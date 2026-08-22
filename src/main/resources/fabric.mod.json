@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "id": "offlineclient",
+  "version": "${version}",
+  "name": "OfflineClient",
+  "description": "A utility client custom designed for minecraftoffline.net",
+  "authors": [
+    "AlphaAlex115"
+  ],
+  "contact": {
+    "homepage": "https://www.minecraftoffline.net/"
+  },
+  "license": "MIT",
+  "icon": "assets/offlineclient/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "com.jellypudding.offlineclient.OfflineClientMod"
+    ]
+  },
+  "mixins": [
+    "offlineclient.mixins.json"
+  ],
+  "accessWidener": "offlineclient.accesswidener",
+  "depends": {
+    "fabricloader": ">=0.19.3",
+    "minecraft": "~26.2",
+    "java": ">=25"
+  }
+}

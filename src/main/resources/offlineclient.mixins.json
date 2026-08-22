@@ -1,0 +1,47 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.jellypudding.offlineclient.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "mixins": [],
+  "client": [
+    "AttackRangeMixin",
+    "BlockCollisionsMixin",
+    "BlockEntityRenderDispatcherMixin",
+    "BlockStateBaseMixin",
+    "CameraMixin",
+    "ChatComponentMixin",
+    "ChatScreenMixin",
+    "ClientPacketListenerMixin",
+    "ConnectionMixin",
+    "DeltaTrackerMixin",
+    "EntityMixin",
+    "EntityRendererMixin",
+    "FluidRendererMixin",
+    "GameRendererAccessor",
+    "GameRendererMixin",
+    "HudMixin",
+    "KeyboardHandlerMixin",
+    "LevelMixin",
+    "LevelRendererMixin",
+    "LightmapMixin",
+    "LocalPlayerMixin",
+    "MinecraftMixin",
+    "ModelBlockRendererMixin",
+    "MouseHandlerMixin",
+    "MultiPlayerGameModeMixin",
+    "PlayerMixin",
+    "OptionInstanceMixin",
+    "ScreenMixin",
+    "SectionCompilerMixin",
+    "SplashManagerMixin",
+    "TitleScreenMixin",
+    "WebBlockMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "overwrites": {
+    "requireAnnotations": true
+  }
+}

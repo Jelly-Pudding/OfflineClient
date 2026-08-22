@@ -1,0 +1,109 @@
+package com.jellypudding.offlineclient.modules.player;
+
+import com.jellypudding.offlineclient.event.Subscribe;
+import com.jellypudding.offlineclient.event.events.ClientTickEvent;
+import com.jellypudding.offlineclient.gui.ClickGuiScreen;
+import com.jellypudding.offlineclient.gui.RegistryPickerScreen;
+import com.jellypudding.offlineclient.module.Category;
+import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.setting.BoolSetting;
+import com.mojang.blaze3d.platform.InputConstants;
+import net.minecraft.client.KeyMapping;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.components.events.GuiEventListener;
+import net.minecraft.client.gui.screens.ChatScreen;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.inventory.AbstractSignEditScreen;
+
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * Keeps the movement keys alive whilst a screen is open. The real
+ * keyboard state is fed straight into the key mappings every tick.
+ */
+public final class InvWalk extends Module {
+
+    private final BoolSetting sneak = new BoolSetting("Sneak",
+        "Also let the sneak key work.", true);
+    private final BoolSetting sprint = new BoolSetting("Sprint",
+        "Also let the sprint key work.", true);
+    private final BoolSetting jump = new BoolSetting("Jump",
+        "Also let the jump key work.", true);
+
+    public InvWalk() {
+        super("InvWalk", "Walk about whilst a screen is open.", Category.PLAYER);
+        addSettings(sneak, sprint, jump);
+        searchTags("inventory walk", "inv move", "menu walk");
+    }
+
+    @Override
+    protected void onDisable() {
+        release();
+    }
+
+    @Subscribe
+    private void onClientTick(ClientTickEvent event) {
+        if (!inGame()) {
+            return;
+        }
+        Screen screen = mc.gui.screen();
+        if (screen == null) {
+            return;
+        }
+        if (!allowed(screen)) {
+            release();
+            return;
+        }
+        for (KeyMapping mapping : keys()) {
+            InputConstants.Key bound = mapping.key;
+            boolean down = bound.getType() == InputConstants.Type.KEYSYM
+                && InputConstants.isKeyDown(mc.getWindow(), bound.getValue());
+            mapping.setDown(down);
+        }
+    }
+
+    /** Screens that take typing keep the keyboard to themselves. */
+    private boolean allowed(Screen screen) {
+        if (screen instanceof ChatScreen || screen instanceof AbstractSignEditScreen) {
+            return false;
+        }
+        if (screen instanceof ClickGuiScreen || screen instanceof RegistryPickerScreen) {
+            return false;
+        }
+        for (GuiEventListener child : screen.children()) {
+            if (child instanceof EditBox) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private List<KeyMapping> keys() {
+        List<KeyMapping> keys = new ArrayList<>(List.of(mc.options.keyUp,
+            mc.options.keyDown, mc.options.keyLeft, mc.options.keyRight));
+        if (sneak.isOn()) {
+            keys.add(mc.options.keyShift);
+        }
+        if (sprint.isOn()) {
+            keys.add(mc.options.keySprint);
+        }
+        if (jump.isOn()) {
+            keys.add(mc.options.keyJump);
+        }
+        return keys;
+    }
+
+    /** Lets go of every key we may have pressed whilst a screen is up. */
+    private void release() {
+        if (mc.gui == null || mc.gui.screen() == null) {
+            return;
+        }
+        List<KeyMapping> all = List.of(mc.options.keyUp, mc.options.keyDown,
+            mc.options.keyLeft, mc.options.keyRight, mc.options.keyShift,
+            mc.options.keySprint, mc.options.keyJump);
+        for (KeyMapping mapping : all) {
+            mapping.setDown(false);
+        }
+    }
+}

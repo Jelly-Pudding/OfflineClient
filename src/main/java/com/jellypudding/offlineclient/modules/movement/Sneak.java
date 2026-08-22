@@ -1,0 +1,164 @@
+package com.jellypudding.offlineclient.modules.movement;
+
+import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.event.Subscribe;
+import com.jellypudding.offlineclient.event.events.PacketSendEvent;
+import com.jellypudding.offlineclient.event.events.TickEvent;
+import com.jellypudding.offlineclient.module.Category;
+import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.setting.BoolSetting;
+import com.jellypudding.offlineclient.setting.EnumSetting;
+import com.mojang.blaze3d.platform.InputConstants;
+import net.minecraft.network.protocol.game.ServerboundPlayerInputPacket;
+import net.minecraft.world.entity.player.Input;
+
+/**
+ * Keeps the player sneaking. Legit mode holds the sneak key while packet
+ * mode only tells the server.
+ */
+public final class Sneak extends Module {
+
+    public enum Mode {
+        LEGIT("Legit"),
+        PACKET("Packet");
+
+        private final String label;
+
+        Mode(String label) {
+            this.label = label;
+        }
+
+        @Override
+        public String toString() {
+            return label;
+        }
+    }
+
+    private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
+        "Legit really crouches. Packet only makes the server think you crouch so you keep full speed.",
+        Mode.LEGIT);
+    private final BoolSetting skipWhileFlying = new BoolSetting("Skip while flying",
+        "Do not hold sneak while flying since that would push you down.", true)
+        .visibleWhen(() -> mode.is(Mode.LEGIT));
+
+    /** The mode that is currently applied. */
+    private Mode applied;
+    /** True while the server has been told the shift key is down. */
+    private boolean forcing;
+
+    public Sneak() {
+        super("Sneak", "Keeps you sneaking.", Category.MOVEMENT);
+        addSettings(mode, skipWhileFlying);
+        searchTags("crouch", "shift");
+    }
+
+    @Override
+    public String getSuffix() {
+        return mode.getValue().toString();
+    }
+
+    @Override
+    protected void onEnable() {
+        applied = null;
+        forcing = false;
+    }
+
+    @Override
+    protected void onDisable() {
+        undo(applied);
+        applied = null;
+    }
+
+    @Subscribe
+    private void onTick(TickEvent event) {
+        if (!inGame()) {
+            return;
+        }
+        if (applied != mode.getValue()) {
+            Mode old = applied;
+            applied = mode.getValue();
+            undo(old);
+        }
+        if (applied == Mode.PACKET) {
+            packetTick();
+            return;
+        }
+        if (skipWhileFlying.isOn() && flying()) {
+            setShift(physicallyHeld());
+            return;
+        }
+        setShift(true);
+    }
+
+    /**
+     * A shift flag while riding makes the server dismount the player.
+     * The forced state drops while riding and comes back after.
+     */
+    private void packetTick() {
+        boolean want = !mc.player.isPassenger();
+        if (want != forcing) {
+            forcing = want;
+            tellServer(want);
+        }
+    }
+
+    /** Packet mode rewrites every input packet with the shift flag on. */
+    @Subscribe
+    private void onPacketSend(PacketSendEvent event) {
+        if (applied != Mode.PACKET || !forcing
+            || !(event.getPacket() instanceof ServerboundPlayerInputPacket packet)) {
+            return;
+        }
+        if (!packet.input().shift()) {
+            event.setPacket(new ServerboundPlayerInputPacket(withShift(packet.input(), true)));
+        }
+    }
+
+    private void undo(Mode old) {
+        if (old == null || !inGame()) {
+            return;
+        }
+        if (old == Mode.LEGIT) {
+            setShift(physicallyHeld());
+        } else if (forcing) {
+            forcing = false;
+            tellServer(false);
+        }
+    }
+
+    /**
+     * Sends one input packet with the shift flag set as asked. The client's
+     * own record still holds the real key state.
+     */
+    private void tellServer(boolean shift) {
+        Input last = mc.player.getLastSentInput();
+        if (last.shift()) {
+            return;
+        }
+        mc.player.connection.send(new ServerboundPlayerInputPacket(withShift(last, shift)));
+    }
+
+    private static Input withShift(Input input, boolean shift) {
+        return new Input(input.forward(), input.backward(), input.left(), input.right(),
+            input.jump(), shift, input.sprint());
+    }
+
+    /**
+     * Only touches the key when its state has to change. With toggle
+     * sneak turned on the game flips the key on every press.
+     */
+    private void setShift(boolean down) {
+        if (mc.options.keyShift.isDown() != down) {
+            mc.options.keyShift.setDown(down);
+        }
+    }
+
+    private boolean physicallyHeld() {
+        return InputConstants.isKeyDown(mc.getWindow(), mc.options.keyShift.key.getValue());
+    }
+
+    private boolean flying() {
+        return mc.player.getAbilities().flying
+            || OfflineClient.INSTANCE.getModuleManager().get(Flight.class).isEnabled();
+    }
+}

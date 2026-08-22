@@ -1,0 +1,70 @@
+plugins {
+    id "net.fabricmc.fabric-loom" version "${loom_version}"
+}
+
+version = project.mod_version
+group = project.maven_group
+
+base {
+    archivesName = project.archives_base_name
+}
+
+repositories {
+}
+
+loom {
+    accessWidenerPath = file("src/main/resources/offlineclient.accesswidener")
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+
+    include(implementation(fabricApi.module("fabric-api-base", project.fabric_api_version)))
+    include(implementation(fabricApi.module("fabric-resource-loader-v1", project.fabric_api_version)))
+}
+
+processResources {
+    inputs.property "version", project.version
+    filteringCharset "UTF-8"
+
+    filesMatching("fabric.mod.json") {
+        expand "version": project.version
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    it.options.encoding = "UTF-8"
+    it.options.release = 25
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_25
+    targetCompatibility = JavaVersion.VERSION_25
+}
+
+jar {
+    from("LICENSE.txt") {
+        rename { "${it}_${project.archives_base_name}" }
+    }
+}
+
+// Builds the jar and drops it straight into .minecraft/mods
+// Run with ./gradlew install
+tasks.register("install", Copy) {
+    group = "offlineclient"
+    description = "Builds the jar and copies it into .minecraft/mods."
+    dependsOn "build"
+
+    def modsDir = file("${System.getenv("APPDATA")}/.minecraft/mods")
+    doFirst {
+        modsDir.mkdirs()
+        modsDir.listFiles()?.each { f ->
+            if (f.name.startsWith("offlineclient") && f.name.endsWith(".jar")) {
+                f.delete()
+            }
+        }
+    }
+    from(tasks.named("jar").flatMap { it.archiveFile })
+    into modsDir
+}
