@@ -27,6 +27,11 @@ public final class ClickGuiScreen extends GuiScreenBase {
     private static final int GRIP = 4;
     private static final int SEARCH_TOP = 6;
     private static final int RESULTS_GAP = 6;
+
+    // Layout of the panels on a first run or after a reset.
+    private static final int TILE_MARGIN = 10;
+    private static final int TILE_GAP = 8;
+    private static final int TILE_TOP = 30;
     private static final int FOOTER_HEIGHT = 12;
     // Two pixels of inset above the rows and two below them.
     private static final int PADDING = 4;
@@ -178,22 +183,60 @@ public final class ClickGuiScreen extends GuiScreenBase {
         nudged.clear();
     }
 
+    /**
+     * Lays the untouched panels out in centred rows. Starting them hard against
+     * the left edge leaves every bit of slack on one side and looks lopsided on
+     * a first run.
+     */
     private void tilePanels() {
         if (freshPanels.isEmpty()) {
             return;
         }
-        int x = 10;
-        int y = 30;
         for (Panel panel : freshPanels) {
             panel.setCollapsed(true);
-            if (x + panel.getWidth() > width - 10) {
-                x = 10;
-                y += GuiTheme.HEADER_HEIGHT + 10;
+        }
+        int usable = Math.max(GuiTheme.PANEL_WIDTH, width - TILE_MARGIN * 2);
+        int y = TILE_TOP;
+        int index = 0;
+        while (index < freshPanels.size()) {
+            int count = rowCount(index, usable);
+            int x = (width - rowWidth(index, count)) / 2;
+            for (int i = 0; i < count; i++) {
+                Panel panel = freshPanels.get(index + i);
+                panel.setPosition(x, y);
+                x += panel.getWidth() + TILE_GAP;
             }
-            panel.setPosition(x, y);
-            x += panel.getWidth() + 8;
+            index += count;
+            y += GuiTheme.HEADER_HEIGHT + TILE_GAP;
         }
         freshPanels.clear();
+    }
+
+    // How many panels from this one onwards fit a single row.
+    private int rowCount(int from, int usable) {
+        int count = 0;
+        int used = 0;
+        for (int i = from; i < freshPanels.size(); i++) {
+            int next = used == 0 ? freshPanels.get(i).getWidth()
+                : used + TILE_GAP + freshPanels.get(i).getWidth();
+            if (count > 0 && next > usable) {
+                break;
+            }
+            used = next;
+            count++;
+        }
+        return count;
+    }
+
+    private int rowWidth(int from, int count) {
+        int total = 0;
+        for (int i = from; i < from + count; i++) {
+            total += freshPanels.get(i).getWidth();
+            if (i > from) {
+                total += TILE_GAP;
+            }
+        }
+        return total;
     }
 
     private int searchX() {

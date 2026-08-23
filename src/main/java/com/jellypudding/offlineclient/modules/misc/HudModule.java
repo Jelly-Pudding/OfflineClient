@@ -12,6 +12,7 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.RenderUtil;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.screens.ChatScreen;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
@@ -48,11 +49,14 @@ public final class HudModule extends Module {
     private final NumberSetting infoScale = new NumberSetting("Info scale",
         "Text size of the info bar.", 0.85, 0.5, 2, 0.05, "x")
         .visibleWhen(info::isOn);
+    private final BoolSetting hideInChat = new BoolSetting("Hide whilst typing",
+        "Takes the info bar away whilst the chat box is open.", true)
+        .visibleWhen(info::isOn);
 
     public HudModule() {
         super("HUD", "The overlay you see whilst playing.", Category.MISC);
         addSettings(watermark, watermarkColor, watermarkScale,
-            moduleList, moduleListColor, moduleListScale, info, infoScale);
+            moduleList, moduleListColor, moduleListScale, info, infoScale, hideInChat);
     }
 
     // The windowed ClickGUI draws the client name in this same corner.
@@ -83,6 +87,11 @@ public final class HudModule extends Module {
         }
     }
 
+    // The chat box covers the bottom left corner the info bar sits in.
+    private static boolean typing() {
+        return OfflineClient.MC.gui.screen() instanceof ChatScreen;
+    }
+
     @Subscribe
     private void onRender2D(Render2DEvent event) {
         GuiGraphicsExtractor context = event.getContext();
@@ -96,7 +105,7 @@ public final class HudModule extends Module {
             renderModuleList(context, font);
         }
 
-        if (info.isOn() && inGame()) {
+        if (info.isOn() && inGame() && !(hideInChat.isOn() && typing())) {
             renderInfoBar(context, font);
         }
     }
@@ -155,8 +164,11 @@ public final class HudModule extends Module {
             + " §8| §7" + String.format(Locale.ROOT, "%.1f m/s", speed)
             + " §8| §7" + mc.getFps() + " fps";
 
-        int y = context.guiHeight() - EDGE - font.lineHeight;
-        boolean pushed = pushScaled(context, infoScale.getFloat(), EDGE, y);
+        // Anchored on the bottom edge. Scaling about the top would lift the bar
+        // off the corner as it shrank.
+        int floor = context.guiHeight() - EDGE;
+        int y = floor - font.lineHeight;
+        boolean pushed = pushScaled(context, infoScale.getFloat(), EDGE, floor);
         context.text(font, line, EDGE, y, 0xFFB0B0C0, true);
         popScaled(context, pushed);
     }

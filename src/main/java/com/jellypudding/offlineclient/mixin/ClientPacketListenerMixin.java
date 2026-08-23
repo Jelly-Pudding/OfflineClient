@@ -2,9 +2,11 @@ package com.jellypudding.offlineclient.mixin;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.modules.player.NoRotate;
+import com.jellypudding.offlineclient.modules.render.NewChunks;
 import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.network.protocol.game.ClientboundLevelChunkWithLightPacket;
 import net.minecraft.network.protocol.game.ClientboundPlayerPositionPacket;
 import net.minecraft.network.protocol.game.ClientboundPlayerRotationPacket;
 import org.spongepowered.asm.mixin.Mixin;
@@ -48,6 +50,21 @@ public abstract class ClientPacketListenerMixin {
         player.setXRot(offlineclient$savedPitch + 0.000001f);
         player.yHeadRot = offlineclient$savedYaw;
         player.yBodyRot = offlineclient$savedYaw;
+    }
+
+    /**
+     * The chunk is in the world and every later packet is still queued behind
+     * this one. NewChunks reads the liquid here whilst the data is untouched.
+     */
+    @Inject(
+        method = "handleLevelChunkWithLight"
+            + "(Lnet/minecraft/network/protocol/game/ClientboundLevelChunkWithLightPacket;)V",
+        at = @At("TAIL"))
+    private void onChunkLoaded(ClientboundLevelChunkWithLightPacket packet, CallbackInfo ci) {
+        NewChunks newChunks = Modules.get(NewChunks.class);
+        if (newChunks != null) {
+            newChunks.onChunkLoaded(packet.getX(), packet.getZ());
+        }
     }
 
     @Inject(

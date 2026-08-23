@@ -14,7 +14,6 @@ import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.ColorUtil;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket;
-import net.minecraft.network.protocol.game.ClientboundLevelChunkWithLightPacket;
 import net.minecraft.network.protocol.game.ClientboundSectionBlocksUpdatePacket;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
@@ -26,28 +25,32 @@ import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.phys.AABB;
 
 import java.lang.ref.WeakReference;
-import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-// Marks the chunks the server generated for the first time whilst the client watched.
-// Only a chunk whose data packet lands whilst this runs can ever reach a verdict.
+/**
+ * Marks the chunks the server generated whilst the client watched. World
+ * generation lays liquid down as source blocks and the spreading only happens
+ * once a chunk is live. A chunk that arrives already holding flowing liquid was
+ * therefore read back off the disk. A chunk that starts flowing after it lands
+ * was made just now.
+ */
 public final class NewChunks extends Module {
 
-    // Room for the burst of arrivals that follows a join or a teleport.
-    private static final int SCANS_PER_TICK = 256;
-
-    private static final int MAX_CHUNKS = 32768;
+    private static final int MAX_CHUNKS = 16384;
 
     private final BoolSetting showOld = new BoolSetting("Show old chunks",
         "Also draws the chunks judged old since you switched this on.", false);
     private final BoolSetting showUnjudged = new BoolSetting("Show unjudged",
-        "Also draws the chunks this watched arrive without reaching a verdict.", false);
+        "Also draws the chunks that arrived without enough liquid to judge.", false);
     private final ColorSetting newColor = new ColorSetting("New color",
         "Colour of the fresh chunks.", 0, false);
     private final ColorSetting oldColor = new ColorSetting("Old color",
@@ -64,28 +67,38 @@ public final class NewChunks extends Module {
         "The height the squares sit at.", 64, -64, 320, 1)
         .min(-2048).max(2048).visibleWhen(() -> !followHeight.isOn());
     private final NumberSetting distance = new NumberSetting("Distance",
-        "How far away a chunk may be and still be drawn.", 32, 8, 64, 1, " chunks")
+        "How far away a chunk may be and still be drawn.", 16, 4, 64, 1, " chunks")
         .min(1).max(256);
     private final NumberSetting settle = new NumberSetting("Settle time",
-        "How long after a chunk loads a liquid flow still counts as fresh.", 60, 5, 300, 5, "s")
+        "How long after a chunk lands a liquid flow still counts as fresh.", 60, 5, 300, 5, "s")
         .min(1).max(3600);
+    private final BoolSetting showReasons = new BoolSetting("Show reasons",
+        "Marks the liquid block that decided each verdict.", false);
     private final BoolSetting notice = new BoolSetting("Notice",
         "Explains the limits in chat when you switch this on.", true);
 
     private final Set<Long> newChunks = new HashSet<>();
     private final Set<Long> oldChunks = new HashSet<>();
 
-    // Insertion ordered. Holds every chunk whose data packet landed whilst this ran.
-    // The value is the tick it landed on.
+    // Insertion ordered. Every chunk that landed whilst this ran mapped to its tick.
     private final Map<Long, Integer> watched = new LinkedHashMap<>();
 
     // Filled from the network thread and drained on the next tick.
-    private final Queue<Long> flowing = new ConcurrentLinkedQueue<>();
-    private final Queue<Long> arrived = new ConcurrentLinkedQueue<>();
+    private final Queue<BlockPos> flowing = new ConcurrentLinkedQueue<>();
 
-    // Chunks whose data still needs the palette test. Client thread only.
-    private final Queue<Long> pending = new ArrayDeque<>();
-    private final Queue<Long> retry = new ArrayDeque<>();
+    // The block that decided each verdict. Drawn by the Show reasons setting.
+    private final Map<Long, BlockPos> reasons = new HashMap<>();
+
+    // The chunks in range of the last rebuild kept apart by verdict. Colours are
+    // resolved at draw time because a rainbow setting moves every frame.
+    private final List<Long> visibleNew = new ArrayList<>();
+    private final List<Long> visibleOld = new ArrayList<>();
+    private final List<Long> visibleUnjudged = new ArrayList<>();
+
+    private long visibleAt = Long.MIN_VALUE;
+    private int revision;
+    private int drawnRevision = -1;
+    private int drawnLayout = -1;
 
     private WeakReference<Level> world;
     private int ticks;
@@ -94,7 +107,7 @@ public final class NewChunks extends Module {
         super("NewChunks", "Marks fresh and old chunks that load whilst this is on.",
             Category.RENDER);
         addSettings(showOld, showUnjudged, newColor, oldColor, unjudgedColor, fill,
-            followHeight, drawHeight, distance, settle, notice);
+            followHeight, drawHeight, distance, settle, showReasons, notice);
         searchTags("new chunks", "fresh terrain", "exploit");
     }
 
@@ -108,9 +121,8 @@ public final class NewChunks extends Module {
     protected void onEnable() {
         reset();
         if (notice.isOn()) {
-            ChatUtil.message("§bNewChunks §7judges only the chunks that load whilst it is on. "
-                + "Switch it on before you head into fresh land. A verdict needs liquid in the "
-                + "chunk. Everything else stays unjudged.");
+            ChatUtil.message("§bNewChunks §7only judges chunks that load whilst it is on. "
+                + "Switch it on before you explore.");
         }
     }
 
@@ -123,16 +135,18 @@ public final class NewChunks extends Module {
         newChunks.clear();
         oldChunks.clear();
         watched.clear();
+        reasons.clear();
         flowing.clear();
-        arrived.clear();
-        pending.clear();
-        retry.clear();
+        clearVisible();
+        visibleAt = Long.MIN_VALUE;
+        revision++;
         ticks = 0;
     }
 
     // The oldest chunk drops once the store is full.
     private void remember(long key) {
         watched.put(key, ticks);
+        revision++;
         if (watched.size() <= MAX_CHUNKS) {
             return;
         }
@@ -142,27 +156,52 @@ public final class NewChunks extends Module {
             iterator.remove();
             newChunks.remove(eldest);
             oldChunks.remove(eldest);
+            reasons.remove(eldest);
+        }
+    }
+
+    /**
+     * Called from ClientPacketListenerMixin the moment a chunk has been put into
+     * the world. Every later packet in the stream is still waiting. The chunk
+     * therefore still holds exactly what the server sent and no flow update has
+     * been written into it yet.
+     */
+    public void onChunkLoaded(int x, int z) {
+        if (!isEnabled() || mc.level == null) {
+            return;
+        }
+        long key = ChunkPos.pack(x, z);
+        if (watched.containsKey(key)) {
+            // A second arrival keeps the first verdict.
+            return;
+        }
+        remember(key);
+
+        LevelChunk chunk = mc.level.getChunkSource().getChunk(x, z, ChunkStatus.FULL, false);
+        if (chunk == null) {
+            return;
+        }
+        BlockPos found = findFlowingLiquid(chunk);
+        if (found != null) {
+            oldChunks.add(key);
+            reasons.put(key, found);
         }
     }
 
     // Fired on the netty thread.
     @Subscribe
     private void onPacketReceive(PacketReceiveEvent event) {
-        if (event.getPacket() instanceof ClientboundLevelChunkWithLightPacket chunk) {
-            arrived.add(ChunkPos.pack(chunk.getX(), chunk.getZ()));
-        } else if (event.getPacket() instanceof ClientboundBlockUpdatePacket update) {
+        if (event.getPacket() instanceof ClientboundBlockUpdatePacket update) {
             noteFlow(update.getPos(), update.getBlockState());
         } else if (event.getPacket() instanceof ClientboundSectionBlocksUpdatePacket update) {
             update.runUpdates(this::noteFlow);
         }
     }
 
-    // Generation writes liquid as source blocks and the spreading only starts once the
-    // chunk is live. A flow update is the giveaway.
     private void noteFlow(BlockPos pos, BlockState state) {
         FluidState fluid = state.getFluidState();
         if (!fluid.isEmpty() && !fluid.isSource()) {
-            flowing.add(ChunkPos.pack(pos));
+            flowing.add(pos.immutable());
         }
     }
 
@@ -179,75 +218,49 @@ public final class NewChunks extends Module {
         }
         ticks++;
 
-        // Arrivals are taken first. A flow update from the same batch then finds its chunk.
-        // A second arrival of the same chunk keeps the first verdict. Liquid spreads whilst
-        // a chunk sits loaded.
-        Long key;
-        while ((key = arrived.poll()) != null) {
-            if (watched.containsKey(key)) {
-                continue;
-            }
-            remember(key);
-            pending.add(key);
-        }
-
-        // A flow marks the chunk fresh before the palette test can call it old.
+        // A flow that turns up after the chunk landed means it was made just now.
         int window = settle.getInt() * 20;
-        while ((key = flowing.poll()) != null) {
+        BlockPos pos;
+        while ((pos = flowing.poll()) != null) {
+            long key = ChunkPos.pack(pos);
             Integer seen = watched.get(key);
             if (seen == null || oldChunks.contains(key)) {
                 continue;
             }
-            if (ticks - seen <= window) {
-                newChunks.add(key);
+            if (ticks - seen <= window && newChunks.add(key)) {
+                reasons.put(key, pos);
+                revision++;
             }
-        }
-
-        int budget = SCANS_PER_TICK;
-        while (budget > 0 && (key = retry.poll()) != null) {
-            budget--;
-            check(key, false);
-        }
-        while (budget > 0 && (key = pending.poll()) != null) {
-            budget--;
-            check(key, true);
         }
     }
 
-    // Liquid that had already spread before the save travels inside the chunk data.
-    private void check(long key, boolean mayRetry) {
-        // The store may have dropped this chunk whilst the scan sat queued.
-        if (!watched.containsKey(key)) {
-            return;
-        }
-        if (newChunks.contains(key) || oldChunks.contains(key)) {
-            return;
-        }
-        LevelChunk chunk = mc.level.getChunkSource()
-            .getChunk(ChunkPos.getX(key), ChunkPos.getZ(key), ChunkStatus.FULL, false);
-        if (chunk == null) {
-            // The packet landed after the client had run its jobs for this tick.
-            if (mayRetry) {
-                retry.add(key);
-            }
-            return;
-        }
-        if (hasFlowingLiquid(chunk)) {
-            oldChunks.add(key);
-        }
-    }
-
-    // Palette test on every section that holds any liquid.
-    private static boolean hasFlowingLiquid(LevelChunk chunk) {
-        for (LevelChunkSection section : chunk.getSections()) {
-            if (section == null || !section.hasFluid()) {
+    /**
+     * The first flowing liquid in the chunk or null. The palette test is only a
+     * prefilter. It reads the palette which can still list a state the section
+     * stopped holding. Every hit is confirmed against the real blocks.
+     */
+    private static BlockPos findFlowingLiquid(LevelChunk chunk) {
+        LevelChunkSection[] sections = chunk.getSections();
+        int minY = chunk.getMinY();
+        int minX = chunk.getPos().getMinBlockX();
+        int minZ = chunk.getPos().getMinBlockZ();
+        for (int i = 0; i < sections.length; i++) {
+            LevelChunkSection section = sections[i];
+            if (section == null || section.hasOnlyAir() || !section.hasFluid()
+                || !section.maybeHas(NewChunks::isFlowing)) {
                 continue;
             }
-            if (section.maybeHas(NewChunks::isFlowing)) {
-                return true;
+            for (int y = 0; y < 16; y++) {
+                for (int x = 0; x < 16; x++) {
+                    for (int z = 0; z < 16; z++) {
+                        if (isFlowing(section.getBlockState(x, y, z))) {
+                            return new BlockPos(minX + x, minY + i * 16 + y, minZ + z);
+                        }
+                    }
+                }
             }
         }
-        return false;
+        return null;
     }
 
     private static boolean isFlowing(BlockState state) {
@@ -260,41 +273,80 @@ public final class NewChunks extends Module {
         if (!inGame()) {
             return;
         }
-        double y = followHeight.isOn() ? mc.player.getY() : drawHeight.getValue();
-        int limit = distance.getInt();
         int centerX = mc.player.chunkPosition().x();
         int centerZ = mc.player.chunkPosition().z();
+        long here = ChunkPos.pack(centerX, centerZ);
+        int layout = layoutKey();
+        if (here != visibleAt || revision != drawnRevision || layout != drawnLayout) {
+            rebuildVisible(centerX, centerZ);
+            visibleAt = here;
+            drawnRevision = revision;
+            drawnLayout = layout;
+        }
 
-        if (showUnjudged.isOn()) {
-            int color = unjudgedColor.getColor();
-            for (long key : watched.keySet()) {
-                if (newChunks.contains(key) || oldChunks.contains(key)) {
-                    continue;
-                }
-                plot(event.getBatch(), key, color, y, limit, centerX, centerZ);
+        double y = followHeight.isOn() ? mc.player.getY() : drawHeight.getValue();
+        drawAll(event.getBatch(), visibleNew, newColor.getColor(), y);
+        drawAll(event.getBatch(), visibleOld, oldColor.getColor(), y);
+        drawAll(event.getBatch(), visibleUnjudged, unjudgedColor.getColor(), y);
+
+        if (showReasons.isOn()) {
+            markReasons(event.getBatch(), visibleNew, newColor.getColor());
+            markReasons(event.getBatch(), visibleOld, oldColor.getColor());
+        }
+    }
+
+    // Draws the block that proved the verdict. Lets you check the call yourself.
+    private void markReasons(DrawBatch batch, List<Long> chunks, int color) {
+        for (long key : chunks) {
+            BlockPos pos = reasons.get(key);
+            if (pos != null) {
+                batch.outlineBlock(pos, color, true);
             }
         }
-        draw(event.getBatch(), newChunks, newColor.getColor(), y, limit, centerX, centerZ);
-        if (showOld.isOn()) {
-            draw(event.getBatch(), oldChunks, oldColor.getColor(), y, limit, centerX, centerZ);
-        }
     }
 
-    private void draw(DrawBatch batch, Set<Long> chunks, int color, double y,
-                      int limit, int centerX, int centerZ) {
+    private void drawAll(DrawBatch batch, List<Long> chunks, int color, double y) {
         for (long key : chunks) {
-            plot(batch, key, color, y, limit, centerX, centerZ);
+            square(batch, ChunkPos.getX(key) * 16, ChunkPos.getZ(key) * 16, y, color);
         }
     }
 
-    private void plot(DrawBatch batch, long key, int color, double y,
-                      int limit, int centerX, int centerZ) {
-        int x = ChunkPos.getX(key);
-        int z = ChunkPos.getZ(key);
-        if (Math.abs(x - centerX) > limit || Math.abs(z - centerZ) > limit) {
-            return;
+    private void clearVisible() {
+        visibleNew.clear();
+        visibleOld.clear();
+        visibleUnjudged.clear();
+    }
+
+    // The settings that decide which chunks land in the visible lists.
+    private int layoutKey() {
+        return (showOld.isOn() ? 1 : 0) | (showUnjudged.isOn() ? 2 : 0) | distance.getInt() << 2;
+    }
+
+    /**
+     * Walks the square of chunks around the player instead of the whole store.
+     * The work per frame is then tied to the draw distance and never to how far
+     * the player has travelled.
+     */
+    private void rebuildVisible(int centerX, int centerZ) {
+        clearVisible();
+        int limit = distance.getInt();
+        boolean drawOld = showOld.isOn();
+        boolean drawUnjudged = showUnjudged.isOn();
+
+        for (int x = centerX - limit; x <= centerX + limit; x++) {
+            for (int z = centerZ - limit; z <= centerZ + limit; z++) {
+                long key = ChunkPos.pack(x, z);
+                if (newChunks.contains(key)) {
+                    visibleNew.add(key);
+                } else if (oldChunks.contains(key)) {
+                    if (drawOld) {
+                        visibleOld.add(key);
+                    }
+                } else if (drawUnjudged && watched.containsKey(key)) {
+                    visibleUnjudged.add(key);
+                }
+            }
         }
-        square(batch, x * 16, z * 16, y, color);
     }
 
     // A flat box has no edges to draw.

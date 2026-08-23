@@ -59,10 +59,15 @@ tasks.register("install", Copy) {
     def modsDir = file("${System.getenv("APPDATA")}/.minecraft/mods")
     doFirst {
         modsDir.mkdirs()
-        modsDir.listFiles()?.each { f ->
-            if (f.name.startsWith("offlineclient") && f.name.endsWith(".jar")) {
-                f.delete()
-            }
+        // A jar left behind is a second copy of the mod and the loader refuses both.
+        // Minecraft holds the file open whilst it runs which is the usual cause.
+        def stuck = modsDir.listFiles()?.findAll { f ->
+            f.name.startsWith("offlineclient") && f.name.endsWith(".jar") && !f.delete()
+        }
+        if (stuck) {
+            throw new GradleException(
+                "Could not remove ${stuck*.name.join(", ")} from the mods folder. "
+                    + "Close Minecraft and run this again.")
         }
     }
     from(tasks.named("jar").flatMap { it.archiveFile })
