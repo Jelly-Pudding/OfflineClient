@@ -27,8 +27,6 @@ public final class ToggleCommand extends Command {
             return;
         }
         module.toggle();
-        OfflineClient.INSTANCE.getConfigManager().saveSoon();
-        ChatUtil.message("§b" + module.getName() + " §7is now "
-            + (module.isEnabled() ? "§aenabled" : "§cdisabled") + "§7.");
+        ChatUtil.toggled(module);
     }
 }

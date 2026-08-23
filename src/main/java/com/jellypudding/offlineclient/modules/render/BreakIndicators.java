@@ -13,7 +13,7 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ColorUtil;
-import net.minecraft.client.gui.Font;
+import com.jellypudding.offlineclient.util.RenderUtil;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.protocol.game.ClientboundBlockDestructionPacket;
@@ -21,10 +21,10 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
-import org.joml.Matrix3x2fStack;
 
 import java.lang.ref.WeakReference;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -50,7 +50,6 @@ public final class BreakIndicators extends Module {
         }
     }
 
-    private static final int BACKGROUND = 0x90000000;
     private static final int LOW_COLOR = 0xFF50FF50;
     private static final int HIGH_COLOR = 0xFFFF3030;
     // The server stops sending updates when a player walks off mid break.
@@ -178,7 +177,7 @@ public final class BreakIndicators extends Module {
     }
 
     private AABB boxOf(Indicator indicator) {
-        AABB full = new AABB(indicator.pos).deflate(0.002);
+        AABB full = DrawBatch.blockBox(indicator.pos);
         if (!grow.isOn()) {
             return full;
         }
@@ -212,19 +211,8 @@ public final class BreakIndicators extends Module {
     }
 
     private void drawName(GuiGraphicsExtractor context, Indicator indicator, Vec3 screen) {
-        Font font = mc.font;
         String text = indicator.name + " " + (indicator.progress + 1) * 10 + "%";
-        int width = font.width(text);
-        int height = font.lineHeight;
-
-        Matrix3x2fStack pose = context.pose();
-        pose.pushMatrix();
-        pose.translate((float) screen.x, (float) screen.y);
-        pose.scale(scale.getFloat(), scale.getFloat());
-        int half = width / 2 + 2;
-        context.fill(-half, -height - 2, half, 1, BACKGROUND);
-        context.guiRenderState.up();
-        context.text(font, text, -width / 2, -height, colorOf(indicator), true);
-        pose.popMatrix();
+        RenderUtil.label(context, mc.font, screen.x, screen.y, scale.getFloat(),
+            List.of(text), List.of(colorOf(indicator)));
     }
 }

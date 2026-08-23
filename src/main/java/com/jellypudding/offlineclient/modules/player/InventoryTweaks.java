@@ -1,6 +1,5 @@
 package com.jellypudding.offlineclient.modules.player;
 
-import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.ClientTickEvent;
 import com.jellypudding.offlineclient.module.Category;
@@ -8,19 +7,17 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
+import com.jellypudding.offlineclient.util.InventoryUtil;
+import com.jellypudding.offlineclient.util.ItemUtil;
+import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.gui.screens.inventory.ContainerScreen;
-import net.minecraft.client.gui.screens.inventory.DispenserScreen;
-import net.minecraft.client.gui.screens.inventory.HopperScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
-import net.minecraft.client.gui.screens.inventory.ShulkerBoxScreen;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -42,13 +39,14 @@ public final class InventoryTweaks extends Module {
     private final BoolSetting dump = new BoolSetting("Dump junk",
         "Move junk into a container the moment you open one.", false);
     private final RegistryListSetting<Item> junk = new RegistryListSetting<>("Junk",
-        "Items counted as junk. Click to pick them.", BuiltInRegistries.ITEM,
-        List.of(Items.COBBLESTONE, Items.COBBLED_DEEPSLATE, Items.DIRT, Items.GRAVEL,
-            Items.NETHERRACK, Items.ROTTEN_FLESH, Items.POISONOUS_POTATO));
+        "Items counted as junk. Click to pick them.", BuiltInRegistries.ITEM, ItemUtil.JUNK);
     private final NumberSetting delay = new NumberSetting("Delay",
         "Ticks between clicks.", 2, 0, 20, 1, " ticks").min(0);
 
     private int timer;
+    // The last slot a dump click was sent for and what it held.
+    private int dumpSlot = -1;
+    private int dumpCount = -1;
 
     public InventoryTweaks() {
         super("InventoryTweaks", "Sorts and merges your inventory whilst it is open.",
@@ -69,8 +67,10 @@ public final class InventoryTweaks extends Module {
         }
         Screen screen = mc.gui.screen();
         boolean own = screen instanceof InventoryScreen;
-        boolean container = !own && isStorage(screen);
+        boolean container = !own && InventoryUtil.isStorage(screen);
         if (!own && !container) {
+            dumpSlot = -1;
+            dumpCount = -1;
             return;
         }
         AbstractContainerMenu menu = mc.player.containerMenu;
@@ -107,19 +107,8 @@ public final class InventoryTweaks extends Module {
         }
     }
 
-    /**
-     * Plain storage only. Crafting and anvil and furnace screens refuse a click
-     * into their own slots.
-     */
-    private static boolean isStorage(Screen screen) {
-        return screen instanceof ContainerScreen
-            || screen instanceof ShulkerBoxScreen
-            || screen instanceof HopperScreen
-            || screen instanceof DispenserScreen;
-    }
-
     private boolean stealerBusy() {
-        return OfflineClient.INSTANCE.getModuleManager().get(ChestStealer.class).isEnabled();
+        return Modules.enabled(ChestStealer.class);
     }
 
     private List<Integer> playerSlots(AbstractContainerMenu menu, boolean withHotbar) {
@@ -164,6 +153,12 @@ public final class InventoryTweaks extends Module {
             if (stack.isEmpty() || !junk.contains(stack.getItem())) {
                 continue;
             }
+            // The same stack coming back means the container had no room for it.
+            if (i == dumpSlot && stack.getCount() == dumpCount) {
+                return false;
+            }
+            dumpSlot = i;
+            dumpCount = stack.getCount();
             click(menu, i, 0, ContainerInput.QUICK_MOVE);
             return true;
         }
@@ -235,8 +230,8 @@ public final class InventoryTweaks extends Module {
         if (a.isEmpty() || b.isEmpty()) {
             return Boolean.compare(a.isEmpty(), b.isEmpty());
         }
-        int byId = BuiltInRegistries.ITEM.getKey(a.getItem()).toString()
-            .compareTo(BuiltInRegistries.ITEM.getKey(b.getItem()).toString());
+        int byId = BuiltInRegistries.ITEM.getKey(a.getItem())
+            .compareTo(BuiltInRegistries.ITEM.getKey(b.getItem()));
         if (byId != 0) {
             return byId;
         }

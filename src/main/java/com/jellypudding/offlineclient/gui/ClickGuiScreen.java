@@ -6,10 +6,9 @@ import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.util.RenderUtil;
+import com.jellypudding.offlineclient.util.SearchRank;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.input.CharacterEvent;
-import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 
 import java.util.ArrayList;
@@ -29,10 +28,13 @@ public final class ClickGuiScreen extends GuiScreenBase {
     private static final int SEARCH_TOP = 6;
     private static final int RESULTS_GAP = 6;
     private static final int FOOTER_HEIGHT = 12;
+    // Two pixels of inset above the rows and two below them.
+    private static final int PADDING = 4;
     private static final int TOOLTIP_WIDTH = 170;
 
     private final List<Panel> panels = new ArrayList<>();
     private final List<ModuleRow> searchRows = new ArrayList<>();
+    private final ScrollBar resultsScroll = new ScrollBar();
 
     private String tooltip;
     private String wrappedFor;
@@ -44,7 +46,7 @@ public final class ClickGuiScreen extends GuiScreenBase {
     // Panels with no saved layout. Tiled once the screen size is known.
     private final List<Panel> freshPanels = new ArrayList<>();
 
-    // The results box is centred so dragging either edge widens it both ways.
+    // The results box is centred. Dragging either edge widens it both ways.
     private int searchWidth = SEARCH_WIDTH;
     private boolean resizingSearch;
 
@@ -131,6 +133,7 @@ public final class ClickGuiScreen extends GuiScreenBase {
     @Override
     protected void releaseDrags() {
         resizingSearch = false;
+        resultsScroll.release();
         for (Panel panel : panels) {
             panel.releaseDrags();
         }
@@ -201,39 +204,61 @@ public final class ClickGuiScreen extends GuiScreenBase {
         return SEARCH_TOP + SEARCH_HEIGHT + RESULTS_GAP;
     }
 
-    // Results past the last one that fits are counted in the footer.
-    private int shownResults() {
-        int room = height - resultsTop() - 8;
-        int shown = countThatFit(room);
-        if (shown < searchRows.size()) {
-            shown = countThatFit(room - FOOTER_HEIGHT);
-        }
-        return shown;
-    }
-
-    private int countThatFit(int room) {
-        int used = 4;
-        int count = 0;
+    // Everything the rows need. Taller than the view means the box scrolls.
+    private int resultsContentHeight() {
+        int total = 0;
         for (ModuleRow row : searchRows) {
-            int h = row.getHeight();
-            if (used + h > room) {
-                break;
-            }
-            used += h;
-            count++;
-        }
-        return count;
-    }
-
-    private int resultsHeight(int shown) {
-        int total = 4;
-        for (int i = 0; i < shown; i++) {
-            total += searchRows.get(i).getHeight();
-        }
-        if (shown < searchRows.size() || searchRows.isEmpty()) {
-            total += FOOTER_HEIGHT;
+            total += row.getHeight();
         }
         return total;
+    }
+
+    // The screen below the box less a small margin.
+    private int resultsRoom() {
+        return Math.max(GuiTheme.ROW_HEIGHT + PADDING, height - resultsTop() - 8);
+    }
+
+    // The clipped strip the rows are drawn into.
+    private int resultsViewHeight() {
+        if (searchRows.isEmpty()) {
+            return 0;
+        }
+        return Math.min(resultsContentHeight(), resultsRoom() - PADDING);
+    }
+
+    private int resultsBoxHeight() {
+        if (searchRows.isEmpty()) {
+            return PADDING + FOOTER_HEIGHT;
+        }
+        return PADDING + resultsViewHeight();
+    }
+
+    private int resultsTrackX() {
+        return ScrollBar.trackX(searchX() + 2, searchWidth - 4);
+    }
+
+    /**
+     * An expanded row can be taller than the view. Its top edge is pinned into
+     * sight and the rest is reached by scrolling.
+     */
+    private void keepVisible(ModuleRow target) {
+        int view = resultsViewHeight();
+        int top = 0;
+        for (ModuleRow row : searchRows) {
+            if (row == target) {
+                break;
+            }
+            top += row.getHeight();
+        }
+        int offset = resultsScroll.getOffset();
+        int bottom = top + target.getHeight();
+        if (bottom - view > offset) {
+            offset = bottom - view;
+        }
+        if (top < offset) {
+            offset = top;
+        }
+        resultsScroll.setOffset(ScrollBar.clamp(offset, resultsContentHeight(), view));
     }
 
     @Override
@@ -242,7 +267,7 @@ public final class ClickGuiScreen extends GuiScreenBase {
         Font font = OfflineClient.MC.font;
 
         if (resizingSearch) {
-            // Centred box so half the pointer offset is the half width.
+            // Centred box. Half the pointer offset gives the half width.
             searchWidth = Math.clamp(Math.abs(mouseX - width / 2) * 2,
                 SEARCH_WIDTH_MIN, SEARCH_WIDTH_MAX);
         }
@@ -253,19 +278,17 @@ public final class ClickGuiScreen extends GuiScreenBase {
         context.guiRenderState.up();
         renderSearchBox(context, font, barX, SEARCH_TOP, searchWidth, mouseX, mouseY,
             searchRows.size());
-        renderSearchGrips(context, barX, mouseX, mouseY);
 
-        int shown = isSearching() ? shownResults() : 0;
-        nudgePanels(isSearching() ? resultsHeight(shown) : 0);
+        nudgePanels(isSearching() ? resultsBoxHeight() : 0);
         for (Panel panel : panels) {
             panel.render(context, mouseX, mouseY);
         }
         if (isSearching()) {
-            renderSearchResults(context, font, shown, mouseX, mouseY);
+            renderSearchResults(context, font, mouseX, mouseY);
         }
 
         if (tooltip != null && !tooltip.isEmpty()) {
-            renderTooltip(context, font, mouseX, mouseY);
+            RenderUtil.tooltip(context, font, wrap(tooltip), mouseX, mouseY, width, height);
         }
     }
 
@@ -320,19 +343,6 @@ public final class ClickGuiScreen extends GuiScreenBase {
         panel.setPosition(next, y);
     }
 
-    // Two dashes on each edge. The only hint that the box can be widened.
-    private void renderSearchGrips(GuiGraphicsExtractor context, int barX, int mouseX, int mouseY) {
-        boolean lit = resizingSearch || overSearchEdge(mouseX, mouseY);
-        int color = lit ? GuiTheme.accentText() : GuiTheme.TEXT_FAINT;
-        int midY = SEARCH_TOP + SEARCH_HEIGHT / 2;
-        for (int offset = -2; offset <= 2; offset += 4) {
-            context.fill(barX + 1, midY + offset, barX + 3, midY + offset + 1, color);
-            context.fill(barX + searchWidth - 3, midY + offset,
-                barX + searchWidth - 1, midY + offset + 1, color);
-        }
-        context.guiRenderState.up();
-    }
-
     // Either upright edge of the search bar or of the results box below it.
     private boolean overSearchEdge(double mx, double my) {
         int left = searchX();
@@ -348,57 +358,53 @@ public final class ClickGuiScreen extends GuiScreenBase {
             return false;
         }
         int top = resultsTop();
-        return my >= top && my <= top + resultsHeight(shownResults());
+        return my >= top && my <= top + resultsBoxHeight();
     }
 
-    private void renderSearchResults(GuiGraphicsExtractor context, Font font, int shown,
+    private void renderSearchResults(GuiGraphicsExtractor context, Font font,
                                      int mouseX, int mouseY) {
         int x = searchX();
         int y = resultsTop();
-        int total = resultsHeight(shown);
-        RenderUtil.shadow(context, x, y, x + searchWidth, y + total, 3);
+        int box = resultsBoxHeight();
+        RenderUtil.shadow(context, x, y, x + searchWidth, y + box, 3);
         context.guiRenderState.up();
-        RenderUtil.roundedBorderedRect(context, x, y, x + searchWidth, y + total,
+        RenderUtil.roundedBorderedRect(context, x, y, x + searchWidth, y + box,
             GuiTheme.CORNER + 1, GuiTheme.BG_WINDOW, GuiTheme.accent());
         context.guiRenderState.up();
 
-        int rowY = y + 2;
         int rowX = x + 2;
-        int rowW = searchWidth - 4;
-        for (int i = 0; i < shown; i++) {
-            ModuleRow row = searchRows.get(i);
-            row.place(rowX, rowY, rowW, mouseX, mouseY, true);
-            row.render(context, mouseX, mouseY);
-            rowY += row.getHeight();
-        }
-        int hidden = searchRows.size() - shown;
-        if (hidden > 0) {
-            context.text(font, hidden + " more. Keep typing.", rowX + 5,
-                GuiTheme.textY(rowY, FOOTER_HEIGHT), GuiTheme.TEXT_FAINT, false);
-        } else if (searchRows.isEmpty()) {
-            context.text(font, "no matches", rowX + 5, GuiTheme.textY(rowY, FOOTER_HEIGHT),
+        int viewTop = y + 2;
+        if (searchRows.isEmpty()) {
+            context.text(font, "no matches", rowX + 5, GuiTheme.textY(viewTop, FOOTER_HEIGHT),
                 GuiTheme.TEXT_DIM, false);
+            return;
         }
-    }
 
-    private void renderTooltip(GuiGraphicsExtractor context, Font font, int mouseX, int mouseY) {
-        List<String> lines = wrap(tooltip);
-        int w = 0;
-        for (String line : lines) {
-            w = Math.max(w, font.width(line));
+        int view = resultsViewHeight();
+        int total = resultsContentHeight();
+        boolean scrollable = total > view;
+        int rowW = ScrollBar.rowWidth(searchWidth - 4, total, view);
+        resultsScroll.update(mouseY, total, view);
+
+        // A slider being dragged still gets the real pointer position.
+        boolean mouseInView = SettingWidget.isOver(mouseX, mouseY, rowX, viewTop, rowW, view);
+
+        context.enableScissor(rowX, viewTop, rowX + rowW, viewTop + view);
+        int rowY = viewTop - resultsScroll.getOffset();
+        for (ModuleRow row : searchRows) {
+            int rowH = row.getHeight();
+            row.place(rowX, rowY, rowW, mouseX, mouseY, mouseInView);
+            if (rowY + rowH > viewTop && rowY < viewTop + view) {
+                row.render(context, mouseX, mouseY);
+            }
+            rowY += rowH;
         }
-        int h = lines.size() * 10 + 6;
-        int tx = Math.max(2, Math.min(mouseX + 10, width - w - 12));
-        int ty = Math.max(2, Math.min(mouseY + 10, height - h - 4));
+        context.disableScissor();
 
-        context.guiRenderState.up();
-        RenderUtil.shadow(context, tx, ty, tx + w + 8, ty + h, 2);
-        context.guiRenderState.up();
-        RenderUtil.roundedBorderedRect(context, tx, ty, tx + w + 8, ty + h, GuiTheme.CORNER,
-            GuiTheme.BG_WINDOW, GuiTheme.accent());
-        context.guiRenderState.up();
-        for (int i = 0; i < lines.size(); i++) {
-            context.text(font, lines.get(i), tx + 4, ty + 4 + i * 10, GuiTheme.TEXT, false);
+        if (scrollable) {
+            int trackX = resultsTrackX();
+            resultsScroll.render(context, trackX, viewTop, view, total,
+                ScrollBar.isOverTrack(mouseX, mouseY, trackX, viewTop, view));
         }
     }
 
@@ -438,14 +444,9 @@ public final class ClickGuiScreen extends GuiScreenBase {
 
         beginClick();
 
-        // Only the results drawn this frame can be clicked.
-        if (isSearching()) {
-            int shown = shownResults();
-            for (int i = 0; i < shown; i++) {
-                if (searchRows.get(i).mouseClicked(mx, my, button)) {
-                    return true;
-                }
-            }
+        // The results box sits over the panels. It takes the click first.
+        if (isSearching() && clickResults(mx, my, button)) {
+            return true;
         }
 
         // The panel drawn on top gets the click first.
@@ -469,9 +470,46 @@ public final class ClickGuiScreen extends GuiScreenBase {
         return super.mouseClicked(event, doubleClick);
     }
 
+    /**
+     * The border of the box is left alone. A click there falls through to the
+     * edge resize.
+     */
+    private boolean clickResults(double mx, double my, int button) {
+        int rowX = searchX() + 2;
+        int rowsW = searchWidth - 4;
+        int y = resultsTop();
+        if (!SettingWidget.isOver(mx, my, rowX, y, rowsW, resultsBoxHeight())) {
+            return false;
+        }
+        if (searchRows.isEmpty()) {
+            return true;
+        }
+
+        int viewTop = y + 2;
+        int view = resultsViewHeight();
+        int trackX = resultsTrackX();
+        if (resultsContentHeight() > view
+            && ScrollBar.isOverTrack(mx, my, trackX, viewTop, view)) {
+            resultsScroll.beginDrag((int) my);
+            return true;
+        }
+        // Rows scrolled out of the strip are placed but not clickable.
+        if (my < viewTop || my >= viewTop + view) {
+            return true;
+        }
+        for (ModuleRow row : searchRows) {
+            if (row.mouseClicked(mx, my, button)) {
+                keepVisible(row);
+                return true;
+            }
+        }
+        return true;
+    }
+
     @Override
     public boolean mouseReleased(MouseButtonEvent event) {
         resizingSearch = false;
+        resultsScroll.release();
         for (Panel panel : panels) {
             panel.mouseReleased();
         }
@@ -483,23 +521,14 @@ public final class ClickGuiScreen extends GuiScreenBase {
     }
 
     @Override
-    public boolean keyPressed(KeyEvent event) {
-        if (handleCommonKey(event)) {
-            return true;
-        }
-        return super.keyPressed(event);
-    }
-
-    @Override
-    public boolean charTyped(CharacterEvent event) {
-        if (handleCommonChar((char) event.codepoint())) {
-            return true;
-        }
-        return super.charTyped(event);
-    }
-
-    @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        if (isSearching() && !searchRows.isEmpty()
+            && SettingWidget.isOver(mouseX, mouseY, searchX(), resultsTop(),
+                searchWidth, resultsBoxHeight())) {
+            resultsScroll.scroll((int) Math.round(scrollY * 16), resultsContentHeight(),
+                resultsViewHeight());
+            return true;
+        }
         for (int i = panels.size() - 1; i >= 0; i--) {
             Panel panel = panels.get(i);
             if (panel.isOver(mouseX, mouseY)) {
@@ -512,14 +541,21 @@ public final class ClickGuiScreen extends GuiScreenBase {
 
     @Override
     protected void onSearchChanged() {
+        // A row dropped whilst its slider is held would never release it.
+        for (ModuleRow row : searchRows) {
+            row.mouseReleased();
+        }
         searchRows.clear();
+        resultsScroll.setOffset(0);
         if (!isSearching()) {
             return;
         }
-        for (Module module : OfflineClient.INSTANCE.getModuleManager().getAll()) {
-            if (module.matchesSearch(search())) {
-                searchRows.add(new ModuleRow(module, this));
-            }
+        String query = search();
+        List<Module> matches = SearchRank.rank(
+            OfflineClient.INSTANCE.getModuleManager().getAll(),
+            module -> module.searchScore(query));
+        for (Module module : matches) {
+            searchRows.add(new ModuleRow(module, this));
         }
     }
 }

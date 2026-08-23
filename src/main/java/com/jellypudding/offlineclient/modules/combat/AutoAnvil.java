@@ -18,7 +18,6 @@ import net.minecraft.world.level.block.AnvilBlock;
 import net.minecraft.world.level.block.BasePressurePlateBlock;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.ButtonBlock;
-import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.shapes.CollisionContext;
 
 /**
@@ -30,13 +29,13 @@ public final class AutoAnvil extends Module {
     private final NumberSetting targetRange = new NumberSetting("Target range",
         "How far away enemies are considered.", 4, 1, 10, 0.5, " blocks");
     private final NumberSetting placeRange = new NumberSetting("Place range",
-        "How far you can reach to place.", 4.5, 1, 6, 0.1).min(1);
+        "How far you can reach to place.", 4.5, 1, 6, 0.1);
     private final NumberSetting height = new NumberSetting("Height",
-        "How far above their feet the anvil goes.", 3, 2, 6, 1, " blocks").min(2);
+        "How far above their feet the anvil goes.", 3, 2, 6, 1, " blocks");
     private final NumberSetting delay = new NumberSetting("Delay",
         "Ticks to wait between anvils.", 10, 0, 40, 1, " ticks");
     private final BoolSetting trigger = new BoolSetting("Place trigger",
-        "Put a button or a plate at their feet so the anvils break instead of stacking up.", true);
+        "Put a button or a plate at their feet to break every anvil on landing.", true);
     private final BoolSetting rotate = new BoolSetting("Rotate",
         "Send a look packet toward each block.", true);
     private final BoolSetting toggleOff = new BoolSetting("Toggle off when done",
@@ -83,7 +82,7 @@ public final class AutoAnvil extends Module {
             return;
         }
         Player target = EntityUtil.nearestEnemy(targetRange.getValue());
-        targetName = target == null ? null : target.getGameProfile().name();
+        targetName = EntityUtil.nameOf(target);
         if (target == null) {
             slots.restore();
             return;
@@ -158,7 +157,7 @@ public final class AutoAnvil extends Module {
     @Subscribe
     private void onRender3D(Render3DEvent event) {
         if (render.isOn() && spot != null) {
-            event.getBatch().outlineBox(new AABB(spot).deflate(0.002), 0xFFB0B0C0, false);
+            event.getBatch().outlineBlock(spot, 0xFFB0B0C0, false);
         }
     }
 }

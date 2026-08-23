@@ -9,14 +9,12 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
+import com.jellypudding.offlineclient.util.BlockUtil.TrapMode;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.phys.AABB;
-import net.minecraft.world.phys.shapes.CollisionContext;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -24,32 +22,16 @@ import java.util.List;
 
 public final class AutoTrap extends Module {
 
-    public enum Mode {
-        TOP("Top"),
-        FULL("Full");
-
-        private final String label;
-
-        Mode(String label) {
-            this.label = label;
-        }
-
-        @Override
-        public String toString() {
-            return label;
-        }
-    }
-
     private final NumberSetting targetRange = new NumberSetting("Target range",
         "How far away enemies are considered.", 4, 1, 10, 0.5, " blocks");
     private final NumberSetting placeRange = new NumberSetting("Place range",
-        "How far you can reach to place.", 4.5, 1, 6, 0.1).min(1);
-    private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
-        "Top covers their head and Full seals the sides too.", Mode.FULL);
+        "How far you can reach to place.", 4.5, 1, 6, 0.1);
+    private final EnumSetting<TrapMode> mode = new EnumSetting<>("Mode",
+        "Top covers their head and Full seals the sides too.", TrapMode.FULL);
     private final NumberSetting delay = new NumberSetting("Delay",
         "Ticks to wait between placing rounds.", 1, 0, 5, 1, " ticks");
     private final NumberSetting perTick = new NumberSetting("Blocks per tick",
-        "How many blocks to place in one round.", 2, 1, 4, 1).min(1);
+        "How many blocks to place in one round.", 2, 1, 4, 1);
     private final BoolSetting rotate = new BoolSetting("Rotate",
         "Send a look packet toward each block.", true);
     private final BoolSetting toggleOff = new BoolSetting("Toggle off when done",
@@ -99,7 +81,7 @@ public final class AutoTrap extends Module {
             return;
         }
         Player target = EntityUtil.nearestEnemy(targetRange.getValue());
-        targetName = target == null ? null : target.getGameProfile().name();
+        targetName = EntityUtil.nameOf(target);
         if (target == null) {
             slots.restore();
             return;
@@ -119,8 +101,7 @@ public final class AutoTrap extends Module {
             return;
         }
 
-        int slot = BlockUtil.findBlockSlot(block ->
-            block.getExplosionResistance() >= 600 && block.defaultDestroyTime() >= 0);
+        int slot = BlockUtil.findBlastProofSlot();
         if (slot == -1) {
             slots.restore();
             return;
@@ -151,26 +132,13 @@ public final class AutoTrap extends Module {
         slots.restore();
     }
 
+    // Furthest first. The near side is left open for as long as possible.
     private List<BlockPos> missingSpots(Player target) {
-        List<BlockPos> result = new ArrayList<>();
-        BlockPos feet = target.blockPosition();
-        addOpen(result, feet.above(2));
-        if (mode.is(Mode.FULL)) {
-            for (Direction side : Direction.Plane.HORIZONTAL) {
-                addOpen(result, feet.above().relative(side));
-            }
-        }
+        List<BlockPos> result = new ArrayList<>(
+            BlockUtil.trapSpots(target.blockPosition(), mode.is(TrapMode.FULL)));
+        result.removeIf(pos -> BlockUtil.distanceTo(pos) > placeRange.getValue());
         result.sort(Comparator.comparingDouble(BlockUtil::distanceTo).reversed());
         return result;
-    }
-
-    private void addOpen(List<BlockPos> result, BlockPos pos) {
-        if (!BlockUtil.isReplaceable(pos) || BlockUtil.distanceTo(pos) > placeRange.getValue()) {
-            return;
-        }
-        if (mc.level.isUnobstructed(Blocks.OBSIDIAN.defaultBlockState(), pos, CollisionContext.empty())) {
-            result.add(pos);
-        }
     }
 
     @Subscribe
@@ -179,7 +147,7 @@ public final class AutoTrap extends Module {
             return;
         }
         for (BlockPos pos : pending) {
-            event.getBatch().outlineBox(new AABB(pos).deflate(0.002), 0xFFB040FF, false);
+            event.getBatch().outlineBlock(pos, 0xFFB040FF, false);
         }
     }
 }

@@ -8,6 +8,7 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.PacketUtil;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
@@ -26,21 +27,7 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  */
 public final class Jesus extends Module {
 
-    public enum Mode {
-        SOLID("Solid"),
-        DOLPHIN("Dolphin");
-
-        private final String label;
-
-        Mode(String label) {
-            this.label = label;
-        }
-
-        @Override
-        public String toString() {
-            return label;
-        }
-    }
+    public enum Mode { SOLID, DOLPHIN }
 
     // Upward speed whilst climbing out of the liquid.
     private static final double RISE_SPEED = 0.11;
@@ -77,7 +64,7 @@ public final class Jesus extends Module {
 
     @Override
     public String getSuffix() {
-        return mode.getValue().toString();
+        return mode.getValueString();
     }
 
     @Override
@@ -86,10 +73,16 @@ public final class Jesus extends Module {
     }
 
     private boolean active() {
-        if (!inGame() || mc.player.isSpectator() || mc.player.isPassenger()) {
+        LocalPlayer player = mc.player;
+        return player != null && mc.level != null && active(player);
+    }
+
+    // The packet thread holds its own reference. A second read can come back null.
+    private boolean active(LocalPlayer player) {
+        if (player.isSpectator() || player.isPassenger()) {
             return false;
         }
-        return !mc.player.getAbilities().flying;
+        return !player.getAbilities().flying;
     }
 
     private boolean wantsToDip() {
@@ -194,7 +187,7 @@ public final class Jesus extends Module {
         // The packet thread can lose the player mid handler.
         LocalPlayer player = mc.player;
         ClientLevel level = mc.level;
-        if (player == null || level == null || !active()) {
+        if (player == null || level == null || !active(player)) {
             return;
         }
         if (player.isInWater() || player.isInLava() || wantsToDip()
@@ -205,14 +198,6 @@ public final class Jesus extends Module {
         double y = packet.getY(player.getY());
         double z = packet.getZ(player.getZ());
         y += player.tickCount % 2 == 0 ? PACKET_WOBBLE : -PACKET_WOBBLE;
-        boolean collision = packet.horizontalCollision();
-
-        if (packet.hasRotation()) {
-            float yaw = packet.getYRot(player.getYRot());
-            float pitch = packet.getXRot(player.getXRot());
-            event.setPacket(new ServerboundMovePlayerPacket.PosRot(x, y, z, yaw, pitch, true, collision));
-        } else {
-            event.setPacket(new ServerboundMovePlayerPacket.Pos(x, y, z, true, collision));
-        }
+        event.setPacket(PacketUtil.withPosition(packet, player, x, y, z, true));
     }
 }

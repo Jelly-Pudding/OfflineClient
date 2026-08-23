@@ -7,6 +7,8 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ColorUtil;
+import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
@@ -14,14 +16,8 @@ import net.minecraft.world.entity.player.Player;
 // EntityRendererMixin flags the target and LivingEntityRendererMixin swaps the render type.
 public final class Chams extends Module {
 
-    // The same blue the other modules give friends.
-    private static final int FRIEND_COLOR = 0xFF4080FF;
-
     // Looked up once per entity every frame.
     private static volatile Chams instance;
-
-    // A module lookup walks every registered module.
-    private Freecam freecam;
 
     private final BoolSetting players = new BoolSetting("Players",
         "Show other players.", true);
@@ -65,13 +61,7 @@ public final class Chams extends Module {
 
     // The player's own model is only on screen in third person or Freecam.
     private boolean showsSelf() {
-        if (freecam == null) {
-            freecam = OfflineClient.INSTANCE.getModuleManager().get(Freecam.class);
-        }
-        if (freecam.isEnabled()) {
-            return true;
-        }
-        return !mc.options.getCameraType().isFirstPerson();
+        return Modules.enabled(Freecam.class) || !mc.options.getCameraType().isFirstPerson();
     }
 
     public boolean throughWalls() {
@@ -82,7 +72,7 @@ public final class Chams extends Module {
         int base = color.getColor();
         if (friendColor.isOn() && entity instanceof Player player
             && OfflineClient.INSTANCE.getFriendManager().isFriend(player.getGameProfile().name())) {
-            base = FRIEND_COLOR;
+            base = EntityUtil.FRIEND_COLOR;
         }
         return ColorUtil.withAlpha(base, (int) (opacity.getValue() * 255));
     }

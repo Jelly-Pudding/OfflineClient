@@ -36,16 +36,28 @@ public final class ExplosionUtil {
     }
 
     public static float crystalDamage(LivingEntity target, Vec3 source) {
-        return blastDamage(target, source, CRYSTAL_POWER);
+        return crystalDamage(target, source, Vec3.ZERO);
+    }
+
+    public static float crystalDamage(LivingEntity target, Vec3 source, Vec3 lead) {
+        return blastDamage(target, source, CRYSTAL_POWER, lead);
     }
 
     public static float blastDamage(LivingEntity target, Vec3 source, float power) {
+        return blastDamage(target, source, power, Vec3.ZERO);
+    }
+
+    /**
+     * Damage with the target carried forward by the lead. The blast stays where it
+     * really is and the exposure raycast runs through the world that exists.
+     */
+    public static float blastDamage(LivingEntity target, Vec3 source, float power, Vec3 lead) {
         if (target == null || !target.isAlive()) {
             return 0;
         }
         // Vanilla measures both the falloff and the damage against double the power.
         float diameter = power * 2;
-        double distance = Math.sqrt(target.distanceToSqr(source));
+        double distance = target.position().add(lead).distanceTo(source);
         if (distance > diameter) {
             return 0;
         }

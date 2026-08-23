@@ -13,7 +13,6 @@ public final class Fullbright extends Module {
         "Gamma level above the vanilla cap of 1.", 16, 1, 16, 0.5);
 
     private double previousGamma = 1;
-    private boolean stored;
 
     public Fullbright() {
         super("Fullbright", "See in the dark without torches.", Category.RENDER);
@@ -24,14 +23,11 @@ public final class Fullbright extends Module {
     protected void onEnable() {
         // A crash whilst enabled leaves the boosted gamma in options.txt. Vanilla caps at 1.
         previousGamma = Math.min(mc.options.gamma().get(), 1.0);
-        stored = true;
     }
 
     @Override
     protected void onDisable() {
-        if (stored) {
-            setGamma(previousGamma);
-        }
+        setGamma(previousGamma);
     }
 
     @Subscribe

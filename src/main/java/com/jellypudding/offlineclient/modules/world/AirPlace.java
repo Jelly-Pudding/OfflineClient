@@ -6,6 +6,7 @@ import com.jellypudding.offlineclient.event.events.RightClickEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.render.DrawBatch;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
@@ -93,7 +94,7 @@ public final class AirPlace extends Module {
         if (target == null || !guide.isOn()) {
             return;
         }
-        AABB box = new AABB(target).deflate(0.002);
+        AABB box = DrawBatch.blockBox(target);
         int argb = color.getColor();
         event.getBatch().solidBox(box, ColorUtil.withAlpha(argb, 40), false);
         event.getBatch().outlineBox(box, ColorUtil.withAlpha(argb, 220), false);

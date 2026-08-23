@@ -5,8 +5,7 @@ import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
-import com.jellypudding.offlineclient.modules.player.AutoEat;
-import com.jellypudding.offlineclient.modules.player.AutoGap;
+import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
@@ -27,14 +26,7 @@ public final class AutoClicker extends Module {
         if (!mc.options.keyAttack.isDown()) {
             return;
         }
-        // No swinging whilst eating or blocking or drawing a bow or mining.
-        if (mc.player.isUsingItem() || mc.gameMode.isDestroying()) {
-            return;
-        }
-        if (OfflineClient.INSTANCE.getModuleManager()
-            .get(AutoEat.class).isEating()
-            || OfflineClient.INSTANCE.getModuleManager()
-            .get(AutoGap.class).isEating()) {
+        if (mc.player.isUsingItem() || mc.gameMode.isDestroying() || Modules.eating()) {
             return;
         }
         if (mc.player.getAttackStrengthScale(0.5f) < 1) {

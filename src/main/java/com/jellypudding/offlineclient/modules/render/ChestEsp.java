@@ -29,6 +29,11 @@ public final class ChestEsp extends Module {
     private record Target(AABB box, int color) {
     }
 
+    private static final int ENDER_COLOR = 0xFFB44CFF;
+    private static final int CHEST_COLOR = 0xFF40FF70;
+    private static final int SHULKER_COLOR = 0xFFFFD040;
+    private static final int BARREL_COLOR = 0xFFC08040;
+
     private final BoolSetting chests = new BoolSetting("Chests",
         "Highlight chests and trapped chests.", true);
     private final BoolSetting enderChests = new BoolSetting("Ender chests",
@@ -49,7 +54,7 @@ public final class ChestEsp extends Module {
 
     @Override
     public String getSuffix() {
-        return String.valueOf(targets.size());
+        return targets.isEmpty() ? null : String.valueOf(targets.size());
     }
 
     @Subscribe
@@ -64,7 +69,7 @@ public final class ChestEsp extends Module {
 
         for (int dx = -r; dx <= r; dx++) {
             for (int dz = -r; dz <= r; dz++) {
-                LevelChunk chunk = (LevelChunk) mc.level.getChunkSource()
+                LevelChunk chunk = mc.level.getChunkSource()
                     .getChunk(centerX + dx, centerZ + dz, ChunkStatus.FULL, false);
                 if (chunk == null) {
                     continue;
@@ -104,16 +109,16 @@ public final class ChestEsp extends Module {
 
     private int colorFor(BlockEntity blockEntity) {
         if (blockEntity instanceof EnderChestBlockEntity) {
-            return enderChests.isOn() ? 0xFFB44CFF : 0;
+            return enderChests.isOn() ? ENDER_COLOR : 0;
         }
         if (blockEntity instanceof ChestBlockEntity) {
-            return chests.isOn() ? 0xFF40FF70 : 0;
+            return chests.isOn() ? CHEST_COLOR : 0;
         }
         if (blockEntity instanceof ShulkerBoxBlockEntity) {
-            return shulkers.isOn() ? 0xFFFFD040 : 0;
+            return shulkers.isOn() ? SHULKER_COLOR : 0;
         }
         if (blockEntity instanceof BarrelBlockEntity) {
-            return barrels.isOn() ? 0xFFC08040 : 0;
+            return barrels.isOn() ? BARREL_COLOR : 0;
         }
         return 0;
     }

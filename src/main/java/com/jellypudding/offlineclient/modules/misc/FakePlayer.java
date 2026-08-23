@@ -71,10 +71,6 @@ public final class FakePlayer extends Module {
         }
     }
 
-    public boolean isFake(Entity entity) {
-        return entity instanceof Body;
-    }
-
     /**
      * Borrows the local player's tab entry for the skin. The level refuses
      * two entities with the same UUID.
@@ -106,7 +102,6 @@ public final class FakePlayer extends Module {
                 setAbsorptionAmount(startHealth - getMaxHealth());
             }
             if (copyGear) {
-                // replaceWith stores the very same stacks.
                 Inventory theirs = source.getInventory();
                 Inventory ours = getInventory();
                 for (int slot = 0; slot < ours.getContainerSize(); slot++) {

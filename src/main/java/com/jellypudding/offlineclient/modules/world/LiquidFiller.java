@@ -18,7 +18,6 @@ import net.minecraft.tags.FluidTags;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.material.FluidState;
-import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.shapes.CollisionContext;
 
 import java.util.ArrayList;
@@ -27,23 +26,7 @@ import java.util.List;
 
 public final class LiquidFiller extends Module {
 
-    public enum Order {
-        CLOSEST("Closest"),
-        FURTHEST("Furthest"),
-        TOP_DOWN("Top down"),
-        BOTTOM_UP("Bottom up");
-
-        private final String label;
-
-        Order(String label) {
-            this.label = label;
-        }
-
-        @Override
-        public String toString() {
-            return label;
-        }
-    }
+    public enum Order { CLOSEST, FURTHEST, TOP_DOWN, BOTTOM_UP }
 
     private final NumberSetting range = new NumberSetting("Range",
         "How far you can reach to place.", 4.5, 1, 6, 0.1).min(1);
@@ -126,12 +109,12 @@ public final class LiquidFiller extends Module {
                 break;
             }
             Direction support = BlockUtil.findPlaceSupport(pos);
-            if (support != null) {
-                BlockUtil.place(pos, support, rotate.isOn(), true);
-            } else {
-                BlockUtil.placeDirect(pos, rotate.isOn(), true);
+            boolean ok = support != null
+                ? BlockUtil.place(pos, support, rotate.isOn(), true)
+                : BlockUtil.placeDirect(pos, rotate.isOn(), true);
+            if (ok) {
+                placed++;
             }
-            placed++;
         }
         if (placed > 0) {
             timer = delay.getInt();
@@ -189,7 +172,7 @@ public final class LiquidFiller extends Module {
         int next = perTick.getInt();
         for (int i = 0; i < targets.size(); i++) {
             int color = i < next ? 0xFF60D0FF : 0x8060D0FF;
-            event.getBatch().outlineBox(new AABB(targets.get(i)).deflate(0.002), color, false);
+            event.getBatch().outlineBlock(targets.get(i), color, false);
         }
     }
 }

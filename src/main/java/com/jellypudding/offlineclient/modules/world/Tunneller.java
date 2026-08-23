@@ -12,6 +12,7 @@ import com.jellypudding.offlineclient.util.AxisWalker;
 import com.jellypudding.offlineclient.util.BlockMiner;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.Blocks;
@@ -25,7 +26,6 @@ import java.util.List;
  * when it starts.
  */
 public final class Tunneller extends Module {
-
 
     private static final int TUNNEL_COLOR = 0xFF40C0FF;
     private static final int CURRENT_COLOR = 0xFFFF5030;
@@ -46,6 +46,7 @@ public final class Tunneller extends Module {
         .min(1).visibleWhen(torches::isOn);
 
     private final AxisWalker walker = new AxisWalker();
+    private final SlotSwap slots = new SlotSwap();
     private int cleared;
     private int lastTorch;
     private BlockPos current;
@@ -78,6 +79,7 @@ public final class Tunneller extends Module {
     @Override
     protected void onEnable() {
         walker.clear();
+        slots.forget();
         current = null;
         if (inGame()) {
             lockAxis();
@@ -93,6 +95,7 @@ public final class Tunneller extends Module {
     @Override
     protected void onDisable() {
         BlockMiner.release();
+        slots.restoreIfMine();
         mc.options.keyUp.setDown(false);
         walker.clear();
         current = null;
@@ -163,10 +166,8 @@ public final class Tunneller extends Module {
     }
 
     private List<BlockPos> slice(int depth) {
-        int lanes = width.getInt();
-        int leftLanes = (lanes - 1) / 2;
-        List<BlockPos> result = new ArrayList<>(lanes * height.getInt());
-        for (int lane = -leftLanes; lane <= lanes - 1 - leftLanes; lane++) {
+        List<BlockPos> result = new ArrayList<>(width.getInt() * height.getInt());
+        for (int lane = leftLane(); lane <= rightLane(); lane++) {
             for (int up = 0; up < height.getInt(); up++) {
                 result.add(walker.blockAt(depth, lane, up));
             }
@@ -174,7 +175,15 @@ public final class Tunneller extends Module {
         return result;
     }
 
-    // Puts a torch against the left wall every so many blocks.
+    private int leftLane() {
+        return -((width.getInt() - 1) / 2);
+    }
+
+    private int rightLane() {
+        return width.getInt() - 1 + leftLane();
+    }
+
+    // Puts a torch against the left wall at a set spacing.
     private void placeTorch() {
         if (!torches.isOn()) {
             return;
@@ -183,7 +192,7 @@ public final class Tunneller extends Module {
         if (depth < 1 || depth - lastTorch < spacing.getInt()) {
             return;
         }
-        BlockPos target = walker.blockAt(depth, -((width.getInt() - 1) / 2), 0);
+        BlockPos target = walker.blockAt(depth, leftLane(), 0);
         if (!BlockUtil.isReplaceable(target) || !BlockUtil.isSolid(target.below())) {
             return;
         }
@@ -191,16 +200,11 @@ public final class Tunneller extends Module {
         if (slot == -1) {
             return;
         }
-        int previous = mc.player.getInventory().getSelectedSlot();
-        if (slot != previous) {
-            mc.player.getInventory().setSelectedSlot(slot);
-        }
+        slots.select(slot);
         if (BlockUtil.place(target, Direction.DOWN, true, true)) {
             lastTorch = depth;
         }
-        if (slot != previous) {
-            mc.player.getInventory().setSelectedSlot(previous);
-        }
+        slots.restoreIfMine();
     }
 
     private void stop(String reason) {
@@ -220,15 +224,13 @@ public final class Tunneller extends Module {
             event.getBatch().outlineBox(near.minmax(far).inflate(0.005), TUNNEL_COLOR, true);
         }
         if (current != null) {
-            event.getBatch().outlineBox(new AABB(current).deflate(0.002), CURRENT_COLOR, false);
+            event.getBatch().outlineBlock(current, CURRENT_COLOR, false);
         }
     }
 
     private AABB box(int depth) {
-        int lanes = width.getInt();
-        int leftLanes = (lanes - 1) / 2;
-        AABB first = new AABB(walker.blockAt(depth, -leftLanes, 0));
-        AABB last = new AABB(walker.blockAt(depth, lanes - 1 - leftLanes, height.getInt() - 1));
+        AABB first = new AABB(walker.blockAt(depth, leftLane(), 0));
+        AABB last = new AABB(walker.blockAt(depth, rightLane(), height.getInt() - 1));
         return first.minmax(last);
     }
 }

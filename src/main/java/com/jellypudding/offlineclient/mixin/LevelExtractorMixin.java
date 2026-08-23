@@ -20,8 +20,8 @@ public class LevelExtractorMixin {
         at = @At("TAIL"))
     private void onExtractVisibleEntities(Camera camera, Frustum frustum, DeltaTracker deltaTracker,
                                           LevelRenderState level, CallbackInfo ci) {
-        PopChams popChams = Modules.get(PopChams.class);
-        if (popChams != null && popChams.isEnabled()) {
+        PopChams popChams = Modules.active(PopChams.class);
+        if (popChams != null) {
             popChams.addGhosts(level, deltaTracker.getGameTimeDeltaPartialTick(false));
         }
     }

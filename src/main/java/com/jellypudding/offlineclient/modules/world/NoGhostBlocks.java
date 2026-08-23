@@ -19,7 +19,7 @@ public final class NoGhostBlocks extends Module {
         searchTags("ghost blocks", "resync", "desync", "block sync");
     }
 
-    // In singleplayer the guess is always right.
+    // The integrated server confirms within a tick.
     public boolean holdsBreaks() {
         return isEnabled() && breaking.isOn() && !mc.isLocalServer();
     }

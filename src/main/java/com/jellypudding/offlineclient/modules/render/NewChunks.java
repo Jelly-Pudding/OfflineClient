@@ -10,6 +10,7 @@ import com.jellypudding.offlineclient.render.DrawBatch;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.ColorUtil;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket;
@@ -23,29 +24,38 @@ import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.phys.AABB;
-import net.minecraft.world.phys.Vec3;
 
 import java.lang.ref.WeakReference;
+import java.util.ArrayDeque;
+import java.util.HashSet;
 import java.util.Iterator;
-import java.util.LinkedHashSet;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 // Marks the chunks the server generated for the first time whilst the client watched.
+// Only a chunk whose data packet lands whilst this runs can ever reach a verdict.
 public final class NewChunks extends Module {
 
-    private static final int SCANS_PER_TICK = 8;
+    // Room for the burst of arrivals that follows a join or a teleport.
+    private static final int SCANS_PER_TICK = 256;
 
     private static final int MAX_CHUNKS = 32768;
 
     private final BoolSetting showOld = new BoolSetting("Show old chunks",
-        "Also marks the chunks that were already on disk.", false);
+        "Also draws the chunks judged old since you switched this on.", false);
+    private final BoolSetting showUnjudged = new BoolSetting("Show unjudged",
+        "Also draws the chunks this watched arrive without reaching a verdict.", false);
     private final ColorSetting newColor = new ColorSetting("New color",
         "Colour of the fresh chunks.", 0, false);
     private final ColorSetting oldColor = new ColorSetting("Old color",
         "Colour of the chunks that were already on disk.", 220, false)
         .visibleWhen(showOld::isOn);
+    private final ColorSetting unjudgedColor = new ColorSetting("Unjudged color",
+        "Colour of the chunks with no verdict.", 60, false)
+        .visibleWhen(showUnjudged::isOn);
     private final BoolSetting fill = new BoolSetting("Fill",
         "Adds a faint tint inside each square.", true);
     private final BoolSetting followHeight = new BoolSetting("Follow height",
@@ -56,31 +66,52 @@ public final class NewChunks extends Module {
     private final NumberSetting distance = new NumberSetting("Distance",
         "How far away a chunk may be and still be drawn.", 32, 8, 64, 1, " chunks")
         .min(1).max(256);
+    private final NumberSetting settle = new NumberSetting("Settle time",
+        "How long after a chunk loads a liquid flow still counts as fresh.", 60, 5, 300, 5, "s")
+        .min(1).max(3600);
+    private final BoolSetting notice = new BoolSetting("Notice",
+        "Explains the limits in chat when you switch this on.", true);
 
-    // Insertion ordered. The oldest entry drops when full.
-    private final Set<Long> newChunks = new LinkedHashSet<>();
-    private final Set<Long> oldChunks = new LinkedHashSet<>();
+    private final Set<Long> newChunks = new HashSet<>();
+    private final Set<Long> oldChunks = new HashSet<>();
+
+    // Insertion ordered. Holds every chunk whose data packet landed whilst this ran.
+    // The value is the tick it landed on.
+    private final Map<Long, Integer> watched = new LinkedHashMap<>();
 
     // Filled from the network thread and drained on the next tick.
     private final Queue<Long> flowing = new ConcurrentLinkedQueue<>();
     private final Queue<Long> arrived = new ConcurrentLinkedQueue<>();
 
+    // Chunks whose data still needs the palette test. Client thread only.
+    private final Queue<Long> pending = new ArrayDeque<>();
+    private final Queue<Long> retry = new ArrayDeque<>();
+
     private WeakReference<Level> world;
+    private int ticks;
 
     public NewChunks() {
-        super("NewChunks", "Marks chunks the server had never generated before.", Category.RENDER);
-        addSettings(showOld, newColor, oldColor, fill, followHeight, drawHeight, distance);
+        super("NewChunks", "Marks fresh and old chunks that load whilst this is on.",
+            Category.RENDER);
+        addSettings(showOld, showUnjudged, newColor, oldColor, unjudgedColor, fill,
+            followHeight, drawHeight, distance, settle, notice);
         searchTags("new chunks", "fresh terrain", "exploit");
     }
 
     @Override
     public String getSuffix() {
-        return String.valueOf(newChunks.size());
+        int unjudged = Math.max(0, watched.size() - newChunks.size() - oldChunks.size());
+        return newChunks.size() + " new " + oldChunks.size() + " old " + unjudged + " unjudged";
     }
 
     @Override
     protected void onEnable() {
         reset();
+        if (notice.isOn()) {
+            ChatUtil.message("§bNewChunks §7judges only the chunks that load whilst it is on. "
+                + "Switch it on before you head into fresh land. A verdict needs liquid in the "
+                + "chunk. Everything else stays unjudged.");
+        }
     }
 
     @Override
@@ -91,19 +122,26 @@ public final class NewChunks extends Module {
     private void reset() {
         newChunks.clear();
         oldChunks.clear();
+        watched.clear();
         flowing.clear();
         arrived.clear();
+        pending.clear();
+        retry.clear();
+        ticks = 0;
     }
 
-    private static void addBounded(Set<Long> chunks, long key) {
-        chunks.add(key);
-        if (chunks.size() <= MAX_CHUNKS) {
+    // The oldest chunk drops once the store is full.
+    private void remember(long key) {
+        watched.put(key, ticks);
+        if (watched.size() <= MAX_CHUNKS) {
             return;
         }
-        Iterator<Long> iterator = chunks.iterator();
-        while (chunks.size() > MAX_CHUNKS && iterator.hasNext()) {
-            iterator.next();
+        Iterator<Long> iterator = watched.keySet().iterator();
+        while (watched.size() > MAX_CHUNKS && iterator.hasNext()) {
+            long eldest = iterator.next();
             iterator.remove();
+            newChunks.remove(eldest);
+            oldChunks.remove(eldest);
         }
     }
 
@@ -119,10 +157,8 @@ public final class NewChunks extends Module {
         }
     }
 
-    /**
-     * Generation writes liquid as source blocks and the spreading only
-     * starts once the chunk is live. A flow update is the giveaway.
-     */
+    // Generation writes liquid as source blocks and the spreading only starts once the
+    // chunk is live. A flow update is the giveaway.
     private void noteFlow(BlockPos pos, BlockState state) {
         FluidState fluid = state.getFluidState();
         if (!fluid.isEmpty() && !fluid.isSource()) {
@@ -141,26 +177,63 @@ public final class NewChunks extends Module {
             reset();
             return;
         }
+        ticks++;
 
-        // Flow updates are read before arrivals.
+        // Arrivals are taken first. A flow update from the same batch then finds its chunk.
+        // A second arrival of the same chunk keeps the first verdict. Liquid spreads whilst
+        // a chunk sits loaded.
         Long key;
+        while ((key = arrived.poll()) != null) {
+            if (watched.containsKey(key)) {
+                continue;
+            }
+            remember(key);
+            pending.add(key);
+        }
+
+        // A flow marks the chunk fresh before the palette test can call it old.
+        int window = settle.getInt() * 20;
         while ((key = flowing.poll()) != null) {
-            if (!oldChunks.contains(key)) {
-                addBounded(newChunks, key);
+            Integer seen = watched.get(key);
+            if (seen == null || oldChunks.contains(key)) {
+                continue;
+            }
+            if (ticks - seen <= window) {
+                newChunks.add(key);
             }
         }
 
         int budget = SCANS_PER_TICK;
-        while (budget > 0 && (key = arrived.poll()) != null) {
+        while (budget > 0 && (key = retry.poll()) != null) {
             budget--;
-            if (newChunks.contains(key) || oldChunks.contains(key)) {
-                continue;
+            check(key, false);
+        }
+        while (budget > 0 && (key = pending.poll()) != null) {
+            budget--;
+            check(key, true);
+        }
+    }
+
+    // Liquid that had already spread before the save travels inside the chunk data.
+    private void check(long key, boolean mayRetry) {
+        // The store may have dropped this chunk whilst the scan sat queued.
+        if (!watched.containsKey(key)) {
+            return;
+        }
+        if (newChunks.contains(key) || oldChunks.contains(key)) {
+            return;
+        }
+        LevelChunk chunk = mc.level.getChunkSource()
+            .getChunk(ChunkPos.getX(key), ChunkPos.getZ(key), ChunkStatus.FULL, false);
+        if (chunk == null) {
+            // The packet landed after the client had run its jobs for this tick.
+            if (mayRetry) {
+                retry.add(key);
             }
-            LevelChunk chunk = mc.level.getChunkSource()
-                .getChunk(ChunkPos.getX(key), ChunkPos.getZ(key), ChunkStatus.FULL, false);
-            if (chunk != null && hasFlowingLiquid(chunk)) {
-                addBounded(oldChunks, key);
-            }
+            return;
+        }
+        if (hasFlowingLiquid(chunk)) {
+            oldChunks.add(key);
         }
     }
 
@@ -192,6 +265,15 @@ public final class NewChunks extends Module {
         int centerX = mc.player.chunkPosition().x();
         int centerZ = mc.player.chunkPosition().z();
 
+        if (showUnjudged.isOn()) {
+            int color = unjudgedColor.getColor();
+            for (long key : watched.keySet()) {
+                if (newChunks.contains(key) || oldChunks.contains(key)) {
+                    continue;
+                }
+                plot(event.getBatch(), key, color, y, limit, centerX, centerZ);
+            }
+        }
         draw(event.getBatch(), newChunks, newColor.getColor(), y, limit, centerX, centerZ);
         if (showOld.isOn()) {
             draw(event.getBatch(), oldChunks, oldColor.getColor(), y, limit, centerX, centerZ);
@@ -201,23 +283,25 @@ public final class NewChunks extends Module {
     private void draw(DrawBatch batch, Set<Long> chunks, int color, double y,
                       int limit, int centerX, int centerZ) {
         for (long key : chunks) {
-            int x = ChunkPos.getX(key);
-            int z = ChunkPos.getZ(key);
-            if (Math.abs(x - centerX) > limit || Math.abs(z - centerZ) > limit) {
-                continue;
-            }
-            square(batch, x * 16, z * 16, y, color);
+            plot(batch, key, color, y, limit, centerX, centerZ);
         }
+    }
+
+    private void plot(DrawBatch batch, long key, int color, double y,
+                      int limit, int centerX, int centerZ) {
+        int x = ChunkPos.getX(key);
+        int z = ChunkPos.getZ(key);
+        if (Math.abs(x - centerX) > limit || Math.abs(z - centerZ) > limit) {
+            return;
+        }
+        square(batch, x * 16, z * 16, y, color);
     }
 
     // A flat box has no edges to draw.
     private void square(DrawBatch batch, double x1, double z1, double y, int color) {
         double x2 = x1 + 16;
         double z2 = z1 + 16;
-        batch.line(new Vec3(x1, y, z1), new Vec3(x2, y, z1), color, true);
-        batch.line(new Vec3(x2, y, z1), new Vec3(x2, y, z2), color, true);
-        batch.line(new Vec3(x2, y, z2), new Vec3(x1, y, z2), color, true);
-        batch.line(new Vec3(x1, y, z2), new Vec3(x1, y, z1), color, true);
+        batch.flatRect(x1, z1, x2, z2, y, color, true);
         if (fill.isOn()) {
             batch.solidBox(new AABB(x1, y, z1, x2, y + 0.02, z2),
                 ColorUtil.withAlpha(color, 40), true);

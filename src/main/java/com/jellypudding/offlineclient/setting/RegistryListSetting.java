@@ -12,6 +12,7 @@ import net.minecraft.world.item.SpawnEggItem;
 import net.minecraft.world.level.block.Block;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.Set;
 
@@ -45,11 +46,16 @@ public final class RegistryListSetting<T> extends Setting<Set<Identifier>> {
                 ids.add(id);
             }
         }
-        return java.util.Collections.unmodifiableSet(ids);
+        return Collections.unmodifiableSet(ids);
     }
 
     public Registry<T> getRegistry() {
         return registry;
+    }
+
+    @Override
+    public Set<Identifier> getValue() {
+        return Collections.unmodifiableSet(value);
     }
 
     // Unknown ids are kept in the config but not here.
@@ -81,6 +87,7 @@ public final class RegistryListSetting<T> extends Setting<Set<Identifier>> {
     public void clear() {
         value.clear();
         rebuild();
+        changed();
     }
 
     public void remove(T entry) {
@@ -150,7 +157,7 @@ public final class RegistryListSetting<T> extends Setting<Set<Identifier>> {
             }
         }
         // Set.copyOf loses order and some modules rank by pick order.
-        resolved = java.util.Collections.unmodifiableSet(next);
+        resolved = Collections.unmodifiableSet(next);
     }
 
     private void changed() {

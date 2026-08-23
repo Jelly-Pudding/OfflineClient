@@ -7,6 +7,7 @@ import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.ExclusivityGroup;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.render.DrawBatch;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
@@ -45,7 +46,6 @@ public final class VeinMiner extends Module {
             return label;
         }
     }
-
 
     private static final int OUTLINE_COLOR = 0xFFFFA020;
 
@@ -219,7 +219,7 @@ public final class VeinMiner extends Module {
     @Subscribe
     private void onRender3D(Render3DEvent event) {
         for (BlockPos pos : vein) {
-            AABB box = new AABB(pos).deflate(pos.equals(current) ? 0.002 : 0.06);
+            AABB box = new AABB(pos).deflate(pos.equals(current) ? DrawBatch.BLOCK_INSET : 0.06);
             event.getBatch().outlineBox(box, OUTLINE_COLOR, false);
         }
     }

@@ -1,6 +1,7 @@
 package com.jellypudding.offlineclient.modules.render;
 
 import com.jellypudding.offlineclient.event.Subscribe;
+import com.jellypudding.offlineclient.event.events.PacketReceiveEvent;
 import com.jellypudding.offlineclient.event.events.Render3DEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
@@ -8,16 +9,11 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.render.DrawBatch;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
-import net.minecraft.core.Direction;
+import com.jellypudding.offlineclient.util.ChunkScanner;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.SectionPos;
-import net.minecraft.resources.ResourceKey;
-import net.minecraft.world.level.Level;
+import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.chunk.LevelChunk;
-import net.minecraft.world.level.chunk.LevelChunkSection;
-import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.phys.AABB;
 
 import java.util.ArrayDeque;
@@ -30,10 +26,13 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Scans nearby chunks once a second through the section palette and merges
- * touching portal blocks into one box per portal.
+ * Nearby chunks are scanned through the section palette on a background thread
+ * and touching portal blocks are merged into one box per portal.
  */
 public final class Portals extends Module {
+
+    private record Spot(BlockPos pos, Block block) {
+    }
 
     private record Group(AABB box, int color) {
     }
@@ -41,6 +40,9 @@ public final class Portals extends Module {
     private static final int NETHER_COLOR = 0xFFB050FF;
     private static final int END_COLOR = 0xFF50FFB0;
     private static final int GATEWAY_COLOR = 0xFF40C8FF;
+
+    // Ticks between merges. The boxes only move when a portal is built or broken.
+    private static final int MERGE_INTERVAL = 20;
 
     private final NumberSetting range = new NumberSetting("Range",
         "Chunk radius to scan around you.", 6, 1, 8, 1, " chunks").max(16);
@@ -51,9 +53,9 @@ public final class Portals extends Module {
     private final BoolSetting tracers = new BoolSetting("Tracers",
         "Draw a line to every portal.", false);
 
+    private final ChunkScanner<Spot> scanner = new ChunkScanner<>();
     private List<Group> groups = List.of();
     private int timer;
-    private ResourceKey<Level> dimension;
 
     public Portals() {
         super("Portals", "Highlights portals through walls.", Category.RENDER);
@@ -63,19 +65,27 @@ public final class Portals extends Module {
 
     @Override
     public String getSuffix() {
-        return String.valueOf(groups.size());
+        return groups.isEmpty() ? null : String.valueOf(groups.size());
     }
 
     @Override
     protected void onEnable() {
         timer = 0;
+        scanner.reset();
     }
 
     @Override
     protected void onDisable() {
         groups = List.of();
+        scanner.reset();
     }
 
+    private static boolean isPortal(Block block) {
+        return block == Blocks.NETHER_PORTAL || block == Blocks.END_PORTAL
+            || block == Blocks.END_GATEWAY;
+    }
+
+    // Zero for a portal the settings hide.
     private int colorOf(Block block) {
         if (block == Blocks.NETHER_PORTAL) {
             return nether.isOn() ? NETHER_COLOR : 0;
@@ -90,35 +100,31 @@ public final class Portals extends Module {
     }
 
     @Subscribe
+    private void onPacketReceive(PacketReceiveEvent event) {
+        scanner.markChanged(event.getPacket());
+    }
+
+    @Subscribe
     private void onTick(TickEvent event) {
         if (!inGame()) {
             return;
         }
-        if (mc.level.dimension() != dimension) {
-            dimension = mc.level.dimension();
-            groups = List.of();
-            timer = 0;
-        }
+        scanner.update(range.getInt(), (view, out) -> view.forEachMatching(
+            state -> isPortal(state.getBlock()),
+            (x, y, z, state) -> out.add(new Spot(new BlockPos(x, y, z), state.getBlock()))));
+
         if (--timer > 0) {
             return;
         }
-        timer = 20;
-        groups = scan();
+        timer = MERGE_INTERVAL;
+        groups = group(scanner.results());
     }
 
-    private List<Group> scan() {
+    private List<Group> group(List<Spot> spots) {
         Map<Block, Set<BlockPos>> found = new HashMap<>();
-        int r = range.getInt();
-        int centerX = mc.player.chunkPosition().x();
-        int centerZ = mc.player.chunkPosition().z();
-
-        for (int dx = -r; dx <= r; dx++) {
-            for (int dz = -r; dz <= r; dz++) {
-                LevelChunk chunk = mc.level.getChunkSource()
-                    .getChunk(centerX + dx, centerZ + dz, ChunkStatus.FULL, false);
-                if (chunk != null) {
-                    scanChunk(chunk, found);
-                }
+        for (Spot spot : spots) {
+            if (colorOf(spot.block()) != 0) {
+                found.computeIfAbsent(spot.block(), key -> new HashSet<>()).add(spot.pos());
             }
         }
 
@@ -130,31 +136,6 @@ public final class Portals extends Module {
             }
         }
         return result;
-    }
-
-    private void scanChunk(LevelChunk chunk, Map<Block, Set<BlockPos>> found) {
-        LevelChunkSection[] sections = chunk.getSections();
-        int baseX = chunk.getPos().getMinBlockX();
-        int baseZ = chunk.getPos().getMinBlockZ();
-        for (int i = 0; i < sections.length; i++) {
-            LevelChunkSection section = sections[i];
-            if (section == null || section.hasOnlyAir()
-                || !section.maybeHas(state -> colorOf(state.getBlock()) != 0)) {
-                continue;
-            }
-            int baseY = SectionPos.sectionToBlockCoord(chunk.getSectionYFromSectionIndex(i));
-            for (int y = 0; y < 16; y++) {
-                for (int z = 0; z < 16; z++) {
-                    for (int x = 0; x < 16; x++) {
-                        Block block = section.getBlockState(x, y, z).getBlock();
-                        if (colorOf(block) != 0) {
-                            found.computeIfAbsent(block, key -> new HashSet<>())
-                                .add(new BlockPos(baseX + x, baseY + y, baseZ + z));
-                        }
-                    }
-                }
-            }
-        }
     }
 
     // One box per patch of touching blocks.

@@ -8,7 +8,7 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.render.WorldToScreen;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
-import net.minecraft.client.gui.Font;
+import com.jellypudding.offlineclient.util.RenderUtil;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.world.entity.Entity;
@@ -17,15 +17,12 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.OwnableEntity;
 import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.phys.Vec3;
-import org.joml.Matrix3x2fStack;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
 public final class EntityOwner extends Module {
-
-    private static final int BACKGROUND = 0x90000000;
 
     private record Label(String name, int color, Vec3 screen, double distance) {
     }
@@ -137,19 +134,8 @@ public final class EntityOwner extends Module {
     }
 
     private void draw(GuiGraphicsExtractor context, Label label) {
-        Font font = mc.font;
-        int width = font.width(label.name());
         float factor = (float) (scale.getValue() * Math.clamp(1 - label.distance() / 80.0, 0.5, 1));
-
-        Matrix3x2fStack pose = context.pose();
-        pose.pushMatrix();
-        pose.translate((float) label.screen().x, (float) label.screen().y);
-        pose.scale(factor, factor);
-
-        int half = width / 2 + 2;
-        context.fill(-half, -font.lineHeight - 2, half, 1, BACKGROUND);
-        context.guiRenderState.up();
-        context.text(font, label.name(), -width / 2, -font.lineHeight, label.color(), true);
-        pose.popMatrix();
+        RenderUtil.label(context, mc.font, label.screen().x, label.screen().y, factor,
+            List.of(label.name()), List.of(label.color()));
     }
 }

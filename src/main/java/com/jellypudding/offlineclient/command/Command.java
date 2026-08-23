@@ -26,10 +26,6 @@ public abstract class Command {
         return usage;
     }
 
-    public String[] getAliases() {
-        return aliases;
-    }
-
     public boolean matches(String input) {
         if (name.equalsIgnoreCase(input)) {
             return true;

@@ -11,21 +11,7 @@ import org.lwjgl.glfw.GLFW;
 
 public final class ClickGuiModule extends Module {
 
-    public enum Style {
-        PANELS("Panels"),
-        WINDOW("Window");
-
-        private final String label;
-
-        Style(String label) {
-            this.label = label;
-        }
-
-        @Override
-        public String toString() {
-            return label;
-        }
-    }
+    public enum Style { PANELS, WINDOW }
 
     private final EnumSetting<Style> style = new EnumSetting<>("Style",
         "Draggable panels or one window with a sidebar.", Style.PANELS);
@@ -60,7 +46,7 @@ public final class ClickGuiModule extends Module {
     // A screen opened mid key press receives that same press.
     public void open() {
         mc.schedule(() -> {
-            Screen screen = style.is(Style.WINDOW) ? new WindowGuiScreen() : new ClickGuiScreen();
+            Screen screen = isWindow() ? new WindowGuiScreen() : new ClickGuiScreen();
             mc.gui.setScreen(screen);
         });
     }

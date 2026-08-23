@@ -43,7 +43,7 @@ import java.util.Map;
 public final class CrystalAura extends Module {
 
     // How far ahead of a moving target the damage is scored.
-    private static final double LEAD_TICKS = 3;
+    private static final double LEAD_TICKS = 1;
 
     // Ticks a placed spot stays on the own crystal list.
     private static final int OWN_MEMORY = 100;
@@ -54,14 +54,10 @@ public final class CrystalAura extends Module {
     // Ticks a crystal is left alone after a hit before it is tried again.
     private static final int ATTACK_MEMORY = 3;
 
-    private static final EquipmentSlot[] ARMOR_SLOTS = {
-        EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET
-    };
-
     private final NumberSetting targetRange = new NumberSetting("Target range",
         "How far away enemies are considered.", 10, 2, 16, 0.5, " blocks");
     private final NumberSetting range = new NumberSetting("Range",
-        "Reach for placing and hitting crystals.", 4.5, 1, 6, 0.1).min(1);
+        "Reach for placing and hitting crystals.", 4.5, 1, 6, 0.1);
     private final NumberSetting wallsRange = new NumberSetting("Walls range",
         "Reach for crystals hidden behind blocks.", 3.5, 0, 6, 0.1);
     private final BoolSetting doPlace = new BoolSetting("Place",
@@ -69,7 +65,7 @@ public final class CrystalAura extends Module {
     private final NumberSetting placeDelay = new NumberSetting("Place delay",
         "Ticks to wait between placements.", 2, 0, 10, 1, " ticks");
     private final BoolSetting doBreak = new BoolSetting("Break",
-        "Hit placed crystals so they explode.", true);
+        "Hit placed crystals to set them off.", true);
     private final NumberSetting breakDelay = new NumberSetting("Break delay",
         "Ticks to wait between hits.", 1, 0, 10, 1, " ticks");
     private final NumberSetting minDamage = new NumberSetting("Min damage",
@@ -112,6 +108,7 @@ public final class CrystalAura extends Module {
     private final SlotSwap slots = new SlotSwap();
     private BlockPos planned;
     private String targetName;
+    private String status;
 
     // True for the tick when the target is weak enough to ignore Min damage.
     private boolean facing;
@@ -134,14 +131,9 @@ public final class CrystalAura extends Module {
         searchTags("end crystal", "cpvp", "ca");
     }
 
-    private String status;
-
     @Override
     public String getSuffix() {
-        if (targetName == null) {
-            return null;
-        }
-        return status == null ? targetName : targetName + " " + status;
+        return targetName == null ? null : suffix(targetName, status);
     }
 
     public boolean hasTarget() {
@@ -150,7 +142,7 @@ public final class CrystalAura extends Module {
 
     /**
      * True only for a short window after a real place or break. Other combat
-     * modules stand aside on that window rather than for the whole fight.
+     * modules stand aside on that window.
      */
     public boolean isActing() {
         return busyTimer > 0;
@@ -205,7 +197,7 @@ public final class CrystalAura extends Module {
         forgetOldSpots();
 
         Player target = EntityUtil.nearestEnemy(targetRange.getValue());
-        targetName = target == null ? null : target.getGameProfile().name();
+        targetName = EntityUtil.nameOf(target);
         status = null;
         if (target == null) {
             slots.restore();
@@ -240,7 +232,7 @@ public final class CrystalAura extends Module {
     }
 
     private void breakBest(Player target) {
-        // Damage during immunity is reduced to the difference so the crystal is wasted.
+        // Damage during immunity drops to the difference. The crystal is wasted.
         if (smartDelay.isOn() && target.hurtTime > 0) {
             return;
         }
@@ -264,7 +256,7 @@ public final class CrystalAura extends Module {
             if (!selfSafe(crystal.position())) {
                 continue;
             }
-            float damage = ExplosionUtil.crystalDamage(target, scorePoint(crystal.position(), target));
+            float damage = ExplosionUtil.crystalDamage(target, crystal.position(), lead(target));
             if (worthIt(damage) && damage > bestDamage) {
                 bestDamage = damage;
                 best = crystal;
@@ -350,14 +342,14 @@ public final class CrystalAura extends Module {
 
             // The crystal model needs its whole space free of entities.
             AABB space = new AABB(above.getX(), above.getY(), above.getZ(),
-                above.getX() + 1, above.getY() + (oldPlacement.isOn() ? 1 : 2), above.getZ() + 1);
+                above.getX() + 1, above.getY() + 2, above.getZ() + 1);
             if (entityBlocks(space)) {
                 continue;
             }
             if (!selfSafe(crystalPos)) {
                 continue;
             }
-            float damage = ExplosionUtil.crystalDamage(target, scorePoint(crystalPos, target));
+            float damage = ExplosionUtil.crystalDamage(target, crystalPos, lead(target));
             if (worthIt(damage) && damage > bestDamage) {
                 bestDamage = damage;
                 best = base.immutable();
@@ -366,15 +358,10 @@ public final class CrystalAura extends Module {
         return best;
     }
 
-    /**
-     * Where to measure the blast from. Pulling the source back along the
-     * target's own speed scores the hit where they are heading.
-     */
-    private Vec3 scorePoint(Vec3 crystalPos, Player target) {
-        if (!predict.isOn()) {
-            return crystalPos;
-        }
-        return crystalPos.subtract(target.getDeltaMovement().scale(LEAD_TICKS));
+    // How far the target travels before the blast lands. Scores the hit where
+    // the target is heading.
+    private Vec3 lead(Player target) {
+        return predict.isOn() ? EntityUtil.velocityOf(target).scale(LEAD_TICKS) : Vec3.ZERO;
     }
 
     private boolean worthIt(float damage) {
@@ -389,7 +376,7 @@ public final class CrystalAura extends Module {
         if (ExplosionUtil.totalHealth(target) <= facePlaceHealth.getFloat()) {
             return true;
         }
-        for (EquipmentSlot slot : ARMOR_SLOTS) {
+        for (EquipmentSlot slot : ItemUtil.ARMOR_SLOTS) {
             ItemStack piece = target.getItemBySlot(slot);
             if (piece.isEmpty() || !piece.isDamageableItem()) {
                 continue;
@@ -415,7 +402,7 @@ public final class CrystalAura extends Module {
 
     /**
      * Puts something with attack damage in hand when weakness has taken it to
-     * zero. The server refuses the whole attack at zero so the crystal survives.
+     * zero. The server refuses the whole attack at zero and the crystal survives.
      */
     private boolean armWeakHand() {
         if (mc.player.getAttributeValue(Attributes.ATTACK_DAMAGE) > 0) {
@@ -504,7 +491,7 @@ public final class CrystalAura extends Module {
      * True whenever the support has taken this tick.
      */
     private boolean placeSupport(Player target) {
-        int slot = InventoryUtil.hotbarSlot(stack -> stack.is(Items.OBSIDIAN.asItem()));
+        int slot = InventoryUtil.hotbarSlot(stack -> stack.is(Items.OBSIDIAN));
         if (slot == -1) {
             status = "(no obsidian)";
             return false;
@@ -527,7 +514,7 @@ public final class CrystalAura extends Module {
             if (!selfSafe(crystalPos)) {
                 continue;
             }
-            float damage = ExplosionUtil.crystalDamage(target, scorePoint(crystalPos, target));
+            float damage = ExplosionUtil.crystalDamage(target, crystalPos, lead(target));
             if (worthIt(damage) && damage > bestDamage) {
                 bestDamage = damage;
                 best = pos.immutable();
@@ -544,7 +531,7 @@ public final class CrystalAura extends Module {
         }
 
         slots.select(slot);
-        Direction side = BlockUtil.findSupport(best);
+        Direction side = BlockUtil.findPlaceSupport(best);
         boolean placed = side != null
             ? BlockUtil.place(best, side, false, true)
             : BlockUtil.placeDirect(best, false, true);
@@ -561,7 +548,7 @@ public final class CrystalAura extends Module {
         if (!render.isOn() || planned == null) {
             return;
         }
-        event.getBatch().outlineBox(new AABB(planned).deflate(0.002), 0xFFB040FF, false);
+        event.getBatch().outlineBlock(planned, 0xFFB040FF, false);
         event.getBatch().outlineBox(new AABB(planned.above()).inflate(-0.2, 0, -0.2), 0x80B040FF, false);
     }
 }

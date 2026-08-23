@@ -4,11 +4,11 @@ import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.AirStrafingSpeedEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
+import com.jellypudding.offlineclient.module.ExclusivityGroup;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
-import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -20,7 +20,8 @@ public final class Glide extends Module {
     private final NumberSetting boost = new NumberSetting("Horizontal boost",
         "How much further your keys carry you through the air.", 1.2, 1, 3, 0.05, "x");
     private final NumberSetting minHeight = new NumberSetting("Minimum height",
-        "Stops gliding once the ground is this close. Zero turns it off.", 0, 0, 4, 0.25, " blocks");
+        "Stops gliding once the ground is this close with zero turning it off.",
+        0, 0, 4, 0.25, " blocks");
     private final BoolSetting pauseOnSneak = new BoolSetting("Pause whilst sneaking",
         "Holding sneak drops you at the normal speed.", true);
 
@@ -28,7 +29,7 @@ public final class Glide extends Module {
     private boolean gliding;
 
     public Glide() {
-        super("Glide", "Slows your fall so you drift down under control.", Category.MOVEMENT);
+        super("Glide", "Slows your fall into a controlled drift.", Category.MOVEMENT);
         addSettings(fallSpeed, boost, minHeight, pauseOnSneak);
         searchTags("slow fall", "float", "parachute", "feather falling");
     }
@@ -42,13 +43,13 @@ public final class Glide extends Module {
     }
 
     @Override
+    public ExclusivityGroup getExclusivityGroup() {
+        return ExclusivityGroup.FALL_CONTROL;
+    }
+
+    @Override
     protected void onEnable() {
         gliding = false;
-        // FastFall pulls the other way and would cancel this out.
-        FastFall fastFall = Modules.get(FastFall.class);
-        if (fastFall != null) {
-            fastFall.setEnabled(false);
-        }
     }
 
     @Override

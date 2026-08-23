@@ -10,6 +10,7 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.setting.Setting;
 import com.jellypudding.offlineclient.setting.TextSetting;
+import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.RenderUtil;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -19,11 +20,19 @@ import java.util.List;
 // Draws one setting row and turns clicks on it into changes.
 public final class SettingWidget {
 
-    public static final int PAD = GuiTheme.PAD;
+    private static final int PAD = GuiTheme.PAD;
 
     private static final int VALUE_BAND = GuiTheme.SETTING_HEIGHT - 5;
-    public static final int INDENT = 10;
+    private static final int INDENT = 10;
     private static final int BOX = 9;
+
+    // A colour row carries a hue bar then a saturation bar then a brightness bar.
+    private static final int COLOR_BARS = 3;
+    private static final int BAR_HEIGHT = 3;
+    private static final int BAR_PITCH = 5;
+    private static final int HUE_CHANNEL = 0;
+    private static final int SATURATION_CHANNEL = 1;
+    private static final int BRIGHTNESS_CHANNEL = 2;
 
     private static final String BIND_HELP =
         "Click here and then press a key. DELETE unbinds. ESC cancels.";
@@ -50,14 +59,15 @@ public final class SettingWidget {
         void openPicker(RegistryListSetting<?> setting);
     }
 
-    // A slider or hue bar keeps following the mouse even when it leaves the row.
+    // A slider or colour bar keeps following the mouse even when it leaves the row.
     public static final class Drag {
 
         private NumberSetting slider;
-        private ColorSetting hue;
+        private ColorSetting color;
+        private int channel;
 
         public boolean isActive() {
-            return slider != null || hue != null;
+            return slider != null || color != null;
         }
 
         // Called every frame with the geometry of the settings block.
@@ -65,8 +75,8 @@ public final class SettingWidget {
             if (slider != null) {
                 slider.setFromSlider(fraction(x, width, mouseX));
             }
-            if (hue != null) {
-                hue.setHue((float) fraction(x, width, mouseX) * 360f);
+            if (color != null) {
+                setChannel(color, channel, (float) fraction(x, width, mouseX));
             }
         }
 
@@ -78,19 +88,16 @@ public final class SettingWidget {
                 slider.endSlider();
             }
             slider = null;
-            hue = null;
+            color = null;
         }
     }
 
-    public static int visibleCount(Module module) {
-        int count = 0;
-        List<Setting<?>> settings = module.getSettings();
-        for (int i = 0; i < settings.size(); i++) {
-            if (settings.get(i).isVisible()) {
-                count++;
-            }
+    // A colour row needs room under the hue bar for the two extra bars.
+    public static int rowHeight(Setting<?> setting) {
+        if (setting instanceof ColorSetting) {
+            return GuiTheme.SETTING_HEIGHT + (COLOR_BARS - 1) * BAR_PITCH;
         }
-        return count;
+        return GuiTheme.SETTING_HEIGHT;
     }
 
     public static boolean isOver(double mx, double my, int x, int y, int w, int h) {
@@ -114,13 +121,15 @@ public final class SettingWidget {
                               int x, int y, int width, int mouseX, int mouseY,
                               boolean hoverAllowed, Host host) {
         int w = width;
-        int h = GuiTheme.SETTING_HEIGHT;
-        int ty = GuiTheme.textY(y, h);
+        int h = rowHeight(setting);
+        int ty = GuiTheme.textY(y, GuiTheme.SETTING_HEIGHT);
         // Rows with a bar at the bottom centre their text in the band above it.
         int bandY = GuiTheme.textY(y, VALUE_BAND);
         boolean hovered = hoverAllowed && isOver(mouseX, mouseY, x, y, w, h);
         if (hovered) {
-            host.setTooltip(setting.getDescription());
+            // A bind row wants the help text and not the description of the key.
+            host.setTooltip(setting instanceof KeybindSetting
+                ? BIND_HELP : setting.getDescription());
             context.fill(x, y, x + w, y + h, 0x14FFFFFF);
             context.guiRenderState.up();
         }
@@ -139,13 +148,10 @@ public final class SettingWidget {
                 context.text(font, k.getName(), x + PAD, ty, nameColor, false);
                 keyChip(context, font, x + w - PAD, y, host.isBinding(k) ? "press a key" : k.getKeyName(),
                     host.isBinding(k));
-                if (hovered) {
-                    host.setTooltip(BIND_HELP);
-                }
             }
             case EnumSetting<?> e -> {
                 context.text(font, e.getName(), x + PAD, ty, nameColor, false);
-                String value = trimEnd(font, String.valueOf(e.getValue()),
+                String value = trimEnd(font, e.getValueString(),
                     w - 2 * PAD - 6 - font.width(e.getName()));
                 context.text(font, value, x + w - PAD - font.width(value), ty,
                     GuiTheme.accentText(), false);
@@ -172,18 +178,25 @@ public final class SettingWidget {
         boolean overValue = hoverAllowed && overNumberValue(font, mouseX, mouseY, n, x, y, w);
         int highlight = editing || overValue ? GuiTheme.accentText() : GuiTheme.TEXT;
         int valueY = GuiTheme.textY(y, VALUE_BAND);
+        int right = x + w - PAD;
         int valueX;
+        int underlineX;
         if (editing) {
-            // A number being typed grows to the left so the caret stays put.
-            int room = w - 2 * PAD;
-            valueX = x + w - PAD - room;
-            host.getEditField().render(context, font, valueX, valueY, room, highlight, true);
+            // The typed number gets the value area the name has left free.
+            int room = Math.max(12, w - 2 * PAD - 6 - font.width(n.getName()));
+            // A number being typed grows to the left. The caret stays put.
+            int shown = Math.min(room, font.width(host.getEditField().get()));
+            valueX = right - shown;
+            host.getEditField().render(context, font, valueX, valueY, shown, highlight, true);
+            // An empty box still needs a mark to aim at.
+            underlineX = Math.min(valueX, right - 6);
         } else {
             String value = n.getValueString();
-            valueX = x + w - PAD - font.width(value);
+            valueX = right - font.width(value);
             context.text(font, value, valueX, valueY, highlight, false);
+            underlineX = valueX;
         }
-        context.fill(valueX, y + VALUE_BAND - 1, x + w - PAD, y + VALUE_BAND,
+        context.fill(underlineX, y + VALUE_BAND - 1, right, y + VALUE_BAND,
             editing || overValue ? GuiTheme.accentText() : GuiTheme.SCROLL_THUMB);
 
         int barY = y + GuiTheme.SETTING_HEIGHT - 4;
@@ -216,6 +229,25 @@ public final class SettingWidget {
         return isOver(mx, my, rainbowChipX(font, x, w), y + 1, rainbowChipWidth(font), BOX);
     }
 
+    // Top of the hue bar at index zero and of the two bars stacked below it.
+    private static int barTop(int y, int index) {
+        return y + GuiTheme.SETTING_HEIGHT - 4 + index * BAR_PITCH;
+    }
+
+    // Which bar the pointer sits on. Each bar owns the gap beneath it.
+    private static int barIndex(double my, int y) {
+        double offset = (my - barTop(y, HUE_CHANNEL)) / BAR_PITCH;
+        return (int) Math.clamp(offset, 0, COLOR_BARS - 1);
+    }
+
+    private static void setChannel(ColorSetting c, int channel, float amount) {
+        switch (channel) {
+            case SATURATION_CHANNEL -> c.setSaturation(amount);
+            case BRIGHTNESS_CHANNEL -> c.setBrightness(amount);
+            default -> c.setHue(amount * 360f);
+        }
+    }
+
     private static void renderColor(GuiGraphicsExtractor context, Font font, ColorSetting c,
                                     int x, int y, int w) {
         int chipX = rainbowChipX(font, x, w);
@@ -228,18 +260,45 @@ public final class SettingWidget {
             c.isRainbow() ? GuiTheme.TEXT : GuiTheme.TEXT_FAINT, false);
 
         box(context, x + w - PAD - BOX, y + 1, BOX, c.getColor());
-        int barY = y + GuiTheme.SETTING_HEIGHT - 4;
+        int barX = x + PAD;
         int barW = w - 2 * PAD;
-        RenderUtil.hueBar(context, x + PAD, barY, barW, 3);
+        RenderUtil.hueBar(context, barX, barTop(y, HUE_CHANNEL), barW, BAR_HEIGHT);
+        // Saturation runs from the grey of the current brightness to the pure hue.
+        ramp(context, barX, barTop(y, SATURATION_CHANNEL), barW,
+            ColorUtil.hsv(0f, 0f, c.getBrightness()),
+            ColorUtil.hsv(c.getHue(), 1f, c.getBrightness()));
+        // Brightness runs from black up to the hue at the current saturation.
+        ramp(context, barX, barTop(y, BRIGHTNESS_CHANNEL), barW, 0xFF000000,
+            ColorUtil.hsv(c.getHue(), c.getSaturation(), 1f));
         context.guiRenderState.up();
         if (c.isRainbow()) {
             return;
         }
-        int cursor = x + PAD + (int) (barW * (c.getHue() / 360f));
-        cursor = Math.clamp(cursor, x + PAD, x + PAD + barW - 1);
-        context.fill(cursor - 1, barY - 1, cursor + 2, barY + 4, 0xFFFFFFFF);
+        int marker = c.getColor();
+        barCursor(context, barX, barTop(y, HUE_CHANNEL), barW, c.getHue() / 360f, marker);
+        barCursor(context, barX, barTop(y, SATURATION_CHANNEL), barW, c.getSaturation(), marker);
+        barCursor(context, barX, barTop(y, BRIGHTNESS_CHANNEL), barW, c.getBrightness(), marker);
+    }
+
+    // Horizontal blend between two colours. The vanilla gradient fill only runs top to bottom.
+    private static void ramp(GuiGraphicsExtractor context, int x, int y, int width,
+                             int from, int to) {
+        int band = 2;
+        int last = Math.max(1, width - band);
+        for (int i = 0; i < width; i += band) {
+            int end = Math.min(width, i + band);
+            context.fill(x + i, y, x + end, y + BAR_HEIGHT,
+                ColorUtil.lerp(from, to, (float) i / last));
+        }
+    }
+
+    // A white notch with the chosen colour in the middle of it.
+    private static void barCursor(GuiGraphicsExtractor context, int x, int y, int width,
+                                  float fraction, int color) {
+        int at = Math.clamp(x + (int) (width * fraction), x, x + width - 1);
+        context.fill(at - 1, y - 1, at + 2, y + BAR_HEIGHT + 1, 0xFFFFFFFF);
         context.guiRenderState.up();
-        context.fill(cursor, barY, cursor + 1, barY + 3, c.getColor());
+        context.fill(at, y, at + 1, y + BAR_HEIGHT, color);
     }
 
     private static void renderText(GuiGraphicsExtractor context, Font font, TextSetting t,
@@ -262,7 +321,15 @@ public final class SettingWidget {
     }
 
     public static int blockHeight(Module module) {
-        return (visibleCount(module) + 1) * GuiTheme.SETTING_HEIGHT + 4;
+        int height = GuiTheme.SETTING_HEIGHT + 4;
+        List<Setting<?>> settings = module.getSettings();
+        for (int i = 0; i < settings.size(); i++) {
+            Setting<?> setting = settings.get(i);
+            if (setting.isVisible()) {
+                height += rowHeight(setting);
+            }
+        }
+        return height;
     }
 
     public static int blockContentX(int rowX) {
@@ -295,9 +362,10 @@ public final class SettingWidget {
                 continue;
             }
             render(context, font, setting, cx, y, cw, mouseX, mouseY, hoverAllowed, host);
-            y += GuiTheme.SETTING_HEIGHT;
+            y += rowHeight(setting);
         }
-        renderBind(context, font, module.getKeybind(), cx, y, cw, mouseX, mouseY, hoverAllowed, host);
+        // The bind of the module itself closes the block.
+        render(context, font, module.getKeybind(), cx, y, cw, mouseX, mouseY, hoverAllowed, host);
     }
 
     // Pairs with renderBlock.
@@ -310,34 +378,18 @@ public final class SettingWidget {
             if (!setting.isVisible()) {
                 continue;
             }
-            if (isOver(mx, my, cx, y, cw, GuiTheme.SETTING_HEIGHT)) {
+            int h = rowHeight(setting);
+            if (isOver(mx, my, cx, y, cw, h)) {
                 click(setting, mx, my, cx, y, cw, button, host, drag);
                 return true;
             }
-            y += GuiTheme.SETTING_HEIGHT;
+            y += h;
         }
         if (isOver(mx, my, cx, y, cw, GuiTheme.SETTING_HEIGHT)) {
-            host.startListening(module.getKeybind());
+            click(module.getKeybind(), mx, my, cx, y, cw, button, host, drag);
             return true;
         }
         return false;
-    }
-
-    public static void renderBind(GuiGraphicsExtractor context, Font font, KeybindSetting bind,
-                                  int x, int y, int width, int mouseX, int mouseY,
-                                  boolean hoverAllowed, Host host) {
-        int h = GuiTheme.SETTING_HEIGHT;
-        boolean hovered = hoverAllowed && isOver(mouseX, mouseY, x, y, width, h);
-        if (hovered) {
-            host.setTooltip(BIND_HELP);
-            context.fill(x, y, x + width, y + h, 0x14FFFFFF);
-            context.guiRenderState.up();
-        }
-        boolean listening = host.isBinding(bind);
-        context.text(font, "Bind", x + PAD, GuiTheme.textY(y, h),
-            hovered ? GuiTheme.TEXT : GuiTheme.TEXT_DIM, false);
-        keyChip(context, font, x + width - PAD, y,
-            listening ? "press a key" : bind.getKeyName(), listening);
     }
 
     // The chip ends at the given right edge.
@@ -357,6 +409,10 @@ public final class SettingWidget {
     // The hit test has already been done by the caller.
     public static void click(Setting<?> setting, double mx, double my, int x, int y, int width,
                              int button, Host host, Drag drag) {
+        // Only the two buttons the rows above answer reach a setting.
+        if (button != 0 && button != 1) {
+            return;
+        }
         switch (setting) {
             case KeybindSetting k -> {
                 host.startListening(k);
@@ -376,10 +432,14 @@ public final class SettingWidget {
             case ColorSetting c -> {
                 if (button == 1 || overRainbowChip(OfflineClient.MC.font, mx, my, x, y, width)) {
                     c.setRainbow(!c.isRainbow());
-                } else {
+                } else if (my >= barTop(y, HUE_CHANNEL)) {
                     c.setRainbow(false);
-                    drag.hue = c;
-                    c.setHue((float) fraction(x, width, mx) * 360f);
+                    drag.color = c;
+                    drag.channel = barIndex(my, y);
+                    setChannel(c, drag.channel, (float) fraction(x, width, mx));
+                } else {
+                    // The name band holds the preview and the chip. Neither is a bar.
+                    return;
                 }
             }
             case RegistryListSetting<?> r -> host.openPicker(r);

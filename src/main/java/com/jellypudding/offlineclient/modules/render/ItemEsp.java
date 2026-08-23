@@ -43,7 +43,7 @@ public final class ItemEsp extends Module {
 
     @Override
     public String getSuffix() {
-        return String.valueOf(count);
+        return count == 0 ? null : String.valueOf(count);
     }
 
     @Override

@@ -8,8 +8,8 @@ import org.lwjgl.glfw.GLFW;
 
 /**
  * One line of editable text with a caret and a selection. Every place the
- * client takes typed input routes through this so the editing keys and the
- * clipboard behave the same everywhere.
+ * client takes typed input routes through this for the same editing keys and
+ * clipboard behaviour everywhere.
  */
 public final class TextField {
 
@@ -75,34 +75,37 @@ public final class TextField {
 
     // True when the key belonged to this field.
     public boolean keyPressed(KeyEvent event, Filter filter) {
+        return clipboard(event, filter) || navigate(event) || erase(event);
+    }
+
+    private boolean clipboard(KeyEvent event, Filter filter) {
         if (event.isSelectAll()) {
             selectAll();
-            return true;
-        }
-        if (event.isCopy()) {
+        } else if (event.isCopy()) {
             copySelection();
-            return true;
-        }
-        if (event.isCut()) {
+        } else if (event.isCut()) {
             copySelection();
             deleteSelection();
-            return true;
-        }
-        if (event.isPaste()) {
+        } else if (event.isPaste()) {
             insert(Minecraft.getInstance().keyboardHandler.getClipboard(), filter);
-            return true;
+        } else {
+            return false;
         }
+        return true;
+    }
 
+    // Shift extends the selection and control moves a word at a time.
+    private boolean navigate(KeyEvent event) {
         boolean shift = event.hasShiftDown();
         boolean word = event.hasControlDown();
         switch (event.key()) {
             case GLFW.GLFW_KEY_LEFT -> {
+                // An unshifted arrow collapses a selection. The caret lands on the near end.
                 if (!shift && hasSelection()) {
                     moveTo(selStart(), false);
                 } else {
                     moveTo(word ? wordLeft() : caret - 1, shift);
                 }
-                return true;
             }
             case GLFW.GLFW_KEY_RIGHT -> {
                 if (!shift && hasSelection()) {
@@ -110,35 +113,37 @@ public final class TextField {
                 } else {
                     moveTo(word ? wordRight() : caret + 1, shift);
                 }
-                return true;
             }
-            case GLFW.GLFW_KEY_HOME -> {
-                moveTo(0, shift);
-                return true;
+            case GLFW.GLFW_KEY_HOME -> moveTo(0, shift);
+            case GLFW.GLFW_KEY_END -> moveTo(buffer.length(), shift);
+            default -> {
+                return false;
             }
-            case GLFW.GLFW_KEY_END -> {
-                moveTo(buffer.length(), shift);
-                return true;
-            }
+        }
+        return true;
+    }
+
+    private boolean erase(KeyEvent event) {
+        boolean word = event.hasControlDown();
+        switch (event.key()) {
             case GLFW.GLFW_KEY_BACKSPACE -> {
                 if (!deleteSelection() && caret > 0) {
                     int from = word ? wordLeft() : caret - 1;
                     buffer.delete(from, caret);
                     moveTo(from, false);
                 }
-                return true;
             }
             case GLFW.GLFW_KEY_DELETE -> {
                 if (!deleteSelection() && caret < buffer.length()) {
                     buffer.delete(caret, word ? wordRight() : caret + 1);
                     anchor = caret;
                 }
-                return true;
             }
             default -> {
                 return false;
             }
         }
+        return true;
     }
 
     public boolean charTyped(char c, Filter filter) {
@@ -235,10 +240,10 @@ public final class TextField {
 
     /**
      * Draws the visible run of text with the selection behind it and the caret
-     * on top. Returns the width the text took so a caller can lay out after it.
+     * on top.
      */
-    public int render(GuiGraphicsExtractor context, Font font, int x, int y, int room,
-                      int color, boolean focused) {
+    public void render(GuiGraphicsExtractor context, Font font, int x, int y, int room,
+                       int color, boolean focused) {
         ensureVisible(font, room);
         String visible = font.plainSubstrByWidth(buffer.substring(firstVisible), room);
         int end = firstVisible + visible.length();
@@ -262,10 +267,9 @@ public final class TextField {
             context.fill(caretX, y - 1, caretX + 1, y + GuiTheme.TEXT_HEIGHT + 1,
                 GuiTheme.accentText());
         }
-        return font.width(visible);
     }
 
-    // Scrolls the window so the caret sits inside it and no room is wasted on the right.
+    // Scrolls the window to keep the caret inside it and waste no room on the right.
     private void ensureVisible(Font font, int room) {
         firstVisible = Math.clamp(firstVisible, 0, buffer.length());
         if (firstVisible > caret) {

@@ -1,22 +1,20 @@
 package com.jellypudding.offlineclient.modules.player;
 
-import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
-import com.jellypudding.offlineclient.module.ModuleManager;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
+import com.jellypudding.offlineclient.util.Modules;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.core.Holder;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
-import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
@@ -73,14 +71,7 @@ public final class AutoGap extends Module {
     private boolean needsEnchanted;
     private int waited;
     private int settle;
-    private int previousSlot = -1;
-
-    private int swappedSlot = -1;
-    private int swappedHotbar = -1;
-
-    // Cached. The lookup walks every registered module.
-    private AutoEat autoEat;
-    private AutoPotion autoPotion;
+    private final InventoryUtil.HotbarLoan loan = new InventoryUtil.HotbarLoan();
 
     public AutoGap() {
         super("AutoGap", "Eats golden apples to hold your buffs and your health up.", Category.PLAYER);
@@ -112,6 +103,13 @@ public final class AutoGap extends Module {
             stopEating();
             return;
         }
+        if (mc.player.isDeadOrDying()) {
+            // Respawn rebuilds the inventory.
+            loan.forget();
+            stopEating();
+            settle = 0;
+            return;
+        }
         if (settle > 0) {
             settle--;
             return;
@@ -123,37 +121,27 @@ public final class AutoGap extends Module {
         if (handBusy()) {
             return;
         }
-        // Slot swaps and container clicks need the survival inventory.
-        if (mc.gui.screen() != null || mc.player.containerMenu.containerId != 0
-            || !mc.player.containerMenu.getCarried().isEmpty()) {
+        if (!InventoryUtil.inventoryFree()) {
             return;
         }
 
         needsEnchanted = false;
         if (!wantsApple()) {
-            releaseHold();
+            loan.giveBack();
             return;
         }
         int slot = findApple();
         if (slot == -1) {
-            releaseHold();
+            loan.giveBack();
             return;
         }
         beginEating(slot);
     }
 
     private boolean handBusy() {
-        ModuleManager modules = OfflineClient.INSTANCE.getModuleManager();
-        if (modules == null) {
-            return false;
-        }
-        if (autoEat == null) {
-            autoEat = modules.get(AutoEat.class);
-        }
-        if (autoPotion == null) {
-            autoPotion = modules.get(AutoPotion.class);
-        }
-        return autoEat.isBusy() || autoPotion.isDrinking();
+        AutoEat eat = Modules.get(AutoEat.class);
+        AutoPotion potion = Modules.get(AutoPotion.class);
+        return (eat != null && eat.isBusy()) || (potion != null && potion.isDrinking());
     }
 
     private boolean wantsApple() {
@@ -177,18 +165,9 @@ public final class AutoGap extends Module {
     }
 
     private void beginEating(int slot) {
-        if (slot >= 9) {
-            // A full hotbar means the held slot takes the apple.
-            int hotbar = InventoryUtil.freeHotbarSlot(InventoryUtil.selectedSlot());
-            mc.gameMode.handleContainerInput(0, slot, hotbar, ContainerInput.SWAP, mc.player);
-            swappedSlot = slot;
-            swappedHotbar = hotbar;
-            slot = hotbar;
+        if (!loan.select(slot)) {
+            return;
         }
-        if (previousSlot == -1) {
-            previousSlot = mc.player.getInventory().getSelectedSlot();
-        }
-        mc.player.getInventory().setSelectedSlot(slot);
         eating = true;
         started = false;
         waited = 0;
@@ -213,13 +192,13 @@ public final class AutoGap extends Module {
     }
 
     private void finishBite() {
-        boolean keep = hold.isOn() && swappedSlot == -1;
+        boolean keep = hold.isOn() && !loan.isLent();
         releaseKey();
         eating = false;
         started = false;
         settle = SETTLE_TICKS;
         if (!keep) {
-            restoreSlot();
+            loan.giveBack();
         }
     }
 
@@ -229,13 +208,7 @@ public final class AutoGap extends Module {
             eating = false;
             started = false;
         }
-        restoreSlot();
-    }
-
-    private void releaseHold() {
-        if (!eating) {
-            restoreSlot();
-        }
+        loan.giveBack();
     }
 
     private void releaseKey() {
@@ -243,27 +216,6 @@ public final class AutoGap extends Module {
         boolean physicallyHeld = InputConstants.isKeyDown(
             mc.getWindow(), mc.options.keyUse.key.getValue());
         mc.options.keyUse.setDown(physicallyHeld);
-    }
-
-    private void restoreSlot() {
-        if (mc.player == null) {
-            swappedSlot = -1;
-            swappedHotbar = -1;
-            previousSlot = -1;
-            return;
-        }
-        if (swappedSlot != -1 && mc.gui.screen() == null
-            && mc.player.containerMenu.containerId == 0
-            && mc.player.containerMenu.getCarried().isEmpty()) {
-            mc.gameMode.handleContainerInput(0, swappedSlot, swappedHotbar,
-                ContainerInput.SWAP, mc.player);
-            swappedSlot = -1;
-            swappedHotbar = -1;
-        }
-        if (previousSlot != -1) {
-            mc.player.getInventory().setSelectedSlot(previousSlot);
-            previousSlot = -1;
-        }
     }
 
     private int findApple() {

@@ -8,6 +8,7 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
+import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.phys.AABB;
@@ -18,7 +19,7 @@ public final class AntiVoid extends Module {
     // Upward push per tick whilst catching.
     private static final double LIFT = 0.08;
 
-    // Fall speed that counts as falling rather than a step down.
+    // Fall speed that counts as a fall and not a step down.
     private static final double FALLING = -0.2;
 
     /**
@@ -49,9 +50,10 @@ public final class AntiVoid extends Module {
         "Empty blocks below you that count as a void fall.", 12, 3, 40, 1, " blocks")
         .min(2).max(64);
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Face the block being placed so the server accepts it.", true)
+        "Face the block being placed for the server to accept it.", true)
         .visibleWhen(() -> mode.is(Mode.PLACE));
 
+    private final SlotSwap slots = new SlotSwap();
     private boolean catching;
     private int placeTries;
 
@@ -134,13 +136,12 @@ public final class AntiVoid extends Module {
         if (!BlockUtil.isReplaceable(target)) {
             return false;
         }
-        int previous = mc.player.getInventory().getSelectedSlot();
-        mc.player.getInventory().setSelectedSlot(slot);
-        Direction support = BlockUtil.findSupport(target);
+        slots.select(slot);
+        Direction support = BlockUtil.findPlaceSupport(target);
         boolean placed = support != null
             ? BlockUtil.place(target, support, rotate.isOn(), true)
             : BlockUtil.placeDirect(target, rotate.isOn(), true);
-        mc.player.getInventory().setSelectedSlot(previous);
+        slots.restore();
         if (!placed) {
             return false;
         }

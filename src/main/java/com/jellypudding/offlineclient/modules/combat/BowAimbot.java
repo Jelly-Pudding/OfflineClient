@@ -11,6 +11,7 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.ProjectileUtil;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
@@ -44,10 +45,6 @@ public final class BowAimbot extends Module {
     private static final double BOW_SPEED = 3.0;
     // Arrow speed in blocks per tick from a crossbow.
     private static final double CROSSBOW_SPEED = 3.15;
-    // Fraction of speed an arrow keeps every tick.
-    private static final double DRAG = 0.99;
-    // Blocks per tick squared pulling an arrow down.
-    private static final double GRAVITY = 0.05;
 
     private final BoolSetting players = new BoolSetting("Players",
         "Aim at other players.", true);
@@ -136,7 +133,7 @@ public final class BowAimbot extends Module {
             return Math.max(charge, 0.1f) * BOW_SPEED;
         }
         if (held.getItem() instanceof CrossbowItem) {
-            if (!CrossbowItem.isCharged(held)) {
+            if (!CrossbowItem.isCharged(held) || !mc.options.keyUse.isDown()) {
                 return 0;
             }
             charge = 1;
@@ -161,7 +158,7 @@ public final class BowAimbot extends Module {
             double score = switch (priority.getValue()) {
                 case NEAREST -> mc.player.distanceToSqr(living);
                 case LOWEST_HEALTH -> living.getHealth();
-                case CROSSHAIR -> angleTo(living);
+                case CROSSHAIR -> EntityUtil.lookAngleTo(living);
             };
             if (score < bestScore) {
                 bestScore = score;
@@ -198,20 +195,11 @@ public final class BowAimbot extends Module {
         return walls.isOn() || mc.player.hasLineOfSight(entity);
     }
 
-    // Degrees between the current look direction and the entity.
-    private double angleTo(Entity entity) {
-        Vec3 look = mc.player.getLookAngle();
-        Vec3 to = entity.getBoundingBox().getCenter().subtract(mc.player.getEyePosition()).normalize();
-        return Math.toDegrees(Math.acos(Math.clamp(look.dot(to), -1, 1)));
-    }
-
     // Turns the player toward the point the arrow needs to fly through.
     private void aim(LivingEntity entity, double speed) {
         Vec3 eye = mc.player.getEyePosition();
         Vec3 aimPoint = entity.getBoundingBox().getCenter();
-        Vec3 targetVelocity = predict.isOn()
-            ? new Vec3(entity.getX() - entity.xOld, entity.getY() - entity.yOld, entity.getZ() - entity.zOld)
-            : Vec3.ZERO;
+        Vec3 targetVelocity = predict.isOn() ? EntityUtil.velocityOf(entity) : Vec3.ZERO;
 
         // An arrow keeps the shooter's momentum and the vertical part only carries whilst airborne.
         Vec3 own = mc.player.getDeltaMovement();
@@ -251,7 +239,7 @@ public final class BowAimbot extends Module {
         if (ticks <= 0) {
             return 0;
         }
-        return (1 - Math.pow(DRAG, ticks)) / (1 - DRAG);
+        return (1 - Math.pow(ProjectileUtil.ARROW_DRAG, ticks)) / (1 - ProjectileUtil.ARROW_DRAG);
     }
 
     /**
@@ -301,11 +289,11 @@ public final class BowAimbot extends Module {
     // Ticks an arrow needs to travel the horizontal distance or NaN if it never gets there.
     private static double flightTicks(double angleDegrees, double distance, double speed) {
         double horizontal = speed * Math.cos(Math.toRadians(angleDegrees));
-        double reach = horizontal / (1 - DRAG);
+        double reach = horizontal / (1 - ProjectileUtil.ARROW_DRAG);
         if (horizontal <= 0 || distance >= reach) {
             return Double.NaN;
         }
-        return Math.log(1 - distance / reach) / Math.log(DRAG);
+        return Math.log(1 - distance / reach) / Math.log(ProjectileUtil.ARROW_DRAG);
     }
 
     /**
@@ -318,9 +306,9 @@ public final class BowAimbot extends Module {
             return Double.NaN;
         }
         double vertical = speed * Math.sin(Math.toRadians(angleDegrees));
-        double terminal = GRAVITY / (1 - DRAG);
-        double fallen = 1 - Math.pow(DRAG, ticks);
-        return (vertical + terminal) * fallen / (1 - DRAG) - terminal * ticks;
+        double terminal = ProjectileUtil.ARROW_GRAVITY / (1 - ProjectileUtil.ARROW_DRAG);
+        double fallen = 1 - Math.pow(ProjectileUtil.ARROW_DRAG, ticks);
+        return (vertical + terminal) * fallen / (1 - ProjectileUtil.ARROW_DRAG) - terminal * ticks;
     }
 
     @Subscribe

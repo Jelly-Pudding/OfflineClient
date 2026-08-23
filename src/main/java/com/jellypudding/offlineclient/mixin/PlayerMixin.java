@@ -1,6 +1,6 @@
 package com.jellypudding.offlineclient.mixin;
 
-import com.jellypudding.offlineclient.modules.movement.SafeWalk;
+import com.jellypudding.offlineclient.modules.movement.EdgeGuard;
 import com.jellypudding.offlineclient.modules.world.Scaffold;
 import com.jellypudding.offlineclient.util.Modules;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
@@ -33,7 +33,7 @@ public abstract class PlayerMixin {
     }
 
     /**
-     * The sneak edge check probes down by the step height. SafeWalk holds the
+     * The sneak edge check probes down by the step height. EdgeGuard holds the
      * probe at the vanilla depth.
      */
     @WrapOperation(
@@ -42,7 +42,7 @@ public abstract class PlayerMixin {
             target = "Lnet/minecraft/world/entity/player/Player;maxUpStep()F"))
     private float wrapEdgeProbeDepth(Player player, Operation<Float> original) {
         float depth = original.call(player);
-        if (Modules.enabled(SafeWalk.class)) {
+        if (Modules.enabled(EdgeGuard.class)) {
             return Math.min(depth, 0.6f);
         }
         return depth;

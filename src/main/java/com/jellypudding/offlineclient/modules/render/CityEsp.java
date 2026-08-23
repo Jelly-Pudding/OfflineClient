@@ -104,7 +104,7 @@ public final class CityEsp extends Module {
             if (BlockUtil.state(pos).isAir()) {
                 continue;
             }
-            AABB box = new AABB(pos).deflate(0.002);
+            AABB box = DrawBatch.blockBox(pos);
             batch.outlineBox(box, argb, through);
             if (fill.isOn()) {
                 batch.solidBox(box, ColorUtil.withAlpha(argb, 50), through);

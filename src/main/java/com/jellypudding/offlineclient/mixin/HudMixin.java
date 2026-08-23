@@ -36,8 +36,8 @@ public class HudMixin {
         if (texture == null) {
             return;
         }
-        ClearView clearView = Modules.get(ClearView.class);
-        if (clearView == null || !clearView.isEnabled()) {
+        ClearView clearView = Modules.active(ClearView.class);
+        if (clearView == null) {
             return;
         }
         String path = texture.getPath();
@@ -49,8 +49,8 @@ public class HudMixin {
 
     @Inject(method = "extractVignette", at = @At("HEAD"), cancellable = true)
     private void onRenderVignette(GuiGraphicsExtractor context, Entity entity, CallbackInfo ci) {
-        ClearView clearView = Modules.get(ClearView.class);
-        if (clearView != null && clearView.isEnabled() && clearView.blocksVignette()) {
+        ClearView clearView = Modules.active(ClearView.class);
+        if (clearView != null && clearView.blocksVignette()) {
             ci.cancel();
         }
     }

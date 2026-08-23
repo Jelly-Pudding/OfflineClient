@@ -36,10 +36,27 @@ public final class ScrollBar {
         offset = clamp(offset - delta, total, view);
     }
 
+    // Rows beside an overflowing track lose the gutter width.
+    public static int rowWidth(int width, int total, int view) {
+        return total > view ? width - GuiTheme.SCROLL_GUTTER : width;
+    }
+
+    // The track is pinned to the right edge of the content it scrolls.
+    public static int trackX(int x, int width) {
+        return x + width - GuiTheme.SCROLLBAR;
+    }
+
+    // The thumb shrinks with the content until it reaches the minimum size.
+    private static int thumbHeight(int view, int total) {
+        return Math.min(view, Math.max(MIN_THUMB, view * view / total));
+    }
+
     // Called once per frame.
     public void update(int mouseY, int total, int view) {
         if (dragging && total > view && view > 0) {
-            offset = dragStartOffset + (mouseY - dragStartY) * total / view;
+            // Pointer travel maps onto the run the thumb has left in the track.
+            int travel = Math.max(1, view - thumbHeight(view, total));
+            offset = dragStartOffset + (mouseY - dragStartY) * (total - view) / travel;
         }
         offset = clamp(offset, total, view);
     }
@@ -69,7 +86,7 @@ public final class ScrollBar {
         int right = trackX + GuiTheme.SCROLLBAR;
         RenderUtil.roundedRect(context, trackX, top, right, top + view, 2, GuiTheme.SCROLL_TRACK);
         context.guiRenderState.up();
-        int thumbH = Math.min(view, Math.max(MIN_THUMB, view * view / total));
+        int thumbH = thumbHeight(view, total);
         int range = total - view;
         int thumbY = top + (view - thumbH) * Math.clamp(offset, 0, range) / range;
         RenderUtil.roundedRect(context, trackX, thumbY, right, thumbY + thumbH, 2,

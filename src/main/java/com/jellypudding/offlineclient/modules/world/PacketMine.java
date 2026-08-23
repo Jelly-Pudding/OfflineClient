@@ -8,6 +8,7 @@ import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.ExclusivityGroup;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.render.DrawBatch;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.util.BlockMiner;
 import com.jellypudding.offlineclient.util.BlockUtil;
@@ -21,7 +22,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;
 import net.minecraft.world.InteractionHand;
-import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
@@ -31,7 +31,6 @@ import net.minecraft.world.phys.AABB;
  * The server finishes the block on its own.
  */
 public final class PacketMine extends Module {
-
 
     private static final int MINING_COLOR = 0xFFFF5030;
     private static final int READY_COLOR = 0xFF40FF60;
@@ -47,6 +46,9 @@ public final class PacketMine extends Module {
         "Draws a box that turns green when the block is due to fall.", true);
     private final BoolSetting rebreak = new BoolSetting("Rebreak",
         "Starts again on whatever is put back in the same spot.", false);
+    private final BoolSetting instantRebreak = new BoolSetting("Instant rebreak",
+        "Fires at the spot every tick to catch a replacement the moment it lands.", true)
+        .visibleWhen(rebreak::isOn);
 
     private BlockPos target;
     private Block mined;
@@ -55,15 +57,12 @@ public final class PacketMine extends Module {
 
     private final SlotSwap slots = new SlotSwap();
 
-    // A manual slot change cancels the return.
-    private int ourSlot = -1;
-
     // Only a fresh press picks a target.
     private boolean attackHeld;
 
     public PacketMine() {
         super("PacketMine", "Keeps breaking one block you clicked whilst you do other things.", Category.WORLD);
-        addSettings(autoTool, rotate, render, rebreak);
+        addSettings(autoTool, rotate, render, rebreak, instantRebreak);
         searchTags("obsidian", "packet mine", "instant mine");
     }
 
@@ -96,7 +95,7 @@ public final class PacketMine extends Module {
                 ServerboundPlayerActionPacket.Action.ABORT_DESTROY_BLOCK, target, Direction.DOWN));
         }
         BlockMiner.release();
-        restoreSlot();
+        slots.restoreIfMine();
         clear();
     }
 
@@ -122,7 +121,7 @@ public final class PacketMine extends Module {
         if (pos.equals(target) || !BlockUtil.isBreakable(pos)) {
             return;
         }
-        restoreSlot();
+        slots.restoreIfMine();
         target = pos.immutable();
         mined = null;
         mining = false;
@@ -135,7 +134,7 @@ public final class PacketMine extends Module {
             return;
         }
         if (target == null) {
-            restoreSlot();
+            slots.restoreIfMine();
             return;
         }
         if (BlockUtil.distanceTo(target) > mc.player.blockInteractionRange()) {
@@ -152,7 +151,9 @@ public final class PacketMine extends Module {
             if (state.isAir() || !BlockUtil.isBreakable(target)) {
                 if (!rebreak.isOn()) {
                     clear();
-                    restoreSlot();
+                    slots.restoreIfMine();
+                } else if (instantRebreak.isOn()) {
+                    poke();
                 }
                 return;
             }
@@ -186,14 +187,20 @@ public final class PacketMine extends Module {
         mined = null;
         if (!rebreak.isOn()) {
             target = null;
-            restoreSlot();
+            slots.restoreIfMine();
         }
+    }
+
+    // Breaks the replacement on the tick it lands. Ignored whilst the spot is empty.
+    private void poke() {
+        mc.player.connection.send(new ServerboundPlayerActionPacket(
+            ServerboundPlayerActionPacket.Action.STOP_DESTROY_BLOCK, target, Direction.UP));
     }
 
     private void giveUp(String message) {
         ChatUtil.message(message);
         clear();
-        restoreSlot();
+        slots.restoreIfMine();
     }
 
     // A client side estimate of how far along the server is.
@@ -212,36 +219,12 @@ public final class PacketMine extends Module {
         if (!autoTool.isOn() || mc.player.isUsingItem()) {
             return;
         }
-        int selected = mc.player.getInventory().getSelectedSlot();
         // A slot the player picked themselves is left alone.
-        if (slots.isHolding() && selected != ourSlot) {
+        if (slots.isHolding() && !slots.stillMine()) {
             slots.forget();
-            ourSlot = -1;
             return;
         }
-        int best = selected;
-        float bestSpeed = ItemUtil.miningSpeed(mc.player.getInventory().getItem(selected), state);
-        for (int i = 0; i < 9; i++) {
-            ItemStack stack = mc.player.getInventory().getItem(i);
-            float speed = ItemUtil.miningSpeed(stack, state);
-            if (speed > bestSpeed) {
-                bestSpeed = speed;
-                best = i;
-            }
-        }
-        if (best == selected) {
-            return;
-        }
-        slots.select(best);
-        ourSlot = best;
-    }
-
-    private void restoreSlot() {
-        if (mc.player != null && mc.player.getInventory().getSelectedSlot() == ourSlot) {
-            slots.restore();
-        }
-        slots.forget();
-        ourSlot = -1;
+        ItemUtil.selectBestTool(state, slots);
     }
 
     @Subscribe
@@ -251,7 +234,7 @@ public final class PacketMine extends Module {
         }
         double done = Math.clamp(progress(), 0, 1);
         int color = ColorUtil.lerp(MINING_COLOR, READY_COLOR, (float) done);
-        AABB box = new AABB(target).deflate(0.002);
+        AABB box = DrawBatch.blockBox(target);
         event.getBatch().outlineBox(box, color, true);
         if (done > 0) {
             AABB filled = new AABB(box.minX, box.minY, box.minZ,

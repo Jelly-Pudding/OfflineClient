@@ -16,7 +16,10 @@ public final class PrefixCommand extends Command {
             ChatUtil.error("Usage: " + getUsage());
             return;
         }
-        OfflineClient.INSTANCE.getCommandManager().setPrefix(args[0]);
+        if (!OfflineClient.INSTANCE.getCommandManager().setPrefix(args[0])) {
+            ChatUtil.error("A prefix cannot be empty and cannot start with a slash.");
+            return;
+        }
         OfflineClient.INSTANCE.getConfigManager().saveSoon();
         ChatUtil.message("§7Prefix set to §b" + OfflineClient.INSTANCE.getCommandManager().getPrefix());
     }

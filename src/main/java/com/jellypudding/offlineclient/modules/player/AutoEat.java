@@ -1,23 +1,23 @@
 package com.jellypudding.offlineclient.modules.player;
 
-import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
-import com.jellypudding.offlineclient.module.ModuleManager;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
+import com.jellypudding.offlineclient.util.Modules;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.food.FoodProperties;
-import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -38,9 +38,6 @@ public final class AutoEat extends Module {
 
     // A golden apple takes a moment to land. Rechecking too early eats a second one.
     private static final int HEAL_SETTLE_TICKS = 30;
-
-    // The offhand needs no swap at all so it is checked first.
-    private static final int OFFHAND_SLOT = 40;
 
     public enum Priority {
         HUNGER("Best hunger"),
@@ -71,7 +68,7 @@ public final class AutoEat extends Module {
         List.of(Items.ROTTEN_FLESH, Items.SPIDER_EYE, Items.POISONOUS_POTATO,
             Items.PUFFERFISH, Items.CHICKEN, Items.SUSPICIOUS_STEW, Items.CHORUS_FRUIT));
     private final BoolSetting offhand = new BoolSetting("Use offhand",
-        "Reach for food in your offhand first so nothing has to be swapped.", true);
+        "Reach for food in your offhand first.", true);
     private final BoolSetting whileMoving = new BoolSetting("Eat whilst moving",
         "Eat on the move. Eating drops you to walking speed.", true);
     private final BoolSetting pauseCombat = new BoolSetting("Pause combat",
@@ -80,23 +77,20 @@ public final class AutoEat extends Module {
         "Keeps eating whilst a chest or inventory is open.", false);
     private final BoolSetting noSlowdown = new BoolSetting("No slowdown",
         "Keeps your normal speed whilst eating.", false);
+    private final BoolSetting pauseOnFire = new BoolSetting("Pause on fire",
+        "Stops eating whilst you are burning.", false);
 
     private boolean eating;
     private boolean healing;
     private boolean started;
     private int waited;
     private int settle;
-    private int previousSlot = -1;
-
-    private int swappedSlot = -1;
-    private int swappedHotbar = -1;
-
-    // Cached. The lookup walks every registered module.
-    private AutoPotion autoPotion;
+    private final InventoryUtil.HotbarLoan loan = new InventoryUtil.HotbarLoan();
 
     public AutoEat() {
         super("AutoEat", "Eats for you when you get hungry or hurt.", Category.PLAYER);
-        addSettings(hunger, health, priority, avoid, offhand, whileMoving, pauseCombat);
+        addSettings(hunger, health, priority, avoid, offhand, whileMoving, pauseCombat,
+            whileBusy, noSlowdown, pauseOnFire);
         searchTags("food", "golden apple", "gapple");
     }
 
@@ -108,7 +102,7 @@ public final class AutoEat extends Module {
         return isEnabled() && eating;
     }
 
-    // Read by LocalPlayerMixin so a meal does not slow you down.
+    // Read by LocalPlayerMixin to keep a meal from slowing you down.
     public boolean suppressesSlowdown() {
         return isEnabled() && eating && noSlowdown.isOn();
     }
@@ -131,9 +125,7 @@ public final class AutoEat extends Module {
         }
         if (mc.player.isDeadOrDying()) {
             // Respawn rebuilds the inventory.
-            swappedSlot = -1;
-            swappedHotbar = -1;
-            previousSlot = -1;
+            loan.forget();
             stopEating();
             settle = 0;
             return;
@@ -142,13 +134,17 @@ public final class AutoEat extends Module {
             settle--;
             return;
         }
+        if (burning()) {
+            stopEating();
+            return;
+        }
 
         if (eating) {
             continueEating();
             return;
         }
-        if (OfflineClient.INSTANCE.getModuleManager()
-            .get(AutoGap.class).isBusy()) {
+        AutoGap gap = Modules.get(AutoGap.class);
+        if (gap != null && gap.isBusy()) {
             return;
         }
         // A carried stack would be dropped by a slot swap.
@@ -165,7 +161,7 @@ public final class AutoEat extends Module {
             return;
         }
 
-        // A swap needs the survival inventory so a screen limits us to the hotbar.
+        // A swap needs the survival inventory. A screen limits us to the hotbar.
         int limit = busy() ? 9 : 36;
         boolean wantsHealing = EntityUtil.healthAtOrBelow(health.getValue()) && !healingWasted();
         int slot = wantsHealing ? findHealing(limit) : -1;
@@ -184,20 +180,20 @@ public final class AutoEat extends Module {
         return mc.gui.screen() != null || mc.player.containerMenu.containerId != 0;
     }
 
-    // The absorption a golden apple grants does not stack so a second one is thrown away.
+    // The absorption a golden apple grants does not stack. A second one is wasted.
     private boolean healingWasted() {
         return mc.player.getAbsorptionAmount() > 0;
     }
 
+    // Fire resistance takes the burn damage away. A meal stays safe under it.
+    private boolean burning() {
+        return pauseOnFire.isOn() && mc.player.isOnFire()
+            && !mc.player.hasEffect(MobEffects.FIRE_RESISTANCE);
+    }
+
     private boolean potionBusy() {
-        if (autoPotion == null) {
-            ModuleManager modules = OfflineClient.INSTANCE.getModuleManager();
-            if (modules == null) {
-                return false;
-            }
-            autoPotion = modules.get(AutoPotion.class);
-        }
-        return autoPotion.isDrinking();
+        AutoPotion potion = Modules.get(AutoPotion.class);
+        return potion != null && potion.isDrinking();
     }
 
     private boolean wantsFood() {
@@ -215,22 +211,16 @@ public final class AutoEat extends Module {
     }
 
     private void beginEating(int slot) {
-        if (slot == OFFHAND_SLOT) {
+        // The offhand needs no swap at all.
+        if (slot == Inventory.SLOT_OFFHAND) {
             eating = true;
             started = false;
             waited = 0;
             return;
         }
-        if (slot >= 9) {
-            // A full hotbar means the held slot takes the food.
-            int hotbar = InventoryUtil.freeHotbarSlot(InventoryUtil.selectedSlot());
-            mc.gameMode.handleContainerInput(0, slot, hotbar, ContainerInput.SWAP, mc.player);
-            swappedSlot = slot;
-            swappedHotbar = hotbar;
-            slot = hotbar;
+        if (!loan.select(slot)) {
+            return;
         }
-        previousSlot = mc.player.getInventory().getSelectedSlot();
-        mc.player.getInventory().setSelectedSlot(slot);
         eating = true;
         started = false;
         waited = 0;
@@ -251,7 +241,7 @@ public final class AutoEat extends Module {
             return;
         }
         mc.options.keyUse.setDown(true);
-        // A screen stops the game reading the use key so the meal is started by hand.
+        // A screen stops the game reading the use key. The meal is started by hand.
         if (busy() && !mc.player.isUsingItem()) {
             mc.gameMode.useItem(mc.player, offhandUsable()
                 ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND);
@@ -265,7 +255,7 @@ public final class AutoEat extends Module {
         settle = wasHealing ? HEAL_SETTLE_TICKS : SETTLE_TICKS;
     }
 
-    // The use key hits the main hand first so anything usable there would fire instead.
+    // The use key hits the main hand first. Anything usable there would fire instead.
     private boolean offhandUsable() {
         if (!offhand.isOn()) {
             return false;
@@ -293,20 +283,7 @@ public final class AutoEat extends Module {
             mc.getWindow(), mc.options.keyUse.key.getValue());
         mc.options.keyUse.setDown(physicallyHeld);
 
-        if (mc.player != null) {
-            if (swappedSlot != -1 && mc.gui.screen() == null
-                && mc.player.containerMenu.containerId == 0
-                && mc.player.containerMenu.getCarried().isEmpty()) {
-                mc.gameMode.handleContainerInput(0, swappedSlot, swappedHotbar,
-                    ContainerInput.SWAP, mc.player);
-            }
-            if (previousSlot != -1) {
-                mc.player.getInventory().setSelectedSlot(previousSlot);
-            }
-        }
-        swappedSlot = -1;
-        swappedHotbar = -1;
-        previousSlot = -1;
+        loan.giveBack();
     }
 
     // The plain apple wins over the enchanted one.
@@ -315,7 +292,7 @@ public final class AutoEat extends Module {
             ItemStack held = mc.player.getOffhandItem();
             if ((held.is(Items.GOLDEN_APPLE) || held.is(Items.ENCHANTED_GOLDEN_APPLE))
                 && !avoid.contains(held.getItem())) {
-                return OFFHAND_SLOT;
+                return Inventory.SLOT_OFFHAND;
             }
         }
         int enchanted = -1;
@@ -338,7 +315,7 @@ public final class AutoEat extends Module {
         if (offhandUsable()) {
             ItemStack held = mc.player.getOffhandItem();
             if (isEdible(held) && !isHealing(held) && edibleNow(held)) {
-                return OFFHAND_SLOT;
+                return Inventory.SLOT_OFFHAND;
             }
         }
         for (int i = 0; i < limit; i++) {
@@ -360,11 +337,12 @@ public final class AutoEat extends Module {
         if (food == null) {
             return 0;
         }
+        // Saturation is the whole value and not a multiplier of the nutrition.
         if (priority.is(Priority.SATURATION)) {
-            return food.nutrition() * food.saturation();
+            return food.saturation();
         }
         if (priority.is(Priority.COMBINED)) {
-            return food.nutrition() + food.nutrition() * food.saturation();
+            return food.nutrition() + food.saturation();
         }
         return food.nutrition();
     }

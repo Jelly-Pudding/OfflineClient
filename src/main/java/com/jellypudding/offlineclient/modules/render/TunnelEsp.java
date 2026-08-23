@@ -51,7 +51,7 @@ public final class TunnelEsp extends Module {
 
     @Override
     public String getSuffix() {
-        return String.valueOf(scanner.size());
+        return scanner.size() == 0 ? null : String.valueOf(scanner.size());
     }
 
     @Override

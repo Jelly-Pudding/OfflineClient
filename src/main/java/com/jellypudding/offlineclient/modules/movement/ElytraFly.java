@@ -9,6 +9,7 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket;
+import net.minecraft.core.BlockPos;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.player.Input;
@@ -19,21 +20,7 @@ import net.minecraft.world.phys.Vec3;
 // Control nudges the vanilla glide. Cruise flies a dive and climb cycle itself.
 public final class ElytraFly extends Module {
 
-    public enum Mode {
-        CONTROL("Control"),
-        CRUISE("Cruise");
-
-        private final String label;
-
-        Mode(String label) {
-            this.label = label;
-        }
-
-        @Override
-        public String toString() {
-            return label;
-        }
-    }
+    public enum Mode { CONTROL, CRUISE }
 
     // Around forty degrees down is where a glide trades the most height for speed.
     private static final float DIVE_PITCH = 40;
@@ -49,6 +36,15 @@ public final class ElytraFly extends Module {
     private static final double LOW_DURABILITY = 0.05;
 
     private static final double TAKE_OFF_CLEARANCE = 3;
+
+    // Speed kept each tick whilst waiting for chunks to arrive.
+    private static final double CHUNK_BRAKE = 0.6;
+
+    // Ticks after a standing jump in which the glide is forced open.
+    private static final int TAKE_OFF_WINDOW = 4;
+
+    // Ticks to leave the server alone after asking for a glide.
+    private static final int RESTART_COOLDOWN = 5;
 
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
         "Control steers by hand. Cruise flies long distances on its own.", Mode.CONTROL);
@@ -72,14 +68,23 @@ public final class ElytraFly extends Module {
         .visibleWhen(() -> mode.is(Mode.CRUISE));
     private final BoolSetting autoTakeOff = new BoolSetting("Auto take off",
         "Opens the elytra for you as soon as you fall.", true);
+    private final BoolSetting groundStart = new BoolSetting("Ground start",
+        "Jump straight into a glide from standing.", true);
     private final BoolSetting keepGliding = new BoolSetting("Keep gliding",
         "Restarts a glide the game cancels midair.", true);
     private final BoolSetting stopInWater = new BoolSetting("Stop in water",
         "Does nothing whilst you are in water.", true);
+    private final BoolSetting chunkGuard = new BoolSetting("Chunk guard",
+        "Slows you down before you fly into ground the client has not loaded.", true);
+    private final NumberSetting chunkLookahead = new NumberSetting("Look ahead",
+        "How far in front to check for loaded ground.", 24, 8, 64, 1, " blocks")
+        .visibleWhen(chunkGuard::isOn);
     private final BoolSetting durabilityGuard = new BoolSetting("Durability guard",
         "Stops helping and warns you when the elytra is nearly broken.", true);
 
     private int restartCooldown;
+    // Ticks left to force the elytra open after a standing jump.
+    private int takeOffWindow;
     private boolean wasGliding;
     private boolean warned;
 
@@ -91,8 +96,14 @@ public final class ElytraFly extends Module {
     public ElytraFly() {
         super("ElytraFly", "Full elytra control without firework rockets.", Category.MOVEMENT);
         addSettings(mode, speed, climbSpeed, holdHeight, instantStop, cruiseSpeed, holdAltitude,
-            autoTakeOff, keepGliding, stopInWater, durabilityGuard);
+            groundStart,
+            autoTakeOff, keepGliding, stopInWater, chunkGuard, chunkLookahead,
+            durabilityGuard);
         searchTags("elytra", "glide", "fly", "cruise");
+    }
+
+    public boolean inCruiseMode() {
+        return mode.is(Mode.CRUISE);
     }
 
     @Override
@@ -106,6 +117,7 @@ public final class ElytraFly extends Module {
     @Override
     protected void onEnable() {
         restartCooldown = 0;
+        takeOffWindow = 0;
         wasGliding = false;
         cruising = false;
         warned = false;
@@ -135,12 +147,17 @@ public final class ElytraFly extends Module {
             return;
         }
 
+        if (takeOffWindow > 0) {
+            takeOffWindow--;
+        }
         if (!mc.player.isFallFlying()) {
             cruising = false;
+            jumpOff();
             startGlide();
             wasGliding = false;
             return;
         }
+        takeOffWindow = 0;
         wasGliding = true;
 
         if (mode.is(Mode.CRUISE)) {
@@ -149,6 +166,30 @@ public final class ElytraFly extends Module {
             cruising = false;
             controlTick();
         }
+
+        if (chunkGuard.isOn() && aheadIsUnloaded()) {
+            brakeForChunks();
+        }
+    }
+
+    // True when the ground ahead has not loaded. The client sees empty air where
+    // the server has terrain.
+    private boolean aheadIsUnloaded() {
+        Vec3 velocity = mc.player.getDeltaMovement();
+        if (velocity.horizontalDistance() < 0.1) {
+            return false;
+        }
+        Vec3 heading = new Vec3(velocity.x, 0, velocity.z).normalize()
+            .scale(chunkLookahead.getValue());
+        BlockPos ahead = BlockPos.containing(mc.player.position().add(heading));
+        return !mc.level.isLoaded(ahead);
+    }
+
+    // Bleeds the speed off each tick. The glide stays controllable.
+    private void brakeForChunks() {
+        Vec3 velocity = mc.player.getDeltaMovement();
+        mc.player.setDeltaMovement(velocity.x * CHUNK_BRAKE, Math.max(velocity.y, -0.1),
+            velocity.z * CHUNK_BRAKE);
     }
 
     // Additive nudges. The glide itself stays vanilla.
@@ -243,8 +284,30 @@ public final class ElytraFly extends Module {
         mc.player.setXRot(forcedPitch);
     }
 
+    // Leaves the ground to give the glide something to start from.
+    private void jumpOff() {
+        if (!groundStart.isOn() || takeOffWindow > 0 || restartCooldown > 0) {
+            return;
+        }
+        if (!mc.player.onGround() || !mc.player.input.keyPresses.jump()
+            || mc.player.isPassenger() || mc.player.getAbilities().flying
+            || !mc.player.getItemBySlot(EquipmentSlot.CHEST).is(Items.ELYTRA)) {
+            return;
+        }
+        mc.player.jumpFromGround();
+        // The glide has to open whilst still rising. The usual falling test is skipped.
+        takeOffWindow = TAKE_OFF_WINDOW;
+    }
+
     private void startGlide() {
         if (restartCooldown > 0) {
+            return;
+        }
+        if (takeOffWindow > 0) {
+            if (!mc.player.onGround()
+                && mc.player.getItemBySlot(EquipmentSlot.CHEST).is(Items.ELYTRA)) {
+                openGlide();
+            }
             return;
         }
         boolean allowed = wasGliding ? keepGliding.isOn() : autoTakeOff.isOn();
@@ -265,9 +328,18 @@ public final class ElytraFly extends Module {
             mc.player.getBoundingBox().expandTowards(0, -clearance, 0))) {
             return;
         }
+        openGlide();
+    }
+
+    private void openGlide() {
+        sendStartGlide();
+        restartCooldown = RESTART_COOLDOWN;
+    }
+
+    // The server opens the elytra on this packet alone.
+    static void sendStartGlide() {
         mc.player.connection.send(new ServerboundPlayerCommandPacket(mc.player,
             ServerboundPlayerCommandPacket.Action.START_FALL_FLYING));
-        restartCooldown = 5;
     }
 
     // Warns once.

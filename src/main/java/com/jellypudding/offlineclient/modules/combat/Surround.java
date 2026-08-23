@@ -13,8 +13,6 @@ import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.world.item.BlockItem;
-import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
@@ -33,11 +31,11 @@ public final class Surround extends Module {
         Blocks.ANCIENT_DEBRIS, Blocks.DIAMOND_BLOCK, Blocks.NETHERITE_BLOCK);
 
     private final RegistryListSetting<Block> blocks = new RegistryListSetting<>("Blocks",
-        "Blocks to wall with in order of preference. Click to pick them.",
+        "Blocks to use in order of preference.",
         BuiltInRegistries.BLOCK,
         List.of(Blocks.OBSIDIAN, Blocks.CRYING_OBSIDIAN));
     private final BoolSetting center = new BoolSetting("Center",
-        "Snap to the middle of your block first so every side lines up.", true);
+        "Snap to the middle of your block to line every side up.", true);
     private final BoolSetting onlyOnGround = new BoolSetting("Only on ground",
         "Wait until you are standing on something.", true);
     private final NumberSetting perTick = new NumberSetting("Blocks per tick",
@@ -47,7 +45,7 @@ public final class Surround extends Module {
     private final BoolSetting rotate = new BoolSetting("Rotate",
         "Send a look packet toward each block as it goes down.", true);
     private final BoolSetting doubleHeight = new BoolSetting("Double height",
-        "Also wall the four sides at head height so nobody can face place on you.", false);
+        "Also wall the four sides at head height to stop a face place.", false);
     private final BoolSetting toggleOnDeath = new BoolSetting("Toggle off on death",
         "Turn off when you die instead of walling your respawn.", true);
     private final BoolSetting toggleOnDone = new BoolSetting("Toggle off when done",
@@ -55,8 +53,7 @@ public final class Surround extends Module {
     private final BoolSetting toggleOnMove = new BoolSetting("Toggle off on move",
         "Turn off if you leave the block you started on.", false);
     private final BoolSetting render = new BoolSetting("Show sides",
-        "Outline the four side positions. Green is blast proof and orange is weak and red is open.",
-        true);
+        "Outline the four side positions by how well they hold.", true);
 
     private int timer;
     private BlockPos anchor;
@@ -163,10 +160,10 @@ public final class Surround extends Module {
                 break;
             }
             BlockPos target = pos;
-            Direction support = BlockUtil.findSupport(pos);
+            Direction support = BlockUtil.findPlaceSupport(pos);
             if (support == null) {
                 BlockPos below = pos.below();
-                Direction belowSupport = canFill(below) ? BlockUtil.findSupport(below) : null;
+                Direction belowSupport = canFill(below) ? BlockUtil.findPlaceSupport(below) : null;
                 if (belowSupport != null) {
                     target = below;
                     support = belowSupport;
@@ -192,7 +189,7 @@ public final class Surround extends Module {
                 result.add(pos);
             }
         }
-        // The lower ring goes down first so the pocket is sealed before it is raised.
+        // The lower ring goes down first. The pocket is sealed before it is raised.
         if (doubleHeight.isOn()) {
             BlockPos head = feet.above();
             for (Direction side : Direction.Plane.HORIZONTAL) {
@@ -214,28 +211,7 @@ public final class Surround extends Module {
     }
 
     private int findBlastBlock() {
-        int best = -1;
-        int bestRank = Integer.MAX_VALUE;
-        for (int i = 0; i < 9; i++) {
-            ItemStack stack = mc.player.getInventory().getItem(i);
-            if (!(stack.getItem() instanceof BlockItem item)) {
-                continue;
-            }
-            int rank = rankOf(item.getBlock());
-            if (rank != -1 && rank < bestRank) {
-                bestRank = rank;
-                best = i;
-            }
-        }
-        return best;
-    }
-
-    // How far up the list a block sits. Lower wins. Minus one when it is not usable.
-    private int rankOf(Block block) {
-        if (NEVER.contains(block)) {
-            return -1;
-        }
-        return BlockUtil.rankOf(block, blocks.getValue());
+        return BlockUtil.findRankedBlockSlot(blocks.getValue(), block -> !NEVER.contains(block));
     }
 
     @Subscribe
@@ -259,6 +235,7 @@ public final class Surround extends Module {
             return 0xFFE03030;
         }
         BlockState state = BlockUtil.state(pos);
-        return state.getBlock().getExplosionResistance() >= 600 ? 0xFF30E030 : 0xFFE08820;
+        return state.getBlock().getExplosionResistance() >= BlockUtil.BLAST_PROOF
+            ? 0xFF30E030 : 0xFFE08820;
     }
 }

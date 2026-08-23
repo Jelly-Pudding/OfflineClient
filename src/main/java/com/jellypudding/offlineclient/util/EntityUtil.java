@@ -17,6 +17,9 @@ public final class EntityUtil {
     // Health points in one heart.
     private static final double HEART = 2;
 
+    // Friends are drawn in blue wherever they appear.
+    public static final int FRIEND_COLOR = 0xFF4080FF;
+
     private EntityUtil() {
     }
 
@@ -29,9 +32,14 @@ public final class EntityUtil {
         return player.getHealth() + player.getAbsorptionAmount() <= hearts * HEART;
     }
 
-    // The holder on EntityType itself is deprecated so the lookup goes via the registry.
+    // The holder on EntityType itself is deprecated. The lookup goes via the registry.
     public static boolean typeIs(Entity entity, TagKey<EntityType<?>> tag) {
         return BuiltInRegistries.ENTITY_TYPE.wrapAsHolder(entity.getType()).is(tag);
+    }
+
+    // The account name of a player or null.
+    public static String nameOf(Player player) {
+        return player == null ? null : player.getGameProfile().name();
     }
 
     public static boolean matches(Entity entity, boolean players, boolean mobs, boolean items) {
@@ -61,6 +69,27 @@ public final class EntityUtil {
         return eye.distanceTo(closest);
     }
 
+    // The distance covered on the last tick. The client keeps no velocity field.
+    public static Vec3 velocityOf(Entity entity) {
+        return new Vec3(entity.getX() - entity.xOld, entity.getY() - entity.yOld,
+            entity.getZ() - entity.zOld);
+    }
+
+    // Degrees between where the player looks and the middle of the target.
+    public static double lookAngleTo(Entity target) {
+        Player player = OfflineClient.MC.player;
+        if (player == null) {
+            return 180;
+        }
+        Vec3 toTarget = target.getBoundingBox().getCenter().subtract(player.getEyePosition());
+        double length = toTarget.length();
+        if (length < 1.0E-4) {
+            return 0;
+        }
+        double cosine = Math.clamp(player.getLookAngle().dot(toTarget) / length, -1, 1);
+        return Math.toDegrees(Math.acos(cosine));
+    }
+
     public static AABB lerpedBox(Entity entity, float partialTicks) {
         Vec3 lerped = entity.getPosition(partialTicks);
         return entity.getBoundingBox().move(lerped.subtract(entity.position()));
@@ -73,7 +102,7 @@ public final class EntityUtil {
     public static int colorOf(Entity entity) {
         if (entity instanceof Player player) {
             if (OfflineClient.INSTANCE.getFriendManager().isFriend(player.getGameProfile().name())) {
-                return 0xFF4080FF;
+                return FRIEND_COLOR;
             }
             float distance = OfflineClient.MC.player == null ? 20
                 : OfflineClient.MC.player.distanceTo(player);

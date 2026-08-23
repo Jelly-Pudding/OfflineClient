@@ -5,25 +5,11 @@ import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.EnumSetting;
+import com.jellypudding.offlineclient.util.MovementUtil;
 
 public final class AutoJump extends Module {
 
-    public enum When {
-        SPRINTING("Sprinting"),
-        MOVING("Moving"),
-        ALWAYS("Always");
-
-        private final String label;
-
-        When(String label) {
-            this.label = label;
-        }
-
-        @Override
-        public String toString() {
-            return label;
-        }
-    }
+    public enum When { SPRINTING, MOVING, ALWAYS }
 
     private final EnumSetting<When> when = new EnumSetting<>("Jump when",
         "Picks whether to jump whilst sprinting or whilst moving or always.",
@@ -37,7 +23,7 @@ public final class AutoJump extends Module {
 
     @Override
     public String getSuffix() {
-        return when.getValue().toString();
+        return when.getValueString();
     }
 
     @Subscribe
@@ -49,7 +35,7 @@ public final class AutoJump extends Module {
             || mc.player.getAbilities().flying || mc.player.isPassenger()) {
             return;
         }
-        boolean moving = mc.player.input.getMoveVector().length() > 1e-4f;
+        boolean moving = MovementUtil.inputDirection().lengthSqr() > 0;
         boolean go = switch (when.getValue()) {
             case SPRINTING -> moving && mc.player.isSprinting();
             case MOVING -> moving;

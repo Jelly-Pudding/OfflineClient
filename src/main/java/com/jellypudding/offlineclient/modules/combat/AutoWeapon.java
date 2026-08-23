@@ -4,6 +4,7 @@ import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.AttackEntityEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
+import com.jellypudding.offlineclient.module.ExclusivityGroup;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
@@ -57,6 +58,11 @@ public final class AutoWeapon extends Module {
         super("AutoWeapon", "Switches to your strongest sword or axe when you attack.", Category.COMBAT);
         addSettings(prefer, threshold, antiBreak, switchBack, releaseTime);
         searchTags("auto sword", "auto axe", "weapon switch");
+    }
+
+    @Override
+    public ExclusivityGroup getExclusivityGroup() {
+        return ExclusivityGroup.WEAPON_SWAP;
     }
 
     @Override
@@ -143,8 +149,7 @@ public final class AutoWeapon extends Module {
             if (stack.isEmpty()) {
                 continue;
             }
-            if (skipBreaking && stack.isDamageableItem()
-                && stack.getMaxDamage() - stack.getDamageValue() <= 5) {
+            if (skipBreaking && ItemUtil.nearlyBroken(stack)) {
                 continue;
             }
             if (stack.is(ItemTags.SWORDS)) {

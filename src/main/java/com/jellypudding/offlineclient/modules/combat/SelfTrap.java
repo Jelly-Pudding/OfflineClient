@@ -9,36 +9,17 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
+import com.jellypudding.offlineclient.util.BlockUtil.TrapMode;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.phys.AABB;
-import net.minecraft.world.phys.shapes.CollisionContext;
 
-import java.util.ArrayList;
 import java.util.List;
 
 public final class SelfTrap extends Module {
 
-    public enum Mode {
-        TOP("Top"),
-        FULL("Full");
-
-        private final String label;
-
-        Mode(String label) {
-            this.label = label;
-        }
-
-        @Override
-        public String toString() {
-            return label;
-        }
-    }
-
-    private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
-        "Top covers your head and Full seals the sides too.", Mode.TOP);
+    private final EnumSetting<TrapMode> mode = new EnumSetting<>("Mode",
+        "Top covers your head and Full seals the sides too.", TrapMode.TOP);
     private final NumberSetting delay = new NumberSetting("Delay",
         "Ticks to wait between placements.", 1, 0, 5, 1, " ticks");
     private final BoolSetting rotate = new BoolSetting("Rotate",
@@ -81,7 +62,8 @@ public final class SelfTrap extends Module {
         if (!inGame() || mc.player.isSpectator()) {
             return;
         }
-        List<BlockPos> missing = missingSpots();
+        List<BlockPos> missing = BlockUtil.trapSpots(
+            mc.player.blockPosition(), mode.is(TrapMode.FULL));
         pending = missing;
         if (missing.isEmpty()) {
             slots.restore();
@@ -95,8 +77,7 @@ public final class SelfTrap extends Module {
             return;
         }
 
-        int slot = BlockUtil.findBlockSlot(block ->
-            block.getExplosionResistance() >= 600 && block.defaultDestroyTime() >= 0);
+        int slot = BlockUtil.findBlastProofSlot();
         if (slot == -1) {
             slots.restore();
             return;
@@ -115,34 +96,13 @@ public final class SelfTrap extends Module {
         slots.restore();
     }
 
-    private List<BlockPos> missingSpots() {
-        List<BlockPos> result = new ArrayList<>();
-        BlockPos feet = mc.player.blockPosition();
-        addOpen(result, feet.above(2));
-        if (mode.is(Mode.FULL)) {
-            for (Direction side : Direction.Plane.HORIZONTAL) {
-                addOpen(result, feet.above().relative(side));
-            }
-        }
-        return result;
-    }
-
-    private void addOpen(List<BlockPos> result, BlockPos pos) {
-        if (!BlockUtil.isReplaceable(pos)) {
-            return;
-        }
-        if (mc.level.isUnobstructed(Blocks.OBSIDIAN.defaultBlockState(), pos, CollisionContext.empty())) {
-            result.add(pos);
-        }
-    }
-
     @Subscribe
     private void onRender3D(Render3DEvent event) {
         if (!render.isOn()) {
             return;
         }
         for (BlockPos pos : pending) {
-            event.getBatch().outlineBox(new AABB(pos).deflate(0.002), 0xFFE0A030, false);
+            event.getBatch().outlineBlock(pos, 0xFFE0A030, false);
         }
     }
 }

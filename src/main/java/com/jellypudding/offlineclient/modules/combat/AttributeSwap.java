@@ -1,21 +1,19 @@
 package com.jellypudding.offlineclient.modules.combat;
 
-import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.AttackEntityEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
+import com.jellypudding.offlineclient.module.ExclusivityGroup;
 import com.jellypudding.offlineclient.module.Module;
-import com.jellypudding.offlineclient.module.ModuleManager;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
+import com.jellypudding.offlineclient.util.ItemUtil;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
 
 public final class AttributeSwap extends Module {
-
-    private static final int NEARLY_BROKEN = 5;
 
     private final NumberSetting minGain = new NumberSetting("Min gain",
         "The other item must beat what you hold by this much damage.", 0.5, 0, 10, 0.5);
@@ -38,14 +36,14 @@ public final class AttributeSwap extends Module {
     }
 
     @Override
+    public ExclusivityGroup getExclusivityGroup() {
+        return ExclusivityGroup.WEAPON_SWAP;
+    }
+
+    @Override
     protected void onEnable() {
         slots.forget();
         timer = 0;
-        // AutoWeapon swaps on the same event.
-        ModuleManager modules = OfflineClient.INSTANCE.getModuleManager();
-        if (modules != null) {
-            modules.get(AutoWeapon.class).setEnabled(false);
-        }
     }
 
     @Override
@@ -99,8 +97,7 @@ public final class AttributeSwap extends Module {
             if (stack.isEmpty()) {
                 continue;
             }
-            if (antiBreak.isOn() && stack.isDamageableItem()
-                && stack.getMaxDamage() - stack.getDamageValue() <= NEARLY_BROKEN) {
+            if (antiBreak.isOn() && ItemUtil.nearlyBroken(stack)) {
                 continue;
             }
             double damage = AutoWeapon.weaponDamage(stack, target);

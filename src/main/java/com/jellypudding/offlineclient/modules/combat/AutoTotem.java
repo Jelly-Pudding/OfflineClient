@@ -15,6 +15,7 @@ import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.boss.enderdragon.EndCrystal;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BedBlock;
@@ -24,11 +25,12 @@ import net.minecraft.world.phys.Vec3;
 
 public final class AutoTotem extends Module {
 
-    // Gliding into a wall kills outright so a totem is always worth holding.
+    // Gliding into a wall kills outright. A totem is always worth holding.
     private static final double ELYTRA_TRIGGER_SPEED = 0.5;
 
     private final NumberSetting health = new NumberSetting("Health",
-        "Only equip a totem at or below this many hearts. Zero means always.", 0, 0, 10, 0.5, " hearts");
+        "Equip a totem at or below this many hearts with zero meaning always.",
+        0, 0, 10, 0.5, " hearts");
     private final NumberSetting delay = new NumberSetting("Delay",
         "Ticks to wait before equipping the next totem.", 0, 0, 20, 1, " ticks");
     private final BoolSetting explosions = new BoolSetting("Explosions",
@@ -41,7 +43,7 @@ public final class AutoTotem extends Module {
     private final BoolSetting elytra = new BoolSetting("Elytra",
         "Always hold a totem whilst gliding at speed.", true);
 
-    private int returnSlot = -1;
+    private final InventoryUtil.StrandedStack cursor = new InventoryUtil.StrandedStack();
     private int totems;
     private int timer;
     private boolean hadTotem;
@@ -59,18 +61,15 @@ public final class AutoTotem extends Module {
 
     @Override
     protected void onEnable() {
-        returnSlot = -1;
         timer = 0;
         hadTotem = false;
     }
 
     @Override
     protected void onDisable() {
-        if (inGame() && returnSlot != -1 && InventoryUtil.canClick()
-            && !InventoryUtil.carried().isEmpty()) {
-            InventoryUtil.click(returnSlot);
+        if (inGame()) {
+            cursor.giveBack();
         }
-        returnSlot = -1;
     }
 
     @Subscribe
@@ -78,20 +77,10 @@ public final class AutoTotem extends Module {
         if (!inGame() || mc.player.isSpectator()) {
             return;
         }
-        boolean canClick = InventoryUtil.canClick();
-
-        // A refused click can leave an item on the cursor.
-        if (returnSlot != -1) {
-            if (canClick && !InventoryUtil.carried().isEmpty()) {
-                InventoryUtil.click(returnSlot);
-            }
-            if (!InventoryUtil.carried().isEmpty()) {
-                return;
-            }
-            returnSlot = -1;
+        if (!cursor.recover()) {
+            return;
         }
-
-        int totemSlot = findTotem();
+        totems = countTotems();
 
         if (mc.player.getOffhandItem().is(Items.TOTEM_OF_UNDYING)) {
             hadTotem = true;
@@ -101,6 +90,7 @@ public final class AutoTotem extends Module {
             timer = delay.getInt();
             hadTotem = false;
         }
+        int totemSlot = findTotem();
         if (totemSlot == -1) {
             return;
         }
@@ -110,7 +100,7 @@ public final class AutoTotem extends Module {
             return;
         }
 
-        if (!canClick) {
+        if (!InventoryUtil.canClick()) {
             return;
         }
         // Anything already on the cursor belongs to the player.
@@ -125,7 +115,7 @@ public final class AutoTotem extends Module {
 
         if (InventoryUtil.swap(totemSlot, InventoryUtil.OFFHAND_SLOT) == Swap.STRANDED) {
             // The item the totem replaced had nowhere to go.
-            returnSlot = totemSlot;
+            cursor.hold(totemSlot);
         }
     }
 
@@ -145,7 +135,7 @@ public final class AutoTotem extends Module {
         return explosions.isOn() && blastThreat() >= headroom;
     }
 
-    // Vanilla takes one heart for every block past the first three.
+    // Vanilla takes half a heart for every block past the first three.
     private float fallDamage() {
         double drop = mc.player.fallDistance - 3;
         if (drop <= 0 || mc.player.isFallFlying()) {
@@ -158,7 +148,7 @@ public final class AutoTotem extends Module {
         return (float) Math.max(0, drop);
     }
 
-    // The worst single charge in range rather than the sum of all of them.
+    // The worst single charge in range.
     private float blastThreat() {
         double range = blastRange.getValue();
         float worst = 0;
@@ -189,19 +179,26 @@ public final class AutoTotem extends Module {
             && mc.level.dimension() != Level.NETHER;
     }
 
-    private int findTotem() {
-        // The one already equipped counts toward the total on the HUD.
-        totems = mc.player.getOffhandItem().is(Items.TOTEM_OF_UNDYING)
+    // Every totem the player owns. The one already equipped counts.
+    private int countTotems() {
+        int total = mc.player.getOffhandItem().is(Items.TOTEM_OF_UNDYING)
             ? mc.player.getOffhandItem().getCount() : 0;
-        int found = -1;
         for (int i = 0; i < 36; i++) {
-            if (mc.player.getInventory().getItem(i).is(Items.TOTEM_OF_UNDYING)) {
-                totems += mc.player.getInventory().getItem(i).getCount();
-                if (found == -1) {
-                    found = InventoryUtil.networkSlot(i);
-                }
+            ItemStack stack = mc.player.getInventory().getItem(i);
+            if (stack.is(Items.TOTEM_OF_UNDYING)) {
+                total += stack.getCount();
             }
         }
-        return found;
+        return total;
+    }
+
+    // Network slot of the first totem in the inventory. Minus one when there is none.
+    private int findTotem() {
+        for (int i = 0; i < 36; i++) {
+            if (mc.player.getInventory().getItem(i).is(Items.TOTEM_OF_UNDYING)) {
+                return InventoryUtil.networkSlot(i);
+            }
+        }
+        return -1;
     }
 }

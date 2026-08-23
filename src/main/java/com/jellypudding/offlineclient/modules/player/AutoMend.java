@@ -44,9 +44,11 @@ public final class AutoMend extends Module {
     private final InventoryUtil.SlotSwap slots = new InventoryUtil.SlotSwap();
     private int timer;
     private int bottles;
-    private int worstPercent = 100;
+    // Minus one whilst nothing worn or held carries Mending.
+    private int worstPercent = -1;
     // Set for the one packet that carries the downward throw.
-    private boolean throwing;
+    // Read from the packet thread.
+    private volatile boolean throwing;
 
     public AutoMend() {
         super("AutoMend", "Repairs your mending gear with experience bottles.", Category.PLAYER);
@@ -56,6 +58,9 @@ public final class AutoMend extends Module {
 
     @Override
     public String getSuffix() {
+        if (worstPercent < 0) {
+            return "no mending gear";
+        }
         if (bottles == 0) {
             return "no bottles";
         }
@@ -82,6 +87,10 @@ public final class AutoMend extends Module {
         worstPercent = lowestDurability();
         bottles = countBottles();
 
+        if (worstPercent < 0) {
+            slots.restore();
+            return;
+        }
         if (worstPercent >= threshold.getInt()) {
             slots.restore();
             if (autoDisable.isOn()) {
@@ -90,9 +99,7 @@ public final class AutoMend extends Module {
             }
             return;
         }
-        // Slot swaps and item use both need the survival inventory.
-        if (mc.gui.screen() != null || mc.player.containerMenu.containerId != 0
-            || !mc.player.containerMenu.getCarried().isEmpty()) {
+        if (!InventoryUtil.inventoryFree()) {
             return;
         }
         if (groundOnly.isOn() && !mc.player.onGround()) {
@@ -128,8 +135,9 @@ public final class AutoMend extends Module {
             packet.getYRot(), DOWN_PITCH));
     }
 
+    // Minus one when no equipped piece carries Mending.
     private int lowestDurability() {
-        int lowest = 100;
+        int lowest = -1;
         for (EquipmentSlot slot : REPAIRABLE) {
             ItemStack stack = mc.player.getItemBySlot(slot);
             if (stack.isEmpty() || !stack.isDamageableItem() || stack.getMaxDamage() <= 0) {
@@ -139,7 +147,7 @@ public final class AutoMend extends Module {
                 continue;
             }
             int percent = 100 - stack.getDamageValue() * 100 / stack.getMaxDamage();
-            lowest = Math.min(lowest, percent);
+            lowest = lowest < 0 ? percent : Math.min(lowest, percent);
         }
         return lowest;
     }

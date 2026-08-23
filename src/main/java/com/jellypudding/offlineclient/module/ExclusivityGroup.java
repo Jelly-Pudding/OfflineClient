@@ -4,5 +4,11 @@ package com.jellypudding.offlineclient.module;
 public enum ExclusivityGroup {
 
     // Drives BlockMiner. The server only tracks one breaking block per player.
-    MINING
+    MINING,
+
+    // Swaps the held weapon. Two modules fighting over the hotbar lose both swaps.
+    WEAPON_SWAP,
+
+    // Takes over a fall. Two of these cancel each other out in mid air.
+    FALL_CONTROL
 }

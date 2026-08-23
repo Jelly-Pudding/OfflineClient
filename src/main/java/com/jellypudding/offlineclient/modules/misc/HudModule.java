@@ -8,6 +8,7 @@ import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
+import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.RenderUtil;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -23,7 +24,7 @@ public final class HudModule extends Module {
     private static final int EDGE = 3;
     private static final int LINE = 10;
 
-    // A long list shrinks rather than running off the bottom of the screen.
+    // The floor for the automatic shrink. Text below this is unreadable.
     private static final float MIN_SCALE = 0.5f;
 
     private final BoolSetting watermark = new BoolSetting("Watermark",
@@ -31,28 +32,55 @@ public final class HudModule extends Module {
     private final ColorSetting watermarkColor = new ColorSetting("Watermark colour",
         "Colour of the client name.", 200, true)
         .visibleWhen(watermark::isOn);
+    private final NumberSetting watermarkScale = new NumberSetting("Watermark scale",
+        "Text size of the watermark.", 0.85, 0.5, 2, 0.05, "x")
+        .visibleWhen(watermark::isOn);
     private final BoolSetting moduleList = new BoolSetting("Module list",
         "Enabled modules listed in the top right.", false);
     private final ColorSetting moduleListColor = new ColorSetting("List colour",
         "Colour of the module names.", 200, true)
         .visibleWhen(moduleList::isOn);
+    private final NumberSetting moduleListScale = new NumberSetting("Scale",
+        "Text size of the module list.", 0.85, 0.5, 2, 0.05, "x")
+        .visibleWhen(moduleList::isOn);
     private final BoolSetting info = new BoolSetting("Info bar",
         "Coordinates and direction and speed and FPS in the bottom left.", false);
+    private final NumberSetting infoScale = new NumberSetting("Info scale",
+        "Text size of the info bar.", 0.85, 0.5, 2, 0.05, "x")
+        .visibleWhen(info::isOn);
 
     public HudModule() {
         super("HUD", "The overlay you see whilst playing.", Category.MISC);
-        addSettings(watermark, watermarkColor, moduleList, moduleListColor, info);
+        addSettings(watermark, watermarkColor, watermarkScale,
+            moduleList, moduleListColor, moduleListScale, info, infoScale);
     }
 
-    public boolean isWatermarkOn() {
-        return isEnabled() && watermark.isOn();
-    }
-
-    // The windowed ClickGUI puts the client name in this exact corner so the two
-    // would stack up. Asked each frame rather than pushed so no screen switch can
-    // leave the watermark hidden.
+    // The windowed ClickGUI draws the client name in this same corner.
     private static boolean cornerTaken() {
         return OfflineClient.MC.gui.screen() instanceof WindowGuiScreen;
+    }
+
+    /**
+     * Scales the drawing about a fixed point. A corner anchor keeps its margin
+     * at any scale. True when a matrix was pushed and the caller owes a
+     * popScaled.
+     */
+    private static boolean pushScaled(GuiGraphicsExtractor context, float scale,
+                                      float anchorX, float anchorY) {
+        if (scale == 1f) {
+            return false;
+        }
+        context.pose().pushMatrix();
+        context.pose().translate(anchorX, anchorY);
+        context.pose().scale(scale, scale);
+        context.pose().translate(-anchorX, -anchorY);
+        return true;
+    }
+
+    private static void popScaled(GuiGraphicsExtractor context, boolean pushed) {
+        if (pushed) {
+            context.pose().popMatrix();
+        }
     }
 
     @Subscribe
@@ -74,6 +102,8 @@ public final class HudModule extends Module {
     }
 
     private void renderWatermark(GuiGraphicsExtractor context, Font font) {
+        boolean pushed = pushScaled(context, watermarkScale.getFloat(), EDGE, EDGE);
+
         if (watermarkColor.isRainbow()) {
             RenderUtil.rainbowText(context, font, OfflineClient.NAME, EDGE, EDGE);
         } else {
@@ -81,6 +111,8 @@ public final class HudModule extends Module {
         }
         int offset = font.width(OfflineClient.NAME) + 6;
         context.text(font, "v" + OfflineClient.VERSION, EDGE + offset, EDGE, 0xFFB0B0C0, true);
+
+        popScaled(context, pushed);
     }
 
     private void renderModuleList(GuiGraphicsExtractor context, Font font) {
@@ -93,18 +125,14 @@ public final class HudModule extends Module {
 
         int width = context.guiWidth();
         int room = context.guiHeight() - EDGE * 2;
-        float scale = Math.clamp((float) room / (enabled.size() * LINE), MIN_SCALE, 1f);
+        float chosen = moduleListScale.getFloat();
+        // The largest scale whose stack of lines still fits the screen height.
+        float fit = (float) room / (enabled.size() * LINE);
+        // The automatic shrink only ever goes below the chosen size.
+        float scale = Math.max(Math.min(chosen, fit), Math.min(MIN_SCALE, chosen));
 
-        boolean scaled = scale < 1f;
-        if (scaled) {
-            // Shrink about the top right corner so the list stays pinned there.
-            context.pose().pushMatrix();
-            context.pose().translate(width, EDGE);
-            context.pose().scale(scale, scale);
-            context.pose().translate(-width, -EDGE);
-        }
+        boolean pushed = pushScaled(context, scale, width - EDGE, EDGE);
 
-        // One colour for the whole list. A per row offset reads as a mistake.
         int color = moduleListColor.getColor();
         int y = EDGE;
         for (Module module : enabled) {
@@ -113,9 +141,7 @@ public final class HudModule extends Module {
             y += LINE;
         }
 
-        if (scaled) {
-            context.pose().popMatrix();
-        }
+        popScaled(context, pushed);
     }
 
     private void renderInfoBar(GuiGraphicsExtractor context, Font font) {
@@ -129,7 +155,9 @@ public final class HudModule extends Module {
             + " §8| §7" + String.format(Locale.ROOT, "%.1f m/s", speed)
             + " §8| §7" + mc.getFps() + " fps";
 
-        int y = context.guiHeight() - 12;
+        int y = context.guiHeight() - EDGE - font.lineHeight;
+        boolean pushed = pushScaled(context, infoScale.getFloat(), EDGE, y);
         context.text(font, line, EDGE, y, 0xFFB0B0C0, true);
+        popScaled(context, pushed);
     }
 }

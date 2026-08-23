@@ -85,10 +85,7 @@ public final class SpawnEsp extends Module {
             double north = pos.getZ();
             double south = pos.getZ() + 1;
 
-            batch.line(new Vec3(west, y, north), new Vec3(east, y, north), COLOR, true);
-            batch.line(new Vec3(east, y, north), new Vec3(east, y, south), COLOR, true);
-            batch.line(new Vec3(east, y, south), new Vec3(west, y, south), COLOR, true);
-            batch.line(new Vec3(west, y, south), new Vec3(west, y, north), COLOR, true);
+            batch.flatRect(west, north, east, south, y, COLOR, true);
             if (x) {
                 batch.line(new Vec3(west, y, north), new Vec3(east, y, south), COLOR, true);
                 batch.line(new Vec3(east, y, north), new Vec3(west, y, south), COLOR, true);

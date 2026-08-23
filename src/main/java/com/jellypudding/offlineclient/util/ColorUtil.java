@@ -36,6 +36,20 @@ public final class ColorUtil {
         return 0.2126f * r + 0.7152f * g + 0.0722f * b;
     }
 
+    // Above this share of full health the ramp reads green.
+    private static final float HEALTHY = 0.6f;
+
+    // Above this share it reads amber. Below it reads red.
+    private static final float HURT = 0.3f;
+
+    // A green to amber to red ramp for a health fraction from 0 to 1.
+    public static int health(float fraction) {
+        if (fraction > HEALTHY) {
+            return 0xFF40E060;
+        }
+        return fraction > HURT ? 0xFFFFC040 : 0xFFFF4040;
+    }
+
     public static int lerp(int from, int to, float t) {
         t = Math.clamp(t, 0f, 1f);
         int a = (int) (((from >> 24) & 0xFF) + (((to >> 24) & 0xFF) - ((from >> 24) & 0xFF)) * t);

@@ -8,7 +8,7 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 public final class AntiPush extends Module {
 
     private final BoolSetting entities = new BoolSetting("Entities",
-        "Players and mobs cannot shove you. You still push them.", true);
+        "Players and mobs cannot shove you whilst you still push them.", true);
     private final BoolSetting currents = new BoolSetting("Water currents",
         "Flowing water and lava cannot drag you.", true);
     private final BoolSetting geysers = new BoolSetting("Geysers",

@@ -13,11 +13,33 @@ import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.item.equipment.Equippable;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.state.BlockState;
+
+import java.util.List;
+import java.util.function.Predicate;
 
 public final class ItemUtil {
 
+    // Head to feet. The order armour is worn in.
+    public static final List<EquipmentSlot> ARMOR_SLOTS = List.of(
+        EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET);
+
+    // What most players want thrown away without being asked.
+    public static final List<Item> JUNK = List.of(
+        Items.COBBLESTONE, Items.COBBLED_DEEPSLATE, Items.DIRT, Items.GRAVEL,
+        Items.NETHERRACK, Items.ROTTEN_FLESH, Items.POISONOUS_POTATO, Items.WHEAT_SEEDS);
+
+    // Durability points left before a stack counts as about to break.
+    private static final int BREAK_MARGIN = 5;
+
     private ItemUtil() {
+    }
+
+    public static boolean nearlyBroken(ItemStack stack) {
+        return stack.isDamageableItem()
+            && stack.getMaxDamage() - stack.getDamageValue() <= BREAK_MARGIN;
     }
 
     // The level of an enchantment on a stack. Zero when absent.
@@ -46,10 +68,22 @@ public final class ItemUtil {
 
     // Minus one when nothing beats a bare hand.
     public static int bestToolSlot(BlockState state) {
+        return bestToolSlot(state, 1, stack -> true);
+    }
+
+    /**
+     * The hotbar slot that mines the block fastest. Only stacks the filter
+     * accepts count and only speeds above the floor. Minus one when none does.
+     */
+    public static int bestToolSlot(BlockState state, float floor, Predicate<ItemStack> allowed) {
         int bestSlot = -1;
-        float bestSpeed = 1;
-        for (int i = 0; i < 9; i++) {
-            float speed = miningSpeed(OfflineClient.MC.player.getInventory().getItem(i), state);
+        float bestSpeed = floor;
+        for (int i = 0; i < InventoryUtil.HOTBAR_SIZE; i++) {
+            ItemStack stack = OfflineClient.MC.player.getInventory().getItem(i);
+            if (!allowed.test(stack)) {
+                continue;
+            }
+            float speed = miningSpeed(stack, state);
             if (speed > bestSpeed) {
                 bestSpeed = speed;
                 bestSlot = i;

@@ -11,7 +11,7 @@ import com.jellypudding.offlineclient.modules.movement.AntiPush;
 import com.jellypudding.offlineclient.modules.movement.HighJump;
 import com.jellypudding.offlineclient.modules.movement.LongJump;
 import com.jellypudding.offlineclient.modules.movement.NoSlowdown;
-import com.jellypudding.offlineclient.modules.movement.SafeWalk;
+import com.jellypudding.offlineclient.modules.movement.EdgeGuard;
 import com.jellypudding.offlineclient.modules.movement.Step;
 import com.jellypudding.offlineclient.modules.player.AutoEat;
 import com.jellypudding.offlineclient.modules.player.FastBreak;
@@ -174,16 +174,19 @@ public abstract class LocalPlayerMixin extends AbstractClientPlayer {
 
     /**
      * The client predicts mining five times slower in the air. FastBreak fixes
-     * the server side by rewriting packets.
+     * the server side by rewriting packets and can raise the rate outright.
      */
     @Override
     public float getDestroySpeed(BlockState state) {
         float speed = super.getDestroySpeed(state);
         FastBreak fastBreak = Modules.get(FastBreak.class);
-        if (!onGround() && !isInWater() && fastBreak != null && fastBreak.removesAirPenalty()) {
+        if (fastBreak == null) {
+            return speed;
+        }
+        if (!onGround() && !isInWater() && fastBreak.removesAirPenalty()) {
             speed *= 5;
         }
-        return speed;
+        return speed * fastBreak.speedMultiplier();
     }
 
     @Override
@@ -198,8 +201,8 @@ public abstract class LocalPlayerMixin extends AbstractClientPlayer {
         if (super.isStayingOnGroundSurface()) {
             return true;
         }
-        SafeWalk safeWalk = Modules.get(SafeWalk.class);
-        return safeWalk != null && safeWalk.shouldGuard();
+        EdgeGuard edgeGuard = Modules.get(EdgeGuard.class);
+        return edgeGuard != null && edgeGuard.shouldGuard();
     }
 
     @Override
@@ -235,8 +238,8 @@ public abstract class LocalPlayerMixin extends AbstractClientPlayer {
 
     @Unique
     private static boolean blocked(Holder<MobEffect> effect) {
-        AntiBlind antiBlind = Modules.get(AntiBlind.class);
-        if (antiBlind == null || !antiBlind.isEnabled()) {
+        AntiBlind antiBlind = Modules.active(AntiBlind.class);
+        if (antiBlind == null) {
             return false;
         }
         if (effect == MobEffects.BLINDNESS) {
@@ -248,11 +251,11 @@ public abstract class LocalPlayerMixin extends AbstractClientPlayer {
         return effect == MobEffects.NAUSEA && antiBlind.blocksNausea();
     }
 
-    // The renderer reads the intensity a tick behind so clearing it here is enough.
+    // The renderer reads the intensity a tick behind. Clearing it here is enough.
     @Inject(method = "tick()V", at = @At("TAIL"))
     private void onTickEnd(CallbackInfo ci) {
-        AntiBlind antiBlind = Modules.get(AntiBlind.class);
-        if (antiBlind != null && antiBlind.isEnabled() && antiBlind.blocksPortal()) {
+        AntiBlind antiBlind = Modules.active(AntiBlind.class);
+        if (antiBlind != null && antiBlind.blocksPortal()) {
             portalEffectIntensity = 0;
             oPortalEffectIntensity = 0;
         }

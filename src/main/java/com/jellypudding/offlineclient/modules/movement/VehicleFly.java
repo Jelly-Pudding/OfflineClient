@@ -8,37 +8,22 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.MovementUtil;
 import net.minecraft.network.protocol.game.ServerboundPlayerInputPacket;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.player.Input;
 import net.minecraft.world.entity.vehicle.boat.AbstractBoat;
 import net.minecraft.world.phys.AABB;
-import net.minecraft.world.phys.Vec2;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * Flies whatever you are riding. Vehicles move on their own code path so the
- * Flight module never reaches them. Only a vehicle the server lets the client
- * steer can be flown which rules out a minecart on rails.
+ * Flies whatever you are riding. Vehicles move on their own code path which
+ * Flight never reaches. Only a vehicle the client may steer can be flown.
  */
 public final class VehicleFly extends Module {
 
-    public enum Mode {
-        CONTROL("Control"),
-        GLIDE("Glide");
-
-        private final String label;
-
-        Mode(String label) {
-            this.label = label;
-        }
-
-        @Override
-        public String toString() {
-            return label;
-        }
-    }
+    public enum Mode { CONTROL, GLIDE }
 
     // Blocks per tick at a speed of one. Matches the Flight module.
     private static final double HORIZONTAL_UNIT = 0.6;
@@ -47,7 +32,7 @@ public final class VehicleFly extends Module {
     // A drop longer than this starts to hurt.
     private static final double SAFE_DROP = 3;
 
-    // A height change this large came from the server rather than from the physics.
+    // The physics never move a vehicle this far in one tick. The server did.
     private static final double RESYNC_DISTANCE = 4;
 
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
@@ -57,7 +42,7 @@ public final class VehicleFly extends Module {
         "How hard your keys push the vehicle. 1 matches creative flight.", 1, 0.1, 5, 0.1, "x")
         .min(0.1).max(20).visibleWhen(() -> mode.is(Mode.CONTROL));
     private final NumberSetting verticalSpeed = new NumberSetting("Vertical speed",
-        "Up and down speed. Jump climbs and sprint sinks.", 1, 0.1, 5, 0.1, "x")
+        "Up and down speed with jump climbing and sprint sinking.", 1, 0.1, 5, 0.1, "x")
         .min(0.1).max(20);
     private final BoolSetting boats = new BoolSetting("Boats",
         "Fly boats and rafts.", true);
@@ -86,7 +71,7 @@ public final class VehicleFly extends Module {
 
     @Override
     public String getSuffix() {
-        return mode.getValue().toString();
+        return mode.getValueString();
     }
 
     @Override
@@ -147,13 +132,10 @@ public final class VehicleFly extends Module {
         if (mode.is(Mode.CONTROL)) {
             vx = 0;
             vz = 0;
-            Vec2 move = mc.player.input.getMoveVector();
-            if (move.length() > 1e-4f) {
-                double h = speed.getValue() * HORIZONTAL_UNIT;
-                double angle = Math.toRadians(mc.player.getYRot()) + Math.atan2(-move.x, move.y);
-                vx = -Math.sin(angle) * h;
-                vz = Math.cos(angle) * h;
-            }
+            Vec3 heading = MovementUtil.inputDirection();
+            double h = speed.getValue() * HORIZONTAL_UNIT;
+            vx = heading.x * h;
+            vz = heading.z * h;
             if (faceView.isOn()) {
                 vehicle.setYRot(mc.player.getYRot());
             }
@@ -163,7 +145,7 @@ public final class VehicleFly extends Module {
 
     /**
      * Corrects back towards the height the vehicle was left at. Vehicle physics
-     * keep pulling downwards so a flat zero would sink.
+     * keep pulling downwards and a flat zero would sink.
      */
     private double holdHeight(Entity vehicle, double limit) {
         if (!holding || Math.abs(holdY - vehicle.getY()) > RESYNC_DISTANCE) {

@@ -5,40 +5,17 @@ import com.jellypudding.offlineclient.event.events.ClientTickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.EnumSetting;
+import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.mojang.blaze3d.platform.InputConstants;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen;
 import org.lwjgl.glfw.GLFW;
 
-/**
- * Lets the mouse turn the camera whilst a chest or inventory is open. Hold
- * mode keeps the pointer usable for clicking and only looks around whilst the
- * chosen key is held. InvWalk is the separate module for walking about.
- */
+// Turns the camera whilst a chest or inventory is open. Hold mode leaves the
+// pointer free for clicking. InvWalk covers walking about.
 public final class GUIMove extends Module {
-
-    public enum Hold {
-        ALT("Left alt", GLFW.GLFW_KEY_LEFT_ALT),
-        CONTROL("Left control", GLFW.GLFW_KEY_LEFT_CONTROL),
-        SHIFT("Left shift", GLFW.GLFW_KEY_LEFT_SHIFT),
-        GRAVE("Grave", GLFW.GLFW_KEY_GRAVE_ACCENT);
-
-        private final String label;
-        private final int key;
-
-        Hold(String label, int key) {
-            this.label = label;
-            this.key = key;
-        }
-
-        public int key() {
-            return key;
-        }
-
-        @Override
-        public String toString() {
-            return label;
-        }
-    }
 
     public enum Mode {
         HOLD("Hold a key"),
@@ -58,8 +35,8 @@ public final class GUIMove extends Module {
 
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
         "Hold keeps the pointer free for clicking. Always turns the whole time.", Mode.HOLD);
-    private final EnumSetting<Hold> hold = new EnumSetting<>("Hold key",
-        "Keep this key down to look around.", Hold.ALT)
+    private final KeybindSetting hold = new KeybindSetting("Hold key",
+        "Keep this key down to look around.", GLFW.GLFW_KEY_LEFT_ALT)
         .visibleWhen(() -> mode.is(Mode.HOLD));
 
     private boolean turning;
@@ -82,8 +59,11 @@ public final class GUIMove extends Module {
         if (turning) {
             return "turning";
         }
+        if (!mode.is(Mode.HOLD)) {
+            return "always";
+        }
         // Naming the key here is the only hint most people get.
-        return mode.is(Mode.HOLD) ? hold.getValue().toString().toLowerCase() : "always";
+        return hold.isBound() ? hold.getKeyName().toLowerCase() : "no key";
     }
 
     @Override
@@ -98,16 +78,33 @@ public final class GUIMove extends Module {
             return;
         }
         Screen screen = mc.gui.screen();
-        if (screen == null || !InvWalk.allowed(screen)) {
+        if (screen == null || !allowed(screen)) {
             stopTurning();
             return;
         }
-        if (mode.is(Mode.ALWAYS)
-            || InputConstants.isKeyDown(mc.getWindow(), hold.getValue().key())) {
+        if (mode.is(Mode.ALWAYS) || (hold.isBound()
+            && InputConstants.isKeyDown(mc.getWindow(), hold.getValue()))) {
             startTurning();
         } else {
             stopTurning();
         }
+    }
+
+    // InvWalk shuts out every screen that carries a text box. The creative screen
+    // always carries its search box. That box only shows in the search tab.
+    private static boolean allowed(Screen screen) {
+        if (InvWalk.allowed(screen)) {
+            return true;
+        }
+        if (!(screen instanceof CreativeModeInventoryScreen)) {
+            return false;
+        }
+        for (GuiEventListener child : screen.children()) {
+            if (child instanceof EditBox box && box.isVisible()) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private void startTurning() {

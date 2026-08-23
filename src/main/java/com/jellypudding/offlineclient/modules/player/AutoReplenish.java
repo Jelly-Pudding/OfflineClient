@@ -1,15 +1,14 @@
 package com.jellypudding.offlineclient.modules.player;
 
-import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
-import com.jellypudding.offlineclient.module.ModuleManager;
 import com.jellypudding.offlineclient.modules.combat.AutoTotem;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.InventoryUtil;
+import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.world.item.ItemStack;
 
 // Tops up hotbar stacks by watching what each slot held last tick.
@@ -32,10 +31,6 @@ public final class AutoReplenish extends Module {
     private final ItemStack[] previous = new ItemStack[10];
     private int timer;
     private boolean hadScreen;
-
-    private AutoTotem autoTotem;
-    private AutoEat autoEat;
-    private AutoPotion autoPotion;
 
     public AutoReplenish() {
         super("AutoReplenish", "Refills your hotbar stacks from your inventory.", Category.PLAYER);
@@ -71,10 +66,9 @@ public final class AutoReplenish extends Module {
             || !mc.player.containerMenu.getCarried().isEmpty()) {
             return;
         }
-        boolean neighbours = findNeighbours();
-        // AutoEat and AutoPotion shuffle stacks between the inventory and the
-        // hotbar. A slot they emptied looks exactly like one that ran out.
-        if (neighbours && (autoEat.isBusy() || autoPotion.isDrinking())) {
+        // AutoEat and AutoGap and AutoPotion shuffle stacks between the inventory
+        // and the hotbar. A slot they emptied looks exactly like one that ran out.
+        if (feederBusy()) {
             snapshot();
             return;
         }
@@ -88,7 +82,7 @@ public final class AutoReplenish extends Module {
         for (int i = 0; i < 9 && !moved; i++) {
             moved = check(i, mc.player.getInventory().getItem(i));
         }
-        boolean totemBusy = neighbours && autoTotem.isEnabled();
+        boolean totemBusy = Modules.enabled(AutoTotem.class);
         if (!moved && offhand.isOn() && !totemBusy) {
             moved = check(OFFHAND_INDEX, mc.player.getOffhandItem());
         }
@@ -98,23 +92,16 @@ public final class AutoReplenish extends Module {
         }
     }
 
-    // Cached. Each lookup walks every registered module.
-    private boolean findNeighbours() {
-        if (autoTotem != null) {
-            return true;
-        }
-        ModuleManager modules = OfflineClient.INSTANCE.getModuleManager();
-        if (modules == null) {
-            return false;
-        }
-        autoTotem = modules.get(AutoTotem.class);
-        autoEat = modules.get(AutoEat.class);
-        autoPotion = modules.get(AutoPotion.class);
-        return true;
+    private static boolean feederBusy() {
+        AutoEat eat = Modules.get(AutoEat.class);
+        AutoGap gap = Modules.get(AutoGap.class);
+        AutoPotion potion = Modules.get(AutoPotion.class);
+        return (eat != null && eat.isBusy()) || (gap != null && gap.isBusy())
+            || (potion != null && potion.isDrinking());
     }
 
     private boolean check(int index, ItemStack now) {
-        ItemStack before = previous[index] == null ? ItemStack.EMPTY : previous[index];
+        ItemStack before = previous[index];
         int wanted = threshold.getInt();
 
         ItemStack lookFor = null;
@@ -146,16 +133,7 @@ public final class AutoReplenish extends Module {
         int target = index == OFFHAND_INDEX
             ? InventoryUtil.OFFHAND_SLOT : InventoryUtil.networkSlot(index);
         int from = InventoryUtil.networkSlot(source);
-        InventoryUtil.click(from);
-        if (mc.player.containerMenu.getCarried().isEmpty()) {
-            // The pickup was refused.
-            return false;
-        }
-        InventoryUtil.click(target);
-        if (!mc.player.containerMenu.getCarried().isEmpty()) {
-            InventoryUtil.click(from);
-        }
-        return true;
+        return InventoryUtil.swap(from, target) != InventoryUtil.Swap.REFUSED;
     }
 
     /**

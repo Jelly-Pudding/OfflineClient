@@ -7,8 +7,8 @@ import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
+import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.Modules;
-import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.protocol.game.ServerboundPlayerInputPacket;
 import net.minecraft.world.entity.player.Input;
@@ -18,26 +18,12 @@ import java.lang.ref.WeakReference;
 // Legit mode holds the sneak key. Packet mode only tells the server.
 public final class Sneak extends Module {
 
-    public enum Mode {
-        LEGIT("Legit"),
-        PACKET("Packet");
-
-        private final String label;
-
-        Mode(String label) {
-            this.label = label;
-        }
-
-        @Override
-        public String toString() {
-            return label;
-        }
-    }
+    public enum Mode { LEGIT, PACKET }
 
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
         "Legit really crouches. Packet keeps your full speed.",
         Mode.LEGIT);
-    private final BoolSetting skipWhileFlying = new BoolSetting("Skip while flying",
+    private final BoolSetting skipWhileFlying = new BoolSetting("Skip whilst flying",
         "Do not hold sneak whilst flying.", true)
         .visibleWhen(() -> mode.is(Mode.LEGIT));
 
@@ -55,7 +41,7 @@ public final class Sneak extends Module {
 
     @Override
     public String getSuffix() {
-        return mode.getValue().toString();
+        return mode.getValueString();
     }
 
     @Override
@@ -86,7 +72,7 @@ public final class Sneak extends Module {
             return;
         }
         if (skipWhileFlying.isOn() && flying()) {
-            setShift(physicallyHeld());
+            setShift(InputUtil.physicallyHeld(mc.options.keyShift));
             return;
         }
         setShift(true);
@@ -120,7 +106,7 @@ public final class Sneak extends Module {
             return;
         }
         if (old == Mode.LEGIT) {
-            setShift(physicallyHeld());
+            setShift(InputUtil.physicallyHeld(mc.options.keyShift));
         } else if (forcing) {
             forcing = false;
             tellServer(false);
@@ -152,15 +138,7 @@ public final class Sneak extends Module {
         }
     }
 
-    private boolean physicallyHeld() {
-        return InputConstants.isKeyDown(mc.getWindow(), mc.options.keyShift.key.getValue());
-    }
-
     private boolean flying() {
-        if (mc.player.getAbilities().flying) {
-            return true;
-        }
-        Flight flight = Modules.get(Flight.class);
-        return flight != null && flight.isEnabled();
+        return mc.player.getAbilities().flying || Modules.enabled(Flight.class);
     }
 }

@@ -11,6 +11,7 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.EmptyBlockGetter;
 import net.minecraft.world.level.block.AnvilBlock;
 import net.minecraft.world.level.block.BaseEntityBlock;
@@ -40,6 +41,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
 import java.util.ArrayList;
@@ -51,6 +53,12 @@ import java.util.function.Predicate;
 public final class BlockUtil {
 
     private static final Minecraft MC = OfflineClient.MC;
+
+    // Blast resistance a block needs to survive a crystal. Obsidian and up.
+    public static final float BLAST_PROOF = 600;
+
+    // Top covers the head. Full seals the sides at head height as well.
+    public enum TrapMode { TOP, FULL }
 
     private BlockUtil() {
     }
@@ -68,9 +76,8 @@ public final class BlockUtil {
         return !state.isAir() && blocksMotion(state);
     }
 
-    // Vanilla deprecated this without shipping a replacement. It is still the only
-    // check that treats cobwebs and bamboo saplings as passable so it stays.
-    // Routed through here so the whole client touches the old call in one place.
+    // Deprecated in vanilla with no replacement. Still the only check that treats
+    // cobwebs and bamboo saplings as passable.
     @SuppressWarnings("deprecation")
     public static boolean blocksMotion(BlockState state) {
         return state.blocksMotion();
@@ -142,15 +149,6 @@ public final class BlockUtil {
      * The direction from the target toward the neighbour it can be placed
      * against. Null when there is nothing to build on.
      */
-    public static Direction findSupport(BlockPos target) {
-        for (Direction side : Direction.values()) {
-            if (isSolid(target.relative(side))) {
-                return side;
-            }
-        }
-        return null;
-    }
-
     public static boolean place(BlockPos target, Direction support, boolean rotate, boolean swing) {
         BlockPos against = target.relative(support);
         Direction face = support.getOpposite();
@@ -230,9 +228,108 @@ public final class BlockUtil {
         return InventoryUtil.hotbarSlot(stack -> stack.getItem() instanceof BlockItem);
     }
 
+    // The closest position within the range that passes the test.
+    public static BlockPos nearestWithin(double range, Predicate<BlockPos> test) {
+        // Sixteen blocks is the widest scan that still fits in one tick.
+        range = Math.min(range, 16);
+        Vec3 eye = MC.player.getEyePosition();
+        BlockPos centre = BlockPos.containing(eye);
+        int r = (int) Math.ceil(range);
+        double bestDistanceSq = range * range;
+        BlockPos best = null;
+        for (int dx = -r; dx <= r; dx++) {
+            for (int dy = -r; dy <= r; dy++) {
+                for (int dz = -r; dz <= r; dz++) {
+                    double ox = centre.getX() + dx + 0.5 - eye.x;
+                    double oy = centre.getY() + dy + 0.5 - eye.y;
+                    double oz = centre.getZ() + dz + 0.5 - eye.z;
+                    double distanceSq = ox * ox + oy * oy + oz * oz;
+                    // Anything further out than the best hit cannot win.
+                    if (distanceSq > bestDistanceSq) {
+                        continue;
+                    }
+                    BlockPos pos = centre.offset(dx, dy, dz);
+                    if (test.test(pos)) {
+                        bestDistanceSq = distanceSq;
+                        best = pos;
+                    }
+                }
+            }
+        }
+        return best;
+    }
+
+    /**
+     * A hotbar slot holding something that survives a crystal and can still be
+     * broken again afterwards. Bedrock and other unbreakable blocks are no use.
+     */
+    public static int findBlastProofSlot() {
+        return findBlockSlot(block ->
+            block.getExplosionResistance() >= BLAST_PROOF && block.defaultDestroyTime() >= 0);
+    }
+
     public static int findBlockSlot(Predicate<Block> filter) {
         return InventoryUtil.hotbarSlot(stack ->
             stack.getItem() instanceof BlockItem item && filter.test(item.getBlock()));
+    }
+
+    // The hotbar slot holding whichever allowed block sits highest up the list.
+    public static int findRankedBlockSlot(Collection<Identifier> preferred, Predicate<Block> allowed) {
+        int best = -1;
+        int bestRank = Integer.MAX_VALUE;
+        for (int i = 0; i < InventoryUtil.HOTBAR_SIZE; i++) {
+            ItemStack stack = MC.player.getInventory().getItem(i);
+            if (!(stack.getItem() instanceof BlockItem item) || !allowed.test(item.getBlock())) {
+                continue;
+            }
+            int rank = rankOf(item.getBlock(), preferred);
+            if (rank != -1 && rank < bestRank) {
+                bestRank = rank;
+                best = i;
+            }
+        }
+        return best;
+    }
+
+    // The open spots above the head and at head height around it.
+    public static List<BlockPos> trapSpots(BlockPos feet, boolean sealSides) {
+        List<BlockPos> spots = new ArrayList<>();
+        addOpen(spots, feet.above(2));
+        if (sealSides) {
+            for (Direction side : Direction.Plane.HORIZONTAL) {
+                addOpen(spots, feet.above().relative(side));
+            }
+        }
+        return spots;
+    }
+
+    // A spot only counts when a full block would actually fit in it.
+    private static void addOpen(List<BlockPos> spots, BlockPos pos) {
+        if (isReplaceable(pos) && MC.level.isUnobstructed(
+            Blocks.OBSIDIAN.defaultBlockState(), pos, CollisionContext.empty())) {
+            spots.add(pos);
+        }
+    }
+
+    /**
+     * Clicks a block face. Vanilla skips a block interaction whilst the player
+     * sneaks. The sneak is dropped for the click and put back straight after.
+     */
+    public static boolean interact(BlockPos pos, Direction side) {
+        boolean sneaking = MC.player.isShiftKeyDown();
+        if (sneaking) {
+            MC.player.setShiftKeyDown(false);
+        }
+        BlockHitResult result = new BlockHitResult(hitPoint(pos, side), side, pos, false);
+        boolean used = MC.gameMode
+            .useItemOn(MC.player, InteractionHand.MAIN_HAND, result).consumesAction();
+        if (sneaking) {
+            MC.player.setShiftKeyDown(true);
+        }
+        if (used) {
+            MC.player.swing(InteractionHand.MAIN_HAND);
+        }
+        return used;
     }
 
     /**
@@ -277,8 +374,8 @@ public final class BlockUtil {
     }
 
     /**
-     * Like {@link #findSupport} but skips blocks that open on click and
-     * prefers the neighbour whose face is closest to the eyes.
+     * A solid neighbour to place against. Blocks that open on click are skipped
+     * and the face closest to the eyes wins.
      */
     public static Direction findPlaceSupport(BlockPos target) {
         Vec3 eye = MC.player.getEyePosition();
@@ -298,7 +395,7 @@ public final class BlockUtil {
         return best;
     }
 
-    // Uses the real shape rather than a full cube.
+    // Taken from the real shape and not from a full cube.
     public static Vec3 hitPoint(BlockPos pos, Direction side) {
         VoxelShape shape = state(pos).getShape(MC.level, pos);
         AABB box = shape.isEmpty() ? new AABB(0, 0, 0, 1, 1, 1) : shape.bounds();

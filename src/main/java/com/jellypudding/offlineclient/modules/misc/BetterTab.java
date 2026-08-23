@@ -38,7 +38,7 @@ public final class BetterTab extends Module {
 
     public BetterTab() {
         super("BetterTab", "Ping numbers and friend colours in the player list.", Category.MISC);
-        addSettings(ping, friends, raiseLimit, limit, friendColor);
+        addSettings(ping, friends, friendColor, raiseLimit, limit);
         searchTags("tab list", "player list", "latency");
         instance = this;
     }

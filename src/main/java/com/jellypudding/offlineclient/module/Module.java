@@ -3,6 +3,7 @@ package com.jellypudding.offlineclient.module;
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.setting.Setting;
+import com.jellypudding.offlineclient.util.SearchRank;
 import net.minecraft.client.Minecraft;
 
 import java.util.ArrayList;
@@ -17,6 +18,7 @@ public abstract class Module {
     private final String description;
     private final Category category;
     private final List<Setting<?>> settings = new ArrayList<>();
+    private final List<Setting<?>> settingsView = Collections.unmodifiableList(settings);
     private final KeybindSetting keybind;
     private String[] tags = new String[0];
     private boolean enabled;
@@ -48,29 +50,35 @@ public abstract class Module {
         return keybind;
     }
 
-    protected void addSettings(Setting<?>... newSettings) {
+    protected final void addSettings(Setting<?>... newSettings) {
         Collections.addAll(settings, newSettings);
     }
 
-    protected void searchTags(String... tags) {
+    protected final void searchTags(String... tags) {
         this.tags = tags;
     }
 
-    public boolean matchesSearch(String query) {
-        String q = query.toLowerCase();
-        if (name.toLowerCase().contains(q) || description.toLowerCase().contains(q)) {
-            return true;
-        }
+    /**
+     * How closely this module answers a search. Higher is a better answer and
+     * SearchRank.NO_MATCH means it does not answer the query at all. The name
+     * outranks a tag. A tag outranks the description.
+     */
+    public int searchScore(String query) {
+        String bestTag = "";
+        int bestTagScore = SearchRank.NO_MATCH;
         for (String tag : tags) {
-            if (tag.toLowerCase().contains(q)) {
-                return true;
+            // Only the strongest tag is offered. A weak one must not drag the module down.
+            int score = SearchRank.score(tag, query);
+            if (score > bestTagScore) {
+                bestTagScore = score;
+                bestTag = tag;
             }
         }
-        return false;
+        return SearchRank.best(query, name, bestTag, description);
     }
 
     public List<Setting<?>> getSettings() {
-        return settings;
+        return settingsView;
     }
 
     // Spaces and case are ignored.
@@ -128,6 +136,14 @@ public abstract class Module {
 
     public void onKeybind() {
         toggle();
+    }
+
+    // Joins a target name and a status word for the module list.
+    protected static String suffix(String target, String status) {
+        if (target == null) {
+            return status;
+        }
+        return status == null ? target : target + " " + status;
     }
 
     public boolean savesEnabledState() {

@@ -1,6 +1,5 @@
 package com.jellypudding.offlineclient.modules.combat;
 
-import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.Render3DEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
@@ -10,13 +9,13 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
-import net.minecraft.client.Minecraft;
+import com.jellypudding.offlineclient.util.InventoryUtil;
+import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
@@ -31,7 +30,7 @@ public final class AutoWeb extends Module {
     private final NumberSetting targetRange = new NumberSetting("Target range",
         "How far away enemies are considered.", 8, 1, 16, 0.5, " blocks");
     private final NumberSetting range = new NumberSetting("Range",
-        "How far you can reach to place.", 4.5, 1, 6, 0.1).min(1);
+        "How far you can reach to place.", 4.5, 1, 6, 0.1);
     private final NumberSetting delay = new NumberSetting("Delay",
         "Ticks to wait between webs.", 2, 0, 20, 1, " ticks");
     private final BoolSetting predict = new BoolSetting("Predict",
@@ -44,6 +43,7 @@ public final class AutoWeb extends Module {
         "Outline the spots being webbed.", true);
 
     private final List<BlockPos> spots = new ArrayList<>();
+    private final SlotSwap slots = new SlotSwap();
     private int timer;
     private String targetName;
 
@@ -82,16 +82,14 @@ public final class AutoWeb extends Module {
             timer--;
         }
         Player target = EntityUtil.nearestEnemy(targetRange.getValue());
-        targetName = target == null ? null : target.getGameProfile().name();
+        targetName = EntityUtil.nameOf(target);
         if (target == null) {
             return;
         }
 
         Vec3 point = target.position();
         if (predict.isOn()) {
-            Vec3 speed = new Vec3(target.getX() - target.xOld,
-                target.getY() - target.yOld, target.getZ() - target.zOld);
-            point = point.add(speed.scale(LEAD_TICKS));
+            point = point.add(EntityUtil.velocityOf(target).scale(LEAD_TICKS));
         }
         BlockPos feet = BlockPos.containing(point);
         addSpot(feet);
@@ -104,7 +102,7 @@ public final class AutoWeb extends Module {
 
         boolean placed = false;
         for (BlockPos spot : spots) {
-            placed |= placeWeb(spot, rotate.isOn());
+            placed |= placeWeb(spot, rotate.isOn(), slots);
         }
         if (placed) {
             timer = delay.getInt();
@@ -121,28 +119,20 @@ public final class AutoWeb extends Module {
         return BlockUtil.isReplaceable(pos) && BlockUtil.state(pos).getBlock() != Blocks.COBWEB;
     }
 
-    static boolean placeWeb(BlockPos pos, boolean rotate) {
-        Minecraft mc = OfflineClient.MC;
+    static boolean placeWeb(BlockPos pos, boolean rotate, SlotSwap slots) {
         if (!webbable(pos)) {
             return false;
         }
-        int slot = -1;
-        for (int i = 0; i < 9; i++) {
-            if (mc.player.getInventory().getItem(i).is(Items.COBWEB)) {
-                slot = i;
-                break;
-            }
-        }
+        int slot = InventoryUtil.hotbarSlot(stack -> stack.is(Items.COBWEB));
         if (slot == -1) {
             return false;
         }
-        int previous = mc.player.getInventory().getSelectedSlot();
-        mc.player.getInventory().setSelectedSlot(slot);
+        slots.select(slot);
         Direction support = BlockUtil.findPlaceSupport(pos);
         boolean placed = support != null
             ? BlockUtil.place(pos, support, rotate, true)
             : BlockUtil.placeDirect(pos, rotate, true);
-        mc.player.getInventory().setSelectedSlot(previous);
+        slots.restore();
         return placed;
     }
 
@@ -152,7 +142,7 @@ public final class AutoWeb extends Module {
             return;
         }
         for (BlockPos spot : spots) {
-            event.getBatch().outlineBox(new AABB(spot).deflate(0.002), 0xFFF0F0F0, false);
+            event.getBatch().outlineBlock(spot, 0xFFF0F0F0, false);
         }
     }
 }

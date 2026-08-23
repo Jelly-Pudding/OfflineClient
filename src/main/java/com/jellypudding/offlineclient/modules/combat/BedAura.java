@@ -17,7 +17,6 @@ import com.jellypudding.offlineclient.util.RotationPriority;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.tags.ItemTags;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.attribute.BedRule;
 import net.minecraft.world.attribute.EnvironmentAttributes;
 import net.minecraft.world.entity.player.Player;
@@ -28,8 +27,6 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.HorizontalDirectionalBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BedPart;
-import net.minecraft.world.phys.AABB;
-import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.CollisionContext;
 
@@ -39,7 +36,7 @@ public final class BedAura extends Module {
     private final NumberSetting targetRange = new NumberSetting("Target range",
         "How far away enemies are considered.", 8, 2, 16, 0.5, " blocks");
     private final NumberSetting range = new NumberSetting("Range",
-        "Reach for placing and using beds.", 4.5, 1, 6, 0.1).min(1);
+        "Reach for placing and using beds.", 4.5, 1, 6, 0.1);
     private final BoolSetting doPlace = new BoolSetting("Place",
         "Place beds near the target.", true);
     private final NumberSetting placeDelay = new NumberSetting("Place delay",
@@ -55,7 +52,7 @@ public final class BedAura extends Module {
     private final BoolSetting antiSuicide = new BoolSetting("Anti suicide",
         "Never set off a bed that could kill you.", true);
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Send a look packet so the bed lies the way you want.", true);
+        "Send a look packet to lay the bed the way you want.", true);
     private final BoolSetting render = new BoolSetting("Show placement",
         "Outline the two blocks the next bed fills.", true);
 
@@ -77,10 +74,7 @@ public final class BedAura extends Module {
 
     @Override
     public String getSuffix() {
-        if (targetName == null) {
-            return status;
-        }
-        return status == null ? targetName : targetName + " " + status;
+        return suffix(targetName, status);
     }
 
     @Override
@@ -129,7 +123,7 @@ public final class BedAura extends Module {
         }
 
         Player target = EntityUtil.nearestEnemy(targetRange.getValue());
-        targetName = target == null ? null : target.getGameProfile().name();
+        targetName = EntityUtil.nameOf(target);
         if (target == null) {
             slots.restore();
             return;
@@ -191,18 +185,7 @@ public final class BedAura extends Module {
             status = "(turning)";
             return true;
         }
-        // Vanilla skips the block interaction whilst the player is sneaking.
-        boolean sneaking = mc.player.isShiftKeyDown();
-        if (sneaking) {
-            mc.player.setShiftKeyDown(false);
-        }
-        BlockHitResult result = new BlockHitResult(hit, Direction.UP, best, false);
-        boolean used = mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND, result).consumesAction();
-        if (sneaking) {
-            mc.player.setShiftKeyDown(true);
-        }
-        if (used) {
-            mc.player.swing(InteractionHand.MAIN_HAND);
+        if (BlockUtil.interact(best, Direction.UP)) {
             breakTimer = breakDelay.getInt();
         }
         return true;
@@ -326,13 +309,13 @@ public final class BedAura extends Module {
             return;
         }
         if (plannedFoot != null) {
-            event.getBatch().outlineBox(new AABB(plannedFoot).deflate(0.002), 0xFF40FFD0, false);
+            event.getBatch().outlineBlock(plannedFoot, 0xFF40FFD0, false);
         }
         if (plannedHead != null) {
-            event.getBatch().outlineBox(new AABB(plannedHead).deflate(0.002), 0xFF40FFD0, false);
+            event.getBatch().outlineBlock(plannedHead, 0xFF40FFD0, false);
         }
         if (armed != null) {
-            event.getBatch().outlineBox(new AABB(armed).deflate(0.002), 0xFFFF4040, false);
+            event.getBatch().outlineBlock(armed, 0xFFFF4040, false);
         }
     }
 }

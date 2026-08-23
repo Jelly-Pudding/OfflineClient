@@ -59,16 +59,12 @@ public final class XRay extends Module {
     private volatile Set<Block> visible = Set.of();
     private volatile boolean exposed;
     private volatile int alpha;
+    private int rebuildCooldown;
 
     public XRay() {
         super("XRay", "See ores through the ground.", Category.RENDER);
         addSettings(blocks, lava, water, exposedOnly, opacity);
         searchTags("ore", "wallhack");
-        blocks.onChange(() -> {
-            if (isEnabled() && snapshot()) {
-                rebuildChunks();
-            }
-        });
         instance = this;
     }
 
@@ -107,8 +103,6 @@ public final class XRay extends Module {
         rebuildChunks();
     }
 
-    private int rebuildCooldown;
-
     // The rebuild fires once the settings sit still for half a second.
     @Subscribe
     private void onTick(TickEvent event) {
@@ -144,10 +138,6 @@ public final class XRay extends Module {
         if (mc.levelExtractor != null) {
             mc.levelExtractor.allChanged();
         }
-    }
-
-    public boolean isOpacityMode() {
-        return isEnabled() && alpha > 0 && alpha < 255;
     }
 
     // A null position skips the exposed only check.

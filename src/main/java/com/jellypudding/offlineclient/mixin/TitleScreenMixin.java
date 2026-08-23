@@ -19,6 +19,7 @@ import net.minecraft.util.Util;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -38,10 +39,17 @@ public abstract class TitleScreenMixin extends Screen {
     @Shadow
     private long fadeInStart;
 
-    private int creditColorFrom;
-    private int creditColorTo;
-    private int versionColor;
-    private int creditY = -1;
+    @Unique
+    private int offlineclient$creditColorFrom;
+
+    @Unique
+    private int offlineclient$creditColorTo;
+
+    @Unique
+    private int offlineclient$versionColor;
+
+    @Unique
+    private int offlineclient$creditY = -1;
 
     private TitleScreenMixin(OfflineClient client, Component title) {
         super(title);
@@ -51,9 +59,10 @@ public abstract class TitleScreenMixin extends Screen {
     @Inject(method = "init()V", at = @At("TAIL"))
     private void onInit(CallbackInfo ci) {
         float hue = ThreadLocalRandom.current().nextFloat(360f);
-        creditColorFrom = ColorUtil.hsv(hue, 0.8f, 1f);
-        creditColorTo = ColorUtil.hsv(hue + 80f, 0.8f, 1f);
-        versionColor = ColorUtil.hsv(ThreadLocalRandom.current().nextFloat(360f), 0.8f, 1f);
+        offlineclient$creditColorFrom = ColorUtil.hsv(hue, 0.8f, 1f);
+        offlineclient$creditColorTo = ColorUtil.hsv(hue + 80f, 0.8f, 1f);
+        offlineclient$versionColor =
+            ColorUtil.hsv(ThreadLocalRandom.current().nextFloat(360f), 0.8f, 1f);
 
         AbstractWidget copyright = null;
         for (GuiEventListener child : children()) {
@@ -64,7 +73,7 @@ public abstract class TitleScreenMixin extends Screen {
             }
         }
         if (copyright != null) {
-            creditY = copyright.getY();
+            offlineclient$creditY = copyright.getY();
             removeWidget(copyright);
         }
 
@@ -83,18 +92,19 @@ public abstract class TitleScreenMixin extends Screen {
     private void onRender(GuiGraphicsExtractor context, int mouseX, int mouseY,
                           float partialTicks, CallbackInfo ci) {
         Font font = minecraft.font;
-        float alpha = fadeAlpha();
+        float alpha = offlineclient$fadeAlpha();
 
         String name = OfflineClient.NAME + " v" + OfflineClient.VERSION;
         RenderUtil.rainbowText(context, font, name, 4, 4, 1f, alpha);
 
         String credit = "Developed by AlphaAlex115";
-        int y = creditY != -1 ? creditY : height - 10;
-        RenderUtil.gradientText(context, font, credit,
-            width - font.width(credit) - 2, y, creditColorFrom, creditColorTo, 1f, alpha);
+        int y = offlineclient$creditY != -1 ? offlineclient$creditY : height - 10;
+        RenderUtil.gradientText(context, font, credit, width - font.width(credit) - 2, y,
+            offlineclient$creditColorFrom, offlineclient$creditColorTo, alpha);
     }
 
-    private float fadeAlpha() {
+    @Unique
+    private float offlineclient$fadeAlpha() {
         if (!fading) {
             return 1f;
         }
@@ -112,7 +122,7 @@ public abstract class TitleScreenMixin extends Screen {
             target = "Lnet/minecraft/client/gui/GuiGraphicsExtractor;text(Lnet/minecraft/client/gui/Font;Ljava/lang/String;III)V"))
     private void wrapVersionText(GuiGraphicsExtractor context, Font font, String text,
                                  int x, int y, int color, Operation<Void> original) {
-        int recolored = (color & 0xFF000000) | (versionColor & 0xFFFFFF);
+        int recolored = (color & 0xFF000000) | (offlineclient$versionColor & 0xFFFFFF);
         original.call(context, font, text, x, y, recolored);
     }
 }

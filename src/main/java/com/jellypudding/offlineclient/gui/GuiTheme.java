@@ -15,6 +15,8 @@ public final class GuiTheme {
     public static final int CORNER = 3;
     public static final int PAD = 6;
     public static final int SCROLLBAR = 4;
+    // Width a scrollbar takes out of the rows beside it.
+    public static final int SCROLL_GUTTER = SCROLLBAR + 2;
     // Cap height of the default font.
     public static final int TEXT_HEIGHT = 7;
 

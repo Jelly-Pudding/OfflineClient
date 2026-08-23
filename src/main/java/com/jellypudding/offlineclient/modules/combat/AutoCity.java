@@ -18,20 +18,18 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.phys.AABB;
 
 // Strips the blast proof cover from an enemy standing in a hole.
 public final class AutoCity extends Module {
 
-
     private final NumberSetting targetRange = new NumberSetting("Target range",
         "How far away enemies are considered.", 6, 1, 10, 0.5, " blocks");
     private final NumberSetting breakRange = new NumberSetting("Break range",
-        "How far you can reach to mine.", 4.5, 1, 6, 0.1).min(1);
+        "How far you can reach to mine.", 4.5, 1, 6, 0.1);
     private final BoolSetting switchTool = new BoolSetting("Switch tool",
         "Swap to your fastest hotbar tool first.", true);
     private final BoolSetting support = new BoolSetting("Support",
-        "Fill the empty block under the city block first so a crystal has a base.", true);
+        "Fill the empty block under the city block to give a crystal a base.", true);
     private final BoolSetting chatInfo = new BoolSetting("Chat info",
         "Say why the module stopped.", true);
     private final BoolSetting rotate = new BoolSetting("Rotate",
@@ -84,7 +82,7 @@ public final class AutoCity extends Module {
         }
 
         Player target = EntityUtil.nearestEnemy(targetRange.getValue());
-        targetName = target == null ? null : target.getGameProfile().name();
+        targetName = EntityUtil.nameOf(target);
         if (target == null) {
             stopMining();
             return;
@@ -140,7 +138,7 @@ public final class AutoCity extends Module {
             return false;
         }
         slots.select(slot);
-        Direction side = BlockUtil.findSupport(below);
+        Direction side = BlockUtil.findPlaceSupport(below);
         boolean placed = side != null
             ? BlockUtil.place(below, side, rotate.isOn(), true)
             : BlockUtil.placeDirect(below, rotate.isOn(), true);
@@ -160,8 +158,8 @@ public final class AutoCity extends Module {
         for (Direction side : Direction.Plane.HORIZONTAL) {
             BlockPos pos = feet.relative(side);
             BlockState state = BlockUtil.state(pos);
-            if (state.isAir() || state.getBlock().getExplosionResistance() < 600
-                || !BlockUtil.isBreakable(pos)) {
+            if (state.isAir() || !BlockUtil.isBreakable(pos)
+                || state.getBlock().getExplosionResistance() < BlockUtil.BLAST_PROOF) {
                 continue;
             }
             double distance = BlockUtil.distanceTo(pos);
@@ -186,6 +184,6 @@ public final class AutoCity extends Module {
         if (!render.isOn() || current == null || BlockUtil.state(current).isAir()) {
             return;
         }
-        event.getBatch().outlineBox(new AABB(current).deflate(0.002), 0xFFFF4040, false);
+        event.getBatch().outlineBlock(current, 0xFFFF4040, false);
     }
 }

@@ -49,10 +49,13 @@ public final class CommandManager {
         return prefix;
     }
 
-    public void setPrefix(String prefix) {
-        if (!prefix.isBlank() && !prefix.startsWith("/")) {
-            this.prefix = prefix.trim();
+    // False when the prefix is blank or would collide with server commands.
+    public boolean setPrefix(String prefix) {
+        if (prefix.isBlank() || prefix.startsWith("/")) {
+            return false;
         }
+        this.prefix = prefix.trim();
+        return true;
     }
 
     public List<Command> getCommands() {
@@ -87,9 +90,7 @@ public final class CommandManager {
         }
         if (module != null && args.length == 0) {
             module.toggle();
-            OfflineClient.INSTANCE.getConfigManager().saveSoon();
-            ChatUtil.message("§b" + module.getName() + " §7is now "
-                + (module.isEnabled() ? "§aenabled" : "§cdisabled") + "§7.");
+            ChatUtil.toggled(module);
             return true;
         }
 

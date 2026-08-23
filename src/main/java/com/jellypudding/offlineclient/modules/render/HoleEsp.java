@@ -18,7 +18,9 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 // Finds one block wide holes walled in bedrock or obsidian. Those survive crystal blasts.
 public final class HoleEsp extends Module {
@@ -50,6 +52,8 @@ public final class HoleEsp extends Module {
         "Hide the hole you are standing in.", false);
     private final BoolSetting webs = new BoolSetting("Webs",
         "Count holes that have cobwebs in them.", false);
+    private final NumberSetting refresh = new NumberSetting("Refresh",
+        "Ticks between scans.", 2, 1, 20, 1, " ticks").min(1);
     private final NumberSetting height = new NumberSetting("Height",
         "How tall the drawn box is.", 0.3, 0.1, 1, 0.1).min(0.05);
     private final BoolSetting fill = new BoolSetting("Fill",
@@ -58,29 +62,52 @@ public final class HoleEsp extends Module {
         "Show holes behind blocks.", true);
 
     private final List<Hole> holes = new ArrayList<>();
+    private int timer;
 
     public HoleEsp() {
         super("HoleESP", "Highlights safe holes to stand in.", Category.RENDER);
-        addSettings(horizontal, vertical, minHeight, doubles, ignoreOwn, webs, height, fill, throughWalls);
+        addSettings(horizontal, vertical, minHeight, doubles, ignoreOwn, webs, refresh,
+            height, fill, throughWalls);
         searchTags("bedrock", "obsidian", "crystal");
     }
 
     @Override
     public String getSuffix() {
-        return String.valueOf(holes.size());
+        return holes.isEmpty() ? null : String.valueOf(holes.size());
+    }
+
+    @Override
+    protected void onEnable() {
+        timer = 0;
+        holes.clear();
+    }
+
+    @Override
+    protected void onDisable() {
+        holes.clear();
     }
 
     @Subscribe
     private void onTick(TickEvent event) {
-        holes.clear();
         if (!inGame()) {
+            holes.clear();
             return;
         }
+        if (timer > 0) {
+            timer--;
+            return;
+        }
+        timer = refresh.getInt();
+        scan();
+    }
+
+    private void scan() {
+        holes.clear();
         BlockPos center = mc.player.blockPosition();
         int h = horizontal.getInt();
         int v = vertical.getInt();
         BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
-        List<BlockPos> seen = new ArrayList<>();
+        Set<BlockPos> seen = new HashSet<>();
 
         for (int dx = -h; dx <= h; dx++) {
             for (int dz = -h; dz <= h; dz++) {
@@ -110,7 +137,7 @@ public final class HoleEsp extends Module {
      * Every side but the top must be bedrock or obsidian. One side may be
      * another open block for a double hole and its own sides must be safe too.
      */
-    private void check(BlockPos pos, List<BlockPos> seen) {
+    private void check(BlockPos pos, Set<BlockPos> seen) {
         int bedrock = 0;
         int obsidian = 0;
         BlockPos partner = null;

@@ -67,10 +67,7 @@ public final class NoInteract extends Module {
         }
     }
 
-    public boolean blocksUse(BlockPos pos) {
-        if (!isEnabled() || !inGame()) {
-            return false;
-        }
+    private boolean blocksUse(BlockPos pos) {
         BlockState state = mc.level.getBlockState(pos);
         Block block = state.getBlock();
         if (useBlocks.contains(block)) {
@@ -79,8 +76,7 @@ public final class NoInteract extends Module {
         if (!explosives.isOn()) {
             return false;
         }
-        // Whether a bed or an anchor goes off is an environment attribute and
-        // no longer fixed per dimension.
+        // Whether a bed or an anchor goes off is an environment attribute of the position.
         if (block instanceof BedBlock) {
             return mc.level.environmentAttributes()
                 .getValue(EnvironmentAttributes.BED_RULE, pos).explodes();
@@ -88,7 +84,7 @@ public final class NoInteract extends Module {
         return block instanceof RespawnAnchorBlock && anchorDetonates(state, pos);
     }
 
-    // True for an anchor that blows up rather than takes a charge or sets spawn.
+    // True for an anchor that blows up. A charge or a spawn set means false.
     private boolean anchorDetonates(BlockState state, BlockPos pos) {
         if (mc.level.environmentAttributes()
             .getValue(EnvironmentAttributes.RESPAWN_ANCHOR_WORKS, pos)) {

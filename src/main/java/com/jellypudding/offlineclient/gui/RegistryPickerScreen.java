@@ -3,6 +3,7 @@ package com.jellypudding.offlineclient.gui;
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.RenderUtil;
+import com.jellypudding.offlineclient.util.SearchRank;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
@@ -18,7 +19,6 @@ import org.lwjgl.glfw.GLFW;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -27,13 +27,14 @@ import java.util.Map;
  */
 public final class RegistryPickerScreen<T> extends Screen {
 
-    private record Entry<T>(T value, String name, String label, String lowerName, String id,
-                            ItemStack icon) {
+    private record Entry<T>(T value, String name, String label, String id, ItemStack icon) {
     }
 
     private static final int COL_WIDTH = 156;
     private static final int COL_GAP = 12;
     private static final int ROW_HEIGHT = 18;
+    // Left inset of the name. The icon sits in front of it.
+    private static final int LABEL_X = 24;
     private static final int SEARCH_WIDTH = 200;
     private static final int TITLE_Y = 8;
     private static final int SEARCH_TOP = 20;
@@ -63,7 +64,9 @@ public final class RegistryPickerScreen<T> extends Screen {
         this.setting = setting;
 
         Font font = OfflineClient.MC.font;
-        int room = COL_WIDTH - 26;
+        // Names are trimmed once for the narrowest a column gets. A registry of
+        // any size overflows and gives up the gutter.
+        int room = COL_WIDTH - GuiTheme.SCROLL_GUTTER - LABEL_X - 2;
         Identifier defaultKey = setting.getRegistry() instanceof DefaultedRegistry<T> defaulted
             ? defaulted.getDefaultKey() : null;
         setting.getRegistry().stream().forEach(value -> {
@@ -72,9 +75,8 @@ public final class RegistryPickerScreen<T> extends Screen {
                 return;
             }
             String name = setting.displayName(value);
-            // Trimmed once for the fixed column width.
             Entry<T> entry = new Entry<>(value, name, SettingWidget.trimEnd(font, name, room),
-                name.toLowerCase(Locale.ROOT), id.toString(), setting.icon(value));
+                id.toString(), setting.icon(value));
             all.add(entry);
             byValue.put(value, entry);
         });
@@ -83,15 +85,19 @@ public final class RegistryPickerScreen<T> extends Screen {
     }
 
     private void refresh() {
-        String query = search.get().toLowerCase(Locale.ROOT).trim();
+        String query = search.get().trim();
         available.clear();
         for (Entry<T> entry : all) {
-            if (setting.isChosen(entry.value())) {
-                continue;
-            }
-            if (query.isEmpty() || entry.lowerName().contains(query) || entry.id().contains(query)) {
+            if (!setting.isChosen(entry.value())) {
                 available.add(entry);
             }
+        }
+        if (!query.isEmpty()) {
+            // The registry id is the weaker field. A namespaced search still finds the entry.
+            List<Entry<T>> matches = SearchRank.rank(available,
+                entry -> SearchRank.best(query, entry.name(), entry.id()));
+            available.clear();
+            available.addAll(matches);
         }
 
         chosen.clear();
@@ -155,13 +161,15 @@ public final class RegistryPickerScreen<T> extends Screen {
         renderColumn(context, font, leftX(), "available", available, leftBar, mouseX, mouseY);
         renderColumn(context, font, rightX(), "chosen", chosen, rightBar, mouseX, mouseY);
 
-        button(context, font, doneX(), "done", isOver(mouseX, mouseY, doneX(), buttonY(),
-            BUTTON_WIDTH, BUTTON_HEIGHT), true);
-        button(context, font, clearX(), "clear all", isOver(mouseX, mouseY, clearX(), buttonY(),
-            BUTTON_WIDTH, BUTTON_HEIGHT), !chosen.isEmpty());
+        boolean overDone = SettingWidget.isOver(mouseX, mouseY, doneX(), buttonY(),
+            BUTTON_WIDTH, BUTTON_HEIGHT);
+        boolean overClear = SettingWidget.isOver(mouseX, mouseY, clearX(), buttonY(),
+            BUTTON_WIDTH, BUTTON_HEIGHT);
+        button(context, font, doneX(), "done", overDone, true);
+        button(context, font, clearX(), "clear all", overClear, !chosen.isEmpty());
 
         if (tooltip != null && !tooltip.isEmpty()) {
-            renderTooltip(context, font, mouseX, mouseY);
+            RenderUtil.tooltip(context, font, List.of(tooltip), mouseX, mouseY, width, height);
         }
     }
 
@@ -184,7 +192,7 @@ public final class RegistryPickerScreen<T> extends Screen {
         int total = list.size() * ROW_HEIGHT;
         bar.update(mouseY, total, h);
         boolean overflow = total > h;
-        int rowW = overflow ? COL_WIDTH - GuiTheme.SCROLLBAR - 2 : COL_WIDTH;
+        int rowW = ScrollBar.rowWidth(COL_WIDTH, total, h);
 
         context.text(font, header, x + 2, top - 11, GuiTheme.TEXT_DIM, false);
         String tally = String.valueOf(list.size());
@@ -194,7 +202,7 @@ public final class RegistryPickerScreen<T> extends Screen {
             GuiTheme.CORNER, GuiTheme.BG_PANEL, GuiTheme.EDGE);
         context.guiRenderState.up();
 
-        boolean mouseInside = isOver(mouseX, mouseY, x, top, rowW, h);
+        boolean mouseInside = SettingWidget.isOver(mouseX, mouseY, x, top, rowW, h);
         context.enableScissor(x, top, x + rowW, top + h);
         int rowY = top - bar.getOffset();
         for (Entry<T> entry : list) {
@@ -210,7 +218,7 @@ public final class RegistryPickerScreen<T> extends Screen {
                     context.item(entry.icon(), x + 3, rowY + 1);
                 }
                 context.guiRenderState.up();
-                context.text(font, entry.label(), x + 24, GuiTheme.textY(rowY, ROW_HEIGHT - 1),
+                context.text(font, entry.label(), x + LABEL_X, GuiTheme.textY(rowY, ROW_HEIGHT - 1),
                     hovered ? GuiTheme.accentText() : GuiTheme.TEXT, false);
             }
             rowY += ROW_HEIGHT;
@@ -222,21 +230,10 @@ public final class RegistryPickerScreen<T> extends Screen {
         context.disableScissor();
 
         if (overflow) {
-            int trackX = x + COL_WIDTH - GuiTheme.SCROLLBAR;
+            int trackX = ScrollBar.trackX(x, COL_WIDTH);
             bar.render(context, trackX, top, h, total,
                 ScrollBar.isOverTrack(mouseX, mouseY, trackX, top, h));
         }
-    }
-
-    private void renderTooltip(GuiGraphicsExtractor context, Font font, int mouseX, int mouseY) {
-        int w = font.width(tooltip);
-        int tx = Math.max(2, Math.min(mouseX + 10, width - w - 12));
-        int ty = Math.max(2, Math.min(mouseY + 10, height - 18));
-        context.guiRenderState.up();
-        RenderUtil.roundedBorderedRect(context, tx, ty, tx + w + 8, ty + 14, GuiTheme.CORNER,
-            GuiTheme.BG_WINDOW, GuiTheme.accent());
-        context.guiRenderState.up();
-        context.text(font, tooltip, tx + 4, GuiTheme.textY(ty, 14), GuiTheme.TEXT, false);
     }
 
     @Override
@@ -244,11 +241,11 @@ public final class RegistryPickerScreen<T> extends Screen {
         double mx = event.x();
         double my = event.y();
 
-        if (isOver(mx, my, doneX(), buttonY(), BUTTON_WIDTH, BUTTON_HEIGHT)) {
+        if (SettingWidget.isOver(mx, my, doneX(), buttonY(), BUTTON_WIDTH, BUTTON_HEIGHT)) {
             onClose();
             return true;
         }
-        if (isOver(mx, my, clearX(), buttonY(), BUTTON_WIDTH, BUTTON_HEIGHT)) {
+        if (SettingWidget.isOver(mx, my, clearX(), buttonY(), BUTTON_WIDTH, BUTTON_HEIGHT)) {
             setting.clear();
             OfflineClient.INSTANCE.getConfigManager().saveSoon();
             refresh();
@@ -266,11 +263,11 @@ public final class RegistryPickerScreen<T> extends Screen {
     private boolean clickColumn(double mx, double my, int x, List<Entry<T>> list,
                                 ScrollBar bar, boolean adding) {
         int h = listHeight();
-        if (!isOver(mx, my, x, LIST_TOP, COL_WIDTH, h)) {
+        if (!SettingWidget.isOver(mx, my, x, LIST_TOP, COL_WIDTH, h)) {
             return false;
         }
         int total = list.size() * ROW_HEIGHT;
-        int trackX = x + COL_WIDTH - GuiTheme.SCROLLBAR;
+        int trackX = ScrollBar.trackX(x, COL_WIDTH);
         if (total > h && ScrollBar.isOverTrack(mx, my, trackX, LIST_TOP, h)) {
             bar.beginDrag((int) my);
             return true;
@@ -300,11 +297,11 @@ public final class RegistryPickerScreen<T> extends Screen {
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
         int dy = (int) Math.round(scrollY * 16);
         int h = listHeight();
-        if (isOver(mouseX, mouseY, leftX(), LIST_TOP, COL_WIDTH, h)) {
+        if (SettingWidget.isOver(mouseX, mouseY, leftX(), LIST_TOP, COL_WIDTH, h)) {
             leftBar.scroll(dy, available.size() * ROW_HEIGHT, h);
             return true;
         }
-        if (isOver(mouseX, mouseY, rightX(), LIST_TOP, COL_WIDTH, h)) {
+        if (SettingWidget.isOver(mouseX, mouseY, rightX(), LIST_TOP, COL_WIDTH, h)) {
             rightBar.scroll(dy, chosen.size() * ROW_HEIGHT, h);
             return true;
         }
@@ -343,9 +340,5 @@ public final class RegistryPickerScreen<T> extends Screen {
     public void onClose() {
         OfflineClient.INSTANCE.getConfigManager().saveNow();
         OfflineClient.MC.gui.setScreen(parent);
-    }
-
-    private static boolean isOver(double mx, double my, int x, int y, int w, int h) {
-        return mx >= x && mx < x + w && my >= y && my < y + h;
     }
 }

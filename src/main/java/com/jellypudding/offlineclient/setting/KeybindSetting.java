@@ -4,6 +4,8 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonPrimitive;
 import org.lwjgl.glfw.GLFW;
 
+import java.util.Locale;
+
 public final class KeybindSetting extends Setting<Integer> {
 
     public static final int UNBOUND = GLFW.GLFW_KEY_UNKNOWN;
@@ -21,7 +23,7 @@ public final class KeybindSetting extends Setting<Integer> {
 
     // Turns typed text like "k" or "f5" or "none" into a key code.
     public static int keyFromName(String text) {
-        String name = text.trim().toUpperCase();
+        String name = text.trim().toUpperCase(Locale.ROOT);
         if (name.isEmpty()) {
             return UNKNOWN;
         }
@@ -73,7 +75,7 @@ public final class KeybindSetting extends Setting<Integer> {
         }
         String name = GLFW.glfwGetKeyName(value, 0);
         if (name != null) {
-            return name.toUpperCase();
+            return name.toUpperCase(Locale.ROOT);
         }
         return switch (value) {
             case GLFW.GLFW_KEY_LEFT_SHIFT -> "LSHIFT";

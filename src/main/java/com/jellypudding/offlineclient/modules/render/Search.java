@@ -10,38 +10,19 @@ import com.jellypudding.offlineclient.render.DrawBatch;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
+import com.jellypudding.offlineclient.util.ChunkScanner;
 import com.jellypudding.offlineclient.util.ColorUtil;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.SectionPos;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.network.protocol.Packet;
-import net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket;
-import net.minecraft.network.protocol.game.ClientboundLevelChunkWithLightPacket;
-import net.minecraft.network.protocol.game.ClientboundSectionBlocksUpdatePacket;
-import net.minecraft.resources.ResourceKey;
-import net.minecraft.world.level.ChunkPos;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.chunk.LevelChunk;
-import net.minecraft.world.level.chunk.LevelChunkSection;
-import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 
 /**
  * Every loaded chunk in range is scanned once on a background thread and only
@@ -80,12 +61,8 @@ public final class Search extends Module {
         Map.entry(Blocks.BEACON, 0xFF80D0FF),
         Map.entry(Blocks.ENCHANTING_TABLE, 0xFFE070FF));
 
-    private static final ExecutorService SCANNER = Executors.newSingleThreadExecutor(runnable -> {
-        Thread thread = new Thread(runnable, "OfflineClient Search");
-        thread.setDaemon(true);
-        thread.setPriority(Thread.MIN_PRIORITY);
-        return thread;
-    });
+    // A box flush with the block fights it for depth.
+    private static final double INSET = 0.02;
 
     private final NumberSetting range = new NumberSetting("Range",
         "Chunk radius to scan around you.", 4, 1, 8, 1, " chunks").max(16);
@@ -103,34 +80,26 @@ public final class Search extends Module {
     // Read from the scanner thread and replaced whole.
     private volatile Map<Block, Integer> wanted = Map.of();
 
-    private final Map<ChunkPos, List<Target>> results = new HashMap<>();
-    private final Map<ChunkPos, Future<List<Target>>> pending = new HashMap<>();
-    // Filled from the network thread.
-    private final Set<ChunkPos> changed = ConcurrentHashMap.newKeySet();
-    // The game applies a packet after the event fires.
-    private Set<ChunkPos> due = new HashSet<>();
+    private final ChunkScanner<Target> scanner = new ChunkScanner<>();
+    // Set from the settings screen and read on the next tick.
+    private volatile boolean listChanged = true;
     private List<Target> drawn = List.of();
-    private ResourceKey<Level> dimension;
 
     public Search() {
         super("Search", "Highlights chosen blocks through walls.", Category.RENDER);
         addSettings(range, limit, tracers, blocks);
         searchTags("block esp", "ore esp");
-        blocks.onChange(() -> {
-            if (isEnabled() && snapshot()) {
-                reset();
-            }
-        });
+        blocks.onChange(() -> listChanged = true);
     }
 
     @Override
     public String getSuffix() {
-        return String.valueOf(drawn.size());
+        return drawn.isEmpty() ? null : String.valueOf(drawn.size());
     }
 
     @Override
     protected void onEnable() {
-        snapshot();
+        listChanged = true;
         reset();
     }
 
@@ -140,13 +109,7 @@ public final class Search extends Module {
     }
 
     private void reset() {
-        for (Future<List<Target>> future : pending.values()) {
-            future.cancel(true);
-        }
-        pending.clear();
-        results.clear();
-        changed.clear();
-        due.clear();
+        scanner.reset();
         drawn = List.of();
     }
 
@@ -175,33 +138,7 @@ public final class Search extends Module {
 
     @Subscribe
     private void onPacketReceive(PacketReceiveEvent event) {
-        // Only a tick drains this set.
-        if (mc.level == null) {
-            return;
-        }
-        ChunkPos pos = affectedChunk(event.getPacket());
-        if (pos != null) {
-            changed.add(pos);
-        }
-    }
-
-    private static ChunkPos affectedChunk(Packet<?> packet) {
-        if (packet instanceof ClientboundBlockUpdatePacket update) {
-            return ChunkPos.containing(update.getPos());
-        }
-        if (packet instanceof ClientboundSectionBlocksUpdatePacket update) {
-            ChunkPos[] holder = new ChunkPos[1];
-            update.runUpdates((pos, state) -> {
-                if (holder[0] == null) {
-                    holder[0] = ChunkPos.containing(pos);
-                }
-            });
-            return holder[0];
-        }
-        if (packet instanceof ClientboundLevelChunkWithLightPacket chunk) {
-            return new ChunkPos(chunk.getX(), chunk.getZ());
-        }
-        return null;
+        scanner.markChanged(event.getPacket());
     }
 
     @Subscribe
@@ -209,90 +146,31 @@ public final class Search extends Module {
         if (!inGame()) {
             return;
         }
-        if (mc.level.dimension() != dimension || snapshot()) {
-            dimension = mc.level.dimension();
-            reset();
-        }
-
-        Set<ChunkPos> dirty = due;
-        due = new HashSet<>();
-        for (Iterator<ChunkPos> it = changed.iterator(); it.hasNext(); ) {
-            due.add(it.next());
-            it.remove();
-        }
-
-        collectFinished();
-
-        int r = range.getInt();
-        int centerX = mc.player.chunkPosition().x();
-        int centerZ = mc.player.chunkPosition().z();
-        results.keySet().removeIf(pos -> outOfRange(pos, centerX, centerZ, r));
-        pending.entrySet().removeIf(entry -> {
-            if (outOfRange(entry.getKey(), centerX, centerZ, r)) {
-                entry.getValue().cancel(true);
-                return true;
+        if (listChanged) {
+            listChanged = false;
+            if (snapshot()) {
+                reset();
             }
-            return false;
-        });
+        }
 
         Map<Block, Integer> query = wanted;
-        for (int dx = -r; dx <= r; dx++) {
-            for (int dz = -r; dz <= r; dz++) {
-                ChunkPos pos = new ChunkPos(centerX + dx, centerZ + dz);
-                LevelChunk chunk = mc.level.getChunkSource().getChunk(pos.x(), pos.z(), ChunkStatus.FULL, false);
-                if (chunk == null) {
-                    results.remove(pos);
-                    continue;
-                }
-                if (dirty.contains(pos)) {
-                    results.remove(pos);
-                    Future<List<Target>> old = pending.remove(pos);
-                    if (old != null) {
-                        old.cancel(true);
-                    }
-                }
-                if (!results.containsKey(pos) && !pending.containsKey(pos)) {
-                    pending.put(pos, SCANNER.submit(() -> scan(chunk, query)));
-                }
-            }
-        }
+        scanner.update(range.getInt(), (view, out) -> view.forEachMatching(
+            state -> query.containsKey(state.getBlock()),
+            (x, y, z, state) -> out.add(new Target(
+                new AABB(new BlockPos(x, y, z)).deflate(INSET), query.get(state.getBlock())))));
 
         rebuildDrawList();
     }
 
-    private static boolean outOfRange(ChunkPos pos, int centerX, int centerZ, int r) {
-        return Math.abs(pos.x() - centerX) > r || Math.abs(pos.z() - centerZ) > r;
-    }
-
-    private void collectFinished() {
-        for (Iterator<Map.Entry<ChunkPos, Future<List<Target>>>> it = pending.entrySet().iterator(); it.hasNext(); ) {
-            Map.Entry<ChunkPos, Future<List<Target>>> entry = it.next();
-            Future<List<Target>> future = entry.getValue();
-            if (!future.isDone()) {
-                continue;
-            }
-            it.remove();
-            if (future.isCancelled()) {
-                continue;
-            }
-            try {
-                results.put(entry.getKey(), future.get());
-            } catch (InterruptedException | ExecutionException ignored) {
-                // A chunk that unloaded mid scan is scanned again later.
-            }
-        }
-    }
-
+    // The nearest blocks win when there are more than the limit allows.
     private void rebuildDrawList() {
-        List<Target> all = new ArrayList<>();
-        for (List<Target> list : results.values()) {
-            all.addAll(list);
-        }
+        List<Target> all = scanner.results();
         int max = limit.getInt();
         if (all.size() > max) {
             Vec3 eye = mc.player.getEyePosition();
+            all = new ArrayList<>(all);
             all.sort((a, b) -> Double.compare(distanceSqr(eye, a.box()), distanceSqr(eye, b.box())));
-            all = new ArrayList<>(all.subList(0, max));
+            all = all.subList(0, max);
         }
         drawn = all;
     }
@@ -302,41 +180,6 @@ public final class Search extends Module {
         double dy = (box.minY + box.maxY) / 2 - eye.y;
         double dz = (box.minZ + box.maxZ) / 2 - eye.z;
         return dx * dx + dy * dy + dz * dz;
-    }
-
-    // Runs on the scanner thread and never touches the game.
-    private static List<Target> scan(LevelChunk chunk, Map<Block, Integer> wanted) {
-        List<Target> found = new ArrayList<>();
-        if (wanted.isEmpty()) {
-            return found;
-        }
-        LevelChunkSection[] sections = chunk.getSections();
-        int baseX = chunk.getPos().getMinBlockX();
-        int baseZ = chunk.getPos().getMinBlockZ();
-        for (int i = 0; i < sections.length; i++) {
-            LevelChunkSection section = sections[i];
-            if (section == null || section.hasOnlyAir()
-                || !section.maybeHas(state -> wanted.containsKey(state.getBlock()))) {
-                continue;
-            }
-            int baseY = SectionPos.sectionToBlockCoord(chunk.getSectionYFromSectionIndex(i));
-            for (int y = 0; y < 16; y++) {
-                for (int z = 0; z < 16; z++) {
-                    for (int x = 0; x < 16; x++) {
-                        BlockState state = section.getBlockState(x, y, z);
-                        Integer color = wanted.get(state.getBlock());
-                        if (color != null) {
-                            found.add(new Target(
-                                new AABB(new BlockPos(baseX + x, baseY + y, baseZ + z)).deflate(0.02), color));
-                        }
-                    }
-                }
-            }
-            if (Thread.currentThread().isInterrupted()) {
-                return found;
-            }
-        }
-        return found;
     }
 
     @Subscribe

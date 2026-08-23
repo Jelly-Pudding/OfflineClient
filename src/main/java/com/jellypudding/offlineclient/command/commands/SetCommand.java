@@ -201,9 +201,6 @@ public final class SetCommand extends Command {
         if (setting instanceof ColorSetting c) {
             return c.isRainbow() ? "rainbow" : "hue " + (int) c.getHue();
         }
-        if (setting instanceof NumberSetting n) {
-            return n.getValueString();
-        }
-        return String.valueOf(setting.getValue());
+        return setting.getValueString();
     }
 }

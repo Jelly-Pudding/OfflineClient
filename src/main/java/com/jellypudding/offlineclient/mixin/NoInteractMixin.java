@@ -5,6 +5,8 @@ import com.jellypudding.offlineclient.modules.player.AutoEat;
 import com.jellypudding.offlineclient.modules.player.AutoGap;
 import com.jellypudding.offlineclient.modules.player.NoInteract;
 import com.jellypudding.offlineclient.util.Modules;
+import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -20,14 +22,10 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(Minecraft.class)
 public abstract class NoInteractMixin {
 
-    // Held between the two startUseItem hooks on the render thread only.
-    @Unique
-    private HitResult offlineclient$realHit;
-
     @Inject(method = "startAttack()Z", at = @At("HEAD"), cancellable = true)
     private void onStartAttack(CallbackInfoReturnable<Boolean> cir) {
-        NoInteract noInteract = Modules.get(NoInteract.class);
-        if (noInteract == null || !noInteract.isEnabled()) {
+        NoInteract noInteract = Modules.active(NoInteract.class);
+        if (noInteract == null) {
             return;
         }
         if (OfflineClient.MC.hitResult != null && noInteract.blocksAttack(OfflineClient.MC.hitResult)) {
@@ -37,25 +35,23 @@ public abstract class NoInteractMixin {
 
     /**
      * Blanks the crosshair target whilst a feeder holds the use key. Without
-     * this a chest or a villager under the crosshair swallows the bite.
+     * this a chest or a villager under the crosshair swallows the bite. The
+     * real target goes back even where another mixin cancels the call.
      */
-    @Inject(method = "startUseItem()V", at = @At("HEAD"))
-    private void onStartUseItem(CallbackInfo ci) {
+    @WrapMethod(method = "startUseItem()V")
+    private void wrapStartUseItem(Operation<Void> original) {
         Minecraft mc = OfflineClient.MC;
-        if (mc.hitResult == null || mc.hitResult.getType() == HitResult.Type.MISS
-            || !offlineclient$feeding()) {
+        HitResult real = mc.hitResult;
+        if (real == null || real.getType() == HitResult.Type.MISS || !offlineclient$feeding()) {
+            original.call();
             return;
         }
-        offlineclient$realHit = mc.hitResult;
-        mc.hitResult = BlockHitResult.miss(mc.hitResult.getLocation(), Direction.UP,
-            BlockPos.containing(mc.hitResult.getLocation()));
-    }
-
-    @Inject(method = "startUseItem()V", at = @At("RETURN"))
-    private void afterStartUseItem(CallbackInfo ci) {
-        if (offlineclient$realHit != null) {
-            OfflineClient.MC.hitResult = offlineclient$realHit;
-            offlineclient$realHit = null;
+        mc.hitResult = BlockHitResult.miss(real.getLocation(), Direction.UP,
+            BlockPos.containing(real.getLocation()));
+        try {
+            original.call();
+        } finally {
+            mc.hitResult = real;
         }
     }
 
@@ -71,8 +67,8 @@ public abstract class NoInteractMixin {
 
     @Inject(method = "continueAttack(Z)V", at = @At("HEAD"), cancellable = true)
     private void onContinueAttack(boolean holding, CallbackInfo ci) {
-        NoInteract noInteract = Modules.get(NoInteract.class);
-        if (noInteract == null || !noInteract.isEnabled()) {
+        NoInteract noInteract = Modules.active(NoInteract.class);
+        if (noInteract == null) {
             return;
         }
         if (OfflineClient.MC.hitResult instanceof BlockHitResult hit

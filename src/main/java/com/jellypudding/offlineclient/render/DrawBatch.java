@@ -7,6 +7,7 @@ import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.Camera;
 import net.minecraft.client.renderer.StagedVertexBuffer;
 import net.minecraft.client.renderer.rendertype.RenderType;
+import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Vector3f;
@@ -19,6 +20,9 @@ import java.util.List;
  * them in a single upload. All coordinates are world coordinates.
  */
 public final class DrawBatch {
+
+    // Thinner lines vanish against terrain at any distance.
+    private static final float LINE_WIDTH = 2;
 
     // A batch is built every frame and most have nothing to draw.
     private StagedVertexBuffer buffer;
@@ -58,6 +62,19 @@ public final class DrawBatch {
         lineRelative(tracerOrigin(), to.subtract(camera), color, throughWalls);
     }
 
+    // Pulled in off the faces. A box flush with a block fights it for depth.
+    public static final double BLOCK_INSET = 0.002;
+
+    // The bounds of a block pulled in off its faces.
+    public static AABB blockBox(BlockPos pos) {
+        return new AABB(pos).deflate(BLOCK_INSET);
+    }
+
+    // Outlines a single block.
+    public void outlineBlock(BlockPos pos, int color, boolean throughWalls) {
+        outlineBox(blockBox(pos), color, throughWalls);
+    }
+
     public void outlineBox(AABB box, int color, boolean throughWalls) {
         AABB b = box.move(camera.reverse());
         float x1 = (float) b.minX;
@@ -82,6 +99,15 @@ public final class DrawBatch {
         edge(x2, y1, z1, x2, y2, z1, color, throughWalls);
         edge(x2, y1, z2, x2, y2, z2, color, throughWalls);
         edge(x1, y1, z2, x1, y2, z2, color, throughWalls);
+    }
+
+    // The four edges of a rectangle lying flat at one height.
+    public void flatRect(double x1, double z1, double x2, double z2, double y,
+                         int color, boolean throughWalls) {
+        line(new Vec3(x1, y, z1), new Vec3(x2, y, z1), color, throughWalls);
+        line(new Vec3(x2, y, z1), new Vec3(x2, y, z2), color, throughWalls);
+        line(new Vec3(x2, y, z2), new Vec3(x1, y, z2), color, throughWalls);
+        line(new Vec3(x1, y, z2), new Vec3(x1, y, z1), color, throughWalls);
     }
 
     public void solidBox(AABB box, int color, boolean throughWalls) {
@@ -127,35 +153,26 @@ public final class DrawBatch {
     }
 
     private void lineRelative(Vec3 from, Vec3 to, int color, boolean throughWalls) {
-        VertexConsumer vc = buffer(Pipelines.lines(throughWalls));
-        float x1 = (float) from.x;
-        float y1 = (float) from.y;
-        float z1 = (float) from.z;
-        float x2 = (float) to.x;
-        float y2 = (float) to.y;
-        float z2 = (float) to.z;
-
-        Vector3f normal = new Vector3f(x2, y2, z2).sub(x1, y1, z1).normalize();
-        vc.addVertex(pose, x1, y1, z1).setColor(color).setNormal(pose, normal).setLineWidth(2);
-
-        // The vanilla line shader glitches when a line crosses the near plane.
-        float t = new Vector3f(x1, y1, z1).negate().dot(normal);
-        float length = new Vector3f(x2, y2, z2).sub(x1, y1, z1).length();
-        if (t > 0 && t < length) {
-            Vector3f mid = new Vector3f(normal).mul(t).add(x1, y1, z1);
-            vc.addVertex(pose, mid).setColor(color).setNormal(pose, normal).setLineWidth(2);
-            vc.addVertex(pose, mid).setColor(color).setNormal(pose, normal).setLineWidth(2);
-        }
-
-        vc.addVertex(pose, x2, y2, z2).setColor(color).setNormal(pose, normal).setLineWidth(2);
+        edge((float) from.x, (float) from.y, (float) from.z,
+            (float) to.x, (float) to.y, (float) to.z, color, throughWalls);
     }
 
     private void edge(float x1, float y1, float z1, float x2, float y2, float z2,
                       int color, boolean throughWalls) {
         VertexConsumer vc = buffer(Pipelines.lines(throughWalls));
         Vector3f normal = new Vector3f(x2, y2, z2).sub(x1, y1, z1).normalize();
-        vc.addVertex(pose, x1, y1, z1).setColor(color).setNormal(pose, normal).setLineWidth(2);
-        vc.addVertex(pose, x2, y2, z2).setColor(color).setNormal(pose, normal).setLineWidth(2);
+        vc.addVertex(pose, x1, y1, z1).setColor(color).setNormal(pose, normal).setLineWidth(LINE_WIDTH);
+
+        // The vanilla line shader glitches when a line crosses the near plane.
+        float t = new Vector3f(x1, y1, z1).negate().dot(normal);
+        float length = new Vector3f(x2, y2, z2).sub(x1, y1, z1).length();
+        if (t > 0 && t < length) {
+            Vector3f mid = new Vector3f(normal).mul(t).add(x1, y1, z1);
+            vc.addVertex(pose, mid).setColor(color).setNormal(pose, normal).setLineWidth(LINE_WIDTH);
+            vc.addVertex(pose, mid).setColor(color).setNormal(pose, normal).setLineWidth(LINE_WIDTH);
+        }
+
+        vc.addVertex(pose, x2, y2, z2).setColor(color).setNormal(pose, normal).setLineWidth(LINE_WIDTH);
     }
 
     private void quad(VertexConsumer vc, int color,

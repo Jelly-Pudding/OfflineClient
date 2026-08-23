@@ -9,6 +9,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.protocol.game.ServerboundUseItemOnPacket;
 import net.minecraft.world.phys.BlockHitResult;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Swaps the clicked side on the use packet at the world height limit. The
@@ -16,27 +17,12 @@ import net.minecraft.world.phys.BlockHitResult;
  */
 public final class BuildHeight extends Module {
 
-    public enum Limit {
-        TOP("Top"),
-        BOTTOM("Bottom"),
-        BOTH("Both");
-
-        private final String label;
-
-        Limit(String label) {
-            this.label = label;
-        }
-
-        @Override
-        public String toString() {
-            return label;
-        }
-    }
+    public enum Limit { TOP, BOTTOM, BOTH }
 
     private final EnumSetting<Limit> limit = new EnumSetting<>("Limit",
         "Which end of the world to work at.", Limit.TOP);
 
-    private int swaps;
+    private final AtomicInteger swaps = new AtomicInteger();
 
     public BuildHeight() {
         super("BuildHeight", "Lets you place blocks against the world height limit.", Category.WORLD);
@@ -46,12 +32,13 @@ public final class BuildHeight extends Module {
 
     @Override
     public String getSuffix() {
-        return swaps == 0 ? null : String.valueOf(swaps);
+        int count = swaps.get();
+        return count == 0 ? null : String.valueOf(count);
     }
 
     @Override
     protected void onEnable() {
-        swaps = 0;
+        swaps.set(0);
     }
 
     @Subscribe(priority = 200)
@@ -75,7 +62,7 @@ public final class BuildHeight extends Module {
         }
         event.setPacket(new ServerboundUseItemOnPacket(packet.getHand(),
             hit.withDirection(swapped), packet.getSequence()));
-        swaps++;
+        swaps.incrementAndGet();
     }
 
     private Direction swapFor(Direction side, BlockPos pos) {

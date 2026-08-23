@@ -37,8 +37,8 @@ public abstract class PickMixin {
             cir.setReturnValue(result);
         }
 
-        LiquidInteract liquid = Modules.get(LiquidInteract.class);
-        if (liquid == null || !liquid.isEnabled()) {
+        LiquidInteract liquid = Modules.active(LiquidInteract.class);
+        if (liquid == null) {
             return;
         }
         BlockHitResult fluidHit = offlineclient$clip(player, camera, partialTicks,

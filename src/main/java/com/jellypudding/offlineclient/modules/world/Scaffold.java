@@ -8,6 +8,7 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
+import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -60,6 +61,8 @@ public final class Scaffold extends Module {
         searchTags("bridge", "auto bridge", "tower");
     }
 
+    private final SlotSwap slots = new SlotSwap();
+
     private boolean descending;
 
     private boolean rotatedThisTick;
@@ -72,6 +75,7 @@ public final class Scaffold extends Module {
     @Override
     protected void onDisable() {
         descending = false;
+        slots.restoreIfMine();
     }
 
     @Subscribe
@@ -161,22 +165,20 @@ public final class Scaffold extends Module {
             return false;
         }
 
-        int previous = mc.player.getInventory().getSelectedSlot();
-        if (slot != previous) {
-            mc.player.getInventory().setSelectedSlot(slot);
-        }
+        slots.select(slot);
         // Only the first block of a tick turns. Several look packets in one
         // tick look obviously wrong to the server.
         boolean turn = rotate.isOn() && !rotatedThisTick;
         rotatedThisTick |= turn;
         boolean placed = BlockUtil.place(target, support, turn, true);
-        if (swapBack.isOn() && slot != previous) {
-            mc.player.getInventory().setSelectedSlot(previous);
+        if (swapBack.isOn()) {
+            slots.restoreIfMine();
+        } else {
+            slots.forget();
         }
         return placed;
     }
 
-    // An empty list falls back to any plain building block.
     // Any entity standing in the square gets the placement refused by the server.
     private boolean occupied(BlockPos pos) {
         if (BlockUtil.intersectsPlayer(pos)) {
@@ -186,7 +188,8 @@ public final class Scaffold extends Module {
             CollisionContext.empty());
     }
 
-    // A listed block still has to be something worth standing on.
+    // A listed block still has to be something worth standing on. An empty list
+    // falls back to any plain building block.
     private boolean allowed(Block block, BlockPos target) {
         if (!BlockUtil.isBuildingBlock(block, target)) {
             return false;

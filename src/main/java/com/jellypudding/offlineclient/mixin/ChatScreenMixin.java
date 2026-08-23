@@ -12,6 +12,7 @@ import net.minecraft.network.chat.Component;
 import org.lwjgl.glfw.GLFW;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -58,7 +59,7 @@ public abstract class ChatScreenMixin extends Screen {
         if (options.size() == 1) {
             input.setValue(head + options.get(0) + " ");
         } else {
-            String common = commonPrefix(options);
+            String common = offlineclient$commonPrefix(options);
             if (common.length() > text.length() - head.length()) {
                 input.setValue(head + common);
             }
@@ -84,26 +85,30 @@ public abstract class ChatScreenMixin extends Screen {
         }
 
         int shown = Math.min(8, options.size());
-        int boxWidth = 0;
+        String overflow = options.size() > shown
+            ? "and " + (options.size() - shown) + " more" : null;
+        int boxWidth = overflow == null ? 0 : minecraft.font.width(overflow);
         for (int i = 0; i < shown; i++) {
             boxWidth = Math.max(boxWidth, minecraft.font.width(options.get(i)));
         }
         int x = 4;
         int bottom = height - 16;
         int top = bottom - shown * 10 - 2;
-        context.fill(x - 2, top - 2, x + boxWidth + 4, bottom, 0xE8101018);
+        // The overflow line sits a row above the options and needs covering too.
+        context.fill(x - 2, overflow == null ? top - 2 : top - 14,
+            x + boxWidth + 4, bottom, 0xE8101018);
         context.guiRenderState.up();
         for (int i = 0; i < shown; i++) {
             context.text(minecraft.font, options.get(i), x, top + i * 10,
                 i == 0 ? 0xFF00E5FF : 0xFFB0B0C0, false);
         }
-        if (options.size() > shown) {
-            context.text(minecraft.font, "and " + (options.size() - shown) + " more",
-                x, top - 12, 0xFF707080, false);
+        if (overflow != null) {
+            context.text(minecraft.font, overflow, x, top - 12, 0xFF707080, false);
         }
     }
 
-    private static String commonPrefix(List<String> options) {
+    @Unique
+    private static String offlineclient$commonPrefix(List<String> options) {
         String common = options.get(0);
         for (String option : options) {
             int i = 0;

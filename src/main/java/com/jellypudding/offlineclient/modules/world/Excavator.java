@@ -28,7 +28,6 @@ import java.util.List;
  */
 public final class Excavator extends Module {
 
-
     private static final int BOX_COLOR = 0xFF40C0FF;
     private static final int CORNER_COLOR = 0xFFFFD040;
     private static final int CURRENT_COLOR = 0xFFFF5030;
@@ -220,7 +219,7 @@ public final class Excavator extends Module {
         event.getBatch().outlineBox(new AABB(first).deflate(0.3), CORNER_COLOR, true);
         event.getBatch().outlineBox(new AABB(second).deflate(0.3), CORNER_COLOR, true);
         if (current != null) {
-            event.getBatch().outlineBox(new AABB(current).deflate(0.002), CURRENT_COLOR, false);
+            event.getBatch().outlineBlock(current, CURRENT_COLOR, false);
         }
     }
 }

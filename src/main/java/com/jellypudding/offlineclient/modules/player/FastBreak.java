@@ -17,11 +17,28 @@ public final class FastBreak extends Module {
     private final NumberSetting delay = new NumberSetting("Delay",
         "Ticks between breaking blocks. Vanilla waits 5.", 0, 0, 5, 1, " ticks");
     private final BoolSetting airPenalty = new BoolSetting("No air penalty",
-        "Mine at full speed in the air. Vanilla mines five times slower there.", true);
+        "Mine at full speed in the air. Vanilla mines five times slower off the ground.", true);
+    private final NumberSetting speed = new NumberSetting("Speed",
+        "Speeds up the break the client predicts. The server keeps its own timer.",
+        1, 1, 10, 0.1, "x").min(1).max(100);
 
     public FastBreak() {
-        super("FastBreak", "Removes the delay between breaking blocks.", Category.PLAYER);
-        addSettings(delay, airPenalty);
+        super("FastBreak", "Breaks blocks faster and without the vanilla wait.", Category.PLAYER);
+        addSettings(delay, speed, airPenalty);
+        searchTags("fast break", "speed mine", "instant mine", "nuker speed", "haste");
+    }
+
+    @Override
+    public String getSuffix() {
+        return speed.getValue() > 1 ? speed.getValueString() : null;
+    }
+
+    /**
+     * Multiplies the break progress the client predicts. The server runs its own
+     * timer and a block can stay visible until that timer agrees.
+     */
+    public float speedMultiplier() {
+        return isEnabled() ? speed.getFloat() : 1;
     }
 
     public boolean removesAirPenalty() {

@@ -26,8 +26,8 @@ public abstract class MouseHandlerMixin {
             target = "Lnet/minecraft/client/player/LocalPlayer;turn(DD)V"))
     private void wrapTurn(LocalPlayer player, double deltaYaw, double deltaPitch,
                           Operation<Void> original) {
-        Freecam freecam = Modules.get(Freecam.class);
-        if (freecam != null && freecam.isEnabled()) {
+        Freecam freecam = Modules.active(Freecam.class);
+        if (freecam != null) {
             freecam.turn(deltaYaw, deltaPitch);
             return;
         }

@@ -1,15 +1,15 @@
 package com.jellypudding.offlineclient.modules.player;
 
-import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.BlockBreakEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
-import com.jellypudding.offlineclient.module.ModuleManager;
 import com.jellypudding.offlineclient.modules.combat.AutoWeapon;
 import com.jellypudding.offlineclient.setting.BoolSetting;
+import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.ItemUtil;
+import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
 
@@ -23,15 +23,9 @@ public final class AutoTool extends Module {
     private final BoolSetting antiBreak = new BoolSetting("Anti break",
         "Never picks a nearly broken tool and drops one that wears out mid swing.", true);
 
-    private int previousSlot = -1;
-
-    // A manual slot change cancels the return.
-    private int ourSlot = -1;
+    private final InventoryUtil.SlotSwap slots = new InventoryUtil.SlotSwap();
 
     private boolean wasDestroying;
-
-    // Cached. The lookup walks every registered module.
-    private AutoWeapon autoWeapon;
 
     public AutoTool() {
         super("AutoTool", "Switches to your best tool when you mine something.", Category.PLAYER);
@@ -49,8 +43,7 @@ public final class AutoTool extends Module {
     private void onTick(TickEvent event) {
         if (!inGame() || mc.gameMode == null || mc.player.isDeadOrDying()) {
             // Respawn hands out a fresh inventory.
-            previousSlot = -1;
-            ourSlot = -1;
+            slots.forget();
             wasDestroying = false;
             return;
         }
@@ -76,54 +69,28 @@ public final class AutoTool extends Module {
 
         // A tool about to snap is worth leaving even for a slower one.
         boolean heldWornOut = antiBreak.isOn() && isNearlyBroken(held);
-        int best = heldWornOut ? -1 : selected;
         // A fast enchanted tool beats a plain better one.
-        float bestSpeed = heldWornOut ? -1 : ItemUtil.miningSpeed(held, state);
-
-        for (int i = 0; i < 9; i++) {
-            ItemStack stack = mc.player.getInventory().getItem(i);
-            if (antiBreak.isOn() && isNearlyBroken(stack)) {
-                continue;
-            }
-            float speed = ItemUtil.miningSpeed(stack, state);
-            if (speed > bestSpeed) {
-                bestSpeed = speed;
-                best = i;
-            }
-        }
+        float heldSpeed = heldWornOut ? -1 : ItemUtil.miningSpeed(held, state);
+        int best = ItemUtil.bestToolSlot(state, heldSpeed,
+            stack -> !antiBreak.isOn() || !isNearlyBroken(stack));
 
         if (best == -1 || best == selected) {
             return;
         }
-        if (previousSlot == -1) {
-            previousSlot = selected;
-        }
-        mc.player.getInventory().setSelectedSlot(best);
-        ourSlot = best;
+        slots.select(best);
     }
 
     private boolean weaponBusy() {
-        if (autoWeapon == null) {
-            ModuleManager modules = OfflineClient.INSTANCE.getModuleManager();
-            if (modules == null) {
-                return false;
-            }
-            autoWeapon = modules.get(AutoWeapon.class);
-        }
-        return autoWeapon.isHoldingWeapon();
+        AutoWeapon weapon = Modules.get(AutoWeapon.class);
+        return weapon != null && weapon.isHoldingWeapon();
     }
 
     private void restore() {
-        if (!switchBack.isOn() || previousSlot == -1 || mc.player == null) {
-            previousSlot = -1;
-            ourSlot = -1;
+        if (!switchBack.isOn()) {
+            slots.forget();
             return;
         }
-        if (mc.player.getInventory().getSelectedSlot() == ourSlot) {
-            mc.player.getInventory().setSelectedSlot(previousSlot);
-        }
-        previousSlot = -1;
-        ourSlot = -1;
+        slots.restoreIfMine();
     }
 
     private boolean isNearlyBroken(ItemStack stack) {

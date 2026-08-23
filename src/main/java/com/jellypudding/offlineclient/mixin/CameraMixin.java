@@ -58,8 +58,8 @@ public abstract class CameraMixin {
             target = "Lnet/minecraft/client/Camera;alignWithEntity(F)V",
             shift = At.Shift.AFTER))
     private void onUpdate(DeltaTracker deltaTracker, CallbackInfo ci) {
-        Freecam freecam = Modules.get(Freecam.class);
-        if (freecam == null || !freecam.isEnabled()) {
+        Freecam freecam = Modules.active(Freecam.class);
+        if (freecam == null) {
             return;
         }
         detached = true;

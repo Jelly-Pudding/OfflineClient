@@ -1,13 +1,13 @@
 package com.jellypudding.offlineclient.modules.movement;
 
-import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.ClientTickEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
-import com.mojang.blaze3d.platform.InputConstants;
+import com.jellypudding.offlineclient.util.InputUtil;
+import com.jellypudding.offlineclient.util.Modules;
 
 public final class AutoWalk extends Module {
 
@@ -30,10 +30,8 @@ public final class AutoWalk extends Module {
             return;
         }
         // A hand started sprint ends on key release.
-        boolean physicallyHeld = InputConstants.isKeyDown(
-            mc.getWindow(), mc.options.keyUp.key.getValue());
-        if (mc.player.isSprinting() && !physicallyHeld
-            && !OfflineClient.INSTANCE.getModuleManager().get(Sprint.class).isEnabled()) {
+        if (mc.player.isSprinting() && !InputUtil.physicallyHeld(mc.options.keyUp)
+            && !Modules.enabled(Sprint.class)) {
             mc.player.setSprinting(false);
         }
     }
@@ -49,8 +47,9 @@ public final class AutoWalk extends Module {
         }
     }
 
+    // The key state only changes again on a real key event.
     @Override
     protected void onDisable() {
-        mc.options.keyUp.setDown(false);
+        mc.options.keyUp.setDown(InputUtil.physicallyHeld(mc.options.keyUp));
     }
 }

@@ -4,6 +4,8 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import org.joml.Matrix3x2fStack;
 
+import java.util.List;
+
 // 2D drawing helpers on top of GuiGraphicsExtractor.
 public final class RenderUtil {
 
@@ -31,13 +33,13 @@ public final class RenderUtil {
         }
     }
 
-    public static void gradientText(GuiGraphicsExtractor context, Font font, String text,
-                                    float x, float y, int from, int to, float scale) {
-        gradientText(context, font, text, x, y, from, to, scale, 1f);
+    public static void gradientTextScaled(GuiGraphicsExtractor context, Font font, String text,
+                                          float x, float y, int from, int to, float scale) {
+        gradientTextScaled(context, font, text, x, y, from, to, scale, 1f);
     }
 
-    public static void gradientText(GuiGraphicsExtractor context, Font font, String text,
-                                    float x, float y, int from, int to, float scale, float alpha) {
+    public static void gradientTextScaled(GuiGraphicsExtractor context, Font font, String text,
+                                          float x, float y, int from, int to, float scale, float alpha) {
         if (alpha < 0.05f) {
             return;
         }
@@ -140,23 +142,42 @@ public final class RenderUtil {
         }
     }
 
-    // Seven pixels square.
-    public static void star(GuiGraphicsExtractor context, int x, int y, int color) {
-        context.fill(x + 3, y, x + 4, y + 1, color);
-        context.fill(x + 2, y + 1, x + 5, y + 2, color);
-        context.fill(x, y + 2, x + 7, y + 3, color);
-        context.fill(x + 1, y + 3, x + 6, y + 5, color);
-        context.fill(x, y + 5, x + 2, y + 7, color);
-        context.fill(x + 5, y + 5, x + 7, y + 7, color);
+    // A hollow star reads as not chosen far better than a faded solid one.
+    private static final String[] STAR = {
+        "....#....",
+        "...###...",
+        "...###...",
+        "#########",
+        ".#######.",
+        "..#####..",
+        "..#####..",
+        ".##...##.",
+        "##.....##",
+    };
+
+    public static final int STAR_SIZE = STAR.length;
+
+    public static void star(GuiGraphicsExtractor context, int x, int y, int color, boolean filled) {
+        for (int row = 0; row < STAR.length; row++) {
+            for (int col = 0; col < STAR[row].length(); col++) {
+                if (!starSolid(row, col) || (!filled && !starEdge(row, col))) {
+                    continue;
+                }
+                context.fill(x + col, y + row, x + col + 1, y + row + 1, color);
+            }
+        }
     }
 
-    // Seven pixels square.
-    public static void magnifier(GuiGraphicsExtractor context, int x, int y, int color) {
-        context.fill(x + 1, y, x + 5, y + 1, color);
-        context.fill(x, y + 1, x + 1, y + 4, color);
-        context.fill(x + 5, y + 1, x + 6, y + 4, color);
-        context.fill(x + 1, y + 4, x + 5, y + 5, color);
-        context.fill(x + 5, y + 5, x + 7, y + 7, color);
+    // A lit cell with any unlit neighbour is part of the outline.
+    private static boolean starEdge(int row, int col) {
+        return !starSolid(row - 1, col) || !starSolid(row + 1, col)
+            || !starSolid(row, col - 1) || !starSolid(row, col + 1);
+    }
+
+    private static boolean starSolid(int row, int col) {
+        return row >= 0 && row < STAR.length
+            && col >= 0 && col < STAR[row].length()
+            && STAR[row].charAt(col) == '#';
     }
 
     // Five pixels square.
@@ -166,6 +187,68 @@ public final class RenderUtil {
         context.fill(x + 2, y + 2, x + 3, y + 4, color);
         context.fill(x + 3, y + 1, x + 4, y + 3, color);
         context.fill(x + 4, y, x + 5, y + 2, color);
+    }
+
+    // Behind a world label. Text over bright terrain is unreadable without it.
+    public static final int LABEL_BACKGROUND = 0x90000000;
+
+    private static final int TOOLTIP_FILL = 0xF00E0E14;
+    private static final int TOOLTIP_BORDER = 0x50FFFFFF;
+    private static final int TOOLTIP_TEXT = 0xFFD8D8E4;
+
+    /**
+     * A scaled label centred on a screen point. Each part carries its own
+     * colour and they run left to right on one line.
+     */
+    public static void label(GuiGraphicsExtractor context, Font font, double screenX, double screenY,
+                             float scale, List<String> parts, List<Integer> colors) {
+        int width = 0;
+        for (String part : parts) {
+            width += font.width(part);
+        }
+        Matrix3x2fStack pose = context.pose();
+        pose.pushMatrix();
+        pose.translate((float) screenX, (float) screenY);
+        pose.scale(scale, scale);
+        int half = width / 2;
+        context.fill(-half - 2, -2, half + 2, font.lineHeight, LABEL_BACKGROUND);
+        context.guiRenderState.up();
+        int x = -half;
+        for (int i = 0; i < parts.size(); i++) {
+            String part = parts.get(i);
+            context.text(font, part, x, -1, colors.get(i), false);
+            x += font.width(part);
+        }
+        pose.popMatrix();
+    }
+
+    // Sits beside the cursor and stays inside the screen.
+    public static void tooltip(GuiGraphicsExtractor context, Font font, List<String> lines,
+                               int mouseX, int mouseY, int screenWidth, int screenHeight) {
+        if (lines.isEmpty()) {
+            return;
+        }
+        int lineHeight = font.lineHeight + 1;
+        int width = 0;
+        for (String line : lines) {
+            width = Math.max(width, font.width(line));
+        }
+        int height = lines.size() * lineHeight;
+        int x = mouseX + 10;
+        int y = mouseY + 10;
+        if (x + width + 4 > screenWidth) {
+            x = Math.max(4, mouseX - width - 12);
+        }
+        if (y + height + 4 > screenHeight) {
+            y = Math.max(4, screenHeight - height - 4);
+        }
+        context.guiRenderState.up();
+        roundedBorderedRect(context, x - 4, y - 3, x + width + 4, y + height + 2,
+            3, TOOLTIP_FILL, TOOLTIP_BORDER);
+        context.guiRenderState.up();
+        for (int i = 0; i < lines.size(); i++) {
+            context.text(font, lines.get(i), x, y + i * lineHeight, TOOLTIP_TEXT, false);
+        }
     }
 
     // Horizontal hue ramp. The vanilla gradient fill only runs top to bottom.

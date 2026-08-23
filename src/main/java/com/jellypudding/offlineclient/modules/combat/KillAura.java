@@ -5,13 +5,13 @@ import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.PreMotionEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
-import com.jellypudding.offlineclient.module.ModuleManager;
-import com.jellypudding.offlineclient.modules.player.AutoEat;
-import com.jellypudding.offlineclient.modules.player.AutoGap;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.AttackTimer;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
+import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.RotationManager;
 import com.jellypudding.offlineclient.util.RotationPriority;
 import net.minecraft.tags.ItemTags;
@@ -30,7 +30,6 @@ import net.minecraft.world.phys.Vec3;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Random;
 
 public final class KillAura extends Module {
 
@@ -64,15 +63,8 @@ public final class KillAura extends Module {
         "Swing at mobs both hostile and passive.", false);
     private final EnumSetting<Priority> priority = new EnumSetting<>("Priority",
         "Which one to pick first when several are in range.", Priority.NEAREST);
-    private final NumberSetting hitDelay = new NumberSetting("Hit delay",
-        "Extra ticks to wait once the attack cooldown is full.", 0, 0, 10, 1, " ticks")
-        .min(0);
-    private final NumberSetting randomise = new NumberSetting("Randomise",
-        "Adds up to this many more ticks to each wait.", 2, 0, 10, 1, " ticks")
-        .min(0);
     private final NumberSetting maxTargets = new NumberSetting("Max targets",
-        "How many entities to swing at in one go. One is the usual single target.",
-        1, 1, 8, 1).min(1);
+        "How many entities to swing at in one go.", 1, 1, 8, 1);
     private final BoolSetting rotate = new BoolSetting("Rotate",
         "Send a look packet toward the target without moving your view.", true);
     private final NumberSetting rotateSpeed = new NumberSetting("Rotate speed",
@@ -106,15 +98,14 @@ public final class KillAura extends Module {
     private final BoolSetting pauseOnContainers = new BoolSetting("Pause in GUIs",
         "No swinging whilst a chest or inventory screen is open.", true);
 
-    private final Random random = new Random();
-
-    // Ticks left of the extra wait after the vanilla cooldown fills.
-    private int wait;
+    private final AttackTimer timer = new AttackTimer();
+    private final SlotSwap slots = new SlotSwap();
 
     public KillAura() {
         super("KillAura", "Automatically swings at nearby mobs and players.", Category.COMBAT);
-        addSettings(range, wallsRange, fov, players, mobs, priority, maxTargets,
-            hitDelay, randomise, rotate, rotateSpeed, walls, autoWeapon, breakShields,
+        addSettings(range, wallsRange, fov, players, mobs, priority, maxTargets);
+        addSettings(timer.settings());
+        addSettings(rotate, rotateSpeed, walls, autoWeapon, breakShields,
             weaponOnly, onlyOnClick, ignoreCreative, ignoreNamed, ignoreTamed,
             ignoreBabies, pauseOnUse, pauseOnContainers);
         searchTags("aura", "multi aura", "aimbot");
@@ -127,69 +118,69 @@ public final class KillAura extends Module {
 
     @Override
     protected void onEnable() {
-        wait = 0;
+        timer.clear();
+        slots.forget();
     }
 
     @Subscribe
     private void onPreMotion(PreMotionEvent event) {
-        if (!inGame() || mc.player.isSpectator()) {
+        if (!inGame() || mc.player.isSpectator() || holdingFire()) {
             return;
         }
+        if (!timer.ready()) {
+            return;
+        }
+        List<LivingEntity> targets = pickTargets();
+        if (!targets.isEmpty()) {
+            strike(targets);
+        }
+    }
+
+    // Every reason the aura sits this tick out.
+    private boolean holdingFire() {
         if (pauseOnUse.isOn() && (mc.player.isUsingItem() || mc.gameMode.isDestroying())) {
-            return;
-        }
-        ModuleManager modules = OfflineClient.INSTANCE.getModuleManager();
-        if (modules.get(AutoEat.class).isEating() || modules.get(AutoGap.class).isEating()) {
-            return;
+            return true;
         }
         if (pauseOnContainers.isOn() && mc.gui.screen() != null) {
-            return;
-        }
-        // Crystals hurt far more than a sword. Only the ticks around a real
-        // place or break are given up.
-        CrystalAura crystals = modules.get(CrystalAura.class);
-        if (crystals.isEnabled() && crystals.isActing()) {
-            return;
+            return true;
         }
         if (onlyOnClick.isOn() && !mc.options.keyAttack.isDown()) {
-            return;
+            return true;
         }
         if (weaponOnly.isOn() && !holdingWeapon()) {
-            return;
+            return true;
         }
         // Hits before the attack cooldown ends deal reduced damage.
         if (mc.player.getAttackStrengthScale(0.5f) < 1) {
-            return;
+            return true;
         }
-        if (wait > 0) {
-            wait--;
-            return;
-        }
+        return Modules.eating() || crystalsBusy();
+    }
 
-        List<LivingEntity> targets = pickTargets();
-        if (targets.isEmpty()) {
-            return;
-        }
+    // Crystals hurt far more than a sword. Only the ticks around a real
+    // place or break are given up.
+    private boolean crystalsBusy() {
+        CrystalAura crystals = Modules.get(CrystalAura.class);
+        return crystals != null && crystals.isEnabled() && crystals.isActing();
+    }
+
+    // Hits everything in reach on one swing then sets the next wait.
+    private void strike(List<LivingEntity> targets) {
         LivingEntity primary = targets.getFirst();
-
         // The swing waits for the turn to land on the server.
         if (rotate.isOn() && !RotationManager.look(primary.getBoundingBox().getCenter(),
             RotationPriority.ATTACK, RotationManager.ENTITY_TOLERANCE, rotateSpeed.getFloat())) {
             return;
         }
 
-        int restore = selectWeapon(primary);
+        selectWeapon(primary);
         // One swing animation covers every entity hit on the tick.
         for (LivingEntity target : targets) {
             mc.gameMode.attack(mc.player, target);
         }
         mc.player.swing(InteractionHand.MAIN_HAND);
-        if (restore != -1) {
-            mc.player.getInventory().setSelectedSlot(restore);
-        }
-
-        int spread = randomise.getInt();
-        wait = hitDelay.getInt() + (spread > 0 ? random.nextInt(spread + 1) : 0);
+        slots.restore();
+        timer.spent();
     }
 
     private boolean holdingWeapon() {
@@ -197,26 +188,23 @@ public final class KillAura extends Module {
         return held.is(ItemTags.SWORDS) || held.is(ItemTags.AXES) || held.is(Items.MACE);
     }
 
-    // Swaps to the best weapon for the target. Minus one when nothing was swapped.
-    private int selectWeapon(LivingEntity target) {
+    // Holds the best weapon for the target until the hit has landed.
+    private void selectWeapon(LivingEntity target) {
         if (!autoWeapon.isOn()) {
-            return -1;
+            return;
         }
-        // The AutoWeapon module keeps the slot itself.
-        if (OfflineClient.INSTANCE.getModuleManager().get(AutoWeapon.class).isEnabled()) {
-            return -1;
+        // AutoWeapon and AttributeSwap keep the slot themselves.
+        if (Modules.enabled(AutoWeapon.class) || Modules.enabled(AttributeSwap.class)) {
+            return;
         }
-        int selected = mc.player.getInventory().getSelectedSlot();
         // An axe staggers a raised shield whilst a sword bounces off it.
         boolean blocking = breakShields.isOn() && target.isBlocking();
         int best = blocking
             ? AutoWeapon.bestWeaponSlot(target, false, 0, true)
             : AutoWeapon.bestWeaponSlot(target);
-        if (best == -1 || best == selected) {
-            return -1;
+        if (best != -1) {
+            slots.select(best);
         }
-        mc.player.getInventory().setSelectedSlot(best);
-        return selected;
     }
 
     private List<LivingEntity> pickTargets() {
@@ -269,7 +257,7 @@ public final class KillAura extends Module {
 
         Comparator<LivingEntity> order = switch (priority.getValue()) {
             case NEAREST -> Comparator.comparingDouble(t -> EntityUtil.reachDistance(mc.player, t));
-            case CLOSEST_ANGLE -> Comparator.comparingDouble(this::angleTo);
+            case CLOSEST_ANGLE -> Comparator.comparingDouble(EntityUtil::lookAngleTo);
             case LOWEST_HEALTH -> Comparator.comparingDouble(LivingEntity::getHealth);
         };
         targets.sort(order);
@@ -288,15 +276,6 @@ public final class KillAura extends Module {
             ClipContext.Fluid.NONE, mc.player)).getType() == HitResult.Type.MISS;
     }
 
-    private double angleTo(LivingEntity target) {
-        Vec3 toTarget = target.getBoundingBox().getCenter().subtract(mc.player.getEyePosition());
-        if (toTarget.lengthSqr() < 1.0E-6) {
-            return 0;
-        }
-        double dot = mc.player.getViewVector(1f).normalize().dot(toTarget.normalize());
-        return Math.acos(Math.clamp(dot, -1, 1));
-    }
-
     private boolean ignored(Mob mob) {
         if (ignoreNamed.isOn() && mob.hasCustomName()) {
             return true;
@@ -309,15 +288,6 @@ public final class KillAura extends Module {
 
     private boolean inFov(LivingEntity target) {
         double limit = fov.getValue();
-        if (limit >= 360) {
-            return true;
-        }
-        Vec3 toTarget = target.getBoundingBox().getCenter().subtract(mc.player.getEyePosition());
-        if (toTarget.lengthSqr() < 1.0E-6) {
-            return true;
-        }
-        double dot = mc.player.getViewVector(1f).normalize().dot(toTarget.normalize());
-        double angle = Math.toDegrees(Math.acos(Math.clamp(dot, -1, 1)));
-        return angle <= limit / 2;
+        return limit >= 360 || EntityUtil.lookAngleTo(target) <= limit / 2;
     }
 }

@@ -159,7 +159,7 @@ public final class ConfigManager {
     }
 
     public void clearFriends() {
-        OfflineClient.INSTANCE.getFriendManager().getAll().clear();
+        OfflineClient.INSTANCE.getFriendManager().clear();
         saveNow();
     }
 
@@ -169,7 +169,7 @@ public final class ConfigManager {
     }
 
     public void resetEverything() {
-        OfflineClient.INSTANCE.getFriendManager().getAll().clear();
+        OfflineClient.INSTANCE.getFriendManager().clear();
         OfflineClient.INSTANCE.getCommandManager().setPrefix(".");
         guiState = new JsonObject();
         resetModules();

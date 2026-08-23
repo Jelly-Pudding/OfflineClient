@@ -37,19 +37,20 @@ public final class RotationManager {
     private RotationPriority priority;
 
     private boolean holding;
-    private float heldYaw;
-    private float heldPitch;
 
-    // The angle this tick has already settled on. Read by isFacing so a caller
-    // can act on the same tick it asks to turn.
+    // The angle this tick has already settled on. isFacing reads it. A caller
+    // can then act on the same tick it asks to turn.
     private boolean projected;
     private float projectedYaw;
     private float projectedPitch;
 
-    // True for the rest of the tick once the held angle has been worked out.
-    private boolean writeRotation;
-
-    // Written from the packet send hook on whichever thread sent the packet.
+    /**
+     * Touched by the packet send hook on whichever thread sent the packet.
+     * Every field the hook reaches has to be visible from that thread.
+     */
+    private volatile float heldYaw;
+    private volatile float heldPitch;
+    private volatile boolean writeRotation;
     private volatile float serverYaw;
     private volatile float serverPitch;
     private volatile boolean rotationSent;
@@ -90,18 +91,6 @@ public final class RotationManager {
         float pitch = pitchTo(point);
         request(yaw, pitch, priority, step);
         return isFacing(yaw, pitch, tolerance);
-    }
-
-    public static boolean isRotating() {
-        return INSTANCE.holding;
-    }
-
-    public static float getServerYaw() {
-        return INSTANCE.serverYaw;
-    }
-
-    public static float getServerPitch() {
-        return INSTANCE.serverPitch;
     }
 
     public static boolean isFacing(float yaw, float pitch, float tolerance) {

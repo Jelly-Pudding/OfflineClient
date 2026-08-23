@@ -50,11 +50,6 @@ public final class WaypointStore {
         return instance;
     }
 
-    // Every saved waypoint on every server.
-    public List<Waypoint> all() {
-        return waypoints;
-    }
-
     // Only the waypoints marked in the world the player is standing in.
     public List<Waypoint> here() {
         String dimension = currentDimension();
@@ -68,28 +63,29 @@ public final class WaypointStore {
         return matching;
     }
 
-    public Waypoint find(String name) {
-        for (Waypoint waypoint : waypoints) {
-            if (waypoint.name().equalsIgnoreCase(name)) {
-                return waypoint;
-            }
-        }
-        return null;
-    }
-
-    // An existing waypoint with the same name is replaced.
+    // An existing waypoint of the same name in this world is replaced.
     public void add(Waypoint waypoint) {
-        waypoints.removeIf(existing -> existing.name().equalsIgnoreCase(waypoint.name()));
+        waypoints.removeIf(existing -> sameSpot(existing, waypoint.name()));
         waypoints.add(waypoint);
         save();
     }
 
     public boolean remove(String name) {
-        boolean removed = waypoints.removeIf(waypoint -> waypoint.name().equalsIgnoreCase(name));
+        boolean removed = waypoints.removeIf(waypoint -> sameSpot(waypoint, name));
         if (removed) {
             save();
         }
         return removed;
+    }
+
+    /**
+     * The name matches and the waypoint belongs to the world the player is
+     * standing in. A base in the Nether never stands in for one overworld.
+     */
+    private static boolean sameSpot(Waypoint waypoint, String name) {
+        return waypoint.name().equalsIgnoreCase(name)
+            && waypoint.dimension().equals(currentDimension())
+            && waypoint.server().equals(currentServer());
     }
 
     public void clear() {

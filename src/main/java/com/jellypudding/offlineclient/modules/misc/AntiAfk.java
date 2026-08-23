@@ -28,6 +28,11 @@ public final class AntiAfk extends Module {
         addSettings(interval, jump, look, swing);
     }
 
+    @Override
+    protected void onEnable() {
+        timer = 0;
+    }
+
     @Subscribe
     private void onTick(TickEvent event) {
         if (!inGame()) {

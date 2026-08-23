@@ -14,8 +14,8 @@ public class ParticleEngineMixin {
 
     @Inject(method = "add(Lnet/minecraft/client/particle/Particle;)V", at = @At("HEAD"), cancellable = true)
     private void onAdd(Particle particle, CallbackInfo ci) {
-        ClearView clearView = Modules.get(ClearView.class);
-        if (clearView != null && clearView.isEnabled() && clearView.blocksParticles()) {
+        ClearView clearView = Modules.active(ClearView.class);
+        if (clearView != null && clearView.blocksParticles()) {
             ci.cancel();
         }
     }

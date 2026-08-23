@@ -53,8 +53,8 @@ public final class AntiPacketKick extends Module {
     private long windowStart;
     private int rate;
     private boolean warned;
-    // Set whilst the queue is being drained.
-    private volatile boolean releasing;
+    // The thread draining the queue. Only its own sends skip the cap.
+    private volatile Thread drainer;
 
     public AntiPacketKick() {
         super("AntiPacketKick", "Spreads packet bursts out so the server does not drop you.",
@@ -86,13 +86,9 @@ public final class AntiPacketKick extends Module {
         heldCount.set(0);
     }
 
-    public boolean overBudget() {
-        return isEnabled() && sent.get() >= limit.getInt();
-    }
-
     @Subscribe(priority = -100)
     private void onPacketSend(PacketSendEvent event) {
-        if (releasing || event.isCancelled()) {
+        if (Thread.currentThread() == drainer || event.isCancelled()) {
             return;
         }
         Packet<?> packet = event.getPacket();
@@ -134,7 +130,7 @@ public final class AntiPacketKick extends Module {
             return;
         }
         ClientPacketListener connection = mc.player.connection;
-        releasing = true;
+        drainer = Thread.currentThread();
         try {
             for (int i = 0; i < allowance; i++) {
                 Packet<?> packet = held.poll();
@@ -146,7 +142,7 @@ public final class AntiPacketKick extends Module {
                 sent.incrementAndGet();
             }
         } finally {
-            releasing = false;
+            drainer = null;
         }
     }
 

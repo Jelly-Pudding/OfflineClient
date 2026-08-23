@@ -12,7 +12,7 @@ import com.jellypudding.offlineclient.render.WorldToScreen;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ColorUtil;
-import net.minecraft.client.gui.Font;
+import com.jellypudding.offlineclient.util.RenderUtil;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.network.protocol.game.ClientboundPlayerInfoRemovePacket;
 import net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket;
@@ -20,10 +20,10 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
-import org.joml.Matrix3x2fStack;
 
 import java.lang.ref.WeakReference;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.UUID;
@@ -32,11 +32,10 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 // The position of every player is cached each tick.
 public final class LogoutSpots extends Module {
 
-    private record Spot(UUID id, String name, AABB box, float health, float maxHealth) {
+    private record Spot(String name, AABB box, float health, float maxHealth) {
     }
 
     private static final int COLOR = 0xFFFF40FF;
-    private static final int BACKGROUND = 0x90000000;
 
     // Players remembered at once.
     private static final int MAX_TRACKED = 512;
@@ -52,8 +51,11 @@ public final class LogoutSpots extends Module {
     private final BoolSetting tracers = new BoolSetting("Tracers",
         "Draw a line to every spot.", false);
 
-    // Kept even after a player walks out of view.
-    private final Map<UUID, Spot> lastSeen = new LinkedHashMap<UUID, Spot>() {
+    /**
+     * Kept even after a player walks out of view. Access ordered. The player
+     * seen least recently is the one that drops when the store fills up.
+     */
+    private final Map<UUID, Spot> lastSeen = new LinkedHashMap<UUID, Spot>(16, 0.75f, true) {
         @Override
         protected boolean removeEldestEntry(Map.Entry<UUID, Spot> eldest) {
             return size() > MAX_TRACKED;
@@ -78,7 +80,7 @@ public final class LogoutSpots extends Module {
 
     @Override
     public String getSuffix() {
-        return String.valueOf(spots.size());
+        return spots.isEmpty() ? null : String.valueOf(spots.size());
     }
 
     @Override
@@ -150,7 +152,7 @@ public final class LogoutSpots extends Module {
                 continue;
             }
             spots.remove(player.getUUID());
-            lastSeen.put(player.getUUID(), new Spot(player.getUUID(),
+            lastSeen.put(player.getUUID(), new Spot(
                 player.getGameProfile().name(), player.getBoundingBox(),
                 player.getHealth() + player.getAbsorptionAmount(),
                 player.getMaxHealth() + player.getAbsorptionAmount()));
@@ -187,25 +189,9 @@ public final class LogoutSpots extends Module {
     }
 
     private void drawTag(GuiGraphicsExtractor context, Spot spot, Vec3 screen) {
-        Font font = mc.font;
-        String name = spot.name();
-        String health = String.format(" %.0f", spot.health());
         float fraction = spot.maxHealth() <= 0 ? 0 : spot.health() / spot.maxHealth();
-        int healthColor = fraction > 0.66f ? 0xFF50FF50 : fraction > 0.33f ? 0xFFFFD040 : 0xFFFF5050;
-
-        int width = font.width(name) + font.width(health);
-        int height = font.lineHeight;
-
-        Matrix3x2fStack pose = context.pose();
-        pose.pushMatrix();
-        pose.translate((float) screen.x, (float) screen.y);
-        pose.scale(scale.getFloat(), scale.getFloat());
-
-        int half = width / 2 + 2;
-        context.fill(-half, -height - 2, half, 1, BACKGROUND);
-        context.guiRenderState.up();
-        context.text(font, name, -width / 2, -height, COLOR, true);
-        context.text(font, health, -width / 2 + font.width(name), -height, healthColor, true);
-        pose.popMatrix();
+        RenderUtil.label(context, mc.font, screen.x, screen.y, scale.getFloat(),
+            List.of(spot.name(), String.format(" %.0f", spot.health())),
+            List.of(COLOR, ColorUtil.health(fraction)));
     }
 }

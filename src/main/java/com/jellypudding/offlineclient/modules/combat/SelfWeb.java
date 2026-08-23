@@ -8,25 +8,12 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import net.minecraft.core.BlockPos;
 
 public final class SelfWeb extends Module {
 
-    public enum Mode {
-        ALWAYS("Always"),
-        ENEMY_NEAR("Enemy near");
-
-        private final String label;
-
-        Mode(String label) {
-            this.label = label;
-        }
-
-        @Override
-        public String toString() {
-            return label;
-        }
-    }
+    public enum Mode { ALWAYS, ENEMY_NEAR }
 
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
         "Web right away or wait until somebody comes close.", Mode.ALWAYS);
@@ -39,6 +26,8 @@ public final class SelfWeb extends Module {
         "Turn off once the web is down.", true);
     private final BoolSetting rotate = new BoolSetting("Rotate",
         "Send a look packet toward the web.", true);
+
+    private final SlotSwap slots = new SlotSwap();
 
     public SelfWeb() {
         super("SelfWeb", "Webs your own block to stop knockback.", Category.COMBAT);
@@ -56,9 +45,9 @@ public final class SelfWeb extends Module {
         }
 
         BlockPos feet = mc.player.blockPosition();
-        AutoWeb.placeWeb(feet, rotate.isOn());
+        AutoWeb.placeWeb(feet, rotate.isOn(), slots);
         if (doubles.isOn()) {
-            AutoWeb.placeWeb(feet.above(), rotate.isOn());
+            AutoWeb.placeWeb(feet.above(), rotate.isOn(), slots);
         }
         // The client puts its own copy down.
         boolean done = !AutoWeb.webbable(feet)

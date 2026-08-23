@@ -5,7 +5,6 @@ import com.jellypudding.offlineclient.command.Command;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.util.ChatUtil;
-import org.lwjgl.glfw.GLFW;
 
 public final class BindCommand extends Command {
 

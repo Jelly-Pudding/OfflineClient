@@ -24,6 +24,9 @@ import net.minecraft.world.item.enchantment.Enchantments;
  */
 public final class AutoFish extends Module {
 
+    // Durability points left that count as about to break.
+    private static final int NEARLY_BROKEN = 2;
+
     private final NumberSetting recastDelay = new NumberSetting("Recast delay",
         "Ticks to wait after reeling in before casting again.", 15, 1, 60, 1, " ticks");
     private final NumberSetting catchDelay = new NumberSetting("Catch delay",
@@ -77,12 +80,18 @@ public final class AutoFish extends Module {
             return;
         }
 
-        int rodSlot = bestRod();
-        if (autoSwitch.isOn() && rodSlot != -1
-            && rodSlot != mc.player.getInventory().getSelectedSlot()) {
-            mc.player.getInventory().setSelectedSlot(rodSlot);
+        if (autoSwitch.isOn()) {
+            int rodSlot = bestRod();
+            if (rodSlot != -1 && rodSlot != mc.player.getInventory().getSelectedSlot()) {
+                mc.player.getInventory().setSelectedSlot(rodSlot);
+            }
         }
-        if (!(mc.player.getMainHandItem().getItem() instanceof FishingRodItem)) {
+        ItemStack held = mc.player.getMainHandItem();
+        if (!(held.getItem() instanceof FishingRodItem)) {
+            return;
+        }
+        // Reeling in wears the rod down as much as casting does.
+        if (antiBreak.isOn() && held.getMaxDamage() - held.getDamageValue() <= NEARLY_BROKEN) {
             return;
         }
 
@@ -172,7 +181,7 @@ public final class AutoFish extends Module {
             if (!(stack.getItem() instanceof FishingRodItem)) {
                 continue;
             }
-            if (antiBreak.isOn() && stack.getMaxDamage() - stack.getDamageValue() <= 2) {
+            if (antiBreak.isOn() && stack.getMaxDamage() - stack.getDamageValue() <= NEARLY_BROKEN) {
                 continue;
             }
             int score = ItemUtil.enchantLevel(Enchantments.LURE, stack)

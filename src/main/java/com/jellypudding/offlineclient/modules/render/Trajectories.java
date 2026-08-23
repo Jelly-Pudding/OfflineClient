@@ -186,7 +186,16 @@ public final class Trajectories extends Module {
         return null;
     }
 
+    // Where a projectile is at one moment in its flight.
+    private record Shot(Vec3 pos, Vec3 velocity) {
+    }
+
     private Path simulate(Player shooter, Launch launch, float partialTicks) {
+        return fly(shooter, launch, leaveHand(shooter, launch, partialTicks));
+    }
+
+    // The position and speed the projectile starts with.
+    private Shot leaveHand(Player shooter, Launch launch, float partialTicks) {
         double yaw = shooter.getYRot(partialTicks);
         double pitch = shooter.getXRot(partialTicks);
         Vec3 origin = shooter.getPosition(partialTicks);
@@ -214,6 +223,13 @@ public final class Trajectories extends Module {
             Vec3 movement = shooter.getKnownMovement();
             velocity = velocity.add(movement.x, shooter.onGround() ? 0 : movement.y, movement.z);
         }
+        return new Shot(pos, velocity);
+    }
+
+    // Steps the projectile forward until it lands or the step budget runs out.
+    private Path fly(Player shooter, Launch launch, Shot shot) {
+        Vec3 pos = shot.pos();
+        Vec3 velocity = shot.velocity();
 
         List<Vec3> points = new ArrayList<>();
         points.add(pos);
@@ -227,21 +243,9 @@ public final class Trajectories extends Module {
             boolean inWater = mc.level.getFluidState(BlockPos.containing(pos)).is(FluidTags.WATER);
             double drag = inWater ? launch.waterDrag() : launch.airDrag();
 
-            switch (launch.motion()) {
-                case ARROW -> {
-                    pos = pos.add(velocity);
-                    velocity = velocity.scale(drag).subtract(0, launch.gravity(), 0);
-                }
-                case THROWN -> {
-                    velocity = velocity.subtract(0, launch.gravity(), 0).scale(drag);
-                    pos = pos.add(velocity);
-                }
-                case BOBBER -> {
-                    velocity = velocity.subtract(0, launch.gravity(), 0);
-                    pos = pos.add(velocity);
-                    velocity = velocity.scale(drag);
-                }
-            }
+            Shot next = advance(launch, pos, velocity, drag);
+            pos = next.pos();
+            velocity = next.velocity();
 
             if (pos.y < minY) {
                 points.add(pos);
@@ -274,5 +278,21 @@ public final class Trajectories extends Module {
             }
         }
         return new Path(points, type, hit);
+    }
+
+    // One tick of motion. Each projectile applies drag and gravity in its own order.
+    private static Shot advance(Launch launch, Vec3 pos, Vec3 velocity, double drag) {
+        return switch (launch.motion()) {
+            case ARROW -> new Shot(pos.add(velocity),
+                velocity.scale(drag).subtract(0, launch.gravity(), 0));
+            case THROWN -> {
+                Vec3 moved = velocity.subtract(0, launch.gravity(), 0).scale(drag);
+                yield new Shot(pos.add(moved), moved);
+            }
+            case BOBBER -> {
+                Vec3 fallen = velocity.subtract(0, launch.gravity(), 0);
+                yield new Shot(pos.add(fallen), fallen.scale(drag));
+            }
+        };
     }
 }

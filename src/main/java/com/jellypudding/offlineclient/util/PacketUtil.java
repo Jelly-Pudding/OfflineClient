@@ -29,6 +29,19 @@ public final class PacketUtil {
         return new ServerboundMovePlayerPacket.StatusOnly(onGround, collision);
     }
 
+    // A packet that carried no position is upgraded to the form that does.
+    public static ServerboundMovePlayerPacket withPosition(ServerboundMovePlayerPacket packet,
+                                                           LocalPlayer player, double x, double y,
+                                                           double z, boolean onGround) {
+        boolean collision = packet.horizontalCollision();
+        if (packet.hasRotation()) {
+            return new ServerboundMovePlayerPacket.PosRot(x, y, z,
+                packet.getYRot(player.getYRot()), packet.getXRot(player.getXRot()),
+                onGround, collision);
+        }
+        return new ServerboundMovePlayerPacket.Pos(x, y, z, onGround, collision);
+    }
+
     // A packet that carried no rotation is upgraded to the form that does.
     public static ServerboundMovePlayerPacket withRotation(ServerboundMovePlayerPacket packet,
                                                            LocalPlayer player, float yaw, float pitch) {

@@ -9,27 +9,13 @@ import com.jellypudding.offlineclient.modules.misc.Timer;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
-import com.jellypudding.offlineclient.util.Modules;
+import com.jellypudding.offlineclient.util.MovementUtil;
 import net.minecraft.world.entity.player.Abilities;
-import net.minecraft.world.phys.Vec2;
+import net.minecraft.world.phys.Vec3;
 
 public final class Flight extends Module {
 
-    public enum Mode {
-        ABILITIES("Abilities"),
-        DIRECT("Direct");
-
-        private final String label;
-
-        Mode(String label) {
-            this.label = label;
-        }
-
-        @Override
-        public String toString() {
-            return label;
-        }
-    }
+    public enum Mode { ABILITIES, DIRECT }
 
     private static final float VANILLA_FLY_SPEED = 0.05f;
 
@@ -44,7 +30,7 @@ public final class Flight extends Module {
     private final NumberSetting timer = new NumberSetting("Timer",
         "Also speeds up the game whilst you fly. 1 does nothing.", 1, 1, 3, 0.1, "x").min(1);
     private final BoolSetting antiKick = new BoolSetting("AntiKick",
-        "Drifts down a little every so often to dodge the vanilla flight kick.", true);
+        "Drifts down a little now and then to dodge the vanilla flight kick.", true);
     private final NumberSetting antiKickInterval = new NumberSetting("Kick interval",
         "Ticks between each little dip.", 70, 5, 80, 1, " ticks")
         .visibleWhen(antiKick::isOn);
@@ -67,17 +53,9 @@ public final class Flight extends Module {
         tickCounter = 0;
     }
 
-    // Modules.get is cached.
-    private static void setTimerOverride(float multiplier) {
-        Timer module = Modules.get(Timer.class);
-        if (module != null) {
-            module.setOverride("flight", multiplier);
-        }
-    }
-
     @Override
     protected void onDisable() {
-        setTimerOverride(1f);
+        Timer.override("flight", 1f);
         if (mc.player == null) {
             return;
         }
@@ -92,7 +70,7 @@ public final class Flight extends Module {
     @Subscribe
     private void onClientTick(ClientTickEvent event) {
         if (!inGame()) {
-            setTimerOverride(1f);
+            Timer.override("flight", 1f);
         }
     }
 
@@ -101,9 +79,9 @@ public final class Flight extends Module {
         if (!inGame()) {
             return;
         }
-        boolean moving = mc.player.input.getMoveVector().length() > 1e-4f
+        boolean moving = MovementUtil.inputDirection().lengthSqr() > 0
             || mc.options.keyJump.isDown() || mc.options.keyShift.isDown();
-        setTimerOverride(moving ? timer.getFloat() : 1f);
+        Timer.override("flight", moving ? timer.getFloat() : 1f);
 
         if (mode.is(Mode.ABILITIES)) {
             abilitiesTick();
@@ -131,10 +109,7 @@ public final class Flight extends Module {
         double h = 0.6 * speed.getValue();
         double v = 0.42 * verticalSpeed.getValue();
 
-        double vx = 0;
         double vy = 0;
-        double vz = 0;
-
         if (mc.options.keyJump.isDown()) {
             vy += v;
         }
@@ -142,19 +117,13 @@ public final class Flight extends Module {
             vy -= v;
         }
 
-        Vec2 move = mc.player.input.getMoveVector();
-        if (move.length() > 1e-4f) {
-            double angle = Math.toRadians(mc.player.getYRot()) + Math.atan2(-move.x, move.y);
-            vx = -Math.sin(angle) * h;
-            vz = Math.cos(angle) * h;
-        }
-
-        mc.player.setDeltaMovement(vx, vy, vz);
+        Vec3 heading = MovementUtil.inputDirection();
+        mc.player.setDeltaMovement(heading.x * h, vy, heading.z * h);
     }
 
     private void doAntiKick() {
         double dip = 0.04;
-        if (tickCounter > antiKickInterval.getInt() + 1) {
+        if (tickCounter >= antiKickInterval.getInt()) {
             tickCounter = 0;
         }
         switch (tickCounter) {

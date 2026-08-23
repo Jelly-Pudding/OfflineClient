@@ -17,30 +17,14 @@ import java.util.concurrent.ThreadLocalRandom;
 // Sends silly rotations to the server whilst the local view is left alone.
 public final class Derp extends Module {
 
-    public enum Mode {
-        SPIN("Spin"),
-        SHAKE("Shake"),
-        HEADBANG("Headbang"),
-        RANDOM("Random");
-
-        private final String label;
-
-        Mode(String label) {
-            this.label = label;
-        }
-
-        @Override
-        public String toString() {
-            return label;
-        }
-    }
+    public enum Mode { SPIN, SHAKE, HEADBANG, RANDOM }
 
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
         "How your head moves to everyone else.", Mode.SPIN);
     private final NumberSetting speed = new NumberSetting("Speed",
         "How fast the head moves.", 30, 1, 90, 1, " degrees").min(1).max(180);
     private final BoolSetting pauseInCombat = new BoolSetting("Pause in combat",
-        "Stops whilst an aura is swinging.", true);
+        "Stops whilst your hands are busy or CrystalAura has a target.", true);
 
     private float yaw;
     private float pitch;
@@ -54,7 +38,7 @@ public final class Derp extends Module {
 
     @Override
     public String getSuffix() {
-        return mode.getValue().toString();
+        return mode.getValueString();
     }
 
     @Override

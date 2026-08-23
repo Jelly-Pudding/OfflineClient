@@ -3,6 +3,11 @@ package com.jellypudding.offlineclient.modules.misc;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.Modules;
+
+import java.math.BigDecimal;
+import java.util.HashMap;
+import java.util.Map;
 
 // Behaviour lives in DeltaTrackerMixin. Other modules can push a temporary override.
 public final class Timer extends Module {
@@ -10,7 +15,7 @@ public final class Timer extends Module {
     private final NumberSetting speed = new NumberSetting("Speed",
         "Game speed multiplier.", 2, 0.1, 10, 0.1, "x");
 
-    private final java.util.Map<String, Float> overrides = new java.util.HashMap<>();
+    private final Map<String, Float> overrides = new HashMap<>();
 
     public Timer() {
         super("Timer", "Speeds up or slows down the whole game client side.", Category.MISC);
@@ -20,7 +25,18 @@ public final class Timer extends Module {
     @Override
     public String getSuffix() {
         float effective = getSpeed();
-        return effective != 1f ? effective + "x" : speed.getValueString();
+        if (effective == speed.getFloat()) {
+            return speed.getValueString();
+        }
+        return new BigDecimal(Float.toString(effective)).stripTrailingZeros().toPlainString() + "x";
+    }
+
+    // Pushes an override without the caller having to look the module up first.
+    public static void override(String key, float multiplier) {
+        Timer timer = Modules.get(Timer.class);
+        if (timer != null) {
+            timer.setOverride(key, multiplier);
+        }
     }
 
     // A value of one or less clears that module's boost. The highest active source wins.

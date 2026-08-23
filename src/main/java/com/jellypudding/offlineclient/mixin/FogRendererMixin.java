@@ -16,7 +16,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(FogRenderer.class)
 public class FogRendererMixin {
 
-    // Far past any render distance so nothing inside the world ever fades.
+    // Far past any render distance. Nothing inside the world ever fades.
     @Unique
     private static final float OFFLINECLIENT_FAR = 1.0E7f;
 
@@ -24,8 +24,8 @@ public class FogRendererMixin {
     private void onSetupFog(Camera camera, int renderDistance, DeltaTracker deltaTracker,
                             float skyDarken, ClientLevel level,
                             CallbackInfoReturnable<FogData> cir) {
-        ClearView clearView = Modules.get(ClearView.class);
-        if (clearView == null || !clearView.isEnabled() || !clearView.blocksFog()) {
+        ClearView clearView = Modules.active(ClearView.class);
+        if (clearView == null || !clearView.blocksFog()) {
             return;
         }
         FogData data = cir.getReturnValue();

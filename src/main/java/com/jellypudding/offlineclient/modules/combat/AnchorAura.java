@@ -16,15 +16,12 @@ import com.jellypudding.offlineclient.util.RotationManager;
 import com.jellypudding.offlineclient.util.RotationPriority;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.attribute.EnvironmentAttributes;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.RespawnAnchorBlock;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.phys.AABB;
-import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.CollisionContext;
 
@@ -34,7 +31,7 @@ public final class AnchorAura extends Module {
     private final NumberSetting targetRange = new NumberSetting("Target range",
         "How far away enemies are considered.", 10, 2, 16, 0.5, " blocks");
     private final NumberSetting range = new NumberSetting("Range",
-        "Reach for placing and using anchors.", 4.5, 1, 6, 0.1).min(1);
+        "Reach for placing and using anchors.", 4.5, 1, 6, 0.1);
     private final BoolSetting doPlace = new BoolSetting("Place",
         "Place anchors near the target.", true);
     private final NumberSetting placeDelay = new NumberSetting("Place delay",
@@ -74,10 +71,7 @@ public final class AnchorAura extends Module {
 
     @Override
     public String getSuffix() {
-        if (targetName == null) {
-            return status;
-        }
-        return status == null ? targetName : targetName + " " + status;
+        return suffix(targetName, status);
     }
 
     @Override
@@ -127,7 +121,7 @@ public final class AnchorAura extends Module {
         }
 
         Player target = EntityUtil.nearestEnemy(targetRange.getValue());
-        targetName = target == null ? null : target.getGameProfile().name();
+        targetName = EntityUtil.nameOf(target);
         if (target == null) {
             slots.restore();
             return;
@@ -279,20 +273,7 @@ public final class AnchorAura extends Module {
             status = "(turning)";
             return false;
         }
-        // Vanilla skips the block interaction whilst the player is sneaking.
-        boolean sneaking = mc.player.isShiftKeyDown();
-        if (sneaking) {
-            mc.player.setShiftKeyDown(false);
-        }
-        BlockHitResult hit = new BlockHitResult(center, BlockUtil.facingSide(pos), pos, false);
-        boolean used = mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND, hit).consumesAction();
-        if (sneaking) {
-            mc.player.setShiftKeyDown(true);
-        }
-        if (used) {
-            mc.player.swing(InteractionHand.MAIN_HAND);
-        }
-        return used;
+        return BlockUtil.interact(pos, BlockUtil.facingSide(pos));
     }
 
     private boolean selfSafe(Vec3 source) {
@@ -306,10 +287,10 @@ public final class AnchorAura extends Module {
             return;
         }
         if (planned != null) {
-            event.getBatch().outlineBox(new AABB(planned).deflate(0.002), 0xFF40FFD0, false);
+            event.getBatch().outlineBlock(planned, 0xFF40FFD0, false);
         }
         if (armed != null) {
-            event.getBatch().outlineBox(new AABB(armed).deflate(0.002), 0xFFFF4040, false);
+            event.getBatch().outlineBlock(armed, 0xFFFF4040, false);
         }
     }
 }

@@ -39,11 +39,12 @@ public final class Offhand extends Module {
     private final EnumSetting<Choice> item = new EnumSetting<>("Item",
         "What to keep in your offhand.", Choice.CRYSTAL);
     private final NumberSetting totemHealth = new NumberSetting("Totem health",
-        "Hold a totem instead at or below this many hearts. Zero turns it off.", 7, 0, 10, 0.5, " hearts");
+        "Hold a totem instead at or below this many hearts with zero turning it off.",
+        7, 0, 10, 0.5, " hearts");
     private final NumberSetting delay = new NumberSetting("Delay",
         "Ticks to wait between swaps.", 0, 0, 20, 1, " ticks");
 
-    private int returnSlot = -1;
+    private final InventoryUtil.StrandedStack cursor = new InventoryUtil.StrandedStack();
     private int timer;
 
     public Offhand() {
@@ -54,22 +55,19 @@ public final class Offhand extends Module {
 
     @Override
     public String getSuffix() {
-        return item.getValue().toString();
+        return item.getValueString();
     }
 
     @Override
     protected void onEnable() {
-        returnSlot = -1;
         timer = 0;
     }
 
     @Override
     protected void onDisable() {
-        if (inGame() && returnSlot != -1 && InventoryUtil.canClick()
-            && !InventoryUtil.carried().isEmpty()) {
-            InventoryUtil.click(returnSlot);
+        if (inGame()) {
+            cursor.giveBack();
         }
-        returnSlot = -1;
     }
 
     @Subscribe
@@ -77,17 +75,8 @@ public final class Offhand extends Module {
         if (!inGame() || mc.player.isSpectator()) {
             return;
         }
-        boolean canClick = InventoryUtil.canClick();
-
-        // A refused click can leave an item on the cursor.
-        if (returnSlot != -1) {
-            if (canClick && !InventoryUtil.carried().isEmpty()) {
-                InventoryUtil.click(returnSlot);
-            }
-            if (!InventoryUtil.carried().isEmpty()) {
-                return;
-            }
-            returnSlot = -1;
+        if (!cursor.recover()) {
+            return;
         }
 
         // AutoTotem owns the offhand whilst it is on.
@@ -100,7 +89,7 @@ public final class Offhand extends Module {
             return;
         }
 
-        if (!canClick) {
+        if (!InventoryUtil.canClick()) {
             return;
         }
         // Anything already on the cursor belongs to the player.
@@ -123,7 +112,7 @@ public final class Offhand extends Module {
         }
         if (result == Swap.STRANDED) {
             // Whatever the new item displaced had nowhere to go.
-            returnSlot = slot;
+            cursor.hold(slot);
         }
         timer = delay.getInt();
     }

@@ -6,12 +6,10 @@ import com.google.gson.JsonObject;
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
-import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.RenderUtil;
+import com.jellypudding.offlineclient.util.SearchRank;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.input.CharacterEvent;
-import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 
 import java.util.ArrayList;
@@ -61,6 +59,9 @@ public final class WindowGuiScreen extends GuiScreenBase {
 
     // The modules on show. Refilled in place to avoid a per frame allocation.
     private final List<Module> listed = new ArrayList<>();
+    // Everything the text in the box finds with the closest answer first.
+    private final List<Module> ranked = new ArrayList<>();
+    private String rankedFor = "";
     // getAll builds a fresh list on every call.
     private final List<Module> allModules =
         OfflineClient.INSTANCE.getModuleManager().getAll();
@@ -183,25 +184,41 @@ public final class WindowGuiScreen extends GuiScreenBase {
         return SIDEBAR_WIDTH - MARGIN - 4;
     }
 
-    // Sidebar rows tighten up rather than run off a short window.
+    // Sidebar rows tighten up on a short window. Every tab stays in sight.
     private int sideRow() {
         return Math.clamp(contentHeight() / tabs.size(), SIDE_ROW_MIN, SIDE_ROW);
     }
 
+    // A query that has not changed keeps the order it already has.
+    private void refreshRanked() {
+        String query = search();
+        if (query.equals(rankedFor)) {
+            return;
+        }
+        rankedFor = query;
+        ranked.clear();
+        if (!query.isEmpty()) {
+            ranked.addAll(SearchRank.rank(allModules, module -> module.searchScore(query)));
+        }
+    }
+
     /**
-     * A search covers every category rather than the chosen sidebar row.
-     * Favourites come first.
+     * A search covers every category and not just the chosen sidebar row. The
+     * closest answer goes to the top. Favourites come first either way.
      */
     private void refreshListed() {
+        refreshRanked();
         listed.clear();
+        boolean searching = isSearching();
+        List<Module> source = searching ? ranked : allModules;
         for (int pass = 0; pass < 2; pass++) {
             boolean wantFavourite = pass == 0;
-            for (int i = 0; i < allModules.size(); i++) {
-                Module module = allModules.get(i);
+            for (int i = 0; i < source.size(); i++) {
+                Module module = source.get(i);
                 if (favourites.contains(module.getName()) != wantFavourite) {
                     continue;
                 }
-                if (isSearching() ? module.matchesSearch(search()) : inTab(module, tab)) {
+                if (searching || inTab(module, tab)) {
                     listed.add(module);
                 }
             }
@@ -328,7 +345,7 @@ public final class WindowGuiScreen extends GuiScreenBase {
         int w = listWidth();
         int total = totalHeight();
         boolean overflow = total > h;
-        int rowW = overflow ? w - GuiTheme.SCROLLBAR - 2 : w;
+        int rowW = ScrollBar.rowWidth(w, total, h);
 
         scrollBar.update(mouseY, total, h);
 
@@ -356,7 +373,7 @@ public final class WindowGuiScreen extends GuiScreenBase {
         context.disableScissor();
 
         if (overflow) {
-            int trackX = x + w - GuiTheme.SCROLLBAR;
+            int trackX = ScrollBar.trackX(x, w);
             scrollBar.render(context, trackX, top, h, total,
                 ScrollBar.isOverTrack(mouseX, mouseY, trackX, top, h));
         }
@@ -382,8 +399,9 @@ public final class WindowGuiScreen extends GuiScreenBase {
         }
 
         boolean favourite = favourites.contains(module.getName());
-        RenderUtil.star(context, x + 8, y + (MODULE_ROW - 7) / 2,
-            favourite ? STAR_COLOR : (hovered ? GuiTheme.TEXT_FAINT : ColorUtil.withAlpha(GuiTheme.TEXT_FAINT, 90)));
+        RenderUtil.star(context, x + 8, y + (MODULE_ROW - RenderUtil.STAR_SIZE) / 2,
+            favourite ? STAR_COLOR : (hovered ? GuiTheme.TEXT_DIM : GuiTheme.TEXT_FAINT),
+            favourite);
 
         int ty = GuiTheme.textY(y, MODULE_ROW);
         int pillRight = x + w - ARROW_ZONE - 2;
@@ -492,9 +510,9 @@ public final class WindowGuiScreen extends GuiScreenBase {
         refreshListed();
         int total = totalHeight();
         boolean overflow = total > h;
-        int rowW = overflow ? w - GuiTheme.SCROLLBAR - 2 : w;
+        int rowW = ScrollBar.rowWidth(w, total, h);
 
-        int trackX = x + w - GuiTheme.SCROLLBAR;
+        int trackX = ScrollBar.trackX(x, w);
         if (overflow && ScrollBar.isOverTrack(mx, my, trackX, top, h)) {
             scrollBar.beginDrag((int) my);
             return true;
@@ -557,21 +575,5 @@ public final class WindowGuiScreen extends GuiScreenBase {
             return true;
         }
         return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
-    }
-
-    @Override
-    public boolean keyPressed(KeyEvent event) {
-        if (handleCommonKey(event)) {
-            return true;
-        }
-        return super.keyPressed(event);
-    }
-
-    @Override
-    public boolean charTyped(CharacterEvent event) {
-        if (handleCommonChar((char) event.codepoint())) {
-            return true;
-        }
-        return super.charTyped(event);
     }
 }

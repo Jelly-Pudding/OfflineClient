@@ -14,3 +14,4 @@ accessible field net/minecraft/client/gui/components/ChatComponent allMessages L
 accessible method net/minecraft/client/gui/components/ChatComponent refreshTrimmedMessages ()V
 accessible field net/minecraft/client/gui/screens/inventory/AbstractSignEditScreen messages [Ljava/lang/String;
 accessible method net/minecraft/client/multiplayer/MultiPlayerGameMode ensureHasSentCarriedItem ()V
+accessible field net/minecraft/world/entity/LivingEntity DATA_EFFECT_PARTICLES Lnet/minecraft/network/syncher/EntityDataAccessor;

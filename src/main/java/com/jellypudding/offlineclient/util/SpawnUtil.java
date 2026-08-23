@@ -51,24 +51,39 @@ public final class SpawnUtil {
         BlockPos centre = MC.player.blockPosition();
         // Rings outward from the player. Hitting the limit drops the furthest spots.
         int reach = Math.max(horizontal, vertical);
-        for (int ring = 0; ring <= reach && found.size() < limit; ring++) {
-            for (int dy = -Math.min(ring, vertical); dy <= Math.min(ring, vertical); dy++) {
-                for (int dx = -Math.min(ring, horizontal); dx <= Math.min(ring, horizontal); dx++) {
-                    for (int dz = -Math.min(ring, horizontal); dz <= Math.min(ring, horizontal); dz++) {
-                        if (Math.max(Math.abs(dy), Math.max(Math.abs(dx), Math.abs(dz))) != ring) {
-                            continue;
+        for (int ring = 0; ring <= reach; ring++) {
+            int dyMax = Math.min(ring, vertical);
+            int dxMax = Math.min(ring, horizontal);
+            int dzMax = Math.min(ring, horizontal);
+            for (int dy = -dyMax; dy <= dyMax; dy++) {
+                for (int dx = -dxMax; dx <= dxMax; dx++) {
+                    if (Math.abs(dy) == ring || Math.abs(dx) == ring) {
+                        for (int dz = -dzMax; dz <= dzMax; dz++) {
+                            if (!collect(found, centre.offset(dx, dy, dz), maxLight, limit)) {
+                                return found;
+                            }
                         }
-                        if (found.size() >= limit) {
+                    } else if (dzMax == ring) {
+                        // A row through the middle of the shell has only two ends on it.
+                        if (!collect(found, centre.offset(dx, dy, -ring), maxLight, limit)
+                            || !collect(found, centre.offset(dx, dy, ring), maxLight, limit)) {
                             return found;
-                        }
-                        BlockPos pos = centre.offset(dx, dy, dz);
-                        if (spawnable(pos, maxLight)) {
-                            found.add(pos);
                         }
                     }
                 }
             }
         }
         return found;
+    }
+
+    // False once the list is full.
+    private static boolean collect(List<BlockPos> found, BlockPos pos, int maxLight, int limit) {
+        if (found.size() >= limit) {
+            return false;
+        }
+        if (spawnable(pos, maxLight)) {
+            found.add(pos);
+        }
+        return true;
     }
 }

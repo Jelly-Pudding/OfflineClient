@@ -27,6 +27,11 @@ public abstract class Setting<T> {
         return description;
     }
 
+    // How the value reads in the interface and in chat.
+    public String getValueString() {
+        return String.valueOf(value);
+    }
+
     public T getValue() {
         return value;
     }

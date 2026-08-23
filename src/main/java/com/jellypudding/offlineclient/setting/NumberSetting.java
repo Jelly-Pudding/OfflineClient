@@ -68,10 +68,6 @@ public final class NumberSetting extends Setting<Double> {
         return hardMax;
     }
 
-    public double getStep() {
-        return step;
-    }
-
     public String getSuffix() {
         return suffix;
     }
@@ -134,6 +130,7 @@ public final class NumberSetting extends Setting<Double> {
         return Math.clamp((value - sliderMin) / (sliderTop() - sliderMin), 0, 1);
     }
 
+    @Override
     public String getValueString() {
         BigDecimal bd = BigDecimal.valueOf(value)
             .setScale(Math.max(decimals, 4), RoundingMode.HALF_UP)

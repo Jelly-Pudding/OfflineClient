@@ -9,12 +9,12 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
+import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.CollisionContext;
 
@@ -32,9 +32,9 @@ public final class HoleFiller extends Module {
     private final NumberSetting targetRange = new NumberSetting("Target range",
         "How far away enemies are considered.", 7, 1, 12, 0.5, " blocks");
     private final NumberSetting range = new NumberSetting("Range",
-        "How far you can reach to place.", 4.5, 1, 6, 0.1).min(1);
+        "How far you can reach to place.", 4.5, 1, 6, 0.1);
     private final NumberSetting perTick = new NumberSetting("Blocks per tick",
-        "How many blocks to place in one round.", 2, 1, 4, 1).min(1);
+        "How many blocks to place in one round.", 2, 1, 4, 1);
     private final NumberSetting delay = new NumberSetting("Delay",
         "Ticks to wait between placing rounds.", 1, 0, 10, 1, " ticks");
     private final BoolSetting genuineOnly = new BoolSetting("Genuine holes",
@@ -99,8 +99,7 @@ public final class HoleFiller extends Module {
             return;
         }
 
-        int slot = BlockUtil.findBlockSlot(block ->
-            block.getExplosionResistance() >= 600 && block.defaultDestroyTime() >= 0);
+        int slot = BlockUtil.findBlastProofSlot();
         if (slot == -1) {
             slots.restore();
             return;
@@ -170,7 +169,7 @@ public final class HoleFiller extends Module {
             }
             BlockPos wall = pos.relative(side);
             if (!BlockUtil.isSolid(wall)
-                || BlockUtil.state(wall).getBlock().getExplosionResistance() < 600) {
+                || BlockUtil.state(wall).getBlock().getExplosionResistance() < BlockUtil.BLAST_PROOF) {
                 return false;
             }
         }
@@ -195,9 +194,7 @@ public final class HoleFiller extends Module {
     }
 
     private Vec3 ahead(Player target) {
-        Vec3 speed = new Vec3(target.getX() - target.xOld,
-            target.getY() - target.yOld, target.getZ() - target.zOld);
-        return target.position().add(speed.scale(LEAD_TICKS));
+        return target.position().add(EntityUtil.velocityOf(target).scale(LEAD_TICKS));
     }
 
     @Subscribe
@@ -208,7 +205,7 @@ public final class HoleFiller extends Module {
         int next = perTick.getInt();
         for (int i = 0; i < holes.size(); i++) {
             int color = i < next ? 0xFFC080FF : 0x80C080FF;
-            event.getBatch().outlineBox(new AABB(holes.get(i)).deflate(0.002), color, false);
+            event.getBatch().outlineBlock(holes.get(i), color, false);
         }
     }
 }

@@ -5,20 +5,31 @@ import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
+import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
-import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.gui.screens.inventory.ContainerScreen;
-import net.minecraft.client.gui.screens.inventory.DispenserScreen;
-import net.minecraft.client.gui.screens.inventory.HopperScreen;
-import net.minecraft.client.gui.screens.inventory.ShulkerBoxScreen;
+import com.jellypudding.offlineclient.setting.RegistryListSetting;
+import com.jellypudding.offlineclient.util.InventoryUtil;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+
+import java.util.List;
 
 public final class ChestStealer extends Module {
 
+    public enum ListMode { WHITELIST, BLACKLIST }
+
     private final NumberSetting delay = new NumberSetting("Delay",
         "Ticks between each item grab.", 1, 0, 10, 1, " ticks");
+    private final EnumSetting<ListMode> listMode = new EnumSetting<>("List mode",
+        "Whitelist takes only the listed items. Blacklist takes everything else.",
+        ListMode.BLACKLIST);
+    private final RegistryListSetting<Item> items = new RegistryListSetting<Item>("Items",
+        "The items the list applies to. Click to pick them.", BuiltInRegistries.ITEM,
+        List.of());
     private final BoolSetting close = new BoolSetting("Close when done",
         "Close the container once everything is taken.", false);
 
@@ -29,7 +40,13 @@ public final class ChestStealer extends Module {
 
     public ChestStealer() {
         super("ChestStealer", "Takes everything out of containers for you.", Category.PLAYER);
-        addSettings(delay, close);
+        addSettings(delay, listMode, items, close);
+        searchTags("loot", "chest", "filter");
+    }
+
+    @Override
+    public String getSuffix() {
+        return items.size() == 0 ? null : listMode.getValueString();
     }
 
     @Subscribe
@@ -37,7 +54,7 @@ public final class ChestStealer extends Module {
         if (!inGame()) {
             return;
         }
-        if (!isStorage(mc.gui.screen())) {
+        if (!InventoryUtil.isStorage(mc.gui.screen())) {
             timer = 0;
             lastSlot = -1;
             lastCount = -1;
@@ -48,6 +65,9 @@ public final class ChestStealer extends Module {
             if (mc.player.getInventory().getFreeSlot() == -1) {
                 return;
             }
+            // The refused slot has to look new again or the next pass skips it.
+            lastSlot = -1;
+            lastCount = -1;
             inventoryFull = false;
         }
 
@@ -65,6 +85,9 @@ public final class ChestStealer extends Module {
         for (int i = 0; i < containerSlots; i++) {
             Slot slot = menu.slots.get(i);
             if (!slot.hasItem()) {
+                continue;
+            }
+            if (!wanted(slot.getItem())) {
                 continue;
             }
             // A click that moved nothing means the inventory is full.
@@ -85,14 +108,8 @@ public final class ChestStealer extends Module {
         }
     }
 
-    /**
-     * Plain storage only. Crafting and anvil and trade and mount screens put
-     * their own slots first and break the container slot count.
-     */
-    private boolean isStorage(Screen screen) {
-        return screen instanceof ContainerScreen
-            || screen instanceof ShulkerBoxScreen
-            || screen instanceof HopperScreen
-            || screen instanceof DispenserScreen;
+    // An empty blacklist leaves every item wanted.
+    private boolean wanted(ItemStack stack) {
+        return items.contains(stack.getItem()) == listMode.is(ListMode.WHITELIST);
     }
 }

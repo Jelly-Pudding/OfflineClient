@@ -33,7 +33,7 @@ import java.util.Map;
 
 /**
  * Cuts the ripe crops around you and puts the seeds back in the ground. It
- * never walks anywhere so only what is already in reach gets farmed.
+ * never walks anywhere and only farms what is already in reach.
  */
 public final class AutoFarm extends Module {
 
@@ -86,9 +86,6 @@ public final class AutoFarm extends Module {
 
     private final SlotSwap slots = new SlotSwap();
 
-    // A manual slot change cancels the return.
-    private int ourSlot = -1;
-
     public AutoFarm() {
         super("AutoFarm", "Harvests the ripe crops in reach and replants them.", Category.WORLD);
         addSettings(range, harvest, replant, bonemeal, perTick, rotate);
@@ -114,7 +111,7 @@ public final class AutoFarm extends Module {
     @Override
     protected void onDisable() {
         reset();
-        restoreSlot();
+        slots.restoreIfMine();
     }
 
     private void reset() {
@@ -128,12 +125,12 @@ public final class AutoFarm extends Module {
     @Subscribe
     private void onTick(TickEvent event) {
         if (!inGame() || mc.player.isSpectator()) {
-            restoreSlot();
+            slots.restoreIfMine();
             return;
         }
         // A held attack or an open container means the player is busy by hand.
         if (mc.options.keyAttack.isDown() || mc.player.isUsingItem() || mc.gui.screen() != null) {
-            restoreSlot();
+            slots.restoreIfMine();
             return;
         }
 
@@ -154,7 +151,7 @@ public final class AutoFarm extends Module {
             harvestTick(scan, now);
         }
         if (!plantTick(scan, now)) {
-            restoreSlot();
+            slots.restoreIfMine();
         }
     }
 
@@ -209,7 +206,7 @@ public final class AutoFarm extends Module {
         if (slot == -1) {
             return false;
         }
-        hold(slot);
+        slots.select(slot);
         if (useOn(target)) {
             lastBonemeal = now;
         }
@@ -233,7 +230,7 @@ public final class AutoFarm extends Module {
             if (slot == -1) {
                 continue;
             }
-            hold(slot);
+            slots.select(slot);
             if (BlockUtil.place(pos, Direction.DOWN, rotate.isOn(), true)) {
                 it.remove();
             }
@@ -256,7 +253,7 @@ public final class AutoFarm extends Module {
         return null;
     }
 
-    // Bone meal goes on through a plain right click rather than a placement.
+    // Bone meal goes on through a plain right click. No block is placed.
     private boolean useOn(BlockPos pos) {
         Direction side = BlockUtil.facingSide(pos);
         Vec3 hit = BlockUtil.hitPoint(pos, side);
@@ -290,7 +287,7 @@ public final class AutoFarm extends Module {
         if (block == Blocks.MELON || block == Blocks.PUMPKIN) {
             return true;
         }
-        // Stalks are cut above their bottom segment so the plant keeps growing.
+        // Stalks are cut above their bottom segment to keep the plant growing.
         if (block == Blocks.SUGAR_CANE || block == Blocks.CACTUS || block == Blocks.BAMBOO) {
             return BlockUtil.state(pos.below()).is(block);
         }
@@ -298,18 +295,5 @@ public final class AutoFarm extends Module {
             return BlockUtil.state(pos.below()).is(Blocks.KELP_PLANT);
         }
         return false;
-    }
-
-    private void hold(int slot) {
-        slots.select(slot);
-        ourSlot = slot;
-    }
-
-    private void restoreSlot() {
-        if (mc.player != null && mc.player.getInventory().getSelectedSlot() == ourSlot) {
-            slots.restore();
-        }
-        slots.forget();
-        ourSlot = -1;
     }
 }

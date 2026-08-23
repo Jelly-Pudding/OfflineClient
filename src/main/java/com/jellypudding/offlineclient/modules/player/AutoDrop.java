@@ -8,22 +8,18 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.InventoryUtil;
+import com.jellypudding.offlineclient.util.ItemUtil;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
-
-import java.util.List;
 
 public final class AutoDrop extends Module {
 
     private final RegistryListSetting<Item> items = new RegistryListSetting<>("Items",
-        "The items to throw away. Click to pick them.", BuiltInRegistries.ITEM,
-        List.of(Items.COBBLESTONE, Items.COBBLED_DEEPSLATE, Items.DIRT, Items.GRAVEL,
-            Items.NETHERRACK, Items.ROTTEN_FLESH, Items.POISONOUS_POTATO, Items.WHEAT_SEEDS));
+        "The items to throw away. Click to pick them.", BuiltInRegistries.ITEM, ItemUtil.JUNK);
     private final BoolSetting hotbar = new BoolSetting("Hotbar too",
         "Also throw junk that lands in your hotbar.", true);
     private final NumberSetting delay = new NumberSetting("Delay",

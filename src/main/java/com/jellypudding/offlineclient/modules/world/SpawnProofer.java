@@ -16,7 +16,6 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.phys.AABB;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -96,8 +95,9 @@ public final class SpawnProofer extends Module {
                 break;
             }
             // The floor under the spot is always a sturdy face to click.
-            BlockUtil.place(pos, Direction.DOWN, rotate.isOn(), true);
-            placed++;
+            if (BlockUtil.place(pos, Direction.DOWN, rotate.isOn(), true)) {
+                placed++;
+            }
         }
         if (placed > 0) {
             timer = delay.getInt();
@@ -126,7 +126,7 @@ public final class SpawnProofer extends Module {
         int next = perTick.getInt();
         for (int i = 0; i < targets.size(); i++) {
             int color = i < next ? 0xFFFFD040 : 0x80FFD040;
-            event.getBatch().outlineBox(new AABB(targets.get(i)).deflate(0.002), color, false);
+            event.getBatch().outlineBlock(targets.get(i), color, false);
         }
     }
 }

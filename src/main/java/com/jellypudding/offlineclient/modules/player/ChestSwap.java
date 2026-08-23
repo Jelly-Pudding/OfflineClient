@@ -101,16 +101,7 @@ public final class ChestSwap extends Module {
     }
 
     private void wear(int inventorySlot) {
-        int networkSlot = InventoryUtil.networkSlot(inventorySlot);
-        InventoryUtil.click(networkSlot);
-        if (mc.player.containerMenu.getCarried().isEmpty()) {
-            // The pickup was refused.
-            return;
-        }
-        InventoryUtil.click(CHEST_SLOT);
-        if (!mc.player.containerMenu.getCarried().isEmpty()) {
-            InventoryUtil.click(networkSlot);
-        }
+        InventoryUtil.swap(InventoryUtil.networkSlot(inventorySlot), CHEST_SLOT);
     }
 
     private boolean isElytra(ItemStack stack) {

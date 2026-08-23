@@ -30,13 +30,13 @@ public abstract class EntityRendererMixin {
             state.outlineColor = esp.glowColor(entity);
         }
 
-        Chams chams = Chams.get();
+        Chams chams = Modules.get(Chams.class);
         if (chams != null && chams.applies(entity)) {
             extra.offlineclient$setChams(chams.throughWalls());
             extra.offlineclient$setTint(chams.tintFor(entity));
         }
 
-        TrueSight trueSight = TrueSight.get();
+        TrueSight trueSight = Modules.get(TrueSight.class);
         if (trueSight != null && trueSight.applies(entity)) {
             extra.offlineclient$setForceVisible(true);
             extra.offlineclient$setTint(trueSight.tint());

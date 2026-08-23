@@ -19,9 +19,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
-import java.util.ArrayList;
 import java.util.Deque;
-import java.util.List;
 
 public final class Breadcrumbs extends Module {
 
@@ -138,9 +136,8 @@ public final class Breadcrumbs extends Module {
         if (dimension == null) {
             return;
         }
-        List<Vec3> points = new ArrayList<>(trail);
         StringBuilder text = new StringBuilder();
-        for (Vec3 point : points) {
+        for (Vec3 point : trail) {
             text.append(point.x).append(' ').append(point.y).append(' ').append(point.z).append('\n');
         }
         try {

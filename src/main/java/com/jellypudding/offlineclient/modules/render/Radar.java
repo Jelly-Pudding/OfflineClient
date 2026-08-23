@@ -23,23 +23,7 @@ public final class Radar extends Module {
     private static final int GRID = 0x40FFFFFF;
     private static final int SELF = 0xFFFFFFFF;
 
-    public enum Corner {
-        TOP_LEFT("Top left"),
-        TOP_RIGHT("Top right"),
-        BOTTOM_LEFT("Bottom left"),
-        BOTTOM_RIGHT("Bottom right");
-
-        private final String label;
-
-        Corner(String label) {
-            this.label = label;
-        }
-
-        @Override
-        public String toString() {
-            return label;
-        }
-    }
+    public enum Corner { TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT }
 
     private final NumberSetting size = new NumberSetting("Size",
         "Width of the radar in pixels.", 100, 60, 220, 10, " px").min(40).max(400);

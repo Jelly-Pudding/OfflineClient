@@ -1,16 +1,14 @@
 package com.jellypudding.offlineclient.modules.movement;
 
-import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
-import com.jellypudding.offlineclient.module.ModuleManager;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
-import com.jellypudding.offlineclient.setting.Setting;
 import com.jellypudding.offlineclient.util.ChatUtil;
-import net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket;
+import com.jellypudding.offlineclient.util.InventoryUtil;
+import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.ItemStack;
@@ -66,8 +64,8 @@ public final class ElytraBoost extends Module {
             return;
         }
         // ElytraFly opens the elytra itself.
-        if (takeOff.isOn() && !elytraFlyOn() && canGlide()) {
-            startGlide();
+        if (takeOff.isOn() && !Modules.enabled(ElytraFly.class) && canGlide()) {
+            ElytraFly.sendStartGlide();
             return;
         }
         toggle();
@@ -107,11 +105,6 @@ public final class ElytraBoost extends Module {
             && mc.player.getItemBySlot(EquipmentSlot.CHEST).is(Items.ELYTRA);
     }
 
-    private void startGlide() {
-        mc.player.connection.send(new ServerboundPlayerCommandPacket(mc.player,
-            ServerboundPlayerCommandPacket.Action.START_FALL_FLYING));
-    }
-
     private void fire() {
         if (now() - lastFireTick < MIN_GAP_TICKS) {
             return;
@@ -120,7 +113,7 @@ public final class ElytraBoost extends Module {
             use(InteractionHand.OFF_HAND);
             return;
         }
-        int slot = findRocket();
+        int slot = InventoryUtil.hotbarSlot(stack -> stack.is(Items.FIREWORK_ROCKET));
         if (slot == -1) {
             if (!warned) {
                 warned = true;
@@ -146,19 +139,6 @@ public final class ElytraBoost extends Module {
         }
     }
 
-    private int findRocket() {
-        int selected = mc.player.getInventory().getSelectedSlot();
-        if (mc.player.getInventory().getItem(selected).is(Items.FIREWORK_ROCKET)) {
-            return selected;
-        }
-        for (int i = 0; i < 9; i++) {
-            if (mc.player.getInventory().getItem(i).is(Items.FIREWORK_ROCKET)) {
-                return i;
-            }
-        }
-        return -1;
-    }
-
     private int countRockets() {
         int total = 0;
         for (int i = 0; i < 9; i++) {
@@ -174,25 +154,9 @@ public final class ElytraBoost extends Module {
         return total;
     }
 
-    private boolean elytraFlyOn() {
-        return elytraFly() != null;
-    }
-
+    // ElytraFly holds its own speed whilst cruising. A rocket only breaks the cycle.
     private boolean cruising() {
-        Module elytraFly = elytraFly();
-        if (elytraFly == null) {
-            return false;
-        }
-        Setting<?> mode = elytraFly.getSetting("Mode");
-        return mode != null && ElytraFly.Mode.CRUISE.equals(mode.getValue());
-    }
-
-    private Module elytraFly() {
-        ModuleManager modules = OfflineClient.INSTANCE.getModuleManager();
-        if (modules == null) {
-            return null;
-        }
-        Module module = modules.get("ElytraFly");
-        return module != null && module.isEnabled() ? module : null;
+        ElytraFly elytraFly = Modules.get(ElytraFly.class);
+        return elytraFly != null && elytraFly.isEnabled() && elytraFly.inCruiseMode();
     }
 }

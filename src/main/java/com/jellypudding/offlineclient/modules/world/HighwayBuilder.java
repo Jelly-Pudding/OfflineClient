@@ -13,6 +13,7 @@ import com.jellypudding.offlineclient.util.AxisWalker;
 import com.jellypudding.offlineclient.util.BlockMiner;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -22,13 +23,13 @@ import net.minecraft.world.phys.AABB;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Predicate;
 
 /**
  * Builds a highway along one axis at the height it starts from. One phase runs
  * per tick.
  */
 public final class HighwayBuilder extends Module {
-
 
     private static final int TUNNEL_COLOR = 0xFF40C0FF;
     private static final int MINE_COLOR = 0xFFFF5030;
@@ -60,6 +61,7 @@ public final class HighwayBuilder extends Module {
         .visibleWhen(pave::isOn);
 
     private final AxisWalker walker = new AxisWalker();
+    private final SlotSwap slots = new SlotSwap();
     private int cleared;
     private int paved;
     private int idleTicks;
@@ -96,6 +98,7 @@ public final class HighwayBuilder extends Module {
     @Override
     protected void onEnable() {
         walker.clear();
+        slots.forget();
         mineTarget = null;
         paveTarget = null;
         if (inGame()) {
@@ -106,6 +109,7 @@ public final class HighwayBuilder extends Module {
     @Override
     protected void onDisable() {
         BlockMiner.release();
+        slots.restoreIfMine();
         mc.options.keyUp.setDown(false);
         walker.clear();
         mineTarget = null;
@@ -178,33 +182,20 @@ public final class HighwayBuilder extends Module {
 
     // Breaks one block out of the tunnel ahead. True when it took the tick.
     private boolean clearAhead() {
-        double reach = mc.player.blockInteractionRange();
         for (int scanned = 0; scanned < SCAN_DEPTHS; scanned++) {
-            BlockPos best = null;
-            double bestDistance = Double.MAX_VALUE;
-            boolean anyLeft = false;
-            for (BlockPos pos : tunnelSlice(cleared + 1)) {
-                if (!BlockUtil.diggable(pos)) {
-                    continue;
-                }
-                anyLeft = true;
-                double distance = BlockUtil.distanceTo(pos);
-                if (distance <= reach && distance < bestDistance) {
-                    bestDistance = distance;
-                    best = pos;
-                }
-            }
-            if (!anyLeft) {
+            Slice ahead = scan(tunnelSlice(cleared + 1), BlockUtil::diggable);
+            if (!ahead.anyLeft()) {
                 cleared++;
                 continue;
             }
-            if (best == null) {
+            if (ahead.nearest() == null) {
                 return false;
             }
-            mineTarget = best;
+            mineTarget = ahead.nearest();
             idleTicks = 0;
             mc.options.keyUp.setDown(false);
-            if (!BlockMiner.mine(best, true)) {
+            slots.restoreIfMine();
+            if (!BlockMiner.mine(mineTarget, true)) {
                 mineTarget = null;
                 return false;
             }
@@ -215,33 +206,46 @@ public final class HighwayBuilder extends Module {
 
     // Fills one gap in the floor ahead. True when it took the tick.
     private boolean paveAhead() {
-        double reach = mc.player.blockInteractionRange();
         for (int scanned = 0; scanned < SCAN_DEPTHS; scanned++) {
-            BlockPos best = null;
-            double bestDistance = Double.MAX_VALUE;
-            boolean anyLeft = false;
-            for (BlockPos pos : floorSlice(paved + 1)) {
-                if (!BlockUtil.isReplaceable(pos) || BlockUtil.intersectsPlayer(pos)) {
-                    continue;
-                }
-                anyLeft = true;
-                double distance = BlockUtil.distanceTo(pos);
-                if (distance <= reach && distance < bestDistance) {
-                    bestDistance = distance;
-                    best = pos;
-                }
-            }
-            if (!anyLeft) {
+            Slice ahead = scan(floorSlice(paved + 1), HighwayBuilder::fillable);
+            if (!ahead.anyLeft()) {
                 paved++;
                 continue;
             }
-            if (best == null) {
+            if (ahead.nearest() == null) {
                 return false;
             }
-            paveTarget = best;
-            return place(best);
+            paveTarget = ahead.nearest();
+            return place(paveTarget);
         }
         return false;
+    }
+
+    // The nearest wanted block in reach. anyLeft says the slice has work left.
+    private record Slice(BlockPos nearest, boolean anyLeft) {
+    }
+
+    private Slice scan(List<BlockPos> positions, Predicate<BlockPos> wanted) {
+        double reach = mc.player.blockInteractionRange();
+        BlockPos nearest = null;
+        double bestDistance = Double.MAX_VALUE;
+        boolean anyLeft = false;
+        for (BlockPos pos : positions) {
+            if (!wanted.test(pos)) {
+                continue;
+            }
+            anyLeft = true;
+            double distance = BlockUtil.distanceTo(pos);
+            if (distance <= reach && distance < bestDistance) {
+                bestDistance = distance;
+                nearest = pos;
+            }
+        }
+        return new Slice(nearest, anyLeft);
+    }
+
+    private static boolean fillable(BlockPos pos) {
+        return BlockUtil.isReplaceable(pos) && !BlockUtil.intersectsPlayer(pos);
     }
 
     private boolean place(BlockPos target) {
@@ -256,14 +260,8 @@ public final class HighwayBuilder extends Module {
         if (support == null) {
             return false;
         }
-        int previous = mc.player.getInventory().getSelectedSlot();
-        if (slot != previous) {
-            mc.player.getInventory().setSelectedSlot(slot);
-        }
+        slots.select(slot);
         boolean placed = BlockUtil.place(target, support, true, true);
-        if (slot != previous) {
-            mc.player.getInventory().setSelectedSlot(previous);
-        }
         if (placed) {
             idleTicks = 0;
             mc.options.keyUp.setDown(false);
@@ -273,6 +271,7 @@ public final class HighwayBuilder extends Module {
 
     private void walk() {
         BlockMiner.release();
+        slots.restoreIfMine();
         int ready = pave.isOn() ? Math.min(cleared, paved) : cleared;
         mc.options.keyUp.setDown(ready >= walker.travelled() + LEAD);
     }
@@ -324,10 +323,10 @@ public final class HighwayBuilder extends Module {
         AABB far = new AABB(walker.blockAt(Math.max(1, cleared), rightLane(), height.getInt() - 1));
         event.getBatch().outlineBox(near.minmax(far).inflate(0.005), TUNNEL_COLOR, true);
         if (mineTarget != null) {
-            event.getBatch().outlineBox(new AABB(mineTarget).deflate(0.002), MINE_COLOR, false);
+            event.getBatch().outlineBlock(mineTarget, MINE_COLOR, false);
         }
         if (paveTarget != null) {
-            event.getBatch().outlineBox(new AABB(paveTarget).deflate(0.002), PAVE_COLOR, false);
+            event.getBatch().outlineBlock(paveTarget, PAVE_COLOR, false);
         }
     }
 }

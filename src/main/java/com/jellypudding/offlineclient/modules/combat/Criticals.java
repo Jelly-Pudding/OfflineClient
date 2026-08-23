@@ -13,6 +13,12 @@ import net.minecraft.world.item.Items;
 public final class Criticals extends Module {
 
     // The server rebuilds fall distance from the gap between position packets.
+    // A sixteenth of a block is the smallest drop that banks any fall at all.
+    private static final double CRIT_LIFT = 0.0625;
+
+    // The packet that settles back down has to stay above zero for the drop to hold.
+    private static final double CRIT_SETTLE = 1.1e-5;
+
     // Five blocks is the threshold a mace smash needs and twenty two keeps the
     // bonus at the flat cap.
     private static final double MACE_LIFT = 22.36;
@@ -42,7 +48,7 @@ public final class Criticals extends Module {
         Mode.PACKET);
 
     private final BoolSetting mace = new BoolSetting("Mace smash",
-        "Fakes a long fall whilst holding a mace so every swing lands as a smash attack.", false);
+        "Fakes a long fall whilst holding a mace to land every swing as a smash attack.", false);
 
     public Criticals() {
         super("Criticals", "Makes every melee hit a critical hit.", Category.COMBAT);
@@ -52,7 +58,7 @@ public final class Criticals extends Module {
 
     @Override
     public String getSuffix() {
-        return mode.getValue().toString();
+        return mode.getValueString();
     }
 
     @Subscribe
@@ -71,9 +77,9 @@ public final class Criticals extends Module {
 
         switch (mode.getValue()) {
             case PACKET -> {
-                sendFakeY(0.0625, true);
+                sendFakeY(CRIT_LIFT, true);
                 sendFakeY(0, false);
-                sendFakeY(1.1e-5, false);
+                sendFakeY(CRIT_SETTLE, false);
                 sendFakeY(0, false);
             }
             case MINI_JUMP -> {

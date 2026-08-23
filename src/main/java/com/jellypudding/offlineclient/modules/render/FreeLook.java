@@ -1,6 +1,5 @@
 package com.jellypudding.offlineclient.modules.render;
 
-import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.KeyPressEvent;
 import com.jellypudding.offlineclient.module.Category;
@@ -8,6 +7,7 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.client.CameraType;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
@@ -53,8 +53,6 @@ public final class FreeLook extends Module {
     // Null whilst nothing is swapped.
     private Entity swapped;
     private boolean primed;
-    // A module lookup walks every registered module.
-    private Freecam freecam;
 
     public FreeLook() {
         super("FreeLook", "Look around without turning your body.", Category.RENDER, GLFW.GLFW_KEY_LEFT_ALT);
@@ -113,10 +111,7 @@ public final class FreeLook extends Module {
         if (!isEnabled() || mc.player == null) {
             return false;
         }
-        if (freecam == null) {
-            freecam = OfflineClient.INSTANCE.getModuleManager().get(Freecam.class);
-        }
-        return !freecam.isEnabled();
+        return !Modules.enabled(Freecam.class);
     }
 
     // Applied for one camera alignment and then restored.

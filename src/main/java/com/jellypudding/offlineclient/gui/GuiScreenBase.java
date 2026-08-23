@@ -11,6 +11,7 @@ import com.jellypudding.offlineclient.util.RenderUtil;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
 import org.lwjgl.glfw.GLFW;
@@ -22,8 +23,7 @@ import org.lwjgl.glfw.GLFW;
 public abstract class GuiScreenBase extends Screen implements SettingWidget.Host {
 
     public static final int SEARCH_HEIGHT = 14;
-    // Room for the magnifier before the text starts.
-    private static final int SEARCH_INDENT = GuiTheme.PAD + 11;
+    private static final int SEARCH_INDENT = GuiTheme.PAD;
 
     protected final TextField searchBox = new TextField();
     protected boolean searchFocused;
@@ -56,7 +56,7 @@ public abstract class GuiScreenBase extends Screen implements SettingWidget.Host
 
     @Override
     public void extractBackground(GuiGraphicsExtractor context, int mouseX, int mouseY, float deltaTicks) {
-        // Dark gradient instead of the vanilla blur.
+        // The vanilla blur washes the panel colours out.
         context.fillGradient(0, 0, width, height, 0x70101018, 0xA0060610);
     }
 
@@ -97,7 +97,7 @@ public abstract class GuiScreenBase extends Screen implements SettingWidget.Host
         String tally = matches >= 0 && isSearching()
             ? matches + (matches == 1 ? " match" : " matches") : null;
         searchTextX = x + SEARCH_INDENT;
-        searchRoom = searchField(context, font, x, y, w, searchBox, "search modules", active,
+        searchRoom = searchField(context, font, x, y, w, searchBox, "click here to search", active,
             hovered, searchFocused, tally);
     }
 
@@ -110,8 +110,6 @@ public abstract class GuiScreenBase extends Screen implements SettingWidget.Host
         RenderUtil.roundedBorderedRect(context, x, y, x + w, y + h, GuiTheme.CORNER,
             GuiTheme.BG_PANEL, border);
         context.guiRenderState.up();
-        RenderUtil.magnifier(context, x + GuiTheme.PAD, y + (h - GuiTheme.TEXT_HEIGHT) / 2,
-            active ? GuiTheme.accentText() : GuiTheme.TEXT_FAINT);
 
         int textX = x + SEARCH_INDENT;
         int textY = GuiTheme.textY(y, h);
@@ -210,6 +208,16 @@ public abstract class GuiScreenBase extends Screen implements SettingWidget.Host
     protected final void beginClick() {
         commitEditing();
         bindingTarget = null;
+    }
+
+    @Override
+    public boolean keyPressed(KeyEvent event) {
+        return handleCommonKey(event) || super.keyPressed(event);
+    }
+
+    @Override
+    public boolean charTyped(CharacterEvent event) {
+        return handleCommonChar((char) event.codepoint()) || super.charTyped(event);
     }
 
     protected final boolean handleCommonKey(KeyEvent event) {

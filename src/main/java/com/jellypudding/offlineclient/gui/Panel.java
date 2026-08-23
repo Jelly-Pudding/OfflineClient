@@ -7,6 +7,7 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 // A draggable column of module rows under a category header.
@@ -20,6 +21,7 @@ public final class Panel {
 
     private final String title;
     private final List<ModuleRow> rows = new ArrayList<>();
+    private final List<ModuleRow> rowsView = Collections.unmodifiableList(rows);
     private final ScrollBar scrollBar = new ScrollBar();
 
     private int x;
@@ -99,7 +101,7 @@ public final class Panel {
     }
 
     public List<ModuleRow> getRows() {
-        return rows;
+        return rowsView;
     }
 
     private int rowsHeight() {
@@ -247,7 +249,7 @@ public final class Panel {
         int viewTop = y + GuiTheme.HEADER_HEIGHT;
         int viewH = viewportHeight();
         boolean scrollable = scrollable();
-        int rowW = scrollable ? w - GuiTheme.SCROLLBAR - 1 : w;
+        int rowW = ScrollBar.rowWidth(w, rowsHeight(), viewH);
 
         RenderUtil.roundedRect(context, x, viewTop, x + w, viewTop + viewH + 2,
             GuiTheme.CORNER, GuiTheme.BG_PANEL, false, true);
@@ -273,7 +275,7 @@ public final class Panel {
         context.disableScissor();
 
         if (scrollable) {
-            int trackX = x + w - GuiTheme.SCROLLBAR;
+            int trackX = ScrollBar.trackX(x, w);
             scrollBar.render(context, trackX, viewTop, viewH, rowsHeight(),
                 ScrollBar.isOverTrack(mouseX, mouseY, trackX, viewTop, viewH));
         }
@@ -328,7 +330,7 @@ public final class Panel {
             return contains(mx, my);
         }
 
-        int trackX = x + w - GuiTheme.SCROLLBAR;
+        int trackX = ScrollBar.trackX(x, w);
         if (scrollable() && ScrollBar.isOverTrack(mx, my, trackX, viewTop, viewH)) {
             scrollBar.beginDrag(my);
             return true;

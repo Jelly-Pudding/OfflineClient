@@ -28,6 +28,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.function.Predicate;
 
 /**
  * Scans loaded chunks on a background thread and caches what each one
@@ -46,6 +47,11 @@ public final class ChunkScanner<T> {
     // Runs on the scanner thread.
     public interface Scan<T> {
         void run(View view, List<T> out);
+    }
+
+    // Handed world coordinates and the state standing there.
+    public interface BlockVisitor {
+        void accept(int x, int y, int z, BlockState state);
     }
 
     /**
@@ -110,6 +116,33 @@ public final class ChunkScanner<T> {
         public BlockState get(BlockPos pos) {
             return get(pos.getX(), pos.getY(), pos.getZ());
         }
+
+        /**
+         * Every block of the centre chunk the test accepts. A section whose
+         * palette cannot hold one is skipped whole.
+         */
+        public void forEachMatching(Predicate<BlockState> wanted, BlockVisitor out) {
+            LevelChunkSection[] sections = centre.getSections();
+            int baseX = centre.getPos().getMinBlockX();
+            int baseZ = centre.getPos().getMinBlockZ();
+            for (int index = 0; index < sections.length; index++) {
+                LevelChunkSection section = sections[index];
+                if (section == null || section.hasOnlyAir() || !section.maybeHas(wanted)) {
+                    continue;
+                }
+                int baseY = minY + (index << 4);
+                for (int y = 0; y < 16; y++) {
+                    for (int x = 0; x < 16; x++) {
+                        for (int z = 0; z < 16; z++) {
+                            BlockState state = section.getBlockState(x, y, z);
+                            if (wanted.test(state)) {
+                                out.accept(baseX + x, baseY + y, baseZ + z, state);
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private final Map<ChunkPos, List<T>> results = new HashMap<>();
@@ -119,6 +152,8 @@ public final class ChunkScanner<T> {
     // Changes seen last tick. The game applies a packet after the scanner sees it.
     private Set<ChunkPos> due = new HashSet<>();
     private List<T> collected = List.of();
+    // Set whenever a chunk result is added or dropped.
+    private boolean stale;
     private ResourceKey<Level> dimension;
 
     // Safe from any thread.
@@ -138,6 +173,7 @@ public final class ChunkScanner<T> {
         changed.clear();
         due.clear();
         collected = List.of();
+        stale = false;
     }
 
     public List<T> results() {
@@ -159,7 +195,7 @@ public final class ChunkScanner<T> {
             reset();
         }
 
-        Set<ChunkPos> dirty = due;
+        Set<ChunkPos> changedLastTick = due;
         due = new HashSet<>();
         for (Iterator<ChunkPos> it = changed.iterator(); it.hasNext(); ) {
             due.add(it.next());
@@ -178,11 +214,11 @@ public final class ChunkScanner<T> {
                 LevelChunk chunk = mc.level.getChunkSource()
                     .getChunk(pos.x(), pos.z(), ChunkStatus.FULL, false);
                 if (chunk == null) {
-                    results.remove(pos);
+                    stale |= results.remove(pos) != null;
                     continue;
                 }
-                if (dirty.contains(pos)) {
-                    results.remove(pos);
+                if (changedLastTick.contains(pos)) {
+                    stale |= results.remove(pos) != null;
                     Future<List<T>> old = pending.remove(pos);
                     if (old != null) {
                         old.cancel(true);
@@ -199,11 +235,14 @@ public final class ChunkScanner<T> {
             }
         }
 
-        collected = flatten();
+        if (stale) {
+            collected = List.copyOf(flatten());
+            stale = false;
+        }
     }
 
     private void dropOutOfRange(int centerX, int centerZ, int radius) {
-        results.keySet().removeIf(pos -> outOfRange(pos, centerX, centerZ, radius));
+        stale |= results.keySet().removeIf(pos -> outOfRange(pos, centerX, centerZ, radius));
         pending.entrySet().removeIf(entry -> {
             if (outOfRange(entry.getKey(), centerX, centerZ, radius)) {
                 entry.getValue().cancel(true);
@@ -239,6 +278,7 @@ public final class ChunkScanner<T> {
             }
             try {
                 results.put(entry.getKey(), future.get());
+                stale = true;
             } catch (InterruptedException | ExecutionException ignored) {
                 // A chunk that unloaded mid scan is scanned again later.
             }

@@ -3,6 +3,7 @@ package com.jellypudding.offlineclient.modules.movement;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
+import com.jellypudding.offlineclient.module.ExclusivityGroup;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import net.minecraft.world.phys.Vec3;
@@ -16,6 +17,11 @@ public final class FastFall extends Module {
         super("FastFall", "Pulls you to the ground faster when you are falling.", Category.MOVEMENT);
         addSettings(force);
         searchTags("heavy boots", "gravity", "fall faster");
+    }
+
+    @Override
+    public ExclusivityGroup getExclusivityGroup() {
+        return ExclusivityGroup.FALL_CONTROL;
     }
 
     @Override

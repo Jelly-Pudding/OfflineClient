@@ -12,7 +12,6 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.BowItem;
 import net.minecraft.world.item.CrossbowItem;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.phys.Vec3;
 
 public final class BowSpam extends Module {
 
@@ -23,8 +22,7 @@ public final class BowSpam extends Module {
     private static final int MIN_CHARGE = 3;
 
     private final NumberSetting charge = new NumberSetting("Charge",
-        "Ticks to draw the bow. Below three the shot is thrown away.", 5, 3, 20, 1, " ticks")
-        .min(MIN_CHARGE);
+        "Ticks to draw the bow before letting go.", 5, 3, 20, 1, " ticks");
     private final BoolSetting onlyWithTarget = new BoolSetting("Only with target",
         "Hold fire until an enemy is in view.", false);
     private final NumberSetting targetRange = new NumberSetting("Target range",
@@ -145,9 +143,6 @@ public final class BowSpam extends Module {
         if (target == null || !mc.player.hasLineOfSight(target)) {
             return false;
         }
-        Vec3 look = mc.player.getLookAngle();
-        Vec3 to = target.getBoundingBox().getCenter().subtract(mc.player.getEyePosition()).normalize();
-        double angle = Math.toDegrees(Math.acos(Math.clamp(look.dot(to), -1, 1)));
-        return angle <= viewAngle.getValue();
+        return EntityUtil.lookAngleTo(target) <= viewAngle.getValue();
     }
 }

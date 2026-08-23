@@ -3,14 +3,16 @@ package com.jellypudding.offlineclient.util;
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.module.ModuleManager;
+import com.jellypudding.offlineclient.modules.player.AutoEat;
+import com.jellypudding.offlineclient.modules.player.AutoGap;
 
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Module lookup for mixins and other hot paths. ModuleManager walks every
- * module on each call and is null until the client has started.
+ * Module lookup for mixins and other hot paths. ModuleManager is null until the
+ * client has started and this hands back null instead of throwing.
  */
 public final class Modules {
 
@@ -49,5 +51,21 @@ public final class Modules {
     public static boolean enabled(Class<? extends Module> type) {
         Module module = get(type);
         return module != null && module.isEnabled();
+    }
+
+    // True whilst either feeder is putting something away.
+    public static boolean eating() {
+        AutoEat autoEat = get(AutoEat.class);
+        if (autoEat != null && autoEat.isEating()) {
+            return true;
+        }
+        AutoGap autoGap = get(AutoGap.class);
+        return autoGap != null && autoGap.isEating();
+    }
+
+    // The module only whilst it is switched on. Null otherwise.
+    public static <T extends Module> T active(Class<T> type) {
+        T module = get(type);
+        return module != null && module.isEnabled() ? module : null;
     }
 }

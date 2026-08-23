@@ -1,22 +1,21 @@
 package com.jellypudding.offlineclient.modules.player;
 
-import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
-import com.jellypudding.offlineclient.module.ModuleManager;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
+import com.jellypudding.offlineclient.util.Modules;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
-import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -57,14 +56,7 @@ public final class AutoPotion extends Module {
     private boolean started;
     private int waited;
     private int settle;
-    private int previousSlot = -1;
-
-    private int swappedSlot = -1;
-    private int swappedHotbar = -1;
-
-    // Cached. The lookup walks every registered module.
-    private AutoEat autoEat;
-    private AutoGap autoGap;
+    private final InventoryUtil.HotbarLoan loan = new InventoryUtil.HotbarLoan();
 
     public AutoPotion() {
         super("AutoPotion", "Drinks a potion when you are hurt or burning or running low.",
@@ -95,9 +87,7 @@ public final class AutoPotion extends Module {
         }
         if (mc.player.isDeadOrDying()) {
             // Respawn rebuilds the inventory.
-            swappedSlot = -1;
-            swappedHotbar = -1;
-            previousSlot = -1;
+            loan.forget();
             stopDrinking();
             settle = 0;
             return;
@@ -111,9 +101,7 @@ public final class AutoPotion extends Module {
             continueDrinking();
             return;
         }
-        // Slot swaps and container clicks need the survival inventory.
-        if (mc.gui.screen() != null || mc.player.containerMenu.containerId != 0
-            || !mc.player.containerMenu.getCarried().isEmpty()) {
+        if (!InventoryUtil.inventoryFree()) {
             return;
         }
         if (handBusy()) {
@@ -128,17 +116,9 @@ public final class AutoPotion extends Module {
     }
 
     private boolean handBusy() {
-        ModuleManager modules = OfflineClient.INSTANCE.getModuleManager();
-        if (modules == null) {
-            return false;
-        }
-        if (autoEat == null) {
-            autoEat = modules.get(AutoEat.class);
-        }
-        if (autoGap == null) {
-            autoGap = modules.get(AutoGap.class);
-        }
-        return autoEat.isBusy() || autoGap.isBusy();
+        AutoEat eat = Modules.get(AutoEat.class);
+        AutoGap gap = Modules.get(AutoGap.class);
+        return (eat != null && eat.isBusy()) || (gap != null && gap.isBusy());
     }
 
     private int findWanted() {
@@ -197,16 +177,9 @@ public final class AutoPotion extends Module {
     }
 
     private void beginDrinking(int slot) {
-        if (slot >= 9) {
-            // A full hotbar means the held slot takes the bottle.
-            int hotbar = InventoryUtil.freeHotbarSlot(InventoryUtil.selectedSlot());
-            mc.gameMode.handleContainerInput(0, slot, hotbar, ContainerInput.SWAP, mc.player);
-            swappedSlot = slot;
-            swappedHotbar = hotbar;
-            slot = hotbar;
+        if (!loan.select(slot)) {
+            return;
         }
-        previousSlot = mc.player.getInventory().getSelectedSlot();
-        mc.player.getInventory().setSelectedSlot(slot);
         drinking = true;
         started = false;
         waited = 0;
@@ -221,15 +194,18 @@ public final class AutoPotion extends Module {
         if (mc.player.isUsingItem()) {
             started = true;
         } else if (started) {
-            stopDrinking();
-            settle = SETTLE_TICKS;
+            finishDrink();
             return;
         } else if (++waited > START_TIMEOUT) {
-            stopDrinking();
-            settle = SETTLE_TICKS;
+            finishDrink();
             return;
         }
         mc.options.keyUse.setDown(true);
+    }
+
+    private void finishDrink() {
+        stopDrinking();
+        settle = SETTLE_TICKS;
     }
 
     private void stopDrinking() {
@@ -239,23 +215,10 @@ public final class AutoPotion extends Module {
         drinking = false;
         started = false;
         // Give the key back without forcing it up.
-        boolean physicallyHeld = com.mojang.blaze3d.platform.InputConstants.isKeyDown(
+        boolean physicallyHeld = InputConstants.isKeyDown(
             mc.getWindow(), mc.options.keyUse.key.getValue());
         mc.options.keyUse.setDown(physicallyHeld);
 
-        if (mc.player != null) {
-            if (swappedSlot != -1 && mc.gui.screen() == null
-                && mc.player.containerMenu.containerId == 0
-                && mc.player.containerMenu.getCarried().isEmpty()) {
-                mc.gameMode.handleContainerInput(0, swappedSlot, swappedHotbar,
-                    ContainerInput.SWAP, mc.player);
-            }
-            if (previousSlot != -1) {
-                mc.player.getInventory().setSelectedSlot(previousSlot);
-            }
-        }
-        swappedSlot = -1;
-        swappedHotbar = -1;
-        previousSlot = -1;
+        loan.giveBack();
     }
 }

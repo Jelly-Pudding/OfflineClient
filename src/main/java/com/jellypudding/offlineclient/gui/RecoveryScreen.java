@@ -110,7 +110,7 @@ public final class RecoveryScreen extends Screen {
             boolean flashing = flashed == i;
             boolean waiting = armed == i;
 
-            // The flash fades out so a repeated click still reads as a new one.
+            // The flash fades out. A repeated click still reads as a new one.
             float flash = flashing ? Math.clamp((flashUntil - now) / (float) FLASH_MS, 0f, 1f) : 0f;
             int fill = flashing
                 ? ColorUtil.lerp(GuiTheme.BG_PANEL, GuiTheme.GREEN, flash * 0.55f)
@@ -142,7 +142,7 @@ public final class RecoveryScreen extends Screen {
         if (hovering != null) {
             context.centeredText(font, hovering, width / 2, footY, GuiTheme.TEXT_DIM);
         }
-        // The status keeps its own line so hovering a button never hides it.
+        // The status keeps its own line. Hovering a button never hides it.
         if (!status.isEmpty()) {
             context.centeredText(font, status, width / 2, footY + 12, GuiTheme.GREEN);
         }

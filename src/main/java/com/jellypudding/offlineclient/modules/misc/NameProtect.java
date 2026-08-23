@@ -15,8 +15,10 @@ import java.util.Optional;
 // The swap is client side. Nobody else sees it.
 public final class NameProtect extends Module {
 
+    private static final String DEFAULT_ALIAS = "Player";
+
     private final TextSetting alias = new TextSetting("Alias",
-        "The name shown instead of yours.", "Player");
+        "The name shown instead of yours.", DEFAULT_ALIAS);
     private final BoolSetting colored = new BoolSetting("Colour it",
         "Paints your name so you can pick it out at a glance.", false);
     private final ColorSetting color = new ColorSetting("Colour",
@@ -38,7 +40,7 @@ public final class NameProtect extends Module {
         if (name.isEmpty() || !message.getString().contains(name)) {
             return message;
         }
-        String replacement = alias.isBlank() ? "Player" : alias.getValue().trim();
+        String replacement = alias.isBlank() ? DEFAULT_ALIAS : alias.getValue().trim();
         MutableComponent result = Component.empty();
         message.visit((style, text) -> {
             append(result, text, name, replacement, style);
@@ -47,7 +49,7 @@ public final class NameProtect extends Module {
         return result;
     }
 
-    // Splits on the name so only the name itself takes the colour.
+    // Splits on the name. Only the name itself takes the colour.
     private void append(MutableComponent result, String text, String name,
                         String replacement, Style style) {
         if (!colored.isOn()) {

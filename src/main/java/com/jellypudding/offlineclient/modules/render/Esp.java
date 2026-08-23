@@ -59,11 +59,8 @@ public final class Esp extends Module {
         }
     }
 
-    // The same blue the other modules give friends.
-    private static final int FRIEND_COLOR = 0xFF4080FF;
-
-    // Distance in blocks at which a player has faded all the way to green.
-    private static final float DISTANCE_FADE = 20;
+    // Blocks at which red and green are both full. Full green comes at twice this.
+    private static final float FADE_MIDPOINT = 20;
 
     // Hue zero is red and hue one hundred and twenty is green.
     private static final float HEALTH_HUE = 120;
@@ -78,13 +75,12 @@ public final class Esp extends Module {
         "Highlight dropped items.", false);
     private final RegistryListSetting<EntityType<?>> entities =
         new RegistryListSetting<EntityType<?>>("Entities",
-            "Extra entity types to highlight. Click to pick them.",
+            "Extra entity types to highlight.",
             BuiltInRegistries.ENTITY_TYPE, List.of(EntityTypes.END_CRYSTAL));
     private final NumberSetting range = new NumberSetting("Range",
         "Furthest an entity can be and still show.", 128, 16, 256, 8, " blocks").min(1);
     private final EnumSetting<Coloring> coloring = new EnumSetting<>("Color mode",
-        "Distance fades players from red to green. Health tints anything living by how hurt it is.",
-        Coloring.DISTANCE);
+        "How the box colour is chosen.", Coloring.DISTANCE);
     private final BoolSetting friendColor = new BoolSetting("Friend color",
         "Paint friends blue instead.", true);
     private final BoolSetting fill = new BoolSetting("Fill",
@@ -99,7 +95,7 @@ public final class Esp extends Module {
 
     @Override
     public String getSuffix() {
-        return style.getValue().toString();
+        return style.getValueString();
     }
 
     @Subscribe
@@ -158,7 +154,7 @@ public final class Esp extends Module {
 
     private int colorOf(Entity entity) {
         if (friendColor.isOn() && isFriend(entity)) {
-            return FRIEND_COLOR;
+            return EntityUtil.FRIEND_COLOR;
         }
         if (coloring.is(Coloring.HEALTH) && entity instanceof LivingEntity living) {
             return healthColor(living);
@@ -184,7 +180,7 @@ public final class Esp extends Module {
     }
 
     private int distanceColor(Entity entity) {
-        float f = mc.player.distanceTo(entity) / DISTANCE_FADE;
+        float f = mc.player.distanceTo(entity) / FADE_MIDPOINT;
         int r = (int) (Math.clamp(2 - f, 0, 1) * 255);
         int g = (int) (Math.clamp(f, 0, 1) * 255);
         return 0xFF000000 | r << 16 | g << 8;

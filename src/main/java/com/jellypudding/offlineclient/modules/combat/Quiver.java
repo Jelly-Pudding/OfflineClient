@@ -8,6 +8,7 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.InventoryUtil;
+import com.jellypudding.offlineclient.util.InventoryUtil.Swap;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
@@ -37,6 +38,7 @@ public final class Quiver extends Module {
     private final NumberSetting delay = new NumberSetting("Delay",
         "Ticks between moves.", 2, 0, 20, 1, " ticks");
 
+    private final InventoryUtil.StrandedStack cursor = new InventoryUtil.StrandedStack();
     private int timer;
     private String chosen;
 
@@ -57,18 +59,26 @@ public final class Quiver extends Module {
         chosen = null;
     }
 
+    @Override
+    protected void onDisable() {
+        if (inGame()) {
+            cursor.giveBack();
+        }
+    }
+
     @Subscribe
     private void onTick(TickEvent event) {
         if (!inGame() || mc.player.isSpectator() || !holdsLauncher()) {
             chosen = null;
             return;
         }
+        if (!cursor.recover()) {
+            return;
+        }
         if (drawingOnly.isOn() && !isDrawing()) {
             return;
         }
-        // Container clicks need the survival inventory with nothing on the cursor.
-        if (mc.gui.screen() != null || mc.player.containerMenu.containerId != 0
-            || !mc.player.containerMenu.getCarried().isEmpty()) {
+        if (!InventoryUtil.inventoryFree()) {
             return;
         }
         if (timer > 0) {
@@ -87,8 +97,7 @@ public final class Quiver extends Module {
         if (isArrow(mc.player.getOffhandItem())) {
             if (!ItemStack.isSameItemSameComponents(mc.player.getOffhandItem(),
                 mc.player.getInventory().getItem(want))) {
-                swap(InventoryUtil.networkSlot(want), InventoryUtil.OFFHAND_SLOT);
-                timer = delay.getInt();
+                move(InventoryUtil.networkSlot(want), InventoryUtil.OFFHAND_SLOT);
             }
             return;
         }
@@ -97,18 +106,19 @@ public final class Quiver extends Module {
         if (first == -1 || first == want) {
             return;
         }
-        swap(InventoryUtil.networkSlot(want), InventoryUtil.networkSlot(first));
-        timer = delay.getInt();
+        move(InventoryUtil.networkSlot(want), InventoryUtil.networkSlot(first));
     }
 
-    // Trades the contents of two slots with three pickup clicks.
-    private void swap(int from, int to) {
-        InventoryUtil.click(from);
-        InventoryUtil.click(to);
-        InventoryUtil.click(from);
-        if (!mc.player.containerMenu.getCarried().isEmpty()) {
-            InventoryUtil.click(to);
+    private void move(int from, int to) {
+        Swap result = InventoryUtil.swap(from, to);
+        if (result == Swap.REFUSED) {
+            return;
         }
+        if (result == Swap.STRANDED) {
+            // Whatever the arrow displaced had nowhere to go.
+            cursor.hold(from);
+        }
+        timer = delay.getInt();
     }
 
     private boolean holdsLauncher() {
@@ -186,9 +196,8 @@ public final class Quiver extends Module {
         if (contents == null) {
             return "plain";
         }
-        for (MobEffectInstance instance : contents.getAllEffects()) {
-            return instance.getEffect().value().getDisplayName().getString();
-        }
-        return "plain";
+        var effects = contents.getAllEffects().iterator();
+        return effects.hasNext()
+            ? effects.next().getEffect().value().getDisplayName().getString() : "plain";
     }
 }

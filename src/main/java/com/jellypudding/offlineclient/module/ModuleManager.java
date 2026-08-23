@@ -70,7 +70,7 @@ import com.jellypudding.offlineclient.modules.movement.NoSlowdown;
 import com.jellypudding.offlineclient.modules.movement.NoWeb;
 import com.jellypudding.offlineclient.modules.movement.Parkour;
 import com.jellypudding.offlineclient.modules.movement.QuickClimb;
-import com.jellypudding.offlineclient.modules.movement.SafeWalk;
+import com.jellypudding.offlineclient.modules.movement.EdgeGuard;
 import com.jellypudding.offlineclient.modules.movement.Sneak;
 import com.jellypudding.offlineclient.modules.movement.Speed;
 import com.jellypudding.offlineclient.modules.movement.Spider;
@@ -156,16 +156,39 @@ import com.jellypudding.offlineclient.util.ChatUtil;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 public final class ModuleManager {
 
+    // Keyed by lower case name. Insertion order is the order modules were added.
     private final Map<String, Module> modules = new LinkedHashMap<>();
 
+    // Lookup by type without walking the name map.
+    private final Map<Class<? extends Module>, Module> byType = new HashMap<>();
+
     public ModuleManager() {
-        // Combat
+        registerCombat();
+        registerMovement();
+        registerRender();
+        registerPlayer();
+        registerWorld();
+        registerMisc();
+
+        OfflineClient.INSTANCE.getEventBus().register(this);
+
+        // The config load runs after this and overrides anything it has saved.
+        for (Module module : modules.values()) {
+            if (module.enabledByDefault()) {
+                module.setEnabled(true);
+            }
+        }
+    }
+
+    private void registerCombat() {
         add(new KillAura());
         add(new TriggerBot());
         add(new Criticals());
@@ -194,8 +217,9 @@ public final class ModuleManager {
         add(new ArrowDodge());
         add(new Quiver());
         add(new AutoAnvil());
+    }
 
-        // Movement
+    private void registerMovement() {
         add(new Sprint());
         add(new Speed());
         add(new Flight());
@@ -204,7 +228,7 @@ public final class ModuleManager {
         add(new Step());
         add(new HighJump());
         add(new NoSlowdown());
-        add(new SafeWalk());
+        add(new EdgeGuard());
         add(new Spider());
         add(new QuickClimb());
         add(new AutoWalk());
@@ -222,8 +246,9 @@ public final class ModuleManager {
         add(new Sneak());
         add(new VehicleFly());
         add(new Glide());
+    }
 
-        // Render
+    private void registerRender() {
         add(new Fullbright());
         add(new AntiBlind());
         add(new ClearView());
@@ -258,8 +283,9 @@ public final class ModuleManager {
         add(new Zoom());
         add(new NoHurtCam());
         add(new CameraTweaks());
+    }
 
-        // Player
+    private void registerPlayer() {
         add(new FastPlace());
         add(new FastBreak());
         add(new AutoRespawn());
@@ -288,8 +314,9 @@ public final class ModuleManager {
         add(new GhostHand());
         add(new MiddleClickExtra());
         add(new NoStatusEffects());
+    }
 
-        // World
+    private void registerWorld() {
         add(new Scaffold());
         add(new Nuker());
         add(new AirPlace());
@@ -304,8 +331,9 @@ public final class ModuleManager {
         add(new SpawnProofer());
         add(new AutoFarm());
         add(new BuildHeight());
+    }
 
-        // Misc
+    private void registerMisc() {
         add(new ClickGuiModule());
         add(new HudModule());
         add(new AntiAfk());
@@ -325,32 +353,46 @@ public final class ModuleManager {
         add(new Spam());
         add(new AntiSpam());
         add(new SoundBlocker());
-
-        OfflineClient.INSTANCE.getEventBus().register(this);
-
-        // The config load runs after this and overrides anything it has saved.
-        for (Module module : modules.values()) {
-            if (module.enabledByDefault()) {
-                module.setEnabled(true);
-            }
-        }
     }
 
     private void add(Module module) {
-        modules.put(module.getName().toLowerCase(), module);
+        modules.put(key(module.getName()), module);
+        byType.put(module.getClass(), module);
     }
 
     public Module get(String name) {
-        return modules.get(name.toLowerCase().replace(" ", ""));
+        return modules.get(key(name));
     }
 
+    // Spaces and case are ignored.
+    private static String key(String name) {
+        return name.toLowerCase(Locale.ROOT).replace(" ", "");
+    }
+
+    /**
+     * The registered module of the given type. A concrete class hits the index
+     * directly. A shared base class such as RespawnBlockBreaker falls back to a
+     * walk and caches the first match against the asked for type.
+     */
     public <T extends Module> T get(Class<T> clazz) {
+        Module module = byType.get(clazz);
+        if (module == null) {
+            module = findByType(clazz);
+        }
+        if (module == null) {
+            throw new IllegalStateException("Module not registered: " + clazz.getSimpleName());
+        }
+        return clazz.cast(module);
+    }
+
+    private Module findByType(Class<? extends Module> clazz) {
         for (Module module : modules.values()) {
             if (clazz.isInstance(module)) {
-                return clazz.cast(module);
+                byType.put(clazz, module);
+                return module;
             }
         }
-        throw new IllegalStateException("Module not registered: " + clazz.getSimpleName());
+        return null;
     }
 
     public List<Module> getAll() {
@@ -390,10 +432,8 @@ public final class ModuleManager {
                 boolean was = module.isEnabled();
                 module.onKeybind();
                 if (module.isEnabled() != was) {
-                    ChatUtil.message("§b" + module.getName() + " §7is now "
-                        + (module.isEnabled() ? "§aenabled" : "§cdisabled") + "§7.");
+                    ChatUtil.toggled(module);
                 }
-                OfflineClient.INSTANCE.getConfigManager().saveSoon();
             }
         }
     }

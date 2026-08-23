@@ -7,13 +7,13 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 // Behaviour lives in LocalPlayerMixin.
-public final class SafeWalk extends Module {
+public final class EdgeGuard extends Module {
 
     private final NumberSetting maxDrop = new NumberSetting("Max drop",
         "Edges deeper than this stop you.",
         0.5, 0.5, 10, 0.5, " blocks");
 
-    public SafeWalk() {
+    public EdgeGuard() {
         super("EdgeGuard", "Stops you from going over edges without the sneak slowdown.",
             Category.MOVEMENT);
         addSettings(maxDrop);

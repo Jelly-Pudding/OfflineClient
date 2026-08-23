@@ -9,6 +9,7 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.render.DrawBatch;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.ProjectileUtil;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.Projectile;
@@ -27,17 +28,13 @@ import java.util.List;
  */
 public final class ArrowDodge extends Module {
 
-    // Fraction of speed an arrow keeps every tick in air.
-    private static final double DRAG = 0.99;
-    // Blocks per tick squared pulling an arrow down.
-    private static final double ARROW_GRAVITY = 0.05;
-    // Snowballs and pearls and eggs fall slower than arrows.
-    private static final double THROWN_GRAVITY = 0.03;
+    // Each axis of a sidestep at forty five degrees.
+    private static final double DIAGONAL = Math.sqrt(0.5);
 
     private static final Vec3[] DIRECTIONS = {
         new Vec3(1, 0, 0), new Vec3(-1, 0, 0), new Vec3(0, 0, 1), new Vec3(0, 0, -1),
-        new Vec3(0.707, 0, 0.707), new Vec3(-0.707, 0, 0.707),
-        new Vec3(0.707, 0, -0.707), new Vec3(-0.707, 0, -0.707)
+        new Vec3(DIAGONAL, 0, DIAGONAL), new Vec3(-DIAGONAL, 0, DIAGONAL),
+        new Vec3(DIAGONAL, 0, -DIAGONAL), new Vec3(-DIAGONAL, 0, -DIAGONAL)
     };
 
     private static final int GROWTH_TRIES = 6;
@@ -50,7 +47,7 @@ public final class ArrowDodge extends Module {
     private final NumberSetting steps = new NumberSetting("Steps",
         "How many ticks of flight to predict.", 40, 5, 120, 5, " ticks").min(1).max(400);
     private final NumberSetting margin = new NumberSetting("Margin",
-        "Extra space kept around you.", 0.4, 0, 2, 0.1).min(0);
+        "Extra space kept around you.", 0.4, 0, 2, 0.1);
     private final NumberSetting speed = new NumberSetting("Speed",
         "How hard each sidestep pushes.", 0.35, 0.05, 1.5, 0.05).min(0.01);
     private final BoolSetting everything = new BoolSetting("All projectiles",
@@ -149,7 +146,8 @@ public final class ArrowDodge extends Module {
     }
 
     private void predict(Projectile projectile) {
-        double gravity = projectile instanceof AbstractArrow ? ARROW_GRAVITY : THROWN_GRAVITY;
+        double gravity = projectile instanceof AbstractArrow
+            ? ProjectileUtil.ARROW_GRAVITY : ProjectileUtil.THROWN_GRAVITY;
         Vec3 pos = projectile.position();
         Vec3 velocity = projectile.getDeltaMovement();
         int limit = steps.getInt();
@@ -158,7 +156,7 @@ public final class ArrowDodge extends Module {
         for (int i = 0; i < limit; i++) {
             Vec3 previous = pos;
             pos = pos.add(velocity);
-            velocity = velocity.scale(DRAG).subtract(0, gravity, 0);
+            velocity = velocity.scale(ProjectileUtil.ARROW_DRAG).subtract(0, gravity, 0);
             if (pos.y < minY) {
                 break;
             }

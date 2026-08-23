@@ -12,17 +12,15 @@ import com.jellypudding.offlineclient.render.WorldToScreen;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ColorUtil;
+import com.jellypudding.offlineclient.util.RenderUtil;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
-import org.joml.Matrix3x2fStack;
 
 import java.util.List;
 
 public final class Waypoints extends Module {
-
-    private static final int BACKGROUND = 0x90000000;
 
     private final BoolSetting beam = new BoolSetting("Beam",
         "Draw a tall line so a marker is visible over hills.", true);
@@ -71,7 +69,7 @@ public final class Waypoints extends Module {
     }
 
     // The same name always gets the same hue.
-    public static int colorOf(String name) {
+    private static int colorOf(String name) {
         return ColorUtil.hsv(Math.floorMod(name.toLowerCase().hashCode(), 360), 0.7f, 1f);
     }
 
@@ -137,18 +135,8 @@ public final class Waypoints extends Module {
             if (distance.isOn()) {
                 text.append(" ").append(Math.round(away)).append("m");
             }
-            String line = text.toString();
-            int width = font.width(line);
-
-            Matrix3x2fStack pose = context.pose();
-            pose.pushMatrix();
-            pose.translate((float) screen.x, (float) screen.y);
-            pose.scale(factor, factor);
-            context.fill(-width / 2 - 2, -font.lineHeight - 2, width / 2 + 2, 1, BACKGROUND);
-            context.guiRenderState.up();
-            context.text(font, line, -width / 2, -font.lineHeight,
-                colorOf(waypoint.name()), true);
-            pose.popMatrix();
+            RenderUtil.label(context, font, screen.x, screen.y, factor,
+                List.of(text.toString()), List.of(colorOf(waypoint.name())));
         }
     }
 }

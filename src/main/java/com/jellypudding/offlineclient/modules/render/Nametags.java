@@ -8,7 +8,9 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.render.WorldToScreen;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.Modules;
+import com.jellypudding.offlineclient.util.RenderUtil;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.multiplayer.PlayerInfo;
@@ -24,7 +26,6 @@ import java.util.List;
 // Drawn on the HUD at the projected head position.
 public final class Nametags extends Module {
 
-    private static final int BACKGROUND = 0x90000000;
     private static final int ITEM_SIZE = 16;
     private static final EquipmentSlot[] ARMOR = {
         EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET
@@ -120,10 +121,8 @@ public final class Nametags extends Module {
         if (health.isOn()) {
             float hp = player.getHealth() + player.getAbsorptionAmount();
             float max = player.getMaxHealth() + player.getAbsorptionAmount();
-            float fraction = max <= 0 ? 0 : hp / max;
-            int color = fraction > 0.66f ? 0xFF50FF50 : fraction > 0.33f ? 0xFFFFD040 : 0xFFFF5050;
             parts.add(String.format(" %.0f", hp));
-            colors.add(color);
+            colors.add(ColorUtil.health(max <= 0 ? 0 : hp / max));
         }
         if (ping.isOn()) {
             int latency = latencyOf(player);
@@ -138,43 +137,28 @@ public final class Nametags extends Module {
             colors.add(0xFFB0B0C0);
         }
 
-        int textWidth = 0;
-        for (String part : parts) {
-            textWidth += font.width(part);
-        }
-        int textHeight = font.lineHeight;
-
-        List<ItemStack> gear = gearOf(player);
-        int gearWidth = gear.size() * ITEM_SIZE;
-
         // Shrink with distance down to half size.
         float factor = (float) (scale.getValue() * Math.clamp(1 - tag.distance() / 100.0, 0.5, 1));
+        RenderUtil.label(context, font, tag.screen().x, tag.screen().y, factor, parts, colors);
 
+        List<ItemStack> gear = gearOf(player);
+        if (gear.isEmpty()) {
+            return;
+        }
         Matrix3x2fStack pose = context.pose();
         pose.pushMatrix();
         pose.translate((float) tag.screen().x, (float) tag.screen().y);
         pose.scale(factor, factor);
-
-        int halfWidth = textWidth / 2 + 2;
-        context.fill(-halfWidth, -textHeight - 2, halfWidth, 1, BACKGROUND);
         context.guiRenderState.up();
-        int x = -textWidth / 2;
-        for (int i = 0; i < parts.size(); i++) {
-            context.text(font, parts.get(i), x, -textHeight, colors.get(i), true);
-            x += font.width(parts.get(i));
-        }
-
-        if (!gear.isEmpty()) {
-            context.guiRenderState.up();
-            int gx = -gearWidth / 2;
-            int gy = -textHeight - 4 - ITEM_SIZE;
-            for (ItemStack stack : gear) {
-                context.item(stack, gx, gy);
-                if (durability.isOn()) {
-                    context.itemDecorations(font, stack, gx, gy);
-                }
-                gx += ITEM_SIZE;
+        int gx = -(gear.size() * ITEM_SIZE) / 2;
+        // The label background reaches two pixels above the point.
+        int gy = -ITEM_SIZE - 6;
+        for (ItemStack stack : gear) {
+            context.item(stack, gx, gy);
+            if (durability.isOn()) {
+                context.itemDecorations(font, stack, gx, gy);
             }
+            gx += ITEM_SIZE;
         }
         pose.popMatrix();
     }

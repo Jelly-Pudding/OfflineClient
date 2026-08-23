@@ -9,11 +9,10 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
-import net.minecraft.world.item.BlockItem;
-import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 
@@ -32,24 +31,10 @@ public final class Burrow extends Module {
 
     private static final int JUMP_TIMEOUT = 20;
 
-    public enum Lift {
-        JUMP("Jump"),
-        PACKET("Packet");
-
-        private final String label;
-
-        Lift(String label) {
-            this.label = label;
-        }
-
-        @Override
-        public String toString() {
-            return label;
-        }
-    }
+    public enum Lift { JUMP, PACKET }
 
     private final RegistryListSetting<Block> blocks = new RegistryListSetting<>("Blocks",
-        "Blocks to burrow into in order of preference. Click to pick them.",
+        "Blocks to use in order of preference.",
         BuiltInRegistries.BLOCK,
         List.of(Blocks.OBSIDIAN, Blocks.CRYING_OBSIDIAN, Blocks.ENDER_CHEST));
     private final EnumSetting<Lift> lift = new EnumSetting<>("Lift",
@@ -59,6 +44,7 @@ public final class Burrow extends Module {
     private final BoolSetting rotate = new BoolSetting("Rotate",
         "Send a look packet toward the block as it goes down.", true);
 
+    private final SlotSwap slots = new SlotSwap();
     private BlockPos anchor;
     private int waited;
 
@@ -77,6 +63,7 @@ public final class Burrow extends Module {
     protected void onEnable() {
         waited = 0;
         anchor = null;
+        slots.forget();
         if (!inGame() || mc.player.isSpectator()) {
             setEnabled(false);
             return;
@@ -137,12 +124,11 @@ public final class Burrow extends Module {
             ChatUtil.error("No burrow block in your hotbar.");
             return;
         }
-        int previous = mc.player.getInventory().getSelectedSlot();
-        mc.player.getInventory().setSelectedSlot(slot);
+        slots.select(slot);
         // The local placement is refused but the packet still goes out. The server
         // has the player up on the lift by then.
         BlockUtil.placeDirect(anchor, rotate.isOn(), true);
-        mc.player.getInventory().setSelectedSlot(previous);
+        slots.restore();
 
         if (lift.is(Lift.PACKET)) {
             mc.player.connection.send(new ServerboundMovePlayerPacket.Pos(
@@ -154,19 +140,6 @@ public final class Burrow extends Module {
     }
 
     private int findSlot() {
-        int best = -1;
-        int bestRank = Integer.MAX_VALUE;
-        for (int i = 0; i < 9; i++) {
-            ItemStack stack = mc.player.getInventory().getItem(i);
-            if (!(stack.getItem() instanceof BlockItem item)) {
-                continue;
-            }
-            int rank = BlockUtil.rankOf(item.getBlock(), blocks.getValue());
-            if (rank != -1 && rank < bestRank) {
-                bestRank = rank;
-                best = i;
-            }
-        }
-        return best;
+        return BlockUtil.findRankedBlockSlot(blocks.getValue(), block -> true);
     }
 }
