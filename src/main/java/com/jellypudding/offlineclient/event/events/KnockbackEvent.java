@@ -2,10 +2,7 @@ package com.jellypudding.offlineclient.event.events;
 
 import com.jellypudding.offlineclient.event.Event;
 
-/**
- * Fired when the server pushes new velocity onto the player. Modify the
- * components to change how much knockback is applied.
- */
+// Fired when the server pushes new velocity onto the player.
 public final class KnockbackEvent extends Event {
 
     private double x;

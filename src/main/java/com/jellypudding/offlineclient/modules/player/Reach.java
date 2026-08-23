@@ -4,9 +4,7 @@ import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 
-/**
- * The behavior lives in LocalPlayerMixin which calls adjustRange.
- */
+// The behaviour lives in LocalPlayerMixin which calls adjustRange.
 public final class Reach extends Module {
 
     private final NumberSetting range = new NumberSetting("Range",

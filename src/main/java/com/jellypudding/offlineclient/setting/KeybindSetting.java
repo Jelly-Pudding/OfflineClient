@@ -12,8 +12,59 @@ public final class KeybindSetting extends Setting<Integer> {
         super(name, description, defaultKey);
     }
 
+    // Returned by keyFromName when the text is not a key at all.
+    public static final int UNKNOWN = Integer.MIN_VALUE;
+
     public boolean isBound() {
         return value != UNBOUND;
+    }
+
+    // Turns typed text like "k" or "f5" or "none" into a key code.
+    public static int keyFromName(String text) {
+        String name = text.trim().toUpperCase();
+        if (name.isEmpty()) {
+            return UNKNOWN;
+        }
+        if (name.equals("NONE") || name.equals("UNBOUND")) {
+            return UNBOUND;
+        }
+        // GLFW codes for letters and digits match their ASCII codes.
+        if (name.length() == 1 && Character.isLetterOrDigit(name.charAt(0))) {
+            return name.charAt(0);
+        }
+        if (name.length() <= 3 && name.charAt(0) == 'F') {
+            try {
+                int number = Integer.parseInt(name.substring(1));
+                if (number >= 1 && number <= 25) {
+                    return GLFW.GLFW_KEY_F1 + number - 1;
+                }
+            } catch (NumberFormatException ignored) {
+                return UNKNOWN;
+            }
+            return UNKNOWN;
+        }
+        return switch (name) {
+            case "SPACE" -> GLFW.GLFW_KEY_SPACE;
+            case "TAB" -> GLFW.GLFW_KEY_TAB;
+            case "ENTER" -> GLFW.GLFW_KEY_ENTER;
+            case "LSHIFT" -> GLFW.GLFW_KEY_LEFT_SHIFT;
+            case "RSHIFT" -> GLFW.GLFW_KEY_RIGHT_SHIFT;
+            case "LCTRL" -> GLFW.GLFW_KEY_LEFT_CONTROL;
+            case "RCTRL" -> GLFW.GLFW_KEY_RIGHT_CONTROL;
+            case "LALT" -> GLFW.GLFW_KEY_LEFT_ALT;
+            case "RALT" -> GLFW.GLFW_KEY_RIGHT_ALT;
+            case "UP" -> GLFW.GLFW_KEY_UP;
+            case "DOWN" -> GLFW.GLFW_KEY_DOWN;
+            case "LEFT" -> GLFW.GLFW_KEY_LEFT;
+            case "RIGHT" -> GLFW.GLFW_KEY_RIGHT;
+            case "HOME" -> GLFW.GLFW_KEY_HOME;
+            case "END" -> GLFW.GLFW_KEY_END;
+            case "PGUP" -> GLFW.GLFW_KEY_PAGE_UP;
+            case "PGDN" -> GLFW.GLFW_KEY_PAGE_DOWN;
+            case "INSERT" -> GLFW.GLFW_KEY_INSERT;
+            case "DELETE" -> GLFW.GLFW_KEY_DELETE;
+            default -> UNKNOWN;
+        };
     }
 
     public String getKeyName() {

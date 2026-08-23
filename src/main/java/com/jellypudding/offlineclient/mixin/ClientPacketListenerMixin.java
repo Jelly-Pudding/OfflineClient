@@ -2,6 +2,7 @@ package com.jellypudding.offlineclient.mixin;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.modules.player.NoRotate;
+import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.protocol.game.ClientboundPlayerPositionPacket;
@@ -21,18 +22,15 @@ public abstract class ClientPacketListenerMixin {
     private float offlineclient$savedPitch;
 
     /**
-     * Packet handlers run once on the network thread just to bounce onto
-     * the main thread. Only the main thread run touches the player.
+     * Packet handlers run once on the network thread to bounce onto the main
+     * thread. Only the main thread run touches the player.
      */
     @Unique
     private boolean offlineclient$noRotateActive() {
         if (!OfflineClient.MC.isSameThread() || OfflineClient.MC.player == null) {
             return false;
         }
-        if (OfflineClient.INSTANCE.getModuleManager() == null) {
-            return false;
-        }
-        return OfflineClient.INSTANCE.getModuleManager().get(NoRotate.class).isEnabled();
+        return Modules.enabled(NoRotate.class);
     }
 
     @Unique
@@ -42,10 +40,7 @@ public abstract class ClientPacketListenerMixin {
         offlineclient$savedPitch = player.getXRot();
     }
 
-    /**
-     * Puts the saved look angles back. The tiny offset makes the next
-     * position update carry a rotation.
-     */
+    // The tiny offset makes the next position update carry a rotation.
     @Unique
     private void offlineclient$restoreRotation() {
         LocalPlayer player = OfflineClient.MC.player;

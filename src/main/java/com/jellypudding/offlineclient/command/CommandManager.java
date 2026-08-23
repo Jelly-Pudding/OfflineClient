@@ -9,6 +9,7 @@ import com.jellypudding.offlineclient.command.commands.PrefixCommand;
 import com.jellypudding.offlineclient.command.commands.ProfileCommand;
 import com.jellypudding.offlineclient.command.commands.SetCommand;
 import com.jellypudding.offlineclient.command.commands.ToggleCommand;
+import com.jellypudding.offlineclient.command.commands.WaypointCommand;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.ChatSendEvent;
 import com.jellypudding.offlineclient.module.Module;
@@ -34,7 +35,8 @@ public final class CommandManager {
         new SetCommand(),
         new FriendCommand(),
         new PrefixCommand(),
-        new ProfileCommand()
+        new ProfileCommand(),
+        new WaypointCommand()
     );
 
     private String prefix = ".";
@@ -57,7 +59,7 @@ public final class CommandManager {
         return commands;
     }
 
-    /** Runs a chat message as a command. Returns false if it is not one. */
+    // False when the message is not a command.
     public boolean run(String message) {
         if (!message.startsWith(prefix) || message.length() <= prefix.length()) {
             return false;
@@ -72,7 +74,7 @@ public final class CommandManager {
                     command.execute(args);
                 } catch (Exception e) {
                     ChatUtil.error("Error: " + e.getMessage());
-                    e.printStackTrace();
+                    OfflineClient.LOG.error("Command {} failed", name, e);
                 }
                 return true;
             }
@@ -102,10 +104,7 @@ public final class CommandManager {
         }
     }
 
-    /**
-     * Completion candidates for the chat text as typed so far. The last
-     * token is the one being completed. Empty when there is nothing to offer.
-     */
+    // Completions for the last token of the chat text as typed.
     public List<String> complete(String text) {
         if (!text.startsWith(prefix)) {
             return List.of();
@@ -119,7 +118,6 @@ public final class CommandManager {
             for (Command command : commands) {
                 names.add(command.getName());
             }
-            // Module names complete too since .name toggles the module.
             names.addAll(moduleIds());
             return matches(current, names);
         }
@@ -139,8 +137,19 @@ public final class CommandManager {
             case "set" -> completeSet(tokens, index, current);
             case "friend" -> completeFriend(tokens, index, current);
             case "profile" -> completeProfile(tokens, index, current);
+            case "waypoint" -> completeWaypoint(tokens, index, current);
             default -> List.of();
         };
+    }
+
+    private List<String> completeWaypoint(String[] tokens, int index, String current) {
+        if (index == 1) {
+            return matches(current, List.of("add", "remove", "list", "clear"));
+        }
+        if (index == 2 && !tokens[1].equalsIgnoreCase("add")) {
+            return matches(current, WaypointCommand.names());
+        }
+        return List.of();
     }
 
     private List<String> completeSet(String[] tokens, int index, String current) {
@@ -220,7 +229,7 @@ public final class CommandManager {
         return ids;
     }
 
-    /** Setting name as typed in commands. Lowercase without spaces. */
+    // Lowercase without spaces.
     public static String settingId(Setting<?> setting) {
         return setting.getName().replace(" ", "").toLowerCase(Locale.ROOT);
     }

@@ -8,6 +8,7 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.render.DrawBatch;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ColorUtil;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -19,10 +20,7 @@ import net.minecraft.world.phys.AABB;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Finds one block wide holes with bedrock or obsidian on every side.
- * Those survive crystal blasts.
- */
+// Finds one block wide holes walled in bedrock or obsidian. Those survive crystal blasts.
 public final class HoleEsp extends Module {
 
     private enum Wall {
@@ -41,7 +39,7 @@ public final class HoleEsp extends Module {
     }
 
     private final NumberSetting horizontal = new NumberSetting("Horizontal range",
-        "How far sideways to look for holes.", 8, 1, 32, 1, " blocks").max(64);
+        "How far sideways to look for holes.", 8, 1, 16, 1, " blocks").max(32);
     private final NumberSetting vertical = new NumberSetting("Vertical range",
         "How far up and down to look for holes.", 4, 1, 16, 1, " blocks").max(64);
     private final NumberSetting minHeight = new NumberSetting("Min height",
@@ -88,6 +86,10 @@ public final class HoleEsp extends Module {
             for (int dz = -h; dz <= h; dz++) {
                 for (int dy = -v; dy <= v; dy++) {
                     cursor.set(center.getX() + dx, center.getY() + dy, center.getZ() + dz);
+                    // A blast proof floor is rare.
+                    if (wallAt(cursor.below()) == null) {
+                        continue;
+                    }
                     if (!isOpen(cursor)) {
                         continue;
                     }
@@ -105,9 +107,8 @@ public final class HoleEsp extends Module {
     }
 
     /**
-     * Looks at a hole candidate. Every side but the top must be bedrock or
-     * obsidian. One side may be another open block for a double hole and
-     * then that block's other sides must be safe too.
+     * Every side but the top must be bedrock or obsidian. One side may be
+     * another open block for a double hole and its own sides must be safe too.
      */
     private void check(BlockPos pos, List<BlockPos> seen) {
         int bedrock = 0;
@@ -127,7 +128,7 @@ public final class HoleEsp extends Module {
             } else if (side == Direction.DOWN || partner != null || !doubles.isOn() || !isOpen(next)) {
                 return;
             } else {
-                // The other half of a double hole. Its own sides must be safe too.
+                // The other half of a double hole.
                 for (Direction other : Direction.values()) {
                     if (other == Direction.UP || other == side.getOpposite()) {
                         continue;
@@ -166,7 +167,7 @@ public final class HoleEsp extends Module {
         holes.add(new Hole(box, kind));
     }
 
-    /** True for a standable spot. The block and the ones above it have no collision. */
+    // The block and the ones above it must have no collision.
     private boolean isOpen(BlockPos pos) {
         int needed = minHeight.getInt();
         BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
@@ -186,15 +187,15 @@ public final class HoleEsp extends Module {
         return true;
     }
 
-    /** What kind of wall a block makes. Null for blocks that do not survive a crystal. */
+    // Null for blocks that do not survive a crystal.
     private Wall wallAt(BlockPos pos) {
         BlockState state = mc.level.getBlockState(pos);
         Block block = state.getBlock();
         boolean breakable = block.defaultDestroyTime() >= 0;
-        if (!breakable && state.blocksMotion()) {
+        if (!breakable && BlockUtil.blocksMotion(state)) {
             return Wall.BEDROCK;
         }
-        if (breakable && block.getExplosionResistance() >= 600 && state.blocksMotion()) {
+        if (breakable && block.getExplosionResistance() >= 600 && BlockUtil.blocksMotion(state)) {
             return Wall.OBSIDIAN;
         }
         return null;

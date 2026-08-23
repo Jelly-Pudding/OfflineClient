@@ -1,8 +1,8 @@
 package com.jellypudding.offlineclient.mixin;
 
-import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.modules.movement.SafeWalk;
 import com.jellypudding.offlineclient.modules.world.Scaffold;
+import com.jellypudding.offlineclient.util.Modules;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import net.minecraft.world.entity.MoverType;
@@ -26,15 +26,15 @@ public abstract class PlayerMixin {
         cancellable = true)
     private void onMaybeBackOffFromEdge(Vec3 movement, MoverType type,
                                         CallbackInfoReturnable<Vec3> cir) {
-        if (OfflineClient.INSTANCE.getModuleManager() != null
-            && OfflineClient.INSTANCE.getModuleManager().get(Scaffold.class).isDescending()) {
+        Scaffold scaffold = Modules.get(Scaffold.class);
+        if (scaffold != null && scaffold.isDescending()) {
             cir.setReturnValue(movement);
         }
     }
 
     /**
-     * The sneak edge check probes down by the step height. While SafeWalk
-     * guards an edge the probe stays vanilla.
+     * The sneak edge check probes down by the step height. SafeWalk holds the
+     * probe at the vanilla depth.
      */
     @WrapOperation(
         method = "maybeBackOffFromEdge(Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/entity/MoverType;)Lnet/minecraft/world/phys/Vec3;",
@@ -42,8 +42,7 @@ public abstract class PlayerMixin {
             target = "Lnet/minecraft/world/entity/player/Player;maxUpStep()F"))
     private float wrapEdgeProbeDepth(Player player, Operation<Float> original) {
         float depth = original.call(player);
-        if (OfflineClient.INSTANCE.getModuleManager() != null
-            && OfflineClient.INSTANCE.getModuleManager().get(SafeWalk.class).isEnabled()) {
+        if (Modules.enabled(SafeWalk.class)) {
             return Math.min(depth, 0.6f);
         }
         return depth;

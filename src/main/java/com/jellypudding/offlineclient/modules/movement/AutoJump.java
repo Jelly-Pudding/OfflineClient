@@ -26,7 +26,7 @@ public final class AutoJump extends Module {
     }
 
     private final EnumSetting<When> when = new EnumSetting<>("Jump when",
-        "Sprinting only jumps while you sprint. Moving jumps whenever you walk. Always jumps even when standing still.",
+        "Picks whether to jump whilst sprinting or whilst moving or always.",
         When.SPRINTING);
 
     public AutoJump() {
@@ -45,7 +45,6 @@ public final class AutoJump extends Module {
         if (!inGame() || !mc.player.onGround() || mc.player.isShiftKeyDown()) {
             return;
         }
-        // Water and ladders and flight all have their own vertical movement.
         if (mc.player.isInWater() || mc.player.isInLava() || mc.player.onClimbable()
             || mc.player.getAbilities().flying || mc.player.isPassenger()) {
             return;

@@ -6,9 +6,8 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Marks a method as an event handler. The method must take exactly one
- * parameter whose type extends {@link Event}. Handlers with higher priority
- * run first.
+ * The method must take exactly one parameter whose type extends
+ * {@link Event}. Higher priority runs first.
  */
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.METHOD)

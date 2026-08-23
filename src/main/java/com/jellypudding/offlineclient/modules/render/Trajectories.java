@@ -39,19 +39,16 @@ import net.minecraft.world.phys.Vec3;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Predicts where the held item will land. Uses the same launch speed and
- * gravity and drag as the real projectile.
- */
+// Uses the same launch speed and gravity and drag as the real projectile.
 public final class Trajectories extends Module {
 
-    /** How the game moves a projectile each tick. The order matters. */
+    // How the game moves a projectile each tick. The order matters.
     private enum Motion {
-        /** Arrows and tridents. Move first and then slow down and fall. */
+        // Arrows and tridents. Move first and then slow down and fall.
         ARROW,
-        /** Thrown items. Fall and slow down first and then move. */
+        // Thrown items. Fall and slow down first and then move.
         THROWN,
-        /** Fishing bobbers. Fall then move then slow down. */
+        // Fishing bobbers. Fall then move then slow down.
         BOBBER
     }
 
@@ -141,7 +138,7 @@ public final class Trajectories extends Module {
         }
     }
 
-    /** Launch data for the item or null if it cannot be thrown or shot. */
+    // Null if the item cannot be thrown or shot.
     private static Launch launchFor(Player player, ItemStack stack) {
         if (stack.isEmpty()) {
             return null;

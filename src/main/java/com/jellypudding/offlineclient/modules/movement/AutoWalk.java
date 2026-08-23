@@ -38,7 +38,7 @@ public final class AutoWalk extends Module {
         }
     }
 
-    /** Sprint is set late in the tick. The player tick clears sprint set any earlier. */
+    // Sprint is set late in the tick. The player tick clears sprint set any earlier.
     @Subscribe
     private void onClientTick(ClientTickEvent event) {
         if (!inGame() || !autoSprint.isOn()) {

@@ -2,6 +2,9 @@ package com.jellypudding.offlineclient.util;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import net.minecraft.client.Minecraft;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.tags.TagKey;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.item.ItemEntity;
@@ -9,15 +12,28 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
-/**
- * Shared helpers for modules that look at entities around the player.
- */
 public final class EntityUtil {
+
+    // Health points in one heart.
+    private static final double HEART = 2;
 
     private EntityUtil() {
     }
 
-    /** Checks an entity against the usual player and mob and item filters. */
+    // Zero hearts turns the check off.
+    public static boolean healthAtOrBelow(double hearts) {
+        Player player = OfflineClient.MC.player;
+        if (hearts <= 0 || player == null) {
+            return false;
+        }
+        return player.getHealth() + player.getAbsorptionAmount() <= hearts * HEART;
+    }
+
+    // The holder on EntityType itself is deprecated so the lookup goes via the registry.
+    public static boolean typeIs(Entity entity, TagKey<EntityType<?>> tag) {
+        return BuiltInRegistries.ENTITY_TYPE.wrapAsHolder(entity.getType()).is(tag);
+    }
+
     public static boolean matches(Entity entity, boolean players, boolean mobs, boolean items) {
         if (entity instanceof Player player) {
             return players && player.isAlive() && !player.isSpectator();
@@ -32,8 +48,8 @@ public final class EntityUtil {
     }
 
     /**
-     * Distance from the player's eyes to the nearest point of the entity's
-     * hitbox. This is how the game measures reach.
+     * From the eyes to the nearest point of the hitbox. This is how the game
+     * measures reach.
      */
     public static double reachDistance(Player from, Entity to) {
         Vec3 eye = from.getEyePosition();
@@ -45,15 +61,14 @@ public final class EntityUtil {
         return eye.distanceTo(closest);
     }
 
-    /** The entity hitbox at its interpolated render position. */
     public static AABB lerpedBox(Entity entity, float partialTicks) {
         Vec3 lerped = entity.getPosition(partialTicks);
         return entity.getBoundingBox().move(lerped.subtract(entity.position()));
     }
 
     /**
-     * ESP color for an entity. Friends are blue. Players fade from red when
-     * close to green when far. Mobs are orange and items are yellow.
+     * Friends are blue. Players fade from red when close to green when far
+     * and mobs are orange with items yellow.
      */
     public static int colorOf(Entity entity) {
         if (entity instanceof Player player) {
@@ -73,12 +88,12 @@ public final class EntityUtil {
         return 0xFFFF8020;
     }
 
-    /**
-     * The closest other player within range that combat modules may act
-     * on. Friends and spectators never count. Null when nobody is close.
-     */
+    // Friends and spectators never count. Null when nobody is close.
     public static Player nearestEnemy(double range) {
         Minecraft mc = OfflineClient.MC;
+        if (mc.player == null || mc.level == null) {
+            return null;
+        }
         Player best = null;
         double bestDistance = range;
         for (Player player : mc.level.players()) {

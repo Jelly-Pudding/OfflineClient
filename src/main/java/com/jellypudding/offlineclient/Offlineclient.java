@@ -4,25 +4,28 @@ import com.jellypudding.offlineclient.command.CommandManager;
 import com.jellypudding.offlineclient.config.ConfigManager;
 import com.jellypudding.offlineclient.event.EventBus;
 import com.jellypudding.offlineclient.event.Subscribe;
-import com.jellypudding.offlineclient.event.events.TickEvent;
+import com.jellypudding.offlineclient.event.events.ClientTickEvent;
 import com.jellypudding.offlineclient.friend.FriendManager;
 import com.jellypudding.offlineclient.module.ModuleManager;
+import com.jellypudding.offlineclient.util.RotationManager;
 import net.minecraft.client.Minecraft;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.file.Path;
 
-/**
- * OfflineClient. A utility client custom designed for minecraftoffline.net
- */
+// A utility client made for minecraftoffline.net
 public enum OfflineClient {
     INSTANCE;
 
     public static final String NAME = "OfflineClient";
-    public static final String VERSION = "0.1.0";
+    public static final String VERSION = "0.2.0";
     public static final String SERVER_NAME = "minecraftoffline.net";
     public static final String SERVER_ADDRESS = "minecraftoffline.net";
 
     public static final Minecraft MC = Minecraft.getInstance();
+
+    public static final Logger LOG = LoggerFactory.getLogger(NAME);
 
     private EventBus eventBus;
     private FriendManager friendManager;
@@ -31,7 +34,7 @@ public enum OfflineClient {
     private ConfigManager configManager;
 
     public void init() {
-        System.out.println("Starting " + NAME + " v" + VERSION + " - " + SERVER_NAME);
+        LOG.info("Starting {} v{} for {}", NAME, VERSION, SERVER_NAME);
 
         Path folder = MC.gameDirectory.toPath().resolve("offlineclient");
 
@@ -44,10 +47,12 @@ public enum OfflineClient {
         configManager.load();
 
         eventBus.register(this);
+        eventBus.register(RotationManager.INSTANCE);
     }
 
+    // Not TickEvent because settings also change from the menus.
     @Subscribe
-    private void onTick(TickEvent event) {
+    private void onTick(ClientTickEvent event) {
         configManager.tick();
     }
 

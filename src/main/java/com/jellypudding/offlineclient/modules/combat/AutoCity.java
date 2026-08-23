@@ -1,19 +1,18 @@
 package com.jellypudding.offlineclient.modules.combat;
 
-import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.Render3DEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
+import com.jellypudding.offlineclient.module.ExclusivityGroup;
 import com.jellypudding.offlineclient.module.Module;
-import com.jellypudding.offlineclient.module.ModuleManager;
-import com.jellypudding.offlineclient.modules.world.Nuker;
-import com.jellypudding.offlineclient.modules.world.VeinMiner;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockMiner;
 import com.jellypudding.offlineclient.util.BlockUtil;
+import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.ItemUtil;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -21,11 +20,9 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 
-/**
- * Mines the surround block next to an enemy standing in a hole so a
- * crystal can reach them.
- */
+// Strips the blast proof cover from an enemy standing in a hole.
 public final class AutoCity extends Module {
+
 
     private final NumberSetting targetRange = new NumberSetting("Target range",
         "How far away enemies are considered.", 6, 1, 10, 0.5, " blocks");
@@ -33,6 +30,10 @@ public final class AutoCity extends Module {
         "How far you can reach to mine.", 4.5, 1, 6, 0.1).min(1);
     private final BoolSetting switchTool = new BoolSetting("Switch tool",
         "Swap to your fastest hotbar tool first.", true);
+    private final BoolSetting support = new BoolSetting("Support",
+        "Fill the empty block under the city block first so a crystal has a base.", true);
+    private final BoolSetting chatInfo = new BoolSetting("Chat info",
+        "Say why the module stopped.", true);
     private final BoolSetting rotate = new BoolSetting("Rotate",
         "Turn toward the block on the server side.", true);
     private final BoolSetting toggleOff = new BoolSetting("Toggle off when done",
@@ -41,12 +42,13 @@ public final class AutoCity extends Module {
         "Outline the block being mined.", true);
 
     private BlockPos current;
-    private int previousSlot = -1;
+    private final SlotSwap slots = new SlotSwap();
     private String targetName;
 
     public AutoCity() {
         super("AutoCity", "Mines the block guarding an enemy in a hole.", Category.COMBAT);
-        addSettings(targetRange, breakRange, switchTool, rotate, toggleOff, render);
+        addSettings(targetRange, breakRange, support, chatInfo, switchTool, rotate,
+            toggleOff, render);
         searchTags("city", "surround", "obsidian");
     }
 
@@ -56,22 +58,21 @@ public final class AutoCity extends Module {
     }
 
     @Override
+    public ExclusivityGroup getExclusivityGroup() {
+        return ExclusivityGroup.MINING;
+    }
+
+    @Override
     protected void onEnable() {
         current = null;
-        previousSlot = -1;
+        slots.forget();
         targetName = null;
-        // Only one module can drive BlockMiner at a time.
-        ModuleManager modules = OfflineClient.INSTANCE.getModuleManager();
-        if (modules != null) {
-            modules.get(Nuker.class).setEnabled(false);
-            modules.get(VeinMiner.class).setEnabled(false);
-        }
     }
 
     @Override
     protected void onDisable() {
         BlockMiner.release();
-        restoreSlot();
+        slots.restore();
         current = null;
         targetName = null;
     }
@@ -90,9 +91,12 @@ public final class AutoCity extends Module {
         }
 
         if (current != null && BlockUtil.state(current).isAir()) {
-            restoreSlot();
+            slots.restore();
             current = null;
             if (toggleOff.isOn()) {
+                if (chatInfo.isOn()) {
+                    ChatUtil.message("§bAutoCity §7took the block down.");
+                }
                 setEnabled(false);
                 return;
             }
@@ -106,20 +110,53 @@ public final class AutoCity extends Module {
         if (current == null) {
             return;
         }
+        // A crystal needs a base under the gap the city leaves behind.
+        if (support.isOn() && placeSupport()) {
+            return;
+        }
 
         if (switchTool.isOn()) {
-            selectBestTool(BlockUtil.state(current));
+            ItemUtil.selectBestTool(BlockUtil.state(current), slots);
         }
         if (!BlockMiner.mine(current, rotate.isOn())) {
             stopMining();
         }
     }
 
-    /** The blast proof block beside the target's feet that is closest to the player. */
+    /**
+     * Fills the hole under the block about to fall. True when a block went down
+     * this tick and mining should wait.
+     */
+    private boolean placeSupport() {
+        BlockPos below = current.below();
+        if (!BlockUtil.isReplaceable(below) || BlockUtil.intersectsPlayer(below)) {
+            return false;
+        }
+        if (BlockUtil.distanceTo(below) > breakRange.getValue()) {
+            return false;
+        }
+        int slot = BlockUtil.findBlockSlot();
+        if (slot == -1) {
+            return false;
+        }
+        slots.select(slot);
+        Direction side = BlockUtil.findSupport(below);
+        boolean placed = side != null
+            ? BlockUtil.place(below, side, rotate.isOn(), true)
+            : BlockUtil.placeDirect(below, rotate.isOn(), true);
+        slots.restore();
+        return placed;
+    }
+
     private BlockPos cityBlock(Player target) {
+        return cityBlock(target, breakRange.getValue());
+    }
+
+    // The blast proof block beside the target's feet that is closest to the player.
+    public static BlockPos cityBlock(Player target, double reach) {
         BlockPos feet = target.blockPosition();
         BlockPos best = null;
-        double bestDistance = breakRange.getValue();
+        double bestDistance = reach;
         for (Direction side : Direction.Plane.HORIZONTAL) {
             BlockPos pos = feet.relative(side);
             BlockState state = BlockUtil.state(pos);
@@ -136,42 +173,12 @@ public final class AutoCity extends Module {
         return best;
     }
 
-    /** Puts the fastest hotbar tool for the block in hand. */
-    private void selectBestTool(BlockState state) {
-        int bestSlot = -1;
-        float bestSpeed = 1;
-        for (int i = 0; i < 9; i++) {
-            float speed = ItemUtil.miningSpeed(mc.player.getInventory().getItem(i), state);
-            if (speed > bestSpeed) {
-                bestSpeed = speed;
-                bestSlot = i;
-            }
-        }
-        if (bestSlot == -1) {
-            return;
-        }
-        int selected = mc.player.getInventory().getSelectedSlot();
-        if (selected != bestSlot) {
-            if (previousSlot == -1) {
-                previousSlot = selected;
-            }
-            mc.player.getInventory().setSelectedSlot(bestSlot);
-        }
-    }
-
     private void stopMining() {
         if (current != null) {
             BlockMiner.release();
         }
-        restoreSlot();
+        slots.restore();
         current = null;
-    }
-
-    private void restoreSlot() {
-        if (previousSlot != -1 && mc.player != null) {
-            mc.player.getInventory().setSelectedSlot(previousSlot);
-        }
-        previousSlot = -1;
     }
 
     @Subscribe

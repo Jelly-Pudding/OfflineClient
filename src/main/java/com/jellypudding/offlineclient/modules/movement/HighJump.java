@@ -14,7 +14,7 @@ public final class HighJump extends Module {
         addSettings(boost);
     }
 
-    /** Called from LocalPlayerMixin.getJumpPower(). */
+    // Called from LocalPlayerMixin.getJumpPower().
     public float getAdditionalJumpMotion() {
         return isEnabled() ? boost.getFloat() : 0f;
     }

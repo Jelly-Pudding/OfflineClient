@@ -4,11 +4,14 @@ import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.PacketSendEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.util.RotationManager;
+import net.minecraft.client.multiplayer.MultiPlayerGameMode;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 
 /**
- * Tells the server the player is airborne so walking costs less hunger.
- * Pauses while falling so fall damage still applies at the right height.
+ * Sends movement packets with the on ground flag cleared. The server charges
+ * no walking exhaustion and no fall damage to airborne players.
  */
 public final class AntiHunger extends Module {
 
@@ -18,23 +21,25 @@ public final class AntiHunger extends Module {
 
     @Subscribe
     private void onPacketSend(PacketSendEvent event) {
-        if (!inGame() || !(event.getPacket() instanceof ServerboundMovePlayerPacket packet)) {
+        if (!(event.getPacket() instanceof ServerboundMovePlayerPacket packet) || !packet.isOnGround()) {
             return;
         }
-        if (!packet.isOnGround() || mc.player.fallDistance > 0.5) {
+        // The packet thread can drop the player and the game mode mid handler.
+        LocalPlayer player = mc.player;
+        MultiPlayerGameMode gameMode = mc.gameMode;
+        if (player == null || gameMode == null || player.fallDistance > 0.5) {
             return;
         }
-        // The server slows down mining a lot for airborne players. Leave the
-        // packets alone while a block is being broken.
-        if (mc.gameMode.isDestroying()) {
+        // The server slows mining a lot for airborne players.
+        if (gameMode.isDestroying()) {
             return;
         }
 
-        double x = packet.getX(mc.player.getX());
-        double y = packet.getY(mc.player.getY());
-        double z = packet.getZ(mc.player.getZ());
-        float yaw = packet.getYRot(mc.player.getYRot());
-        float pitch = packet.getXRot(mc.player.getXRot());
+        double x = packet.getX(player.getX());
+        double y = packet.getY(player.getY());
+        double z = packet.getZ(player.getZ());
+        float yaw = packet.getYRot(RotationManager.getServerYaw());
+        float pitch = packet.getXRot(RotationManager.getServerPitch());
         boolean collision = packet.horizontalCollision();
 
         if (packet.hasPosition() && packet.hasRotation()) {

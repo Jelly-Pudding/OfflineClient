@@ -20,10 +20,7 @@ import net.minecraft.world.item.CrossbowItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
 
-/**
- * Aims a drawn bow or a loaded crossbow at the best target. The pitch
- * comes from the real arrow physics and the flight time leads the target.
- */
+// The pitch comes from the real arrow physics and the flight time leads the target.
 public final class BowAimbot extends Module {
 
     public enum Priority {
@@ -43,13 +40,13 @@ public final class BowAimbot extends Module {
         }
     }
 
-    /** Arrow speed in blocks per tick at a full bow draw. */
+    // Arrow speed in blocks per tick at a full bow draw.
     private static final double BOW_SPEED = 3.0;
-    /** Arrow speed in blocks per tick from a crossbow. */
+    // Arrow speed in blocks per tick from a crossbow.
     private static final double CROSSBOW_SPEED = 3.15;
-    /** Fraction of speed an arrow keeps every tick. */
+    // Fraction of speed an arrow keeps every tick.
     private static final double DRAG = 0.99;
-    /** Blocks per tick squared pulling an arrow down. */
+    // Blocks per tick squared pulling an arrow down.
     private static final double GRAVITY = 0.05;
 
     private final BoolSetting players = new BoolSetting("Players",
@@ -57,7 +54,7 @@ public final class BowAimbot extends Module {
     private final BoolSetting mobs = new BoolSetting("Mobs",
         "Aim at mobs.", false);
     private final NumberSetting range = new NumberSetting("Range",
-        "Farthest target to aim at in blocks.", 40, 5, 80, 1);
+        "Furthest target to aim at in blocks.", 40, 5, 80, 1);
     private final EnumSetting<Priority> priority = new EnumSetting<>("Priority",
         "Which target to pick when several are in range.", Priority.NEAREST);
     private final BoolSetting predict = new BoolSetting("Predict",
@@ -66,13 +63,16 @@ public final class BowAimbot extends Module {
         "Also aim at targets you cannot see.", false);
     private final BoolSetting render = new BoolSetting("Highlight",
         "Draw a box around the target that fills in as the bow charges.", true);
+    private final BoolSetting noSlow = new BoolSetting("No slowdown",
+        "Move at full speed whilst drawing.", true);
 
     private LivingEntity target;
     private float charge;
+    private boolean wasDrawing;
 
     public BowAimbot() {
-        super("BowAimbot", "Aims your bow or crossbow at the nearest target while you draw it.", Category.COMBAT);
-        addSettings(players, mobs, range, priority, predict, walls, render);
+        super("BowAimbot", "Aims your bow or crossbow at the nearest target whilst you draw it.", Category.COMBAT);
+        addSettings(players, mobs, range, priority, predict, walls, render, noSlow);
         searchTags("bow aim", "crossbow", "aimbot", "arrow");
     }
 
@@ -85,6 +85,12 @@ public final class BowAimbot extends Module {
     protected void onDisable() {
         target = null;
         charge = 0;
+        wasDrawing = false;
+    }
+
+    // Consulted by LocalPlayerMixin to skip the bow draw slowdown.
+    public boolean suppressesSlowdown() {
+        return isEnabled() && noSlow.isOn() && inGame() && mc.player.isUsingItem();
     }
 
     @Subscribe
@@ -98,14 +104,18 @@ public final class BowAimbot extends Module {
         if (speed <= 0) {
             target = null;
             charge = 0;
+            wasDrawing = false;
             return;
         }
 
         if (target != null && !valid(target)) {
             target = null;
         }
-        // Crosshair mode re picks every tick.
-        if (target == null || priority.getValue() == Priority.CROSSHAIR) {
+        // Crosshair mode picks once at the start of the draw whilst the
+        // rotation is still the player's own.
+        boolean drawStart = !wasDrawing;
+        wasDrawing = true;
+        if (target == null || (priority.getValue() == Priority.CROSSHAIR && drawStart)) {
             target = pickTarget();
         }
         if (target == null) {
@@ -115,11 +125,7 @@ public final class BowAimbot extends Module {
         aim(target, speed);
     }
 
-    /**
-     * Speed the arrow would leave with right now or zero when no ranged
-     * weapon is ready. A bow needs to be drawing and a crossbow needs to
-     * be loaded.
-     */
+    // Speed the arrow would leave with right now or zero when no ranged weapon is ready.
     private double launchSpeed() {
         ItemStack held = mc.player.getMainHandItem();
         if (held.getItem() instanceof BowItem) {
@@ -192,18 +198,14 @@ public final class BowAimbot extends Module {
         return walls.isOn() || mc.player.hasLineOfSight(entity);
     }
 
-    /** Degrees between the current look direction and the entity. */
+    // Degrees between the current look direction and the entity.
     private double angleTo(Entity entity) {
         Vec3 look = mc.player.getLookAngle();
         Vec3 to = entity.getBoundingBox().getCenter().subtract(mc.player.getEyePosition()).normalize();
         return Math.toDegrees(Math.acos(Math.clamp(look.dot(to), -1, 1)));
     }
 
-    /**
-     * Turns the player toward the point the arrow needs to fly through.
-     * The flight time from a first solve is used to lead the target and
-     * then the angle is solved again against the predicted spot.
-     */
+    // Turns the player toward the point the arrow needs to fly through.
     private void aim(LivingEntity entity, double speed) {
         Vec3 eye = mc.player.getEyePosition();
         Vec3 aimPoint = entity.getBoundingBox().getCenter();
@@ -217,7 +219,11 @@ public final class BowAimbot extends Module {
 
         double[] solution = solve(eye, aimPoint, speed);
         if (solution != null) {
-            Vec3 lead = aimPoint.add(targetVelocity.subtract(drift).scale(solution[1]));
+            // The target keeps its pace whilst the momentum the arrow inherited from
+            // a sprint or a jump bleeds off to the drag every tick.
+            double flight = solution[1];
+            Vec3 lead = aimPoint.add(targetVelocity.scale(flight))
+                .subtract(drift.scale(carriedTicks(flight)));
             double[] again = solve(eye, lead, speed);
             if (again != null) {
                 solution = again;
@@ -238,6 +244,14 @@ public final class BowAimbot extends Module {
 
         mc.player.setYRot(yaw);
         mc.player.setXRot(Math.clamp(pitch, -90f, 90f));
+    }
+
+    // Sum of the drag series over the flight. How far the inherited speed really carries.
+    private static double carriedTicks(double ticks) {
+        if (ticks <= 0) {
+            return 0;
+        }
+        return (1 - Math.pow(DRAG, ticks)) / (1 - DRAG);
     }
 
     /**
@@ -284,7 +298,7 @@ public final class BowAimbot extends Module {
         return null;
     }
 
-    /** Ticks an arrow needs to travel the horizontal distance or NaN if it never gets there. */
+    // Ticks an arrow needs to travel the horizontal distance or NaN if it never gets there.
     private static double flightTicks(double angleDegrees, double distance, double speed) {
         double horizontal = speed * Math.cos(Math.toRadians(angleDegrees));
         double reach = horizontal / (1 - DRAG);

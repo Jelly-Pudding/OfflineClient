@@ -6,13 +6,11 @@ import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.InventoryUtil;
+import com.jellypudding.offlineclient.util.InventoryUtil.Swap;
 import com.jellypudding.offlineclient.util.ItemUtil;
-import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
-import net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen;
-import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.ai.attributes.Attributes;
-import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.Enchantments;
@@ -26,23 +24,26 @@ public final class AutoArmor extends Module {
     private final NumberSetting delay = new NumberSetting("Delay",
         "Ticks between each swap.", 2, 0, 20, 1, " ticks");
     private final BoolSetting useEnchantments = new BoolSetting("Count Protection",
-        "A well enchanted piece can beat a higher tier plain one.", true);
+        "Weigh the Protection enchantment when comparing pieces.", true);
 
     private int timer;
 
     public AutoArmor() {
-        super("AutoArmor", "Automatically wears the best armor you have.", Category.COMBAT);
+        super("AutoArmor", "Automatically wears the best armour you have.", Category.COMBAT);
         addSettings(delay, useEnchantments);
     }
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame()) {
+        if (!inGame() || mc.player.isSpectator()) {
             return;
         }
-        if (mc.gui.screen() instanceof AbstractContainerScreen
-            && !(mc.gui.screen() instanceof InventoryScreen
-                || mc.gui.screen() instanceof CreativeModeInventoryScreen)) {
+        // Clicks are thrown away unless the survival inventory is the open one.
+        if (!InventoryUtil.canClick()) {
+            return;
+        }
+        // Anything already on the cursor belongs to the player.
+        if (!InventoryUtil.carried().isEmpty()) {
             return;
         }
         if (timer > 0) {
@@ -53,47 +54,40 @@ public final class AutoArmor extends Module {
         for (int slotIndex = 0; slotIndex < SLOTS.length; slotIndex++) {
             EquipmentSlot slot = SLOTS[slotIndex];
 
-            // Never swap off an equipped elytra.
             if (slot == EquipmentSlot.CHEST
                 && mc.player.getItemBySlot(slot).is(Items.ELYTRA)) {
                 continue;
             }
 
-            double equippedScore = score(mc.player.getItemBySlot(slot), slot);
-
-            int bestInvSlot = -1;
-            double bestScore = equippedScore;
-            for (int i = 0; i < 36; i++) {
-                ItemStack stack = mc.player.getInventory().getItem(i);
-                double stackScore = score(stack, slot);
-                if (stackScore > bestScore) {
-                    bestScore = stackScore;
-                    bestInvSlot = i;
-                }
-            }
-
-            if (bestInvSlot == -1) {
+            int upgrade = bestUpgrade(slot);
+            if (upgrade == -1) {
                 continue;
             }
 
-            int networkSlot = bestInvSlot < 9 ? 36 + bestInvSlot : bestInvSlot;
+            // The armour slots sit right after the crafting grid.
             int armorNetworkSlot = 5 + slotIndex;
-            boolean slotWasEmpty = mc.player.getItemBySlot(slot).isEmpty();
-
-            click(networkSlot);
-            click(armorNetworkSlot);
-            if (!slotWasEmpty) {
-                click(networkSlot);
+            // A cursed piece never comes off.
+            if (InventoryUtil.swap(InventoryUtil.networkSlot(upgrade), armorNetworkSlot) != Swap.REFUSED) {
+                timer = delay.getInt();
             }
-            timer = delay.getInt();
+            // One piece a tick.
             return;
         }
     }
 
-    /**
-     * Real protective value of a piece. Armor points weigh the most. Then
-     * the Protection enchantment. Then toughness.
-     */
+    private int bestUpgrade(EquipmentSlot slot) {
+        int best = -1;
+        double bestScore = score(mc.player.getItemBySlot(slot), slot);
+        for (int i = 0; i < 36; i++) {
+            double stackScore = score(mc.player.getInventory().getItem(i), slot);
+            if (stackScore > bestScore) {
+                bestScore = stackScore;
+                best = i;
+            }
+        }
+        return best;
+    }
+
     private double score(ItemStack stack, EquipmentSlot slot) {
         if (stack.isEmpty() || stack.is(Items.ELYTRA) || ItemUtil.equipSlot(stack) != slot) {
             return -1;
@@ -103,9 +97,5 @@ public final class AutoArmor extends Module {
         double protection = useEnchantments.isOn()
             ? ItemUtil.enchantLevel(Enchantments.PROTECTION, stack) : 0;
         return armor * 5 + protection * 3 + toughness;
-    }
-
-    private void click(int networkSlot) {
-        mc.gameMode.handleContainerInput(0, networkSlot, 0, ContainerInput.PICKUP, mc.player);
     }
 }

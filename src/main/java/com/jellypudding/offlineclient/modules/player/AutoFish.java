@@ -8,6 +8,8 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ItemUtil;
+import net.minecraft.client.multiplayer.MultiPlayerGameMode;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.protocol.game.ClientboundSoundPacket;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.world.InteractionHand;
@@ -17,8 +19,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.enchantment.Enchantments;
 
 /**
- * Casts the rod and reels it back in when something bites. A bite is
- * spotted from the bobber's own synced flag and from the splash sound
+ * A bite is spotted from the bobber's synced flag and from the splash sound
  * near the bobber.
  */
 public final class AutoFish extends Module {
@@ -37,8 +38,10 @@ public final class AutoFish extends Module {
     private int castTimer;
     private int reelTimer = -1;
     private int patienceTimer;
-    private boolean splashHeard;
-    private FishingHook reeled;
+    // Written from the packet thread.
+    private volatile boolean splashHeard;
+    // Holding the bobber itself would pin the world.
+    private int reeledId = -1;
     private int caught;
 
     public AutoFish() {
@@ -58,7 +61,7 @@ public final class AutoFish extends Module {
         reelTimer = -1;
         patienceTimer = 0;
         splashHeard = false;
-        reeled = null;
+        reeledId = -1;
         caught = 0;
     }
 
@@ -87,7 +90,7 @@ public final class AutoFish extends Module {
         if (bobber == null || bobber.isRemoved()) {
             reelTimer = -1;
             splashHeard = false;
-            reeled = null;
+            reeledId = -1;
             if (castTimer > 0) {
                 return;
             }
@@ -96,8 +99,8 @@ public final class AutoFish extends Module {
             patienceTimer = patience.getInt() * 20;
             return;
         }
-        // The old bobber lingers for a tick or two after reeling. Leave it alone.
-        if (bobber == reeled) {
+        // The old bobber lingers for a tick or two after reeling.
+        if (bobber.getId() == reeledId) {
             return;
         }
 
@@ -123,7 +126,7 @@ public final class AutoFish extends Module {
             caught++;
         }
         useRod();
-        reeled = bobber;
+        reeledId = bobber.getId();
         reelTimer = -1;
         splashHeard = false;
         castTimer = recastDelay.getInt();
@@ -137,11 +140,13 @@ public final class AutoFish extends Module {
         if (sound.getSound().value() != SoundEvents.FISHING_BOBBER_SPLASH) {
             return;
         }
-        FishingHook bobber = mc.player == null ? null : mc.player.fishing;
+        // The packet thread can drop the player mid handler.
+        LocalPlayer player = mc.player;
+        FishingHook bobber = player == null ? null : player.fishing;
         if (bobber == null || bobber.isRemoved()) {
             return;
         }
-        // Someone else's bobber can splash nearby. Only trust sounds right on ours.
+        // Someone else's bobber can splash nearby.
         double dx = Math.abs(sound.getX() - bobber.getX());
         double dz = Math.abs(sound.getZ() - bobber.getZ());
         if (Math.max(dx, dz) <= 1.5) {
@@ -150,15 +155,15 @@ public final class AutoFish extends Module {
     }
 
     private void useRod() {
-        if (mc.gameMode.useItem(mc.player, InteractionHand.MAIN_HAND).consumesAction()) {
+        MultiPlayerGameMode gameMode = mc.gameMode;
+        if (gameMode == null) {
+            return;
+        }
+        if (gameMode.useItem(mc.player, InteractionHand.MAIN_HAND).consumesAction()) {
             mc.player.swing(InteractionHand.MAIN_HAND);
         }
     }
 
-    /**
-     * Hotbar slot of the best rod or minus one. Lure and Luck of the Sea and
-     * Mending and Unbreaking each add to the score.
-     */
     private int bestRod() {
         int bestSlot = -1;
         int bestScore = -1;

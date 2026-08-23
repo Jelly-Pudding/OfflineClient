@@ -6,9 +6,7 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
-/**
- * The behavior lives in LocalPlayerMixin which calls shouldGuard.
- */
+// Behaviour lives in LocalPlayerMixin.
 public final class SafeWalk extends Module {
 
     private final NumberSetting maxDrop = new NumberSetting("Max drop",
@@ -16,7 +14,7 @@ public final class SafeWalk extends Module {
         0.5, 0.5, 10, 0.5, " blocks");
 
     public SafeWalk() {
-        super("EdgeGuard", "Stops you from going over edges. Like holding sneak without the slowdown.",
+        super("EdgeGuard", "Stops you from going over edges without the sneak slowdown.",
             Category.MOVEMENT);
         addSettings(maxDrop);
         searchTags("safewalk", "safe walk", "edge", "ledge");
@@ -27,11 +25,7 @@ public final class SafeWalk extends Module {
         return maxDrop.getValueString();
     }
 
-    /**
-     * True when the edge ahead is too deep to allow. Probes a little ahead
-     * in the direction of travel and looks for ground within the allowed
-     * depth.
-     */
+    // True when the edge ahead is too deep to allow.
     public boolean shouldGuard() {
         if (!isEnabled() || !inGame()) {
             return false;
@@ -49,7 +43,6 @@ public final class SafeWalk extends Module {
         }
         probe = probe.expandTowards(0, -depth, 0).inflate(-0.05, 0, -0.05);
 
-        // No ground anywhere within the allowed depth means a long fall.
         return mc.level.noCollision(mc.player, probe);
     }
 }

@@ -17,10 +17,6 @@ import net.minecraft.world.phys.AABB;
 
 import java.util.List;
 
-/**
- * Highlights dropped items. Shows everything by default and can narrow
- * down to a picked list.
- */
 public final class ItemEsp extends Module {
 
     private static final int COLOR = 0xFFFFE040;
@@ -32,7 +28,7 @@ public final class ItemEsp extends Module {
     private final BoolSetting everything = new BoolSetting("Everything",
         "Show every dropped item.", true);
     private final RegistryListSetting<Item> items = new RegistryListSetting<Item>("Items",
-        "The items to show. Click to pick them.", BuiltInRegistries.ITEM,
+        "The items to show.", BuiltInRegistries.ITEM,
         List.of(Items.DIAMOND, Items.NETHERITE_INGOT, Items.ENCHANTED_GOLDEN_APPLE,
             Items.ELYTRA, Items.TOTEM_OF_UNDYING, Items.SHULKER_BOX))
         .visibleWhen(() -> !everything.isOn());

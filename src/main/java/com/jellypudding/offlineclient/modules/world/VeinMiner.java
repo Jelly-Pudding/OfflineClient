@@ -1,13 +1,12 @@
 package com.jellypudding.offlineclient.modules.world;
 
-import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.BlockBreakEvent;
 import com.jellypudding.offlineclient.event.events.Render3DEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
+import com.jellypudding.offlineclient.module.ExclusivityGroup;
 import com.jellypudding.offlineclient.module.Module;
-import com.jellypudding.offlineclient.module.ModuleManager;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
@@ -47,18 +46,19 @@ public final class VeinMiner extends Module {
         }
     }
 
+
     private static final int OUTLINE_COLOR = 0xFFFFA020;
 
     private final NumberSetting range = new NumberSetting("Range",
-        "How far from your eyes a vein block may be.", 4.5, 1, 6, 0.1).min(1);
+        "How far from your eyes a vein block may be.", 4.5, 1, 6, 0.1).min(1).max(6);
     private final NumberSetting delay = new NumberSetting("Delay",
-        "Ticks to wait between one block breaking and the next one starting.", 0, 0, 20, 1, " ticks").min(0);
+        "Ticks to wait between one block and the next.", 0, 0, 20, 1, " ticks").min(0);
     private final NumberSetting maxBlocks = new NumberSetting("Max blocks",
         "The most blocks one vein may contain.", 32, 1, 128, 1).min(1);
     private final EnumSetting<Targets> targets = new EnumSetting<>("Targets",
         "Which block types count as a vein.", Targets.ORES);
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Turns toward each block on the server side. Your own view never moves.", true);
+        "Turn toward each block on the server side.", true);
 
     private final Set<BlockPos> vein = new LinkedHashSet<>();
     private String veinFamily;
@@ -78,12 +78,13 @@ public final class VeinMiner extends Module {
     }
 
     @Override
+    public ExclusivityGroup getExclusivityGroup() {
+        return ExclusivityGroup.MINING;
+    }
+
+    @Override
     protected void onEnable() {
         clear();
-        ModuleManager modules = OfflineClient.INSTANCE.getModuleManager();
-        if (modules != null) {
-            modules.get(Nuker.class).setEnabled(false);
-        }
     }
 
     @Override
@@ -100,10 +101,7 @@ public final class VeinMiner extends Module {
         waitTicks = 0;
     }
 
-    /**
-     * Fires for the block mined by hand. Aiming at a fresh vein block
-     * builds a new vein.
-     */
+    // Fires for the block mined by hand.
     @Subscribe
     private void onBlockBreak(BlockBreakEvent event) {
         if (BlockMiner.isSelfCall() || !inGame()) {
@@ -160,7 +158,6 @@ public final class VeinMiner extends Module {
         }
     }
 
-    /** Drops vein blocks that are gone or changed or drifted out of range. */
     private void prune() {
         vein.removeIf(pos -> {
             BlockState state = BlockUtil.state(pos);
@@ -173,10 +170,7 @@ public final class VeinMiner extends Module {
         }
     }
 
-    /**
-     * Flood fills from the origin through every touching block of the same
-     * family. Corners count as touching so diagonal veins are found too.
-     */
+    // Flood fills from the origin. Corners count as touching.
     private void build(BlockPos origin, BlockState state) {
         vein.clear();
         veinFamily = BlockUtil.family(state.getBlock());

@@ -77,8 +77,7 @@ public final class ChestEsp extends Module {
                     BlockPos pos = blockEntity.getBlockPos();
                     AABB box = boxAt(pos);
 
-                    // A double chest is one container. Draw one merged box
-                    // from the right half and skip the left half entirely.
+                    // A double chest is one container drawn from its right half.
                     if (blockEntity instanceof ChestBlockEntity) {
                         BlockState state = blockEntity.getBlockState();
                         if (state.hasProperty(ChestBlock.TYPE)) {

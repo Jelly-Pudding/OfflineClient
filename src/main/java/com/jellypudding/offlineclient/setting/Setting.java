@@ -39,9 +39,7 @@ public abstract class Setting<T> {
         value = defaultValue;
     }
 
-    /**
-     * Hides this setting in the GUI while the supplier returns false.
-     */
+    // Hides this setting in the GUI whilst the supplier returns false.
     @SuppressWarnings("unchecked")
     public <S extends Setting<T>> S visibleWhen(Supplier<Boolean> visibility) {
         this.visibility = visibility;

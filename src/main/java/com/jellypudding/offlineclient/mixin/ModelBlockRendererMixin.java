@@ -64,10 +64,7 @@ public abstract class ModelBlockRendererMixin {
         }
     }
 
-    /**
-     * Wanted blocks draw every face that does not touch another wanted
-     * block.
-     */
+    // Wanted blocks draw every face that does not touch another wanted block.
     @ModifyReturnValue(
         method = "shouldRenderFace(Lnet/minecraft/client/renderer/block/BlockAndTintGetter;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/core/Direction;Lnet/minecraft/core/BlockPos;)Z",
         at = @At("RETURN"))

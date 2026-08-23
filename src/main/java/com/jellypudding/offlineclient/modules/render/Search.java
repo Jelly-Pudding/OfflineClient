@@ -44,15 +44,16 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
 /**
- * Block ESP. Every loaded chunk in range is scanned once on a background
- * thread and only scanned again when the server sends a change for it.
+ * Every loaded chunk in range is scanned once on a background thread and only
+ * scanned again when the server sends a change for it.
  */
 public final class Search extends Module {
 
-    private record Target(BlockPos pos, int color) {
+    // The box is built once on the scanner thread.
+    private record Target(AABB box, int color) {
     }
 
-    /** Hand tuned colors for the usual targets. Everything else gets a stable hue from its id. */
+    // Hand tuned colours for the usual targets.
     private static final Map<Block, Integer> PRESET_COLORS = Map.ofEntries(
         Map.entry(Blocks.DIAMOND_ORE, 0xFF40E0FF),
         Map.entry(Blocks.DEEPSLATE_DIAMOND_ORE, 0xFF40E0FF),
@@ -89,24 +90,24 @@ public final class Search extends Module {
     private final NumberSetting range = new NumberSetting("Range",
         "Chunk radius to scan around you.", 4, 1, 8, 1, " chunks").max(16);
     private final NumberSetting limit = new NumberSetting("Limit",
-        "Most blocks drawn at once. The nearest ones win.", 2000, 100, 5000, 100).min(1);
+        "Most blocks drawn at once with the nearest first.", 2000, 100, 5000, 100).min(1);
     private final BoolSetting tracers = new BoolSetting("Tracers",
         "Draw a line to every found block.", false);
     private final RegistryListSetting<Block> blocks = new RegistryListSetting<>("Blocks",
-        "The blocks to find. Click to pick them.", BuiltInRegistries.BLOCK,
+        "The blocks to find.", BuiltInRegistries.BLOCK,
         List.of(Blocks.DIAMOND_ORE, Blocks.DEEPSLATE_DIAMOND_ORE, Blocks.ANCIENT_DEBRIS,
             Blocks.EMERALD_ORE, Blocks.DEEPSLATE_EMERALD_ORE,
             Blocks.SPAWNER, Blocks.TRIAL_SPAWNER, Blocks.END_PORTAL_FRAME,
             Blocks.BEACON, Blocks.ENCHANTING_TABLE));
 
-    /** Block to color. Read from the scanner thread and replaced whole. */
+    // Read from the scanner thread and replaced whole.
     private volatile Map<Block, Integer> wanted = Map.of();
 
     private final Map<ChunkPos, List<Target>> results = new HashMap<>();
     private final Map<ChunkPos, Future<List<Target>>> pending = new HashMap<>();
-    /** Chunks the server changed. Filled from the network thread. */
+    // Filled from the network thread.
     private final Set<ChunkPos> changed = ConcurrentHashMap.newKeySet();
-    /** Changes seen last tick. The game applies a packet after we see it. */
+    // The game applies a packet after the event fires.
     private Set<ChunkPos> due = new HashSet<>();
     private List<Target> drawn = List.of();
     private ResourceKey<Level> dimension;
@@ -115,7 +116,6 @@ public final class Search extends Module {
         super("Search", "Highlights chosen blocks through walls.", Category.RENDER);
         addSettings(range, limit, tracers, blocks);
         searchTags("block esp", "ore esp");
-        // A picker change rescans the affected chunks right away.
         blocks.onChange(() -> {
             if (isEnabled() && snapshot()) {
                 reset();
@@ -150,7 +150,7 @@ public final class Search extends Module {
         drawn = List.of();
     }
 
-    /** True if the wanted blocks changed. */
+    // True if the wanted blocks changed.
     private boolean snapshot() {
         Map<Block, Integer> next = new HashMap<>();
         for (Block block : blocks.resolved()) {
@@ -175,6 +175,10 @@ public final class Search extends Module {
 
     @Subscribe
     private void onPacketReceive(PacketReceiveEvent event) {
+        // Only a tick drains this set.
+        if (mc.level == null) {
+            return;
+        }
         ChunkPos pos = affectedChunk(event.getPacket());
         if (pos != null) {
             changed.add(pos);
@@ -274,7 +278,7 @@ public final class Search extends Module {
             try {
                 results.put(entry.getKey(), future.get());
             } catch (InterruptedException | ExecutionException ignored) {
-                // A chunk that unloaded mid scan is simply scanned again later.
+                // A chunk that unloaded mid scan is scanned again later.
             }
         }
     }
@@ -287,14 +291,20 @@ public final class Search extends Module {
         int max = limit.getInt();
         if (all.size() > max) {
             Vec3 eye = mc.player.getEyePosition();
-            all.sort((a, b) -> Double.compare(
-                eye.distanceToSqr(Vec3.atCenterOf(a.pos())), eye.distanceToSqr(Vec3.atCenterOf(b.pos()))));
+            all.sort((a, b) -> Double.compare(distanceSqr(eye, a.box()), distanceSqr(eye, b.box())));
             all = new ArrayList<>(all.subList(0, max));
         }
         drawn = all;
     }
 
-    /** Runs on the scanner thread. Reads the chunk without touching the game. */
+    private static double distanceSqr(Vec3 eye, AABB box) {
+        double dx = (box.minX + box.maxX) / 2 - eye.x;
+        double dy = (box.minY + box.maxY) / 2 - eye.y;
+        double dz = (box.minZ + box.maxZ) / 2 - eye.z;
+        return dx * dx + dy * dy + dz * dz;
+    }
+
+    // Runs on the scanner thread and never touches the game.
     private static List<Target> scan(LevelChunk chunk, Map<Block, Integer> wanted) {
         List<Target> found = new ArrayList<>();
         if (wanted.isEmpty()) {
@@ -316,7 +326,8 @@ public final class Search extends Module {
                         BlockState state = section.getBlockState(x, y, z);
                         Integer color = wanted.get(state.getBlock());
                         if (color != null) {
-                            found.add(new Target(new BlockPos(baseX + x, baseY + y, baseZ + z), color));
+                            found.add(new Target(
+                                new AABB(new BlockPos(baseX + x, baseY + y, baseZ + z)).deflate(0.02), color));
                         }
                     }
                 }
@@ -333,10 +344,9 @@ public final class Search extends Module {
         DrawBatch batch = event.getBatch();
         boolean lines = tracers.isOn();
         for (Target target : drawn) {
-            AABB box = new AABB(target.pos()).deflate(0.02);
-            batch.outlineBox(box, target.color(), true);
+            batch.outlineBox(target.box(), target.color(), true);
             if (lines) {
-                batch.tracer(box.getCenter(), target.color(), true);
+                batch.tracer(target.box().getCenter(), target.color(), true);
             }
         }
     }

@@ -1,7 +1,7 @@
 package com.jellypudding.offlineclient.mixin;
 
-import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.modules.render.ClearSkies;
+import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.world.level.Level;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -26,9 +26,6 @@ public class LevelMixin {
     }
 
     private static boolean offlineclient$clearSkies() {
-        if (OfflineClient.INSTANCE.getModuleManager() == null) {
-            return false;
-        }
-        return OfflineClient.INSTANCE.getModuleManager().get(ClearSkies.class).isEnabled();
+        return Modules.enabled(ClearSkies.class);
     }
 }

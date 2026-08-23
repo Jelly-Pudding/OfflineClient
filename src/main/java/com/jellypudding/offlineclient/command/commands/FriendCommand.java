@@ -8,7 +8,7 @@ import com.jellypudding.offlineclient.util.ChatUtil;
 public final class FriendCommand extends Command {
 
     public FriendCommand() {
-        super("friend", "Manages your friends list (never targeted by combat modules).",
+        super("friend", "Manages your friends list. Friends are never targeted by combat modules.",
             "friend <add|remove|list> [name]", "f");
     }
 

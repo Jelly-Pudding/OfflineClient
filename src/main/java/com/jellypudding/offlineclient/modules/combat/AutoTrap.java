@@ -10,6 +10,7 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.entity.player.Player;
@@ -21,10 +22,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
-/**
- * Boxes an enemy's head in with obsidian so they cannot move or be
- * crystalled out easily.
- */
 public final class AutoTrap extends Module {
 
     public enum Mode {
@@ -61,9 +58,12 @@ public final class AutoTrap extends Module {
         "Outline the spots still to fill.", true);
 
     private int timer;
-    private int previousSlot = -1;
+    private final SlotSwap slots = new SlotSwap();
     private String targetName;
     private boolean placed;
+
+    // The spots the last tick found. The unobstructed test walks the entity list.
+    private List<BlockPos> pending = List.of();
 
     public AutoTrap() {
         super("AutoTrap", "Places obsidian around an enemy's head to trap them.", Category.COMBAT);
@@ -79,32 +79,36 @@ public final class AutoTrap extends Module {
     @Override
     protected void onEnable() {
         timer = 0;
-        previousSlot = -1;
+        slots.forget();
         targetName = null;
         placed = false;
+        pending = List.of();
     }
 
     @Override
     protected void onDisable() {
-        restoreSlot();
+        slots.restore();
         targetName = null;
+        pending = List.of();
     }
 
     @Subscribe
     private void onTick(TickEvent event) {
+        pending = List.of();
         if (!inGame() || mc.player.isSpectator()) {
             return;
         }
         Player target = EntityUtil.nearestEnemy(targetRange.getValue());
         targetName = target == null ? null : target.getGameProfile().name();
         if (target == null) {
-            restoreSlot();
+            slots.restore();
             return;
         }
 
         List<BlockPos> missing = missingSpots(target);
+        pending = missing;
         if (missing.isEmpty()) {
-            restoreSlot();
+            slots.restore();
             if (toggleOff.isOn() && placed) {
                 setEnabled(false);
             }
@@ -118,20 +122,24 @@ public final class AutoTrap extends Module {
         int slot = BlockUtil.findBlockSlot(block ->
             block.getExplosionResistance() >= 600 && block.defaultDestroyTime() >= 0);
         if (slot == -1) {
-            restoreSlot();
+            slots.restore();
             return;
         }
-        selectSlot(slot);
+        slots.select(slot);
 
         int done = 0;
+        boolean rotated = false;
         for (BlockPos pos : missing) {
             if (done >= perTick.getInt()) {
                 break;
             }
             Direction support = BlockUtil.findPlaceSupport(pos);
+            // Several look packets in one tick look obviously wrong to the server.
+            boolean turn = rotate.isOn() && !rotated;
+            rotated |= turn;
             boolean ok = support != null
-                ? BlockUtil.place(pos, support, rotate.isOn(), true)
-                : BlockUtil.placeDirect(pos, rotate.isOn(), true);
+                ? BlockUtil.place(pos, support, turn, true)
+                : BlockUtil.placeDirect(pos, turn, true);
             if (ok) {
                 done++;
                 placed = true;
@@ -140,10 +148,9 @@ public final class AutoTrap extends Module {
         if (done > 0) {
             timer = delay.getInt();
         }
-        restoreSlot();
+        slots.restore();
     }
 
-    /** Open trap spots around the target. Farthest first. */
     private List<BlockPos> missingSpots(Player target) {
         List<BlockPos> result = new ArrayList<>();
         BlockPos feet = target.blockPosition();
@@ -166,34 +173,12 @@ public final class AutoTrap extends Module {
         }
     }
 
-    private void selectSlot(int slot) {
-        int selected = mc.player.getInventory().getSelectedSlot();
-        if (selected == slot) {
-            return;
-        }
-        if (previousSlot == -1) {
-            previousSlot = selected;
-        }
-        mc.player.getInventory().setSelectedSlot(slot);
-    }
-
-    private void restoreSlot() {
-        if (previousSlot != -1 && mc.player != null) {
-            mc.player.getInventory().setSelectedSlot(previousSlot);
-        }
-        previousSlot = -1;
-    }
-
     @Subscribe
     private void onRender3D(Render3DEvent event) {
-        if (!render.isOn() || !inGame()) {
+        if (!render.isOn()) {
             return;
         }
-        Player target = EntityUtil.nearestEnemy(targetRange.getValue());
-        if (target == null) {
-            return;
-        }
-        for (BlockPos pos : missingSpots(target)) {
+        for (BlockPos pos : pending) {
             event.getBatch().outlineBox(new AABB(pos).deflate(0.002), 0xFFB040FF, false);
         }
     }

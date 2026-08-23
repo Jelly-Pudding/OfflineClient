@@ -4,10 +4,7 @@ import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 
-/**
- * The behavior lives in LocalPlayerMixin. Each toggle blocks one kind of
- * outside force from moving the player.
- */
+// Behaviour lives in LocalPlayerMixin.
 public final class AntiPush extends Module {
 
     private final BoolSetting entities = new BoolSetting("Entities",

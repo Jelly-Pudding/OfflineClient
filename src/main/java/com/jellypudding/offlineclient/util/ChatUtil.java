@@ -5,7 +5,6 @@ import net.minecraft.network.chat.Component;
 
 public final class ChatUtil {
 
-    /** §b[§3Offline§b]§r */
     private static final String PREFIX = "§b[§3Offline§b]§r ";
 
     private ChatUtil() {

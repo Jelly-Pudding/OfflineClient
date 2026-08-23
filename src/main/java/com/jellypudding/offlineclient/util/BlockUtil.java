@@ -5,11 +5,12 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
+import net.minecraft.resources.Identifier;
+import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.item.BlockItem;
-import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.EmptyBlockGetter;
 import net.minecraft.world.level.block.AnvilBlock;
 import net.minecraft.world.level.block.BaseEntityBlock;
@@ -42,12 +43,11 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Comparator;
 import java.util.List;
 import java.util.function.Predicate;
 
-/**
- * Shared helpers for modules that place or break blocks.
- */
 public final class BlockUtil {
 
     private static final Minecraft MC = OfflineClient.MC;
@@ -59,58 +59,88 @@ public final class BlockUtil {
         return MC.level.getBlockState(pos);
     }
 
-    /** True for anything a block can be placed into like air or water or grass. */
     public static boolean isReplaceable(BlockPos pos) {
         return state(pos).canBeReplaced();
     }
 
-    /** True for a block that can be stood on or placed against. */
     public static boolean isSolid(BlockPos pos) {
         BlockState state = state(pos);
-        return !state.isAir() && state.blocksMotion();
+        return !state.isAir() && blocksMotion(state);
     }
 
-    /** True if the block can be broken by hand or tool at all. */
+    // Vanilla deprecated this without shipping a replacement. It is still the only
+    // check that treats cobwebs and bamboo saplings as passable so it stays.
+    // Routed through here so the whole client touches the old call in one place.
+    @SuppressWarnings("deprecation")
+    public static boolean blocksMotion(BlockState state) {
+        return state.blocksMotion();
+    }
+
     public static boolean isBreakable(BlockPos pos) {
         BlockState state = state(pos);
         return !state.isAir() && state.getDestroySpeed(MC.level, pos) >= 0;
     }
 
-    /** Distance from the player's eyes to the middle of the block. */
     public static double distanceTo(BlockPos pos) {
         return MC.player.getEyePosition().distanceTo(Vec3.atCenterOf(pos));
     }
 
-    /** All block positions inside a box around the player. Nearest first. */
+    private record Scored(BlockPos pos, double distanceSq) {
+    }
+
+    // Nearest first.
     public static List<BlockPos> positionsWithin(double range) {
-        List<BlockPos> result = new ArrayList<>();
+        // Sixteen blocks is the widest scan that still fits in one tick.
+        range = Math.min(range, 16);
         Vec3 eye = MC.player.getEyePosition();
+        double limitSq = range * range;
         int r = (int) Math.ceil(range);
         BlockPos center = BlockPos.containing(eye);
+        // Sorting on a fresh Vec3 per comparison allocates millions at this radius.
+        List<Scored> scored = new ArrayList<>();
         for (int dx = -r; dx <= r; dx++) {
             for (int dy = -r; dy <= r; dy++) {
                 for (int dz = -r; dz <= r; dz++) {
                     BlockPos pos = center.offset(dx, dy, dz);
-                    if (eye.distanceTo(Vec3.atCenterOf(pos)) <= range) {
-                        result.add(pos);
+                    double ox = pos.getX() + 0.5 - eye.x;
+                    double oy = pos.getY() + 0.5 - eye.y;
+                    double oz = pos.getZ() + 0.5 - eye.z;
+                    double distanceSq = ox * ox + oy * oy + oz * oz;
+                    if (distanceSq <= limitSq) {
+                        scored.add(new Scored(pos, distanceSq));
                     }
                 }
             }
         }
-        result.sort((a, b) -> Double.compare(distanceTo(a), distanceTo(b)));
+        scored.sort(Comparator.comparingDouble(Scored::distanceSq));
+        List<BlockPos> result = new ArrayList<>(scored.size());
+        for (Scored entry : scored) {
+            result.add(entry.pos());
+        }
         return result;
     }
 
-    /** True if the player's own hitbox overlaps the block. */
+    public static Iterable<BlockPos> positionsAround(BlockPos center, int radius) {
+        return BlockPos.betweenClosed(
+            center.offset(-radius, -radius, -radius), center.offset(radius, radius, radius));
+    }
+
+    public static boolean diggable(BlockPos pos) {
+        BlockState state = state(pos);
+        if (state.isAir() || !isBreakable(pos)) {
+            return false;
+        }
+        return !state.getShape(MC.level, pos).isEmpty();
+    }
+
     public static boolean intersectsPlayer(BlockPos pos) {
         AABB block = new AABB(pos);
         return MC.player.getBoundingBox().intersects(block);
     }
 
     /**
-     * Finds a solid neighbor of the target to place against. Returns the
-     * direction from the target toward the neighbor or null if there is
-     * nothing to build on.
+     * The direction from the target toward the neighbour it can be placed
+     * against. Null when there is nothing to build on.
      */
     public static Direction findSupport(BlockPos target) {
         for (Direction side : Direction.values()) {
@@ -121,11 +151,6 @@ public final class BlockUtil {
         return null;
     }
 
-    /**
-     * Places the held block at the target using the given support side.
-     * Rotates toward the click point first when rotate is true. Returns
-     * true if the game accepted the placement.
-     */
     public static boolean place(BlockPos target, Direction support, boolean rotate, boolean swing) {
         BlockPos against = target.relative(support);
         Direction face = support.getOpposite();
@@ -147,10 +172,7 @@ public final class BlockUtil {
         return false;
     }
 
-    /**
-     * Places the held block by clicking the empty target spot itself. The
-     * server accepts a click on a replaceable block as a placement there.
-     */
+    // The server accepts a click on a replaceable block as a placement there.
     public static boolean placeDirect(BlockPos target, boolean rotate, boolean swing) {
         if (!isReplaceable(target)) {
             return false;
@@ -170,59 +192,52 @@ public final class BlockUtil {
         return false;
     }
 
-    /** Sends a rotation packet toward a point without moving the view. */
+    // Looks at a point without moving the view.
     public static void faceVector(Vec3 point) {
-        Vec3 eye = MC.player.getEyePosition();
-        double dx = point.x - eye.x;
-        double dy = point.y - eye.y;
-        double dz = point.z - eye.z;
-        double horizontal = Math.sqrt(dx * dx + dz * dz);
-        float yaw = (float) Math.toDegrees(Math.atan2(dz, dx)) - 90f;
-        float pitch = (float) -Math.toDegrees(Math.atan2(dy, horizontal));
-        MC.player.connection.send(new ServerboundMovePlayerPacket.Rot(
-            yaw, Math.clamp(pitch, -90f, 90f), MC.player.onGround(), MC.player.horizontalCollision));
+        faceVector(point, RotationPriority.PLACE);
     }
 
-    /** Hotbar slot holding a block item or -1. Prefers the selected slot. */
+    public static void faceVector(Vec3 point, RotationPriority priority) {
+        RotationManager.request(RotationManager.yawTo(point), RotationManager.pitchTo(point), priority);
+    }
+
+    public static void centerPlayer() {
+        double x = Mth.floor(MC.player.getX()) + 0.5;
+        double z = Mth.floor(MC.player.getZ()) + 0.5;
+        if (Math.abs(MC.player.getX() - x) < 0.01 && Math.abs(MC.player.getZ() - z) < 0.01) {
+            return;
+        }
+        MC.player.setPos(x, MC.player.getY(), z);
+        MC.player.connection.send(new ServerboundMovePlayerPacket.Pos(
+            x, MC.player.getY(), z, MC.player.onGround(), MC.player.horizontalCollision));
+    }
+
+    // Lower wins. Minus one means the block is not on the list.
+    public static int rankOf(Block block, Collection<Identifier> preferred) {
+        Identifier id = BuiltInRegistries.BLOCK.getKey(block);
+        int rank = 0;
+        for (Identifier chosen : preferred) {
+            if (chosen.equals(id)) {
+                return rank;
+            }
+            rank++;
+        }
+        return -1;
+    }
+
+    // Hotbar slot holding a block item or minus one. Prefers the selected slot.
     public static int findBlockSlot() {
-        int selected = MC.player.getInventory().getSelectedSlot();
-        if (MC.player.getInventory().getItem(selected).getItem() instanceof BlockItem) {
-            return selected;
-        }
-        for (int i = 0; i < 9; i++) {
-            ItemStack stack = MC.player.getInventory().getItem(i);
-            if (stack.getItem() instanceof BlockItem) {
-                return i;
-            }
-        }
-        return -1;
+        return InventoryUtil.hotbarSlot(stack -> stack.getItem() instanceof BlockItem);
     }
 
-    /**
-     * Hotbar slot holding a block item that passes the filter. Minus one when
-     * there is none. Prefers the selected slot.
-     */
     public static int findBlockSlot(Predicate<Block> filter) {
-        int selected = MC.player.getInventory().getSelectedSlot();
-        if (slotHolds(selected, filter)) {
-            return selected;
-        }
-        for (int i = 0; i < 9; i++) {
-            if (slotHolds(i, filter)) {
-                return i;
-            }
-        }
-        return -1;
-    }
-
-    private static boolean slotHolds(int slot, Predicate<Block> filter) {
-        ItemStack stack = MC.player.getInventory().getItem(slot);
-        return stack.getItem() instanceof BlockItem item && filter.test(item.getBlock());
+        return InventoryUtil.hotbarSlot(stack ->
+            stack.getItem() instanceof BlockItem item && filter.test(item.getBlock()));
     }
 
     /**
-     * True for a plain full standable cube. Sand and gravel only count
-     * when something under the target holds them up.
+     * True for a plain full standable cube. Sand and gravel need something
+     * under the target to hold them up.
      */
     public static boolean isBuildingBlock(Block block, BlockPos target) {
         BlockState state = block.defaultBlockState();
@@ -235,10 +250,7 @@ public final class BlockUtil {
         return !opensOnClick(state);
     }
 
-    /**
-     * True for blocks that open a menu or toggle when right clicked.
-     * Placing against one opens it instead.
-     */
+    // Placing against one of these opens it instead.
     public static boolean opensOnClick(BlockState state) {
         Block block = state.getBlock();
         return block instanceof BaseEntityBlock
@@ -266,8 +278,7 @@ public final class BlockUtil {
 
     /**
      * Like {@link #findSupport} but skips blocks that open on click and
-     * prefers the neighbor whose face is closest to the player's eyes.
-     * Null if there is nothing usable to build on.
+     * prefers the neighbour whose face is closest to the eyes.
      */
     public static Direction findPlaceSupport(BlockPos target) {
         Vec3 eye = MC.player.getEyePosition();
@@ -287,7 +298,7 @@ public final class BlockUtil {
         return best;
     }
 
-    /** The point in the middle of one face of a block. Uses the real shape. */
+    // Uses the real shape rather than a full cube.
     public static Vec3 hitPoint(BlockPos pos, Direction side) {
         VoxelShape shape = state(pos).getShape(MC.level, pos);
         AABB box = shape.isEmpty() ? new AABB(0, 0, 0, 1, 1, 1) : shape.bounds();
@@ -298,7 +309,6 @@ public final class BlockUtil {
         return center.add(side.getStepX() * halfX, side.getStepY() * halfY, side.getStepZ() * halfZ);
     }
 
-    /** The face of a block that sits closest to the player's eyes. */
     public static Direction facingSide(BlockPos pos) {
         Vec3 eye = MC.player.getEyePosition();
         Direction best = Direction.UP;
@@ -313,7 +323,6 @@ public final class BlockUtil {
         return best;
     }
 
-    /** True if the player is standing on this block. */
     public static boolean isStandingOn(BlockPos pos) {
         VoxelShape shape = state(pos).getCollisionShape(MC.level, pos);
         if (shape.isEmpty()) {
@@ -324,7 +333,6 @@ public final class BlockUtil {
         return shape.bounds().move(pos).intersects(below);
     }
 
-    /** True if one hit breaks the block right now. */
     public static boolean canInstantBreak(BlockPos pos) {
         if (MC.player.getAbilities().instabuild) {
             return true;
@@ -332,7 +340,6 @@ public final class BlockUtil {
         return state(pos).getDestroyProgress(MC.player, MC.level, pos) >= 1;
     }
 
-    /** Ticks to break the block with the held item. */
     public static int breakTicks(BlockPos pos) {
         float perTick = state(pos).getDestroyProgress(MC.player, MC.level, pos);
         if (perTick <= 0) {
@@ -341,7 +348,7 @@ public final class BlockUtil {
         return (int) Math.ceil(1 / perTick);
     }
 
-    /** True for ore blocks. Nether ores and ancient debris count too. */
+    // Ancient debris and gilded blackstone count too.
     public static boolean isOre(BlockState state) {
         Block block = state.getBlock();
         if (block == Blocks.ANCIENT_DEBRIS || block == Blocks.GILDED_BLACKSTONE) {
@@ -350,16 +357,12 @@ public final class BlockUtil {
         return BuiltInRegistries.BLOCK.getKey(block).getPath().endsWith("_ore");
     }
 
-    /**
-     * Groups blocks that are the same thing in different stone. Iron ore
-     * and deepslate iron ore share a family.
-     */
+    // Iron ore and deepslate iron ore share a family.
     public static String family(Block block) {
         String path = BuiltInRegistries.BLOCK.getKey(block).getPath();
         return path.startsWith("deepslate_") ? path.substring("deepslate_".length()) : path;
     }
 
-    /** Readable block name for chat and the HUD. */
     public static String blockName(Block block) {
         return block.getName().getString();
     }

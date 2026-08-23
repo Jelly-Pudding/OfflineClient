@@ -3,6 +3,7 @@ package com.jellypudding.offlineclient.mixin;
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.events.Render2DEvent;
 import com.jellypudding.offlineclient.modules.render.ClearView;
+import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.Hud;
@@ -35,8 +36,8 @@ public class HudMixin {
         if (texture == null) {
             return;
         }
-        ClearView clearView = OfflineClient.INSTANCE.getModuleManager().get(ClearView.class);
-        if (!clearView.isEnabled()) {
+        ClearView clearView = Modules.get(ClearView.class);
+        if (clearView == null || !clearView.isEnabled()) {
             return;
         }
         String path = texture.getPath();
@@ -48,8 +49,8 @@ public class HudMixin {
 
     @Inject(method = "extractVignette", at = @At("HEAD"), cancellable = true)
     private void onRenderVignette(GuiGraphicsExtractor context, Entity entity, CallbackInfo ci) {
-        ClearView clearView = OfflineClient.INSTANCE.getModuleManager().get(ClearView.class);
-        if (clearView.isEnabled() && clearView.blocksVignette()) {
+        ClearView clearView = Modules.get(ClearView.class);
+        if (clearView != null && clearView.isEnabled() && clearView.blocksVignette()) {
             ci.cancel();
         }
     }

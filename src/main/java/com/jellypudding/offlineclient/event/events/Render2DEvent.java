@@ -3,9 +3,7 @@ package com.jellypudding.offlineclient.event.events;
 import com.jellypudding.offlineclient.event.Event;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 
-/**
- * Fired while the HUD is being drawn.
- */
+// Fired whilst the HUD is being drawn.
 public final class Render2DEvent extends Event {
 
     private final GuiGraphicsExtractor context;

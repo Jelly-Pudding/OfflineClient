@@ -5,9 +5,12 @@ import com.jellypudding.offlineclient.event.events.KnockbackEvent;
 import com.jellypudding.offlineclient.event.events.PacketReceiveEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import net.minecraft.network.protocol.game.ClientboundExplodePacket;
 import net.minecraft.world.phys.Vec3;
+
+import java.util.Optional;
 
 public final class NoKnockback extends Module {
 
@@ -15,10 +18,19 @@ public final class NoKnockback extends Module {
         "How much horizontal knockback to take.", 0, 0, 100, 1, "%");
     private final NumberSetting vertical = new NumberSetting("Vertical",
         "How much vertical knockback to take.", 0, 0, 100, 1, "%");
+    private final BoolSetting separateExplosions = new BoolSetting("Separate explosions",
+        "Give explosions their own pair of sliders.", false);
+    private final NumberSetting explosionHorizontal = new NumberSetting("Explosion horizontal",
+        "How much sideways push to take from explosions.", 100, 0, 100, 1, "%")
+        .visibleWhen(separateExplosions::isOn);
+    private final NumberSetting explosionVertical = new NumberSetting("Explosion vertical",
+        "How much upward push to take from explosions.", 100, 0, 100, 1, "%")
+        .visibleWhen(separateExplosions::isOn);
 
     public NoKnockback() {
         super("NoKnockback", "Reduces or removes the knockback you take.", Category.MOVEMENT);
-        addSettings(horizontal, vertical);
+        addSettings(horizontal, vertical, separateExplosions, explosionHorizontal,
+            explosionVertical);
         searchTags("velocity", "knockback", "antikb");
     }
 
@@ -40,29 +52,23 @@ public final class NoKnockback extends Module {
         event.setZ(current.z + (event.getZ() - current.z) * h);
     }
 
-    /**
-     * Explosions push the player through their own packet instead of the
-     * usual knockback path. Swallow it and apply the scaled push ourselves.
-     */
+    // Explosions push the player through their own packet instead of the usual knockback path.
     @Subscribe
     private void onPacketReceive(PacketReceiveEvent event) {
         if (!(event.getPacket() instanceof ClientboundExplodePacket packet)
             || packet.playerKnockback().isEmpty()) {
             return;
         }
-        double h = horizontal.getValue() / 100.0;
-        double v = vertical.getValue() / 100.0;
+        double h = (separateExplosions.isOn() ? explosionHorizontal : horizontal).getValue() / 100.0;
+        double v = (separateExplosions.isOn() ? explosionVertical : vertical).getValue() / 100.0;
         if (h >= 1 && v >= 1) {
             return;
         }
-        event.cancel();
-        Vec3 knockback = packet.playerKnockback().get();
-        Vec3 scaled = new Vec3(knockback.x * h, knockback.y * v, knockback.z * h);
-        // Packets arrive off the game thread.
-        mc.schedule(() -> {
-            if (mc.player != null && scaled.lengthSqr() > 0) {
-                mc.player.addDeltaMovement(scaled);
-            }
-        });
+        Vec3 push = packet.playerKnockback().get();
+        // Scaling the packet keeps the particles and the sound.
+        event.setPacket(new ClientboundExplodePacket(
+            packet.center(), packet.radius(), packet.blockCount(),
+            Optional.of(new Vec3(push.x * h, push.y * v, push.z * h)),
+            packet.explosionParticle(), packet.explosionSound(), packet.blockParticles()));
     }
 }

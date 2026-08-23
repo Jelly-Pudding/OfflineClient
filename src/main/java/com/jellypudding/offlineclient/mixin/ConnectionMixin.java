@@ -3,33 +3,27 @@ package com.jellypudding.offlineclient.mixin;
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.events.PacketReceiveEvent;
 import com.jellypudding.offlineclient.event.events.PacketSendEvent;
+import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import io.netty.channel.ChannelFutureListener;
-import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import net.minecraft.network.Connection;
+import net.minecraft.network.PacketListener;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBundlePacket;
-import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ConcurrentLinkedQueue;
 
 @Mixin(Connection.class)
 public abstract class ConnectionMixin extends SimpleChannelInboundHandler<Packet<?>> {
 
-    private final ConcurrentLinkedQueue<PacketSendEvent> offlineclient$events = new ConcurrentLinkedQueue<>();
-
-    /**
-     * Bundles carry several packets in one wrapper. Each one gets its own
-     * event and cancelled ones are dropped from the bundle.
-     */
+    // Bundles carry several packets in one wrapper.
     @ModifyVariable(
         method = "channelRead0(Lio/netty/channel/ChannelHandlerContext;Lnet/minecraft/network/protocol/Packet;)V",
         at = @At("HEAD"),
@@ -46,60 +40,42 @@ public abstract class ConnectionMixin extends SimpleChannelInboundHandler<Packet
             if (event.isCancelled()) {
                 changed = true;
             } else {
-                kept.add(sub);
+                @SuppressWarnings("unchecked")
+                Packet<? super ClientGamePacketListener> result =
+                    (Packet<? super ClientGamePacketListener>) event.getPacket();
+                changed |= result != sub;
+                kept.add(result);
             }
         }
         return changed ? new ClientboundBundlePacket(kept) : packet;
     }
 
-    @Inject(
+    @WrapOperation(
         method = "channelRead0(Lio/netty/channel/ChannelHandlerContext;Lnet/minecraft/network/protocol/Packet;)V",
         at = @At(value = "INVOKE",
-            target = "Lnet/minecraft/network/Connection;genericsFtw(Lnet/minecraft/network/protocol/Packet;Lnet/minecraft/network/PacketListener;)V",
-            ordinal = 0),
-        cancellable = true)
-    private void onChannelRead0(ChannelHandlerContext context, Packet<?> packet, CallbackInfo ci) {
+            target = "Lnet/minecraft/network/Connection;genericsFtw(Lnet/minecraft/network/protocol/Packet;Lnet/minecraft/network/PacketListener;)V"))
+    private void wrapHandle(Packet<?> packet, PacketListener listener, Operation<Void> original) {
+        // Bundles already had an event each in unpackBundle.
         if (packet instanceof ClientboundBundlePacket) {
+            original.call(packet, listener);
             return;
         }
         PacketReceiveEvent event = new PacketReceiveEvent(packet);
         OfflineClient.INSTANCE.getEventBus().post(event);
         if (event.isCancelled()) {
-            ci.cancel();
-        }
-    }
-
-    @ModifyVariable(
-        method = "send(Lnet/minecraft/network/protocol/Packet;Lio/netty/channel/ChannelFutureListener;)V",
-        at = @At("HEAD"))
-    private Packet<?> modifyPacket(Packet<?> packet) {
-        PacketSendEvent event = new PacketSendEvent(packet);
-        offlineclient$events.add(event);
-        OfflineClient.INSTANCE.getEventBus().post(event);
-        return event.getPacket();
-    }
-
-    @Inject(
-        method = "send(Lnet/minecraft/network/protocol/Packet;Lio/netty/channel/ChannelFutureListener;)V",
-        at = @At("HEAD"),
-        cancellable = true)
-    private void onSend(Packet<?> packet, @Nullable ChannelFutureListener callback, CallbackInfo ci) {
-        PacketSendEvent event = offlineclient$getEvent(packet);
-        if (event == null) {
             return;
         }
-        if (event.isCancelled()) {
-            ci.cancel();
-        }
-        offlineclient$events.remove(event);
+        original.call(event.getPacket(), listener);
     }
 
-    private PacketSendEvent offlineclient$getEvent(Packet<?> packet) {
-        for (PacketSendEvent event : offlineclient$events) {
-            if (event.getPacket() == packet) {
-                return event;
-            }
+    @WrapMethod(
+        method = "send(Lnet/minecraft/network/protocol/Packet;Lio/netty/channel/ChannelFutureListener;)V")
+    private void wrapSend(Packet<?> packet, ChannelFutureListener callback, Operation<Void> original) {
+        PacketSendEvent event = new PacketSendEvent(packet);
+        OfflineClient.INSTANCE.getEventBus().post(event);
+        if (event.isCancelled()) {
+            return;
         }
-        return null;
+        original.call(event.getPacket(), callback);
     }
 }

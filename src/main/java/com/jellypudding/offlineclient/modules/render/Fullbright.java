@@ -10,7 +10,7 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 public final class Fullbright extends Module {
 
     private final NumberSetting brightness = new NumberSetting("Brightness",
-        "Gamma level. Vanilla max is 1. Higher removes all darkness.", 16, 1, 16, 0.5);
+        "Gamma level above the vanilla cap of 1.", 16, 1, 16, 0.5);
 
     private double previousGamma = 1;
     private boolean stored;
@@ -22,8 +22,7 @@ public final class Fullbright extends Module {
 
     @Override
     protected void onEnable() {
-        // A crash while enabled can leave our boosted value in options.txt.
-        // Anything above the vanilla maximum of 1 cannot be a real choice.
+        // A crash whilst enabled leaves the boosted gamma in options.txt. Vanilla caps at 1.
         previousGamma = Math.min(mc.options.gamma().get(), 1.0);
         stored = true;
     }

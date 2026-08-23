@@ -14,20 +14,18 @@ import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.player.RemotePlayer;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.player.Inventory;
 
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 
-/**
- * Drops a client side copy of the player wearing their skin and gear.
- * The server never knows it exists.
- */
+// A client side copy of the player. The server never knows it exists.
 public final class FakePlayer extends Module {
 
     private final BoolSetting copyGear = new BoolSetting("Copy gear",
-        "Give the copy your armor and held items.", true);
+        "Give the copy your armour and held items.", true);
     private final NumberSetting health = new NumberSetting("Health",
-        "Health points the copy starts with. Anything above 20 becomes absorption.",
+        "Health points the copy starts with.",
         20, 1, 40, 1).min(1);
 
     private Body body;
@@ -62,7 +60,6 @@ public final class FakePlayer extends Module {
         body = null;
     }
 
-    /** The module turns off once the copy is gone. */
     @Subscribe
     private void onClientTick(ClientTickEvent event) {
         if (body == null) {
@@ -79,13 +76,12 @@ public final class FakePlayer extends Module {
     }
 
     /**
-     * A remote player that borrows the local player's tab entry for the
-     * skin. It gets its own UUID because the level refuses two entities
-     * with the same one.
+     * Borrows the local player's tab entry for the skin. The level refuses
+     * two entities with the same UUID.
      */
     public static final class Body extends RemotePlayer {
 
-        /** Far above any entity id the server hands out. */
+        // Far above any entity id the server hands out.
         private static final int ID_BASE = Integer.MAX_VALUE - 100_000;
 
         private final UUID skinOwner;
@@ -110,7 +106,13 @@ public final class FakePlayer extends Module {
                 setAbsorptionAmount(startHealth - getMaxHealth());
             }
             if (copyGear) {
-                getInventory().replaceWith(source.getInventory());
+                // replaceWith stores the very same stacks.
+                Inventory theirs = source.getInventory();
+                Inventory ours = getInventory();
+                for (int slot = 0; slot < ours.getContainerSize(); slot++) {
+                    ours.setItem(slot, theirs.getItem(slot).copy());
+                }
+                ours.setSelectedSlot(theirs.getSelectedSlot());
             }
         }
 

@@ -2,9 +2,7 @@ package com.jellypudding.offlineclient.event.events;
 
 import com.jellypudding.offlineclient.event.Event;
 
-/**
- * Fired for every raw keyboard event (GLFW key codes and actions).
- */
+// Key and action are raw GLFW values.
 public final class KeyPressEvent extends Event {
 
     private final int key;

@@ -19,16 +19,12 @@ import net.minecraft.world.entity.EntityEvent;
 import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.player.Player;
 
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Queue;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 
-/**
- * Chat messages for things worth knowing about. Packets are queued on the
- * network thread and drained on the game thread where the level is safe
- * to read.
- */
 public final class Notifier extends Module {
 
     private enum Kind {
@@ -40,8 +36,13 @@ public final class Notifier extends Module {
     private record Pending(Kind kind, int entityId, UUID uuid) {
     }
 
-    /** Ticks after joining during which players already nearby stay quiet. */
+    // Ticks after joining during which players already nearby stay quiet.
     private static final int JOIN_GRACE_TICKS = 40;
+
+    // Packets held whilst the game thread is busy. Anything past this is dropped.
+    private static final int MAX_PENDING = 4096;
+
+    private static final int MAX_TRACKED = 512;
 
     private final BoolSetting visualRange = new BoolSetting("Visual range",
         "Say when a player enters or leaves your render distance.", true);
@@ -55,12 +56,25 @@ public final class Notifier extends Module {
     private final BoolSetting sound = new BoolSetting("Sound",
         "Play a soft ping with every message.", false);
 
-    private final ConcurrentLinkedQueue<Pending> queue = new ConcurrentLinkedQueue<>();
-    /** Entity id to name for every player the server has shown us. */
-    private final Map<Integer, String> names = new HashMap<>();
-    /** Totem pops per player since we last saw them die. */
-    private final Map<UUID, Integer> pops = new HashMap<>();
+    private final Queue<Pending> queue = new LinkedBlockingQueue<>(MAX_PENDING);
+    // Entity id to name for every player the server has sent.
+    private final Map<Integer, String> names = bounded(MAX_TRACKED);
+    // Totem pops per player since their last death.
+    private final Map<UUID, Integer> pops = bounded(MAX_TRACKED);
     private ClientLevel lastLevel;
+
+    /**
+     * The client removes some entities without a packet. Neither map can be
+     * trusted to empty itself.
+     */
+    private static <K, V> Map<K, V> bounded(int max) {
+        return new LinkedHashMap<K, V>() {
+            @Override
+            protected boolean removeEldestEntry(Map.Entry<K, V> eldest) {
+                return size() > max;
+            }
+        };
+    }
 
     public Notifier() {
         super("Notifier", "Chat messages when players come and go and when totems pop.", Category.MISC);
@@ -85,18 +99,19 @@ public final class Notifier extends Module {
         lastLevel = null;
     }
 
+    // Fired on the netty thread. The level must not be read here.
     @Subscribe
     private void onPacketReceive(PacketReceiveEvent event) {
         switch (event.getPacket()) {
             case ClientboundAddEntityPacket packet when packet.getType() == EntityTypes.PLAYER ->
-                queue.add(new Pending(Kind.ENTER, packet.getId(), packet.getUUID()));
+                queue.offer(new Pending(Kind.ENTER, packet.getId(), packet.getUUID()));
             case ClientboundRemoveEntitiesPacket packet -> {
                 for (int id : packet.getEntityIds()) {
-                    queue.add(new Pending(Kind.LEAVE, id, null));
+                    queue.offer(new Pending(Kind.LEAVE, id, null));
                 }
             }
             case ClientboundEntityEventPacket packet when packet.getEventId() == EntityEvent.PROTECTED_FROM_DEATH ->
-                queue.add(new Pending(Kind.TOTEM, packet.entityId, null));
+                queue.offer(new Pending(Kind.TOTEM, packet.entityId, null));
             default -> {
             }
         }
@@ -108,7 +123,8 @@ public final class Notifier extends Module {
             return;
         }
         if (mc.level != lastLevel) {
-            // A new dimension resends every entity. Start clean.
+            // A new dimension resends every entity. Queued ids belong to the old one.
+            queue.clear();
             names.clear();
             pops.clear();
             lastLevel = mc.level;
@@ -166,7 +182,6 @@ public final class Notifier extends Module {
         say(label(player) + "popped " + describe(count) + ".");
     }
 
-    /** A death ends the pop count for that player and says how many it took. */
     private void checkDeaths() {
         if (pops.isEmpty()) {
             return;
@@ -189,7 +204,7 @@ public final class Notifier extends Module {
         return count == 1 ? "§b1 §7totem" : "§b" + count + " §7totems";
     }
 
-    /** The tab list usually knows the name before the entity exists. */
+    // The tab list usually knows the name before the entity exists.
     private String nameOf(Pending pending) {
         if (mc.getConnection() != null && pending.uuid() != null) {
             PlayerInfo info = mc.getConnection().getPlayerInfo(pending.uuid());

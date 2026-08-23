@@ -1,9 +1,11 @@
 package com.jellypudding.offlineclient.mixin;
 
-import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.modules.render.CameraTweaks;
 import com.jellypudding.offlineclient.modules.render.Freecam;
+import com.jellypudding.offlineclient.modules.render.FreeLook;
 import com.jellypudding.offlineclient.modules.render.XRay;
 import com.jellypudding.offlineclient.modules.render.Zoom;
+import com.jellypudding.offlineclient.util.Modules;
 import com.llamalad7.mixinextras.injector.ModifyReturnValue;
 import net.minecraft.client.Camera;
 import net.minecraft.client.DeltaTracker;
@@ -13,7 +15,9 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(Camera.class)
 public abstract class CameraMixin {
@@ -27,16 +31,35 @@ public abstract class CameraMixin {
     @Shadow
     protected abstract void setRotation(float yaw, float pitch);
 
+    // FreeLook lends its look angles to the camera entity for the alignment call.
+    @Inject(method = "update(Lnet/minecraft/client/DeltaTracker;)V",
+        at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/client/Camera;alignWithEntity(F)V"))
+    private void beforeAlignWithEntity(DeltaTracker deltaTracker, CallbackInfo ci) {
+        FreeLook freeLook = Modules.get(FreeLook.class);
+        if (freeLook != null) {
+            freeLook.applyRotation();
+        }
+    }
+
+    @Inject(method = "update(Lnet/minecraft/client/DeltaTracker;)V",
+        at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/client/Camera;alignWithEntity(F)V",
+            shift = At.Shift.AFTER))
+    private void afterAlignWithEntity(DeltaTracker deltaTracker, CallbackInfo ci) {
+        FreeLook freeLook = Modules.get(FreeLook.class);
+        if (freeLook != null) {
+            freeLook.restoreRotation();
+        }
+    }
+
     @Inject(method = "update(Lnet/minecraft/client/DeltaTracker;)V",
         at = @At(value = "INVOKE",
             target = "Lnet/minecraft/client/Camera;alignWithEntity(F)V",
             shift = At.Shift.AFTER))
     private void onUpdate(DeltaTracker deltaTracker, CallbackInfo ci) {
-        if (OfflineClient.INSTANCE.getModuleManager() == null) {
-            return;
-        }
-        Freecam freecam = OfflineClient.INSTANCE.getModuleManager().get(Freecam.class);
-        if (!freecam.isEnabled()) {
+        Freecam freecam = Modules.get(Freecam.class);
+        if (freecam == null || !freecam.isEnabled()) {
             return;
         }
         detached = true;
@@ -45,10 +68,7 @@ public abstract class CameraMixin {
         setRotation(freecam.getCamYaw(), freecam.getCamPitch());
     }
 
-    /**
-     * XRay turns off the smart chunk culling. Vanilla skips chunk
-     * sections that are boxed in by solid ground.
-     */
+    // Vanilla skips chunk sections that are boxed in by solid ground.
     @Inject(method = "extractRenderState(Lnet/minecraft/client/renderer/state/level/CameraRenderState;F)V",
         at = @At("RETURN"))
     private void onExtractRenderState(CameraRenderState state, float partialTicks, CallbackInfo ci) {
@@ -58,21 +78,31 @@ public abstract class CameraMixin {
         }
     }
 
-    /** Zoom divides the FOV at read time. */
     @ModifyReturnValue(method = "calculateFov(F)F", at = @At("RETURN"))
     private float onCalculateFov(float original) {
-        if (OfflineClient.INSTANCE.getModuleManager() == null) {
-            return original;
-        }
-        return OfflineClient.INSTANCE.getModuleManager().get(Zoom.class).applyZoom(original);
+        Zoom zoom = Modules.get(Zoom.class);
+        return zoom == null ? original : zoom.applyZoom(original);
     }
 
-    /** Hides the hand while zoomed in. */
     @ModifyReturnValue(method = "calculateHudFov(F)F", at = @At("RETURN"))
     private float onCalculateHudFov(float original) {
-        if (OfflineClient.INSTANCE.getModuleManager() == null) {
-            return original;
+        Zoom zoom = Modules.get(Zoom.class);
+        return zoom == null ? original : zoom.applyZoom(original);
+    }
+
+    // The distance vanilla wants before it walks the ray out and shortens it.
+    @ModifyVariable(method = "getMaxZoom(F)F", at = @At("HEAD"), argsOnly = true)
+    private float onWantedZoom(float wanted) {
+        CameraTweaks tweaks = Modules.get(CameraTweaks.class);
+        return tweaks == null ? wanted : tweaks.adjustDistance(wanted);
+    }
+
+    // No clip returns the wanted distance whole and skips the ray walk.
+    @Inject(method = "getMaxZoom(F)F", at = @At("HEAD"), cancellable = true)
+    private void onGetMaxZoom(float wanted, CallbackInfoReturnable<Float> cir) {
+        CameraTweaks tweaks = Modules.get(CameraTweaks.class);
+        if (tweaks != null && tweaks.passesThroughWalls()) {
+            cir.setReturnValue(tweaks.adjustDistance(wanted));
         }
-        return OfflineClient.INSTANCE.getModuleManager().get(Zoom.class).applyZoom(original);
     }
 }

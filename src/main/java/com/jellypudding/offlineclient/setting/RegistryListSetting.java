@@ -4,8 +4,11 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import net.minecraft.core.Registry;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.effect.MobEffect;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.SpawnEggItem;
 import net.minecraft.world.level.block.Block;
 
 import java.util.Collection;
@@ -20,10 +23,10 @@ public final class RegistryListSetting<T> extends Setting<Set<Identifier>> {
 
     private final Registry<T> registry;
 
-    /** Resolved entries. Read from other threads and replaced whole. */
+    // Resolved entries. Read from other threads and replaced whole.
     private volatile Set<T> resolved = Set.of();
 
-    /** Runs after every change to the list. Modules use it to refresh caches. */
+    // Runs after every change to the list.
     private Runnable onChange;
 
     public RegistryListSetting(String name, String description, Registry<T> registry,
@@ -49,7 +52,7 @@ public final class RegistryListSetting<T> extends Setting<Set<Identifier>> {
         return registry;
     }
 
-    /** The resolved entries. Unknown ids are kept in the config but not here. */
+    // Unknown ids are kept in the config but not here.
     public Set<T> resolved() {
         return resolved;
     }
@@ -58,7 +61,6 @@ public final class RegistryListSetting<T> extends Setting<Set<Identifier>> {
         return value.size();
     }
 
-    /** Fast lookup for the per tick paths. */
     public boolean contains(T entry) {
         return resolved.contains(entry);
     }
@@ -94,7 +96,6 @@ public final class RegistryListSetting<T> extends Setting<Set<Identifier>> {
         return this;
     }
 
-    /** A readable name for a registry entry. */
     public String displayName(T entry) {
         if (entry instanceof Block block) {
             return block.getName().getString();
@@ -102,17 +103,26 @@ public final class RegistryListSetting<T> extends Setting<Set<Identifier>> {
         if (entry instanceof Item item) {
             return item.getName(item.getDefaultInstance()).getString();
         }
+        if (entry instanceof EntityType<?> type) {
+            return type.getDescription().getString();
+        }
+        if (entry instanceof MobEffect effect) {
+            return effect.getDisplayName().getString();
+        }
         Identifier id = registry.getKey(entry);
         return id == null ? "unknown" : id.getPath().replace('_', ' ');
     }
 
-    /** An icon stack for the GUI. Empty when the entry has no item form. */
+    // Empty when the entry has no item form.
     public ItemStack icon(T entry) {
         if (entry instanceof Block block) {
             return new ItemStack(block);
         }
         if (entry instanceof Item item) {
             return item.getDefaultInstance();
+        }
+        if (entry instanceof EntityType<?> type) {
+            return SpawnEggItem.byId(type).map(ItemStack::new).orElse(ItemStack.EMPTY);
         }
         return ItemStack.EMPTY;
     }
@@ -139,7 +149,8 @@ public final class RegistryListSetting<T> extends Setting<Set<Identifier>> {
                 next.add(registry.getValue(id));
             }
         }
-        resolved = Set.copyOf(next);
+        // Set.copyOf loses order and some modules rank by pick order.
+        resolved = java.util.Collections.unmodifiableSet(next);
     }
 
     private void changed() {

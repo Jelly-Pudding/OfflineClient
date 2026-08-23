@@ -1,6 +1,7 @@
 package com.jellypudding.offlineclient.mixin;
 
 import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.gui.RecoveryScreen;
 import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.RenderUtil;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
@@ -8,6 +9,7 @@ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
+import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.TitleScreen;
@@ -25,9 +27,6 @@ import java.util.concurrent.ThreadLocalRandom;
 
 @Mixin(TitleScreen.class)
 public abstract class TitleScreenMixin extends Screen {
-
-    private static final int CYAN = 0xFF00E5FF;
-    private static final int PURPLE = 0xFFB44CFF;
 
     @Shadow
     @Final
@@ -48,10 +47,7 @@ public abstract class TitleScreenMixin extends Screen {
         super(title);
     }
 
-    /**
-     * Swaps the vanilla copyright line in the bottom right for our
-     * developer credit. New random colors every time the screen opens.
-     */
+    // Swaps the vanilla copyright line in the bottom right for the developer credit.
     @Inject(method = "init()V", at = @At("TAIL"))
     private void onInit(CallbackInfo ci) {
         float hue = ThreadLocalRandom.current().nextFloat(360f);
@@ -71,6 +67,14 @@ public abstract class TitleScreenMixin extends Screen {
             creditY = copyright.getY();
             removeWidget(copyright);
         }
+
+        // A way back to defaults when a saved setting breaks the game.
+        addRenderableWidget(Button.builder(
+                Component.literal("Recovery"),
+                button -> minecraft.gui.setScreen(
+                    new RecoveryScreen(this)))
+            .bounds(width - 62, 4, 58, 16)
+            .build());
     }
 
     @Inject(
@@ -81,27 +85,15 @@ public abstract class TitleScreenMixin extends Screen {
         Font font = minecraft.font;
         float alpha = fadeAlpha();
 
-        // Server advert in big rainbow text at the top.
-        String advert = OfflineClient.SERVER_NAME;
-        float advertScale = 1.5f;
-        float advertX = (width - font.width(advert) * advertScale) / 2f;
-        RenderUtil.rainbowText(context, font, advert, advertX, 3, advertScale, alpha);
-
-        // Client name below in the accent gradient.
         String name = OfflineClient.NAME + " v" + OfflineClient.VERSION;
-        float nameX = (width - font.width(name)) / 2f;
-        RenderUtil.gradientText(context, font, name, nameX, 18, CYAN, PURPLE, 1f, alpha);
+        RenderUtil.rainbowText(context, font, name, 4, 4, 1f, alpha);
 
-        // Developer credit where the copyright line used to be.
         String credit = "Developed by AlphaAlex115";
         int y = creditY != -1 ? creditY : height - 10;
         RenderUtil.gradientText(context, font, credit,
             width - font.width(credit) - 2, y, creditColorFrom, creditColorTo, 1f, alpha);
     }
 
-    /**
-     * Matches the fade the rest of the title screen uses.
-     */
     private float fadeAlpha() {
         if (!fading) {
             return 1f;
@@ -113,9 +105,7 @@ public abstract class TitleScreenMixin extends Screen {
         return Mth.clampedMap(Mth.clamp(t, 0f, 1f), 0.5f, 1f, 0f, 1f);
     }
 
-    /**
-     * Recolors the version line in the bottom left while keeping its fade.
-     */
+    // The top byte carries the fade alpha.
     @WrapOperation(
         method = "extractRenderState(Lnet/minecraft/client/gui/GuiGraphicsExtractor;IIF)V",
         at = @At(value = "INVOKE",

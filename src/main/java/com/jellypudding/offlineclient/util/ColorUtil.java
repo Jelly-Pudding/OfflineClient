@@ -5,17 +5,14 @@ public final class ColorUtil {
     private ColorUtil() {
     }
 
-    /** HSV to opaque ARGB. Hue is in degrees and wraps around. */
+    // HSV to opaque ARGB. Hue is in degrees and wraps around.
     public static int hsv(float hue, float saturation, float value) {
         float h = ((hue % 360f) + 360f) % 360f;
         int rgb = java.awt.Color.HSBtoRGB(h / 360f, Math.clamp(saturation, 0f, 1f), Math.clamp(value, 0f, 1f));
         return 0xFF000000 | (rgb & 0xFFFFFF);
     }
 
-    /**
-     * Animated rainbow color. The offset shifts the phase between
-     * adjacent characters or list entries.
-     */
+    // The offset shifts the phase between adjacent characters or entries.
     public static int rainbow(int offset) {
         float hue = ((System.currentTimeMillis() % 4000L) / 4000f * 360f + offset * 8f) % 360f;
         return hsv(hue, 0.65f, 1f);
@@ -25,13 +22,20 @@ public final class ColorUtil {
         return (Math.clamp(alpha, 0, 255) << 24) | (color & 0xFFFFFF);
     }
 
-    /** Multiplies the color's own alpha by a 0 to 1 factor. */
+    // Multiplies the colour's own alpha by a 0 to 1 factor.
     public static int fade(int color, float alpha) {
         int a = (int) ((color >>> 24) * Math.clamp(alpha, 0f, 1f));
         return (a << 24) | (color & 0xFFFFFF);
     }
 
-    /** Linear interpolation between two ARGB colors. */
+    // Perceived brightness from 0 to 1. Alpha is ignored.
+    public static float luminance(int color) {
+        float r = ((color >> 16) & 0xFF) / 255f;
+        float g = ((color >> 8) & 0xFF) / 255f;
+        float b = (color & 0xFF) / 255f;
+        return 0.2126f * r + 0.7152f * g + 0.0722f * b;
+    }
+
     public static int lerp(int from, int to, float t) {
         t = Math.clamp(t, 0f, 1f);
         int a = (int) (((from >> 24) & 0xFF) + (((to >> 24) & 0xFF) - ((from >> 24) & 0xFF)) * t);

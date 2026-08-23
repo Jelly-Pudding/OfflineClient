@@ -15,15 +15,12 @@ import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.item.equipment.Equippable;
 import net.minecraft.world.level.block.state.BlockState;
 
-/**
- * Helpers for reading item stats.
- */
 public final class ItemUtil {
 
     private ItemUtil() {
     }
 
-    /** The level of an enchantment on a stack. Zero when absent. */
+    // The level of an enchantment on a stack. Zero when absent.
     public static int enchantLevel(ResourceKey<Enchantment> enchantment, ItemStack stack) {
         if (OfflineClient.MC.level == null || stack.isEmpty()) {
             return 0;
@@ -35,7 +32,7 @@ public final class ItemUtil {
             .orElse(0);
     }
 
-    /** Mining speed against a block including the Efficiency enchantment. */
+    // Mining speed against a block including the Efficiency enchantment.
     public static float miningSpeed(ItemStack stack, BlockState state) {
         float speed = stack.getDestroySpeed(state);
         if (speed > 1) {
@@ -47,16 +44,37 @@ public final class ItemUtil {
         return speed;
     }
 
-    /** The equipment slot an item goes into. Null for items that cannot be worn. */
+    // Minus one when nothing beats a bare hand.
+    public static int bestToolSlot(BlockState state) {
+        int bestSlot = -1;
+        float bestSpeed = 1;
+        for (int i = 0; i < 9; i++) {
+            float speed = miningSpeed(OfflineClient.MC.player.getInventory().getItem(i), state);
+            if (speed > bestSpeed) {
+                bestSpeed = speed;
+                bestSlot = i;
+            }
+        }
+        return bestSlot;
+    }
+
+    public static void selectBestTool(BlockState state, InventoryUtil.SlotSwap slots) {
+        int bestSlot = bestToolSlot(state);
+        if (bestSlot == -1) {
+            return;
+        }
+        slots.select(bestSlot);
+    }
+
+    // Null for items that cannot be worn.
     public static EquipmentSlot equipSlot(ItemStack stack) {
         Equippable equippable = stack.getItem().components().get(DataComponents.EQUIPPABLE);
         return equippable == null ? null : equippable.slot();
     }
 
     /**
-     * Sums a flat attribute the item grants in a slot. Armor points and
-     * toughness use this. Multiplier style modifiers scale a base of zero
-     * here.
+     * Sums a flat attribute the item grants in a slot. Multiplier style
+     * modifiers scale a base of zero.
      */
     public static double attributeValue(ItemStack stack, Holder<Attribute> attribute, EquipmentSlot slot) {
         ItemAttributeModifiers modifiers = stack.getItem().components()

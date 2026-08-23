@@ -10,10 +10,7 @@ import org.spongepowered.asm.mixin.injection.ModifyVariable;
 @Mixin(SectionCompiler.class)
 public abstract class SectionCompilerMixin {
 
-    /**
-     * See through blocks need the translucent layer or their alpha is
-     * ignored. Only the blocks XRay is fading are moved.
-     */
+    // See through blocks need the translucent layer or their alpha is ignored.
     @ModifyVariable(
         method = "getOrBeginLayer(Ljava/util/Map;Lnet/minecraft/client/renderer/SectionBufferBuilderPack;Lnet/minecraft/client/renderer/chunk/ChunkSectionLayer;)Lcom/mojang/blaze3d/vertex/BufferBuilder;",
         at = @At("HEAD"),

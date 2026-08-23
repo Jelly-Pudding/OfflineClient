@@ -7,6 +7,7 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
+import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.Setting;
 import com.jellypudding.offlineclient.setting.TextSetting;
@@ -40,8 +41,7 @@ public final class SetCommand extends Command {
 
         Setting<?> setting = module.getSetting(args[1]);
         if (setting == null) {
-            // The user may have skipped the setting name. That works when
-            // the module has exactly one setting.
+            // The setting name may be left out when the module has only one.
             if (args.length == 2 && module.getSettings().size() == 1) {
                 apply(module, module.getSettings().get(0), args[1]);
                 return;
@@ -140,6 +140,14 @@ public final class SetCommand extends Command {
                 }
             }
             case TextSetting t -> t.setValue(value.trim());
+            case KeybindSetting k -> {
+                int key = KeybindSetting.keyFromName(value);
+                if (key == KeybindSetting.UNKNOWN) {
+                    ChatUtil.error("§f" + value + "§c is not a key. Try a letter or §fnone§c.");
+                    return;
+                }
+                k.setValue(key);
+            }
             default -> {
                 ChatUtil.error("This setting can only be changed in the ClickGUI.");
                 return;
@@ -187,6 +195,9 @@ public final class SetCommand extends Command {
     }
 
     private static String valueString(Setting<?> setting) {
+        if (setting instanceof KeybindSetting k) {
+            return k.getKeyName();
+        }
         if (setting instanceof ColorSetting c) {
             return c.isRainbow() ? "rainbow" : "hue " + (int) c.getHue();
         }

@@ -5,19 +5,16 @@ import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.module.ModuleManager;
 import com.jellypudding.offlineclient.modules.combat.AutoTotem;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
-import net.minecraft.world.inventory.ContainerInput;
+import com.jellypudding.offlineclient.util.InventoryUtil;
 import net.minecraft.world.item.ItemStack;
 
-/**
- * Tops up hotbar stacks from the rest of the inventory before they run
- * out. Watches what each slot held last tick.
- */
+// Tops up hotbar stacks by watching what each slot held last tick.
 public final class AutoReplenish extends Module {
 
-    private static final int OFFHAND_NETWORK_SLOT = 45;
     private static final int OFFHAND_INDEX = 9;
 
     private final NumberSetting threshold = new NumberSetting("Threshold",
@@ -27,14 +24,18 @@ public final class AutoReplenish extends Module {
     private final BoolSetting offhand = new BoolSetting("Offhand",
         "Also refill your offhand.", true);
     private final BoolSetting unstackable = new BoolSetting("Unstackables",
-        "Replace a used up single item like a totem or a pearl with another one.", true);
+        "Replace a used up single item like a totem or a pearl.", true);
     private final BoolSetting fromHotbar = new BoolSetting("Search hotbar",
         "Pull from other hotbar slots when the inventory has none.", false);
 
-    /** What each hotbar slot and the offhand held last tick. */
+    // What each hotbar slot and the offhand held last tick.
     private final ItemStack[] previous = new ItemStack[10];
     private int timer;
     private boolean hadScreen;
+
+    private AutoTotem autoTotem;
+    private AutoEat autoEat;
+    private AutoPotion autoPotion;
 
     public AutoReplenish() {
         super("AutoReplenish", "Refills your hotbar stacks from your inventory.", Category.PLAYER);
@@ -61,13 +62,20 @@ public final class AutoReplenish extends Module {
             return;
         }
         boolean screen = mc.gui.screen() != null;
-        // Items get moved around while a screen is open. Start fresh once it closes.
+        // Items get moved around whilst a screen is open.
         if (hadScreen && !screen) {
             snapshot();
         }
         hadScreen = screen;
         if (screen || mc.player.containerMenu.containerId != 0
             || !mc.player.containerMenu.getCarried().isEmpty()) {
+            return;
+        }
+        boolean neighbours = findNeighbours();
+        // AutoEat and AutoPotion shuffle stacks between the inventory and the
+        // hotbar. A slot they emptied looks exactly like one that ran out.
+        if (neighbours && (autoEat.isBusy() || autoPotion.isDrinking())) {
+            snapshot();
             return;
         }
         if (timer > 0) {
@@ -80,7 +88,7 @@ public final class AutoReplenish extends Module {
         for (int i = 0; i < 9 && !moved; i++) {
             moved = check(i, mc.player.getInventory().getItem(i));
         }
-        boolean totemBusy = OfflineClient.INSTANCE.getModuleManager().get(AutoTotem.class).isEnabled();
+        boolean totemBusy = neighbours && autoTotem.isEnabled();
         if (!moved && offhand.isOn() && !totemBusy) {
             moved = check(OFFHAND_INDEX, mc.player.getOffhandItem());
         }
@@ -90,7 +98,21 @@ public final class AutoReplenish extends Module {
         }
     }
 
-    /** Refills one slot if it needs it. Returns true when a click was sent. */
+    // Cached. Each lookup walks every registered module.
+    private boolean findNeighbours() {
+        if (autoTotem != null) {
+            return true;
+        }
+        ModuleManager modules = OfflineClient.INSTANCE.getModuleManager();
+        if (modules == null) {
+            return false;
+        }
+        autoTotem = modules.get(AutoTotem.class);
+        autoEat = modules.get(AutoEat.class);
+        autoPotion = modules.get(AutoPotion.class);
+        return true;
+    }
+
     private boolean check(int index, ItemStack now) {
         ItemStack before = previous[index] == null ? ItemStack.EMPTY : previous[index];
         int wanted = threshold.getInt();
@@ -102,7 +124,6 @@ public final class AutoReplenish extends Module {
             lookFor = now;
             topUp = true;
         } else if (now.isEmpty() && !before.isEmpty()) {
-            // The stack ran out completely since last tick.
             if (before.isStackable() || unstackable.isOn()) {
                 lookFor = before;
             }
@@ -111,7 +132,9 @@ public final class AutoReplenish extends Module {
             return false;
         }
 
-        int source = findSource(lookFor, index, topUp);
+        // The offhand is not part of the inventory index space. Passing its own
+        // index would skip a real backpack slot.
+        int source = findSource(lookFor, index == OFFHAND_INDEX ? -1 : index, topUp);
         if (source == -1) {
             return false;
         }
@@ -120,21 +143,24 @@ public final class AutoReplenish extends Module {
             return false;
         }
 
-        int target = index == OFFHAND_INDEX ? OFFHAND_NETWORK_SLOT : 36 + index;
-        int from = source < 9 ? 36 + source : source;
-        click(from);
-        click(target);
-        // Whatever did not fit goes back where it came from.
+        int target = index == OFFHAND_INDEX
+            ? InventoryUtil.OFFHAND_SLOT : InventoryUtil.networkSlot(index);
+        int from = InventoryUtil.networkSlot(source);
+        InventoryUtil.click(from);
+        if (mc.player.containerMenu.getCarried().isEmpty()) {
+            // The pickup was refused.
+            return false;
+        }
+        InventoryUtil.click(target);
         if (!mc.player.containerMenu.getCarried().isEmpty()) {
-            click(from);
+            InventoryUtil.click(from);
         }
         return true;
     }
 
     /**
-     * Inventory index of the best stack to pull from or minus one. Prefers the
-     * biggest matching stack. Only exact matches can be merged into a
-     * partial stack. An emptied slot accepts the same item with any data.
+     * Only exact matches merge into a partial stack. An emptied slot accepts the
+     * same item with any data.
      */
     private int findSource(ItemStack lookFor, int excludedIndex, boolean mustMerge) {
         int best = -1;
@@ -158,10 +184,6 @@ public final class AutoReplenish extends Module {
             }
         }
         return best;
-    }
-
-    private void click(int networkSlot) {
-        mc.gameMode.handleContainerInput(0, networkSlot, 0, ContainerInput.PICKUP, mc.player);
     }
 
     private void snapshot() {

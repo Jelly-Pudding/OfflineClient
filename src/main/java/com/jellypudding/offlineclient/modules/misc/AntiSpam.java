@@ -12,9 +12,6 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/**
- * Collapses repeated chat lines into one line with a counter.
- */
 public final class AntiSpam extends Module {
 
     private static final Pattern COUNTER = Pattern.compile(" x(\\d{1,8})$");
@@ -28,7 +25,7 @@ public final class AntiSpam extends Module {
         searchTags("chat", "duplicate");
     }
 
-    /** Folds a repeat into the earlier line. Returns the line to add. */
+    // Returns the line to add.
     public Component fold(ChatComponent chat, Component message) {
         if (!isEnabled()) {
             return message;

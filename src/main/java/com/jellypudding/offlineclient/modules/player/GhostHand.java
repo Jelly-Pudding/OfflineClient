@@ -15,11 +15,7 @@ import net.minecraft.world.phys.Vec3;
 import java.util.HashSet;
 import java.util.Set;
 
-/**
- * Opens containers through walls. A right click walks along the crosshair
- * line and uses the first container it passes even when blocks are in
- * the way.
- */
+// Opens containers through walls.
 public final class GhostHand extends Module {
 
     public GhostHand() {
@@ -35,7 +31,6 @@ public final class GhostHand extends Module {
         if (mc.player.isSpectator() || mc.player.isShiftKeyDown()) {
             return;
         }
-        // The click stays vanilla when the crosshair already hits a container.
         if (mc.hitResult instanceof BlockHitResult hit && hit.getType() == HitResult.Type.BLOCK
             && mc.level.getBlockState(hit.getBlockPos())
                 .getMenuProvider(mc.level, hit.getBlockPos()) != null) {

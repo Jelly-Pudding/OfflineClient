@@ -1,26 +1,33 @@
 package com.jellypudding.offlineclient.modules.render;
 
 import com.jellypudding.offlineclient.event.Subscribe;
+import com.jellypudding.offlineclient.event.events.Render3DEvent;
 import com.jellypudding.offlineclient.event.events.RightClickEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.EntityUtil;
 import net.minecraft.client.player.ClientInput;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 
-/**
- * Detaches the camera while the player's body stays put. CameraMixin
- * positions the camera and MouseHandlerMixin routes the mouse here.
- */
+// CameraMixin positions the camera and MouseHandlerMixin routes the mouse here.
 public final class Freecam extends Module {
+
+    private static final int TRACER_COLOR = 0xFF40E0FF;
 
     private final NumberSetting speed = new NumberSetting("Speed",
         "How fast the camera moves.", 1, 0.1, 5, 0.1);
     private final BoolSetting blockClicks = new BoolSetting("Block clicks",
         "Clicks do nothing whilst the camera is away.", true);
+    private final BoolSetting tracer = new BoolSetting("Tracer",
+        "Draws a line back to your body.", true);
+    private final BoolSetting disableOnDamage = new BoolSetting("Disable on damage",
+        "Snaps back to your body when you take a hit.", true);
+    private final BoolSetting reloadChunks = new BoolSetting("Reload chunks",
+        "Redraws the world around your body when you come back.", false);
 
     private Vec3 camPos = Vec3.ZERO;
     private Vec3 prevCamPos = Vec3.ZERO;
@@ -29,19 +36,19 @@ public final class Freecam extends Module {
     private ClientInput dummyInput;
     private ClientInput realInput;
     private boolean initialized;
+    private float lastHealth;
 
     public Freecam() {
-        super("Freecam", "Fly the camera around while your character stays still.", Category.RENDER);
-        addSettings(speed, blockClicks);
+        super("Freecam", "Fly the camera around whilst your character stays still.", Category.RENDER);
+        addSettings(speed, blockClicks, tracer, disableOnDamage, reloadChunks);
         searchTags("free camera", "spectator", "detach");
     }
 
-    /** Consulted by MinecraftMixin before the game handles an attack. */
+    // Consulted by MinecraftMixin before the game handles an attack.
     public boolean blocksClicks() {
         return isEnabled() && blockClicks.isOn();
     }
 
-    /** Right clicks go nowhere while the camera is detached. */
     @Subscribe
     private void onRightClick(RightClickEvent event) {
         if (blocksClicks()) {
@@ -49,7 +56,6 @@ public final class Freecam extends Module {
         }
     }
 
-    /** Never comes back on at launch. */
     @Override
     public boolean savesEnabledState() {
         return false;
@@ -68,14 +74,12 @@ public final class Freecam extends Module {
         prevCamPos = camPos;
         camYaw = mc.player.getYRot();
         camPitch = mc.player.getXRot();
+        lastHealth = mc.player.getHealth();
         swapInput();
         initialized = true;
     }
 
-    /**
-     * Hands the player an input object that reads no keys. The movement
-     * keys then steer only the camera.
-     */
+    // Hands the player an input object that reads no keys.
     private void swapInput() {
         realInput = mc.player.input;
         dummyInput = new ClientInput();
@@ -94,6 +98,14 @@ public final class Freecam extends Module {
         if (mc.player.input != dummyInput) {
             swapInput();
         }
+
+        float healthNow = mc.player.getHealth();
+        if (disableOnDamage.isOn() && healthNow < lastHealth) {
+            lastHealth = healthNow;
+            setEnabled(false);
+            return;
+        }
+        lastHealth = healthNow;
 
         prevCamPos = camPos;
         if (mc.gui.screen() != null) {
@@ -131,6 +143,16 @@ public final class Freecam extends Module {
         camPos = camPos.add(delta.x, vertical, delta.z);
     }
 
+    @Subscribe
+    private void onRender3D(Render3DEvent event) {
+        if (!tracer.isOn() || !inGame()) {
+            return;
+        }
+        event.getBatch().tracer(
+            EntityUtil.lerpedBox(mc.player, event.getPartialTicks()).getCenter(),
+            TRACER_COLOR, true);
+    }
+
     @Override
     protected void onDisable() {
         if (mc.player != null && realInput != null && mc.player.input == dummyInput) {
@@ -139,16 +161,19 @@ public final class Freecam extends Module {
         realInput = null;
         dummyInput = null;
         initialized = false;
+        // The chunks around the body were meshed from the camera's side.
+        if (reloadChunks.isOn() && mc.levelExtractor != null) {
+            mc.levelExtractor.allChanged();
+        }
     }
 
-    /** Mouse movement lands here instead of turning the player. */
+    // Mouse movement lands here instead of turning the player.
     public void turn(double deltaYaw, double deltaPitch) {
         // The 0.15 factor matches how the game turns the player.
         camYaw += (float) (deltaYaw * 0.15);
         camPitch = Mth.clamp(camPitch + (float) (deltaPitch * 0.15), -90f, 90f);
     }
 
-    /** Interpolated between ticks. */
     public Vec3 getCamPos(float partialTicks) {
         return Mth.lerp(partialTicks, prevCamPos, camPos);
     }

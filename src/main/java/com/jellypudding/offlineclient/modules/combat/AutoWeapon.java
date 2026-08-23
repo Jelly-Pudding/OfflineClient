@@ -8,6 +8,8 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.ItemUtil;
 import net.minecraft.tags.EntityTypeTags;
 import net.minecraft.tags.ItemTags;
@@ -39,7 +41,7 @@ public final class AutoWeapon extends Module {
     private final EnumSetting<Prefer> prefer = new EnumSetting<>("Prefer",
         "Which kind of weapon wins when both are close in damage.", Prefer.SWORD);
     private final NumberSetting threshold = new NumberSetting("Threshold",
-        "The other kind must deal this much more damage to beat your preferred kind.", 2, 0, 10, 0.5);
+        "How much more damage the other kind must deal to win.", 2, 0, 10, 0.5);
     private final BoolSetting antiBreak = new BoolSetting("Anti break",
         "Skip weapons that are about to break.", true);
     private final BoolSetting switchBack = new BoolSetting("Switch back",
@@ -48,7 +50,7 @@ public final class AutoWeapon extends Module {
         "Ticks without an attack before switching back.", 20, 1, 100, 1, " ticks")
         .visibleWhen(switchBack::isOn);
 
-    private int previousSlot = -1;
+    private final SlotSwap slots = new SlotSwap();
     private int timer;
 
     public AutoWeapon() {
@@ -59,18 +61,27 @@ public final class AutoWeapon extends Module {
 
     @Override
     protected void onEnable() {
-        previousSlot = -1;
+        slots.forget();
         timer = 0;
     }
 
     @Override
     protected void onDisable() {
-        restoreSlot();
+        if (switchBack.isOn() && inGame()) {
+            slots.restore();
+        } else {
+            slots.forget();
+        }
+    }
+
+    // AutoTool stands aside whilst this is true.
+    public boolean isHoldingWeapon() {
+        return isEnabled() && slots.isHolding();
     }
 
     @Subscribe
     private void onAttack(AttackEntityEvent event) {
-        if (!inGame() || mc.player.isSpectator()) {
+        if (!inGame() || mc.player.isSpectator() || mc.player.isDeadOrDying()) {
             return;
         }
         if (!(event.getTarget() instanceof LivingEntity target)) {
@@ -84,38 +95,44 @@ public final class AutoWeapon extends Module {
             return;
         }
 
-        if (previousSlot == -1) {
-            previousSlot = selected;
-        }
-        mc.player.getInventory().setSelectedSlot(best);
+        slots.select(best);
         timer = releaseTime.getInt();
     }
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || previousSlot == -1) {
+        if (!inGame() || !slots.isHolding()) {
+            return;
+        }
+        if (mc.player.isDeadOrDying()) {
+            // Respawn hands out a fresh inventory.
+            slots.forget();
+            timer = 0;
             return;
         }
         if (!switchBack.isOn()) {
-            previousSlot = -1;
+            slots.forget();
             return;
         }
         if (timer > 0) {
             timer--;
             return;
         }
-        restoreSlot();
+        slots.restore();
     }
 
-    private void restoreSlot() {
-        if (previousSlot != -1 && mc.player != null && switchBack.isOn()) {
-            mc.player.getInventory().setSelectedSlot(previousSlot);
-        }
-        previousSlot = -1;
-    }
-
-    /** The hotbar slot holding the weapon to use against this target or minus one. */
     private int bestSlot(LivingEntity target) {
+        return bestWeaponSlot(target, prefer.getValue() == Prefer.SWORD,
+            threshold.getValue(), antiBreak.isOn());
+    }
+
+    public static int bestWeaponSlot(LivingEntity target) {
+        return bestWeaponSlot(target, true, 2, true);
+    }
+
+    // The hotbar slot holding the strongest weapon against this target or minus one.
+    public static int bestWeaponSlot(LivingEntity target, boolean preferSword,
+                                     double margin, boolean skipBreaking) {
         int swordSlot = -1;
         int axeSlot = -1;
         double swordDamage = 0;
@@ -126,18 +143,18 @@ public final class AutoWeapon extends Module {
             if (stack.isEmpty()) {
                 continue;
             }
-            if (antiBreak.isOn() && stack.isDamageableItem()
+            if (skipBreaking && stack.isDamageableItem()
                 && stack.getMaxDamage() - stack.getDamageValue() <= 5) {
                 continue;
             }
             if (stack.is(ItemTags.SWORDS)) {
-                double damage = damage(stack, target);
+                double damage = weaponDamage(stack, target);
                 if (damage > swordDamage) {
                     swordDamage = damage;
                     swordSlot = i;
                 }
             } else if (stack.is(ItemTags.AXES)) {
-                double damage = damage(stack, target);
+                double damage = weaponDamage(stack, target);
                 if (damage > axeDamage) {
                     axeDamage = damage;
                     axeSlot = i;
@@ -151,30 +168,24 @@ public final class AutoWeapon extends Module {
         if (axeSlot == -1) {
             return swordSlot;
         }
-
-        double margin = threshold.getValue();
-        return switch (prefer.getValue()) {
-            case SWORD -> axeDamage - swordDamage > margin ? axeSlot : swordSlot;
-            case AXE -> swordDamage - axeDamage > margin ? swordSlot : axeSlot;
-        };
+        if (preferSword) {
+            return axeDamage - swordDamage > margin ? axeSlot : swordSlot;
+        }
+        return swordDamage - axeDamage > margin ? swordSlot : axeSlot;
     }
 
-    /**
-     * Damage one full strength hit would deal to the target. The item's own
-     * attack damage plus Sharpness. Smite and Bane of Arthropods only count
-     * against the mobs they affect.
-     */
-    private double damage(ItemStack stack, Entity target) {
+    // Damage one full strength hit would deal to the target.
+    public static double weaponDamage(ItemStack stack, Entity target) {
         double damage = ItemUtil.attributeValue(stack, Attributes.ATTACK_DAMAGE, EquipmentSlot.MAINHAND);
 
         int sharpness = ItemUtil.enchantLevel(Enchantments.SHARPNESS, stack);
         if (sharpness > 0) {
             damage += 0.5 * sharpness + 0.5;
         }
-        if (target.getType().builtInRegistryHolder().is(EntityTypeTags.SENSITIVE_TO_SMITE)) {
+        if (EntityUtil.typeIs(target, EntityTypeTags.SENSITIVE_TO_SMITE)) {
             damage += 2.5 * ItemUtil.enchantLevel(Enchantments.SMITE, stack);
         }
-        if (target.getType().builtInRegistryHolder().is(EntityTypeTags.SENSITIVE_TO_BANE_OF_ARTHROPODS)) {
+        if (EntityUtil.typeIs(target, EntityTypeTags.SENSITIVE_TO_BANE_OF_ARTHROPODS)) {
             damage += 2.5 * ItemUtil.enchantLevel(Enchantments.BANE_OF_ARTHROPODS, stack);
         }
         return damage;

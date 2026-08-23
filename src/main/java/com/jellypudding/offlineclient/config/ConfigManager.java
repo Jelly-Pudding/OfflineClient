@@ -8,6 +8,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.modules.misc.HudModule;
 import com.jellypudding.offlineclient.setting.Setting;
 
 import java.io.IOException;
@@ -25,7 +26,7 @@ public final class ConfigManager {
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
-    /** Bump this when old saved values need a one time migration. */
+    // Raised when old saved values need a one time migration.
     private static final int CONFIG_VERSION = 2;
 
     private final Path file;
@@ -39,12 +40,12 @@ public final class ConfigManager {
         try {
             Files.createDirectories(profilesFolder);
         } catch (IOException e) {
-            e.printStackTrace();
+            OfflineClient.LOG.error("Failed to create the profiles folder", e);
         }
         Runtime.getRuntime().addShutdownHook(new Thread(this::saveNow, "OfflineClient config save"));
     }
 
-    /** Marks the config for a write at the end of the tick. */
+    // Marks the config for a write at the end of the tick.
     public void saveSoon() {
         dirty = true;
     }
@@ -124,7 +125,7 @@ public final class ConfigManager {
                         }
                     }
                     if (m.has("enabled") && module.savesEnabledState()) {
-                        module.setEnabledSilently(m.get("enabled").getAsBoolean());
+                        module.setEnabled(m.get("enabled").getAsBoolean());
                     }
                 }
             }
@@ -136,21 +137,49 @@ public final class ConfigManager {
             if (version < 2) {
                 // Old configs forced every HUD element on.
                 for (Setting<?> setting : OfflineClient.INSTANCE.getModuleManager()
-                    .get(com.jellypudding.offlineclient.modules.misc.HudModule.class).getSettings()) {
+                    .get(HudModule.class).getSettings()) {
                     setting.reset();
                 }
                 saveSoon();
             }
         } catch (Exception e) {
-            System.err.println("[OfflineClient] Failed to apply config: " + e.getMessage());
+            OfflineClient.LOG.error("Failed to apply config", e);
         }
+    }
+
+    public void resetModules() {
+        for (Module module : OfflineClient.INSTANCE.getModuleManager().getAll()) {
+            module.setEnabled(false);
+            module.getKeybind().reset();
+            for (Setting<?> setting : module.getSettings()) {
+                setting.reset();
+            }
+        }
+        saveNow();
+    }
+
+    public void clearFriends() {
+        OfflineClient.INSTANCE.getFriendManager().getAll().clear();
+        saveNow();
+    }
+
+    public void resetGuiLayout() {
+        guiState = new JsonObject();
+        saveNow();
+    }
+
+    public void resetEverything() {
+        OfflineClient.INSTANCE.getFriendManager().getAll().clear();
+        OfflineClient.INSTANCE.getCommandManager().setPrefix(".");
+        guiState = new JsonObject();
+        resetModules();
     }
 
     public void saveProfile(String name) {
         write(profilesFolder.resolve(sanitize(name) + ".json"), buildRoot());
     }
 
-    /** Loads a named profile. Returns false if it does not exist. */
+    // False when the profile does not exist.
     public boolean loadProfile(String name) {
         Path path = profilesFolder.resolve(sanitize(name) + ".json");
         if (!Files.exists(path)) {
@@ -182,7 +211,7 @@ public final class ConfigManager {
         try {
             Files.writeString(path, GSON.toJson(root));
         } catch (IOException e) {
-            System.err.println("[OfflineClient] Failed to save " + path.getFileName() + ": " + e.getMessage());
+            OfflineClient.LOG.error("Failed to save {}", path.getFileName(), e);
         }
     }
 
@@ -190,7 +219,7 @@ public final class ConfigManager {
         try {
             return JsonParser.parseString(Files.readString(path)).getAsJsonObject();
         } catch (Exception e) {
-            System.err.println("[OfflineClient] Failed to read " + path.getFileName() + ": " + e.getMessage());
+            OfflineClient.LOG.error("Failed to read {}", path.getFileName(), e);
             return null;
         }
     }

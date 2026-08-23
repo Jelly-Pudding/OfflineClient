@@ -8,6 +8,7 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.render.DrawBatch;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import net.minecraft.core.Direction;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.resources.ResourceKey;
@@ -29,8 +30,8 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * ESP for portals. Scans nearby chunks once a second through the section
- * palette and merges touching portal blocks into one box per portal.
+ * Scans nearby chunks once a second through the section palette and merges
+ * touching portal blocks into one box per portal.
  */
 public final class Portals extends Module {
 
@@ -156,7 +157,7 @@ public final class Portals extends Module {
         }
     }
 
-    /** One box per patch of touching blocks. */
+    // One box per patch of touching blocks.
     private static List<AABB> merge(Set<BlockPos> positions) {
         List<AABB> boxes = new ArrayList<>();
         Set<BlockPos> remaining = new HashSet<>(positions);
@@ -168,7 +169,7 @@ public final class Portals extends Module {
             queue.add(start);
             while (!queue.isEmpty()) {
                 BlockPos pos = queue.poll();
-                for (var direction : net.minecraft.core.Direction.values()) {
+                for (Direction direction : Direction.values()) {
                     BlockPos next = pos.relative(direction);
                     if (remaining.remove(next)) {
                         box = box.minmax(new AABB(next));

@@ -7,6 +7,7 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
+import com.jellypudding.offlineclient.util.InventoryUtil;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -17,9 +18,6 @@ import net.minecraft.world.item.Items;
 
 import java.util.List;
 
-/**
- * Throws out junk the moment it lands in the inventory.
- */
 public final class AutoDrop extends Module {
 
     private final RegistryListSetting<Item> items = new RegistryListSetting<>("Items",
@@ -44,7 +42,7 @@ public final class AutoDrop extends Module {
         if (!inGame() || mc.player.isSpectator()) {
             return;
         }
-        // Only the survival inventory. Chests and crafting tables use other slot numbers.
+        // Other containers number their slots differently.
         if (mc.gui.screen() instanceof AbstractContainerScreen
             && !(mc.gui.screen() instanceof InventoryScreen)) {
             return;
@@ -63,7 +61,7 @@ public final class AutoDrop extends Module {
             if (stack.isEmpty() || !items.contains(stack.getItem())) {
                 continue;
             }
-            int networkSlot = i < 9 ? 36 + i : i;
+            int networkSlot = InventoryUtil.networkSlot(i);
             // Button 1 throws the whole stack in one click.
             mc.gameMode.handleContainerInput(0, networkSlot, 1, ContainerInput.THROW, mc.player);
             timer = delay.getInt();

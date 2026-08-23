@@ -32,10 +32,7 @@ public abstract class ChatScreenMixin extends Screen {
     @Shadow
     protected EditBox input;
 
-    /**
-     * TAB completes client commands. Vanilla completion only knows
-     * server commands.
-     */
+    // Vanilla completion only knows server commands.
     @Inject(method = "keyPressed(Lnet/minecraft/client/input/KeyEvent;)Z",
         at = @At("HEAD"),
         cancellable = true)
@@ -72,10 +69,6 @@ public abstract class ChatScreenMixin extends Screen {
         input.moveCursorToEnd(false);
     }
 
-    /**
-     * Live suggestions above the chat box while typing a client command.
-     * The vanilla popup only knows server commands.
-     */
     @Inject(method = "extractRenderState(Lnet/minecraft/client/gui/GuiGraphicsExtractor;IIF)V",
         at = @At("TAIL"))
     private void onRender(GuiGraphicsExtractor context, int mouseX, int mouseY,
@@ -108,9 +101,6 @@ public abstract class ChatScreenMixin extends Screen {
             context.text(minecraft.font, "and " + (options.size() - shown) + " more",
                 x, top - 12, 0xFF707080, false);
         }
-        context.guiRenderState.up();
-        context.text(minecraft.font, "TAB completes", x + boxWidth + 10, bottom - 11,
-            0xFF505060, false);
     }
 
     private static String commonPrefix(List<String> options) {

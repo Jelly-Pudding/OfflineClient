@@ -3,10 +3,7 @@ package com.jellypudding.offlineclient.modules.render;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 
-/**
- * The behavior lives in GameRendererMixin which skips the hurt tilt while
- * this is enabled.
- */
+// The behaviour lives in GameRendererMixin which skips the hurt tilt.
 public final class NoHurtCam extends Module {
 
     public NoHurtCam() {

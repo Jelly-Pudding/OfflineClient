@@ -9,21 +9,18 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * A draggable column of module rows with a category header. Edges and
- * corners resize and a scrollbar shows when the rows do not all fit.
- */
+// A draggable column of module rows under a category header.
 public final class Panel {
 
     private static final int MIN_VIEW = 16;
     private static final int MIN_WIDTH = 64;
     private static final int MAX_WIDTH = 320;
-    /** How close to an edge the mouse must be to grab it. */
     private static final int GRAB = 4;
-    private static final int SCROLLBAR = 3;
+    private static final int MARKER_ZONE = 14;
 
     private final String title;
     private final List<ModuleRow> rows = new ArrayList<>();
+    private final ScrollBar scrollBar = new ScrollBar();
 
     private int x;
     private int y;
@@ -34,26 +31,21 @@ public final class Panel {
     private int dragOffsetX;
     private int dragOffsetY;
 
-    // Which edges are being dragged right now.
     private boolean sizeLeft;
     private boolean sizeRight;
     private boolean sizeTop;
     private boolean sizeBottom;
 
-    /** Zero means show everything that fits on screen. */
+    // Zero means show everything that fits on screen.
     private int viewHeight;
-    private int scrollOffset;
-    private boolean draggingScrollbar;
-    private int scrollDragStartY;
-    private int scrollDragStartOffset;
     private int screenHeight;
 
-    public Panel(String title, List<Module> modules, ClickGuiScreen screen, int x, int y) {
+    public Panel(String title, List<Module> modules, SettingWidget.Host host, int x, int y) {
         this.title = title;
         this.x = x;
         this.y = y;
         for (Module module : modules) {
-            rows.add(new ModuleRow(module, screen));
+            rows.add(new ModuleRow(module, host));
         }
     }
 
@@ -95,15 +87,15 @@ public final class Panel {
     }
 
     public void setViewHeight(int viewHeight) {
-        this.viewHeight = viewHeight;
+        this.viewHeight = Math.max(0, viewHeight);
     }
 
     public int getScrollOffset() {
-        return scrollOffset;
+        return scrollBar.getOffset();
     }
 
     public void setScrollOffset(int scrollOffset) {
-        this.scrollOffset = scrollOffset;
+        scrollBar.setOffset(scrollOffset);
     }
 
     public List<ModuleRow> getRows() {
@@ -118,10 +110,7 @@ public final class Panel {
         return height;
     }
 
-    /**
-     * How tall the visible row area is right now. Never taller than the
-     * rows themselves or the space left on screen below the panel.
-     */
+    // Never taller than the rows or the space left below the panel.
     private int viewportHeight() {
         int full = rowsHeight();
         int limit = viewHeight > 0 ? viewHeight : full;
@@ -132,6 +121,10 @@ public final class Panel {
         return Math.clamp(limit, Math.min(MIN_VIEW, full), full);
     }
 
+    private int minView() {
+        return Math.min(MIN_VIEW, rowsHeight());
+    }
+
     public int getContentHeight() {
         if (collapsed) {
             return GuiTheme.HEADER_HEIGHT;
@@ -139,28 +132,21 @@ public final class Panel {
         return GuiTheme.HEADER_HEIGHT + viewportHeight() + 2;
     }
 
-    /** The full rectangle including the grab margin around it. */
+    // The full rectangle including the grab margin around it.
     public boolean isOver(double mx, double my) {
         return mx >= x - GRAB && mx < x + width + GRAB
             && my >= y - GRAB && my < y + getContentHeight() + GRAB;
     }
 
-    /** True if the mouse is on the panel body itself. */
     public boolean contains(double mx, double my) {
         return mx >= x && mx < x + width && my >= y && my < y + getContentHeight();
     }
 
-    /** Mouse wheel input. Scrolls the rows inside the panel. */
     public void scroll(int dy) {
-        scrollOffset = clampScroll(scrollOffset - dy);
+        scrollBar.scroll(dy, rowsHeight(), viewportHeight());
     }
 
-    private int clampScroll(int value) {
-        return Math.clamp(value, 0, Math.max(0, rowsHeight() - viewportHeight()));
-    }
-
-    // The grab bands sit on the border and just outside it. Clicks inside
-    // the panel body never resize.
+    // The grab bands sit on the border and just outside it.
     private boolean nearLeft(double mx, double my) {
         return mx >= x - GRAB && mx <= x + 1 && my >= y - GRAB && my < y + getContentHeight() + GRAB;
     }
@@ -192,94 +178,104 @@ public final class Panel {
         screenHeight = context.guiHeight();
 
         if (dragging) {
-            x = mouseX - dragOffsetX;
-            y = mouseY - dragOffsetY;
-            x = Math.clamp(x, 0, Math.max(0, context.guiWidth() - width));
-            y = Math.clamp(y, 0, Math.max(0, context.guiHeight() - GuiTheme.HEADER_HEIGHT));
+            x = Math.clamp(mouseX - dragOffsetX, 0, Math.max(0, context.guiWidth() - width));
+            y = Math.clamp(mouseY - dragOffsetY, 0,
+                Math.max(0, context.guiHeight() - GuiTheme.HEADER_HEIGHT));
         }
         applyResize(mouseX, mouseY);
-        if (draggingScrollbar) {
-            int track = viewportHeight();
-            int total = rowsHeight();
-            int delta = mouseY - scrollDragStartY;
-            scrollOffset = clampScroll(scrollDragStartOffset + delta * total / Math.max(1, track));
-        }
-        scrollOffset = clampScroll(scrollOffset);
+        scrollBar.update(mouseY, rowsHeight(), viewportHeight());
 
-        Font font = OfflineClient.MC.font;
-        int w = width;
         int contentH = getContentHeight();
-
-        boolean hotL = sizeLeft || nearLeft(mouseX, mouseY);
-        boolean hotR = sizeRight || nearRight(mouseX, mouseY);
-        boolean hotT = sizeTop || nearTop(mouseX, mouseY);
-        boolean hotB = sizeBottom || nearBottom(mouseX, mouseY);
-        int frame = GuiTheme.OUTLINE;
-        int hot = GuiTheme.accent();
-        context.fill(x - 1, y - 1, x + w + 1, y + contentH + 1, frame);
+        RenderUtil.shadow(context, x - 1, y - 1, x + width + 1, y + contentH + 1, 3);
         context.guiRenderState.up();
-        if (hotL) {
-            context.fill(x - 1, y - 1, x, y + contentH + 1, hot);
-        }
-        if (hotR) {
-            context.fill(x + w, y - 1, x + w + 1, y + contentH + 1, hot);
-        }
-        if (hotT) {
-            context.fill(x - 1, y - 1, x + w + 1, y, hot);
-        }
-        if (hotB) {
-            context.fill(x - 1, y + contentH, x + w + 1, y + contentH + 1, hot);
-        }
+        RenderUtil.roundedRect(context, x - 1, y - 1, x + width + 1, y + contentH + 1,
+            GuiTheme.CORNER + 1, GuiTheme.OUTLINE);
         context.guiRenderState.up();
-
-        // Header: dark bar with accent underline and title.
-        context.fill(x, y, x + w, y + GuiTheme.HEADER_HEIGHT, GuiTheme.BG_PANEL);
-        context.guiRenderState.up();
-        context.fill(x, y + GuiTheme.HEADER_HEIGHT - 2, x + w, y + GuiTheme.HEADER_HEIGHT,
-            GuiTheme.accent());
-        // The title gets clipped when the panel is narrower than the text.
-        context.enableScissor(x, y, x + w - 14, y + GuiTheme.HEADER_HEIGHT);
-        RenderUtil.gradientText(context, font, title, x + 5, y + 5,
-            GuiTheme.accent(), GuiTheme.accent(12));
-        context.disableScissor();
-        String marker = collapsed ? "+" : "-";
-        context.text(font, marker, x + w - 9, y + 5, GuiTheme.TEXT_DIM, false);
+        renderGrabBands(context, mouseX, mouseY, contentH);
+        renderHeader(context, mouseX, mouseY);
 
         if (collapsed) {
             return;
         }
+        renderRows(context, mouseX, mouseY);
+    }
 
+    private void renderGrabBands(GuiGraphicsExtractor context, int mouseX, int mouseY, int contentH) {
+        int corner = GuiTheme.CORNER;
+        int hot = GuiTheme.accent();
+        if (sizeLeft || nearLeft(mouseX, mouseY)) {
+            context.fill(x - 1, y - 1 + corner, x, y + contentH + 1 - corner, hot);
+        }
+        if (sizeRight || nearRight(mouseX, mouseY)) {
+            context.fill(x + width, y - 1 + corner, x + width + 1, y + contentH + 1 - corner, hot);
+        }
+        if (sizeTop || nearTop(mouseX, mouseY)) {
+            context.fill(x - 1 + corner, y - 1, x + width + 1 - corner, y, hot);
+        }
+        if (sizeBottom || nearBottom(mouseX, mouseY)) {
+            context.fill(x - 1 + corner, y + contentH, x + width + 1 - corner, y + contentH + 1, hot);
+        }
+        context.guiRenderState.up();
+    }
+
+    private void renderHeader(GuiGraphicsExtractor context, int mouseX, int mouseY) {
+        Font font = OfflineClient.MC.font;
+        int w = width;
+        int h = GuiTheme.HEADER_HEIGHT;
+        RenderUtil.roundedRect(context, x, y, x + w, y + h, GuiTheme.CORNER,
+            GuiTheme.BG_HEADER, true, collapsed);
+        context.guiRenderState.up();
+        // Collapsed panels keep the underline clear of the rounded corners.
+        int underlineTop = y + h - (collapsed ? 4 : 2);
+        int inset = collapsed ? 1 : 0;
+        context.fill(x + inset, underlineTop, x + w - inset, underlineTop + 2, GuiTheme.accent());
+
+        int textY = GuiTheme.textY(y, h - 2);
+        context.enableScissor(x, y, x + w - MARKER_ZONE, y + h);
+        RenderUtil.gradientText(context, font, title, x + GuiTheme.PAD, textY,
+            GuiTheme.accentText(), GuiTheme.accent(12));
+        context.disableScissor();
+
+        boolean overMarker = mouseX >= x + w - MARKER_ZONE && mouseX < x + w
+            && mouseY >= y && mouseY < y + h;
+        RenderUtil.chevron(context, x + w - 11, y + (h - 5) / 2, collapsed,
+            overMarker ? GuiTheme.TEXT : GuiTheme.TEXT_DIM);
+    }
+
+    private void renderRows(GuiGraphicsExtractor context, int mouseX, int mouseY) {
+        int w = width;
         int viewTop = y + GuiTheme.HEADER_HEIGHT;
         int viewH = viewportHeight();
-        int rowW = scrollable() ? w - SCROLLBAR - 1 : w;
+        boolean scrollable = scrollable();
+        int rowW = scrollable ? w - GuiTheme.SCROLLBAR - 1 : w;
 
-        // Rows outside the viewport should not show hover effects. Sliders
-        // being dragged still get the real mouse position.
+        RenderUtil.roundedRect(context, x, viewTop, x + w, viewTop + viewH + 2,
+            GuiTheme.CORNER, GuiTheme.BG_PANEL, false, true);
+        context.guiRenderState.up();
+        if (viewH <= 0) {
+            return;
+        }
+
+        // Sliders being dragged still get the real mouse position.
         boolean mouseInView = mouseX >= x && mouseX < x + rowW
             && mouseY >= viewTop && mouseY < viewTop + viewH;
 
-        context.fill(x, viewTop, x + w, viewTop + viewH + 2, GuiTheme.BG_PANEL);
-        context.guiRenderState.up();
         context.enableScissor(x, viewTop, x + rowW, viewTop + viewH);
-        int rowY = viewTop - scrollOffset;
+        int rowY = viewTop - scrollBar.getOffset();
         for (ModuleRow row : rows) {
-            row.render(context, x, rowY, rowW, mouseX, mouseY, mouseInView);
-            rowY += row.getHeight();
+            int rowH = row.getHeight();
+            row.place(x, rowY, rowW, mouseX, mouseY, mouseInView);
+            if (rowY + rowH > viewTop && rowY < viewTop + viewH) {
+                row.render(context, mouseX, mouseY);
+            }
+            rowY += rowH;
         }
         context.disableScissor();
 
-        // Scrollbar. A thin track with a thumb sized to the visible share.
-        if (scrollable()) {
-            int trackX = x + w - SCROLLBAR;
-            context.fill(trackX, viewTop, trackX + SCROLLBAR, viewTop + viewH, GuiTheme.BG_ROW);
-            int total = rowsHeight();
-            int thumbH = Math.max(8, viewH * viewH / total);
-            int thumbY = viewTop + (viewH - thumbH) * scrollOffset / Math.max(1, total - viewH);
-            boolean overBar = mouseX >= trackX - 2 && mouseX < x + w
-                && mouseY >= viewTop && mouseY < viewTop + viewH;
-            context.guiRenderState.up();
-            context.fill(trackX, thumbY, trackX + SCROLLBAR, thumbY + thumbH,
-                draggingScrollbar || overBar ? GuiTheme.accent() : GuiTheme.TEXT_DIM);
+        if (scrollable) {
+            int trackX = x + w - GuiTheme.SCROLLBAR;
+            scrollBar.render(context, trackX, viewTop, viewH, rowsHeight(),
+                ScrollBar.isOverTrack(mouseX, mouseY, trackX, viewTop, viewH));
         }
     }
 
@@ -293,65 +289,35 @@ public final class Panel {
             x = newX;
             width = right - newX;
         }
+        int full = rowsHeight();
         if (sizeBottom) {
-            viewHeight = Math.clamp(mouseY - y - GuiTheme.HEADER_HEIGHT - 2, MIN_VIEW, rowsHeight());
+            viewHeight = Math.clamp(mouseY - y - GuiTheme.HEADER_HEIGHT - 2, minView(),
+                Math.max(minView(), full));
         }
         if (sizeTop) {
             int bottom = y + GuiTheme.HEADER_HEIGHT + viewportHeight() + 2;
-            int minY = bottom - GuiTheme.HEADER_HEIGHT - 2 - rowsHeight();
-            int maxY = bottom - GuiTheme.HEADER_HEIGHT - 2 - MIN_VIEW;
-            int newY = Math.clamp(mouseY, Math.max(0, minY), maxY);
-            viewHeight = bottom - newY - GuiTheme.HEADER_HEIGHT - 2;
+            int base = bottom - GuiTheme.HEADER_HEIGHT - 2;
+            int maxY = base - minView();
+            int minY = Math.clamp(base - full, 0, Math.max(0, maxY));
+            int newY = Math.clamp(mouseY, minY, Math.max(minY, maxY));
+            viewHeight = base - newY;
             y = newY;
         }
     }
 
-    /** Returns true if the click was handled by this panel. */
     public boolean mouseClicked(double rawMx, double rawMy, int button) {
         // Whole pixels to match the hover highlight.
         int mx = (int) rawMx;
         int my = (int) rawMy;
         int w = width;
 
-        // Edge and corner resizing is checked before the header.
-        boolean l = nearLeft(mx, my);
-        boolean r = nearRight(mx, my);
-        boolean t = nearTop(mx, my);
-        boolean b = nearBottom(mx, my);
-        if (l || r || t || b) {
-            if (button == 0) {
-                sizeLeft = l;
-                sizeRight = r;
-                sizeTop = t;
-                sizeBottom = b;
-            } else if (button == 1) {
-                // Right click on an edge resets that direction.
-                if (l || r) {
-                    width = GuiTheme.PANEL_WIDTH;
-                }
-                if (t || b) {
-                    viewHeight = 0;
-                    scrollOffset = 0;
-                }
-            }
+        if (clickEdges(mx, my, button)) {
             return true;
         }
-
-        if (mx >= x && mx < x + w && my >= y && my < y + GuiTheme.HEADER_HEIGHT) {
-            // The marker on the right collapses with a left click. Anywhere
-            // else on the header drags. Right click collapses too.
-            if (button == 0 && mx >= x + w - 14) {
-                collapsed = !collapsed;
-            } else if (button == 0) {
-                dragging = true;
-                dragOffsetX = (int) mx - x;
-                dragOffsetY = (int) my - y;
-            } else if (button == 1) {
-                collapsed = !collapsed;
-            }
+        if (my >= y && my < y + GuiTheme.HEADER_HEIGHT && mx >= x && mx < x + w) {
+            clickHeader(mx, my, button);
             return true;
         }
-
         if (collapsed) {
             return false;
         }
@@ -362,11 +328,9 @@ public final class Panel {
             return contains(mx, my);
         }
 
-        // Scrollbar drag.
-        if (scrollable() && mx >= x + w - SCROLLBAR - 2) {
-            draggingScrollbar = true;
-            scrollDragStartY = (int) my;
-            scrollDragStartOffset = scrollOffset;
+        int trackX = x + w - GuiTheme.SCROLLBAR;
+        if (scrollable() && ScrollBar.isOverTrack(mx, my, trackX, viewTop, viewH)) {
+            scrollBar.beginDrag(my);
             return true;
         }
 
@@ -375,17 +339,59 @@ public final class Panel {
                 return true;
             }
         }
-        // Clicks on the panel body are consumed.
         return true;
+    }
+
+    // Checked before the header.
+    private boolean clickEdges(int mx, int my, int button) {
+        boolean l = nearLeft(mx, my);
+        boolean r = nearRight(mx, my);
+        boolean t = nearTop(mx, my);
+        boolean b = nearBottom(mx, my);
+        if (!l && !r && !t && !b) {
+            return false;
+        }
+        if (button == 0) {
+            sizeLeft = l;
+            sizeRight = r;
+            sizeTop = t;
+            sizeBottom = b;
+        } else if (button == 1) {
+            if (l || r) {
+                width = GuiTheme.PANEL_WIDTH;
+            }
+            if (t || b) {
+                viewHeight = 0;
+                scrollBar.setOffset(0);
+            }
+        }
+        return true;
+    }
+
+    private void clickHeader(int mx, int my, int button) {
+        if (button == 1 || (button == 0 && mx >= x + width - MARKER_ZONE)) {
+            collapsed = !collapsed;
+        } else if (button == 0) {
+            dragging = true;
+            dragOffsetX = mx - x;
+            dragOffsetY = my - y;
+        }
     }
 
     public void mouseReleased() {
         dragging = false;
-        draggingScrollbar = false;
+        scrollBar.release();
         sizeLeft = false;
         sizeRight = false;
         sizeTop = false;
         sizeBottom = false;
+        for (ModuleRow row : rows) {
+            row.mouseReleased();
+        }
+    }
+
+    // Leaves the panel drag and resize state alone.
+    public void releaseDrags() {
         for (ModuleRow row : rows) {
             row.mouseReleased();
         }

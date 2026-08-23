@@ -11,10 +11,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(Screen.class)
 public abstract class ScreenMixin {
 
-    /**
-     * Chat click events that carry one of our commands run on the client
-     * instead of going to the server. This powers the clickable link in help.
-     */
+    // Chat click events that carry a client command run locally instead of going to the server.
     @Inject(
         method = "clickCommandAction(Lnet/minecraft/client/player/LocalPlayer;Ljava/lang/String;Lnet/minecraft/client/gui/screens/Screen;)V",
         at = @At("HEAD"),

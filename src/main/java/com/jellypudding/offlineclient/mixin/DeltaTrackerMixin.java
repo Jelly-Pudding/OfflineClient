@@ -1,7 +1,7 @@
 package com.jellypudding.offlineclient.mixin;
 
-import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.modules.misc.Timer;
+import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.client.DeltaTracker;
 import org.objectweb.asm.Opcodes;
 import org.spongepowered.asm.mixin.Mixin;
@@ -22,6 +22,9 @@ public abstract class DeltaTrackerMixin {
             opcode = Opcodes.PUTFIELD,
             ordinal = 0))
     private void onAdvanceGameTime(long timeMillis, CallbackInfoReturnable<Integer> cir) {
-        deltaTicks *= OfflineClient.INSTANCE.getModuleManager().get(Timer.class).getSpeed();
+        Timer timer = Modules.get(Timer.class);
+        if (timer != null) {
+            deltaTicks *= timer.getSpeed();
+        }
     }
 }

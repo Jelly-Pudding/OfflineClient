@@ -6,14 +6,18 @@ import com.jellypudding.offlineclient.event.events.KnockbackEvent;
 import com.jellypudding.offlineclient.event.events.PostMotionEvent;
 import com.jellypudding.offlineclient.event.events.PreMotionEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
+import com.jellypudding.offlineclient.modules.combat.BowAimbot;
 import com.jellypudding.offlineclient.modules.movement.AntiPush;
 import com.jellypudding.offlineclient.modules.movement.HighJump;
 import com.jellypudding.offlineclient.modules.movement.LongJump;
 import com.jellypudding.offlineclient.modules.movement.NoSlowdown;
 import com.jellypudding.offlineclient.modules.movement.SafeWalk;
 import com.jellypudding.offlineclient.modules.movement.Step;
+import com.jellypudding.offlineclient.modules.player.AutoEat;
+import com.jellypudding.offlineclient.modules.player.FastBreak;
 import com.jellypudding.offlineclient.modules.player.Reach;
 import com.jellypudding.offlineclient.modules.render.AntiBlind;
+import com.jellypudding.offlineclient.util.Modules;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.mojang.authlib.GameProfile;
@@ -24,14 +28,23 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(LocalPlayer.class)
 public abstract class LocalPlayerMixin extends AbstractClientPlayer {
+
+    @Shadow
+    public float portalEffectIntensity;
+
+    @Shadow
+    public float oPortalEffectIntensity;
 
     private LocalPlayerMixin(OfflineClient client, ClientLevel level, GameProfile profile) {
         super(level, profile);
@@ -60,7 +73,7 @@ public abstract class LocalPlayerMixin extends AbstractClientPlayer {
             target = "Lnet/minecraft/client/player/LocalPlayer;isSlowDueToUsingItem()Z",
             ordinal = 0))
     private boolean wrapAiStepItemUse(LocalPlayer instance, Operation<Boolean> original) {
-        if (OfflineClient.INSTANCE.getModuleManager().get(NoSlowdown.class).isEnabled()) {
+        if (offlineclient$noSlowdown()) {
             return false;
         }
         return original.call(instance);
@@ -72,10 +85,22 @@ public abstract class LocalPlayerMixin extends AbstractClientPlayer {
             target = "Lnet/minecraft/client/player/LocalPlayer;isUsingItem()Z",
             ordinal = 0))
     private boolean wrapModifyInputItemUse(LocalPlayer instance, Operation<Boolean> original) {
-        if (OfflineClient.INSTANCE.getModuleManager().get(NoSlowdown.class).isEnabled()) {
+        if (offlineclient$noSlowdown()) {
             return false;
         }
         return original.call(instance);
+    }
+
+    private static boolean offlineclient$noSlowdown() {
+        if (Modules.enabled(NoSlowdown.class)) {
+            return true;
+        }
+        BowAimbot bowAimbot = Modules.get(BowAimbot.class);
+        if (bowAimbot != null && bowAimbot.suppressesSlowdown()) {
+            return true;
+        }
+        AutoEat autoEat = Modules.get(AutoEat.class);
+        return autoEat != null && autoEat.suppressesSlowdown();
     }
 
     @Override
@@ -94,24 +119,27 @@ public abstract class LocalPlayerMixin extends AbstractClientPlayer {
 
     @Override
     protected float getJumpPower() {
-        return super.getJumpPower()
-            + OfflineClient.INSTANCE.getModuleManager().get(HighJump.class).getAdditionalJumpMotion();
+        HighJump highJump = Modules.get(HighJump.class);
+        return super.getJumpPower() + (highJump == null ? 0f : highJump.getAdditionalJumpMotion());
     }
 
-    /** LongJump adds its boost right after the game sets the jump velocity. */
     @Override
     public void jumpFromGround() {
         super.jumpFromGround();
-        OfflineClient.INSTANCE.getModuleManager().get(LongJump.class).onJump();
+        LongJump longJump = Modules.get(LongJump.class);
+        if (longJump != null) {
+            longJump.onJump();
+        }
     }
 
     /**
-     * Crowd pushing checks this on both sides of a collision. False here
-     * blocks pushes on us while we still push others.
+     * Crowd pushing checks this on both sides of a collision. False here blocks
+     * incoming pushes and leaves outgoing ones alone.
      */
     @Override
     public boolean isPushable() {
-        if (OfflineClient.INSTANCE.getModuleManager().get(AntiPush.class).blocksEntities()) {
+        AntiPush antiPush = Modules.get(AntiPush.class);
+        if (antiPush != null && antiPush.blocksEntities()) {
             return false;
         }
         return super.isPushable();
@@ -119,7 +147,8 @@ public abstract class LocalPlayerMixin extends AbstractClientPlayer {
 
     @Override
     public boolean isPushedByFluid() {
-        if (OfflineClient.INSTANCE.getModuleManager().get(AntiPush.class).blocksCurrents()) {
+        AntiPush antiPush = Modules.get(AntiPush.class);
+        if (antiPush != null && antiPush.blocksCurrents()) {
             return false;
         }
         return super.isPushedByFluid();
@@ -127,7 +156,8 @@ public abstract class LocalPlayerMixin extends AbstractClientPlayer {
 
     @Override
     public void onAboveBubbleColumn(boolean downwards, BlockPos pos) {
-        if (OfflineClient.INSTANCE.getModuleManager().get(AntiPush.class).blocksBubbleColumns()) {
+        AntiPush antiPush = Modules.get(AntiPush.class);
+        if (antiPush != null && antiPush.blocksBubbleColumns()) {
             return;
         }
         super.onAboveBubbleColumn(downwards, pos);
@@ -135,23 +165,22 @@ public abstract class LocalPlayerMixin extends AbstractClientPlayer {
 
     @Override
     public void onInsideBubbleColumn(boolean downwards) {
-        if (OfflineClient.INSTANCE.getModuleManager().get(AntiPush.class).blocksBubbleColumns()) {
+        AntiPush antiPush = Modules.get(AntiPush.class);
+        if (antiPush != null && antiPush.blocksBubbleColumns()) {
             return;
         }
         super.onInsideBubbleColumn(downwards);
     }
 
     /**
-     * The client predicts mining five times slower in the air. FastBreak
-     * lifts that here and fixes the server side by rewriting packets.
+     * The client predicts mining five times slower in the air. FastBreak fixes
+     * the server side by rewriting packets.
      */
     @Override
-    public float getDestroySpeed(net.minecraft.world.level.block.state.BlockState state) {
+    public float getDestroySpeed(BlockState state) {
         float speed = super.getDestroySpeed(state);
-        if (!onGround() && !isInWater()
-            && OfflineClient.INSTANCE.getModuleManager()
-                .get(com.jellypudding.offlineclient.modules.player.FastBreak.class)
-                .removesAirPenalty()) {
+        FastBreak fastBreak = Modules.get(FastBreak.class);
+        if (!onGround() && !isInWater() && fastBreak != null && fastBreak.removesAirPenalty()) {
             speed *= 5;
         }
         return speed;
@@ -159,45 +188,73 @@ public abstract class LocalPlayerMixin extends AbstractClientPlayer {
 
     @Override
     public float maxUpStep() {
-        return OfflineClient.INSTANCE.getModuleManager().get(Step.class).adjustStepHeight(super.maxUpStep());
+        float vanilla = super.maxUpStep();
+        Step step = Modules.get(Step.class);
+        return step == null ? vanilla : step.adjustStepHeight(vanilla);
     }
 
     @Override
     protected boolean isStayingOnGroundSurface() {
-        return super.isStayingOnGroundSurface()
-            || OfflineClient.INSTANCE.getModuleManager().get(SafeWalk.class).shouldGuard();
+        if (super.isStayingOnGroundSurface()) {
+            return true;
+        }
+        SafeWalk safeWalk = Modules.get(SafeWalk.class);
+        return safeWalk != null && safeWalk.shouldGuard();
     }
 
     @Override
     public double blockInteractionRange() {
-        return OfflineClient.INSTANCE.getModuleManager().get(Reach.class)
-            .adjustRange(super.blockInteractionRange());
+        double vanilla = super.blockInteractionRange();
+        Reach reach = Modules.get(Reach.class);
+        return reach == null ? vanilla : reach.adjustRange(vanilla);
     }
 
     @Override
     public double entityInteractionRange() {
-        return OfflineClient.INSTANCE.getModuleManager().get(Reach.class)
-            .adjustRange(super.entityInteractionRange());
+        double vanilla = super.entityInteractionRange();
+        Reach reach = Modules.get(Reach.class);
+        return reach == null ? vanilla : reach.adjustRange(vanilla);
     }
 
     @Override
     public boolean hasEffect(Holder<MobEffect> effect) {
-        if ((effect == MobEffects.BLINDNESS || effect == MobEffects.DARKNESS)
-            && OfflineClient.INSTANCE.getModuleManager().get(AntiBlind.class).isEnabled()) {
+        if (blocked(effect)) {
             return false;
         }
         return super.hasEffect(effect);
     }
 
-    /**
-     * The pulsing darkness dimming reads this instead of hasEffect.
-     */
+    // The pulsing darkness dimming and the nausea spin read this instead of hasEffect.
     @Override
     public float getEffectBlendFactor(Holder<MobEffect> effect, float partialTicks) {
-        if (effect == MobEffects.DARKNESS
-            && OfflineClient.INSTANCE.getModuleManager().get(AntiBlind.class).isEnabled()) {
+        if (blocked(effect)) {
             return 0;
         }
         return super.getEffectBlendFactor(effect, partialTicks);
+    }
+
+    @Unique
+    private static boolean blocked(Holder<MobEffect> effect) {
+        AntiBlind antiBlind = Modules.get(AntiBlind.class);
+        if (antiBlind == null || !antiBlind.isEnabled()) {
+            return false;
+        }
+        if (effect == MobEffects.BLINDNESS) {
+            return antiBlind.blocksBlindness();
+        }
+        if (effect == MobEffects.DARKNESS) {
+            return antiBlind.blocksDarkness();
+        }
+        return effect == MobEffects.NAUSEA && antiBlind.blocksNausea();
+    }
+
+    // The renderer reads the intensity a tick behind so clearing it here is enough.
+    @Inject(method = "tick()V", at = @At("TAIL"))
+    private void onTickEnd(CallbackInfo ci) {
+        AntiBlind antiBlind = Modules.get(AntiBlind.class);
+        if (antiBlind != null && antiBlind.isEnabled() && antiBlind.blocksPortal()) {
+            portalEffectIntensity = 0;
+            oPortalEffectIntensity = 0;
+        }
     }
 }

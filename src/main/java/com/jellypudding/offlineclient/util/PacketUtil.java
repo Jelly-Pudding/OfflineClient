@@ -3,15 +3,11 @@ package com.jellypudding.offlineclient.util;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 
-/**
- * Helpers for rewriting outgoing packets.
- */
 public final class PacketUtil {
 
     private PacketUtil() {
     }
 
-    /** The same movement packet with the on ground flag replaced. */
     public static ServerboundMovePlayerPacket withOnGround(ServerboundMovePlayerPacket packet,
                                                            LocalPlayer player, boolean onGround) {
         double x = packet.getX(player.getX());
@@ -31,5 +27,19 @@ public final class PacketUtil {
             return new ServerboundMovePlayerPacket.Rot(yaw, pitch, onGround, collision);
         }
         return new ServerboundMovePlayerPacket.StatusOnly(onGround, collision);
+    }
+
+    // A packet that carried no rotation is upgraded to the form that does.
+    public static ServerboundMovePlayerPacket withRotation(ServerboundMovePlayerPacket packet,
+                                                           LocalPlayer player, float yaw, float pitch) {
+        boolean onGround = packet.isOnGround();
+        boolean collision = packet.horizontalCollision();
+
+        if (packet.hasPosition()) {
+            return new ServerboundMovePlayerPacket.PosRot(
+                packet.getX(player.getX()), packet.getY(player.getY()), packet.getZ(player.getZ()),
+                yaw, pitch, onGround, collision);
+        }
+        return new ServerboundMovePlayerPacket.Rot(yaw, pitch, onGround, collision);
     }
 }

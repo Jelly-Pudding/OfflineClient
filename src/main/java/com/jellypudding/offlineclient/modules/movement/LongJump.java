@@ -11,23 +11,19 @@ import net.minecraft.network.protocol.game.ClientboundPlayerPositionPacket;
 import net.minecraft.world.phys.Vec2;
 import net.minecraft.world.phys.Vec3;
 
-/**
- * Holds the launch speed of a jump for the whole flight while the direction
- * follows the movement keys. LocalPlayerMixin calls onJump right after the
- * game applies a jump.
- */
 public final class LongJump extends Module {
 
-    /** Average horizontal speed per tick of a normal sprint jump. */
+    // Average horizontal speed per tick of a normal sprint jump.
     private static final double BASE_SPEED = 0.35;
 
     private final NumberSetting multiplier = new NumberSetting("Multiplier",
-        "How much further a jump carries you compared to a normal sprint jump.",
+        "How much further a jump carries you.",
         3, 1, 10, 0.5, "x").min(0.1);
     private final BoolSetting stopOnLagback = new BoolSetting("Stop on lagback",
         "Ends the boost when the server teleports you back.", true);
 
-    private boolean boosting;
+    // Cleared from the packet thread.
+    private volatile boolean boosting;
     private double speed;
     private double dirX;
     private double dirZ;
@@ -47,7 +43,7 @@ public final class LongJump extends Module {
         boosting = false;
     }
 
-    /** Called from LocalPlayerMixin once the game has set the jump velocity. */
+    // Called from LocalPlayerMixin once the game has set the jump velocity.
     public void onJump() {
         if (!isEnabled() || !inGame() || !canBoost()) {
             return;
@@ -86,7 +82,7 @@ public final class LongJump extends Module {
             && !mc.player.isInWater() && !mc.player.isInLava() && !mc.player.onClimbable();
     }
 
-    /** Points the boost where the movement keys say. Keeps the old heading when no key is held. */
+    // Keeps the old heading when no key is held.
     private boolean updateDirection() {
         Vec2 move = mc.player.input.getMoveVector();
         if (move.length() < 1e-4f) {

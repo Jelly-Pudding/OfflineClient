@@ -25,14 +25,16 @@ public final class BlockMiner {
     }
 
     /**
-     * Advances mining of one block by a tick. Call it every tick until the
-     * block is gone. Switching to another block aborts the old one just
-     * like a crosshair move does. Returns false if the game refused.
+     * Called every tick until the block is gone. Switching to another block
+     * aborts the old one just like a crosshair move does.
      */
     public static boolean mine(BlockPos pos, boolean rotate) {
+        if (MC.player == null || MC.level == null || MC.gameMode == null) {
+            return false;
+        }
         Direction side = BlockUtil.facingSide(pos);
         if (rotate) {
-            BlockUtil.faceVector(BlockUtil.hitPoint(pos, side));
+            BlockUtil.faceVector(BlockUtil.hitPoint(pos, side), RotationPriority.MINE);
         }
         boolean accepted;
         selfCall = true;
@@ -51,12 +53,13 @@ public final class BlockMiner {
     }
 
     /**
-     * Sends the start and stop packets for a block in one go. Blocks that
-     * break in one hit vanish at once. Anything slower gets queued on the
-     * server and breaks on its own once its normal time has passed. Only
-     * one slow block can be queued at a time so send those sparingly.
+     * Sends the start and stop packets for a block in one go. The server
+     * queues anything slower than one hit and holds only one at a time.
      */
     public static void breakInstantly(BlockPos pos) {
+        if (MC.player == null || MC.level == null) {
+            return;
+        }
         Direction side = BlockUtil.facingSide(pos);
         MC.player.connection.send(new ServerboundPlayerActionPacket(
             ServerboundPlayerActionPacket.Action.START_DESTROY_BLOCK, pos, side));
@@ -64,15 +67,14 @@ public final class BlockMiner {
             ServerboundPlayerActionPacket.Action.STOP_DESTROY_BLOCK, pos, side));
     }
 
-    /**
-     * Keeps vanilla mining suppressed for another tick without touching
-     * any block. Use it while waiting on a delay between blocks.
-     */
+    // Keeps vanilla mining suppressed for another tick without touching a block.
     public static void keepControl() {
-        lastDriveTick = MC.player.tickCount;
+        if (MC.player != null) {
+            lastDriveTick = MC.player.tickCount;
+        }
     }
 
-    /** True while a module drove mining this tick or the one before. */
+    // True when a module drove mining this tick or the one before.
     public static boolean isActive() {
         if (MC.player == null) {
             return false;
@@ -81,17 +83,16 @@ public final class BlockMiner {
         return sinceDrive >= 0 && sinceDrive <= 1;
     }
 
-    /** True while the game is inside a mining call made from here. */
+    // True whilst the game is inside a mining call made from here.
     public static boolean isSelfCall() {
         return selfCall;
     }
 
-    /** The block a module is mining right now or null. */
     public static BlockPos getTarget() {
         return isActive() ? target : null;
     }
 
-    /** Lets go of the current block. Sends the abort the server expects. */
+    // Sends the abort the server expects.
     public static void release() {
         if (isActive() && MC.gameMode != null) {
             MC.gameMode.stopDestroyBlock();

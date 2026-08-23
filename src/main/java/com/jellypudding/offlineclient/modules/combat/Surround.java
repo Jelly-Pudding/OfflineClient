@@ -7,13 +7,15 @@ import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
+import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
-import net.minecraft.util.Mth;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
@@ -21,13 +23,19 @@ import net.minecraft.world.phys.shapes.CollisionContext;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
-/**
- * Walls the player in with obsidian so crystals cannot reach their feet.
- * Missing support under a side is filled first.
- */
+// Missing support under a side is filled first.
 public final class Surround extends Module {
 
+    // Blocks that are far too valuable to spend on a wall.
+    private static final Set<Block> NEVER = Set.of(
+        Blocks.ANCIENT_DEBRIS, Blocks.DIAMOND_BLOCK, Blocks.NETHERITE_BLOCK);
+
+    private final RegistryListSetting<Block> blocks = new RegistryListSetting<>("Blocks",
+        "Blocks to wall with in order of preference. Click to pick them.",
+        BuiltInRegistries.BLOCK,
+        List.of(Blocks.OBSIDIAN, Blocks.CRYING_OBSIDIAN));
     private final BoolSetting center = new BoolSetting("Center",
         "Snap to the middle of your block first so every side lines up.", true);
     private final BoolSetting onlyOnGround = new BoolSetting("Only on ground",
@@ -38,20 +46,26 @@ public final class Surround extends Module {
         "Ticks to wait between placing rounds.", 0, 0, 5, 1, " ticks");
     private final BoolSetting rotate = new BoolSetting("Rotate",
         "Send a look packet toward each block as it goes down.", true);
+    private final BoolSetting doubleHeight = new BoolSetting("Double height",
+        "Also wall the four sides at head height so nobody can face place on you.", false);
+    private final BoolSetting toggleOnDeath = new BoolSetting("Toggle off on death",
+        "Turn off when you die instead of walling your respawn.", true);
     private final BoolSetting toggleOnDone = new BoolSetting("Toggle off when done",
         "Turn off once all four sides are filled.", false);
     private final BoolSetting toggleOnMove = new BoolSetting("Toggle off on move",
-        "Turn off if you leave the block you started on. Otherwise the wall follows you.", false);
+        "Turn off if you leave the block you started on.", false);
     private final BoolSetting render = new BoolSetting("Show sides",
-        "Outline the four side positions. Green when safe and red when open.", true);
+        "Outline the four side positions. Green is blast proof and orange is weak and red is open.",
+        true);
 
     private int timer;
     private BlockPos anchor;
-    private int previousSlot = -1;
+    private final SlotSwap slots = new SlotSwap();
 
     public Surround() {
-        super("Surround", "Places obsidian around your feet to block crystals.", Category.COMBAT);
-        addSettings(center, onlyOnGround, perTick, delay, rotate, toggleOnDone, toggleOnMove, render);
+        super("Surround", "Places blast proof blocks around your feet to stop crystals.", Category.COMBAT);
+        addSettings(blocks, center, onlyOnGround, perTick, delay, rotate,
+            doubleHeight, toggleOnDeath, toggleOnDone, toggleOnMove, render);
         searchTags("obsidian", "crystal", "hole");
     }
 
@@ -59,18 +73,18 @@ public final class Surround extends Module {
     protected void onEnable() {
         timer = 0;
         anchor = null;
-        previousSlot = -1;
+        slots.forget();
         if (inGame()) {
             anchor = mc.player.blockPosition();
             if (center.isOn()) {
-                centerPlayer();
+                BlockUtil.centerPlayer();
             }
         }
     }
 
     @Override
     protected void onDisable() {
-        restoreSlot();
+        slots.restore();
         anchor = null;
     }
 
@@ -79,18 +93,15 @@ public final class Surround extends Module {
         if (!inGame() || mc.player.isSpectator()) {
             return;
         }
-        // Handles a first tick after enabling from the GUI before a world was loaded.
-        if (anchor == null) {
-            anchor = mc.player.blockPosition();
+        if (mc.player.isDeadOrDying()) {
+            if (toggleOnDeath.isOn()) {
+                setEnabled(false);
+            }
+            return;
         }
         BlockPos feet = mc.player.blockPosition();
-        if (!feet.equals(anchor)) {
-            if (toggleOnMove.isOn()) {
-                setEnabled(false);
-                return;
-            }
-            // The wall follows the player's current block.
-            anchor = feet;
+        if (!keepAnchor(feet)) {
+            return;
         }
         if (onlyOnGround.isOn() && !mc.player.onGround()) {
             return;
@@ -106,7 +117,7 @@ public final class Surround extends Module {
             missing.add(0, feet.below());
         }
         if (missing.isEmpty()) {
-            restoreSlot();
+            slots.restore();
             if (toggleOnDone.isOn()) {
                 setEnabled(false);
             }
@@ -115,13 +126,37 @@ public final class Surround extends Module {
 
         int slot = findBlastBlock();
         if (slot == -1) {
-            restoreSlot();
+            slots.restore();
             return;
         }
         if (center.isOn()) {
-            centerPlayer();
+            BlockUtil.centerPlayer();
         }
+        if (placeRound(missing, slot) > 0) {
+            timer = delay.getInt();
+        }
+        slots.restore();
+    }
 
+    /**
+     * Keeps the wall on the block the player stands in. False once the
+     * module has switched itself off.
+     */
+    private boolean keepAnchor(BlockPos feet) {
+        // Null on the first tick after enabling from the GUI with no world loaded.
+        if (anchor == null || feet.equals(anchor)) {
+            anchor = feet;
+            return true;
+        }
+        if (toggleOnMove.isOn()) {
+            setEnabled(false);
+            return false;
+        }
+        anchor = feet;
+        return true;
+    }
+
+    private int placeRound(List<BlockPos> missing, int slot) {
         int placed = 0;
         for (BlockPos pos : missing) {
             if (placed >= perTick.getInt()) {
@@ -130,34 +165,25 @@ public final class Surround extends Module {
             BlockPos target = pos;
             Direction support = BlockUtil.findSupport(pos);
             if (support == null) {
-                // Nothing to build against. Fill under the side first.
                 BlockPos below = pos.below();
-                if (canFill(below) && BlockUtil.findSupport(below) != null) {
+                Direction belowSupport = canFill(below) ? BlockUtil.findSupport(below) : null;
+                if (belowSupport != null) {
                     target = below;
-                    support = BlockUtil.findSupport(below);
-                } else {
-                    // With no support at all the empty spot is clicked directly like AirPlace does.
-                    selectSlot(slot);
-                    if (BlockUtil.placeDirect(pos, rotate.isOn(), true)) {
-                        placed++;
-                    }
-                    continue;
+                    support = belowSupport;
                 }
             }
-            selectSlot(slot);
-            if (BlockUtil.place(target, support, rotate.isOn(), true)) {
+            slots.select(slot);
+            // Every side asks to turn and the rotation manager keeps the first one.
+            boolean ok = support != null
+                ? BlockUtil.place(target, support, rotate.isOn(), true)
+                : BlockUtil.placeDirect(pos, rotate.isOn(), true);
+            if (ok) {
                 placed++;
             }
         }
-
-        if (placed > 0) {
-            timer = delay.getInt();
-        }
-        // Give the hand back straight away.
-        restoreSlot();
+        return placed;
     }
 
-    /** The side positions that still need a block. */
     private List<BlockPos> missingSides(BlockPos feet) {
         List<BlockPos> result = new ArrayList<>();
         for (Direction side : Direction.Plane.HORIZONTAL) {
@@ -166,10 +192,19 @@ public final class Surround extends Module {
                 result.add(pos);
             }
         }
+        // The lower ring goes down first so the pocket is sealed before it is raised.
+        if (doubleHeight.isOn()) {
+            BlockPos head = feet.above();
+            for (Direction side : Direction.Plane.HORIZONTAL) {
+                BlockPos pos = head.relative(side);
+                if (canFill(pos)) {
+                    result.add(pos);
+                }
+            }
+        }
         return result;
     }
 
-    /** True if the spot is open and no entity is standing in it. */
     private boolean canFill(BlockPos pos) {
         if (!BlockUtil.isReplaceable(pos)) {
             return false;
@@ -178,47 +213,29 @@ public final class Surround extends Module {
         return mc.level.isUnobstructed(obsidian, pos, CollisionContext.empty());
     }
 
-    /** Hotbar slot with a blast proof block or minus one. */
     private int findBlastBlock() {
+        int best = -1;
+        int bestRank = Integer.MAX_VALUE;
         for (int i = 0; i < 9; i++) {
             ItemStack stack = mc.player.getInventory().getItem(i);
-            if (stack.getItem() instanceof BlockItem item
-                && item.getBlock().getExplosionResistance() >= 600
-                && item.getBlock().defaultDestroyTime() >= 0) {
-                return i;
+            if (!(stack.getItem() instanceof BlockItem item)) {
+                continue;
+            }
+            int rank = rankOf(item.getBlock());
+            if (rank != -1 && rank < bestRank) {
+                bestRank = rank;
+                best = i;
             }
         }
-        return -1;
+        return best;
     }
 
-    private void selectSlot(int slot) {
-        int selected = mc.player.getInventory().getSelectedSlot();
-        if (selected == slot) {
-            return;
+    // How far up the list a block sits. Lower wins. Minus one when it is not usable.
+    private int rankOf(Block block) {
+        if (NEVER.contains(block)) {
+            return -1;
         }
-        if (previousSlot == -1) {
-            previousSlot = selected;
-        }
-        mc.player.getInventory().setSelectedSlot(slot);
-    }
-
-    private void restoreSlot() {
-        if (previousSlot != -1 && mc.player != null) {
-            mc.player.getInventory().setSelectedSlot(previousSlot);
-        }
-        previousSlot = -1;
-    }
-
-    /** Moves to the middle of the current block and tells the server. */
-    private void centerPlayer() {
-        double x = Mth.floor(mc.player.getX()) + 0.5;
-        double z = Mth.floor(mc.player.getZ()) + 0.5;
-        if (Math.abs(mc.player.getX() - x) < 0.01 && Math.abs(mc.player.getZ() - z) < 0.01) {
-            return;
-        }
-        mc.player.setPos(x, mc.player.getY(), z);
-        mc.player.connection.send(new ServerboundMovePlayerPacket.Pos(
-            x, mc.player.getY(), z, mc.player.onGround(), mc.player.horizontalCollision));
+        return BlockUtil.rankOf(block, blocks.getValue());
     }
 
     @Subscribe
@@ -229,9 +246,19 @@ public final class Surround extends Module {
         BlockPos feet = mc.player.blockPosition();
         for (Direction side : Direction.Plane.HORIZONTAL) {
             BlockPos pos = feet.relative(side);
-            boolean safe = !BlockUtil.isReplaceable(pos);
-            int color = safe ? 0xFF30E030 : 0xFFE03030;
-            event.getBatch().outlineBox(new AABB(pos), color, false);
+            event.getBatch().outlineBox(new AABB(pos), sideColor(pos), false);
         }
+    }
+
+    /**
+     * Green when the side shrugs off a crystal. Orange when a blast would
+     * clear what is there and red when the side is open.
+     */
+    private int sideColor(BlockPos pos) {
+        if (BlockUtil.isReplaceable(pos)) {
+            return 0xFFE03030;
+        }
+        BlockState state = BlockUtil.state(pos);
+        return state.getBlock().getExplosionResistance() >= 600 ? 0xFF30E030 : 0xFFE08820;
     }
 }

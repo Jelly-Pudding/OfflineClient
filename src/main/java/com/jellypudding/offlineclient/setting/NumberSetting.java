@@ -36,13 +36,11 @@ public final class NumberSetting extends Setting<Double> {
         this.hardMin = sliderMin;
     }
 
-    /** Overrides the lowest value that can ever be set. */
     public NumberSetting min(double hardMin) {
         this.hardMin = hardMin;
         return this;
     }
 
-    /** Sets a highest value that can ever be set. Unlimited otherwise. */
     public NumberSetting max(double hardMax) {
         this.hardMax = hardMax;
         return this;
@@ -86,7 +84,7 @@ public final class NumberSetting extends Setting<Double> {
         return value.floatValue();
     }
 
-    /** Typed values keep their exact number. Only the hard limits apply. */
+    // Typed values keep their exact number. Only the hard limits apply.
     @Override
     public void setValue(Double newValue) {
         value = Math.clamp(newValue, hardMin, hardMax);
@@ -95,7 +93,7 @@ public final class NumberSetting extends Setting<Double> {
         }
     }
 
-    /** Set while a slider drag is running. */
+    // Set whilst a slider drag is running.
     private double activeSliderMax = -1;
 
     /**
@@ -104,10 +102,7 @@ public final class NumberSetting extends Setting<Double> {
      */
     private double sessionMax;
 
-    /**
-     * The top of the slider right now. A typed value above the normal
-     * range stretches the slider.
-     */
+    // A typed value above the normal range stretches the slider.
     private double sliderTop() {
         if (activeSliderMax > 0) {
             return activeSliderMax;
@@ -115,7 +110,7 @@ public final class NumberSetting extends Setting<Double> {
         return Math.max(sliderMax, Math.max(sessionMax, value));
     }
 
-    /** Locks the slider range for the length of one drag. */
+    // Locks the slider range for the length of one drag.
     public void beginSlider() {
         activeSliderMax = sliderTop();
     }
@@ -124,16 +119,17 @@ public final class NumberSetting extends Setting<Double> {
         activeSliderMax = -1;
     }
 
-    /** Slider input. Snaps to the step and stays inside the slider range. */
+    // Snaps to the step and stays inside the slider range.
     public void setFromSlider(double fraction) {
         double top = sliderTop();
         double raw = sliderMin + (top - sliderMin) * Math.clamp(fraction, 0, 1);
         double stepped = Math.round(raw / step) * step;
         double clamped = Math.clamp(stepped, sliderMin, top);
-        value = BigDecimal.valueOf(clamped).setScale(decimals, RoundingMode.HALF_UP).doubleValue();
+        double rounded = BigDecimal.valueOf(clamped).setScale(decimals, RoundingMode.HALF_UP).doubleValue();
+        // The hard limits still win over the slider range.
+        value = Math.clamp(rounded, hardMin, hardMax);
     }
 
-    /** How far along the slider the current value sits from 0 to 1. */
     public double getSliderFraction() {
         return Math.clamp((value - sliderMin) / (sliderTop() - sliderMin), 0, 1);
     }

@@ -6,10 +6,7 @@ import net.minecraft.client.renderer.state.level.CameraRenderState;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Invoker;
 
-/**
- * Lets the world to screen projection apply the same view bobbing the
- * game uses.
- */
+// The world to screen projection applies the same view bobbing the game uses.
 @Mixin(GameRenderer.class)
 public interface GameRendererAccessor {
 

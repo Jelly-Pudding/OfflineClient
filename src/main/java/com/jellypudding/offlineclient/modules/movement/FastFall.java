@@ -10,7 +10,7 @@ import net.minecraft.world.phys.Vec3;
 public final class FastFall extends Module {
 
     private final NumberSetting force = new NumberSetting("Force",
-        "Extra downward pull while falling. Vanilla gravity is about 1.", 0.5, 0.1, 3, 0.1);
+        "Extra downward pull whilst falling.", 0.5, 0.1, 3, 0.1);
 
     public FastFall() {
         super("FastFall", "Pulls you to the ground faster when you are falling.", Category.MOVEMENT);
@@ -28,13 +28,11 @@ public final class FastFall extends Module {
         if (!inGame() || mc.player.onGround()) {
             return;
         }
-        // Never fight flight or gliding or swimming or climbing.
         if (mc.player.isFallFlying() || mc.player.getAbilities().flying
             || mc.player.isInWater() || mc.player.isInLava() || mc.player.onClimbable()) {
             return;
         }
         Vec3 velocity = mc.player.getDeltaMovement();
-        // Only while already falling.
         if (velocity.y >= 0) {
             return;
         }

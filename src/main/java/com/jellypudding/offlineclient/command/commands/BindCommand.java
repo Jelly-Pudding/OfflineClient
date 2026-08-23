@@ -26,21 +26,17 @@ public final class BindCommand extends Command {
             return;
         }
 
-        String key = args[1].toUpperCase();
-        if (key.equals("NONE")) {
-            module.getKeybind().setValue(KeybindSetting.UNBOUND);
-            ChatUtil.message("§b" + module.getName() + " §7unbound.");
-        } else if (key.length() == 1 && (Character.isLetterOrDigit(key.charAt(0)))) {
-            // GLFW key codes for letters and digits match their ASCII codes.
-            module.getKeybind().setValue((int) key.charAt(0));
-            ChatUtil.message("§b" + module.getName() + " §7bound to §b" + key + "§7.");
-        } else if (key.startsWith("F") && key.length() <= 3) {
-            int f = Integer.parseInt(key.substring(1));
-            module.getKeybind().setValue(GLFW.GLFW_KEY_F1 + f - 1);
-            ChatUtil.message("§b" + module.getName() + " §7bound to §b" + key + "§7.");
-        } else {
+        int key = KeybindSetting.keyFromName(args[1]);
+        if (key == KeybindSetting.UNKNOWN) {
             ChatUtil.error("Can't parse key '" + args[1] + "'. Use the ClickGUI for special keys.");
             return;
+        }
+        module.getKeybind().setValue(key);
+        if (key == KeybindSetting.UNBOUND) {
+            ChatUtil.message("§b" + module.getName() + " §7unbound.");
+        } else {
+            ChatUtil.message("§b" + module.getName() + " §7bound to §b"
+                + module.getKeybind().getKeyName() + "§7.");
         }
         OfflineClient.INSTANCE.getConfigManager().saveSoon();
     }

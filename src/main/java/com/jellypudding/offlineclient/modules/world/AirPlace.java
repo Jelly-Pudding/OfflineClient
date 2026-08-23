@@ -23,10 +23,6 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
-/**
- * Right click with a block in hand while looking at nothing and the block
- * goes exactly where the crosshair points.
- */
 public final class AirPlace extends Module {
 
     private final NumberSetting range = new NumberSetting("Range",
@@ -34,7 +30,7 @@ public final class AirPlace extends Module {
     private final BoolSetting guide = new BoolSetting("Guide",
         "Outline the spot the block will land in.", true);
     private final ColorSetting color = new ColorSetting("Guide color",
-        "Color of the outline.", 0, false).visibleWhen(guide::isOn);
+        "Colour of the outline.", 0, false).visibleWhen(guide::isOn);
 
     private BlockPos target;
 
@@ -66,6 +62,10 @@ public final class AirPlace extends Module {
         if (!inGame() || mc.player.isSpectator() || mc.gameMode.isDestroying()) {
             return;
         }
+        // Swallowing the click whilst the hands are busy would eat a normal use.
+        if (mc.player.isHandsBusy()) {
+            return;
+        }
         InteractionHand hand = heldBlockHand();
         if (hand == null) {
             return;
@@ -77,9 +77,6 @@ public final class AirPlace extends Module {
         // The game sets this delay itself on a normal click.
         mc.rightClickDelay = 4;
         event.cancel();
-        if (mc.player.isHandsBusy()) {
-            return;
-        }
 
         // The click lands on the empty spot itself. The server treats a
         // replaceable clicked block as the place to put the new one.
@@ -102,10 +99,6 @@ public final class AirPlace extends Module {
         event.getBatch().outlineBox(box, ColorUtil.withAlpha(argb, 220), false);
     }
 
-    /**
-     * The empty block the crosshair points at within range or null when the
-     * crosshair already rests on a real block or entity.
-     */
     private BlockPos findSpot() {
         if (mc.hitResult != null && mc.hitResult.getType() != HitResult.Type.MISS) {
             return null;
@@ -124,10 +117,7 @@ public final class AirPlace extends Module {
         return pos;
     }
 
-    /**
-     * The hand holding a block item. The off hand only counts when the main
-     * hand is empty. A tool or food in the main hand keeps its normal use.
-     */
+    // A tool or food in the main hand keeps its normal use.
     private InteractionHand heldBlockHand() {
         ItemStack main = mc.player.getMainHandItem();
         if (main.getItem() instanceof BlockItem) {

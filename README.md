@@ -8,43 +8,41 @@ A utility client custom designed for the anarchy lifesteal server [minecraftoffl
 4. Launch the game with the Fabric profile.
 
 ## Usage
-- **RIGHT SHIFT** opens the ClickGUI.
-- Chat commands use the `.` prefix. `.help` lists them.
+- **RIGHT SHIFT** opens the ClickGUI. Its Style setting switches between draggable panels and a single window with a sidebar.
+- Chat commands use the `.` prefix. `.help` lists them. Typing just a module name toggles it.
+- Press **TAB** whilst typing a command to autocomplete it.
 - Everything is saved to `.minecraft/offlineclient/config.json` automatically.
+- The title screen has a Recovery button that puts settings back to default.
 
 ## Modules
 | Category | Modules |
 | --- | --- |
-| Combat | KillAura · TriggerBot · AutoClicker · Criticals · AutoTotem · AutoArmor · AutoWeapon · BowAimbot · Surround · CrystalAura · AutoCity · SelfTrap · AutoTrap · Offhand · Hitboxes |
-| Movement | Sprint · Speed · Flight · ElytraFly · NoFall · NoKnockback · Step · HighJump · NoSlowdown · EdgeGuard · Spider · QuickClimb · AutoWalk · Blink · Parkour · FastFall · Jesus · AutoJump · AntiPush · LongJump · NoWeb · Sneak |
-| Render | Fullbright · AntiBlind · ClearView · ClearSkies · ESP · ChestESP · ItemESP · LogoutSpots · Portals · Search · HoleESP · XRay · Nametags · Trajectories · Tracers · Breadcrumbs · Freecam · Zoom · NoHurtCam |
-| Player | FastPlace · FastBreak · AutoRespawn · AutoEat · ChestStealer · AntiHunger · AutoTool · Reach · AutoFish · AutoDrop · NoRotate · FastUse · AutoReplenish · InvWalk · GhostHand · MiddleClickExtra · AirPlace |
-| World | Scaffold · Nuker · VeinMiner |
-| Misc | ClickGUI · HUD · AntiAFK · AutoReconnect · AutoLog · Timer · FakePlayer · Notifier · NameProtect · Spam · AntiSpam |
+| Combat | KillAura · TriggerBot · AutoClicker · Criticals · AutoTotem · AutoArmor · AutoWeapon · BowAimbot · BowSpam · ArrowDodge · Quiver · Surround · CrystalAura · AnchorAura · BedAura · AutoCity · SelfTrap · AutoTrap · HoleFiller · Burrow · AutoWeb · SelfWeb · AntiBed · AntiAnchor · AttributeSwap · Offhand · Hitboxes · AutoAnvil |
+| Movement | Sprint · Speed · Flight · ElytraFly · NoFall · NoKnockback · Step · HighJump · NoSlowdown · EdgeGuard · Spider · QuickClimb · AutoWalk · Blink · Parkour · FastFall · Jesus · AutoJump · AntiPush · AntiVoid · LongJump · NoWeb · Sneak · ElytraBoost · VehicleFly · Glide |
+| Render | Fullbright · AntiBlind · ClearView · ClearSkies · ESP · Chams · PopChams · ChestESP · ItemESP · LogoutSpots · Portals · Search · HoleESP · CityESP · XRay · NewChunks · BreakIndicators · Nametags · Trajectories · Tracers · Breadcrumbs · BetterTooltips · TrueSight · EntityOwner · Radar · Waypoints · VoidESP · TunnelESP · SpawnESP · Freecam · FreeLook · Zoom · NoHurtCam · CameraTweaks |
+| Player | FastPlace · FastBreak · AutoRespawn · AutoEat · AutoGap · AutoPotion · AutoMend · ChestStealer · InventoryTweaks · AntiHunger · AutoTool · Reach · AutoFish · AutoDrop · NoRotate · NoInteract · NoMiningTrace · LiquidInteract · FastUse · AutoReplenish · InvWalk · GUIMove · Multitask · ChestSwap · PotionSaver · GhostHand · MiddleClickExtra · AirPlace · NoStatusEffects |
+| World | Scaffold · Nuker · VeinMiner · PacketMine · Excavator · Tunneller · HighwayBuilder · LiquidFiller · SpawnProofer · AutoSign · NoGhostBlocks · AutoFarm · BuildHeight |
+| Misc | ClickGUI · HUD · AntiAFK · AutoReconnect · AutoLog · Timer · FakePlayer · Notifier · NameProtect · Spam · AntiSpam · Derp · Panic · ServerSpoof · StashFinder · BetterTab · AntiPacketKick · PacketCanceller · SoundBlocker |
 
-## Building
+## Build with Gradle
+Git clone the repository and then run this:
 ```
 ./gradlew build
 ```
-
-The jar lands in `build/libs`. Requires JDK 25.
+The jar lands in `build/libs`.
 
 ## Developing
 Launch the modded client:
-
 ```
 ./gradlew runClient
 ```
+The first launch takes a while. After that it starts in a few seconds. N.B. it uses its own folder at `run/`.
 
-The first launch downloads assets and takes a while. After that it starts in a few seconds. N.B. it uses its own folder at `run/`.
-
-When you want to test in the real launcher instead:
+To test in the real launcher instead run this and it builds the jar and copies it into `.minecraft/mods`.
 
 ```
 ./gradlew install
 ```
-
-That builds the jar and copies it into `.minecraft/mods` in one step.
 
 ## Support Me
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/K3K715TC1R)

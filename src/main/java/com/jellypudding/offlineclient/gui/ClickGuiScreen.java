@@ -1,50 +1,59 @@
 package com.jellypudding.offlineclient.gui;
 
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
-import com.jellypudding.offlineclient.setting.KeybindSetting;
-import com.jellypudding.offlineclient.setting.NumberSetting;
-import com.jellypudding.offlineclient.setting.RegistryListSetting;
-import com.jellypudding.offlineclient.setting.Setting;
-import com.jellypudding.offlineclient.setting.TextSetting;
 import com.jellypudding.offlineclient.util.RenderUtil;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
-import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.network.chat.Component;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
+import java.util.Map;
 
-public final class ClickGuiScreen extends Screen {
+// The draggable panel style of the ClickGUI. One panel per category.
+public final class ClickGuiScreen extends GuiScreenBase {
+
+    private static final int SEARCH_WIDTH = 156;
+    private static final int SEARCH_WIDTH_MIN = 120;
+    private static final int SEARCH_WIDTH_MAX = 460;
+
+    // How close to an edge the pointer has to be to grab it.
+    private static final int GRIP = 4;
+    private static final int SEARCH_TOP = 6;
+    private static final int RESULTS_GAP = 6;
+    private static final int FOOTER_HEIGHT = 12;
+    private static final int TOOLTIP_WIDTH = 170;
 
     private final List<Panel> panels = new ArrayList<>();
-    private List<ModuleRow> searchRows = new ArrayList<>();
-    private static final int SEARCH_WIDTH = 140;
-    private static final int SEARCH_TOP = 6;
-    private static final int SEARCH_BOTTOM = 20;
+    private final List<ModuleRow> searchRows = new ArrayList<>();
 
-    private String search = "";
-    private boolean searchFocused;
     private String tooltip;
+    private String wrappedFor;
+    private final List<String> wrappedLines = new ArrayList<>();
 
-    /** Panels nudged aside by the search results and where they came from. */
-    private final java.util.Map<Panel, int[]> nudged = new java.util.HashMap<>();
-    private ModuleRow bindingRow;
-    private Setting<?> editingSetting;
-    private final StringBuilder editBuffer = new StringBuilder();
-    private long suppressCharsUntil;
+    // Nudged panels mapped to the position they came from.
+    private final Map<Panel, int[]> nudged = new HashMap<>();
+
+    // Panels with no saved layout. Tiled once the screen size is known.
+    private final List<Panel> freshPanels = new ArrayList<>();
+
+    // The results box is centred so dragging either edge widens it both ways.
+    private int searchWidth = SEARCH_WIDTH;
+    private boolean resizingSearch;
 
     public ClickGuiScreen() {
-        super(Component.literal("ClickGUI"));
-
+        JsonObject gui = OfflineClient.INSTANCE.getConfigManager().getGuiState();
+        if (gui.has("searchWidth")) {
+            searchWidth = Math.clamp(gui.get("searchWidth").getAsInt(),
+                SEARCH_WIDTH_MIN, SEARCH_WIDTH_MAX);
+        }
         int startX = 10;
         for (Category category : Category.values()) {
             Panel panel = new Panel(category.getDisplayName(),
@@ -52,20 +61,26 @@ public final class ClickGuiScreen extends Screen {
                 this, startX, 30);
             // Saved layouts override the default height cap right after.
             panel.setViewHeight(190);
-            restorePanelState(panel);
+            if (!restorePanelState(panel)) {
+                freshPanels.add(panel);
+            }
             panels.add(panel);
             startX += GuiTheme.PANEL_WIDTH + 8;
         }
     }
 
-    private void restorePanelState(Panel panel) {
+    private boolean restorePanelState(Panel panel) {
         JsonObject gui = OfflineClient.INSTANCE.getConfigManager().getGuiState();
-        if (!gui.has(panel.getTitle())) {
-            return;
+        if (!gui.has(panel.getTitle()) || !gui.get(panel.getTitle()).isJsonObject()) {
+            return false;
         }
         JsonObject state = gui.getAsJsonObject(panel.getTitle());
-        panel.setPosition(state.get("x").getAsInt(), state.get("y").getAsInt());
-        panel.setCollapsed(state.get("collapsed").getAsBoolean());
+        if (state.has("x") && state.has("y")) {
+            panel.setPosition(state.get("x").getAsInt(), state.get("y").getAsInt());
+        }
+        if (state.has("collapsed")) {
+            panel.setCollapsed(state.get("collapsed").getAsBoolean());
+        }
         if (state.has("height")) {
             panel.setViewHeight(state.get("height").getAsInt());
         }
@@ -76,7 +91,7 @@ public final class ClickGuiScreen extends Screen {
             panel.setScrollOffset(state.get("scroll").getAsInt());
         }
         if (state.has("expanded")) {
-            var expanded = state.getAsJsonArray("expanded");
+            JsonArray expanded = state.getAsJsonArray("expanded");
             for (ModuleRow row : panel.getRows()) {
                 for (var name : expanded) {
                     if (row.getModule().getName().equals(name.getAsString())) {
@@ -85,16 +100,12 @@ public final class ClickGuiScreen extends Screen {
                 }
             }
         }
+        return true;
     }
 
     @Override
-    public void onClose() {
-        commitEditing();
-        // Panels moved aside by a search go back where they belong.
-        for (var entry : nudged.entrySet()) {
-            entry.getKey().setPosition(entry.getValue()[0], entry.getValue()[1]);
-        }
-        nudged.clear();
+    protected void saveState() {
+        restoreNudged();
         JsonObject gui = OfflineClient.INSTANCE.getConfigManager().getGuiState();
         for (Panel panel : panels) {
             JsonObject state = new JsonObject();
@@ -104,7 +115,7 @@ public final class ClickGuiScreen extends Screen {
             state.addProperty("height", panel.getViewHeight());
             state.addProperty("width", panel.getWidth());
             state.addProperty("scroll", panel.getScrollOffset());
-            var expanded = new com.google.gson.JsonArray();
+            JsonArray expanded = new JsonArray();
             for (ModuleRow row : panel.getRows()) {
                 if (row.isExpanded()) {
                     expanded.add(row.getModule().getName());
@@ -113,22 +124,36 @@ public final class ClickGuiScreen extends Screen {
             state.add("expanded", expanded);
             gui.add(panel.getTitle(), state);
         }
+        gui.addProperty("searchWidth", searchWidth);
         OfflineClient.INSTANCE.getConfigManager().saveNow();
-        super.onClose();
     }
 
     @Override
-    public boolean isPauseScreen() {
+    protected void releaseDrags() {
+        resizingSearch = false;
+        for (Panel panel : panels) {
+            panel.releaseDrags();
+        }
+        for (ModuleRow row : searchRows) {
+            row.mouseReleased();
+        }
+    }
+
+    @Override
+    protected boolean isWindowStyle() {
         return false;
     }
 
     /**
-     * Panels saved on a bigger screen or an older layout can end up outside
-     * the window where they cannot be reached. Pull them back in.
+     * Panels saved on a bigger screen can end up outside the window. This
+     * runs again on every resize.
      */
     @Override
     protected void init() {
         super.init();
+        // A search running across a resize would leave panels pinned aside.
+        restoreNudged();
+        tilePanels();
         int rescued = 0;
         for (Panel panel : panels) {
             boolean offscreen = panel.getX() > width - 24
@@ -143,10 +168,72 @@ public final class ClickGuiScreen extends Screen {
         }
     }
 
-    @Override
-    public void extractBackground(GuiGraphicsExtractor context, int mouseX, int mouseY, float deltaTicks) {
-        // Use a soft dark gradient instead of the vanilla blur.
-        context.fillGradient(0, 0, width, height, 0x70101018, 0xA0060610);
+    private void restoreNudged() {
+        for (var entry : nudged.entrySet()) {
+            entry.getKey().setPosition(entry.getValue()[0], entry.getValue()[1]);
+        }
+        nudged.clear();
+    }
+
+    private void tilePanels() {
+        if (freshPanels.isEmpty()) {
+            return;
+        }
+        int x = 10;
+        int y = 30;
+        for (Panel panel : freshPanels) {
+            panel.setCollapsed(true);
+            if (x + panel.getWidth() > width - 10) {
+                x = 10;
+                y += GuiTheme.HEADER_HEIGHT + 10;
+            }
+            panel.setPosition(x, y);
+            x += panel.getWidth() + 8;
+        }
+        freshPanels.clear();
+    }
+
+    private int searchX() {
+        return width / 2 - searchWidth / 2;
+    }
+
+    private int resultsTop() {
+        return SEARCH_TOP + SEARCH_HEIGHT + RESULTS_GAP;
+    }
+
+    // Results past the last one that fits are counted in the footer.
+    private int shownResults() {
+        int room = height - resultsTop() - 8;
+        int shown = countThatFit(room);
+        if (shown < searchRows.size()) {
+            shown = countThatFit(room - FOOTER_HEIGHT);
+        }
+        return shown;
+    }
+
+    private int countThatFit(int room) {
+        int used = 4;
+        int count = 0;
+        for (ModuleRow row : searchRows) {
+            int h = row.getHeight();
+            if (used + h > room) {
+                break;
+            }
+            used += h;
+            count++;
+        }
+        return count;
+    }
+
+    private int resultsHeight(int shown) {
+        int total = 4;
+        for (int i = 0; i < shown; i++) {
+            total += searchRows.get(i).getHeight();
+        }
+        if (shown < searchRows.size() || searchRows.isEmpty()) {
+            total += FOOTER_HEIGHT;
+        }
+        return total;
     }
 
     @Override
@@ -154,36 +241,27 @@ public final class ClickGuiScreen extends Screen {
         tooltip = null;
         Font font = OfflineClient.MC.font;
 
-        // Watermark in the top right.
-        String name = OfflineClient.NAME + " v" + OfflineClient.VERSION;
-        float watermarkScale = 0.7f;
-        RenderUtil.rainbowText(context, font, name,
-            width - font.width(name) * watermarkScale - 4, 4, watermarkScale);
-
-        // Search bar at the top.
-        int barX = width / 2 - SEARCH_WIDTH / 2;
-        boolean active = searchFocused || !search.isEmpty();
-        RenderUtil.borderedRect(context, barX, SEARCH_TOP, barX + SEARCH_WIDTH, SEARCH_BOTTOM,
-            GuiTheme.BG_PANEL, active ? GuiTheme.accent() : GuiTheme.OUTLINE);
-        context.guiRenderState.up();
-        boolean placeholder = search.isEmpty() && !searchFocused;
-        String searchText = placeholder ? "click here to search" : search;
-        context.text(font, searchText, barX + 5, 9,
-            placeholder ? GuiTheme.TEXT_DIM : GuiTheme.TEXT, false);
-        // Blinking caret while the bar has focus.
-        if (searchFocused && (System.currentTimeMillis() / 500) % 2 == 0) {
-            int caretX = barX + 5 + (search.isEmpty() ? 0 : font.width(search) + 1);
-            context.fill(caretX, 9, caretX + 1, 17, GuiTheme.TEXT);
+        if (resizingSearch) {
+            // Centred box so half the pointer offset is the half width.
+            searchWidth = Math.clamp(Math.abs(mouseX - width / 2) * 2,
+                SEARCH_WIDTH_MIN, SEARCH_WIDTH_MAX);
         }
 
-        // Panels under the search results slide aside until the search ends.
-        int resultsHeight = search.isEmpty() ? 0 : searchResultsHeight();
-        nudgePanels(resultsHeight, searchFocused || !search.isEmpty());
+        int barX = searchX();
+        RenderUtil.shadow(context, barX, SEARCH_TOP, barX + searchWidth,
+            SEARCH_TOP + SEARCH_HEIGHT, 2);
+        context.guiRenderState.up();
+        renderSearchBox(context, font, barX, SEARCH_TOP, searchWidth, mouseX, mouseY,
+            searchRows.size());
+        renderSearchGrips(context, barX, mouseX, mouseY);
+
+        int shown = isSearching() ? shownResults() : 0;
+        nudgePanels(isSearching() ? resultsHeight(shown) : 0);
         for (Panel panel : panels) {
             panel.render(context, mouseX, mouseY);
         }
-        if (!search.isEmpty()) {
-            renderSearchResults(context, mouseX, mouseY);
+        if (isSearching()) {
+            renderSearchResults(context, font, shown, mouseX, mouseY);
         }
 
         if (tooltip != null && !tooltip.isEmpty()) {
@@ -191,25 +269,14 @@ public final class ClickGuiScreen extends Screen {
         }
     }
 
-    private int searchResultsHeight() {
-        int total = 4;
-        for (ModuleRow row : searchRows) {
-            total += row.getHeight();
-        }
-        return total;
-    }
-
-    /**
-     * Slides any panel under the search results to the side.
-     * The overlap test uses the panel's remembered home position.
-     */
-    private void nudgePanels(int resultsHeight, boolean searchActive) {
-        int rx = width / 2 - GuiTheme.PANEL_WIDTH / 2 - 6;
-        int rx2 = rx + GuiTheme.PANEL_WIDTH + 12;
-        int ry2 = 26 + resultsHeight;
+    // The overlap test uses the panel's remembered home position.
+    private void nudgePanels(int resultsHeight) {
+        int rx = searchX() - 4;
+        int rx2 = rx + searchWidth + 8;
+        int ry2 = resultsTop() + resultsHeight;
+        boolean searchActive = searchFocused || isSearching();
 
         for (Panel panel : panels) {
-            // Dragging a nudged panel hands it back to the player.
             if (panel.isDragging()) {
                 nudged.remove(panel);
                 continue;
@@ -227,7 +294,6 @@ public final class ClickGuiScreen extends Screen {
                 if (origin == null) {
                     nudged.put(panel, new int[] {homeX, homeY});
                 }
-                // Step aside to whichever side is closer. Only sideways.
                 boolean left = homeX + panel.getWidth() / 2 < width / 2;
                 int target = left ? rx - panel.getWidth() - 6 : rx2 + 6;
                 target = Math.clamp(target, 0, Math.max(0, width - panel.getWidth()));
@@ -254,126 +320,114 @@ public final class ClickGuiScreen extends Screen {
         panel.setPosition(next, y);
     }
 
-    private void renderSearchResults(GuiGraphicsExtractor context, int mouseX, int mouseY) {
-        int x = width / 2 - GuiTheme.PANEL_WIDTH / 2;
-        int y = 26;
-        int total = searchResultsHeight();
-        context.guiRenderState.up();
-        RenderUtil.borderedRect(context, x - 2, y - 2,
-            x + GuiTheme.PANEL_WIDTH + 2, y + total, 0xF80C0C14, GuiTheme.accent());
-        context.guiRenderState.up();
-        y += 2;
-        if (searchRows.isEmpty()) {
-            context.text(OfflineClient.MC.font, "no matches", x + 5, y + 2, GuiTheme.TEXT_DIM, false);
-            return;
+    // Two dashes on each edge. The only hint that the box can be widened.
+    private void renderSearchGrips(GuiGraphicsExtractor context, int barX, int mouseX, int mouseY) {
+        boolean lit = resizingSearch || overSearchEdge(mouseX, mouseY);
+        int color = lit ? GuiTheme.accentText() : GuiTheme.TEXT_FAINT;
+        int midY = SEARCH_TOP + SEARCH_HEIGHT / 2;
+        for (int offset = -2; offset <= 2; offset += 4) {
+            context.fill(barX + 1, midY + offset, barX + 3, midY + offset + 1, color);
+            context.fill(barX + searchWidth - 3, midY + offset,
+                barX + searchWidth - 1, midY + offset + 1, color);
         }
-        for (ModuleRow row : searchRows) {
-            row.render(context, x, y, GuiTheme.PANEL_WIDTH, mouseX, mouseY, true);
-            y += row.getHeight();
+        context.guiRenderState.up();
+    }
+
+    // Either upright edge of the search bar or of the results box below it.
+    private boolean overSearchEdge(double mx, double my) {
+        int left = searchX();
+        int right = left + searchWidth;
+        boolean nearEdge = Math.abs(mx - left) <= GRIP || Math.abs(mx - right) <= GRIP;
+        if (!nearEdge) {
+            return false;
+        }
+        if (my >= SEARCH_TOP && my <= SEARCH_TOP + SEARCH_HEIGHT) {
+            return true;
+        }
+        if (!isSearching()) {
+            return false;
+        }
+        int top = resultsTop();
+        return my >= top && my <= top + resultsHeight(shownResults());
+    }
+
+    private void renderSearchResults(GuiGraphicsExtractor context, Font font, int shown,
+                                     int mouseX, int mouseY) {
+        int x = searchX();
+        int y = resultsTop();
+        int total = resultsHeight(shown);
+        RenderUtil.shadow(context, x, y, x + searchWidth, y + total, 3);
+        context.guiRenderState.up();
+        RenderUtil.roundedBorderedRect(context, x, y, x + searchWidth, y + total,
+            GuiTheme.CORNER + 1, GuiTheme.BG_WINDOW, GuiTheme.accent());
+        context.guiRenderState.up();
+
+        int rowY = y + 2;
+        int rowX = x + 2;
+        int rowW = searchWidth - 4;
+        for (int i = 0; i < shown; i++) {
+            ModuleRow row = searchRows.get(i);
+            row.place(rowX, rowY, rowW, mouseX, mouseY, true);
+            row.render(context, mouseX, mouseY);
+            rowY += row.getHeight();
+        }
+        int hidden = searchRows.size() - shown;
+        if (hidden > 0) {
+            context.text(font, hidden + " more. Keep typing.", rowX + 5,
+                GuiTheme.textY(rowY, FOOTER_HEIGHT), GuiTheme.TEXT_FAINT, false);
+        } else if (searchRows.isEmpty()) {
+            context.text(font, "no matches", rowX + 5, GuiTheme.textY(rowY, FOOTER_HEIGHT),
+                GuiTheme.TEXT_DIM, false);
         }
     }
 
     private void renderTooltip(GuiGraphicsExtractor context, Font font, int mouseX, int mouseY) {
-        List<String> lines = wrap(tooltip, 160);
+        List<String> lines = wrap(tooltip);
         int w = 0;
         for (String line : lines) {
             w = Math.max(w, font.width(line));
         }
         int h = lines.size() * 10 + 6;
-        int tx = Math.min(mouseX + 10, width - w - 10);
-        int ty = Math.min(mouseY + 10, height - h - 4);
+        int tx = Math.max(2, Math.min(mouseX + 10, width - w - 12));
+        int ty = Math.max(2, Math.min(mouseY + 10, height - h - 4));
 
         context.guiRenderState.up();
-        RenderUtil.borderedRect(context, tx, ty, tx + w + 8, ty + h, 0xF80C0C14, GuiTheme.accent());
+        RenderUtil.shadow(context, tx, ty, tx + w + 8, ty + h, 2);
+        context.guiRenderState.up();
+        RenderUtil.roundedBorderedRect(context, tx, ty, tx + w + 8, ty + h, GuiTheme.CORNER,
+            GuiTheme.BG_WINDOW, GuiTheme.accent());
         context.guiRenderState.up();
         for (int i = 0; i < lines.size(); i++) {
             context.text(font, lines.get(i), tx + 4, ty + 4 + i * 10, GuiTheme.TEXT, false);
         }
     }
 
-    private List<String> wrap(String text, int maxWidth) {
+    private List<String> wrap(String text) {
+        if (text.equals(wrappedFor)) {
+            return wrappedLines;
+        }
         Font font = OfflineClient.MC.font;
-        List<String> lines = new ArrayList<>();
+        wrappedFor = text;
+        wrappedLines.clear();
         StringBuilder current = new StringBuilder();
         for (String word : text.split(" ")) {
             String candidate = current.isEmpty() ? word : current + " " + word;
-            if (font.width(candidate) > maxWidth && !current.isEmpty()) {
-                lines.add(current.toString());
+            if (font.width(candidate) > TOOLTIP_WIDTH && !current.isEmpty()) {
+                wrappedLines.add(current.toString());
                 current = new StringBuilder(word);
             } else {
                 current = new StringBuilder(candidate);
             }
         }
         if (!current.isEmpty()) {
-            lines.add(current.toString());
+            wrappedLines.add(current.toString());
         }
-        return lines;
+        return wrappedLines;
     }
 
+    @Override
     public void setTooltip(String tooltip) {
         this.tooltip = tooltip;
-    }
-
-    public void startListening(ModuleRow row) {
-        if (bindingRow != null) {
-            bindingRow.setListeningForBind(false);
-        }
-        bindingRow = row;
-        row.setListeningForBind(true);
-    }
-
-    /** Opens the two column picker for a registry list setting. */
-    public void openPicker(RegistryListSetting<?> setting) {
-        commitEditing();
-        openPickerTyped(setting);
-    }
-
-    private <T> void openPickerTyped(RegistryListSetting<T> setting) {
-        OfflineClient.MC.gui.setScreen(new RegistryPickerScreen<>(this, setting));
-    }
-
-    /** Starts typing mode for a number setting. */
-    public void startEditing(NumberSetting setting) {
-        commitEditing();
-        editingSetting = setting;
-        editBuffer.setLength(0);
-    }
-
-    /** Starts typing mode for a text setting with the current value loaded. */
-    public void startEditing(TextSetting setting) {
-        commitEditing();
-        editingSetting = setting;
-        editBuffer.setLength(0);
-        editBuffer.append(setting.getValue());
-    }
-
-    public boolean isEditing(Setting<?> setting) {
-        return editingSetting == setting;
-    }
-
-    public String getEditBuffer() {
-        return editBuffer.toString();
-    }
-
-    private void commitEditing() {
-        if (editingSetting instanceof NumberSetting number) {
-            if (!editBuffer.isEmpty()) {
-                try {
-                    number.setValue(Double.parseDouble(editBuffer.toString()));
-                    OfflineClient.INSTANCE.getConfigManager().saveSoon();
-                } catch (NumberFormatException ignored) {
-                }
-            }
-        } else if (editingSetting instanceof TextSetting text) {
-            text.setValue(editBuffer.toString().trim());
-            OfflineClient.INSTANCE.getConfigManager().saveSoon();
-        }
-        cancelEditing();
-    }
-
-    private void cancelEditing() {
-        editingSetting = null;
-        editBuffer.setLength(0);
     }
 
     @Override
@@ -382,13 +436,13 @@ public final class ClickGuiScreen extends Screen {
         double my = event.y();
         int button = event.button();
 
-        // Clicking anywhere else confirms a number that is being typed.
-        commitEditing();
+        beginClick();
 
-        // Search results get clicks first.
-        if (!search.isEmpty()) {
-            for (ModuleRow row : searchRows) {
-                if (row.mouseClicked(mx, my, button)) {
+        // Only the results drawn this frame can be clicked.
+        if (isSearching()) {
+            int shown = shownResults();
+            for (int i = 0; i < shown; i++) {
+                if (searchRows.get(i).mouseClicked(mx, my, button)) {
                     return true;
                 }
             }
@@ -405,78 +459,32 @@ public final class ClickGuiScreen extends Screen {
             }
         }
 
-        // Clicking the search bar focuses it and shows the caret.
-        int barX = width / 2 - SEARCH_WIDTH / 2;
-        if (mx >= barX && mx < barX + SEARCH_WIDTH && my >= SEARCH_TOP && my < SEARCH_BOTTOM) {
-            searchFocused = true;
+        if (button == 0 && overSearchEdge(mx, my)) {
+            resizingSearch = true;
             return true;
         }
-        searchFocused = false;
+        if (clickSearchBox(mx, my, searchX(), SEARCH_TOP, searchWidth)) {
+            return true;
+        }
         return super.mouseClicked(event, doubleClick);
     }
 
     @Override
     public boolean mouseReleased(MouseButtonEvent event) {
+        resizingSearch = false;
         for (Panel panel : panels) {
             panel.mouseReleased();
         }
         for (ModuleRow row : searchRows) {
             row.mouseReleased();
         }
+        checkStyle();
         return super.mouseReleased(event);
     }
 
     @Override
     public boolean keyPressed(KeyEvent event) {
-        int key = event.key();
-
-        if (editingSetting != null) {
-            if (key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_KP_ENTER) {
-                commitEditing();
-            } else if (key == GLFW.GLFW_KEY_ESCAPE) {
-                cancelEditing();
-            } else if (key == GLFW.GLFW_KEY_BACKSPACE && !editBuffer.isEmpty()) {
-                editBuffer.deleteCharAt(editBuffer.length() - 1);
-            }
-            return true;
-        }
-
-        if (bindingRow != null) {
-            if (key == GLFW.GLFW_KEY_DELETE || key == GLFW.GLFW_KEY_BACKSPACE) {
-                bindingRow.getModule().getKeybind().setValue(KeybindSetting.UNBOUND);
-            } else if (key != GLFW.GLFW_KEY_ESCAPE) {
-                bindingRow.getModule().getKeybind().setValue(key);
-            }
-            bindingRow.setListeningForBind(false);
-            bindingRow = null;
-            OfflineClient.INSTANCE.getConfigManager().saveSoon();
-            // The character for this key press arrives right after this callback.
-            suppressCharsUntil = System.currentTimeMillis() + 150;
-            return true;
-        }
-
-        if (searchFocused) {
-            if (key == GLFW.GLFW_KEY_BACKSPACE && !search.isEmpty()) {
-                search = search.substring(0, search.length() - 1);
-                updateSearch();
-                return true;
-            }
-            if (key == GLFW.GLFW_KEY_ESCAPE || key == GLFW.GLFW_KEY_ENTER) {
-                // ESC clears the search and leaves the box. ENTER just leaves.
-                if (key == GLFW.GLFW_KEY_ESCAPE) {
-                    search = "";
-                    updateSearch();
-                }
-                searchFocused = false;
-                return true;
-            }
-        }
-        // Same key that opened the GUI closes it again unless the search
-        // box is taking input.
-        if (!searchFocused && key == OfflineClient.INSTANCE.getModuleManager()
-            .get(com.jellypudding.offlineclient.modules.misc.ClickGuiModule.class)
-            .getKeybind().getValue()) {
-            onClose();
+        if (handleCommonKey(event)) {
             return true;
         }
         return super.keyPressed(event);
@@ -484,26 +492,7 @@ public final class ClickGuiScreen extends Screen {
 
     @Override
     public boolean charTyped(CharacterEvent event) {
-        if (System.currentTimeMillis() < suppressCharsUntil || bindingRow != null) {
-            return true;
-        }
-        char c = (char) event.codepoint();
-        if (editingSetting instanceof NumberSetting) {
-            if ((c >= '0' && c <= '9') || c == '.' || c == '-') {
-                editBuffer.append(c);
-            }
-            return true;
-        }
-        if (editingSetting instanceof TextSetting) {
-            if (c >= ' ' && c != 127) {
-                editBuffer.append(c);
-            }
-            return true;
-        }
-        // Typing only searches once the search box has been clicked.
-        if (searchFocused && c >= ' ' && c < 127) {
-            search += c;
-            updateSearch();
+        if (handleCommonChar((char) event.codepoint())) {
             return true;
         }
         return super.charTyped(event);
@@ -521,13 +510,14 @@ public final class ClickGuiScreen extends Screen {
         return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
     }
 
-    private void updateSearch() {
-        searchRows = new ArrayList<>();
-        if (search.isEmpty()) {
+    @Override
+    protected void onSearchChanged() {
+        searchRows.clear();
+        if (!isSearching()) {
             return;
         }
         for (Module module : OfflineClient.INSTANCE.getModuleManager().getAll()) {
-            if (module.matchesSearch(search)) {
+            if (module.matchesSearch(search())) {
                 searchRows.add(new ModuleRow(module, this));
             }
         }

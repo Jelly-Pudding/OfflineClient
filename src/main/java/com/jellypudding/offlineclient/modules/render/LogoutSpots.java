@@ -16,25 +16,20 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.network.protocol.game.ClientboundPlayerInfoRemovePacket;
 import net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket;
-import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix3x2fStack;
 
-import java.util.HashMap;
+import java.lang.ref.WeakReference;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Queue;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-/**
- * Remembers where players were when they left the server and marks the
- * spot with a box and a nametag. The position of every player is cached
- * each tick.
- */
+// The position of every player is cached each tick.
 public final class LogoutSpots extends Module {
 
     private record Spot(UUID id, String name, AABB box, float health, float maxHealth) {
@@ -42,6 +37,11 @@ public final class LogoutSpots extends Module {
 
     private static final int COLOR = 0xFFFF40FF;
     private static final int BACKGROUND = 0x90000000;
+
+    // Players remembered at once.
+    private static final int MAX_TRACKED = 512;
+    // Markers kept at once.
+    private static final int MAX_SPOTS = 128;
 
     private final NumberSetting scale = new NumberSetting("Scale",
         "Size of the nametag.", 1, 0.5, 3, 0.1).min(0.1);
@@ -52,13 +52,23 @@ public final class LogoutSpots extends Module {
     private final BoolSetting tracers = new BoolSetting("Tracers",
         "Draw a line to every spot.", false);
 
-    /** Last known state of every player. Kept even after they walk out of view. */
-    private final Map<UUID, Spot> lastSeen = new HashMap<>();
-    /** Filled from the network thread and handled on the next tick. */
+    // Kept even after a player walks out of view.
+    private final Map<UUID, Spot> lastSeen = new LinkedHashMap<UUID, Spot>() {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<UUID, Spot> eldest) {
+            return size() > MAX_TRACKED;
+        }
+    };
+    // Filled from the network thread and handled on the next tick.
     private final Queue<UUID> loggedOut = new ConcurrentLinkedQueue<>();
     private final Queue<UUID> returned = new ConcurrentLinkedQueue<>();
-    private final Map<UUID, Spot> spots = new LinkedHashMap<>();
-    private ResourceKey<Level> dimension;
+    private final Map<UUID, Spot> spots = new LinkedHashMap<UUID, Spot>() {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<UUID, Spot> eldest) {
+            return size() > MAX_SPOTS;
+        }
+    };
+    private WeakReference<Level> world = new WeakReference<>(null);
 
     public LogoutSpots() {
         super("LogoutSpots", "Marks where players logged out.", Category.RENDER);
@@ -74,13 +84,14 @@ public final class LogoutSpots extends Module {
     @Override
     protected void onEnable() {
         if (inGame()) {
-            dimension = mc.level.dimension();
+            world = new WeakReference<>(mc.level);
             snapshot();
         }
     }
 
     @Override
     protected void onDisable() {
+        world = new WeakReference<>(null);
         clear();
     }
 
@@ -93,6 +104,10 @@ public final class LogoutSpots extends Module {
 
     @Subscribe
     private void onPacketReceive(PacketReceiveEvent event) {
+        // Nothing drains these queues outside a world.
+        if (mc.level == null) {
+            return;
+        }
         if (event.getPacket() instanceof ClientboundPlayerInfoRemovePacket remove) {
             loggedOut.addAll(remove.profileIds());
         } else if (event.getPacket() instanceof ClientboundPlayerInfoUpdatePacket update
@@ -108,8 +123,9 @@ public final class LogoutSpots extends Module {
         if (!inGame()) {
             return;
         }
-        if (mc.level.dimension() != dimension) {
-            dimension = mc.level.dimension();
+        // A new world object covers a dimension change and a rejoin alike.
+        if (mc.level != world.get()) {
+            world = new WeakReference<>(mc.level);
             clear();
         }
 
@@ -128,7 +144,6 @@ public final class LogoutSpots extends Module {
         snapshot();
     }
 
-    /** Caches every visible player and drops spots for anyone standing there again. */
     private void snapshot() {
         for (Player player : mc.level.players()) {
             if (player == mc.player) {

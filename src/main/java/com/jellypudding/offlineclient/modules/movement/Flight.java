@@ -1,12 +1,15 @@
 package com.jellypudding.offlineclient.modules.movement;
 
 import com.jellypudding.offlineclient.event.Subscribe;
+import com.jellypudding.offlineclient.event.events.ClientTickEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.modules.misc.Timer;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.world.entity.player.Abilities;
 import net.minecraft.world.phys.Vec2;
 
@@ -38,6 +41,8 @@ public final class Flight extends Module {
     private final NumberSetting verticalSpeed = new NumberSetting("Vertical",
         "Up and down speed in direct mode.", 1, 0.1, 10, 0.1, "x")
         .visibleWhen(() -> mode.is(Mode.DIRECT));
+    private final NumberSetting timer = new NumberSetting("Timer",
+        "Also speeds up the game whilst you fly. 1 does nothing.", 1, 1, 3, 0.1, "x").min(1);
     private final BoolSetting antiKick = new BoolSetting("AntiKick",
         "Drifts down a little every so often to dodge the vanilla flight kick.", true);
     private final NumberSetting antiKickInterval = new NumberSetting("Kick interval",
@@ -48,7 +53,7 @@ public final class Flight extends Module {
 
     public Flight() {
         super("Flight", "Lets you fly like in creative mode.", Category.MOVEMENT);
-        addSettings(mode, speed, verticalSpeed, antiKick, antiKickInterval);
+        addSettings(mode, speed, verticalSpeed, timer, antiKick, antiKickInterval);
         searchTags("fly");
     }
 
@@ -62,8 +67,17 @@ public final class Flight extends Module {
         tickCounter = 0;
     }
 
+    // Modules.get is cached.
+    private static void setTimerOverride(float multiplier) {
+        Timer module = Modules.get(Timer.class);
+        if (module != null) {
+            module.setOverride("flight", multiplier);
+        }
+    }
+
     @Override
     protected void onDisable() {
+        setTimerOverride(1f);
         if (mc.player == null) {
             return;
         }
@@ -74,11 +88,23 @@ public final class Flight extends Module {
         }
     }
 
+    // TickEvent stops at a disconnect. ClientTickEvent still runs in the menus.
+    @Subscribe
+    private void onClientTick(ClientTickEvent event) {
+        if (!inGame()) {
+            setTimerOverride(1f);
+        }
+    }
+
     @Subscribe
     private void onTick(TickEvent event) {
         if (!inGame()) {
             return;
         }
+        boolean moving = mc.player.input.getMoveVector().length() > 1e-4f
+            || mc.options.keyJump.isDown() || mc.options.keyShift.isDown();
+        setTimerOverride(moving ? timer.getFloat() : 1f);
+
         if (mode.is(Mode.ABILITIES)) {
             abilitiesTick();
         } else {
@@ -89,22 +115,19 @@ public final class Flight extends Module {
         }
     }
 
-    /** Turns on the creative flight flag. Vanilla handles the movement. */
     private void abilitiesTick() {
         Abilities abilities = mc.player.getAbilities();
         abilities.flying = true;
         abilities.setFlyingSpeed((float) (VANILLA_FLY_SPEED * speed.getValue()));
     }
 
-    /** Sets motion directly from the movement keys every tick. */
     private void directTick() {
         Abilities abilities = mc.player.getAbilities();
         // The flying flag turns gravity off and zero fly speed disables the vanilla push.
         abilities.flying = true;
         abilities.setFlyingSpeed(0);
 
-        // Creative flight moves about 10.9 blocks a second. This matches
-        // it at 1x.
+        // Creative flight moves about 10.9 blocks a second.
         double h = 0.6 * speed.getValue();
         double v = 0.42 * verticalSpeed.getValue();
 

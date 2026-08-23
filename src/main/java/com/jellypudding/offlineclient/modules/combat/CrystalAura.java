@@ -10,13 +10,21 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.ExplosionUtil;
+import com.jellypudding.offlineclient.util.InventoryUtil;
+import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
+import com.jellypudding.offlineclient.util.ItemUtil;
+import com.jellypudding.offlineclient.util.RotationManager;
+import com.jellypudding.offlineclient.util.RotationPriority;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.protocol.game.ServerboundAttackPacket;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.boss.enderdragon.EndCrystal;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.block.Block;
@@ -26,11 +34,29 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
-/**
- * Places end crystals next to enemies and detonates them. Every
- * candidate spot is scored with the game's own explosion math.
- */
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+// Every candidate spot is scored with the game's own explosion maths.
 public final class CrystalAura extends Module {
+
+    // How far ahead of a moving target the damage is scored.
+    private static final double LEAD_TICKS = 3;
+
+    // Ticks a placed spot stays on the own crystal list.
+    private static final int OWN_MEMORY = 100;
+
+    // Ticks between attempts to pull crystals up from the backpack.
+    private static final int REFILL_DELAY = 4;
+
+    // Ticks a crystal is left alone after a hit before it is tried again.
+    private static final int ATTACK_MEMORY = 3;
+
+    private static final EquipmentSlot[] ARMOR_SLOTS = {
+        EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET
+    };
 
     private final NumberSetting targetRange = new NumberSetting("Target range",
         "How far away enemies are considered.", 10, 2, 16, 0.5, " blocks");
@@ -52,51 +78,116 @@ public final class CrystalAura extends Module {
         "Never take more than this from your own crystal.", 8, 0, 20, 0.5);
     private final BoolSetting antiSuicide = new BoolSetting("Anti suicide",
         "Never touch a crystal that could kill you.", true);
+    private final BoolSetting predict = new BoolSetting("Predict",
+        "Score the damage where a moving target is heading.", true);
+    private final BoolSetting facePlace = new BoolSetting("Face place",
+        "Ignore the minimum damage once the target is nearly finished.", true);
+    private final NumberSetting facePlaceHealth = new NumberSetting("Face place health",
+        "Health plus absorption at or below this counts as nearly finished.", 8, 1, 20, 0.5)
+        .visibleWhen(facePlace::isOn);
+    private final BoolSetting onlyOwn = new BoolSetting("Only own",
+        "Only hit crystals you placed yourself.", false);
     private final BoolSetting oldPlacement = new BoolSetting("Old placement",
         "Require two air blocks above the base like older servers.", false);
+    private final BoolSetting support = new BoolSetting("Support",
+        "Place obsidian from your hotbar when there is nothing to crystal.", true);
+    private final BoolSetting smartDelay = new BoolSetting("Smart delay",
+        "Skip a hit whilst the target is still in damage immunity.", true);
+    private final BoolSetting antiWeakness = new BoolSetting("Anti weakness",
+        "Swap to a tool that still breaks crystals whilst you have weakness.", true);
+    private final BoolSetting pauseOnUse = new BoolSetting("Pause on use",
+        "Hold off whilst eating or drawing a bow.", true);
     private final BoolSetting rotate = new BoolSetting("Rotate",
         "Send a look packet toward the crystal spot.", true);
     private final BoolSetting render = new BoolSetting("Show placement",
         "Outline the base block the next crystal goes on.", true);
 
+    // Ticks that other combat modules stand aside for after a real action.
+    private static final int BUSY_TICKS = 8;
+
     private int placeTimer;
     private int breakTimer;
-    private int previousSlot = -1;
+    private int refillTimer;
+    private int busyTimer;
+    private final SlotSwap slots = new SlotSwap();
     private BlockPos planned;
     private String targetName;
+
+    // True for the tick when the target is weak enough to ignore Min damage.
+    private boolean facing;
+
+    // Everything worth looking at this tick.
+    private final List<Entity> entities = new ArrayList<>();
+
+    // Spots placed on with the ticks left before they are forgotten.
+    private final Map<BlockPos, Integer> ownSpots = new HashMap<>();
+
+    // Crystal entity ids already hit with the ticks left before a retry.
+    private final Map<Integer, Integer> attacked = new HashMap<>();
 
     public CrystalAura() {
         super("CrystalAura", "Places end crystals near enemies and blows them up.", Category.COMBAT);
         addSettings(targetRange, range, wallsRange, doPlace, placeDelay, doBreak, breakDelay,
-            minDamage, maxSelfDamage, antiSuicide, oldPlacement, rotate, render);
+            minDamage, maxSelfDamage, antiSuicide, predict, facePlace, facePlaceHealth,
+            onlyOwn, oldPlacement, support, smartDelay, antiWeakness, pauseOnUse,
+            rotate, render);
         searchTags("end crystal", "cpvp", "ca");
     }
 
+    private String status;
+
     @Override
     public String getSuffix() {
-        return targetName;
+        if (targetName == null) {
+            return null;
+        }
+        return status == null ? targetName : targetName + " " + status;
+    }
+
+    public boolean hasTarget() {
+        return targetName != null;
+    }
+
+    /**
+     * True only for a short window after a real place or break. Other combat
+     * modules stand aside on that window rather than for the whole fight.
+     */
+    public boolean isActing() {
+        return busyTimer > 0;
     }
 
     @Override
     protected void onEnable() {
         placeTimer = 0;
         breakTimer = 0;
-        previousSlot = -1;
+        refillTimer = 0;
+        busyTimer = 0;
+        slots.forget();
         planned = null;
         targetName = null;
+        entities.clear();
+        ownSpots.clear();
+        attacked.clear();
     }
 
     @Override
     protected void onDisable() {
-        restoreSlot();
+        busyTimer = 0;
+        slots.restore();
         planned = null;
         targetName = null;
+        entities.clear();
+        ownSpots.clear();
+        attacked.clear();
     }
 
     @Subscribe
     private void onTick(TickEvent event) {
         planned = null;
+        // Dropping last tick's entities stops an unloaded world being held alive.
+        entities.clear();
         if (!inGame() || mc.player.isSpectator()) {
+            targetName = null;
             return;
         }
         if (placeTimer > 0) {
@@ -105,30 +196,64 @@ public final class CrystalAura extends Module {
         if (breakTimer > 0) {
             breakTimer--;
         }
+        if (refillTimer > 0) {
+            refillTimer--;
+        }
+        if (busyTimer > 0) {
+            busyTimer--;
+        }
+        forgetOldSpots();
 
         Player target = EntityUtil.nearestEnemy(targetRange.getValue());
         targetName = target == null ? null : target.getGameProfile().name();
+        status = null;
         if (target == null) {
-            restoreSlot();
+            slots.restore();
+            return;
+        }
+        if (pauseOnUse.isOn() && mc.player.isUsingItem()) {
+            slots.restore();
+            status = "(paused)";
             return;
         }
 
-        // Break before placing.
+        collectEntities();
+        facing = facePlacing(target);
+
         if (doBreak.isOn() && breakTimer == 0) {
             breakBest(target);
         }
         if (doPlace.isOn() && placeTimer == 0) {
             placeBest(target);
         }
-        restoreSlot();
+        slots.restore();
     }
 
-    /** Hits the crystal already in the world that hurts the target most. */
+    private void collectEntities() {
+        entities.clear();
+        for (Entity entity : mc.level.entitiesForRendering()) {
+            if (entity.isRemoved() || entity.isSpectator()) {
+                continue;
+            }
+            entities.add(entity);
+        }
+    }
+
     private void breakBest(Player target) {
+        // Damage during immunity is reduced to the difference so the crystal is wasted.
+        if (smartDelay.isOn() && target.hurtTime > 0) {
+            return;
+        }
         EndCrystal best = null;
         float bestDamage = 0;
-        for (Entity entity : mc.level.entitiesForRendering()) {
-            if (!(entity instanceof EndCrystal crystal) || crystal.isRemoved()) {
+        for (Entity entity : entities) {
+            if (!(entity instanceof EndCrystal crystal)) {
+                continue;
+            }
+            if (attacked.containsKey(crystal.getId())) {
+                continue;
+            }
+            if (onlyOwn.isOn() && !ownSpots.containsKey(crystal.blockPosition())) {
                 continue;
             }
             Vec3 center = crystal.getBoundingBox().getCenter();
@@ -139,8 +264,8 @@ public final class CrystalAura extends Module {
             if (!selfSafe(crystal.position())) {
                 continue;
             }
-            float damage = ExplosionUtil.crystalDamage(target, crystal.position());
-            if (damage >= minDamage.getFloat() && damage > bestDamage) {
+            float damage = ExplosionUtil.crystalDamage(target, scorePoint(crystal.position(), target));
+            if (worthIt(damage) && damage > bestDamage) {
                 bestDamage = damage;
                 best = crystal;
             }
@@ -148,43 +273,66 @@ public final class CrystalAura extends Module {
         if (best == null) {
             return;
         }
-        if (rotate.isOn()) {
-            BlockUtil.faceVector(best.getBoundingBox().getCenter());
+        if (rotate.isOn() && !RotationManager.look(best.getBoundingBox().getCenter(),
+            RotationPriority.AURA, RotationManager.BLOCK_TOLERANCE)) {
+            status = "(turning)";
+            return;
+        }
+        if (antiWeakness.isOn() && !armWeakHand()) {
+            status = "(weakness)";
+            return;
         }
         mc.player.connection.send(new ServerboundAttackPacket(best.getId()));
         mc.player.swing(InteractionHand.MAIN_HAND);
         breakTimer = breakDelay.getInt();
+        busyTimer = BUSY_TICKS;
+        attacked.put(best.getId(), ATTACK_MEMORY);
     }
 
-    /** Places a crystal on the base block with the best damage score. */
     private void placeBest(Player target) {
         BlockPos base = bestBase(target);
         planned = base;
         if (base == null) {
+            if (support.isOn() && placeSupport(target)) {
+                return;
+            }
+            status = "(no safe spot)";
             return;
         }
         InteractionHand hand = crystalHand();
         if (hand == null) {
+            status = "(no crystals)";
             return;
         }
         Vec3 hit = Vec3.atCenterOf(base).add(0, 0.5, 0);
-        if (rotate.isOn()) {
-            BlockUtil.faceVector(hit);
+        if (rotate.isOn() && !RotationManager.look(hit, RotationPriority.AURA,
+            RotationManager.BLOCK_TOLERANCE)) {
+            status = "(turning)";
+            return;
         }
         BlockHitResult result = new BlockHitResult(hit, Direction.UP, base, false);
         if (mc.gameMode.useItemOn(mc.player, hand, result).consumesAction()) {
             mc.player.swing(hand);
+            ownSpots.put(base.above().immutable(), OWN_MEMORY);
             placeTimer = placeDelay.getInt();
+            busyTimer = BUSY_TICKS;
         }
     }
 
-    /** Scans around the target for the base block worth a crystal. */
     private BlockPos bestBase(Player target) {
         BlockPos feet = target.blockPosition();
         BlockPos best = null;
         float bestDamage = 0;
-        for (BlockPos base : BlockPos.betweenClosed(feet.offset(-4, -3, -4), feet.offset(4, 3, 4))) {
+        Vec3 eye = mc.player.getEyePosition();
+        double furthest = Math.max(range.getValue(), wallsRange.getValue());
+        int r = (int) Math.ceil(furthest);
+        for (BlockPos base : BlockPos.betweenClosed(feet.offset(-r, -r, -r), feet.offset(r, r, r))) {
             BlockPos above = base.above();
+            Vec3 crystalPos = Vec3.atBottomCenterOf(above);
+            // The cheap reach test first.
+            if (eye.distanceTo(crystalPos) > furthest) {
+                continue;
+            }
             if (!BlockUtil.state(above).isAir()) {
                 continue;
             }
@@ -195,10 +343,8 @@ public final class CrystalAura extends Module {
             if (oldPlacement.isOn() && !BlockUtil.state(above.above()).isAir()) {
                 continue;
             }
-
-            Vec3 crystalPos = Vec3.atBottomCenterOf(above);
             double reach = canSee(crystalPos) ? range.getValue() : wallsRange.getValue();
-            if (mc.player.getEyePosition().distanceTo(crystalPos) > reach) {
+            if (eye.distanceTo(crystalPos) > reach) {
                 continue;
             }
 
@@ -211,8 +357,8 @@ public final class CrystalAura extends Module {
             if (!selfSafe(crystalPos)) {
                 continue;
             }
-            float damage = ExplosionUtil.crystalDamage(target, crystalPos);
-            if (damage >= minDamage.getFloat() && damage > bestDamage) {
+            float damage = ExplosionUtil.crystalDamage(target, scorePoint(crystalPos, target));
+            if (worthIt(damage) && damage > bestDamage) {
                 bestDamage = damage;
                 best = base.immutable();
             }
@@ -220,28 +366,100 @@ public final class CrystalAura extends Module {
         return best;
     }
 
-    /** True when a blast at the point stays inside the self damage rules. */
-    private boolean selfSafe(Vec3 source) {
-        float self = ExplosionUtil.crystalDamage(mc.player, source);
-        if (self > maxSelfDamage.getFloat()) {
-            return false;
+    /**
+     * Where to measure the blast from. Pulling the source back along the
+     * target's own speed scores the hit where they are heading.
+     */
+    private Vec3 scorePoint(Vec3 crystalPos, Player target) {
+        if (!predict.isOn()) {
+            return crystalPos;
         }
-        return !antiSuicide.isOn() || self < ExplosionUtil.totalHealth(mc.player);
+        return crystalPos.subtract(target.getDeltaMovement().scale(LEAD_TICKS));
     }
 
-    /** True when nothing solid sits between the player's eyes and the point. */
+    private boolean worthIt(float damage) {
+        return damage > 0 && (facing || damage >= minDamage.getFloat());
+    }
+
+    // True when the target is nearly dead or their armour is falling apart.
+    private boolean facePlacing(Player target) {
+        if (!facePlace.isOn()) {
+            return false;
+        }
+        if (ExplosionUtil.totalHealth(target) <= facePlaceHealth.getFloat()) {
+            return true;
+        }
+        for (EquipmentSlot slot : ARMOR_SLOTS) {
+            ItemStack piece = target.getItemBySlot(slot);
+            if (piece.isEmpty() || !piece.isDamageableItem()) {
+                continue;
+            }
+            int left = piece.getMaxDamage() - piece.getDamageValue();
+            if (left < piece.getMaxDamage() * 0.15f) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void forgetOldSpots() {
+        ownSpots.entrySet().removeIf(entry -> {
+            entry.setValue(entry.getValue() - 1);
+            return entry.getValue() <= 0;
+        });
+        attacked.entrySet().removeIf(entry -> {
+            entry.setValue(entry.getValue() - 1);
+            return entry.getValue() <= 0;
+        });
+    }
+
+    /**
+     * Puts something with attack damage in hand when weakness has taken it to
+     * zero. The server refuses the whole attack at zero so the crystal survives.
+     */
+    private boolean armWeakHand() {
+        if (mc.player.getAttributeValue(Attributes.ATTACK_DAMAGE) > 0) {
+            return true;
+        }
+        ItemStack held = mc.player.getInventory().getSelectedItem();
+        double heldBonus = ItemUtil.attributeValue(held, Attributes.ATTACK_DAMAGE,
+            EquipmentSlot.MAINHAND);
+        double base = mc.player.getAttributeValue(Attributes.ATTACK_DAMAGE) - heldBonus;
+
+        int bestSlot = -1;
+        double bestBonus = 0;
+        for (int i = 0; i < 9; i++) {
+            ItemStack stack = mc.player.getInventory().getItem(i);
+            if (stack.isEmpty()) {
+                continue;
+            }
+            double bonus = ItemUtil.attributeValue(stack, Attributes.ATTACK_DAMAGE,
+                EquipmentSlot.MAINHAND);
+            if (bonus > bestBonus) {
+                bestBonus = bonus;
+                bestSlot = i;
+            }
+        }
+        if (bestSlot == -1 || base + bestBonus <= 0) {
+            return false;
+        }
+        slots.select(bestSlot);
+        return true;
+    }
+
+    private boolean selfSafe(Vec3 source) {
+        return ExplosionUtil.selfSafe(source, ExplosionUtil.CRYSTAL_POWER,
+            maxSelfDamage.getFloat(), antiSuicide.isOn());
+    }
+
     private boolean canSee(Vec3 point) {
         BlockHitResult hit = mc.level.clip(new ClipContext(mc.player.getEyePosition(), point,
             ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, mc.player));
         return hit.getType() != HitResult.Type.BLOCK;
     }
 
-    /** True if any entity stands in the space a crystal would fill. */
     private boolean entityBlocks(AABB space) {
-        for (Entity entity : mc.level.entitiesForRendering()) {
-            if (entity.isRemoved() || entity.isSpectator()) {
-                continue;
-            }
+        for (Entity entity : entities) {
             if (entity.getBoundingBox().intersects(space)) {
                 return true;
             }
@@ -249,32 +467,93 @@ public final class CrystalAura extends Module {
         return false;
     }
 
-    /** The hand holding a crystal. Switches the hotbar over if needed. */
+    // The hand holding a crystal. Switches the hotbar over if needed.
     private InteractionHand crystalHand() {
         if (mc.player.getOffhandItem().is(Items.END_CRYSTAL)) {
             return InteractionHand.OFF_HAND;
         }
-        int selected = mc.player.getInventory().getSelectedSlot();
-        if (mc.player.getInventory().getItem(selected).is(Items.END_CRYSTAL)) {
+        int slot = InventoryUtil.hotbarSlot(stack -> stack.is(Items.END_CRYSTAL));
+        if (slot != -1) {
+            slots.select(slot);
             return InteractionHand.MAIN_HAND;
         }
-        for (int i = 0; i < 9; i++) {
-            if (mc.player.getInventory().getItem(i).is(Items.END_CRYSTAL)) {
-                if (previousSlot == -1) {
-                    previousSlot = selected;
-                }
-                mc.player.getInventory().setSelectedSlot(i);
-                return InteractionHand.MAIN_HAND;
-            }
-        }
+        refillCrystals();
         return null;
     }
 
-    private void restoreSlot() {
-        if (previousSlot != -1 && mc.player != null) {
-            mc.player.getInventory().setSelectedSlot(previousSlot);
+    private void refillCrystals() {
+        if (refillTimer > 0 || mc.player.containerMenu != mc.player.inventoryMenu) {
+            return;
         }
-        previousSlot = -1;
+        int free = InventoryUtil.freeHotbarSlot();
+        if (free == -1) {
+            return;
+        }
+        for (int i = 9; i < 36; i++) {
+            if (!mc.player.getInventory().getItem(i).is(Items.END_CRYSTAL)) {
+                continue;
+            }
+            refillTimer = REFILL_DELAY;
+            InventoryUtil.swap(i, InventoryUtil.networkSlot(free));
+            return;
+        }
+    }
+
+    /**
+     * Places an obsidian block from the hotbar on the best open spot.
+     * True whenever the support has taken this tick.
+     */
+    private boolean placeSupport(Player target) {
+        int slot = InventoryUtil.hotbarSlot(stack -> stack.is(Items.OBSIDIAN.asItem()));
+        if (slot == -1) {
+            status = "(no obsidian)";
+            return false;
+        }
+
+        BlockPos feet = target.blockPosition();
+        BlockPos best = null;
+        float bestDamage = 0;
+        for (BlockPos pos : BlockPos.betweenClosed(feet.offset(-3, -2, -3), feet.offset(3, 2, 3))) {
+            if (!BlockUtil.isReplaceable(pos) || !BlockUtil.state(pos.above()).isAir()) {
+                continue;
+            }
+            if (BlockUtil.intersectsPlayer(pos) || entityBlocks(new AABB(pos))) {
+                continue;
+            }
+            Vec3 crystalPos = Vec3.atBottomCenterOf(pos.above());
+            if (mc.player.getEyePosition().distanceTo(crystalPos) > range.getValue()) {
+                continue;
+            }
+            if (!selfSafe(crystalPos)) {
+                continue;
+            }
+            float damage = ExplosionUtil.crystalDamage(target, scorePoint(crystalPos, target));
+            if (worthIt(damage) && damage > bestDamage) {
+                bestDamage = damage;
+                best = pos.immutable();
+            }
+        }
+        if (best == null) {
+            return false;
+        }
+
+        if (rotate.isOn() && !RotationManager.look(Vec3.atCenterOf(best), RotationPriority.AURA,
+            RotationManager.BLOCK_TOLERANCE)) {
+            status = "(turning)";
+            return true;
+        }
+
+        slots.select(slot);
+        Direction side = BlockUtil.findSupport(best);
+        boolean placed = side != null
+            ? BlockUtil.place(best, side, false, true)
+            : BlockUtil.placeDirect(best, false, true);
+        if (placed) {
+            status = "(placing support)";
+            placeTimer = placeDelay.getInt();
+            busyTimer = BUSY_TICKS;
+        }
+        return placed;
     }
 
     @Subscribe

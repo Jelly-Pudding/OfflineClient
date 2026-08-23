@@ -3,9 +3,7 @@ package com.jellypudding.offlineclient.friend;
 import java.util.Set;
 import java.util.TreeSet;
 
-/**
- * Players on this list are never targeted by combat modules.
- */
+// Players on this list are never targeted by combat modules.
 public final class FriendManager {
 
     private final Set<String> friends = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);

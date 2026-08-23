@@ -19,7 +19,7 @@ public final class Step extends Module {
         return height.getValueString();
     }
 
-    /** Called from LocalPlayerMixin.maxUpStep(). */
+    // Called from LocalPlayerMixin.maxUpStep().
     public float adjustStepHeight(float vanilla) {
         if (!isEnabled()) {
             return vanilla;

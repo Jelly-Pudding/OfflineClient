@@ -1,46 +1,70 @@
 package com.jellypudding.offlineclient.modules.world;
 
-import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.BlockBreakEvent;
 import com.jellypudding.offlineclient.event.events.Render3DEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
+import com.jellypudding.offlineclient.module.ExclusivityGroup;
 import com.jellypudding.offlineclient.module.Module;
-import com.jellypudding.offlineclient.module.ModuleManager;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.BlockMiner;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
+import com.jellypudding.offlineclient.util.ItemUtil;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.phys.Vec3;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
- * Breaks every block around the player. Legit mode mines one block at a time
- * like a held click while instant mode fires the break packets straight
- * away.
+ * Legit mode mines one block at a time like a held click. Instant mode fires
+ * the break packets straight away.
  */
 public final class Nuker extends Module {
 
     public enum Mode {
         ALL("All"),
-        SELECTED("Selected");
+        SELECTED("Selected"),
+        LIST("List");
 
         private final String label;
 
         Mode(String label) {
+            this.label = label;
+        }
+
+        @Override
+        public String toString() {
+            return label;
+        }
+    }
+
+    public enum ListMode {
+        WHITELIST("Whitelist"),
+        BLACKLIST("Blacklist");
+
+        private final String label;
+
+        ListMode(String label) {
             this.label = label;
         }
 
@@ -82,31 +106,55 @@ public final class Nuker extends Module {
         }
     }
 
-    private static final int OUTLINE_COLOR = 0xFFFF4040;
+
     private static final int RETRY_TICKS = 10;
     private static final int SLOW_GRACE_TICKS = 20;
 
+    private static final int MAX_HIGHLIGHTS = 64;
+
     private final NumberSetting range = new NumberSetting("Range",
-        "How far from your eyes to break blocks.", 4.5, 1, 6, 0.1).min(1);
+        "How far from your eyes to break blocks.",
+        4.5, 1, 6, 0.1).min(1).max(6);
+    private final NumberSetting wallsRange = new NumberSetting("Walls range",
+        "How far to break blocks with no clear view from your eyes.",
+        4.5, 0, 6, 0.1).min(0).max(6);
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
-        "All breaks everything. Selected only breaks the block type you were looking at when you turned it on. Left click a block to pick another type.",
+        "All breaks everything. Selected sticks to the block you click. List uses the block list.",
         Mode.ALL);
+    private final RegistryListSetting<Block> blocks = new RegistryListSetting<Block>("Blocks",
+        "The blocks the list applies to. Click to pick them.", BuiltInRegistries.BLOCK,
+        List.of(Blocks.BEDROCK, Blocks.BARRIER, Blocks.REINFORCED_DEEPSLATE,
+            Blocks.SPAWNER, Blocks.TRIAL_SPAWNER, Blocks.VAULT, Blocks.END_PORTAL_FRAME,
+            Blocks.CHEST, Blocks.TRAPPED_CHEST, Blocks.ENDER_CHEST,
+            Blocks.BARREL, Blocks.SHULKER_BOX))
+        .visibleWhen(() -> mode.is(Mode.LIST));
+    private final EnumSetting<ListMode> listMode = new EnumSetting<>("List mode",
+        "Whitelist breaks only the listed blocks. Blacklist breaks everything else.",
+        ListMode.BLACKLIST).visibleWhen(() -> mode.is(Mode.LIST));
+    private final BoolSetting lockTarget = new BoolSetting("Lock target",
+        "Keeps the block you picked instead of following your next click.", false)
+        .visibleWhen(() -> mode.is(Mode.SELECTED));
     private final BoolSetting flat = new BoolSetting("Flat",
-        "Only breaks blocks at your feet or higher so you never dig a hole under yourself.", false);
+        "Only breaks blocks at your feet or higher.", false);
+    private final BoolSetting smash = new BoolSetting("Smash",
+        "Only breaks blocks with no hardness such as plants and torches.", false);
     private final EnumSetting<Speed> speed = new EnumSetting<>("Speed",
-        "Legit mines one block at a time and waits for it to break. Instant sends break packets and is only quick for blocks that break in one hit.",
+        "Legit mines one block at a time. Instant suits one hit blocks.",
         Speed.LEGIT);
     private final NumberSetting perTick = new NumberSetting("Blocks per tick",
         "How many one hit blocks to break each tick in Instant mode.", 4, 1, 16, 1)
         .min(1).visibleWhen(() -> speed.is(Speed.INSTANT));
+    private final BoolSetting autoTool = new BoolSetting("Auto tool",
+        "Holds your fastest tool before the break packets go out.", true)
+        .visibleWhen(() -> speed.is(Speed.INSTANT));
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Turns toward the block on the server side. Your own view never moves.", true)
+        "Turn toward the block on the server side.", true)
         .visibleWhen(() -> speed.is(Speed.LEGIT));
     private final EnumSetting<Order> order = new EnumSetting<>("Order",
-        "Nearest breaks the closest block first. Fastest breaks what goes quickest first.",
+        "Nearest breaks the closest block. Fastest breaks the quickest one.",
         Order.NEAREST).visibleWhen(() -> speed.is(Speed.LEGIT));
     private final ColorSetting highlight = new ColorSetting("Highlight",
-        "Color of the boxes on the blocks about to break.", 10, false);
+        "Colour of the boxes on the blocks about to break.", 10, false);
     private final NumberSetting highlightStrength = new NumberSetting("Highlight strength",
         "How strong the boxes show. Zero hides them.", 35, 0, 100, 5, "%").max(100);
 
@@ -115,10 +163,23 @@ public final class Nuker extends Module {
     private final Map<BlockPos, Integer> attempted = new HashMap<>();
     private BlockPos slowPending;
     private int slowDeadline;
+    private int lastTick;
+
+    private final SlotSwap slots = new SlotSwap();
+
+    // A manual slot change cancels the return.
+    private int ourSlot = -1;
+
+    // Filled once a tick and read by the renderer.
+    private final List<BlockPos> highlights = new ArrayList<>();
+
+    // A block is scanned several times a tick and one raycast each covers them all.
+    private final Map<BlockPos, Boolean> sightCache = new HashMap<>();
 
     public Nuker() {
         super("Nuker", "Breaks all blocks around you.", Category.WORLD);
-        addSettings(range, mode, flat, speed, perTick, rotate, order, highlight, highlightStrength);
+        addSettings(range, wallsRange, mode, blocks, listMode, lockTarget, flat, smash,
+            speed, perTick, autoTool, rotate, order, highlight, highlightStrength);
         searchTags("dig", "excavate", "break blocks");
     }
 
@@ -127,19 +188,25 @@ public final class Nuker extends Module {
         if (mode.is(Mode.SELECTED)) {
             return selected == null ? "Nothing selected" : BlockUtil.blockName(selected);
         }
+        if (mode.is(Mode.LIST)) {
+            return listMode.getValue().toString();
+        }
         return range.getValueString();
+    }
+
+    @Override
+    public ExclusivityGroup getExclusivityGroup() {
+        return ExclusivityGroup.MINING;
     }
 
     @Override
     protected void onEnable() {
         current = null;
         attempted.clear();
+        highlights.clear();
+        sightCache.clear();
         slowPending = null;
-        // Only one module may drive BlockMiner.
-        ModuleManager modules = OfflineClient.INSTANCE.getModuleManager();
-        if (modules != null) {
-            modules.get(VeinMiner.class).setEnabled(false);
-        }
+        lastTick = 0;
         if (mode.is(Mode.SELECTED) && inGame()) {
             selectLookedAtBlock();
         }
@@ -148,12 +215,14 @@ public final class Nuker extends Module {
     @Override
     protected void onDisable() {
         BlockMiner.release();
+        restoreSlot();
         current = null;
         attempted.clear();
+        highlights.clear();
+        sightCache.clear();
         slowPending = null;
     }
 
-    /** Picks up the block type under the crosshair. */
     private void selectLookedAtBlock() {
         if (mc.hitResult instanceof BlockHitResult hit && hit.getType() == HitResult.Type.BLOCK) {
             select(hit.getBlockPos());
@@ -161,6 +230,9 @@ public final class Nuker extends Module {
     }
 
     private void select(BlockPos pos) {
+        if (lockTarget.isOn() && selected != null) {
+            return;
+        }
         BlockState state = BlockUtil.state(pos);
         if (state.isAir() || state.getBlock() == selected) {
             return;
@@ -170,7 +242,7 @@ public final class Nuker extends Module {
         ChatUtil.message("§bNuker §7now breaks §f" + BlockUtil.blockName(selected) + "§7.");
     }
 
-    /** A real click on a block in Selected mode picks that block type. */
+    // A real click on a block in Selected mode picks that block type.
     @Subscribe
     private void onBlockBreak(BlockBreakEvent event) {
         if (BlockMiner.isSelfCall() || !mode.is(Mode.SELECTED) || !inGame()) {
@@ -181,31 +253,54 @@ public final class Nuker extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
+        highlights.clear();
+        sightCache.clear();
         if (!inGame() || mc.player.isSpectator()) {
+            current = null;
+            restoreSlot();
             return;
         }
         // Holding attack means the player is mining by hand.
         if (mc.options.keyAttack.isDown() || mc.player.isUsingItem()) {
             current = null;
+            restoreSlot();
             return;
         }
         if (mode.is(Mode.SELECTED) && selected == null) {
+            restoreSlot();
             return;
         }
+        // One scan a tick feeds both the mining and the boxes.
+        List<BlockPos> scan = BlockUtil.positionsWithin(range.getValue());
+        collectHighlights(scan);
         if (speed.is(Speed.LEGIT)) {
-            mineLegit();
+            restoreSlot();
+            mineLegit(scan);
         } else {
-            mineInstant();
+            mineInstant(scan);
         }
     }
 
-    /** Sticks with one block until it is gone then moves to the next nearest. */
-    private void mineLegit() {
+    private void collectHighlights(List<BlockPos> scan) {
+        if (highlightStrength.getValue() <= 0) {
+            return;
+        }
+        for (BlockPos pos : scan) {
+            if (highlights.size() >= MAX_HIGHLIGHTS) {
+                return;
+            }
+            if (wanted(pos)) {
+                highlights.add(pos);
+            }
+        }
+    }
+
+    private void mineLegit(List<BlockPos> scan) {
         if (current != null && !wanted(current)) {
             current = null;
         }
         if (current == null) {
-            current = nearest();
+            current = nearest(scan);
         }
         if (current == null) {
             return;
@@ -216,19 +311,28 @@ public final class Nuker extends Module {
     }
 
     /**
-     * One hit blocks get their packets right away up to the per tick limit.
-     * A slower block is only queued when the previous one is gone or its
-     * expected break time has run out.
+     * One hit blocks get their packets right away. A slower block is only queued
+     * when the previous one is gone or its break time has run out.
      */
-    private void mineInstant() {
+    private void mineInstant(List<BlockPos> scan) {
         int now = mc.player.tickCount;
+        // The tick count restarts on a respawn.
+        if (now < lastTick) {
+            attempted.clear();
+            slowPending = null;
+        }
+        lastTick = now;
         attempted.values().removeIf(expiry -> expiry <= now);
         if (slowPending != null && (!wanted(slowPending) || now >= slowDeadline)) {
             slowPending = null;
         }
+        if (autoTool.isOn()) {
+            // The tool has to be in hand before anything is judged a one hit block.
+            holdTool(slowPending != null ? slowPending : firstWanted(scan));
+        }
 
         int sent = 0;
-        for (BlockPos pos : BlockUtil.positionsWithin(range.getValue())) {
+        for (BlockPos pos : scan) {
             if (sent >= perTick.getInt()) {
                 break;
             }
@@ -252,10 +356,56 @@ public final class Nuker extends Module {
         }
     }
 
-    private BlockPos nearest() {
+    /**
+     * Instant mode never reaches the vanilla mining call so AutoTool never sees
+     * the block. This holds the tool the same way the single block miner does.
+     */
+    private void holdTool(BlockPos pos) {
+        if (pos == null) {
+            restoreSlot();
+            return;
+        }
+        int selectedSlot = mc.player.getInventory().getSelectedSlot();
+        // A slot the player picked themselves is left alone.
+        if (slots.isHolding() && selectedSlot != ourSlot) {
+            slots.forget();
+            ourSlot = -1;
+            return;
+        }
+        BlockState state = BlockUtil.state(pos);
+        int best = ItemUtil.bestToolSlot(state);
+        if (best == -1 || best == selectedSlot) {
+            return;
+        }
+        if (ItemUtil.miningSpeed(mc.player.getInventory().getItem(best), state)
+            <= ItemUtil.miningSpeed(mc.player.getInventory().getItem(selectedSlot), state)) {
+            return;
+        }
+        slots.select(best);
+        ourSlot = best;
+    }
+
+    private void restoreSlot() {
+        if (mc.player != null && mc.player.getInventory().getSelectedSlot() == ourSlot) {
+            slots.restore();
+        }
+        slots.forget();
+        ourSlot = -1;
+    }
+
+    private BlockPos firstWanted(List<BlockPos> scan) {
+        for (BlockPos pos : scan) {
+            if (wanted(pos)) {
+                return pos;
+            }
+        }
+        return null;
+    }
+
+    private BlockPos nearest(List<BlockPos> scan) {
         BlockPos best = null;
         int bestTicks = Integer.MAX_VALUE;
-        for (BlockPos pos : BlockUtil.positionsWithin(range.getValue())) {
+        for (BlockPos pos : scan) {
             if (!wanted(pos)) {
                 continue;
             }
@@ -271,7 +421,6 @@ public final class Nuker extends Module {
         return best;
     }
 
-    /** True if the block passes every filter and is safe to remove. */
     private boolean wanted(BlockPos pos) {
         BlockState state = BlockUtil.state(pos);
         if (state.isAir() || !BlockUtil.isBreakable(pos)) {
@@ -283,35 +432,52 @@ public final class Nuker extends Module {
         if (mode.is(Mode.SELECTED) && state.getBlock() != selected) {
             return false;
         }
+        if (mode.is(Mode.LIST)
+            && blocks.contains(state.getBlock()) != listMode.is(ListMode.WHITELIST)) {
+            return false;
+        }
+        if (smash.isOn() && state.getDestroySpeed(mc.level, pos) != 0) {
+            return false;
+        }
         if (flat.isOn() && pos.getY() + 0.5 < mc.player.getY()) {
             return false;
         }
         if (BlockUtil.isStandingOn(pos)) {
             return false;
         }
-        return BlockUtil.distanceTo(pos) <= range.getValue();
+        double distance = BlockUtil.distanceTo(pos);
+        if (distance > range.getValue()) {
+            return false;
+        }
+        return distance <= wallsRange.getValue() || hasLineOfSight(pos);
+    }
+
+    private boolean hasLineOfSight(BlockPos pos) {
+        Boolean cached = sightCache.get(pos);
+        if (cached != null) {
+            return cached;
+        }
+        Vec3 eye = mc.player.getEyePosition();
+        Vec3 point = BlockUtil.hitPoint(pos, BlockUtil.facingSide(pos));
+        BlockHitResult hit = mc.level.clip(new ClipContext(eye, point,
+            ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, mc.player));
+        // A target with no collider lets the ray run all the way to the end point.
+        boolean result = hit.getType() == HitResult.Type.MISS || hit.getBlockPos().equals(pos);
+        sightCache.put(pos, result);
+        return result;
     }
 
     @Subscribe
     private void onRender3D(Render3DEvent event) {
         int strength = (int) (255 * highlightStrength.getValue() / 100);
-        if (inGame() && strength > 0) {
-            // Boxes on every qualifying block up to a cap.
+        if (strength > 0) {
             int argb = ColorUtil.withAlpha(highlight.getColor(), strength);
-            int shown = 0;
-            for (BlockPos candidate : BlockUtil.positionsWithin(range.getValue())) {
-                if (shown >= 64) {
-                    break;
-                }
-                if (!wanted(candidate)) {
-                    continue;
-                }
+            for (BlockPos candidate : highlights) {
                 event.getBatch().outlineBox(new AABB(candidate).deflate(0.01), argb, false);
-                shown++;
             }
         }
         BlockPos pos = speed.is(Speed.LEGIT) ? current : slowPending;
-        if (pos == null || BlockUtil.state(pos).isAir()) {
+        if (pos == null || !inGame() || BlockUtil.state(pos).isAir()) {
             return;
         }
         event.getBatch().outlineBox(new AABB(pos).deflate(0.002),

@@ -10,9 +10,8 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 
 /**
- * Grows entity hitboxes so they are easier to hit. EntityMixin feeds the
- * expansion into the crosshair pick and AttackRangeMixin widens the
- * matching reach check.
+ * EntityMixin feeds the expansion into the crosshair pick and
+ * AttackRangeMixin widens the matching reach check.
  */
 public final class Hitboxes extends Module {
 
@@ -35,7 +34,7 @@ public final class Hitboxes extends Module {
         return expand.getValueString();
     }
 
-    /** Extra pick radius for one entity. Zero keeps it vanilla. */
+    // Extra pick radius for one entity. Zero keeps it vanilla.
     public double expansionFor(Entity entity) {
         if (!isEnabled() || entity == mc.player) {
             return 0;
@@ -55,7 +54,7 @@ public final class Hitboxes extends Module {
         return 0;
     }
 
-    /** Extra margin for the attack range check. */
+    // Extra margin for the attack range check.
     public float margin() {
         if (!isEnabled() || (!players.isOn() && !mobs.isOn())) {
             return 0;

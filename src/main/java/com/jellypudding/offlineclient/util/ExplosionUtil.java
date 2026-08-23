@@ -2,6 +2,7 @@ package com.jellypudding.offlineclient.util;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import net.minecraft.client.Minecraft;
+import net.minecraft.core.BlockPos;
 import net.minecraft.world.damagesource.CombatRules;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.effect.MobEffectInstance;
@@ -22,8 +23,10 @@ public final class ExplosionUtil {
 
     private static final Minecraft MC = OfflineClient.MC;
 
-    /** A crystal explodes with power six. Damage scales on double that. */
-    private static final float CRYSTAL_DIAMETER = 12f;
+    public static final float CRYSTAL_POWER = 6f;
+
+    // A respawn anchor and a bed both explode with power five.
+    public static final float RESPAWN_BLOCK_POWER = 5f;
 
     private static final EquipmentSlot[] ARMOR_SLOTS = {
         EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET
@@ -32,27 +35,50 @@ public final class ExplosionUtil {
     private ExplosionUtil() {
     }
 
-    /** Damage a crystal exploding at the point would deal to the entity. */
     public static float crystalDamage(LivingEntity target, Vec3 source) {
+        return blastDamage(target, source, CRYSTAL_POWER);
+    }
+
+    public static float blastDamage(LivingEntity target, Vec3 source, float power) {
         if (target == null || !target.isAlive()) {
             return 0;
         }
+        // Vanilla measures both the falloff and the damage against double the power.
+        float diameter = power * 2;
         double distance = Math.sqrt(target.distanceToSqr(source));
-        if (distance > CRYSTAL_DIAMETER) {
+        if (distance > diameter) {
             return 0;
         }
         float seen = ServerExplosion.getSeenPercent(source, target);
-        double impact = (1 - distance / CRYSTAL_DIAMETER) * seen;
-        float raw = (float) ((impact * impact + impact) / 2 * 7 * CRYSTAL_DIAMETER + 1);
+        double impact = (1 - distance / diameter) * seen;
+        float raw = (float) ((impact * impact + impact) / 2 * 7 * diameter + 1);
         return reduce(raw, target);
     }
 
-    /** Health plus absorption. What the entity can lose before dying. */
     public static float totalHealth(LivingEntity entity) {
         return entity.getHealth() + entity.getAbsorptionAmount();
     }
 
-    /** Applies difficulty scaling then armor then resistance then enchantments. */
+    // The suicide check refuses anything that could kill.
+    public static boolean selfSafe(Vec3 source, float power, float maxSelfDamage,
+                                   boolean antiSuicide) {
+        float self = blastDamage(MC.player, source, power);
+        if (self > maxSelfDamage) {
+            return false;
+        }
+        return !antiSuicide || self < totalHealth(MC.player);
+    }
+
+    // Only the reach is checked when dangerous is off.
+    public static boolean respawnBlockThreat(BlockPos pos, double range, boolean onlyDangerous) {
+        if (BlockUtil.distanceTo(pos) > range) {
+            return false;
+        }
+        return !onlyDangerous
+            || blastDamage(MC.player, Vec3.atCenterOf(pos), RESPAWN_BLOCK_POWER) > 0;
+    }
+
+    // Applies difficulty scaling then armour then resistance then enchantments.
     private static float reduce(float damage, LivingEntity target) {
         DamageSource source = MC.level.damageSources().explosion(null, null);
 

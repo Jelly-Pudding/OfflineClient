@@ -5,8 +5,8 @@ import com.jellypudding.offlineclient.render.DrawBatch;
 import com.mojang.blaze3d.vertex.PoseStack;
 
 /**
- * Fired after the world has rendered. Add lines and boxes to the shared
- * batch. It gets drawn once after every handler has run.
+ * Fired after the world has rendered. The shared batch is drawn once after
+ * every handler has run.
  */
 public final class Render3DEvent extends Event {
 

@@ -6,9 +6,11 @@ import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
-import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
-import net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen;
-import net.minecraft.client.gui.screens.inventory.InventoryScreen;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.inventory.ContainerScreen;
+import net.minecraft.client.gui.screens.inventory.DispenserScreen;
+import net.minecraft.client.gui.screens.inventory.HopperScreen;
+import net.minecraft.client.gui.screens.inventory.ShulkerBoxScreen;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.Slot;
@@ -35,9 +37,7 @@ public final class ChestStealer extends Module {
         if (!inGame()) {
             return;
         }
-        if (!(mc.gui.screen() instanceof AbstractContainerScreen)
-            || mc.gui.screen() instanceof InventoryScreen
-            || mc.gui.screen() instanceof CreativeModeInventoryScreen) {
+        if (!isStorage(mc.gui.screen())) {
             timer = 0;
             lastSlot = -1;
             lastCount = -1;
@@ -45,7 +45,10 @@ public final class ChestStealer extends Module {
             return;
         }
         if (inventoryFull) {
-            return;
+            if (mc.player.getInventory().getFreeSlot() == -1) {
+                return;
+            }
+            inventoryFull = false;
         }
 
         if (timer > 0) {
@@ -80,5 +83,16 @@ public final class ChestStealer extends Module {
         if (close.isOn()) {
             mc.player.closeContainer();
         }
+    }
+
+    /**
+     * Plain storage only. Crafting and anvil and trade and mount screens put
+     * their own slots first and break the container slot count.
+     */
+    private boolean isStorage(Screen screen) {
+        return screen instanceof ContainerScreen
+            || screen instanceof ShulkerBoxScreen
+            || screen instanceof HopperScreen
+            || screen instanceof DispenserScreen;
     }
 }

@@ -4,6 +4,7 @@ import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.ClientTickEvent;
 import com.jellypudding.offlineclient.gui.ClickGuiScreen;
 import com.jellypudding.offlineclient.gui.RegistryPickerScreen;
+import com.jellypudding.offlineclient.gui.WindowGuiScreen;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
@@ -18,10 +19,7 @@ import net.minecraft.client.gui.screens.inventory.AbstractSignEditScreen;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Keeps the movement keys alive whilst a screen is open. The real
- * keyboard state is fed straight into the key mappings every tick.
- */
+// The real keyboard state is fed into the movement key mappings every tick.
 public final class InvWalk extends Module {
 
     private final BoolSetting sneak = new BoolSetting("Sneak",
@@ -63,12 +61,13 @@ public final class InvWalk extends Module {
         }
     }
 
-    /** Screens that take typing keep the keyboard to themselves. */
-    private boolean allowed(Screen screen) {
+    // Screens that take typing keep the keyboard to themselves.
+    public static boolean allowed(Screen screen) {
         if (screen instanceof ChatScreen || screen instanceof AbstractSignEditScreen) {
             return false;
         }
-        if (screen instanceof ClickGuiScreen || screen instanceof RegistryPickerScreen) {
+        if (screen instanceof ClickGuiScreen || screen instanceof WindowGuiScreen
+            || screen instanceof RegistryPickerScreen) {
             return false;
         }
         for (GuiEventListener child : screen.children()) {
@@ -94,7 +93,6 @@ public final class InvWalk extends Module {
         return keys;
     }
 
-    /** Lets go of every key we may have pressed whilst a screen is up. */
     private void release() {
         if (mc.gui == null || mc.gui.screen() == null) {
             return;

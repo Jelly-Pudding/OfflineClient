@@ -9,6 +9,7 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
+import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.Blocks;
@@ -18,9 +19,6 @@ import net.minecraft.world.phys.shapes.CollisionContext;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Covers the player's head with obsidian so crystals cannot be placed on it.
- */
 public final class SelfTrap extends Module {
 
     public enum Mode {
@@ -51,7 +49,11 @@ public final class SelfTrap extends Module {
         "Outline the spots still to fill.", true);
 
     private int timer;
-    private int previousSlot = -1;
+    private final SlotSwap slots = new SlotSwap();
+    private boolean placed;
+
+    // The spots the last tick found. The unobstructed test walks the entity list.
+    private List<BlockPos> pending = List.of();
 
     public SelfTrap() {
         super("SelfTrap", "Places obsidian above your head to stop crystals.", Category.COMBAT);
@@ -62,23 +64,28 @@ public final class SelfTrap extends Module {
     @Override
     protected void onEnable() {
         timer = 0;
-        previousSlot = -1;
+        slots.forget();
+        placed = false;
+        pending = List.of();
     }
 
     @Override
     protected void onDisable() {
-        restoreSlot();
+        slots.restore();
+        pending = List.of();
     }
 
     @Subscribe
     private void onTick(TickEvent event) {
+        pending = List.of();
         if (!inGame() || mc.player.isSpectator()) {
             return;
         }
         List<BlockPos> missing = missingSpots();
+        pending = missing;
         if (missing.isEmpty()) {
-            restoreSlot();
-            if (toggleOff.isOn()) {
+            slots.restore();
+            if (toggleOff.isOn() && placed) {
                 setEnabled(false);
             }
             return;
@@ -91,23 +98,23 @@ public final class SelfTrap extends Module {
         int slot = BlockUtil.findBlockSlot(block ->
             block.getExplosionResistance() >= 600 && block.defaultDestroyTime() >= 0);
         if (slot == -1) {
-            restoreSlot();
+            slots.restore();
             return;
         }
-        selectSlot(slot);
+        slots.select(slot);
 
         BlockPos target = missing.getFirst();
         Direction support = BlockUtil.findPlaceSupport(target);
-        boolean placed = support != null
+        boolean ok = support != null
             ? BlockUtil.place(target, support, rotate.isOn(), true)
             : BlockUtil.placeDirect(target, rotate.isOn(), true);
-        if (placed) {
+        if (ok) {
+            placed = true;
             timer = delay.getInt();
         }
-        restoreSlot();
+        slots.restore();
     }
 
-    /** The trap spots that are still open. */
     private List<BlockPos> missingSpots() {
         List<BlockPos> result = new ArrayList<>();
         BlockPos feet = mc.player.blockPosition();
@@ -129,30 +136,12 @@ public final class SelfTrap extends Module {
         }
     }
 
-    private void selectSlot(int slot) {
-        int selected = mc.player.getInventory().getSelectedSlot();
-        if (selected == slot) {
-            return;
-        }
-        if (previousSlot == -1) {
-            previousSlot = selected;
-        }
-        mc.player.getInventory().setSelectedSlot(slot);
-    }
-
-    private void restoreSlot() {
-        if (previousSlot != -1 && mc.player != null) {
-            mc.player.getInventory().setSelectedSlot(previousSlot);
-        }
-        previousSlot = -1;
-    }
-
     @Subscribe
     private void onRender3D(Render3DEvent event) {
-        if (!render.isOn() || !inGame()) {
+        if (!render.isOn()) {
             return;
         }
-        for (BlockPos pos : missingSpots()) {
+        for (BlockPos pos : pending) {
             event.getBatch().outlineBox(new AABB(pos).deflate(0.002), 0xFFE0A030, false);
         }
     }

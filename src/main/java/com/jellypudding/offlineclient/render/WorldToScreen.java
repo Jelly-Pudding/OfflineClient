@@ -12,8 +12,7 @@ import org.joml.Vector4f;
 
 /**
  * Projects world positions onto the HUD using the same projection and view
- * bobbing the level is drawn with. Call update once per frame then project
- * as many points as needed.
+ * bobbing the level is drawn with.
  */
 public final class WorldToScreen {
 
@@ -26,7 +25,7 @@ public final class WorldToScreen {
     private WorldToScreen() {
     }
 
-    /** Rebuilds the projection for this frame. False if there is no camera yet. */
+    // Rebuilds the projection for this frame. False if there is no camera yet.
     public static boolean update() {
         GameRenderer renderer = MC.gameRenderer;
         CameraRenderState camera = renderer.gameRenderState().levelRenderState.cameraRenderState;
@@ -47,15 +46,13 @@ public final class WorldToScreen {
         return true;
     }
 
-    /** Where the camera is this frame. */
     public static Vec3 cameraPos() {
         return cameraPos;
     }
 
     /**
-     * Screen position of a world point in gui pixels. Null when the point
-     * is behind the camera. The z value is the depth and grows with
-     * distance.
+     * Null when the point is behind the camera. The z value is the depth and
+     * grows with distance.
      */
     public static Vec3 project(Vec3 world) {
         Vector4f v = new Vector4f((float) (world.x - cameraPos.x), (float) (world.y - cameraPos.y),

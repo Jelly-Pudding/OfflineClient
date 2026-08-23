@@ -16,9 +16,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/**
- * XRay hooks for water and lava. Same idea as the block renderer hooks.
- */
+// XRay hooks for water and lava.
 @Mixin(FluidRenderer.class)
 public abstract class FluidRendererMixin {
 
@@ -40,9 +38,7 @@ public abstract class FluidRendererMixin {
         }
     }
 
-    /**
-     * A wanted fluid keeps its faces against hidden blocks.
-     */
+    // A wanted fluid keeps its faces against hidden blocks.
     @WrapOperation(
         method = "tesselate(Lnet/minecraft/client/renderer/block/BlockAndTintGetter;Lnet/minecraft/core/BlockPos;Lnet/minecraft/client/renderer/block/FluidRenderer$Output;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/world/level/material/FluidState;)V",
         at = @At(value = "INVOKE",

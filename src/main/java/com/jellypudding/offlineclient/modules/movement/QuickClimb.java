@@ -22,7 +22,7 @@ public final class QuickClimb extends Module {
         if (!inGame() || !mc.player.onClimbable()) {
             return;
         }
-        // Vanilla climbs while pushing into the ladder or holding jump.
+        // Vanilla climbs whilst pushing into the ladder or holding jump.
         if (!mc.player.horizontalCollision && !mc.options.keyJump.isDown()) {
             return;
         }

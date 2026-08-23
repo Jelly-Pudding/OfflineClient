@@ -20,8 +20,8 @@ import java.util.List;
  */
 public final class DrawBatch {
 
-    private final StagedVertexBuffer buffer =
-        new StagedVertexBuffer(() -> "OfflineClient DrawBatch", RenderType.BIG_BUFFER_SIZE);
+    // A batch is built every frame and most have nothing to draw.
+    private StagedVertexBuffer buffer;
     private final List<StagedVertexBuffer.Draw> draws = new ArrayList<>();
     private final List<RenderType> types = new ArrayList<>();
 
@@ -38,7 +38,7 @@ public final class DrawBatch {
         return camera == null ? Vec3.ZERO : camera.position();
     }
 
-    /** A point in front of the camera that tracer lines start from. */
+    // A point in front of the camera that tracer lines start from.
     public static Vec3 tracerOrigin() {
         Camera camera = OfflineClient.MC.gameRenderer.mainCamera();
         if (camera == null) {
@@ -50,17 +50,14 @@ public final class DrawBatch {
             Math.cos(yaw) * Math.cos(pitch)).scale(10);
     }
 
-    /** Draws a line between two points. */
     public void line(Vec3 from, Vec3 to, int color, boolean throughWalls) {
         lineRelative(from.subtract(camera), to.subtract(camera), color, throughWalls);
     }
 
-    /** Draws a line from just in front of the camera to a position. */
     public void tracer(Vec3 to, int color, boolean throughWalls) {
         lineRelative(tracerOrigin(), to.subtract(camera), color, throughWalls);
     }
 
-    /** Draws the twelve edges of a box. */
     public void outlineBox(AABB box, int color, boolean throughWalls) {
         AABB b = box.move(camera.reverse());
         float x1 = (float) b.minX;
@@ -87,7 +84,6 @@ public final class DrawBatch {
         edge(x1, y1, z2, x1, y2, z2, color, throughWalls);
     }
 
-    /** Draws a filled box. */
     public void solidBox(AABB box, int color, boolean throughWalls) {
         VertexConsumer vc = buffer(Pipelines.fill(throughWalls));
         AABB b = box.move(camera.reverse());
@@ -106,8 +102,10 @@ public final class DrawBatch {
         quad(vc, color, x1, y1, z1, x1, y1, z2, x1, y2, z2, x1, y2, z1);
     }
 
-    /** Uploads and renders everything collected so far. */
     public void draw() {
+        if (buffer == null) {
+            return;
+        }
         try {
             if (draws.isEmpty()) {
                 return;
@@ -124,6 +122,7 @@ public final class DrawBatch {
             draws.clear();
             types.clear();
             buffer.close();
+            buffer = null;
         }
     }
 
@@ -169,6 +168,9 @@ public final class DrawBatch {
     }
 
     private VertexConsumer buffer(RenderType type) {
+        if (buffer == null) {
+            buffer = new StagedVertexBuffer(() -> "OfflineClient DrawBatch", RenderType.BIG_BUFFER_SIZE);
+        }
         if (!types.isEmpty() && types.getLast() == type
             && type.canConsolidateConsecutiveGeometry()) {
             return buffer.getVertexBuilder(draws.getLast());

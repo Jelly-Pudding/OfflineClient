@@ -8,6 +8,7 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.render.WorldToScreen;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.multiplayer.PlayerInfo;
@@ -20,10 +21,7 @@ import org.joml.Matrix3x2fStack;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Bigger and richer player nametags. Drawn on the HUD at the projected
- * head position.
- */
+// Drawn on the HUD at the projected head position.
 public final class Nametags extends Module {
 
     private static final int BACKGROUND = 0x90000000;
@@ -40,7 +38,7 @@ public final class Nametags extends Module {
     private final NumberSetting range = new NumberSetting("Range",
         "Furthest player to tag.", 128, 16, 256, 8, " blocks").min(1);
     private final BoolSetting health = new BoolSetting("Health",
-        "Show hearts left. Absorption counts too.", true);
+        "Show hearts left including absorption.", true);
     private final BoolSetting ping = new BoolSetting("Ping",
         "Show the player's latency.", true);
     private final BoolSetting distance = new BoolSetting("Distance",
@@ -48,14 +46,14 @@ public final class Nametags extends Module {
     private final BoolSetting items = new BoolSetting("Items",
         "Show what they hold in each hand.", true);
     private final BoolSetting armor = new BoolSetting("Armor",
-        "Show their armor next to the held items.", true);
+        "Show their armour next to the held items.", true);
     private final BoolSetting durability = new BoolSetting("Durability",
         "Show the durability bar on each item.", true);
     private final BoolSetting self = new BoolSetting("Self",
-        "Tag yourself while in third person or Freecam.", true);
+        "Tag yourself whilst in third person or Freecam.", true);
 
     public Nametags() {
-        super("Nametags", "Shows name and health and ping and gear above players.", Category.RENDER);
+        super("Nametags", "Shows health and ping and gear above players.", Category.RENDER);
         addSettings(scale, range, health, ping, distance, items, armor, durability, self);
         searchTags("name tags", "player info");
     }
@@ -100,7 +98,7 @@ public final class Nametags extends Module {
         if (!self.isOn()) {
             return false;
         }
-        if (OfflineClient.INSTANCE.getModuleManager().get(Freecam.class).isEnabled()) {
+        if (Modules.enabled(Freecam.class)) {
             return true;
         }
         return !mc.options.getCameraType().isFirstPerson();
@@ -149,7 +147,7 @@ public final class Nametags extends Module {
         List<ItemStack> gear = gearOf(player);
         int gearWidth = gear.size() * ITEM_SIZE;
 
-        // Shrink with distance but keep far tags readable.
+        // Shrink with distance down to half size.
         float factor = (float) (scale.getValue() * Math.clamp(1 - tag.distance() / 100.0, 0.5, 1));
 
         Matrix3x2fStack pose = context.pose();
@@ -181,7 +179,7 @@ public final class Nametags extends Module {
         pose.popMatrix();
     }
 
-    /** Held items first and then armor from head to feet. Empty slots are skipped. */
+    // Held items first and then armour from head to feet.
     private List<ItemStack> gearOf(Player player) {
         List<ItemStack> gear = new ArrayList<>();
         if (items.isOn()) {
@@ -202,7 +200,7 @@ public final class Nametags extends Module {
         }
     }
 
-    /** Ping from the tab list or -1 if the player is not on it. */
+    // Ping from the tab list or -1 if the player is not on it.
     private int latencyOf(Player player) {
         if (mc.getConnection() == null) {
             return -1;

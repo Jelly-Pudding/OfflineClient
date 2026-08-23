@@ -3,10 +3,7 @@ package com.jellypudding.offlineclient.event.events;
 import com.jellypudding.offlineclient.event.Event;
 import net.minecraft.network.protocol.Packet;
 
-/**
- * Fired when the client is about to send a packet. Cancel it to drop the
- * packet or replace it to change what gets sent.
- */
+// Fired once per send. A replaced packet is the one that goes out.
 public final class PacketSendEvent extends Event {
 
     private Packet<?> packet;

@@ -1,6 +1,5 @@
 package com.jellypudding.offlineclient.modules.movement;
 
-import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.PacketSendEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
@@ -8,14 +7,15 @@ import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
+import com.jellypudding.offlineclient.util.Modules;
 import com.mojang.blaze3d.platform.InputConstants;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.protocol.game.ServerboundPlayerInputPacket;
 import net.minecraft.world.entity.player.Input;
 
-/**
- * Keeps the player sneaking. Legit mode holds the sneak key while packet
- * mode only tells the server.
- */
+import java.lang.ref.WeakReference;
+
+// Legit mode holds the sneak key. Packet mode only tells the server.
 public final class Sneak extends Module {
 
     public enum Mode {
@@ -35,16 +35,17 @@ public final class Sneak extends Module {
     }
 
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
-        "Legit really crouches. Packet only makes the server think you crouch so you keep full speed.",
+        "Legit really crouches. Packet keeps your full speed.",
         Mode.LEGIT);
     private final BoolSetting skipWhileFlying = new BoolSetting("Skip while flying",
-        "Do not hold sneak while flying since that would push you down.", true)
+        "Do not hold sneak whilst flying.", true)
         .visibleWhen(() -> mode.is(Mode.LEGIT));
 
-    /** The mode that is currently applied. */
-    private Mode applied;
-    /** True while the server has been told the shift key is down. */
-    private boolean forcing;
+    // Read from the packet thread.
+    private volatile Mode applied;
+    private volatile boolean forcing;
+    // The player the flag was sent for. Weak to avoid pinning a dead world.
+    private WeakReference<LocalPlayer> told = new WeakReference<>(null);
 
     public Sneak() {
         super("Sneak", "Keeps you sneaking.", Category.MOVEMENT);
@@ -61,6 +62,7 @@ public final class Sneak extends Module {
     protected void onEnable() {
         applied = null;
         forcing = false;
+        told = new WeakReference<>(null);
     }
 
     @Override
@@ -90,19 +92,18 @@ public final class Sneak extends Module {
         setShift(true);
     }
 
-    /**
-     * A shift flag while riding makes the server dismount the player.
-     * The forced state drops while riding and comes back after.
-     */
+    // A shift flag whilst riding makes the server dismount the player.
     private void packetTick() {
-        boolean want = !mc.player.isPassenger();
-        if (want != forcing) {
+        LocalPlayer player = mc.player;
+        boolean want = !player.isPassenger();
+        // A respawn or a dimension change wipes what the server was told.
+        if (want != forcing || (want && player != told.get())) {
             forcing = want;
+            told = new WeakReference<>(want ? player : null);
             tellServer(want);
         }
     }
 
-    /** Packet mode rewrites every input packet with the shift flag on. */
     @Subscribe
     private void onPacketSend(PacketSendEvent event) {
         if (applied != Mode.PACKET || !forcing
@@ -126,16 +127,17 @@ public final class Sneak extends Module {
         }
     }
 
-    /**
-     * Sends one input packet with the shift flag set as asked. The client's
-     * own record still holds the real key state.
-     */
+    // The client's own record still holds the real key state.
     private void tellServer(boolean shift) {
-        Input last = mc.player.getLastSentInput();
-        if (last.shift()) {
+        LocalPlayer player = mc.player;
+        if (player == null) {
             return;
         }
-        mc.player.connection.send(new ServerboundPlayerInputPacket(withShift(last, shift)));
+        Input last = player.getLastSentInput();
+        if (last.shift() == shift) {
+            return;
+        }
+        player.connection.send(new ServerboundPlayerInputPacket(withShift(last, shift)));
     }
 
     private static Input withShift(Input input, boolean shift) {
@@ -143,10 +145,7 @@ public final class Sneak extends Module {
             input.jump(), shift, input.sprint());
     }
 
-    /**
-     * Only touches the key when its state has to change. With toggle
-     * sneak turned on the game flips the key on every press.
-     */
+    // With toggle sneak turned on the game flips the key on every press.
     private void setShift(boolean down) {
         if (mc.options.keyShift.isDown() != down) {
             mc.options.keyShift.setDown(down);
@@ -158,7 +157,10 @@ public final class Sneak extends Module {
     }
 
     private boolean flying() {
-        return mc.player.getAbilities().flying
-            || OfflineClient.INSTANCE.getModuleManager().get(Flight.class).isEnabled();
+        if (mc.player.getAbilities().flying) {
+            return true;
+        }
+        Flight flight = Modules.get(Flight.class);
+        return flight != null && flight.isEnabled();
     }
 }

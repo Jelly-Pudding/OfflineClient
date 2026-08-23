@@ -21,7 +21,7 @@ public final class HelpCommand extends Command {
             ChatUtil.message("§b" + prefix + command.getUsage() + " §8» §7" + command.getDescription());
         }
         ChatUtil.message("§7Typing just a module name like §b" + prefix + "speed§7 toggles it.");
-        ChatUtil.message("§7Press §bTAB§7 while typing a command to autocomplete.");
+        ChatUtil.message("§7Press §bTAB§7 whilst typing a command to autocomplete.");
 
         String key = OfflineClient.INSTANCE.getModuleManager()
             .get(ClickGuiModule.class).getKeybind().getKeyName();

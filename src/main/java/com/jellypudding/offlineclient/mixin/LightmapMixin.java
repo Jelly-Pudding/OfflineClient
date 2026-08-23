@@ -20,10 +20,7 @@ public abstract class LightmapMixin {
     @Final
     private GpuTexture texture;
 
-    /**
-     * XRay paints the whole lightmap white. The vanilla lightmap comes
-     * back on its own the next time it updates after XRay turns off.
-     */
+    // The vanilla lightmap comes back on its own the next time it updates.
     @Inject(
         method = "render(Lnet/minecraft/client/renderer/state/LightmapRenderState;)V",
         at = @At("HEAD"),

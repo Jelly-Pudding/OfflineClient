@@ -4,10 +4,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.jellypudding.offlineclient.util.ColorUtil;
 
-/**
- * A color stored as a hue from 0 to 360 plus an optional rainbow mode. The GUI
- * shows it as a hue slider with a rainbow toggle.
- */
+// A colour stored as a hue from 0 to 360 plus an optional rainbow mode.
 public final class ColorSetting extends Setting<Float> {
 
     private boolean rainbow;
@@ -17,7 +14,7 @@ public final class ColorSetting extends Setting<Float> {
         this.rainbow = defaultRainbow;
     }
 
-    /** Current ARGB color. Animated when rainbow mode is on. */
+    // Current ARGB colour.
     public int getColor() {
         if (rainbow) {
             return ColorUtil.rainbow(0);
@@ -25,7 +22,7 @@ public final class ColorSetting extends Setting<Float> {
         return ColorUtil.hsv(value, 0.75f, 1f);
     }
 
-    /** Like {@link #getColor()} but with a phase offset for gradients and waves. */
+    // A phase offset for gradients and waves.
     public int getColor(int offset) {
         if (rainbow) {
             return ColorUtil.rainbow(offset);

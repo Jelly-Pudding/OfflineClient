@@ -3,10 +3,11 @@ package com.jellypudding.offlineclient.modules.misc;
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.Render2DEvent;
-import com.jellypudding.offlineclient.gui.GuiTheme;
+import com.jellypudding.offlineclient.gui.WindowGuiScreen;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
+import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.util.RenderUtil;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -19,16 +20,39 @@ import java.util.Locale;
 
 public final class HudModule extends Module {
 
+    private static final int EDGE = 3;
+    private static final int LINE = 10;
+
+    // A long list shrinks rather than running off the bottom of the screen.
+    private static final float MIN_SCALE = 0.5f;
+
     private final BoolSetting watermark = new BoolSetting("Watermark",
         "Client name and version in the top left.", false);
+    private final ColorSetting watermarkColor = new ColorSetting("Watermark colour",
+        "Colour of the client name.", 200, true)
+        .visibleWhen(watermark::isOn);
     private final BoolSetting moduleList = new BoolSetting("Module list",
         "Enabled modules listed in the top right.", false);
+    private final ColorSetting moduleListColor = new ColorSetting("List colour",
+        "Colour of the module names.", 200, true)
+        .visibleWhen(moduleList::isOn);
     private final BoolSetting info = new BoolSetting("Info bar",
         "Coordinates and direction and speed and FPS in the bottom left.", false);
 
     public HudModule() {
-        super("HUD", "The overlay you see while playing.", Category.MISC);
-        addSettings(watermark, moduleList, info);
+        super("HUD", "The overlay you see whilst playing.", Category.MISC);
+        addSettings(watermark, watermarkColor, moduleList, moduleListColor, info);
+    }
+
+    public boolean isWatermarkOn() {
+        return isEnabled() && watermark.isOn();
+    }
+
+    // The windowed ClickGUI puts the client name in this exact corner so the two
+    // would stack up. Asked each frame rather than pushed so no screen switch can
+    // leave the watermark hidden.
+    private static boolean cornerTaken() {
+        return OfflineClient.MC.gui.screen() instanceof WindowGuiScreen;
     }
 
     @Subscribe
@@ -36,11 +60,8 @@ public final class HudModule extends Module {
         GuiGraphicsExtractor context = event.getContext();
         Font font = mc.font;
 
-        if (watermark.isOn()) {
-            RenderUtil.gradientText(context, font, OfflineClient.NAME, 3, 3,
-                GuiTheme.accent(), GuiTheme.accent(12));
-            int offset = font.width(OfflineClient.NAME) + 6;
-            context.text(font, "v" + OfflineClient.VERSION, 3 + offset, 3, 0xFFB0B0C0, true);
+        if (watermark.isOn() && !cornerTaken()) {
+            renderWatermark(context, font);
         }
 
         if (moduleList.isOn()) {
@@ -52,19 +73,48 @@ public final class HudModule extends Module {
         }
     }
 
+    private void renderWatermark(GuiGraphicsExtractor context, Font font) {
+        if (watermarkColor.isRainbow()) {
+            RenderUtil.rainbowText(context, font, OfflineClient.NAME, EDGE, EDGE);
+        } else {
+            context.text(font, OfflineClient.NAME, EDGE, EDGE, watermarkColor.getColor(), true);
+        }
+        int offset = font.width(OfflineClient.NAME) + 6;
+        context.text(font, "v" + OfflineClient.VERSION, EDGE + offset, EDGE, 0xFFB0B0C0, true);
+    }
+
     private void renderModuleList(GuiGraphicsExtractor context, Font font) {
         List<Module> enabled = new ArrayList<>(OfflineClient.INSTANCE.getModuleManager().getEnabled());
         enabled.removeIf(m -> m instanceof HudModule);
+        if (enabled.isEmpty()) {
+            return;
+        }
         enabled.sort(Comparator.comparingInt((Module m) -> font.width(m.getDisplayName())).reversed());
 
-        int y = 3;
-        int i = 0;
+        int width = context.guiWidth();
+        int room = context.guiHeight() - EDGE * 2;
+        float scale = Math.clamp((float) room / (enabled.size() * LINE), MIN_SCALE, 1f);
+
+        boolean scaled = scale < 1f;
+        if (scaled) {
+            // Shrink about the top right corner so the list stays pinned there.
+            context.pose().pushMatrix();
+            context.pose().translate(width, EDGE);
+            context.pose().scale(scale, scale);
+            context.pose().translate(-width, -EDGE);
+        }
+
+        // One colour for the whole list. A per row offset reads as a mistake.
+        int color = moduleListColor.getColor();
+        int y = EDGE;
         for (Module module : enabled) {
             String name = module.getDisplayName();
-            int x = context.guiWidth() - font.width(name) - 3;
-            context.text(font, name, x, y, GuiTheme.accent(i * 3), true);
-            y += 10;
-            i++;
+            context.text(font, name, width - font.width(name) - EDGE, y, color, true);
+            y += LINE;
+        }
+
+        if (scaled) {
+            context.pose().popMatrix();
         }
     }
 
@@ -80,6 +130,6 @@ public final class HudModule extends Module {
             + " §8| §7" + mc.getFps() + " fps";
 
         int y = context.guiHeight() - 12;
-        context.text(font, line, 3, y, 0xFFB0B0C0, true);
+        context.text(font, line, EDGE, y, 0xFFB0B0C0, true);
     }
 }

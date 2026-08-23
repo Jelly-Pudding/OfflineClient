@@ -52,12 +52,10 @@ public abstract class Module {
         Collections.addAll(settings, newSettings);
     }
 
-    /** Extra words that make this module show up in the GUI search. */
     protected void searchTags(String... tags) {
         this.tags = tags;
     }
 
-    /** True if the query matches this module's name or description or tags. */
     public boolean matchesSearch(String query) {
         String q = query.toLowerCase();
         if (name.toLowerCase().contains(q) || description.toLowerCase().contains(q)) {
@@ -75,7 +73,7 @@ public abstract class Module {
         return settings;
     }
 
-    /** Finds a setting by name. Spaces and case do not matter. */
+    // Spaces and case are ignored.
     public Setting<?> getSetting(String settingName) {
         String wanted = settingName.replace(" ", "").toLowerCase();
         for (Setting<?> setting : settings) {
@@ -101,6 +99,7 @@ public abstract class Module {
         this.enabled = enabled;
 
         if (enabled) {
+            disableGroup();
             OfflineClient.INSTANCE.getEventBus().register(this);
             onEnable();
         } else {
@@ -109,22 +108,38 @@ public abstract class Module {
         }
     }
 
-    /** Restores enabled state from config without toggle side effects. */
-    public void setEnabledSilently(boolean enabled) {
-        setEnabled(enabled);
+    // Null when the module clashes with nothing.
+    public ExclusivityGroup getExclusivityGroup() {
+        return null;
     }
 
-    /** Called when the module keybind is pressed. Default: toggle. */
+    private void disableGroup() {
+        ExclusivityGroup group = getExclusivityGroup();
+        ModuleManager manager = OfflineClient.INSTANCE.getModuleManager();
+        if (group == null || manager == null) {
+            return;
+        }
+        for (Module other : manager.getAll()) {
+            if (other != this && other.isEnabled() && other.getExclusivityGroup() == group) {
+                other.setEnabled(false);
+            }
+        }
+    }
+
     public void onKeybind() {
         toggle();
     }
 
-    /** Whether the enabled state goes into the config. */
     public boolean savesEnabledState() {
         return true;
     }
 
-    /** False for rows like ClickGUI that only exist to hold settings. */
+    // True for modules that ship switched on when there is no saved state.
+    public boolean enabledByDefault() {
+        return false;
+    }
+
+    // False for rows like ClickGUI that only exist to hold settings.
     public boolean isTogglable() {
         return true;
     }
@@ -135,7 +150,7 @@ public abstract class Module {
     protected void onDisable() {
     }
 
-    /** Extra info shown next to the name in the HUD list. */
+    // Extra info shown next to the name in the HUD list.
     public String getSuffix() {
         return null;
     }

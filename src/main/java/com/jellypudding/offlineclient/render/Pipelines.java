@@ -21,9 +21,7 @@ import java.util.Optional;
  */
 public final class Pipelines {
 
-    /**
-     * Vanilla lines but with our own shaders that skip fog.
-     */
+    // Vanilla lines with custom shaders that skip fog.
     private static final RenderPipeline.Snippet LINE_SNIPPET = RenderPipeline
         .builder(RenderPipelines.LINES_SNIPPET)
         .withVertexShader(Identifier.parse("offlineclient:core/lines"))

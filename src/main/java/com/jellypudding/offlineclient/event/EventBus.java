@@ -1,5 +1,7 @@
 package com.jellypudding.offlineclient.event;
 
+import com.jellypudding.offlineclient.OfflineClient;
+
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -8,9 +10,8 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * A small event bus. Register a listener object once and every method on it
- * annotated with {@link Subscribe} becomes a handler for its event type.
- * Registering the same listener twice does nothing.
+ * Every method on a registered listener annotated with {@link Subscribe}
+ * becomes a handler for its event type. Registering twice does nothing.
  */
 public final class EventBus {
 
@@ -19,9 +20,8 @@ public final class EventBus {
             try {
                 method.invoke(listener, event);
             } catch (Exception e) {
-                System.err.println("[OfflineClient] Error in event handler "
-                    + listener.getClass().getSimpleName() + "." + method.getName());
-                e.printStackTrace();
+                OfflineClient.LOG.error("Error in event handler {}.{}",
+                    listener.getClass().getSimpleName(), method.getName(), e);
             }
         }
     }

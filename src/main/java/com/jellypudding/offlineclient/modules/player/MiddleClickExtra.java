@@ -8,9 +8,6 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import net.minecraft.world.entity.player.Player;
 
-/**
- * Middle click a player to friend or unfriend them without typing.
- */
 public final class MiddleClickExtra extends Module {
 
     private final BoolSetting notify = new BoolSetting("Notify",
@@ -22,7 +19,7 @@ public final class MiddleClickExtra extends Module {
         searchTags("friend", "add friend");
     }
 
-    /** Called from the mouse mixin on every middle click press. */
+    // Called from the mouse mixin on every middle click press.
     public void onMiddleClick() {
         if (!isEnabled() || !inGame() || mc.gui.screen() != null) {
             return;

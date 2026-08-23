@@ -2,6 +2,7 @@ package com.jellypudding.offlineclient.mixin;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.modules.movement.Jesus;
+import com.jellypudding.offlineclient.util.Modules;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import net.minecraft.core.BlockPos;
@@ -14,10 +15,7 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 
-/**
- * Every block shape the player can bump into passes through here. Jesus
- * swaps liquid shapes for a full block.
- */
+// Every block shape the player can bump into passes through here.
 @Mixin(BlockCollisions.class)
 public abstract class BlockCollisionsMixin {
 
@@ -28,14 +26,12 @@ public abstract class BlockCollisionsMixin {
                                           CollisionGetter getter, BlockPos pos,
                                           Operation<VoxelShape> original) {
         VoxelShape shape = original.call(context, state, getter, pos);
-        if (OfflineClient.INSTANCE.getModuleManager() == null) {
-            return shape;
-        }
         if (!(context instanceof EntityCollisionContext entityContext)
             || entityContext.getEntity() == null
             || entityContext.getEntity() != OfflineClient.MC.player) {
             return shape;
         }
-        return OfflineClient.INSTANCE.getModuleManager().get(Jesus.class).adjustShape(state, pos, shape);
+        Jesus jesus = Modules.get(Jesus.class);
+        return jesus == null ? shape : jesus.adjustShape(state, pos, shape);
     }
 }

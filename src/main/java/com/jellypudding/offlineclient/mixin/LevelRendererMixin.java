@@ -2,6 +2,7 @@ package com.jellypudding.offlineclient.mixin;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.events.Render3DEvent;
+import com.jellypudding.offlineclient.render.DrawBatch;
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.resource.GraphicsResourceAllocator;
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -28,8 +29,7 @@ public class LevelRendererMixin {
         PoseStack poseStack = new PoseStack();
         poseStack.mulPose(positionMatrix);
         float partialTicks = tickCounter.getGameTimeDeltaPartialTick(false);
-        com.jellypudding.offlineclient.render.DrawBatch batch =
-            new com.jellypudding.offlineclient.render.DrawBatch(poseStack);
+        DrawBatch batch = new DrawBatch(poseStack);
         OfflineClient.INSTANCE.getEventBus().post(new Render3DEvent(poseStack, batch, partialTicks));
         batch.draw();
     }

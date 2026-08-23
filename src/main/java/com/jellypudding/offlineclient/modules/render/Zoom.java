@@ -26,7 +26,7 @@ public final class Zoom extends Module {
         return factor.getValueString();
     }
 
-    /** Called every frame. Eases toward the target. */
+    // Called every frame.
     public float applyZoom(float fov) {
         double target = isEnabled() ? factor.getValue() : 1;
         smoothed += (target - smoothed) * 0.3;

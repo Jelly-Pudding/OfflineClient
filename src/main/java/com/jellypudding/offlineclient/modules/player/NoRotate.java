@@ -5,8 +5,7 @@ import com.jellypudding.offlineclient.module.Module;
 
 /**
  * Keeps the view where it was when the server sends a forced rotation.
- * ClientPacketListenerMixin saves the look angles before the packet is
- * applied and puts them back after.
+ * ClientPacketListenerMixin saves the angles and puts them back.
  */
 public final class NoRotate extends Module {
 

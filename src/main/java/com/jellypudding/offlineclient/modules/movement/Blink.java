@@ -5,29 +5,32 @@ import com.jellypudding.offlineclient.event.events.PacketSendEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.NumberSetting;
-import net.minecraft.client.multiplayer.ClientPacketListener;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.lang.ref.WeakReference;
+import java.util.Queue;
+import java.util.concurrent.LinkedBlockingQueue;
 
 public final class Blink extends Module {
 
     private final NumberSetting limit = new NumberSetting("Limit",
-        "Restarts after holding this many packets so the server never snaps you back too far.",
+        "Restarts after holding this many packets.",
         200, 20, 1000, 10, " packets");
 
-    private final List<Packet<?>> held = new ArrayList<>();
-    private ClientPacketListener connection;
+    // Filled from the packet thread and read by the HUD.
+    private final Queue<Packet<?>> held = new LinkedBlockingQueue<>();
+
+    // The player the held packets were captured from. Weak to avoid pinning a dead world.
+    private volatile WeakReference<LocalPlayer> owner = new WeakReference<>(null);
 
     public Blink() {
-        super("Blink", "Pauses your position updates. You catch up to your real spot when you turn it off.",
+        super("Blink", "Pauses your position updates until you turn it off.",
             Category.MOVEMENT);
         addSettings(limit);
     }
 
-    /** Never comes back on at launch. */
     @Override
     public boolean savesEnabledState() {
         return false;
@@ -41,16 +44,22 @@ public final class Blink extends Module {
     @Override
     protected void onEnable() {
         held.clear();
-        connection = mc.player != null ? mc.player.connection : null;
+        owner = new WeakReference<>(mc.player);
     }
 
     @Subscribe
     private void onPacketSend(PacketSendEvent event) {
-        if (!inGame() || !(event.getPacket() instanceof ServerboundMovePlayerPacket)) {
+        LocalPlayer player = mc.player;
+        if (player == null || !(event.getPacket() instanceof ServerboundMovePlayerPacket)) {
             return;
         }
+        if (player != owner.get()) {
+            // A respawn or a new world means the held positions are worthless.
+            held.clear();
+            owner = new WeakReference<>(player);
+        }
         if (held.size() >= limit.getInt()) {
-            // Flush by restarting. Disabling releases everything held.
+            // Disabling releases everything held.
             setEnabled(false);
             setEnabled(true);
             return;
@@ -61,13 +70,15 @@ public final class Blink extends Module {
 
     @Override
     protected void onDisable() {
-        // Only replay onto the same connection they were captured from.
-        if (mc.player != null && mc.player.connection == connection) {
-            for (Packet<?> packet : held) {
-                mc.player.connection.send(packet);
+        LocalPlayer player = mc.player;
+        LocalPlayer captured = owner.get();
+        owner = new WeakReference<>(null);
+        boolean replay = player != null && player == captured;
+        Packet<?> packet;
+        while ((packet = held.poll()) != null) {
+            if (replay) {
+                player.connection.send(packet);
             }
         }
-        held.clear();
-        connection = null;
     }
 }
