@@ -7,12 +7,14 @@ import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.ExclusivityGroup;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
+import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockMiner;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
@@ -20,8 +22,11 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Predicate;
 
 /**
  * Digs out a box marked with two corners. Blocks come out from the top down.
@@ -38,8 +43,20 @@ public final class Excavator extends Module {
     private final NumberSetting maxBlocks = new NumberSetting("Max blocks",
         "The most blocks one box may hold.", 4096, 64, 16384, 64)
         .min(1).max(65536);
+    private final EnumSetting<Speed> speed = new EnumSetting<>("Speed",
+        "How the blocks come down.", Speed.LEGIT)
+        .describe(Speed.LEGIT, "One block at a time like a held click.")
+        .describe(Speed.INSTANT, "Fires the break packets for several one hit blocks at once.");
+    private final NumberSetting perTick = new NumberSetting("Blocks per tick",
+        "How many one hit blocks to break each tick in Instant mode.", 4, 1, 16, 1)
+        .min(1).under(speed, Speed.INSTANT);
     private final BoolSetting rotate = new BoolSetting("Rotate",
         "Turn toward each block on the server side.", true);
+
+    public enum Speed { LEGIT, INSTANT }
+
+    // Ticks before a one hit block that did not vanish is sent again.
+    private static final int RETRY_TICKS = 10;
 
     private BlockPos first;
     private BlockPos second;
@@ -47,9 +64,12 @@ public final class Excavator extends Module {
     private BlockPos current;
     private ClientLevel lastLevel;
 
+    // One hit blocks already sent and the tick they may be sent again.
+    private final Map<BlockPos, Integer> attempted = new HashMap<>();
+
     public Excavator() {
         super("Excavator", "Digs out a box. Press the bind at each corner whilst it is on.", Category.WORLD);
-        addSettings(range, maxBlocks, rotate);
+        addSettings(range, maxBlocks, speed, perTick, rotate);
         searchTags("dig", "cuboid", "selection", "quarry");
     }
 
@@ -92,6 +112,7 @@ public final class Excavator extends Module {
         first = null;
         second = null;
         remaining.clear();
+        attempted.clear();
         current = null;
     }
 
@@ -174,15 +195,43 @@ public final class Excavator extends Module {
             clear();
             return;
         }
-        current = next();
+        if (speed.is(Speed.INSTANT) && breakInstantly()) {
+            return;
+        }
+        current = next(pos -> true);
         if (current != null && !BlockMiner.mine(current, rotate.isOn())) {
             remaining.remove(current);
             current = null;
         }
     }
 
+    /**
+     * Sends the break packets for the one hit blocks in reach. True when any
+     * went out. Slower blocks fall through to the held click path.
+     */
+    private boolean breakInstantly() {
+        int now = mc.player.tickCount;
+        attempted.values().removeIf(expiry -> expiry <= now);
+        int sent = 0;
+        while (sent < perTick.getInt()) {
+            BlockPos pos = next(candidate -> BlockUtil.canInstantBreak(candidate)
+                && !attempted.containsKey(candidate));
+            if (pos == null) {
+                break;
+            }
+            BlockMiner.breakInstantly(pos);
+            attempted.put(pos, now + RETRY_TICKS);
+            current = pos;
+            sent++;
+        }
+        if (sent > 0) {
+            mc.player.swing(InteractionHand.MAIN_HAND);
+        }
+        return sent > 0;
+    }
+
     // Blocks that are already gone drop out of the queue on the way past.
-    private BlockPos next() {
+    private BlockPos next(Predicate<BlockPos> wanted) {
         Iterator<BlockPos> it = remaining.iterator();
         while (it.hasNext()) {
             BlockPos pos = it.next();
@@ -190,7 +239,7 @@ public final class Excavator extends Module {
                 it.remove();
                 continue;
             }
-            if (BlockUtil.distanceTo(pos) <= range.getValue()) {
+            if (BlockUtil.distanceTo(pos) <= range.getValue() && wanted.test(pos)) {
                 return pos;
             }
         }

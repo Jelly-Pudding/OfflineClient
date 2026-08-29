@@ -2,7 +2,6 @@ package com.jellypudding.offlineclient.mixin;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.events.ChatSendEvent;
-import com.jellypudding.offlineclient.util.ChatUtil;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.ChatScreen;
@@ -33,12 +32,24 @@ public abstract class ChatScreenMixin extends Screen {
     @Shadow
     protected EditBox input;
 
-    // Vanilla completion only knows server commands.
+    // Which of the shown completions the arrow keys have picked.
+    @Unique
+    private int offlineclient$picked;
+
+    // The text the pick was made for. Typing anything else starts over at the top.
+    @Unique
+    private String offlineclient$pickedFor = "";
+
+    /**
+     * Vanilla completion only knows server commands. Tab takes the picked
+     * completion and the up and down arrows move the pick through the list.
+     */
     @Inject(method = "keyPressed(Lnet/minecraft/client/input/KeyEvent;)Z",
         at = @At("HEAD"),
         cancellable = true)
     private void onTabComplete(KeyEvent event, CallbackInfoReturnable<Boolean> cir) {
-        if (event.key() != GLFW.GLFW_KEY_TAB) {
+        int key = event.key();
+        if (key != GLFW.GLFW_KEY_TAB && key != GLFW.GLFW_KEY_UP && key != GLFW.GLFW_KEY_DOWN) {
             return;
         }
         String text = input.getValue();
@@ -46,28 +57,40 @@ public abstract class ChatScreenMixin extends Screen {
         if (!text.startsWith(prefix) || text.length() <= prefix.length()) {
             return;
         }
-        cir.setReturnValue(true);
-
         List<String> options = OfflineClient.INSTANCE.getCommandManager().complete(text);
         if (options.isEmpty()) {
+            return;
+        }
+        cir.setReturnValue(true);
+        int picked = offlineclient$pickFor(text, options.size());
+
+        if (key == GLFW.GLFW_KEY_UP || key == GLFW.GLFW_KEY_DOWN) {
+            offlineclient$picked = Math.floorMod(picked + (key == GLFW.GLFW_KEY_DOWN ? 1 : -1), options.size());
             return;
         }
 
         int lastSpace = text.lastIndexOf(' ');
         String head = lastSpace == -1 ? prefix : text.substring(0, lastSpace + 1);
-
-        if (options.size() == 1) {
-            input.setValue(head + options.get(0) + " ");
+        String typed = text.substring(head.length());
+        String common = offlineclient$commonPrefix(options);
+        // A pick or a single match completes whole. Otherwise the shared start fills in first.
+        if (options.size() == 1 || picked > 0 || common.length() <= typed.length()) {
+            input.setValue(head + options.get(picked) + " ");
         } else {
-            String common = offlineclient$commonPrefix(options);
-            if (common.length() > text.length() - head.length()) {
-                input.setValue(head + common);
-            }
-            int shown = Math.min(8, options.size());
-            String more = options.size() > shown ? " §8and " + (options.size() - shown) + " more" : "";
-            ChatUtil.message("§7" + String.join(" §8/ §7", options.subList(0, shown)) + more);
+            input.setValue(head + common);
         }
         input.moveCursorToEnd(false);
+    }
+
+    // The pick for this text. Any change to the text puts it back on the first option.
+    @Unique
+    private int offlineclient$pickFor(String text, int count) {
+        if (!text.equals(offlineclient$pickedFor)) {
+            offlineclient$pickedFor = text;
+            offlineclient$picked = 0;
+        }
+        offlineclient$picked = Math.min(offlineclient$picked, count - 1);
+        return offlineclient$picked;
     }
 
     @Inject(method = "extractRenderState(Lnet/minecraft/client/gui/GuiGraphicsExtractor;IIF)V",
@@ -84,11 +107,14 @@ public abstract class ChatScreenMixin extends Screen {
             return;
         }
 
+        int picked = offlineclient$pickFor(text, options.size());
+        // The list scrolls so the pick is always among the rows shown.
         int shown = Math.min(8, options.size());
+        int first = Math.clamp(picked - shown + 1, 0, options.size() - shown);
         String overflow = options.size() > shown
             ? "and " + (options.size() - shown) + " more" : null;
         int boxWidth = overflow == null ? 0 : minecraft.font.width(overflow);
-        for (int i = 0; i < shown; i++) {
+        for (int i = first; i < first + shown; i++) {
             boxWidth = Math.max(boxWidth, minecraft.font.width(options.get(i)));
         }
         int x = 4;
@@ -99,8 +125,9 @@ public abstract class ChatScreenMixin extends Screen {
             x + boxWidth + 4, bottom, 0xE8101018);
         context.guiRenderState.up();
         for (int i = 0; i < shown; i++) {
-            context.text(minecraft.font, options.get(i), x, top + i * 10,
-                i == 0 ? 0xFF00E5FF : 0xFFB0B0C0, false);
+            int index = first + i;
+            context.text(minecraft.font, options.get(index), x, top + i * 10,
+                index == picked ? 0xFF00E5FF : 0xFFB0B0C0, false);
         }
         if (overflow != null) {
             context.text(minecraft.font, overflow, x, top - 12, 0xFF707080, false);

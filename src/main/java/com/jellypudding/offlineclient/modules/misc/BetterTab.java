@@ -28,13 +28,13 @@ public final class BetterTab extends Module {
         "Paint people on your friend list in their own colour.", true);
     private final ColorSetting friendColor = new ColorSetting("Friend color",
         "Colour for friends in the list.", 210, false)
-        .visibleWhen(friends::isOn);
+        .under(friends);
     private final BoolSetting raiseLimit = new BoolSetting("Raise limit",
         "Let the list show more players than vanilla allows.", false);
     private final NumberSetting limit = new NumberSetting("Limit",
         "How many players the list may show.", 200, 80, 500, 10, " players")
         .min(1).max(1000)
-        .visibleWhen(raiseLimit::isOn);
+        .under(raiseLimit);
 
     public BetterTab() {
         super("BetterTab", "Ping numbers and friend colours in the player list.", Category.MISC);

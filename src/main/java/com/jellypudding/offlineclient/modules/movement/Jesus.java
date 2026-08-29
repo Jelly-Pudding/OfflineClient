@@ -37,28 +37,37 @@ public final class Jesus extends Module {
     private static final double PACKET_WOBBLE = 0.05;
 
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
-        "Solid lets you stand on the surface. Dolphin keeps you swimming at the top.",
-        Mode.SOLID);
+        "How the liquid holds you.", Mode.SOLID)
+        .describe(Mode.SOLID, "Lets you stand and walk on the surface.")
+        .describe(Mode.DOLPHIN, "Keeps you swimming along the top instead.");
     private final BoolSetting lava = new BoolSetting("Lava",
         "Also walk on lava.", false)
-        .visibleWhen(() -> mode.is(Mode.SOLID));
+        .under(mode, Mode.SOLID);
+    private final BoolSetting climbOn = new BoolSetting("Climb on",
+        "Liquid level with your feet counts as a solid block so you step or jump onto it instead of wading in. Keeps you out of lava.", true)
+        .under(mode, Mode.SOLID);
+    private final BoolSetting riseToSurface = new BoolSetting("Rise to surface",
+        "Pushes you up out of the liquid when you are in it. Off lets you swim about as normal.", true)
+        .under(mode, Mode.SOLID);
     private final BoolSetting sneakToDip = new BoolSetting("Sneak to dip",
         "Hold sneak to sink into the liquid.", true)
-        .visibleWhen(() -> mode.is(Mode.SOLID));
+        .under(mode, Mode.SOLID);
     private final NumberSetting dipFall = new NumberSetting("Dip fall",
         "Fall further than this and you sink instead of landing.",
         4, 0, 20, 0.5, "m")
-        .visibleWhen(() -> mode.is(Mode.SOLID));
+        .under(mode, Mode.SOLID);
+    private final BoolSetting powderSnow = new BoolSetting("Powder snow",
+        "Also walk on powder snow.", true);
     private final BoolSetting wobblePackets = new BoolSetting("Wobble packets",
         "Makes standing on liquid look like bobbing to the server.",
         true)
-        .visibleWhen(() -> mode.is(Mode.SOLID));
+        .under(mode, Mode.SOLID);
 
     private int ticksSinceExit = 10;
 
     public Jesus() {
         super("Jesus", "Walk on water and lava.", Category.MOVEMENT);
-        addSettings(mode, lava, sneakToDip, dipFall, wobblePackets);
+        addSettings(mode, lava, climbOn, riseToSurface, sneakToDip, dipFall, wobblePackets, powderSnow);
         searchTags("water walking", "waterwalk", "lava walking");
     }
 
@@ -102,13 +111,18 @@ public final class Jesus extends Module {
             && !mc.player.isInLava();
     }
 
+    // Read by PowderSnowBlockMixin.
+    public boolean walksOnPowderSnow() {
+        return isEnabled() && powderSnow.isOn() && active() && !wantsToDip();
+    }
+
     // Called for every block the player collides with.
     public VoxelShape adjustShape(BlockState state, BlockPos pos, VoxelShape original) {
         if (!isEnabled() || mc.player == null) {
             return original;
         }
         FluidState fluid = state.getFluidState();
-        if (fluid.isEmpty() || pos.getY() > mc.player.getY() - 1) {
+        if (fluid.isEmpty() || pos.getY() > highestSolidLevel()) {
             return original;
         }
         if (fluid.is(FluidTags.WATER) && solidWater()) {
@@ -118,6 +132,19 @@ public final class Jesus extends Module {
             return Shapes.block();
         }
         return original;
+    }
+
+    /**
+     * Liquid below the feet is always solid. With Climb on the liquid level
+     * with the feet is solid too whilst the player stands on dry ground so
+     * they walk into a wall of it and step or jump on top.
+     */
+    private double highestSolidLevel() {
+        double feet = mc.player.getY();
+        if (climbOn.isOn() && mc.player.onGround() && !mc.player.isInWater() && !mc.player.isInLava()) {
+            return Math.floor(feet);
+        }
+        return feet - 1;
     }
 
     @Subscribe
@@ -134,6 +161,11 @@ public final class Jesus extends Module {
         Vec3 velocity = mc.player.getDeltaMovement();
 
         if (inSolidLiquid) {
+            // Swimming stays vanilla until the player climbs out on their own.
+            if (!riseToSurface.isOn()) {
+                ticksSinceExit = 10;
+                return;
+            }
             mc.player.setDeltaMovement(velocity.x, RISE_SPEED, velocity.z);
             ticksSinceExit = 0;
             return;

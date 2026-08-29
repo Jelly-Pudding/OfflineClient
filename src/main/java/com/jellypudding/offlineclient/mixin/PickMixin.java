@@ -2,6 +2,7 @@ package com.jellypudding.offlineclient.mixin;
 
 import com.jellypudding.offlineclient.modules.player.LiquidInteract;
 import com.jellypudding.offlineclient.modules.player.NoMiningTrace;
+import com.jellypudding.offlineclient.modules.render.Freecam;
 import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.entity.Entity;
@@ -18,6 +19,18 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(LocalPlayer.class)
 public abstract class PickMixin {
+
+    // Freecam swaps the whole ray for one cast from the camera.
+    @Inject(method = "raycastHitResult(FLnet/minecraft/world/entity/Entity;)Lnet/minecraft/world/phys/HitResult;",
+        at = @At("HEAD"),
+        cancellable = true)
+    private void onPickFromCamera(float partialTicks, Entity camera,
+                                  CallbackInfoReturnable<HitResult> cir) {
+        Freecam freecam = Modules.active(Freecam.class);
+        if (freecam != null && freecam.interactsFromCamera()) {
+            cir.setReturnValue(freecam.pick((LocalPlayer) (Object) this, partialTicks));
+        }
+    }
 
     // Runs once per frame after vanilla has picked.
     @Inject(method = "raycastHitResult(FLnet/minecraft/world/entity/Entity;)Lnet/minecraft/world/phys/HitResult;",

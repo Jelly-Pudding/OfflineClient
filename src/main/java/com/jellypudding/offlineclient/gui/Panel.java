@@ -14,7 +14,7 @@ import java.util.List;
 public final class Panel {
 
     private static final int MIN_VIEW = 16;
-    private static final int MIN_WIDTH = 64;
+    private static final int MIN_WIDTH = 60;
     private static final int MAX_WIDTH = 320;
     private static final int GRAB = 4;
     private static final int MARKER_ZONE = 14;
@@ -344,7 +344,6 @@ public final class Panel {
         return true;
     }
 
-    // Checked before the header.
     private boolean clickEdges(int mx, int my, int button) {
         boolean l = nearLeft(mx, my);
         boolean r = nearRight(mx, my);

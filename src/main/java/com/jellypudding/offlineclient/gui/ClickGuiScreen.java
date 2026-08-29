@@ -12,6 +12,7 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.input.MouseButtonEvent;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -51,6 +52,9 @@ public final class ClickGuiScreen extends GuiScreenBase {
     // Panels with no saved layout. Tiled once the screen size is known.
     private final List<Panel> freshPanels = new ArrayList<>();
 
+    // The saved stacking order. Higher draws on top. Only used whilst the panels are built.
+    private final Map<Panel, Integer> layers = new HashMap<>();
+
     // The results box is centred. Dragging either edge widens it both ways.
     private int searchWidth = SEARCH_WIDTH;
     private boolean resizingSearch;
@@ -74,6 +78,9 @@ public final class ClickGuiScreen extends GuiScreenBase {
             panels.add(panel);
             startX += GuiTheme.PANEL_WIDTH + 8;
         }
+        // The panel that was on top last time comes back on top.
+        panels.sort(Comparator.comparingInt(panel -> layers.getOrDefault(panel, 0)));
+        layers.clear();
     }
 
     private boolean restorePanelState(Panel panel) {
@@ -97,6 +104,9 @@ public final class ClickGuiScreen extends GuiScreenBase {
         if (state.has("scroll")) {
             panel.setScrollOffset(state.get("scroll").getAsInt());
         }
+        if (state.has("layer")) {
+            layers.put(panel, state.get("layer").getAsInt());
+        }
         if (state.has("expanded")) {
             JsonArray expanded = state.getAsJsonArray("expanded");
             for (ModuleRow row : panel.getRows()) {
@@ -118,6 +128,7 @@ public final class ClickGuiScreen extends GuiScreenBase {
             JsonObject state = new JsonObject();
             state.addProperty("x", panel.getX());
             state.addProperty("y", panel.getY());
+            state.addProperty("layer", panels.indexOf(panel));
             state.addProperty("collapsed", panel.isCollapsed());
             state.addProperty("height", panel.getViewHeight());
             state.addProperty("width", panel.getWidth());
@@ -295,12 +306,19 @@ public final class ClickGuiScreen extends GuiScreenBase {
         }
         int offset = resultsScroll.getOffset();
         int bottom = top + target.getHeight();
-        if (bottom - view > offset) {
-            offset = bottom - view;
-        }
-        if (top < offset) {
+        boolean outOfSight = bottom <= offset || top >= offset + view;
+        if (outOfSight) {
             offset = top;
+        } else if (target.getHeight() <= view) {
+            // Only the part that is cut off is scrolled into view.
+            if (bottom > offset + view) {
+                offset = bottom - view;
+            }
+            if (top < offset) {
+                offset = top;
+            }
         }
+        // A row taller than the view that is already partly in sight stays where it is.
         resultsScroll.setOffset(ScrollBar.clamp(offset, resultsContentHeight(), view));
     }
 
@@ -330,7 +348,7 @@ public final class ClickGuiScreen extends GuiScreenBase {
             renderSearchResults(context, font, mouseX, mouseY);
         }
 
-        if (tooltip != null && !tooltip.isEmpty()) {
+        if (tooltip != null && !tooltip.isEmpty() && hoverHelp()) {
             RenderUtil.tooltip(context, font, wrap(tooltip), mouseX, mouseY, width, height);
         }
     }
@@ -542,6 +560,8 @@ public final class ClickGuiScreen extends GuiScreenBase {
         }
         for (ModuleRow row : searchRows) {
             if (row.mouseClicked(mx, my, button)) {
+                // Keys now belong to whatever the row is editing and not to the search box.
+                searchFocused = false;
                 keepVisible(row);
                 return true;
             }

@@ -100,6 +100,15 @@ public final class RotationManager {
             && Math.abs(pitchNow - pitch) <= tolerance;
     }
 
+    // The angle the server last heard. The camera itself whilst nothing is held.
+    public static float serverYaw() {
+        return INSTANCE.serverYaw;
+    }
+
+    public static float serverPitch() {
+        return INSTANCE.serverPitch;
+    }
+
     public static float yawTo(Vec3 point) {
         Vec3 eye = MC.player.getEyePosition();
         return (float) Math.toDegrees(Math.atan2(point.z - eye.z, point.x - eye.x)) - 90f;

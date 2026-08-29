@@ -12,6 +12,7 @@ import com.jellypudding.offlineclient.util.AxisWalker;
 import com.jellypudding.offlineclient.util.BlockMiner;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -43,7 +44,7 @@ public final class Tunneller extends Module {
         "Puts a torch on the floor as you go. Needs torches in your hotbar.", false);
     private final NumberSetting spacing = new NumberSetting("Torch spacing",
         "Blocks between one torch and the next.", 8, 2, 16, 1, " blocks")
-        .min(1).visibleWhen(torches::isOn);
+        .min(1).under(torches);
 
     private final AxisWalker walker = new AxisWalker();
     private final SlotSwap slots = new SlotSwap();
@@ -96,7 +97,7 @@ public final class Tunneller extends Module {
     protected void onDisable() {
         BlockMiner.release();
         slots.restoreIfMine();
-        mc.options.keyUp.setDown(false);
+        mc.options.keyUp.setDown(InputUtil.physicallyHeld(mc.options.keyUp));
         walker.clear();
         current = null;
     }

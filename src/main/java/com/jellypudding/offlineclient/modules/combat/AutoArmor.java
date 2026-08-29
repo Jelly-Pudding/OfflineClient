@@ -13,6 +13,8 @@ import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.enchantment.EnchantmentEffectComponents;
+import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import net.minecraft.world.item.enchantment.Enchantments;
 
 public final class AutoArmor extends Module {
@@ -66,7 +68,6 @@ public final class AutoArmor extends Module {
 
             // The armour slots sit right after the crafting grid.
             int armorNetworkSlot = 5 + slotIndex;
-            // A cursed piece never comes off.
             if (InventoryUtil.swap(InventoryUtil.networkSlot(upgrade), armorNetworkSlot) != Swap.REFUSED) {
                 timer = delay.getInt();
             }
@@ -76,8 +77,13 @@ public final class AutoArmor extends Module {
     }
 
     private int bestUpgrade(EquipmentSlot slot) {
+        ItemStack worn = mc.player.getItemBySlot(slot);
+        // A cursed piece never comes off. Clicking at it every tick gets nowhere.
+        if (EnchantmentHelper.has(worn, EnchantmentEffectComponents.PREVENT_ARMOR_CHANGE)) {
+            return -1;
+        }
         int best = -1;
-        double bestScore = score(mc.player.getItemBySlot(slot), slot);
+        double bestScore = score(worn, slot);
         for (int i = 0; i < 36; i++) {
             double stackScore = score(mc.player.getInventory().getItem(i), slot);
             if (stackScore > bestScore) {

@@ -4,11 +4,29 @@ import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.ClientTickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.setting.BoolSetting;
 
 public final class Sprint extends Module {
 
+    private final BoolSetting anyDirection = new BoolSetting("Any direction",
+        "Also sprints sideways and backwards.", false);
+    private final BoolSetting whilstHungry = new BoolSetting("Whilst hungry",
+        "Sprints even when the hunger bar is too low for it.", false);
+
     public Sprint() {
-        super("Sprint", "Automatically sprints whenever you move forward.", Category.MOVEMENT);
+        super("Sprint", "Automatically sprints whenever you move.", Category.MOVEMENT);
+        addSettings(anyDirection, whilstHungry);
+        searchTags("auto sprint", "omnidirectional");
+    }
+
+    // Read by ClientInputMixin.
+    public boolean sprintsAnyDirection() {
+        return isEnabled() && anyDirection.isOn();
+    }
+
+    // Read by FoodDataMixin.
+    public boolean sprintsHungry() {
+        return isEnabled() && whilstHungry.isOn();
     }
 
     /**

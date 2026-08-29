@@ -19,27 +19,15 @@ import org.lwjgl.glfw.GLFW;
  */
 public final class FreeLook extends Module {
 
-    public enum Perspective {
-        KEEP("Keep"),
-        THIRD_PERSON("Third person"),
-        FRONT("Front");
-
-        private final String name;
-
-        Perspective(String name) {
-            this.name = name;
-        }
-
-        @Override
-        public String toString() {
-            return name;
-        }
-    }
+    public enum Perspective { KEEP, THIRD_PERSON, FRONT }
 
     private final BoolSetting hold = new BoolSetting("Hold",
         "Look around only whilst the bind is held down.", true);
     private final EnumSetting<Perspective> perspective = new EnumSetting<>("Perspective",
-        "Camera to switch to whilst looking around.", Perspective.THIRD_PERSON);
+        "Camera to switch to whilst looking around.", Perspective.THIRD_PERSON)
+        .describe(Perspective.KEEP, "Stays in whatever view you already had.")
+        .describe(Perspective.THIRD_PERSON, "Switches to the view from behind.")
+        .describe(Perspective.FRONT, "Switches to the view from the front.");
     private final NumberSetting sensitivity = new NumberSetting("Sensitivity",
         "Mouse speed whilst looking around.", 1, 0.1, 3, 0.1).min(0.05);
 

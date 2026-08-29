@@ -27,15 +27,15 @@ public final class BowSpam extends Module {
         "Hold fire until an enemy is in view.", false);
     private final NumberSetting targetRange = new NumberSetting("Target range",
         "How far away enemies are considered.", 40, 5, 100, 1, " blocks")
-        .visibleWhen(onlyWithTarget::isOn);
+        .under(onlyWithTarget);
     private final NumberSetting viewAngle = new NumberSetting("View angle",
         "How far off the crosshair a target still counts.", 30, 5, 90, 1, " degrees")
-        .visibleWhen(onlyWithTarget::isOn);
+        .under(onlyWithTarget);
     private final BoolSetting crossbows = new BoolSetting("Crossbows",
         "Fire loaded crossbows as well.", true);
     private final NumberSetting crossbowDelay = new NumberSetting("Crossbow delay",
         "Ticks to wait between crossbow shots.", 10, 0, 20, 1, " ticks")
-        .visibleWhen(crossbows::isOn);
+        .under(crossbows);
 
     private int crossbowTimer;
 

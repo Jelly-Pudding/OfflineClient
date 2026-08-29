@@ -1,6 +1,5 @@
 package com.jellypudding.offlineclient.modules.render;
 
-import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.Render3DEvent;
 import com.jellypudding.offlineclient.module.Category;
@@ -21,52 +20,26 @@ import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.phys.AABB;
 
 import java.util.List;
 
 public final class Esp extends Module {
 
-    public enum Style {
-        BOXES("Boxes"),
-        GLOW("Glow"),
-        BOTH("Both");
+    public enum Style { BOXES, GLOW, BOTH }
 
-        private final String name;
-
-        Style(String name) {
-            this.name = name;
-        }
-
-        @Override
-        public String toString() {
-            return name;
-        }
-    }
-
-    public enum Coloring {
-        DISTANCE("Distance"),
-        HEALTH("Health");
-
-        private final String name;
-
-        Coloring(String name) {
-            this.name = name;
-        }
-
-        @Override
-        public String toString() {
-            return name;
-        }
-    }
-
-    // Blocks at which red and green are both full. Full green comes at twice this.
-    private static final float FADE_MIDPOINT = 20;
+    public enum Coloring { DISTANCE, HEALTH }
 
     // Hue zero is red and hue one hundred and twenty is green.
     private static final float HEALTH_HUE = 120;
 
     private final EnumSetting<Style> style = new EnumSetting<>("Style",
-        "Outline boxes or the vanilla glow effect.", Style.BOXES);
+        "How the entities are marked.", Style.BOXES)
+        .describe(Style.BOXES, "Draws an outline box round each one.")
+        .describe(Style.GLOW, "Uses the vanilla glow effect.")
+        .describe(Style.BOTH, "Boxes and the glow together.");
+    private final BoolSetting tracers = new BoolSetting("Tracers",
+        "Also draws a line from you to each one.", false);
     private final BoolSetting players = new BoolSetting("Players",
         "Highlight other players.", true);
     private final BoolSetting mobs = new BoolSetting("Mobs",
@@ -80,16 +53,18 @@ public final class Esp extends Module {
     private final NumberSetting range = new NumberSetting("Range",
         "Furthest an entity can be and still show.", 128, 16, 256, 8, " blocks").min(1);
     private final EnumSetting<Coloring> coloring = new EnumSetting<>("Color mode",
-        "How the box colour is chosen.", Coloring.DISTANCE);
+        "How the colour is chosen.", Coloring.DISTANCE)
+        .describe(Coloring.DISTANCE, "Red up close fading to green far away.")
+        .describe(Coloring.HEALTH, "Green at full health down to red near death.");
     private final BoolSetting friendColor = new BoolSetting("Friend color",
         "Paint friends blue instead.", true);
     private final BoolSetting fill = new BoolSetting("Fill",
         "Adds a faint tint inside each box.", false)
-        .visibleWhen(() -> style.getValue() != Style.GLOW);
+        .under(style, Style.BOXES, Style.BOTH);
 
     public Esp() {
         super("ESP", "See entities through walls.", Category.RENDER);
-        addSettings(style, players, mobs, items, entities, range, coloring, friendColor, fill);
+        addSettings(style, fill, tracers, players, mobs, items, entities, range, coloring, friendColor);
         searchTags("crystal esp", "wallhack", "boxes");
     }
 
@@ -100,7 +75,8 @@ public final class Esp extends Module {
 
     @Subscribe
     private void onRender3D(Render3DEvent event) {
-        if (!inGame() || style.is(Style.GLOW)) {
+        boolean boxes = !style.is(Style.GLOW);
+        if (!inGame() || (!boxes && !tracers.isOn())) {
             return;
         }
         DrawBatch batch = event.getBatch();
@@ -111,15 +87,20 @@ public final class Esp extends Module {
                 continue;
             }
             int color = colorOf(entity);
-            var box = EntityUtil.lerpedBox(entity, event.getPartialTicks());
+            AABB box = EntityUtil.lerpedBox(entity, event.getPartialTicks());
             // Hitboxes expands the reach of a hit.
             double grow = hitboxes == null ? 0 : hitboxes.expansionFor(entity);
             if (grow > 0) {
                 box = box.inflate(grow);
             }
-            batch.outlineBox(box, color, true);
-            if (fill.isOn()) {
-                batch.solidBox(box, ColorUtil.withAlpha(color, 40), true);
+            if (boxes) {
+                batch.outlineBox(box, color, true);
+                if (fill.isOn()) {
+                    batch.solidBox(box, ColorUtil.withAlpha(color, 40), true);
+                }
+            }
+            if (tracers.isOn()) {
+                batch.tracer(box.getCenter(), color, true);
             }
         }
     }
@@ -153,21 +134,16 @@ public final class Esp extends Module {
     }
 
     private int colorOf(Entity entity) {
-        if (friendColor.isOn() && isFriend(entity)) {
+        if (friendColor.isOn() && EntityUtil.isFriend(entity)) {
             return EntityUtil.FRIEND_COLOR;
         }
         if (coloring.is(Coloring.HEALTH) && entity instanceof LivingEntity living) {
             return healthColor(living);
         }
-        if (entity instanceof Player player) {
-            return distanceColor(player);
+        if (entity instanceof Player) {
+            return EntityUtil.distanceColor(entity);
         }
         return EntityUtil.colorOf(entity);
-    }
-
-    private boolean isFriend(Entity entity) {
-        return entity instanceof Player player
-            && OfflineClient.INSTANCE.getFriendManager().isFriend(player.getGameProfile().name());
     }
 
     private int healthColor(LivingEntity living) {
@@ -177,12 +153,5 @@ public final class Esp extends Module {
         }
         float left = Math.clamp((living.getHealth() + living.getAbsorptionAmount()) / max, 0f, 1f);
         return ColorUtil.hsv(left * HEALTH_HUE, 0.85f, 1f);
-    }
-
-    private int distanceColor(Entity entity) {
-        float f = mc.player.distanceTo(entity) / FADE_MIDPOINT;
-        int r = (int) (Math.clamp(2 - f, 0, 1) * 255);
-        int g = (int) (Math.clamp(f, 0, 1) * 255);
-        return 0xFF000000 | r << 16 | g << 8;
     }
 }

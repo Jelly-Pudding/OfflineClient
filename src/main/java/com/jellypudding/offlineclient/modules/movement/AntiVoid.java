@@ -8,6 +8,7 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
+import com.jellypudding.offlineclient.util.HoverDip;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -16,11 +17,16 @@ import net.minecraft.world.phys.Vec3;
 
 public final class AntiVoid extends Module {
 
-    // Upward push per tick whilst catching.
-    private static final double LIFT = 0.08;
+    public enum Mode { CATCH, PLACE_BLOCK }
 
     // Fall speed that counts as a fall and not a step down.
     private static final double FALLING = -0.2;
+
+    // The lift of a normal jump. Used for climbing out whilst caught.
+    private static final double JUMP = 0.42;
+
+    // Ticks between the dips that keep the flight kick away whilst caught.
+    private static final int DIP_INTERVAL = 60;
 
     /**
      * Ticks of placing in a row before the catch takes over. Open void has
@@ -28,32 +34,19 @@ public final class AntiVoid extends Module {
      */
     private static final int PLACE_LIMIT = 20;
 
-    public enum Mode {
-        CATCH("Catch"),
-        PLACE("Place block");
-
-        private final String label;
-
-        Mode(String label) {
-            this.label = label;
-        }
-
-        @Override
-        public String toString() {
-            return label;
-        }
-    }
-
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
-        "Catch holds you up. Place block puts a block under your feet.", Mode.CATCH);
+        "What to do once the fall is spotted.", Mode.CATCH)
+        .describe(Mode.CATCH, "Holds you still in the air. Press jump to climb whilst caught.")
+        .describe(Mode.PLACE_BLOCK, "Puts a block from your hotbar under your feet.");
     private final NumberSetting depth = new NumberSetting("Depth",
         "Empty blocks below you that count as a void fall.", 12, 3, 40, 1, " blocks")
         .min(2).max(64);
     private final BoolSetting rotate = new BoolSetting("Rotate",
         "Face the block being placed for the server to accept it.", true)
-        .visibleWhen(() -> mode.is(Mode.PLACE));
+        .under(mode, Mode.PLACE_BLOCK);
 
     private final SlotSwap slots = new SlotSwap();
+    private final HoverDip dip = new HoverDip();
     private boolean catching;
     private int placeTries;
 
@@ -76,6 +69,7 @@ public final class AntiVoid extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
+        boolean wasCatching = catching;
         catching = false;
         if (!inGame() || mc.player.isSpectator()) {
             return;
@@ -85,19 +79,33 @@ public final class AntiVoid extends Module {
             placeTries = 0;
             return;
         }
+        // A caught player hangs still so the speed only starts the catch.
         Vec3 motion = mc.player.getDeltaMovement();
-        if (motion.y > FALLING || !voidBelow()) {
+        if ((!wasCatching && motion.y > FALLING) || !voidBelow()) {
             placeTries = 0;
             return;
         }
 
         catching = true;
-        if (mode.is(Mode.PLACE) && placeTries < PLACE_LIMIT && placeUnderfoot()) {
+        if (!wasCatching) {
+            dip.reset();
+        }
+        if (mode.is(Mode.PLACE_BLOCK) && placeTries < PLACE_LIMIT && placeUnderfoot()) {
             placeTries++;
             return;
         }
-        mc.player.setDeltaMovement(motion.x, LIFT, motion.z);
-        mc.player.resetFallDistance();
+        hold(motion);
+    }
+
+    // Hangs in place. A jump lets go and the fall after it is caught again.
+    private void hold(Vec3 motion) {
+        if (mc.player.input.keyPresses.jump()) {
+            mc.player.setDeltaMovement(motion.x, JUMP, motion.z);
+            catching = false;
+            return;
+        }
+        mc.player.setDeltaMovement(motion.x, 0, motion.z);
+        dip.tick(DIP_INTERVAL);
     }
 
     private boolean voidBelow() {
@@ -147,7 +155,6 @@ public final class AntiVoid extends Module {
         }
         Vec3 motion = mc.player.getDeltaMovement();
         mc.player.setDeltaMovement(motion.x, 0, motion.z);
-        mc.player.resetFallDistance();
         return true;
     }
 }

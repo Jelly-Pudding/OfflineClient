@@ -50,7 +50,7 @@ public final class AutoPotion extends Module {
         "Drink again when an effect you already have is about to run out.", true);
     private final NumberSetting topUpAt = new NumberSetting("Top up at",
         "Seconds of effect left before topping up.", 10, 1, 60, 1, " s")
-        .min(1).visibleWhen(topUp::isOn);
+        .min(1).under(topUp);
 
     private boolean drinking;
     private boolean started;

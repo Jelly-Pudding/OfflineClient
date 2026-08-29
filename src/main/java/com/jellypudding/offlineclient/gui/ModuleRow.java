@@ -56,7 +56,6 @@ public final class ModuleRow {
         return GuiTheme.ROW_HEIGHT + SettingWidget.blockHeight(module);
     }
 
-    // Called for every row each frame including the clipped ones.
     public void place(int x, int y, int width, int mouseX, int mouseY, boolean hoverAllowed) {
         this.x = x;
         this.y = y;
@@ -67,7 +66,6 @@ public final class ModuleRow {
             && SettingWidget.isOver(mouseX, mouseY, x, y, width, GuiTheme.ROW_HEIGHT));
     }
 
-    // Draws the row where place last put it.
     public void render(GuiGraphicsExtractor context, int mouseX, int mouseY) {
         Font font = OfflineClient.MC.font;
         int w = width;

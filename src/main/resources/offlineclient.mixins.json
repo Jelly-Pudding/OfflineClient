@@ -49,7 +49,27 @@
     "SoundEngineMixin",
     "SplashManagerMixin",
     "TitleScreenMixin",
-    "WebBlockMixin"
+    "WebBlockMixin",
+    "FoodDataMixin",
+    "SlimeBlockMixin",
+    "SweetBerryBushBlockMixin",
+    "FishingHookMixin",
+    "PowderSnowBlockMixin",
+    "TridentItemMixin",
+    "ClientInputMixin",
+    "ClientClockManagerMixin",
+    "EquipmentLayerRendererMixin",
+    "BeaconRendererMixin",
+    "FallingBlockRendererMixin",
+    "WorldBorderRendererMixin",
+    "ItemInHandRendererMixin",
+    "AbstractContainerScreenMixin",
+    "LivingEntityMixin",
+    "ItemFeatureRendererMixin",
+    "FireworkParticleMixin",
+    "AbstractSignRendererMixin",
+    "BannerRendererMixin",
+    "ItemFrameRendererMixin"
   ],
   "injectors": {
     "defaultRequire": 1

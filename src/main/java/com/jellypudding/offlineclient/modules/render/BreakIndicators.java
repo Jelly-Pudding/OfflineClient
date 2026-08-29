@@ -63,7 +63,7 @@ public final class BreakIndicators extends Module {
         "Fade from green to red as the block gives way.", true);
     private final ColorSetting color = new ColorSetting("Color",
         "Box colour when progress colouring is off.", 20, false)
-        .visibleWhen(() -> !progressColor.isOn());
+        .unless(progressColor);
     private final BoolSetting grow = new BoolSetting("Grow",
         "Start the box small and grow it to full size.", true);
     private final BoolSetting names = new BoolSetting("Names",

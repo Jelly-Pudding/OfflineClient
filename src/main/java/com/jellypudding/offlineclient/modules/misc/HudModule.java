@@ -31,27 +31,27 @@ public final class HudModule extends Module {
     private final BoolSetting watermark = new BoolSetting("Watermark",
         "Client name and version in the top left.", false);
     private final ColorSetting watermarkColor = new ColorSetting("Watermark colour",
-        "Colour of the client name.", 200, true)
-        .visibleWhen(watermark::isOn);
+        "Colour of the client name.", 200, false)
+        .under(watermark);
     private final NumberSetting watermarkScale = new NumberSetting("Watermark scale",
         "Text size of the watermark.", 0.85, 0.5, 2, 0.05, "x")
-        .visibleWhen(watermark::isOn);
+        .under(watermark);
     private final BoolSetting moduleList = new BoolSetting("Module list",
         "Enabled modules listed in the top right.", false);
     private final ColorSetting moduleListColor = new ColorSetting("List colour",
-        "Colour of the module names.", 200, true)
-        .visibleWhen(moduleList::isOn);
-    private final NumberSetting moduleListScale = new NumberSetting("Scale",
+        "Colour of the module names.", 200, false)
+        .under(moduleList);
+    private final NumberSetting moduleListScale = new NumberSetting("List scale",
         "Text size of the module list.", 0.85, 0.5, 2, 0.05, "x")
-        .visibleWhen(moduleList::isOn);
+        .under(moduleList);
     private final BoolSetting info = new BoolSetting("Info bar",
         "Coordinates and direction and speed and FPS in the bottom left.", false);
     private final NumberSetting infoScale = new NumberSetting("Info scale",
         "Text size of the info bar.", 0.85, 0.5, 2, 0.05, "x")
-        .visibleWhen(info::isOn);
+        .under(info);
     private final BoolSetting hideInChat = new BoolSetting("Hide whilst typing",
         "Takes the info bar away whilst the chat box is open.", true)
-        .visibleWhen(info::isOn);
+        .under(info);
 
     public HudModule() {
         super("HUD", "The overlay you see whilst playing.", Category.MISC);

@@ -1,6 +1,5 @@
 package com.jellypudding.offlineclient.modules.combat;
 
-import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.Render3DEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
@@ -132,7 +131,7 @@ public final class HoleFiller extends Module {
             if (player == mc.player || !player.isAlive() || player.isSpectator() || player.isCreative()) {
                 continue;
             }
-            if (OfflineClient.INSTANCE.getFriendManager().isFriend(player.getGameProfile().name())) {
+            if (EntityUtil.isFriend(player)) {
                 continue;
             }
             if (mc.player.distanceTo(player) <= targetRange.getValue()) {

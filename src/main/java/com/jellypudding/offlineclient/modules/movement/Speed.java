@@ -16,7 +16,15 @@ import net.minecraft.world.phys.Vec3;
 
 public final class Speed extends Module {
 
-    public enum Mode { STRAFE, HOP }
+    public enum Mode {
+        STRAFE, BHOP;
+
+        // The automatic label would read Bhop.
+        @Override
+        public String toString() {
+            return this == BHOP ? "BHop" : name();
+        }
+    }
 
     private static final double BASE_SPEED = 0.2806;
 
@@ -26,23 +34,31 @@ public final class Speed extends Module {
 
     private static final double TICKS_PER_SECOND = 20;
 
-    private static final double HOP_SHARE = 0.3;
-    private static final double MAX_HOP_FACTOR = 1.6;
-
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
-        "Strafe pushes you along the ground. Hop bunnyhops you forward instead.", Mode.STRAFE);
+        "How the speed is gained.", Mode.STRAFE)
+        .describe(Mode.STRAFE, "Pushes you along the ground at the set speed.")
+        .describe(Mode.BHOP, "Bunnyhops and multiplies your speed on every landing.");
     private final NumberSetting multiplier = new NumberSetting("Multiplier",
-        "Ground speed multiplier.", 1.6, 1, 10, 0.1, "x").min(0);
-    private final NumberSetting speedCap = new NumberSetting("Speed cap",
-        "Never move faster than this many blocks a second.", 12, 4, 30, 0.5, " bps")
-        .min(1).visibleWhen(() -> mode.is(Mode.STRAFE));
+        "How many times your normal ground speed to move at.", 1.6, 1, 10, 0.1, "x").min(0)
+        .visibleWhen(() -> mode.is(Mode.STRAFE));
+    private final NumberSetting hopBoost = new NumberSetting("Hop boost",
+        "Multiplies your speed on every hop. Much past 1.6 the server pulls you back.",
+        1.3, 1, 2, 0.05, "x").min(1).max(20)
+        .visibleWhen(() -> mode.is(Mode.BHOP));
+    private final BoolSetting capSpeed = new BoolSetting("Speed cap",
+        "Puts a ceiling on how fast you get pushed.", true);
+    private final NumberSetting cap = new NumberSetting("Cap",
+        "Never move faster than this many blocks a second. Holds under a timer as well.",
+        12, 4, 30, 0.5, " bps").min(1)
+        .under(capSpeed);
     private final BoolSetting keepInAir = new BoolSetting("Keep in air",
         "Keeps your speed whilst airborne.", true)
         .visibleWhen(() -> mode.is(Mode.STRAFE));
     private final BoolSetting forceSprint = new BoolSetting("Force sprint",
         "Holds sprint on whilst you move to keep the jump boost.", true);
     private final BoolSetting inLiquids = new BoolSetting("In liquids",
-        "Keep pushing whilst you are in water or lava.", false);
+        "Keep pushing whilst you are in water or lava.", false)
+        .visibleWhen(() -> mode.is(Mode.STRAFE));
     private final BoolSetting whilstSneaking = new BoolSetting("Whilst sneaking",
         "Keeps pushing whilst you sneak and is very easy to spot.", false);
     private final NumberSetting timer = new NumberSetting("Timer",
@@ -50,9 +66,9 @@ public final class Speed extends Module {
 
     public Speed() {
         super("Speed", "Move faster on the ground.", Category.MOVEMENT);
-        addSettings(mode, multiplier, speedCap, keepInAir, forceSprint, inLiquids,
+        addSettings(mode, multiplier, hopBoost, capSpeed, cap, keepInAir, forceSprint, inLiquids,
             whilstSneaking, timer);
-        searchTags("bunnyhop", "strafe");
+        searchTags("bunnyhop", "bhop", "strafe");
     }
 
     @Override
@@ -62,7 +78,8 @@ public final class Speed extends Module {
 
     @Override
     public String getSuffix() {
-        return mode.getValueString() + " " + multiplier.getValueString();
+        NumberSetting amount = mode.is(Mode.BHOP) ? hopBoost : multiplier;
+        return mode.getValueString() + " " + amount.getValueString();
     }
 
     // TickEvent stops at a disconnect. ClientTickEvent still runs in the menus.
@@ -93,7 +110,8 @@ public final class Speed extends Module {
         if (mc.player.isShiftKeyDown() && !whilstSneaking.isOn()) {
             return;
         }
-        if ((mc.player.isInWater() || mc.player.isInLava()) && !inLiquids.isOn()) {
+        boolean inLiquid = mc.player.isInWater() || mc.player.isInLava();
+        if (inLiquid && (mode.is(Mode.BHOP) || !inLiquids.isOn())) {
             return;
         }
         if (mc.player.onClimbable() || mc.player.isFallFlying() || mc.player.getAbilities().flying) {
@@ -103,7 +121,7 @@ public final class Speed extends Module {
             return;
         }
 
-        if (mode.is(Mode.HOP)) {
+        if (mode.is(Mode.BHOP)) {
             hop();
         } else {
             strafe(heading);
@@ -115,11 +133,19 @@ public final class Speed extends Module {
             return;
         }
         double base = baseSpeed();
+        double speed = capped(base * multiplier.getValue());
         // The cap must never drag the player below what they would move at anyway.
-        double speed = Math.max(base,
-            Math.min(base * multiplier.getValue(), speedCap.getValue() / TICKS_PER_SECOND));
+        speed = Math.max(base, speed);
         Vec3 velocity = mc.player.getDeltaMovement();
         mc.player.setDeltaMovement(heading.x * speed, velocity.y, heading.z * speed);
+    }
+
+    // The whole game runs faster under a timer so the cap shrinks with it to stay true in real seconds.
+    private double capped(double perTick) {
+        if (!capSpeed.isOn()) {
+            return perTick;
+        }
+        return Math.min(perTick, cap.getValue() / (TICKS_PER_SECOND * Timer.current()));
     }
 
     // Potion effects scale the walk speed attribute. The ceiling moves with them.
@@ -141,12 +167,17 @@ public final class Speed extends Module {
         if (!mc.player.onGround()) {
             return;
         }
-        double factor = Math.min(1 + (multiplier.getValue() - 1) * HOP_SHARE, MAX_HOP_FACTOR);
         // Whilst the key is held the game jumps on its own. Two jumps in one tick stack the sprint boost twice.
         if (!mc.player.input.keyPresses.jump()) {
             mc.player.jumpFromGround();
         }
         Vec3 velocity = mc.player.getDeltaMovement();
-        mc.player.setDeltaMovement(velocity.x * factor, velocity.y, velocity.z * factor);
+        double current = velocity.horizontalDistance();
+        if (current < 1.0E-6) {
+            return;
+        }
+        double wanted = capped(current * hopBoost.getValue());
+        double scale = wanted / current;
+        mc.player.setDeltaMovement(velocity.x * scale, velocity.y, velocity.z * scale);
     }
 }

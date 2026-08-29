@@ -8,15 +8,20 @@ import com.jellypudding.offlineclient.event.events.PreMotionEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.modules.combat.BowAimbot;
 import com.jellypudding.offlineclient.modules.movement.AntiPush;
+import com.jellypudding.offlineclient.modules.movement.Flight;
 import com.jellypudding.offlineclient.modules.movement.HighJump;
+import com.jellypudding.offlineclient.modules.movement.HoleSnap;
+import com.jellypudding.offlineclient.modules.movement.NoKnockback;
 import com.jellypudding.offlineclient.modules.movement.LongJump;
 import com.jellypudding.offlineclient.modules.movement.NoSlowdown;
 import com.jellypudding.offlineclient.modules.movement.EdgeGuard;
 import com.jellypudding.offlineclient.modules.movement.Step;
 import com.jellypudding.offlineclient.modules.player.AutoEat;
+import com.jellypudding.offlineclient.modules.player.AutoGap;
 import com.jellypudding.offlineclient.modules.player.FastBreak;
 import com.jellypudding.offlineclient.modules.player.Reach;
 import com.jellypudding.offlineclient.modules.render.AntiBlind;
+import com.jellypudding.offlineclient.modules.world.AirPlace;
 import com.jellypudding.offlineclient.util.Modules;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
@@ -27,7 +32,9 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.world.effect.MobEffect;
+import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.entity.player.Abilities;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
@@ -36,6 +43,7 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(LocalPlayer.class)
 public abstract class LocalPlayerMixin extends AbstractClientPlayer {
@@ -92,7 +100,8 @@ public abstract class LocalPlayerMixin extends AbstractClientPlayer {
     }
 
     private static boolean offlineclient$noSlowdown() {
-        if (Modules.enabled(NoSlowdown.class)) {
+        NoSlowdown noSlowdown = Modules.get(NoSlowdown.class);
+        if (noSlowdown != null && noSlowdown.skipsItems()) {
             return true;
         }
         BowAimbot bowAimbot = Modules.get(BowAimbot.class);
@@ -100,7 +109,11 @@ public abstract class LocalPlayerMixin extends AbstractClientPlayer {
             return true;
         }
         AutoEat autoEat = Modules.get(AutoEat.class);
-        return autoEat != null && autoEat.suppressesSlowdown();
+        if (autoEat != null && autoEat.suppressesSlowdown()) {
+            return true;
+        }
+        AutoGap autoGap = Modules.get(AutoGap.class);
+        return autoGap != null && autoGap.suppressesSlowdown();
     }
 
     @Override
@@ -125,11 +138,32 @@ public abstract class LocalPlayerMixin extends AbstractClientPlayer {
 
     @Override
     public void jumpFromGround() {
+        HoleSnap holeSnap = Modules.get(HoleSnap.class);
+        if (holeSnap != null && holeSnap.cancelsJump()) {
+            return;
+        }
         super.jumpFromGround();
         LongJump longJump = Modules.get(LongJump.class);
         if (longJump != null) {
             longJump.onJump();
         }
+        HighJump highJump = Modules.get(HighJump.class);
+        if (highJump != null) {
+            highJump.onJump();
+        }
+    }
+
+    /**
+     * The one place creative flight reads the fly speed for its push up and
+     * down. Flight hands over its own vertical speed there. The fly speed
+     * itself carries the horizontal setting and must not scale the climb.
+     */
+    @WrapOperation(method = "aiStep()V",
+        at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/world/entity/player/Abilities;getFlyingSpeed()F"))
+    private float wrapVerticalFlySpeed(Abilities abilities, Operation<Float> original) {
+        Flight flight = Modules.active(Flight.class);
+        return flight == null ? original.call(abilities) : flight.verticalFlySpeed();
     }
 
     /**
@@ -189,6 +223,49 @@ public abstract class LocalPlayerMixin extends AbstractClientPlayer {
         return speed * fastBreak.speedMultiplier();
     }
 
+    // Honey and soul sand slow through this factor alone.
+    @Override
+    protected float getBlockSpeedFactor() {
+        float factor = super.getBlockSpeedFactor();
+        NoSlowdown noSlowdown = Modules.get(NoSlowdown.class);
+        if (factor >= 1 || noSlowdown == null) {
+            return factor;
+        }
+        boolean skipped = noSlowdown.skipsBlockFriction(level().getBlockState(blockPosition()).getBlock())
+            || noSlowdown.skipsBlockFriction(
+                level().getBlockState(getBlockPosBelowThatAffectsMyMovement()).getBlock());
+        return skipped ? 1 : factor;
+    }
+
+    // The sneak slowdown hangs off this. Crawling keeps its own pace.
+    @Inject(method = "isMovingSlowly()Z", at = @At("HEAD"), cancellable = true)
+    private void onIsMovingSlowly(CallbackInfoReturnable<Boolean> cir) {
+        NoSlowdown noSlowdown = Modules.get(NoSlowdown.class);
+        if (noSlowdown != null && noSlowdown.skipsSneaking()) {
+            cir.setReturnValue(isVisuallyCrawling());
+        }
+    }
+
+    @Override
+    public float getSpeed() {
+        float speed = super.getSpeed();
+        MobEffectInstance slowness = getEffect(MobEffects.SLOWNESS);
+        NoSlowdown noSlowdown = Modules.get(NoSlowdown.class);
+        if (slowness == null || noSlowdown == null) {
+            return speed;
+        }
+        return noSlowdown.withoutSlowness(speed, slowness.getAmplifier());
+    }
+
+    // Vanilla shoves the player out of any block they stand inside.
+    @Inject(method = "moveTowardsClosestSpace(DD)V", at = @At("HEAD"), cancellable = true)
+    private void onMoveTowardsClosestSpace(double x, double z, CallbackInfo ci) {
+        NoKnockback noKnockback = Modules.get(NoKnockback.class);
+        if (noKnockback != null && noKnockback.blocksBlockPush()) {
+            ci.cancel();
+        }
+    }
+
     @Override
     public float maxUpStep() {
         float vanilla = super.maxUpStep();
@@ -207,9 +284,14 @@ public abstract class LocalPlayerMixin extends AbstractClientPlayer {
 
     @Override
     public double blockInteractionRange() {
-        double vanilla = super.blockInteractionRange();
+        double range = super.blockInteractionRange();
         Reach reach = Modules.get(Reach.class);
-        return reach == null ? vanilla : reach.adjustRange(vanilla);
+        if (reach != null) {
+            range = reach.adjustRange(range);
+        }
+        // A block placed in the air has to be reachable to build onto.
+        AirPlace airPlace = Modules.active(AirPlace.class);
+        return airPlace == null ? range : Math.max(range, airPlace.getRange());
     }
 
     @Override

@@ -24,28 +24,16 @@ import net.minecraft.world.item.Items;
  */
 public final class AutoGap extends Module {
 
-    // Ticks to wait after a bite whilst the effects land.
-    private static final int SETTLE_TICKS = 5;
+    // Ticks to wait after a bite whilst the effects land. A laggy server needs a moment.
+    private static final int SETTLE_TICKS = 20;
+
+    // The least ticks between two apples so a slow server never gets a second one for the same reason.
+    private static final int MEAL_GAP = 100;
 
     // Ticks to give the hand before the bite is written off.
     private static final int START_TIMEOUT = 20;
 
-    public enum Choice {
-        PLAIN("Plain first"),
-        ENCHANTED("Enchanted first"),
-        ENCHANTED_ONLY("Enchanted only");
-
-        private final String label;
-
-        Choice(String label) {
-            this.label = label;
-        }
-
-        @Override
-        public String toString() {
-            return label;
-        }
-    }
+    public enum Choice { PLAIN_FIRST, ENCHANTED_FIRST, ENCHANTED_ONLY }
 
     private final NumberSetting health = new NumberSetting("Health",
         "Eat at or below this many hearts. Zero turns it off.", 7, 0, 10, 0.5, " hearts")
@@ -60,22 +48,29 @@ public final class AutoGap extends Module {
         "Start eating this many ticks before an effect runs out.", 60, 0, 200, 10, " ticks")
         .min(0);
     private final EnumSetting<Choice> choice = new EnumSetting<>("Choice",
-        "Which apple to reach for.", Choice.PLAIN);
+        "Which apple to reach for.", Choice.PLAIN_FIRST)
+        .describe(Choice.PLAIN_FIRST, "Eats a plain apple and only takes an enchanted one when there is none.")
+        .describe(Choice.ENCHANTED_FIRST, "Eats an enchanted apple and falls back to a plain one.")
+        .describe(Choice.ENCHANTED_ONLY, "Never eats a plain apple.");
     private final BoolSetting hold = new BoolSetting("Keep held",
         "Stay on the apple slot between bites.", true);
     private final BoolSetting pauseCombat = new BoolSetting("Pause combat",
         "Holds the combat modules back whilst you eat.", true);
+    private final BoolSetting noSlowdown = new BoolSetting("No slowdown",
+        "Keeps your normal speed whilst an apple goes down.", false);
 
     private boolean eating;
     private boolean started;
     private boolean needsEnchanted;
     private int waited;
     private int settle;
+    private int lastMeal = Integer.MIN_VALUE / 2;
     private final InventoryUtil.HotbarLoan loan = new InventoryUtil.HotbarLoan();
 
     public AutoGap() {
         super("AutoGap", "Eats golden apples to hold your buffs and your health up.", Category.PLAYER);
-        addSettings(health, absorption, regeneration, fireResistance, expiry, choice, hold, pauseCombat);
+        addSettings(health, absorption, regeneration, fireResistance, expiry, choice, hold, pauseCombat,
+            noSlowdown);
         searchTags("gapple", "golden apple", "egap");
     }
 
@@ -85,6 +80,15 @@ public final class AutoGap extends Module {
 
     public boolean isBusy() {
         return isEnabled() && eating;
+    }
+
+    // Read by LocalPlayerMixin to keep the apple from slowing you down. Manual bites count too.
+    public boolean suppressesSlowdown() {
+        if (!isEnabled() || !noSlowdown.isOn() || mc.player == null || !mc.player.isUsingItem()) {
+            return false;
+        }
+        ItemStack using = mc.player.getUseItem();
+        return using.is(Items.GOLDEN_APPLE) || using.is(Items.ENCHANTED_GOLDEN_APPLE);
     }
 
     @Override
@@ -128,6 +132,11 @@ public final class AutoGap extends Module {
         needsEnchanted = false;
         if (!wantsApple()) {
             loan.giveBack();
+            return;
+        }
+        // Health that is actually low is never made to wait. A buff top up is.
+        if (!EntityUtil.healthAtOrBelow(health.getValue())
+            && mc.player.tickCount - lastMeal < MEAL_GAP) {
             return;
         }
         int slot = findApple();
@@ -197,6 +206,7 @@ public final class AutoGap extends Module {
         eating = false;
         started = false;
         settle = SETTLE_TICKS;
+        lastMeal = mc.player.tickCount;
         if (!keep) {
             loan.giveBack();
         }
@@ -232,7 +242,7 @@ public final class AutoGap extends Module {
         if (needsEnchanted || choice.is(Choice.ENCHANTED_ONLY)) {
             return enchanted;
         }
-        if (choice.is(Choice.ENCHANTED)) {
+        if (choice.is(Choice.ENCHANTED_FIRST)) {
             return enchanted != -1 ? enchanted : plain;
         }
         return plain != -1 ? plain : enchanted;

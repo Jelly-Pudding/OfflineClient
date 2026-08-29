@@ -11,7 +11,7 @@ import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 
 /**
  * Sends movement packets with the on ground flag cleared. The server charges
- * no walking exhaustion and no fall damage to airborne players.
+ * no walking exhaustion to airborne players.
  */
 public final class AntiHunger extends Module {
 
@@ -28,6 +28,10 @@ public final class AntiHunger extends Module {
         LocalPlayer player = mc.player;
         MultiPlayerGameMode gameMode = mc.gameMode;
         if (player == null || gameMode == null || player.fallDistance > 0.5) {
+            return;
+        }
+        // A glide only ends when the server hears about the landing.
+        if (player.isFallFlying()) {
             return;
         }
         // The server slows mining a lot for airborne players.

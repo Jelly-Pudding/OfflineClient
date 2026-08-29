@@ -31,7 +31,14 @@ public final class RecoveryScreen extends Screen {
     private static final int BACK_WIDTH = 80;
     private static final int BACK_HEIGHT = 20;
 
-    private static final long FLASH_MS = 450;
+    private static final float TITLE_SCALE = 2f;
+    private static final String SUBTITLE = "Puts the client back into a known good state.";
+
+    // Room above the buttons for the title block and below them for the two status lines.
+    private static final int TITLE_ROOM = 70;
+    private static final int FOOT_ROOM = 34;
+
+    private static final long FLASH_MS = 900;
     private static final long STATUS_MS = 4000;
     private static final long ARM_MS = 3000;
 
@@ -71,8 +78,10 @@ public final class RecoveryScreen extends Screen {
         return actions.length * (BUTTON_HEIGHT + GAP) - GAP;
     }
 
+    // The whole column is centred. The title always keeps its room.
     private int topY() {
-        return Math.max(34, height / 2 - listHeight() / 2);
+        int column = TITLE_ROOM + listHeight() + FOOT_ROOM + BACK_HEIGHT;
+        return Math.max(TITLE_ROOM, (height - column) / 2 + TITLE_ROOM);
     }
 
     private int buttonX() {
@@ -80,7 +89,7 @@ public final class RecoveryScreen extends Screen {
     }
 
     private int backY() {
-        return Math.min(height - 30, topY() + listHeight() + 46);
+        return topY() + listHeight() + FOOT_ROOM;
     }
 
     private int backX() {
@@ -98,9 +107,7 @@ public final class RecoveryScreen extends Screen {
         expire(now);
 
         Font font = OfflineClient.MC.font;
-        String title = OfflineClient.NAME + " recovery";
-        RenderUtil.rainbowText(context, font, title,
-            width / 2f - font.width(title) / 2f, topY() - 24, 1f);
+        renderTitle(context, font);
 
         String hovering = null;
         int y = topY();
@@ -138,7 +145,7 @@ public final class RecoveryScreen extends Screen {
             y += BUTTON_HEIGHT + GAP;
         }
 
-        int footY = topY() + listHeight() + 12;
+        int footY = topY() + listHeight() + 8;
         if (hovering != null) {
             context.centeredText(font, hovering, width / 2, footY, GuiTheme.TEXT_DIM);
         }
@@ -155,6 +162,34 @@ public final class RecoveryScreen extends Screen {
         context.guiRenderState.up();
         context.centeredText(font, "back", width / 2, GuiTheme.textY(backY(), BACK_HEIGHT),
             overBack ? GuiTheme.accentText() : GuiTheme.TEXT);
+    }
+
+    // The title in the accent at twice the usual size with a rule and a line of small print.
+    private void renderTitle(GuiGraphicsExtractor context, Font font) {
+        String title = OfflineClient.NAME + " Recovery";
+        int fullWidth = font.width(title);
+        float x = width / 2f - fullWidth * TITLE_SCALE / 2f;
+        int y = topY() - TITLE_ROOM + 12;
+
+        RenderUtil.gradientTextScaled(context, font, title, x, y,
+            GuiTheme.accentText(), GuiTheme.accent(), TITLE_SCALE);
+
+        int ruleY = y + (int) (GuiTheme.TEXT_HEIGHT * TITLE_SCALE) + 7;
+        int half = (int) (fullWidth * TITLE_SCALE / 2);
+        rule(context, width / 2 - half, width / 2 + half, ruleY);
+        context.centeredText(font, SUBTITLE, width / 2, ruleY + 7, GuiTheme.TEXT_DIM);
+    }
+
+    // A hairline that fades out towards both ends.
+    private static void rule(GuiGraphicsExtractor context, int left, int right, int y) {
+        int centre = (left + right) / 2;
+        int half = Math.max(1, centre - left);
+        int accent = GuiTheme.accent();
+        for (int x = left; x < right; x++) {
+            float strength = 1f - Math.abs(x - centre) / (float) half;
+            context.fill(x, y, x + 1, y + 1, ColorUtil.fade(accent, strength));
+        }
+        context.guiRenderState.up();
     }
 
     private void expire(long now) {

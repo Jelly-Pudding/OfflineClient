@@ -27,7 +27,9 @@ public final class AutoTrap extends Module {
     private final NumberSetting placeRange = new NumberSetting("Place range",
         "How far you can reach to place.", 4.5, 1, 6, 0.1);
     private final EnumSetting<TrapMode> mode = new EnumSetting<>("Mode",
-        "Top covers their head and Full seals the sides too.", TrapMode.FULL);
+        "Which blocks go round the target.", TrapMode.FULL)
+        .describe(TrapMode.TOP, "Covers their head only.")
+        .describe(TrapMode.FULL, "Seals their head and the sides at head height.");
     private final NumberSetting delay = new NumberSetting("Delay",
         "Ticks to wait between placing rounds.", 1, 0, 5, 1, " ticks");
     private final NumberSetting perTick = new NumberSetting("Blocks per tick",

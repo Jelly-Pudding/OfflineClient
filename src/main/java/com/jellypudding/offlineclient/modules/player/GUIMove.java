@@ -17,27 +17,15 @@ import org.lwjgl.glfw.GLFW;
 // pointer free for clicking. InvWalk covers walking about.
 public final class GUIMove extends Module {
 
-    public enum Mode {
-        HOLD("Hold a key"),
-        ALWAYS("Always");
-
-        private final String label;
-
-        Mode(String label) {
-            this.label = label;
-        }
-
-        @Override
-        public String toString() {
-            return label;
-        }
-    }
+    public enum Mode { HOLD_KEY, ALWAYS }
 
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
-        "Hold keeps the pointer free for clicking. Always turns the whole time.", Mode.HOLD);
+        "When the view turns.", Mode.HOLD_KEY)
+        .describe(Mode.HOLD_KEY, "Turns only whilst the key is held so the pointer stays free for clicking.")
+        .describe(Mode.ALWAYS, "Turns the whole time the screen is open.");
     private final KeybindSetting hold = new KeybindSetting("Hold key",
         "Keep this key down to look around.", GLFW.GLFW_KEY_LEFT_ALT)
-        .visibleWhen(() -> mode.is(Mode.HOLD));
+        .under(mode, Mode.HOLD_KEY);
 
     private boolean turning;
     private double savedX;
@@ -59,7 +47,7 @@ public final class GUIMove extends Module {
         if (turning) {
             return "turning";
         }
-        if (!mode.is(Mode.HOLD)) {
+        if (!mode.is(Mode.HOLD_KEY)) {
             return "always";
         }
         // Naming the key here is the only hint most people get.

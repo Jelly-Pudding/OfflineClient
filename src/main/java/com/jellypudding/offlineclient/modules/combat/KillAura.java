@@ -33,22 +33,7 @@ import java.util.List;
 
 public final class KillAura extends Module {
 
-    public enum Priority {
-        NEAREST("Nearest"),
-        CLOSEST_ANGLE("Closest angle"),
-        LOWEST_HEALTH("Low health");
-
-        private final String name;
-
-        Priority(String name) {
-            this.name = name;
-        }
-
-        @Override
-        public String toString() {
-            return name;
-        }
-    }
+    public enum Priority { NEAREST, CLOSEST_ANGLE, LOW_HEALTH }
 
     private final NumberSetting range = new NumberSetting("Range",
         "Maximum reach in blocks.", 4.2, 1, 6, 0.05);
@@ -62,7 +47,10 @@ public final class KillAura extends Module {
     private final BoolSetting mobs = new BoolSetting("Mobs",
         "Swing at mobs both hostile and passive.", false);
     private final EnumSetting<Priority> priority = new EnumSetting<>("Priority",
-        "Which one to pick first when several are in range.", Priority.NEAREST);
+        "Which one to pick first when several are in range.", Priority.NEAREST)
+        .describe(Priority.NEAREST, "Attacks the closest target first.")
+        .describe(Priority.CLOSEST_ANGLE, "Attacks whoever is nearest your crosshair first.")
+        .describe(Priority.LOW_HEALTH, "Attacks whoever has the least health left first.");
     private final NumberSetting maxTargets = new NumberSetting("Max targets",
         "How many entities to swing at in one go.", 1, 1, 8, 1);
     private final BoolSetting rotate = new BoolSetting("Rotate",
@@ -70,11 +58,14 @@ public final class KillAura extends Module {
     private final NumberSetting rotateSpeed = new NumberSetting("Rotate speed",
         "How many degrees the look packet may turn in one tick.", 45, 15, 180, 5, " degrees")
         .min(1).max(180)
-        .visibleWhen(rotate::isOn);
+        .under(rotate);
     private final BoolSetting walls = new BoolSetting("Through walls",
         "Also swing at targets you cannot see.", true);
     private final BoolSetting autoWeapon = new BoolSetting("Auto weapon",
-        "Switch to your best sword or axe for the hit and back after.", false);
+        "Switches to your best sword or axe before each hit.", false);
+    private final BoolSetting weaponSwapBack = new BoolSetting("Swap back",
+        "Returns to the slot you had the moment the hit has gone out. Off stays on the weapon.", false)
+        .under(autoWeapon);
     private final BoolSetting breakShields = new BoolSetting("Break shields",
         "Reach for an axe whilst the target holds a raised shield.", true);
     private final BoolSetting weaponOnly = new BoolSetting("Weapon only",
@@ -83,16 +74,18 @@ public final class KillAura extends Module {
         "Only swing whilst you hold the attack key down.", false);
     private final BoolSetting ignoreCreative = new BoolSetting("Ignore creative",
         "Skip players in creative mode.", true)
-        .visibleWhen(players::isOn);
+        .under(players);
     private final BoolSetting ignoreNamed = new BoolSetting("Ignore named",
         "Skip mobs wearing a name tag.", true)
-        .visibleWhen(mobs::isOn);
+        .under(mobs);
     private final BoolSetting ignoreTamed = new BoolSetting("Ignore tamed",
         "Skip tamed animals.", true)
-        .visibleWhen(mobs::isOn);
+        .under(mobs);
     private final BoolSetting ignoreBabies = new BoolSetting("Ignore babies",
         "Skip baby animals.", true)
-        .visibleWhen(mobs::isOn);
+        .under(mobs);
+    private final BoolSetting ignoreCooldown = new BoolSetting("Ignore cooldown",
+        "Swings before the attack cooldown ends. Hits land weaker but far more often.", false);
     private final BoolSetting pauseOnUse = new BoolSetting("Pause on use",
         "Hold off whilst eating or blocking or drawing a bow or mining.", true);
     private final BoolSetting pauseOnContainers = new BoolSetting("Pause in GUIs",
@@ -105,9 +98,9 @@ public final class KillAura extends Module {
         super("KillAura", "Automatically swings at nearby mobs and players.", Category.COMBAT);
         addSettings(range, wallsRange, fov, players, mobs, priority, maxTargets);
         addSettings(timer.settings());
-        addSettings(rotate, rotateSpeed, walls, autoWeapon, breakShields,
+        addSettings(rotate, rotateSpeed, walls, autoWeapon, weaponSwapBack, breakShields,
             weaponOnly, onlyOnClick, ignoreCreative, ignoreNamed, ignoreTamed,
-            ignoreBabies, pauseOnUse, pauseOnContainers);
+            ignoreBabies, ignoreCooldown, pauseOnUse, pauseOnContainers);
         searchTags("aura", "multi aura", "aimbot");
     }
 
@@ -151,7 +144,7 @@ public final class KillAura extends Module {
             return true;
         }
         // Hits before the attack cooldown ends deal reduced damage.
-        if (mc.player.getAttackStrengthScale(0.5f) < 1) {
+        if (!ignoreCooldown.isOn() && mc.player.getAttackStrengthScale(0.5f) < 1) {
             return true;
         }
         return Modules.eating() || crystalsBusy();
@@ -179,7 +172,11 @@ public final class KillAura extends Module {
             mc.gameMode.attack(mc.player, target);
         }
         mc.player.swing(InteractionHand.MAIN_HAND);
-        slots.restore();
+        if (weaponSwapBack.isOn()) {
+            slots.restore();
+        } else {
+            slots.forget();
+        }
         timer.spent();
     }
 
@@ -230,8 +227,7 @@ public final class KillAura extends Module {
                 if (ignoreCreative.isOn() && player.isCreative()) {
                     continue;
                 }
-                if (OfflineClient.INSTANCE.getFriendManager()
-                    .isFriend(player.getGameProfile().name())) {
+                if (EntityUtil.isFriend(player)) {
                     continue;
                 }
             } else if (living instanceof Mob mob) {
@@ -258,7 +254,7 @@ public final class KillAura extends Module {
         Comparator<LivingEntity> order = switch (priority.getValue()) {
             case NEAREST -> Comparator.comparingDouble(t -> EntityUtil.reachDistance(mc.player, t));
             case CLOSEST_ANGLE -> Comparator.comparingDouble(EntityUtil::lookAngleTo);
-            case LOWEST_HEALTH -> Comparator.comparingDouble(LivingEntity::getHealth);
+            case LOW_HEALTH -> Comparator.comparingDouble(LivingEntity::getHealth);
         };
         targets.sort(order);
         int wanted = maxTargets.getInt();

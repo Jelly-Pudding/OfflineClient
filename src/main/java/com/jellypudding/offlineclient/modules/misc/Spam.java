@@ -19,37 +19,41 @@ public final class Spam extends Module {
     // Servers cut a chat line off here.
     private static final int MAX_LENGTH = 256;
 
-    private static final int SLOTS = 6;
+    private static final int SLOTS = 100;
+
+    // Tacked onto the end of a message when the variation calls for it.
+    private static final String TAILS = "!.~";
 
     public enum Order {
-        SEQUENCE("In order"),
-        RANDOM("Random");
-
-        private final String label;
-
-        Order(String label) {
-            this.label = label;
-        }
+        SEQUENCE, RANDOM;
 
         @Override
         public String toString() {
-            return label;
+            return this == SEQUENCE ? "In order" : name();
         }
     }
 
     private final NumberSetting count = new NumberSetting("Messages",
-        "How many lines to rotate through.", 1, 1, SLOTS, 1);
+        "How many lines to rotate through.", 1, 1, 30, 1).max(SLOTS);
     private final TextSetting[] lines = new TextSetting[SLOTS];
     private final EnumSetting<Order> order = new EnumSetting<>("Order",
         "How the lines are picked.", Order.SEQUENCE)
-        .visibleWhen(() -> count.getInt() > 1);
+        .describe(Order.SEQUENCE, "Sends the lines top to bottom and starts over.")
+        .describe(Order.RANDOM, "Picks a random line each time.")
+        .under(count, () -> count.getInt() > 1);
+    private final BoolSetting skipDuplicates = new BoolSetting("Skip repeats",
+        "Never sends the same line twice in a row.", true)
+        .under(order, () -> count.getInt() > 1 && order.is(Order.RANDOM));
     private final NumberSetting delay = new NumberSetting("Delay",
         "Seconds between messages.", 5, 0.1, 60, 0.1, "s").min(0.1).max(600);
     private final BoolSetting randomise = new BoolSetting("Randomise",
         "Varies the delay so it looks less robotic.", false);
-    private final BoolSetting skipDuplicates = new BoolSetting("Skip repeats",
-        "Never sends the same line twice in a row.", true)
-        .visibleWhen(() -> count.getInt() > 1 && order.is(Order.RANDOM));
+    private final BoolSetting vary = new BoolSetting("Vary text",
+        "Makes small random changes to each message so repeats get past a spam filter.", false);
+    private final NumberSetting variation = new NumberSetting("Variation",
+        "How many changes each message gets. A letter changes case or doubles or the line gains a tail.",
+        1, 1, 5, 1).max(20)
+        .under(vary);
 
     private int timer;
     private int next;
@@ -63,10 +67,10 @@ public final class Spam extends Module {
             lines[i] = new TextSetting("Line " + (i + 1),
                 "The text to send. Click to type it.",
                 i == 0 ? "minecraftoffline.net is OK I guess" : "")
-                .visibleWhen(() -> slot < count.getInt());
+                .under(count, () -> slot < count.getInt());
             addSettings(lines[i]);
         }
-        addSettings(order, delay, randomise, skipDuplicates);
+        addSettings(order, skipDuplicates, delay, randomise, vary, variation);
         searchTags("auto message", "advert", "chat spam");
     }
 
@@ -98,19 +102,24 @@ public final class Spam extends Module {
             return;
         }
         lastSent = text;
+        if (text.startsWith("/")) {
+            mc.getConnection().sendCommand(text.substring(1));
+            return;
+        }
+        if (vary.isOn()) {
+            for (int i = 0; i < variation.getInt(); i++) {
+                text = vary(text);
+            }
+        }
         if (text.length() > MAX_LENGTH) {
             text = text.substring(0, MAX_LENGTH);
         }
-        if (text.startsWith("/")) {
-            mc.getConnection().sendCommand(text.substring(1));
-        } else {
-            mc.getConnection().sendChat(text);
-        }
+        mc.getConnection().sendChat(text);
     }
 
     // Null when every slot in use is blank.
     private String pick() {
-        List<String> filled = new ArrayList<>(SLOTS);
+        List<String> filled = new ArrayList<>(count.getInt());
         for (int i = 0; i < count.getInt(); i++) {
             String value = lines[i].getValue().trim();
             if (!value.isEmpty()) {
@@ -140,5 +149,38 @@ public final class Spam extends Module {
             seconds *= ThreadLocalRandom.current().nextDouble(0.5, 1.5);
         }
         return Math.max(1, (int) Math.round(seconds * 20));
+    }
+
+    /**
+     * One small change that keeps the message readable. A letter changes
+     * case or doubles up or the line gains a tail. Text with no letters can
+     * only gain a tail.
+     */
+    private static String vary(String text) {
+        ThreadLocalRandom random = ThreadLocalRandom.current();
+        List<Integer> letters = new ArrayList<>();
+        for (int i = 0; i < text.length(); i++) {
+            if (Character.isLetter(text.charAt(i))) {
+                letters.add(i);
+            }
+        }
+        int kind = letters.isEmpty() ? random.nextInt(2) : random.nextInt(4);
+        switch (kind) {
+            case 0 -> {
+                return text + " " + random.nextInt(10, 100);
+            }
+            case 1 -> {
+                return text + TAILS.charAt(random.nextInt(TAILS.length()));
+            }
+            default -> {
+                int at = letters.get(random.nextInt(letters.size()));
+                char letter = text.charAt(at);
+                String replacement = kind == 2
+                    ? String.valueOf(Character.isUpperCase(letter)
+                        ? Character.toLowerCase(letter) : Character.toUpperCase(letter))
+                    : String.valueOf(letter) + letter;
+                return text.substring(0, at) + replacement + text.substring(at + 1);
+            }
+        }
     }
 }

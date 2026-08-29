@@ -81,6 +81,11 @@ public abstract class GuiScreenBase extends Screen implements SettingWidget.Host
         OfflineClient.MC.gui.setScreen(window ? new WindowGuiScreen() : new ClickGuiScreen());
     }
 
+    // The hover text can be switched off in the ClickGUI module.
+    protected static boolean hoverHelp() {
+        return OfflineClient.INSTANCE.getModuleManager().get(ClickGuiModule.class).showsHoverHelp();
+    }
+
     protected final String search() {
         return searchBox.get();
     }
@@ -204,7 +209,6 @@ public abstract class GuiScreenBase extends Screen implements SettingWidget.Host
         editField.clear();
     }
 
-    // Called at the top of every click.
     protected final void beginClick() {
         commitEditing();
         bindingTarget = null;

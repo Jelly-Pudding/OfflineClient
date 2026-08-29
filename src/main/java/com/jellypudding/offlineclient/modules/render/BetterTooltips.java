@@ -42,7 +42,7 @@ public final class BetterTooltips extends Module {
         "Preview filled maps.", true);
     private final NumberSetting mapSize = new NumberSetting("Map size",
         "How big the map preview is drawn.", 128, 64, 256, 8, " px").min(16).max(512)
-        .visibleWhen(maps::isOn);
+        .under(maps);
     private final BoolSetting requireShift = new BoolSetting("Hold shift",
         "Only show the preview whilst the sneak key is down.", false);
 

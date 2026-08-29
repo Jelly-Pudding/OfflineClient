@@ -1,6 +1,5 @@
 package com.jellypudding.offlineclient.modules.combat;
 
-import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
@@ -59,7 +58,7 @@ public final class TriggerBot extends Module {
             if (!players.isOn()) {
                 return;
             }
-            if (OfflineClient.INSTANCE.getFriendManager().isFriend(player.getGameProfile().name())) {
+            if (EntityUtil.isFriend(player)) {
                 return;
             }
         } else if (!mobs.isOn()) {

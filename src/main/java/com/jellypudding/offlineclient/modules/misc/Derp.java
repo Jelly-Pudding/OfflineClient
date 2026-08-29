@@ -20,7 +20,11 @@ public final class Derp extends Module {
     public enum Mode { SPIN, SHAKE, HEADBANG, RANDOM }
 
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
-        "How your head moves to everyone else.", Mode.SPIN);
+        "How your head moves to everyone else.", Mode.SPIN)
+        .describe(Mode.SPIN, "Turns your head round and round.")
+        .describe(Mode.SHAKE, "Shakes your head from side to side.")
+        .describe(Mode.HEADBANG, "Nods your head up and down.")
+        .describe(Mode.RANDOM, "Points your head somewhere new every tick.");
     private final NumberSetting speed = new NumberSetting("Speed",
         "How fast the head moves.", 30, 1, 90, 1, " degrees").min(1).max(180);
     private final BoolSetting pauseInCombat = new BoolSetting("Pause in combat",

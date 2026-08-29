@@ -27,11 +27,12 @@ import net.minecraft.world.phys.Vec3;
 public final class AirPlace extends Module {
 
     private final NumberSetting range = new NumberSetting("Range",
-        "How far away the block can be placed.", 4.5, 1, 6, 0.1).min(0.5);
+        "How far away blocks can be placed. Your normal block reach grows to match whilst on.",
+        4.5, 1, 6, 0.1).min(0.5);
     private final BoolSetting guide = new BoolSetting("Guide",
         "Outline the spot the block will land in.", true);
     private final ColorSetting color = new ColorSetting("Guide color",
-        "Colour of the outline.", 0, false).visibleWhen(guide::isOn);
+        "Colour of the outline.", 0, false).under(guide);
 
     private BlockPos target;
 
@@ -39,6 +40,11 @@ public final class AirPlace extends Module {
         super("AirPlace", "Place blocks in mid air where your crosshair points.", Category.PLAYER);
         addSettings(range, guide, color);
         searchTags("air place", "midair", "build");
+    }
+
+    // Read by LocalPlayerMixin so blocks placed in the air can be built onto from the same distance.
+    public double getRange() {
+        return range.getValue();
     }
 
     @Override

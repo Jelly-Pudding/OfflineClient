@@ -25,7 +25,7 @@ public final class ChestSwap extends Module {
         "Reach for the strongest chestplate instead of the first one found.", true);
     private final BoolSetting countProtection = new BoolSetting("Count Protection",
         "A well enchanted piece can beat a higher tier plain one.", true)
-        .visibleWhen(best::isOn);
+        .under(best);
 
     public ChestSwap() {
         super("ChestSwap", "Swaps an elytra and a chestplate on one key.",

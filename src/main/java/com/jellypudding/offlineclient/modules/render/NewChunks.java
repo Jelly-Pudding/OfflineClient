@@ -55,23 +55,26 @@ public final class NewChunks extends Module {
         "Colour of the fresh chunks.", 0, false);
     private final ColorSetting oldColor = new ColorSetting("Old color",
         "Colour of the chunks that were already on disk.", 220, false)
-        .visibleWhen(showOld::isOn);
+        .under(showOld);
     private final ColorSetting unjudgedColor = new ColorSetting("Unjudged color",
         "Colour of the chunks with no verdict.", 60, false)
-        .visibleWhen(showUnjudged::isOn);
+        .under(showUnjudged);
     private final BoolSetting fill = new BoolSetting("Fill",
         "Adds a faint tint inside each square.", true);
     private final BoolSetting followHeight = new BoolSetting("Follow height",
         "Draws the squares at your own height instead of a fixed one.", true);
     private final NumberSetting drawHeight = new NumberSetting("Height",
         "The height the squares sit at.", 64, -64, 320, 1)
-        .min(-2048).max(2048).visibleWhen(() -> !followHeight.isOn());
+        .min(-2048).max(2048).unless(followHeight);
     private final NumberSetting distance = new NumberSetting("Distance",
         "How far away a chunk may be and still be drawn.", 16, 4, 64, 1, " chunks")
         .min(1).max(256);
     private final NumberSetting settle = new NumberSetting("Settle time",
         "How long after a chunk lands a liquid flow still counts as fresh.", 60, 5, 300, 5, "s")
         .min(1).max(3600);
+    private final NumberSetting minSpread = new NumberSetting("Min spread",
+        "How far a flow must have run from its source before it proves a chunk old. Raise it where chunks are ticked before they are sent such as single player.",
+        1, 1, 7, 1, " blocks").min(1).max(7);
     private final BoolSetting showReasons = new BoolSetting("Show reasons",
         "Marks the liquid block that decided each verdict.", false);
     private final BoolSetting notice = new BoolSetting("Notice",
@@ -107,7 +110,7 @@ public final class NewChunks extends Module {
         super("NewChunks", "Marks fresh and old chunks that load whilst this is on.",
             Category.RENDER);
         addSettings(showOld, showUnjudged, newColor, oldColor, unjudgedColor, fill,
-            followHeight, drawHeight, distance, settle, showReasons, notice);
+            followHeight, drawHeight, distance, settle, minSpread, showReasons, notice);
         searchTags("new chunks", "fresh terrain", "exploit");
     }
 
@@ -122,7 +125,8 @@ public final class NewChunks extends Module {
         reset();
         if (notice.isOn()) {
             ChatUtil.message("§bNewChunks §7only judges chunks that load whilst it is on. "
-                + "Switch it on before you explore.");
+                + "Switch it on before you explore. A server that ticks a chunk before sending it "
+                + "can make a fresh one read as old. Raise Min spread if that happens.");
         }
     }
 
@@ -181,7 +185,7 @@ public final class NewChunks extends Module {
         if (chunk == null) {
             return;
         }
-        BlockPos found = findFlowingLiquid(chunk);
+        BlockPos found = findFlowingLiquid(chunk, minSpread.getInt());
         if (found != null) {
             oldChunks.add(key);
             reasons.put(key, found);
@@ -239,7 +243,7 @@ public final class NewChunks extends Module {
      * prefilter. It reads the palette which can still list a state the section
      * stopped holding. Every hit is confirmed against the real blocks.
      */
-    private static BlockPos findFlowingLiquid(LevelChunk chunk) {
+    private static BlockPos findFlowingLiquid(LevelChunk chunk, int spread) {
         LevelChunkSection[] sections = chunk.getSections();
         int minY = chunk.getMinY();
         int minX = chunk.getPos().getMinBlockX();
@@ -253,7 +257,7 @@ public final class NewChunks extends Module {
             for (int y = 0; y < 16; y++) {
                 for (int x = 0; x < 16; x++) {
                     for (int z = 0; z < 16; z++) {
-                        if (isFlowing(section.getBlockState(x, y, z))) {
+                        if (spreadOf(section.getBlockState(x, y, z)) >= spread) {
                             return new BlockPos(minX + x, minY + i * 16 + y, minZ + z);
                         }
                     }
@@ -266,6 +270,18 @@ public final class NewChunks extends Module {
     private static boolean isFlowing(BlockState state) {
         FluidState fluid = state.getFluidState();
         return !fluid.isEmpty() && !fluid.isSource();
+    }
+
+    /**
+     * How many blocks a flow has run from its source. A source is zero and
+     * each block of flow drops the level by one. Falling liquid reads as one.
+     */
+    private static int spreadOf(BlockState state) {
+        FluidState fluid = state.getFluidState();
+        if (fluid.isEmpty() || fluid.isSource()) {
+            return 0;
+        }
+        return Math.max(1, 8 - fluid.getAmount());
     }
 
     @Subscribe

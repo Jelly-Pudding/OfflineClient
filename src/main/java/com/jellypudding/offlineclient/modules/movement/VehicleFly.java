@@ -25,9 +25,9 @@ public final class VehicleFly extends Module {
 
     public enum Mode { CONTROL, GLIDE }
 
-    // Blocks per tick at a speed of one. Matches the Flight module.
-    private static final double HORIZONTAL_UNIT = 0.6;
-    private static final double VERTICAL_UNIT = 0.42;
+    // Blocks per tick at a speed of one. The same pace as the Flight module.
+    private static final double HORIZONTAL_UNIT = 0.5;
+    private static final double VERTICAL_UNIT = 0.225;
 
     // A drop longer than this starts to hurt.
     private static final double SAFE_DROP = 3;
@@ -36,8 +36,9 @@ public final class VehicleFly extends Module {
     private static final double RESYNC_DISTANCE = 4;
 
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
-        "Control steers the vehicle from your keys. Glide only holds it up and leaves the steering alone.",
-        Mode.CONTROL);
+        "How much the module takes over.", Mode.CONTROL)
+        .describe(Mode.CONTROL, "Steers the vehicle from your keys.")
+        .describe(Mode.GLIDE, "Only holds the vehicle up and leaves the steering alone.");
     private final NumberSetting speed = new NumberSetting("Horizontal speed",
         "How hard your keys push the vehicle. 1 matches creative flight.", 1, 0.1, 5, 0.1, "x")
         .min(0.1).max(20).visibleWhen(() -> mode.is(Mode.CONTROL));
@@ -64,7 +65,7 @@ public final class VehicleFly extends Module {
 
     public VehicleFly() {
         super("VehicleFly", "Flies the boat or mount you are riding.", Category.MOVEMENT);
-        addSettings(mode, verticalSpeed, speed, boats, mounts, others, faceView, dismountSafety);
+        addSettings(mode, speed, faceView, verticalSpeed, boats, mounts, others, dismountSafety);
         searchTags("boat fly", "vehicle fly", "horse fly", "entity control", "entity speed",
             "minecart", "strider", "camel", "pig");
     }

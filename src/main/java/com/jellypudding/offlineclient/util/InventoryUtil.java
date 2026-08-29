@@ -24,6 +24,9 @@ public final class InventoryUtil {
 
     public static final int HOTBAR_SIZE = 9;
 
+    // Every slot of the survival inventory.
+    public static final int WHOLE_INVENTORY = 36;
+
     public static final int OFFHAND_SLOT = 45;
 
     private InventoryUtil() {
@@ -142,6 +145,9 @@ public final class InventoryUtil {
         private int lentFrom = -1;
         private int lentTo = -1;
 
+        // The hotbar slot the loan last selected.
+        private int chosen = -1;
+
         /**
          * Selects the given inventory index and borrows it into the hotbar when
          * it is not already there. False when the swap could not be made.
@@ -174,21 +180,33 @@ public final class InventoryUtil {
             if (previousSlot == -1) {
                 previousSlot = selectedSlot();
             }
+            chosen = slot;
             MC.player.getInventory().setSelectedSlot(slot);
             return true;
         }
 
+        // True whilst the player is still on the slot the loan picked.
+        public boolean stillMine() {
+            return chosen != -1 && MC.player != null && selectedSlot() == chosen;
+        }
+
         // Returns a borrowed stack and goes back to the slot the player had held.
         public void giveBack() {
+            giveBack(true);
+        }
+
+        // A borrowed stack always goes home. The old slot only comes back when asked.
+        public void giveBack(boolean reselect) {
             if (MC.player == null) {
                 forget();
                 return;
             }
             returnLoan();
-            if (previousSlot != -1) {
+            if (reselect && previousSlot != -1) {
                 MC.player.getInventory().setSelectedSlot(previousSlot);
-                previousSlot = -1;
             }
+            previousSlot = -1;
+            chosen = -1;
         }
 
         // False when the swap could not be sent. The loan then stays open.
@@ -215,6 +233,7 @@ public final class InventoryUtil {
             previousSlot = -1;
             lentFrom = -1;
             lentTo = -1;
+            chosen = -1;
         }
     }
 

@@ -1,14 +1,13 @@
 package com.jellypudding.offlineclient.modules.combat;
 
-import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.EntityHitResult;
 
 public final class AutoClicker extends Module {
@@ -38,8 +37,7 @@ public final class AutoClicker extends Module {
             && hit.getEntity() instanceof LivingEntity living && living.isAlive()) {
             target = living;
         }
-        if (target instanceof Player player && OfflineClient.INSTANCE.getFriendManager()
-            .isFriend(player.getGameProfile().name())) {
+        if (EntityUtil.isFriend(target)) {
             target = null;
         }
 

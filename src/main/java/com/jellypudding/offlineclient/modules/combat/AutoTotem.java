@@ -29,7 +29,7 @@ public final class AutoTotem extends Module {
     private static final double ELYTRA_TRIGGER_SPEED = 0.5;
 
     private final NumberSetting health = new NumberSetting("Health",
-        "Equip a totem at or below this many hearts with zero meaning always.",
+        "Puts a totem in your offhand once you drop to this many hearts. Zero keeps one there at all times.",
         0, 0, 10, 0.5, " hearts");
     private final NumberSetting delay = new NumberSetting("Delay",
         "Ticks to wait before equipping the next totem.", 0, 0, 20, 1, " ticks");
@@ -37,7 +37,7 @@ public final class AutoTotem extends Module {
         "Equip early when a nearby crystal or bed or anchor could take you out.", true);
     private final NumberSetting blastRange = new NumberSetting("Blast range",
         "How far away a charge is counted as a threat.", 8, 2, 16, 0.5, " blocks")
-        .visibleWhen(explosions::isOn);
+        .under(explosions);
     private final BoolSetting fall = new BoolSetting("Fall",
         "Equip early when the fall you are in would kill you.", true);
     private final BoolSetting elytra = new BoolSetting("Elytra",

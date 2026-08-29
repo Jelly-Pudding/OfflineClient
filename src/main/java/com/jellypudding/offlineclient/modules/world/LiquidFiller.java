@@ -41,7 +41,11 @@ public final class LiquidFiller extends Module {
         List.of(Blocks.COBBLESTONE, Blocks.COBBLED_DEEPSLATE, Blocks.DIRT, Blocks.STONE,
             Blocks.DEEPSLATE, Blocks.NETHERRACK, Blocks.ANDESITE, Blocks.DIORITE, Blocks.GRANITE));
     private final EnumSetting<Order> order = new EnumSetting<>("Order",
-        "Which block gets filled first.", Order.CLOSEST);
+        "Which block gets filled first.", Order.CLOSEST)
+        .describe(Order.CLOSEST, "The nearest liquid first.")
+        .describe(Order.FURTHEST, "The furthest liquid first.")
+        .describe(Order.TOP_DOWN, "The top layer first and down from there.")
+        .describe(Order.BOTTOM_UP, "The bottom layer first and up from there.");
     private final NumberSetting perTick = new NumberSetting("Blocks per tick",
         "How many blocks to place in one round.", 1, 1, 8, 1).min(1);
     private final NumberSetting delay = new NumberSetting("Delay",

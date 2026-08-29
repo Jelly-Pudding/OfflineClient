@@ -6,7 +6,9 @@ import com.jellypudding.offlineclient.event.events.KeyPressEvent;
 import com.jellypudding.offlineclient.modules.combat.AnchorAura;
 import com.jellypudding.offlineclient.modules.combat.AntiAnchor;
 import com.jellypudding.offlineclient.modules.combat.ArrowDodge;
+import com.jellypudding.offlineclient.modules.combat.AntiAnvil;
 import com.jellypudding.offlineclient.modules.combat.AutoAnvil;
+import com.jellypudding.offlineclient.modules.combat.SelfAnvil;
 import com.jellypudding.offlineclient.modules.combat.Quiver;
 import com.jellypudding.offlineclient.modules.combat.AntiBed;
 import com.jellypudding.offlineclient.modules.combat.AttributeSwap;
@@ -34,6 +36,7 @@ import com.jellypudding.offlineclient.modules.combat.TriggerBot;
 import com.jellypudding.offlineclient.modules.misc.AntiAfk;
 import com.jellypudding.offlineclient.modules.misc.AntiPacketKick;
 import com.jellypudding.offlineclient.modules.misc.AntiSpam;
+import com.jellypudding.offlineclient.modules.misc.BetterChat;
 import com.jellypudding.offlineclient.modules.misc.PacketCanceller;
 import com.jellypudding.offlineclient.modules.misc.BetterTab;
 import com.jellypudding.offlineclient.modules.misc.AutoLog;
@@ -47,10 +50,18 @@ import com.jellypudding.offlineclient.modules.misc.Notifier;
 import com.jellypudding.offlineclient.modules.misc.Panic;
 import com.jellypudding.offlineclient.modules.misc.ServerSpoof;
 import com.jellypudding.offlineclient.modules.misc.SoundBlocker;
+import com.jellypudding.offlineclient.modules.misc.BookBot;
+import com.jellypudding.offlineclient.modules.misc.Notebot;
 import com.jellypudding.offlineclient.modules.misc.StashFinder;
 import com.jellypudding.offlineclient.modules.misc.Spam;
 import com.jellypudding.offlineclient.modules.misc.Timer;
+import com.jellypudding.offlineclient.modules.movement.AirJump;
+import com.jellypudding.offlineclient.modules.player.AntiCactus;
 import com.jellypudding.offlineclient.modules.movement.AntiVoid;
+import com.jellypudding.offlineclient.modules.movement.ClickTp;
+import com.jellypudding.offlineclient.modules.movement.HoleSnap;
+import com.jellypudding.offlineclient.modules.movement.NoClip;
+import com.jellypudding.offlineclient.modules.movement.TridentBoost;
 import com.jellypudding.offlineclient.modules.movement.AutoJump;
 import com.jellypudding.offlineclient.modules.movement.VehicleFly;
 import com.jellypudding.offlineclient.modules.movement.ElytraBoost;
@@ -100,6 +111,7 @@ import com.jellypudding.offlineclient.modules.player.GhostHand;
 import com.jellypudding.offlineclient.modules.player.InvWalk;
 import com.jellypudding.offlineclient.modules.player.MiddleClickExtra;
 import com.jellypudding.offlineclient.modules.player.NoRotate;
+import com.jellypudding.offlineclient.modules.player.Rotation;
 import com.jellypudding.offlineclient.modules.player.Reach;
 import com.jellypudding.offlineclient.modules.player.FastBreak;
 import com.jellypudding.offlineclient.modules.player.FastPlace;
@@ -107,8 +119,13 @@ import com.jellypudding.offlineclient.modules.player.FastUse;
 import com.jellypudding.offlineclient.modules.render.AntiBlind;
 import com.jellypudding.offlineclient.modules.render.Breadcrumbs;
 import com.jellypudding.offlineclient.modules.render.CameraTweaks;
+import com.jellypudding.offlineclient.modules.render.HandView;
+import com.jellypudding.offlineclient.modules.render.ItemHighlight;
+import com.jellypudding.offlineclient.modules.render.NoBackground;
+import com.jellypudding.offlineclient.modules.render.NoShieldOverlay;
+import com.jellypudding.offlineclient.modules.render.OpenWaterEsp;
 import com.jellypudding.offlineclient.modules.render.ChestEsp;
-import com.jellypudding.offlineclient.modules.render.ClearSkies;
+import com.jellypudding.offlineclient.modules.render.Weather;
 import com.jellypudding.offlineclient.modules.render.ClearView;
 import com.jellypudding.offlineclient.modules.render.Esp;
 import com.jellypudding.offlineclient.modules.render.Freecam;
@@ -137,11 +154,22 @@ import com.jellypudding.offlineclient.modules.render.Search;
 import com.jellypudding.offlineclient.modules.render.Tracers;
 import com.jellypudding.offlineclient.modules.render.Trajectories;
 import com.jellypudding.offlineclient.modules.render.XRay;
+import com.jellypudding.offlineclient.modules.render.NoRender;
+import com.jellypudding.offlineclient.modules.render.TimeChanger;
 import com.jellypudding.offlineclient.modules.render.Zoom;
 import com.jellypudding.offlineclient.modules.world.AirPlace;
 import com.jellypudding.offlineclient.modules.world.AutoFarm;
 import com.jellypudding.offlineclient.modules.world.AutoSign;
+import com.jellypudding.offlineclient.modules.world.AutoBreed;
+import com.jellypudding.offlineclient.modules.world.AutoBrewer;
+import com.jellypudding.offlineclient.modules.world.AutoLibrarian;
+import com.jellypudding.offlineclient.modules.world.AutoNametag;
+import com.jellypudding.offlineclient.modules.world.AutoShearer;
+import com.jellypudding.offlineclient.modules.world.AutoSmelter;
+import com.jellypudding.offlineclient.modules.world.BonemealAura;
 import com.jellypudding.offlineclient.modules.world.BuildHeight;
+import com.jellypudding.offlineclient.modules.world.EChestFarmer;
+import com.jellypudding.offlineclient.modules.world.Tillaura;
 import com.jellypudding.offlineclient.modules.world.Excavator;
 import com.jellypudding.offlineclient.modules.world.LiquidFiller;
 import com.jellypudding.offlineclient.modules.world.SpawnProofer;
@@ -156,6 +184,7 @@ import com.jellypudding.offlineclient.util.ChatUtil;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -217,6 +246,8 @@ public final class ModuleManager {
         add(new ArrowDodge());
         add(new Quiver());
         add(new AutoAnvil());
+        add(new SelfAnvil());
+        add(new AntiAnvil());
     }
 
     private void registerMovement() {
@@ -246,13 +277,18 @@ public final class ModuleManager {
         add(new Sneak());
         add(new VehicleFly());
         add(new Glide());
+        add(new AirJump());
+        add(new HoleSnap());
+        add(new ClickTp());
+        add(new TridentBoost());
+        add(new NoClip());
     }
 
     private void registerRender() {
         add(new Fullbright());
         add(new AntiBlind());
         add(new ClearView());
-        add(new ClearSkies());
+        add(new Weather());
         add(new Esp());
         add(new ChestEsp());
         add(new Search());
@@ -281,8 +317,15 @@ public final class ModuleManager {
         add(new Breadcrumbs());
         add(new Freecam());
         add(new Zoom());
+        add(new NoRender());
+        add(new TimeChanger());
         add(new NoHurtCam());
         add(new CameraTweaks());
+        add(new HandView());
+        add(new ItemHighlight());
+        add(new NoShieldOverlay());
+        add(new NoBackground());
+        add(new OpenWaterEsp());
     }
 
     private void registerPlayer() {
@@ -297,6 +340,7 @@ public final class ModuleManager {
         add(new AutoFish());
         add(new AutoDrop());
         add(new NoRotate());
+        add(new Rotation());
         add(new FastUse());
         add(new AutoReplenish());
         add(new AutoPotion());
@@ -314,6 +358,7 @@ public final class ModuleManager {
         add(new GhostHand());
         add(new MiddleClickExtra());
         add(new NoStatusEffects());
+        add(new AntiCactus());
     }
 
     private void registerWorld() {
@@ -331,6 +376,15 @@ public final class ModuleManager {
         add(new SpawnProofer());
         add(new AutoFarm());
         add(new BuildHeight());
+        add(new Tillaura());
+        add(new BonemealAura());
+        add(new AutoShearer());
+        add(new AutoBreed());
+        add(new AutoNametag());
+        add(new EChestFarmer());
+        add(new AutoBrewer());
+        add(new AutoSmelter());
+        add(new AutoLibrarian());
     }
 
     private void registerMisc() {
@@ -352,7 +406,10 @@ public final class ModuleManager {
         add(new NameProtect());
         add(new Spam());
         add(new AntiSpam());
+        add(new BetterChat());
         add(new SoundBlocker());
+        add(new BookBot());
+        add(new Notebot());
     }
 
     private void add(Module module) {
@@ -399,6 +456,7 @@ public final class ModuleManager {
         return new ArrayList<>(modules.values());
     }
 
+    // Alphabetical so a module is where the eye expects it.
     public List<Module> getByCategory(Category category) {
         List<Module> result = new ArrayList<>();
         for (Module module : modules.values()) {
@@ -406,6 +464,7 @@ public final class ModuleManager {
                 result.add(module);
             }
         }
+        result.sort(Comparator.comparing(module -> module.getName().toLowerCase(Locale.ROOT)));
         return result;
     }
 

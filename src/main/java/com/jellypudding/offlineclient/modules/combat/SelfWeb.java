@@ -16,10 +16,12 @@ public final class SelfWeb extends Module {
     public enum Mode { ALWAYS, ENEMY_NEAR }
 
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
-        "Web right away or wait until somebody comes close.", Mode.ALWAYS);
+        "When the web goes down.", Mode.ALWAYS)
+        .describe(Mode.ALWAYS, "Webs your block as soon as it is turned on.")
+        .describe(Mode.ENEMY_NEAR, "Waits until an enemy comes within range.");
     private final NumberSetting range = new NumberSetting("Enemy range",
         "How close an enemy has to be.", 4, 1, 10, 0.5, " blocks")
-        .visibleWhen(() -> mode.is(Mode.ENEMY_NEAR));
+        .under(mode, Mode.ENEMY_NEAR);
     private final BoolSetting doubles = new BoolSetting("Upper body",
         "Also web the block your head is in.", false);
     private final BoolSetting toggleOff = new BoolSetting("Toggle off when done",

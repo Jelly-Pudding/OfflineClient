@@ -19,7 +19,9 @@ import java.util.List;
 public final class SelfTrap extends Module {
 
     private final EnumSetting<TrapMode> mode = new EnumSetting<>("Mode",
-        "Top covers your head and Full seals the sides too.", TrapMode.TOP);
+        "Which blocks go round you.", TrapMode.TOP)
+        .describe(TrapMode.TOP, "Covers your head only.")
+        .describe(TrapMode.FULL, "Seals your head and the sides at head height.");
     private final NumberSetting delay = new NumberSetting("Delay",
         "Ticks to wait between placements.", 1, 0, 5, 1, " ticks");
     private final BoolSetting rotate = new BoolSetting("Rotate",

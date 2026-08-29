@@ -1,6 +1,5 @@
 package com.jellypudding.offlineclient.modules.combat;
 
-import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.Render3DEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
@@ -9,6 +8,7 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.render.DrawBatch;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.ProjectileUtil;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
@@ -142,7 +142,7 @@ public final class ArrowDodge extends Module {
             return false;
         }
         return !ignoreFriends.isOn() || !(owner instanceof Player player)
-            || !OfflineClient.INSTANCE.getFriendManager().isFriend(player.getGameProfile().name());
+            || !EntityUtil.isFriend(player);
     }
 
     private void predict(Projectile projectile) {

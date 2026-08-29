@@ -48,7 +48,7 @@ public final class PacketMine extends Module {
         "Starts again on whatever is put back in the same spot.", false);
     private final BoolSetting instantRebreak = new BoolSetting("Instant rebreak",
         "Fires at the spot every tick to catch a replacement the moment it lands.", true)
-        .visibleWhen(rebreak::isOn);
+        .under(rebreak);
 
     private BlockPos target;
     private Block mined;

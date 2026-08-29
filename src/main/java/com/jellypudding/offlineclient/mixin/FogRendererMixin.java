@@ -3,6 +3,7 @@ package com.jellypudding.offlineclient.mixin;
 import com.jellypudding.offlineclient.modules.render.ClearView;
 import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.client.Camera;
+import net.minecraft.world.level.material.FogType;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.fog.FogData;
@@ -25,7 +26,12 @@ public class FogRendererMixin {
                             float skyDarken, ClientLevel level,
                             CallbackInfoReturnable<FogData> cir) {
         ClearView clearView = Modules.active(ClearView.class);
-        if (clearView == null || !clearView.blocksFog()) {
+        if (clearView == null) {
+            return;
+        }
+        // The blue underwater is mostly the short water fog. Pushing it away clears the tint.
+        boolean underwater = clearView.blocksWater() && camera.getFluidInCamera() == FogType.WATER;
+        if (!clearView.blocksFog() && !underwater) {
             return;
         }
         FogData data = cir.getReturnValue();

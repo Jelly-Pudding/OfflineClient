@@ -165,7 +165,12 @@ public final class WindowGuiScreen extends GuiScreenBase {
     }
 
     private int contentBottom() {
-        return windowY() + windowHeight() - DESC_HEIGHT - 5;
+        return windowY() + windowHeight() - descHeight() - 5;
+    }
+
+    // The bar at the foot of the window goes away with the hover help.
+    private int descHeight() {
+        return hoverHelp() ? DESC_HEIGHT : 0;
     }
 
     private int contentHeight() {
@@ -287,7 +292,9 @@ public final class WindowGuiScreen extends GuiScreenBase {
             mouseX, mouseY, isSearching() ? listed.size() : -1);
         renderSidebar(context, font, mouseX, mouseY);
         renderList(context, font, mouseX, mouseY);
-        renderDescription(context, font, wx, wy, ww, wh);
+        if (hoverHelp()) {
+            renderDescription(context, font, wx, wy, ww, wh);
+        }
     }
 
     private void renderTitle(GuiGraphicsExtractor context, Font font, int wx, int wy, int ww) {

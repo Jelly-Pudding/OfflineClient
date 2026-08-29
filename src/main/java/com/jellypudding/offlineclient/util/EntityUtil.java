@@ -7,7 +7,12 @@ import net.minecraft.tags.TagKey;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.ambient.AmbientCreature;
+import net.minecraft.world.entity.animal.AgeableWaterCreature;
+import net.minecraft.world.entity.animal.fish.WaterAnimal;
+import net.minecraft.world.entity.boss.enderdragon.EndCrystal;
 import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.monster.Enemy;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -19,6 +24,16 @@ public final class EntityUtil {
 
     // Friends are drawn in blue wherever they appear.
     public static final int FRIEND_COLOR = 0xFF4080FF;
+    public static final int ITEM_COLOR = 0xFFFFE040;
+    // Anything that hunts the player.
+    public static final int HOSTILE_COLOR = 0xFFFF5030;
+    public static final int PASSIVE_COLOR = 0xFF60E060;
+    public static final int WATER_COLOR = 0xFF40C8FF;
+    public static final int AMBIENT_COLOR = 0xFFB080FF;
+    public static final int MOB_COLOR = 0xFFFF8020;
+
+    // Blocks at which a player reads as far away. Closer fades towards red.
+    private static final float FADE_DISTANCE = 20;
 
     private EntityUtil() {
     }
@@ -32,6 +47,20 @@ public final class EntityUtil {
         return player.getHealth() + player.getAbsorptionAmount() <= hearts * HEART;
     }
 
+    // True when an end crystal sits within the distance.
+    public static boolean crystalNearby(double distance) {
+        Minecraft mc = OfflineClient.MC;
+        if (mc.level == null || mc.player == null) {
+            return false;
+        }
+        for (Entity entity : mc.level.entitiesForRendering()) {
+            if (entity instanceof EndCrystal && mc.player.distanceTo(entity) <= distance) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     // The holder on EntityType itself is deprecated. The lookup goes via the registry.
     public static boolean typeIs(Entity entity, TagKey<EntityType<?>> tag) {
         return BuiltInRegistries.ENTITY_TYPE.wrapAsHolder(entity.getType()).is(tag);
@@ -40,6 +69,37 @@ public final class EntityUtil {
     // The account name of a player or null.
     public static String nameOf(Player player) {
         return player == null ? null : player.getGameProfile().name();
+    }
+
+    public static boolean isFriend(Entity entity) {
+        return entity instanceof Player player
+            && OfflineClient.INSTANCE.getFriendManager().isFriend(nameOf(player));
+    }
+
+    // The broad families the filters in the render modules work with.
+    public enum Kind { PLAYER, HOSTILE, PASSIVE, WATER, AMBIENT, ITEM, OTHER }
+
+    /**
+     * Hostile covers anything that hunts the player. Water is fish and squid
+     * and dolphins. Ambient is bats. Passive is every other living thing.
+     */
+    public static Kind kindOf(Entity entity) {
+        if (entity instanceof Player) {
+            return Kind.PLAYER;
+        }
+        if (entity instanceof ItemEntity) {
+            return Kind.ITEM;
+        }
+        if (entity instanceof Enemy) {
+            return Kind.HOSTILE;
+        }
+        if (entity instanceof WaterAnimal || entity instanceof AgeableWaterCreature) {
+            return Kind.WATER;
+        }
+        if (entity instanceof AmbientCreature) {
+            return Kind.AMBIENT;
+        }
+        return entity instanceof LivingEntity ? Kind.PASSIVE : Kind.OTHER;
     }
 
     public static boolean matches(Entity entity, boolean players, boolean mobs, boolean items) {
@@ -96,25 +156,31 @@ public final class EntityUtil {
     }
 
     /**
-     * Friends are blue. Players fade from red when close to green when far
-     * and mobs are orange with items yellow.
+     * Friends are blue. Players fade from red when close to green when far.
+     * Hostile mobs are red and passive ones green with sea life blue and
+     * bats purple. Items are yellow.
      */
     public static int colorOf(Entity entity) {
-        if (entity instanceof Player player) {
-            if (OfflineClient.INSTANCE.getFriendManager().isFriend(player.getGameProfile().name())) {
-                return FRIEND_COLOR;
-            }
-            float distance = OfflineClient.MC.player == null ? 20
-                : OfflineClient.MC.player.distanceTo(player);
-            float f = distance / 20f;
-            int r = (int) (Math.clamp(2 - f, 0, 1) * 255);
-            int g = (int) (Math.clamp(f, 0, 1) * 255);
-            return 0xFF000000 | r << 16 | g << 8;
+        if (entity instanceof Player) {
+            return isFriend(entity) ? FRIEND_COLOR : distanceColor(entity);
         }
-        if (entity instanceof ItemEntity) {
-            return 0xFFFFE040;
-        }
-        return 0xFFFF8020;
+        return switch (kindOf(entity)) {
+            case ITEM -> ITEM_COLOR;
+            case HOSTILE -> HOSTILE_COLOR;
+            case PASSIVE -> PASSIVE_COLOR;
+            case WATER -> WATER_COLOR;
+            case AMBIENT -> AMBIENT_COLOR;
+            case PLAYER, OTHER -> MOB_COLOR;
+        };
+    }
+
+    // Red within arm's reach through yellow to green at twice the fade distance.
+    public static int distanceColor(Entity entity) {
+        Player self = OfflineClient.MC.player;
+        float f = (self == null ? FADE_DISTANCE : self.distanceTo(entity)) / FADE_DISTANCE;
+        int r = (int) (Math.clamp(2 - f, 0, 1) * 255);
+        int g = (int) (Math.clamp(f, 0, 1) * 255);
+        return 0xFF000000 | r << 16 | g << 8;
     }
 
     // Friends and spectators never count. Null when nobody is close.
@@ -129,7 +195,7 @@ public final class EntityUtil {
             if (player == mc.player || !player.isAlive() || player.isSpectator()) {
                 continue;
             }
-            if (OfflineClient.INSTANCE.getFriendManager().isFriend(player.getGameProfile().name())) {
+            if (isFriend(player)) {
                 continue;
             }
             double distance = mc.player.distanceTo(player);

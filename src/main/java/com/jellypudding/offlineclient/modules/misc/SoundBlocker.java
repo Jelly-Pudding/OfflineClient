@@ -26,10 +26,10 @@ public final class SoundBlocker extends Module {
         "Mute everything instead of the chosen sounds.", false);
     private final BoolSetting keepUi = new BoolSetting("Keep menus",
         "Lets button clicks and menu sounds through.", true)
-        .visibleWhen(blockAll::isOn);
+        .under(blockAll);
     private final BoolSetting keepMusic = new BoolSetting("Keep music",
         "Lets the background music through.", true)
-        .visibleWhen(blockAll::isOn);
+        .under(blockAll);
 
     private final AtomicInteger muted = new AtomicInteger();
 

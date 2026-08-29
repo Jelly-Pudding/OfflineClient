@@ -62,38 +62,47 @@ public final class Nuker extends Module {
         "How far to break blocks with no clear view from your eyes.",
         4.5, 0, 6, 0.1).min(0).max(6);
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
-        "Which blocks the module is allowed to break.", Mode.ALL);
+        "Which blocks the module is allowed to break.", Mode.ALL)
+        .describe(Mode.ALL, "Every block in range.")
+        .describe(Mode.SELECTED, "Only the block type you click.")
+        .describe(Mode.LIST, "Whatever the list below allows.");
     private final RegistryListSetting<Block> blocks = new RegistryListSetting<Block>("Blocks",
         "The blocks the list applies to. Click to pick them.", BuiltInRegistries.BLOCK,
         List.of(Blocks.BEDROCK, Blocks.BARRIER, Blocks.REINFORCED_DEEPSLATE,
             Blocks.SPAWNER, Blocks.TRIAL_SPAWNER, Blocks.VAULT, Blocks.END_PORTAL_FRAME,
             Blocks.CHEST, Blocks.TRAPPED_CHEST, Blocks.ENDER_CHEST,
             Blocks.BARREL, Blocks.SHULKER_BOX))
-        .visibleWhen(() -> mode.is(Mode.LIST));
+        .under(mode, Mode.LIST);
     private final EnumSetting<ListMode> listMode = new EnumSetting<>("List mode",
-        "Whether the list picks what to break or what to leave alone.",
-        ListMode.BLACKLIST).visibleWhen(() -> mode.is(Mode.LIST));
+        "What the list means.", ListMode.BLACKLIST)
+        .describe(ListMode.WHITELIST, "The list is what gets broken.")
+        .describe(ListMode.BLACKLIST, "The list is what gets left alone.")
+        .under(mode, Mode.LIST);
     private final BoolSetting lockTarget = new BoolSetting("Lock target",
         "Keeps the block you picked instead of following your next click.", false)
-        .visibleWhen(() -> mode.is(Mode.SELECTED));
+        .under(mode, Mode.SELECTED);
     private final BoolSetting flat = new BoolSetting("Flat",
         "Only breaks blocks at your feet or higher.", false);
     private final BoolSetting smash = new BoolSetting("Smash",
         "Only breaks blocks with no hardness such as plants and torches.", false);
     private final EnumSetting<Speed> speed = new EnumSetting<>("Speed",
-        "Whether blocks break one at a time or all at once.", Speed.LEGIT);
+        "How the blocks come down.", Speed.LEGIT)
+        .describe(Speed.LEGIT, "One block at a time like a held click.")
+        .describe(Speed.INSTANT, "Fires the break packets for several at once.");
     private final NumberSetting perTick = new NumberSetting("Blocks per tick",
         "How many one hit blocks to break each tick in Instant mode.", 4, 1, 16, 1)
-        .min(1).visibleWhen(() -> speed.is(Speed.INSTANT));
+        .min(1).under(speed, Speed.INSTANT);
     private final BoolSetting autoTool = new BoolSetting("Auto tool",
         "Holds your fastest tool before the break packets go out.", true)
-        .visibleWhen(() -> speed.is(Speed.INSTANT));
+        .under(speed, Speed.INSTANT);
     private final BoolSetting rotate = new BoolSetting("Rotate",
         "Turn toward the block on the server side.", true)
-        .visibleWhen(() -> speed.is(Speed.LEGIT));
+        .under(speed, Speed.LEGIT);
     private final EnumSetting<Order> order = new EnumSetting<>("Order",
         "Which block gets broken first.", Order.NEAREST)
-        .visibleWhen(() -> speed.is(Speed.LEGIT));
+        .describe(Order.NEAREST, "The closest block first.")
+        .describe(Order.FASTEST, "The quickest block to break first.")
+        .under(speed, Speed.LEGIT);
     private final ColorSetting highlight = new ColorSetting("Highlight",
         "Colour of the boxes on the blocks about to break.", 10, false);
     private final NumberSetting highlightStrength = new NumberSetting("Highlight strength",

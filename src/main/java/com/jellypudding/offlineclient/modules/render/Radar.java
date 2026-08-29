@@ -13,6 +13,7 @@ import com.jellypudding.offlineclient.util.RenderUtil;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
 
@@ -37,8 +38,18 @@ public final class Radar extends Module {
         "Turn the radar so the way you face points up.", true);
     private final BoolSetting players = new BoolSetting("Players",
         "Show other players.", true);
-    private final BoolSetting mobs = new BoolSetting("Mobs",
-        "Show mobs.", false);
+    private final BoolSetting sleeping = new BoolSetting("Sleeping players",
+        "Keep players who are in a bed on the radar.", true).under(players);
+    private final BoolSetting hostile = new BoolSetting("Hostile mobs",
+        "Show zombies and skeletons and the rest.", false);
+    private final BoolSetting passive = new BoolSetting("Passive mobs",
+        "Show animals and villagers.", false);
+    private final BoolSetting water = new BoolSetting("Water animals",
+        "Show fish and squid and dolphins.", false);
+    private final BoolSetting bats = new BoolSetting("Bats",
+        "Show bats. They clutter every cave.", false);
+    private final BoolSetting invisible = new BoolSetting("Invisible",
+        "Show entities that are under an invisibility effect.", true);
     private final BoolSetting items = new BoolSetting("Items",
         "Show dropped items.", false);
     private final BoolSetting names = new BoolSetting("Names",
@@ -48,8 +59,32 @@ public final class Radar extends Module {
 
     public Radar() {
         super("Radar", "Draws a small map of nearby entities on your screen.", Category.RENDER);
-        addSettings(size, range, corner, margin, rotate, players, mobs, items, names, height);
+        addSettings(size, range, corner, margin, rotate, players, sleeping, hostile, passive,
+            water, bats, invisible, items, names, height);
         searchTags("minimap", "entity map");
+    }
+
+    // Which kinds of entity the filters let through.
+    private boolean shows(Entity entity) {
+        if (entity == mc.player) {
+            return false;
+        }
+        if (entity instanceof LivingEntity living && !living.isAlive()) {
+            return false;
+        }
+        if (!invisible.isOn() && entity.isInvisible()) {
+            return false;
+        }
+        return switch (EntityUtil.kindOf(entity)) {
+            case PLAYER -> players.isOn() && !entity.isSpectator()
+                && (sleeping.isOn() || !((Player) entity).isSleeping());
+            case HOSTILE -> hostile.isOn();
+            case PASSIVE -> passive.isOn();
+            case WATER -> water.isOn();
+            case AMBIENT -> bats.isOn();
+            case ITEM -> items.isOn();
+            case OTHER -> false;
+        };
     }
 
     @Subscribe
@@ -86,7 +121,7 @@ public final class Radar extends Module {
 
         context.guiRenderState.up();
         for (Entity entity : mc.level.entitiesForRendering()) {
-            if (entity == mc.player || !EntityUtil.matches(entity, players.isOn(), mobs.isOn(), items.isOn())) {
+            if (!shows(entity)) {
                 continue;
             }
             double dx = entity.getX() - eye.x;

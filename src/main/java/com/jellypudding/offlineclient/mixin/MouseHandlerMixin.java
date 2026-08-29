@@ -1,5 +1,7 @@
 package com.jellypudding.offlineclient.mixin;
 
+import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.event.events.MouseScrollEvent;
 import com.jellypudding.offlineclient.modules.player.GUIMove;
 import com.jellypudding.offlineclient.modules.player.MiddleClickExtra;
 import com.jellypudding.offlineclient.modules.render.FreeLook;
@@ -26,8 +28,8 @@ public abstract class MouseHandlerMixin {
             target = "Lnet/minecraft/client/player/LocalPlayer;turn(DD)V"))
     private void wrapTurn(LocalPlayer player, double deltaYaw, double deltaPitch,
                           Operation<Void> original) {
-        Freecam freecam = Modules.active(Freecam.class);
-        if (freecam != null) {
+        Freecam freecam = Modules.get(Freecam.class);
+        if (freecam != null && freecam.movesCamera()) {
             freecam.turn(deltaYaw, deltaPitch);
             return;
         }
@@ -53,6 +55,17 @@ public abstract class MouseHandlerMixin {
             if (extra != null) {
                 extra.onMiddleClick();
             }
+        }
+    }
+
+    // Modules may take the wheel before it reaches the hotbar.
+    @Inject(method = "onScroll(JDD)V", at = @At("HEAD"), cancellable = true)
+    private void onScroll(long window, double horizontal, double vertical, CallbackInfo ci) {
+        if (OfflineClient.MC.gui.screen() != null || vertical == 0) {
+            return;
+        }
+        if (OfflineClient.INSTANCE.getEventBus().post(new MouseScrollEvent(vertical)).isCancelled()) {
+            ci.cancel();
         }
     }
 

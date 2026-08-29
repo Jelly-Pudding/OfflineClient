@@ -1,12 +1,12 @@
 package com.jellypudding.offlineclient.modules.player;
 
-import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.RightClickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
+import com.jellypudding.offlineclient.util.EntityUtil;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.attribute.EnvironmentAttributes;
@@ -118,7 +118,7 @@ public final class NoInteract extends Module {
             return true;
         }
         if (friends.isOn() && entity instanceof Player player
-            && OfflineClient.INSTANCE.getFriendManager().isFriend(player.getGameProfile().name())) {
+            && EntityUtil.isFriend(player)) {
             return true;
         }
         if (babies.isOn() && entity instanceof LivingEntity living && living.isBaby()) {

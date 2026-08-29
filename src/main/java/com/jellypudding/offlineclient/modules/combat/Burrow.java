@@ -38,7 +38,9 @@ public final class Burrow extends Module {
         BuiltInRegistries.BLOCK,
         List.of(Blocks.OBSIDIAN, Blocks.CRYING_OBSIDIAN, Blocks.ENDER_CHEST));
     private final EnumSetting<Lift> lift = new EnumSetting<>("Lift",
-        "Jump for real or send position packets to get above the spot.", Lift.PACKET);
+        "How to get above the block as it goes in.", Lift.PACKET)
+        .describe(Lift.JUMP, "Jumps for real.")
+        .describe(Lift.PACKET, "Sends position packets to hop up without moving on screen.");
     private final BoolSetting center = new BoolSetting("Center",
         "Snap to the middle of your block first.", true);
     private final BoolSetting rotate = new BoolSetting("Rotate",

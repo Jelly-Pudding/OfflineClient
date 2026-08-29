@@ -21,7 +21,7 @@ public final class AttributeSwap extends Module {
         "Return to the slot you had once the hit has landed.", true);
     private final NumberSetting swapBackDelay = new NumberSetting("Swap back delay",
         "Ticks to hold the swapped item before returning.", 2, 0, 20, 1, " ticks")
-        .visibleWhen(swapBack::isOn);
+        .under(swapBack);
     private final BoolSetting antiBreak = new BoolSetting("Anti break",
         "Skip items that are about to break.", true);
 

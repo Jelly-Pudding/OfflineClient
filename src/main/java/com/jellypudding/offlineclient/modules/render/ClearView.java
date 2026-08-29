@@ -24,10 +24,25 @@ public final class ClearView extends Module {
         "Pushes fog far enough away that it never hides anything.", false);
     private final BoolSetting particles = new BoolSetting("Particles",
         "Stops every particle from spawning.", false);
+    private final BoolSetting spyglass = new BoolSetting("Spyglass",
+        "Removes the black frame whilst you look through a spyglass.", false);
+    private final BoolSetting bossBars = new BoolSetting("Boss bars",
+        "Hides boss health bars.", false);
+    private final BoolSetting scoreboard = new BoolSetting("Scoreboard",
+        "Hides the sidebar scoreboard.", false);
+    private final BoolSetting titles = new BoolSetting("Titles",
+        "Hides titles the server puts in the middle of the screen.", false);
+    private final BoolSetting itemNames = new BoolSetting("Item names",
+        "Hides the name that pops up above the hotbar on a slot change.", false);
+    private final BoolSetting effectIcons = new BoolSetting("Effect icons",
+        "Hides the potion effect icons in the top right corner.", false);
+    private final BoolSetting totemPop = new BoolSetting("Totem pop",
+        "Skips the totem animation that fills the screen.", false);
 
     public ClearView() {
         super("ClearView", "Removes screen overlays that hide what you need to see.", Category.RENDER);
-        addSettings(pumpkin, powderSnow, vignette, fire, water, blockInFace, fog, particles);
+        addSettings(pumpkin, powderSnow, vignette, fire, water, blockInFace, fog, particles,
+            spyglass, bossBars, scoreboard, titles, itemNames, effectIcons, totemPop);
         searchTags("no fog", "no fire", "no overlay", "no particles", "norender");
     }
 
@@ -61,5 +76,33 @@ public final class ClearView extends Module {
 
     public boolean blocksParticles() {
         return particles.isOn();
+    }
+
+    public boolean blocksSpyglass() {
+        return spyglass.isOn();
+    }
+
+    public boolean blocksBossBars() {
+        return bossBars.isOn();
+    }
+
+    public boolean blocksScoreboard() {
+        return scoreboard.isOn();
+    }
+
+    public boolean blocksTitles() {
+        return titles.isOn();
+    }
+
+    public boolean blocksItemNames() {
+        return itemNames.isOn();
+    }
+
+    public boolean blocksEffectIcons() {
+        return effectIcons.isOn();
+    }
+
+    public boolean blocksTotemPop() {
+        return totemPop.isOn();
     }
 }

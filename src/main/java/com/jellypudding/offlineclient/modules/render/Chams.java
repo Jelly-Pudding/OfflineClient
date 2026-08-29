@@ -1,6 +1,5 @@
 package com.jellypudding.offlineclient.modules.render;
 
-import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
@@ -71,7 +70,7 @@ public final class Chams extends Module {
     public int tintFor(Entity entity) {
         int base = color.getColor();
         if (friendColor.isOn() && entity instanceof Player player
-            && OfflineClient.INSTANCE.getFriendManager().isFriend(player.getGameProfile().name())) {
+            && EntityUtil.isFriend(player)) {
             base = EntityUtil.FRIEND_COLOR;
         }
         return ColorUtil.withAlpha(base, (int) (opacity.getValue() * 255));

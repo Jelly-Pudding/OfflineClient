@@ -39,22 +39,9 @@ public final class AutoEat extends Module {
     // A golden apple takes a moment to land. Rechecking too early eats a second one.
     private static final int HEAL_SETTLE_TICKS = 30;
 
-    public enum Priority {
-        HUNGER("Best hunger"),
-        SATURATION("Best saturation"),
-        COMBINED("Best overall");
+    public enum Priority { BEST_HUNGER, BEST_SATURATION, BEST_OVERALL }
 
-        private final String label;
-
-        Priority(String label) {
-            this.label = label;
-        }
-
-        @Override
-        public String toString() {
-            return label;
-        }
-    }
+    public enum TakeFrom { HANDS, HOTBAR, INVENTORY }
 
     private final NumberSetting hunger = new NumberSetting("Hunger",
         "Start eating at or below this many food points. Full is 20.", 14, 1, 19, 1);
@@ -62,11 +49,21 @@ public final class AutoEat extends Module {
         "Eat a golden apple at or below this many hearts. Zero turns it off.",
         0, 0, 10, 0.5, " hearts").min(0).max(20);
     private final EnumSetting<Priority> priority = new EnumSetting<>("Priority",
-        "Which food to reach for first.", Priority.HUNGER);
+        "Which food to reach for first.", Priority.BEST_HUNGER)
+        .describe(Priority.BEST_HUNGER, "Eats whatever restores the most food points.")
+        .describe(Priority.BEST_SATURATION, "Eats whatever gives the most saturation.")
+        .describe(Priority.BEST_OVERALL, "Eats whatever scores best on both together.");
     private final RegistryListSetting<Item> avoid = new RegistryListSetting<>("Avoid",
         "Food that never gets eaten. Click to pick it.", BuiltInRegistries.ITEM,
         List.of(Items.ROTTEN_FLESH, Items.SPIDER_EYE, Items.POISONOUS_POTATO,
             Items.PUFFERFISH, Items.CHICKEN, Items.SUSPICIOUS_STEW, Items.CHORUS_FRUIT));
+    private final EnumSetting<TakeFrom> takeFrom = new EnumSetting<>("Take from",
+        "Where food may be taken from.", TakeFrom.INVENTORY)
+        .describe(TakeFrom.HANDS, "Only eats what is already in your hands.")
+        .describe(TakeFrom.HOTBAR, "Picks food from the hotbar only.")
+        .describe(TakeFrom.INVENTORY, "Borrows food from anywhere in the inventory.");
+    private final BoolSetting saveGapples = new BoolSetting("Save golden apples",
+        "Never eats a golden apple for hunger alone. They are kept for the Health check.", false);
     private final BoolSetting offhand = new BoolSetting("Use offhand",
         "Reach for food in your offhand first.", true);
     private final BoolSetting whileMoving = new BoolSetting("Eat whilst moving",
@@ -76,7 +73,7 @@ public final class AutoEat extends Module {
     private final BoolSetting whileBusy = new BoolSetting("Eat in screens",
         "Keeps eating whilst a chest or inventory is open.", false);
     private final BoolSetting noSlowdown = new BoolSetting("No slowdown",
-        "Keeps your normal speed whilst eating.", false);
+        "Keeps your normal speed whilst eating. Meals you start yourself count too.", false);
     private final BoolSetting pauseOnFire = new BoolSetting("Pause on fire",
         "Stops eating whilst you are burning.", false);
 
@@ -89,8 +86,8 @@ public final class AutoEat extends Module {
 
     public AutoEat() {
         super("AutoEat", "Eats for you when you get hungry or hurt.", Category.PLAYER);
-        addSettings(hunger, health, priority, avoid, offhand, whileMoving, pauseCombat,
-            whileBusy, noSlowdown, pauseOnFire);
+        addSettings(hunger, health, priority, avoid, takeFrom, saveGapples, offhand, whileMoving,
+            pauseCombat, whileBusy, noSlowdown, pauseOnFire);
         searchTags("food", "golden apple", "gapple");
     }
 
@@ -104,7 +101,13 @@ public final class AutoEat extends Module {
 
     // Read by LocalPlayerMixin to keep a meal from slowing you down.
     public boolean suppressesSlowdown() {
-        return isEnabled() && eating && noSlowdown.isOn();
+        return isEnabled() && noSlowdown.isOn() && eatingFood();
+    }
+
+    // True whilst any food is going down. A meal started by hand counts.
+    private boolean eatingFood() {
+        return mc.player != null && mc.player.isUsingItem()
+            && mc.player.getUseItem().has(DataComponents.FOOD);
     }
 
     @Override
@@ -161,8 +164,7 @@ public final class AutoEat extends Module {
             return;
         }
 
-        // A swap needs the survival inventory. A screen limits us to the hotbar.
-        int limit = busy() ? 9 : 36;
+        int limit = slotLimit();
         boolean wantsHealing = EntityUtil.healthAtOrBelow(health.getValue()) && !healingWasted();
         int slot = wantsHealing ? findHealing(limit) : -1;
         healing = slot != -1;
@@ -173,6 +175,26 @@ public final class AutoEat extends Module {
             return;
         }
         beginEating(slot);
+    }
+
+    /**
+     * How many inventory slots may be searched. A swap needs the survival
+     * inventory so a screen limits the search to the hotbar. Hands means the
+     * held slot alone and the offhand is checked separately.
+     */
+    private int slotLimit() {
+        if (takeFrom.is(TakeFrom.HANDS)) {
+            return 0;
+        }
+        if (takeFrom.is(TakeFrom.HOTBAR) || busy()) {
+            return InventoryUtil.HOTBAR_SIZE;
+        }
+        return InventoryUtil.WHOLE_INVENTORY;
+    }
+
+    // The held slot always counts. The rest only up to the limit.
+    private boolean searchable(int slot, int limit) {
+        return slot < limit || slot == InventoryUtil.selectedSlot();
     }
 
     // A screen or a foreign container is open.
@@ -296,7 +318,10 @@ public final class AutoEat extends Module {
             }
         }
         int enchanted = -1;
-        for (int i = 0; i < limit; i++) {
+        for (int i = 0; i < InventoryUtil.WHOLE_INVENTORY; i++) {
+            if (!searchable(i, limit)) {
+                continue;
+            }
             ItemStack stack = mc.player.getInventory().getItem(i);
             if (stack.is(Items.GOLDEN_APPLE) && !avoid.contains(stack.getItem())) {
                 return i;
@@ -309,6 +334,7 @@ public final class AutoEat extends Module {
         return enchanted;
     }
 
+    // Plain food first. A golden apple only when nothing else is left and it is not being saved.
     private int findFood(int limit) {
         int best = -1;
         double bestScore = 0;
@@ -318,7 +344,10 @@ public final class AutoEat extends Module {
                 return Inventory.SLOT_OFFHAND;
             }
         }
-        for (int i = 0; i < limit; i++) {
+        for (int i = 0; i < InventoryUtil.WHOLE_INVENTORY; i++) {
+            if (!searchable(i, limit)) {
+                continue;
+            }
             ItemStack stack = mc.player.getInventory().getItem(i);
             if (!isEdible(stack) || isHealing(stack) || !edibleNow(stack)) {
                 continue;
@@ -329,6 +358,9 @@ public final class AutoEat extends Module {
                 best = i;
             }
         }
+        if (best == -1 && !saveGapples.isOn()) {
+            return findHealing(limit);
+        }
         return best;
     }
 
@@ -338,10 +370,10 @@ public final class AutoEat extends Module {
             return 0;
         }
         // Saturation is the whole value and not a multiplier of the nutrition.
-        if (priority.is(Priority.SATURATION)) {
+        if (priority.is(Priority.BEST_SATURATION)) {
             return food.saturation();
         }
-        if (priority.is(Priority.COMBINED)) {
+        if (priority.is(Priority.BEST_OVERALL)) {
             return food.nutrition() + food.saturation();
         }
         return food.nutrition();

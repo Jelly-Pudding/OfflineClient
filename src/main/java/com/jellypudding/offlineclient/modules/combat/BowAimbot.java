@@ -1,6 +1,5 @@
 package com.jellypudding.offlineclient.modules.combat;
 
-import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.Render3DEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
@@ -24,22 +23,7 @@ import net.minecraft.world.phys.Vec3;
 // The pitch comes from the real arrow physics and the flight time leads the target.
 public final class BowAimbot extends Module {
 
-    public enum Priority {
-        NEAREST("Nearest"),
-        LOWEST_HEALTH("Low health"),
-        CROSSHAIR("Crosshair");
-
-        private final String name;
-
-        Priority(String name) {
-            this.name = name;
-        }
-
-        @Override
-        public String toString() {
-            return name;
-        }
-    }
+    public enum Priority { NEAREST, LOW_HEALTH, CROSSHAIR }
 
     // Arrow speed in blocks per tick at a full bow draw.
     private static final double BOW_SPEED = 3.0;
@@ -53,7 +37,10 @@ public final class BowAimbot extends Module {
     private final NumberSetting range = new NumberSetting("Range",
         "Furthest target to aim at in blocks.", 40, 5, 80, 1);
     private final EnumSetting<Priority> priority = new EnumSetting<>("Priority",
-        "Which target to pick when several are in range.", Priority.NEAREST);
+        "Which target to pick when several are in range.", Priority.NEAREST)
+        .describe(Priority.NEAREST, "Aims at the closest target.")
+        .describe(Priority.LOW_HEALTH, "Aims at whoever has the least health left.")
+        .describe(Priority.CROSSHAIR, "Aims at the target nearest your crosshair.");
     private final BoolSetting predict = new BoolSetting("Predict",
         "Lead moving targets by their speed and the arrow flight time.", true);
     private final BoolSetting walls = new BoolSetting("Through walls",
@@ -157,7 +144,7 @@ public final class BowAimbot extends Module {
             }
             double score = switch (priority.getValue()) {
                 case NEAREST -> mc.player.distanceToSqr(living);
-                case LOWEST_HEALTH -> living.getHealth();
+                case LOW_HEALTH -> living.getHealth();
                 case CROSSHAIR -> EntityUtil.lookAngleTo(living);
             };
             if (score < bestScore) {
@@ -182,7 +169,7 @@ public final class BowAimbot extends Module {
             if (!players.isOn() || player.isCreative()) {
                 return false;
             }
-            if (OfflineClient.INSTANCE.getFriendManager().isFriend(player.getGameProfile().name())) {
+            if (EntityUtil.isFriend(player)) {
                 return false;
             }
         } else if (entity instanceof Mob) {
@@ -201,8 +188,10 @@ public final class BowAimbot extends Module {
         Vec3 aimPoint = entity.getBoundingBox().getCenter();
         Vec3 targetVelocity = predict.isOn() ? EntityUtil.velocityOf(entity) : Vec3.ZERO;
 
-        // An arrow keeps the shooter's momentum and the vertical part only carries whilst airborne.
-        Vec3 own = mc.player.getDeltaMovement();
+        // An arrow keeps the shooter's momentum and the vertical part only carries whilst
+        // airborne. The server reads that momentum as the distance the last packet moved
+        // so the real displacement is used rather than the client's own velocity.
+        Vec3 own = EntityUtil.velocityOf(mc.player);
         Vec3 drift = new Vec3(own.x, mc.player.onGround() ? 0 : own.y, own.z);
 
         double[] solution = solve(eye, aimPoint, speed);

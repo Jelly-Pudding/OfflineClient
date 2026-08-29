@@ -66,19 +66,22 @@ public final class ItemUtil {
         return speed;
     }
 
-    // Minus one when nothing beats a bare hand.
+    // Minus one when nothing in the hotbar beats a bare hand.
     public static int bestToolSlot(BlockState state) {
-        return bestToolSlot(state, 1, stack -> true);
+        return bestToolSlot(state, 1, stack -> true, InventoryUtil.HOTBAR_SIZE);
     }
 
     /**
-     * The hotbar slot that mines the block fastest. Only stacks the filter
-     * accepts count and only speeds above the floor. Minus one when none does.
+     * The inventory slot that mines the block fastest. Only the first slots
+     * up to the limit are searched so nine keeps to the hotbar. Only stacks
+     * the filter accepts count and only speeds above the floor. Minus one
+     * when none does.
      */
-    public static int bestToolSlot(BlockState state, float floor, Predicate<ItemStack> allowed) {
+    public static int bestToolSlot(BlockState state, float floor, Predicate<ItemStack> allowed,
+                                   int slots) {
         int bestSlot = -1;
         float bestSpeed = floor;
-        for (int i = 0; i < InventoryUtil.HOTBAR_SIZE; i++) {
+        for (int i = 0; i < slots; i++) {
             ItemStack stack = OfflineClient.MC.player.getInventory().getItem(i);
             if (!allowed.test(stack)) {
                 continue;

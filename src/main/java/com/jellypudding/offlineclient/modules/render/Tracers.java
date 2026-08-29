@@ -25,7 +25,7 @@ public final class Tracers extends Module {
         "Draw lines to dropped items.", false);
     private final BoolSetting names = new BoolSetting("Names",
         "Show the player's name where their tracer ends.", true)
-        .visibleWhen(players::isOn);
+        .under(players);
 
     public Tracers() {
         super("Tracers", "Draws lines from you to entities around you.", Category.RENDER);

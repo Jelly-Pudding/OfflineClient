@@ -23,7 +23,7 @@ public final class NameProtect extends Module {
         "Paints your name so you can pick it out at a glance.", false);
     private final ColorSetting color = new ColorSetting("Colour",
         "The colour your name is painted.", 140, false)
-        .visibleWhen(colored::isOn);
+        .under(colored);
 
     public NameProtect() {
         super("NameProtect", "Hides your own name in chat.", Category.MISC);

@@ -50,7 +50,7 @@ public final class Notifier extends Module {
         "Say when a player pops a totem and how many so far.", true);
     private final BoolSetting ownTotems = new BoolSetting("Own totems",
         "Also count your own totem pops.", false)
-        .visibleWhen(totemPops::isOn);
+        .under(totemPops);
     private final BoolSetting ignoreFriends = new BoolSetting("Ignore friends",
         "Stay quiet about people on your friend list.", false);
     private final BoolSetting sound = new BoolSetting("Sound",

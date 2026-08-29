@@ -1,6 +1,7 @@
 package com.jellypudding.offlineclient.mixin;
 
 import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.modules.player.AntiCactus;
 import com.jellypudding.offlineclient.modules.movement.Jesus;
 import com.jellypudding.offlineclient.util.Modules;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
@@ -8,7 +9,9 @@ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.BlockCollisions;
 import net.minecraft.world.level.CollisionGetter;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.EntityCollisionContext;
 import net.minecraft.world.phys.shapes.VoxelShape;
@@ -30,6 +33,9 @@ public abstract class BlockCollisionsMixin {
             || entityContext.getEntity() == null
             || entityContext.getEntity() != OfflineClient.MC.player) {
             return shape;
+        }
+        if (state.is(Blocks.CACTUS) && Modules.enabled(AntiCactus.class)) {
+            return Shapes.block();
         }
         Jesus jesus = Modules.get(Jesus.class);
         return jesus == null ? shape : jesus.adjustShape(state, pos, shape);

@@ -51,7 +51,6 @@ public final class ScrollBar {
         return Math.min(view, Math.max(MIN_THUMB, view * view / total));
     }
 
-    // Called once per frame.
     public void update(int mouseY, int total, int view) {
         if (dragging && total > view && view > 0) {
             // Pointer travel maps onto the run the thumb has left in the track.

@@ -20,6 +20,12 @@ public final class RenderUtil {
     // Alpha runs from 0 to 1.
     public static void gradientText(GuiGraphicsExtractor context, Font font, String text,
                                     int x, int y, int from, int to, float alpha) {
+        gradientText(context, font, text, x, y, from, to, alpha, true);
+    }
+
+    // The drop shadow doubles up at a large scale. Big titles turn it off.
+    public static void gradientText(GuiGraphicsExtractor context, Font font, String text,
+                                    int x, int y, int from, int to, float alpha, boolean shadow) {
         if (alpha < 0.05f) {
             return;
         }
@@ -28,7 +34,7 @@ public final class RenderUtil {
         for (int i = 0; i < length; i++) {
             String ch = String.valueOf(text.charAt(i));
             int color = ColorUtil.lerp(from, to, length <= 1 ? 0 : (float) i / (length - 1));
-            context.text(font, ch, x, y, ColorUtil.fade(color, alpha), true);
+            context.text(font, ch, x, y, ColorUtil.fade(color, alpha), shadow);
             x += font.width(ch);
         }
     }
@@ -47,7 +53,7 @@ public final class RenderUtil {
         pose.pushMatrix();
         pose.translate(x, y);
         pose.scale(scale, scale);
-        gradientText(context, font, text, 0, 0, from, to, alpha);
+        gradientText(context, font, text, 0, 0, from, to, alpha, scale < 1.5f);
         pose.popMatrix();
     }
 
@@ -134,7 +140,6 @@ public final class RenderUtil {
         roundedRect(context, knobX, y + 2, knobX + knob, y + 2 + knob, knob / 2, knobColor);
     }
 
-    // Six wide and three tall.
     public static void chevron(GuiGraphicsExtractor context, int x, int y, boolean down, int color) {
         for (int i = 0; i < 3; i++) {
             int row = down ? y + i : y + 2 - i;
@@ -142,42 +147,97 @@ public final class RenderUtil {
         }
     }
 
-    // A hollow star reads as not chosen far better than a faded solid one.
-    private static final String[] STAR = {
-        "....#....",
-        "...###...",
-        "...###...",
-        "#########",
-        ".#######.",
-        "..#####..",
-        "..#####..",
-        ".##...##.",
-        "##.....##",
-    };
+    public static final int STAR_SIZE = 11;
 
-    public static final int STAR_SIZE = STAR.length;
+    // Sample points per pixel side. Sixteen per pixel smooths the edges.
+    private static final int STAR_SAMPLES = 4;
+    // Inner radius of a regular five point star as a share of the outer.
+    private static final double STAR_INNER = 0.382;
+    // How much smaller the cut out of the hollow star is.
+    private static final double STAR_HOLLOW = 0.6;
 
+    private static float[] starFill;
+    private static float[] starRing;
+
+    /**
+     * A five point star with soft edges. Chosen is solid and not chosen is
+     * a hollow ring of the same shape. Each pixel carries the share of its
+     * sample points that land inside the shape so the points stay crisp.
+     */
     public static void star(GuiGraphicsExtractor context, int x, int y, int color, boolean filled) {
-        for (int row = 0; row < STAR.length; row++) {
-            for (int col = 0; col < STAR[row].length(); col++) {
-                if (!starSolid(row, col) || (!filled && !starEdge(row, col))) {
-                    continue;
+        float[] cover = filled ? starFill() : starRing();
+        for (int row = 0; row < STAR_SIZE; row++) {
+            for (int col = 0; col < STAR_SIZE; col++) {
+                float share = cover[row * STAR_SIZE + col];
+                if (share > 0.02f) {
+                    context.fill(x + col, y + row, x + col + 1, y + row + 1,
+                        ColorUtil.fade(color, share));
                 }
-                context.fill(x + col, y + row, x + col + 1, y + row + 1, color);
             }
         }
     }
 
-    // A lit cell with any unlit neighbour is part of the outline.
-    private static boolean starEdge(int row, int col) {
-        return !starSolid(row - 1, col) || !starSolid(row + 1, col)
-            || !starSolid(row, col - 1) || !starSolid(row, col + 1);
+    private static float[] starFill() {
+        if (starFill == null) {
+            starFill = rasteriseStar(1);
+        }
+        return starFill;
     }
 
-    private static boolean starSolid(int row, int col) {
-        return row >= 0 && row < STAR.length
-            && col >= 0 && col < STAR[row].length()
-            && STAR[row].charAt(col) == '#';
+    private static float[] starRing() {
+        if (starRing == null) {
+            float[] outer = starFill();
+            float[] inner = rasteriseStar(STAR_HOLLOW);
+            starRing = new float[outer.length];
+            for (int i = 0; i < outer.length; i++) {
+                starRing[i] = Math.max(0, outer[i] - inner[i]);
+            }
+        }
+        return starRing;
+    }
+
+    // Coverage of every pixel by a star scaled about the middle of the cell.
+    private static float[] rasteriseStar(double scale) {
+        double centre = STAR_SIZE / 2.0;
+        double outer = centre * scale;
+        double[] xs = new double[10];
+        double[] ys = new double[10];
+        for (int i = 0; i < xs.length; i++) {
+            double angle = Math.toRadians(-90 + i * 36);
+            double radius = i % 2 == 0 ? outer : outer * STAR_INNER;
+            xs[i] = centre + Math.cos(angle) * radius;
+            ys[i] = centre + Math.sin(angle) * radius;
+        }
+        float[] cover = new float[STAR_SIZE * STAR_SIZE];
+        int perPixel = STAR_SAMPLES * STAR_SAMPLES;
+        for (int row = 0; row < STAR_SIZE; row++) {
+            for (int col = 0; col < STAR_SIZE; col++) {
+                int hits = 0;
+                for (int sy = 0; sy < STAR_SAMPLES; sy++) {
+                    for (int sx = 0; sx < STAR_SAMPLES; sx++) {
+                        double px = col + (sx + 0.5) / STAR_SAMPLES;
+                        double py = row + (sy + 0.5) / STAR_SAMPLES;
+                        if (insidePolygon(xs, ys, px, py)) {
+                            hits++;
+                        }
+                    }
+                }
+                cover[row * STAR_SIZE + col] = (float) hits / perPixel;
+            }
+        }
+        return cover;
+    }
+
+    // Crossing test. Works for the concave outline of a star.
+    private static boolean insidePolygon(double[] xs, double[] ys, double px, double py) {
+        boolean inside = false;
+        for (int i = 0, j = xs.length - 1; i < xs.length; j = i++) {
+            boolean crosses = (ys[i] > py) != (ys[j] > py);
+            if (crosses && px < (xs[j] - xs[i]) * (py - ys[i]) / (ys[j] - ys[i]) + xs[i]) {
+                inside = !inside;
+            }
+        }
+        return inside;
     }
 
     // Five pixels square.

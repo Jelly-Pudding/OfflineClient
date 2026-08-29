@@ -22,21 +22,33 @@ public final class NoKnockback extends Module {
         "Give explosions their own pair of sliders.", false);
     private final NumberSetting explosionHorizontal = new NumberSetting("Explosion horizontal",
         "How much sideways push to take from explosions.", 100, 0, 100, 1, "%")
-        .visibleWhen(separateExplosions::isOn);
+        .under(separateExplosions);
     private final NumberSetting explosionVertical = new NumberSetting("Explosion vertical",
         "How much upward push to take from explosions.", 100, 0, 100, 1, "%")
-        .visibleWhen(separateExplosions::isOn);
+        .under(separateExplosions);
+    private final BoolSetting fishingRods = new BoolSetting("Fishing rods",
+        "A rod hooked into you cannot reel you in.", true);
+    private final BoolSetting blockPush = new BoolSetting("Block push",
+        "Standing inside a block no longer shoves you out.", false);
 
     public NoKnockback() {
         super("NoKnockback", "Reduces or removes the knockback you take.", Category.MOVEMENT);
         addSettings(horizontal, vertical, separateExplosions, explosionHorizontal,
-            explosionVertical);
+            explosionVertical, fishingRods, blockPush);
         searchTags("velocity", "knockback", "antikb");
     }
 
     @Override
     public String getSuffix() {
         return horizontal.getInt() + "/" + vertical.getInt();
+    }
+
+    public boolean blocksFishingRods() {
+        return isEnabled() && fishingRods.isOn();
+    }
+
+    public boolean blocksBlockPush() {
+        return isEnabled() && blockPush.isOn();
     }
 
     @Subscribe

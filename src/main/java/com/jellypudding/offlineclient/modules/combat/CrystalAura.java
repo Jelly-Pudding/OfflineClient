@@ -80,7 +80,7 @@ public final class CrystalAura extends Module {
         "Ignore the minimum damage once the target is nearly finished.", true);
     private final NumberSetting facePlaceHealth = new NumberSetting("Face place health",
         "Health plus absorption at or below this counts as nearly finished.", 8, 1, 20, 0.5)
-        .visibleWhen(facePlace::isOn);
+        .under(facePlace);
     private final BoolSetting onlyOwn = new BoolSetting("Only own",
         "Only hit crystals you placed yourself.", false);
     private final BoolSetting oldPlacement = new BoolSetting("Old placement",

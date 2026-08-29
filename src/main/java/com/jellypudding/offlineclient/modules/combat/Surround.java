@@ -9,10 +9,17 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
+import com.jellypudding.offlineclient.util.ExplosionUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
+import com.jellypudding.offlineclient.util.RotationPriority;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.protocol.game.ServerboundAttackPacket;
+import net.minecraft.server.level.BlockDestructionProgress;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.boss.enderdragon.EndCrystal;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
@@ -22,6 +29,7 @@ import net.minecraft.world.phys.shapes.CollisionContext;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.SortedSet;
 
 // Missing support under a side is filled first.
 public final class Surround extends Module {
@@ -46,6 +54,8 @@ public final class Surround extends Module {
         "Send a look packet toward each block as it goes down.", true);
     private final BoolSetting doubleHeight = new BoolSetting("Double height",
         "Also wall the four sides at head height to stop a face place.", false);
+    private final BoolSetting protect = new BoolSetting("Protect",
+        "Hits any crystal sitting on an open side before it can be set off.", true);
     private final BoolSetting toggleOnDeath = new BoolSetting("Toggle off on death",
         "Turn off when you die instead of walling your respawn.", true);
     private final BoolSetting toggleOnDone = new BoolSetting("Toggle off when done",
@@ -62,7 +72,7 @@ public final class Surround extends Module {
     public Surround() {
         super("Surround", "Places blast proof blocks around your feet to stop crystals.", Category.COMBAT);
         addSettings(blocks, center, onlyOnGround, perTick, delay, rotate,
-            doubleHeight, toggleOnDeath, toggleOnDone, toggleOnMove, render);
+            doubleHeight, protect, toggleOnDeath, toggleOnDone, toggleOnMove, render);
         searchTags("obsidian", "crystal", "hole");
     }
 
@@ -102,6 +112,10 @@ public final class Surround extends Module {
         }
         if (onlyOnGround.isOn() && !mc.player.onGround()) {
             return;
+        }
+        // A crystal on an open side goes before the wall does. The delay never holds this up.
+        if (protect.isOn()) {
+            protectSides(feet);
         }
         if (timer > 0) {
             timer--;
@@ -212,6 +226,41 @@ public final class Surround extends Module {
 
     private int findBlastBlock() {
         return BlockUtil.findRankedBlockSlot(blocks.getValue(), block -> !NEVER.contains(block));
+    }
+
+    /**
+     * A side that is open or being mined is where a crystal would go. Any
+     * crystal touching such a side is hit unless popping it would kill us.
+     */
+    private void protectSides(BlockPos feet) {
+        float health = ExplosionUtil.totalHealth(mc.player);
+        for (Direction side : Direction.Plane.HORIZONTAL) {
+            BlockPos pos = feet.relative(side);
+            if (!BlockUtil.isReplaceable(pos) && !beingMined(pos)) {
+                continue;
+            }
+            AABB reach = new AABB(pos).inflate(1);
+            for (Entity crystal : mc.level.getEntities((Entity) null, reach, e -> e instanceof EndCrystal)) {
+                if (ExplosionUtil.crystalDamage(mc.player, crystal.position()) >= health) {
+                    continue;
+                }
+                if (rotate.isOn()) {
+                    BlockUtil.faceVector(crystal.position(), RotationPriority.ATTACK);
+                }
+                mc.player.connection.send(new ServerboundAttackPacket(crystal.getId()));
+                mc.player.swing(InteractionHand.MAIN_HAND);
+            }
+        }
+    }
+
+    // True whilst somebody has a crack pattern on the block.
+    private boolean beingMined(BlockPos pos) {
+        for (SortedSet<BlockDestructionProgress> progress : mc.level.destructionProgress().values()) {
+            if (!progress.isEmpty() && progress.last().getPos().equals(pos)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Subscribe

@@ -1,10 +1,10 @@
 package com.jellypudding.offlineclient.modules.combat;
 
-import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.EntityUtil;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
@@ -43,7 +43,7 @@ public final class Hitboxes extends Module {
             if (!players.isOn()) {
                 return 0;
             }
-            if (OfflineClient.INSTANCE.getFriendManager().isFriend(player.getGameProfile().name())) {
+            if (EntityUtil.isFriend(player)) {
                 return 0;
             }
             return expand.getValue();

@@ -24,18 +24,21 @@ public final class ElytraBoost extends Module {
         "Keeps firing on its own whilst you glide.", false);
     private final NumberSetting interval = new NumberSetting("Interval",
         "Seconds between rockets whilst Auto is on.", 3, 0.5, 15, 0.5, "s")
-        .min(MIN_GAP_TICKS / TICKS_PER_SECOND).visibleWhen(auto::isOn);
+        .min(MIN_GAP_TICKS / TICKS_PER_SECOND).under(auto);
     private final BoolSetting takeOff = new BoolSetting("Take off",
         "Opens the elytra when you press the bind midair.", true);
     private final BoolSetting swapBack = new BoolSetting("Swap back",
         "Returns to the slot you had after every rocket.", true);
+    private final BoolSetting fromInventory = new BoolSetting("Take from inventory",
+        "Borrows rockets from the rest of the inventory when the hotbar has none.", true);
 
     private int lastFireTick = Integer.MIN_VALUE / 2;
     private boolean warned;
+    private final InventoryUtil.HotbarLoan loan = new InventoryUtil.HotbarLoan();
 
     public ElytraBoost() {
         super("ElytraBoost", "Press the bind whilst gliding to fire a firework rocket.", Category.MOVEMENT);
-        addSettings(auto, interval, takeOff, swapBack);
+        addSettings(auto, interval, takeOff, swapBack, fromInventory);
         searchTags("elytra", "firework", "rocket", "boost");
     }
 
@@ -51,6 +54,11 @@ public final class ElytraBoost extends Module {
     @Override
     protected void onEnable() {
         warned = false;
+    }
+
+    @Override
+    protected void onDisable() {
+        loan.giveBack();
     }
 
     @Override
@@ -105,7 +113,8 @@ public final class ElytraBoost extends Module {
             && mc.player.getItemBySlot(EquipmentSlot.CHEST).is(Items.ELYTRA);
     }
 
-    private void fire() {
+    // Also used by ElytraFly whilst it cruises on rockets.
+    public void fire() {
         if (now() - lastFireTick < MIN_GAP_TICKS) {
             return;
         }
@@ -114,10 +123,13 @@ public final class ElytraBoost extends Module {
             return;
         }
         int slot = InventoryUtil.hotbarSlot(stack -> stack.is(Items.FIREWORK_ROCKET));
+        if (slot == -1 && fromInventory.isOn()) {
+            slot = borrowRockets();
+        }
         if (slot == -1) {
             if (!warned) {
                 warned = true;
-                ChatUtil.error("You have no firework rockets in your hotbar.");
+                ChatUtil.error("You have no firework rockets" + (fromInventory.isOn() ? "." : " in your hotbar."));
             }
             return;
         }
@@ -130,6 +142,24 @@ public final class ElytraBoost extends Module {
         if (swapBack.isOn() && slot != previous) {
             mc.player.getInventory().setSelectedSlot(previous);
         }
+    }
+
+    // Moves a stack of rockets into the hotbar. The slot it landed in or minus one.
+    private int borrowRockets() {
+        for (int i = InventoryUtil.HOTBAR_SIZE; i < InventoryUtil.WHOLE_INVENTORY; i++) {
+            if (!mc.player.getInventory().getItem(i).is(Items.FIREWORK_ROCKET)) {
+                continue;
+            }
+            int before = mc.player.getInventory().getSelectedSlot();
+            if (!loan.select(i)) {
+                return -1;
+            }
+            int slot = mc.player.getInventory().getSelectedSlot();
+            // The loan selected the slot for us. The caller decides what to hold.
+            mc.player.getInventory().setSelectedSlot(before);
+            return slot;
+        }
+        return -1;
     }
 
     private void use(InteractionHand hand) {

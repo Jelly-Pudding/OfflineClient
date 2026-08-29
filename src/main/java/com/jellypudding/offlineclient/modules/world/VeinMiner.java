@@ -30,22 +30,7 @@ import java.util.Set;
  */
 public final class VeinMiner extends Module {
 
-    public enum Targets {
-        ORES("Ores"),
-        ORES_AND_LOGS("Ores and logs"),
-        ANY("Any block");
-
-        private final String label;
-
-        Targets(String label) {
-            this.label = label;
-        }
-
-        @Override
-        public String toString() {
-            return label;
-        }
-    }
+    public enum Targets { ORES, ORES_AND_LOGS, ANY_BLOCK }
 
     private static final int OUTLINE_COLOR = 0xFFFFA020;
 
@@ -56,7 +41,10 @@ public final class VeinMiner extends Module {
     private final NumberSetting maxBlocks = new NumberSetting("Max blocks",
         "The most blocks one vein may contain.", 32, 1, 128, 1).min(1);
     private final EnumSetting<Targets> targets = new EnumSetting<>("Targets",
-        "Which block types count as a vein.", Targets.ORES);
+        "Which block types count as a vein.", Targets.ORES)
+        .describe(Targets.ORES, "Only ore veins.")
+        .describe(Targets.ORES_AND_LOGS, "Ore veins and tree trunks.")
+        .describe(Targets.ANY_BLOCK, "Any run of matching blocks.");
     private final BoolSetting rotate = new BoolSetting("Rotate",
         "Turn toward each block on the server side.", true);
 
@@ -212,7 +200,7 @@ public final class VeinMiner extends Module {
         return switch (targets.getValue()) {
             case ORES -> BlockUtil.isOre(state);
             case ORES_AND_LOGS -> BlockUtil.isOre(state) || state.is(BlockTags.LOGS);
-            case ANY -> !state.getShape(mc.level, pos).isEmpty();
+            case ANY_BLOCK -> !state.getShape(mc.level, pos).isEmpty();
         };
     }
 

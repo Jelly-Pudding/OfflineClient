@@ -26,26 +26,13 @@ public final class Criticals extends Module {
     // Leading packets that keep the movement checker from rejecting the lift.
     private static final int MACE_SETTLE_PACKETS = 4;
 
-    public enum Mode {
-        PACKET("Packet"),
-        MINI_JUMP("Mini jump"),
-        FULL_JUMP("Full jump");
-
-        private final String name;
-
-        Mode(String name) {
-            this.name = name;
-        }
-
-        @Override
-        public String toString() {
-            return name;
-        }
-    }
+    public enum Mode { PACKET, MINI_JUMP, FULL_JUMP }
 
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
-        "How to get the fall a critical hit needs.",
-        Mode.PACKET);
+        "How to get the fall a critical hit needs.", Mode.PACKET)
+        .describe(Mode.PACKET, "Sends the tiny fall the server checks for without moving you.")
+        .describe(Mode.MINI_JUMP, "A small hop that lands as a critical.")
+        .describe(Mode.FULL_JUMP, "A normal jump. Slowest but the most natural.");
 
     private final BoolSetting mace = new BoolSetting("Mace smash",
         "Fakes a long fall whilst holding a mace to land every swing as a smash attack.", false);

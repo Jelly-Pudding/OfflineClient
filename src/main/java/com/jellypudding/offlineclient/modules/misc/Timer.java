@@ -31,6 +31,12 @@ public final class Timer extends Module {
         return new BigDecimal(Float.toString(effective)).stripTrailingZeros().toPlainString() + "x";
     }
 
+    // The game speed in force right now. One when nothing is speeding it up.
+    public static float current() {
+        Timer timer = Modules.get(Timer.class);
+        return timer == null ? 1f : timer.getSpeed();
+    }
+
     // Pushes an override without the caller having to look the module up first.
     public static void override(String key, float multiplier) {
         Timer timer = Modules.get(Timer.class);

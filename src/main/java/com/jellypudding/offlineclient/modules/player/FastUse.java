@@ -25,34 +25,22 @@ import net.minecraft.world.item.WindChargeItem;
  */
 public final class FastUse extends Module {
 
-    public enum Mode {
-        ALL("All items"),
-        CHOSEN("Chosen only");
-
-        private final String name;
-
-        Mode(String name) {
-            this.name = name;
-        }
-
-        @Override
-        public String toString() {
-            return name;
-        }
-    }
+    public enum Mode { ALL_ITEMS, CHOSEN_ONLY }
 
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
-        "Speed up everything or only the kinds ticked below.", Mode.ALL);
+        "What gets sped up.", Mode.ALL_ITEMS)
+        .describe(Mode.ALL_ITEMS, "Speeds up everything you can use.")
+        .describe(Mode.CHOSEN_ONLY, "Speeds up only the kinds ticked below.");
     private final BoolSetting food = new BoolSetting("Food",
-        "Anything you can eat or drink.", true).visibleWhen(() -> mode.is(Mode.CHOSEN));
+        "Anything you can eat or drink.", true).under(mode, Mode.CHOSEN_ONLY);
     private final BoolSetting pearls = new BoolSetting("Ender pearls",
-        "Ender pearls.", true).visibleWhen(() -> mode.is(Mode.CHOSEN));
+        "Ender pearls.", true).under(mode, Mode.CHOSEN_ONLY);
     private final BoolSetting potions = new BoolSetting("Splash potions",
-        "Splash and lingering potions.", true).visibleWhen(() -> mode.is(Mode.CHOSEN));
+        "Splash and lingering potions.", true).under(mode, Mode.CHOSEN_ONLY);
     private final BoolSetting experience = new BoolSetting("Experience bottles",
-        "Bottles of enchanting.", true).visibleWhen(() -> mode.is(Mode.CHOSEN));
+        "Bottles of enchanting.", true).under(mode, Mode.CHOSEN_ONLY);
     private final BoolSetting throwables = new BoolSetting("Snowballs and eggs",
-        "Snowballs and eggs and wind charges.", false).visibleWhen(() -> mode.is(Mode.CHOSEN));
+        "Snowballs and eggs and wind charges.", false).under(mode, Mode.CHOSEN_ONLY);
     private final NumberSetting cooldown = new NumberSetting("Cooldown",
         "Ticks to keep between uses. 0 is one use every tick.", 0, 0, 4, 1, " ticks").max(4);
 
@@ -82,7 +70,7 @@ public final class FastUse extends Module {
         if (held.isEmpty() || held.getItem() instanceof BlockItem) {
             return;
         }
-        if (mode.is(Mode.ALL) || wanted(held)) {
+        if (mode.is(Mode.ALL_ITEMS) || wanted(held)) {
             capUseDelay(cooldown.getInt());
         }
     }

@@ -7,72 +7,125 @@ import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.ExclusivityGroup;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
+import com.jellypudding.offlineclient.setting.ColorSetting;
+import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.AxisWalker;
 import com.jellypudding.offlineclient.util.BlockMiner;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.ColorUtil;
+import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Predicate;
 
 /**
- * Builds a highway along one axis at the height it starts from. One phase runs
- * per tick.
+ * Builds a highway along one line at the height it starts from. Every tick
+ * the stretch around the player is checked and the nearest job in reach is
+ * done. Clearing comes first and then the floor and the walls and the
+ * ceiling. Blocks with nothing to lean on are placed straight into the air
+ * the way AirPlace does so a wall or a floor can start anywhere. The line
+ * may run diagonally in which case the shell is picked by distance from it.
  */
 public final class HighwayBuilder extends Module {
 
-    private static final int TUNNEL_COLOR = 0xFF40C0FF;
     private static final int MINE_COLOR = 0xFFFF5030;
-    private static final int PAVE_COLOR = 0xFF50FF80;
+    private static final int PLACE_COLOR = 0xFF50FF80;
 
-    // Finished blocks that must lie ahead before walking on.
-    private static final double LEAD = 1.5;
+    // Finished depths that must lie ahead before the module walks on.
+    private static final int LEAD = 2;
 
-    // Ticks of no progress before the module gives up.
-    private static final int IDLE_LIMIT = 100;
+    // How far ahead of the player the work reaches and how far behind it is checked.
+    private static final int AHEAD = 6;
+    private static final int BEHIND = 2;
 
-    // Depths looked at in one tick. Keeps a long clear stretch cheap.
-    private static final int SCAN_DEPTHS = 8;
+    // Ticks of no progress before the module gives up walking on its own.
+    private static final int IDLE_LIMIT = 200;
+
+    // A walking pace in blocks per tick whilst the view is left free.
+    private static final double WALK_SPEED = 0.13;
+
+    public enum Movement { AUTO, MANUAL }
 
     private final NumberSetting width = new NumberSetting("Width",
         "How wide the highway is.", 4, 1, 5, 1, " blocks").min(1).max(9);
     private final NumberSetting height = new NumberSetting("Height",
-        "How tall the cleared tunnel is.", 3, 2, 5, 1, " blocks").min(2).max(9);
-    private final BoolSetting pave = new BoolSetting("Pave",
-        "Fills the floor under the highway as you go.", true);
+        "How tall the tunnel is. Walls are built to the same height.", 3, 2, 5, 1, " blocks").min(2).max(9);
+    private final BoolSetting diagonal = new BoolSetting("Diagonal",
+        "Lets the line run at forty five degrees when you face that way.", false);
+    private final EnumSetting<Movement> movement = new EnumSetting<>("Movement",
+        "Who walks.", Movement.AUTO)
+        .describe(Movement.AUTO, "The module walks on once the stretch ahead is finished.")
+        .describe(Movement.MANUAL, "You walk. The module builds around wherever you are along the line.");
+    private final BoolSetting freeLook = new BoolSetting("Free look",
+        "Leaves your view alone. The walking and building follow the line on their own.", false)
+        .under(movement, Movement.AUTO);
+    private final BoolSetting skipUnreachable = new BoolSetting("Skip unreachable",
+        "Walks on past blocks you cannot reach from the line instead of waiting for them.", true)
+        .under(movement, Movement.AUTO);
     private final RegistryListSetting<Block> blocks = new RegistryListSetting<>("Blocks",
-        "The blocks allowed in the floor. The first one you carry gets used.",
+        "The blocks allowed in the build. The first one you carry gets used.",
         BuiltInRegistries.BLOCK,
         List.of(Blocks.OBSIDIAN, Blocks.NETHERRACK, Blocks.BLACKSTONE, Blocks.BASALT,
-            Blocks.COBBLESTONE, Blocks.COBBLED_DEEPSLATE))
-        .visibleWhen(pave::isOn);
+            Blocks.COBBLESTONE, Blocks.COBBLED_DEEPSLATE));
+    private final BoolSetting floor = new BoolSetting("Floor",
+        "Fills the floor under the highway.", true);
+    private final BoolSetting replaceFloor = new BoolSetting("Replace floor",
+        "Digs out floor blocks that are not on the list and paves over them.", false)
+        .under(floor);
+    private final BoolSetting walls = new BoolSetting("Walls",
+        "Builds a wall down each side of the highway.", false);
+    private final BoolSetting replaceWalls = new BoolSetting("Replace walls",
+        "Digs out wall blocks that are not on the list and rebuilds them.", false)
+        .under(walls);
+    private final BoolSetting ceiling = new BoolSetting("Ceiling",
+        "Roofs the highway over.", false);
+    private final BoolSetting replaceCeiling = new BoolSetting("Replace ceiling",
+        "Digs out ceiling blocks that are not on the list and roofs over them.", false)
+        .under(ceiling);
+    private final BoolSetting torches = new BoolSetting("Torches",
+        "Puts a torch on the left edge as you go. Needs torches in your hotbar.", false);
+    private final NumberSetting torchSpacing = new NumberSetting("Torch spacing",
+        "Blocks between one torch and the next.", 8, 2, 16, 1, " blocks").min(1)
+        .under(torches);
+    private final NumberSetting torchHeight = new NumberSetting("Torch height",
+        "Blocks of air under the torch. Zero stands it on the floor and anything higher hangs it on the wall. Capped one below the height.",
+        0, 0, 4, 1, " blocks").min(0).max(8).under(torches);
     private final BoolSetting stopWhenEmpty = new BoolSetting("Stop when empty",
-        "Turns the module off once you run out of floor blocks.", true)
-        .visibleWhen(pave::isOn);
+        "Turns the module off once you run out of blocks.", true);
+    private final BoolSetting outline = new BoolSetting("Outline",
+        "Draws the stretch being worked on.", true);
+    private final ColorSetting outlineColor = new ColorSetting("Outline colour",
+        "Colour of the outline.", 200, false).under(outline);
 
     private final AxisWalker walker = new AxisWalker();
     private final SlotSwap slots = new SlotSwap();
-    private int cleared;
-    private int paved;
+
     private int idleTicks;
     private double bestTravelled;
+    private boolean walking;
 
     private BlockPos mineTarget;
-    private BlockPos paveTarget;
+    private BlockPos placeTarget;
+
+    // Every block of the shell around the player this tick.
+    private final List<BlockPos> stretch = new ArrayList<>();
 
     public HighwayBuilder() {
-        super("HighwayBuilder", "Digs and paves a highway along one axis at a fixed height.", Category.WORLD);
-        addSettings(width, height, pave, blocks, stopWhenEmpty);
+        super("HighwayBuilder", "Digs and builds a highway along one line at a fixed height.", Category.WORLD);
+        addSettings(width, height, diagonal, movement, freeLook, skipUnreachable, blocks, floor,
+            replaceFloor, walls, replaceWalls, ceiling, replaceCeiling, torches, torchSpacing,
+            torchHeight, stopWhenEmpty, outline, outlineColor);
         searchTags("highway", "nether", "tunnel", "road");
     }
 
@@ -81,7 +134,7 @@ public final class HighwayBuilder extends Module {
         if (!walker.isLocked()) {
             return null;
         }
-        return walker.axis().getName() + " " + (int) Math.max(0, bestTravelled);
+        return walker.heading() + " " + (int) Math.max(0, bestTravelled);
     }
 
     // Bringing this back at launch would start digging at once.
@@ -100,7 +153,7 @@ public final class HighwayBuilder extends Module {
         walker.clear();
         slots.forget();
         mineTarget = null;
-        paveTarget = null;
+        placeTarget = null;
         if (inGame()) {
             lockAxis();
         }
@@ -110,16 +163,15 @@ public final class HighwayBuilder extends Module {
     protected void onDisable() {
         BlockMiner.release();
         slots.restoreIfMine();
-        mc.options.keyUp.setDown(false);
+        stopWalking();
         walker.clear();
         mineTarget = null;
-        paveTarget = null;
+        placeTarget = null;
+        stretch.clear();
     }
 
     private void lockAxis() {
-        walker.lock();
-        cleared = 0;
-        paved = 0;
+        walker.lock(diagonal.isOn());
         idleTicks = 0;
         bestTravelled = 0;
     }
@@ -127,7 +179,7 @@ public final class HighwayBuilder extends Module {
     @Subscribe
     private void onTick(TickEvent event) {
         mineTarget = null;
-        paveTarget = null;
+        placeTarget = null;
         if (!inGame()) {
             return;
         }
@@ -137,21 +189,25 @@ public final class HighwayBuilder extends Module {
         if (!safeToWork()) {
             return;
         }
-
-        walker.holdAxis();
+        boolean auto = movement.is(Movement.AUTO);
+        walker.holdAxis(auto && !freeLook.isOn());
         trackProgress();
 
-        if (clearAhead()) {
+        double here = walker.travelled();
+        gatherStretch(here - BEHIND, here + AHEAD);
+        if (work()) {
+            if (auto) {
+                stopWalking();
+            }
             return;
         }
-        if (pave.isOn() && paveAhead()) {
-            return;
-        }
-        // Running out of floor blocks turns the module off inside that phase.
+        // Running out of blocks turns the module off inside a fill.
         if (!isEnabled()) {
             return;
         }
-        walk();
+        if (auto) {
+            walk(here);
+        }
     }
 
     private boolean safeToWork() {
@@ -163,7 +219,7 @@ public final class HighwayBuilder extends Module {
             stop("HighwayBuilder stopped because you left the highway floor.");
             return false;
         }
-        if (idleTicks > IDLE_LIMIT) {
+        if (movement.is(Movement.AUTO) && idleTicks > IDLE_LIMIT) {
             stop("HighwayBuilder stopped because it could not get any further.");
             return false;
         }
@@ -180,125 +236,266 @@ public final class HighwayBuilder extends Module {
         }
     }
 
-    // Breaks one block out of the tunnel ahead. True when it took the tick.
-    private boolean clearAhead() {
-        for (int scanned = 0; scanned < SCAN_DEPTHS; scanned++) {
-            Slice ahead = scan(tunnelSlice(cleared + 1), BlockUtil::diggable);
-            if (!ahead.anyLeft()) {
-                cleared++;
-                continue;
+    /**
+     * Collects every block of the tunnel and its shell between two depths
+     * along the line. The box around the player is sieved by distance along
+     * and across the line so a diagonal works the same as a straight run.
+     */
+    private void gatherStretch(double from, double to) {
+        stretch.clear();
+        int reach = AHEAD + width.getInt() + 2;
+        BlockPos centre = mc.player.blockPosition();
+        int tall = height.getInt();
+        double nearEdge = leftLane() - 1.5;
+        double farEdge = rightLane() + 1.5;
+        for (int dx = -reach; dx <= reach; dx++) {
+            for (int dz = -reach; dz <= reach; dz++) {
+                int x = centre.getX() + dx;
+                int z = centre.getZ() + dz;
+                double along = walker.alongOf(x + 0.5, z + 0.5);
+                if (along < from || along > to) {
+                    continue;
+                }
+                double across = walker.acrossOf(x + 0.5, z + 0.5);
+                if (across < nearEdge || across > farEdge) {
+                    continue;
+                }
+                for (int up = -1; up <= tall; up++) {
+                    stretch.add(new BlockPos(x, walker.floorY() + up, z));
+                }
             }
-            if (ahead.nearest() == null) {
-                return false;
-            }
-            mineTarget = ahead.nearest();
+        }
+    }
+
+    /**
+     * Does the nearest job across the stretch. Clearing wins over filling so
+     * nothing is built into a block that still has to come out. True when
+     * the tick was spent on something.
+     */
+    private boolean work() {
+        BlockPos dig = nearest(this::needsClearing);
+        if (dig != null) {
+            mineTarget = dig;
             idleTicks = 0;
-            mc.options.keyUp.setDown(false);
             slots.restoreIfMine();
-            if (!BlockMiner.mine(mineTarget, true)) {
+            if (!BlockMiner.mine(dig, true)) {
                 mineTarget = null;
                 return false;
             }
             return true;
         }
-        return false;
-    }
-
-    // Fills one gap in the floor ahead. True when it took the tick.
-    private boolean paveAhead() {
-        for (int scanned = 0; scanned < SCAN_DEPTHS; scanned++) {
-            Slice ahead = scan(floorSlice(paved + 1), HighwayBuilder::fillable);
-            if (!ahead.anyLeft()) {
-                paved++;
-                continue;
-            }
-            if (ahead.nearest() == null) {
-                return false;
-            }
-            paveTarget = ahead.nearest();
-            return place(paveTarget);
+        BlockMiner.release();
+        BlockPos fill = nearest(this::needsFilling);
+        if (fill != null) {
+            placeTarget = fill;
+            return place(fill);
         }
+        BlockPos torch = nearest(this::needsTorch);
+        if (torch != null) {
+            return placeTorch(torch);
+        }
+        slots.restoreIfMine();
         return false;
     }
 
-    // The nearest wanted block in reach. anyLeft says the slice has work left.
-    private record Slice(BlockPos nearest, boolean anyLeft) {
-    }
-
-    private Slice scan(List<BlockPos> positions, Predicate<BlockPos> wanted) {
+    // The closest block of the stretch in reach that passes the test.
+    private BlockPos nearest(Predicate<BlockPos> wanted) {
         double reach = mc.player.blockInteractionRange();
-        BlockPos nearest = null;
+        BlockPos best = null;
         double bestDistance = Double.MAX_VALUE;
-        boolean anyLeft = false;
-        for (BlockPos pos : positions) {
+        for (BlockPos pos : stretch) {
             if (!wanted.test(pos)) {
                 continue;
             }
-            anyLeft = true;
             double distance = BlockUtil.distanceTo(pos);
             if (distance <= reach && distance < bestDistance) {
                 bestDistance = distance;
-                nearest = pos;
+                best = pos;
             }
         }
-        return new Slice(nearest, anyLeft);
+        return best;
     }
 
-    private static boolean fillable(BlockPos pos) {
-        return BlockUtil.isReplaceable(pos) && !BlockUtil.intersectsPlayer(pos);
+    private enum Part { TUNNEL, FLOOR, WALL, CEILING, OUTSIDE }
+
+    // Which part of the highway a block belongs to by where its middle falls.
+    private Part partOf(BlockPos pos) {
+        int up = pos.getY() - walker.floorY();
+        double across = walker.acrossOf(pos);
+        boolean inside = across >= leftLane() - 0.5 && across <= rightLane() + 0.5;
+        boolean beside = !inside && across >= leftLane() - 1.5 && across <= rightLane() + 1.5;
+        int tall = height.getInt();
+        if (inside && up >= 0 && up < tall) {
+            return Part.TUNNEL;
+        }
+        if (inside && up == -1) {
+            return Part.FLOOR;
+        }
+        if (beside && up >= 0 && up < tall) {
+            return Part.WALL;
+        }
+        if (up == tall && (inside || (beside && walls.isOn()))) {
+            return Part.CEILING;
+        }
+        // The blocks the walls stand on are part of the floor once walls are wanted.
+        if (beside && up == -1 && walls.isOn()) {
+            return Part.FLOOR;
+        }
+        return Part.OUTSIDE;
     }
 
+    // Anything in the tunnel. A shell block that is not on the list when that shell is being replaced.
+    private boolean needsClearing(BlockPos pos) {
+        if (!BlockUtil.diggable(pos) || BlockUtil.isStandingOn(pos)) {
+            return false;
+        }
+        Part part = partOf(pos);
+        if (part == Part.TUNNEL) {
+            // Torches light the way and never block it.
+            return !isTorch(BlockUtil.state(pos).getBlock());
+        }
+        if (allowed(BlockUtil.state(pos).getBlock())) {
+            return false;
+        }
+        return switch (part) {
+            case FLOOR -> floor.isOn() && replaceFloor.isOn();
+            case WALL -> walls.isOn() && replaceWalls.isOn();
+            case CEILING -> ceiling.isOn() && replaceCeiling.isOn();
+            default -> false;
+        };
+    }
+
+    private boolean needsFilling(BlockPos pos) {
+        if (!BlockUtil.isReplaceable(pos) || BlockUtil.intersectsPlayer(pos)) {
+            return false;
+        }
+        return switch (partOf(pos)) {
+            case FLOOR -> floor.isOn();
+            case WALL -> walls.isOn();
+            case CEILING -> ceiling.isOn();
+            default -> false;
+        };
+    }
+
+    // A block goes against a neighbour when there is one and into the air when there is not.
     private boolean place(BlockPos target) {
         int slot = BlockUtil.findBlockSlot(this::allowed);
         if (slot == -1) {
             if (stopWhenEmpty.isOn()) {
-                stop("HighwayBuilder stopped because you ran out of floor blocks.");
+                stop("HighwayBuilder stopped because you ran out of blocks.");
             }
             return false;
         }
-        Direction support = BlockUtil.findPlaceSupport(target);
-        if (support == null) {
-            return false;
-        }
         slots.select(slot);
-        boolean placed = BlockUtil.place(target, support, true, true);
+        Direction support = BlockUtil.findPlaceSupport(target);
+        boolean placed = support != null
+            ? BlockUtil.place(target, support, true, true)
+            : BlockUtil.placeDirect(target, true, true);
         if (placed) {
             idleTicks = 0;
-            mc.options.keyUp.setDown(false);
         }
         return placed;
     }
 
-    private void walk() {
-        BlockMiner.release();
+    // The torch never sits above the top of the tunnel.
+    private int torchUp() {
+        return Math.min(torchHeight.getInt(), height.getInt() - 1);
+    }
+
+    /**
+     * The torch spots sit on the left edge every few blocks at the chosen
+     * height. On the floor a torch stands on the block below. Higher up it
+     * hangs on the wall beside it.
+     */
+    private boolean needsTorch(BlockPos pos) {
+        if (!torches.isOn() || pos.getY() - walker.floorY() != torchUp()) {
+            return false;
+        }
+        double across = walker.acrossOf(pos);
+        if (across < leftLane() - 0.5 || across >= leftLane() + 0.5) {
+            return false;
+        }
+        int depth = walker.depthOf(pos);
+        if (depth <= 0 || depth % torchSpacing.getInt() != 0) {
+            return false;
+        }
+        return BlockUtil.isReplaceable(pos) && !BlockUtil.intersectsPlayer(pos) && torchSupport(pos) != null;
+    }
+
+    private Direction torchSupport(BlockPos pos) {
+        if (BlockUtil.isSolid(pos.below())) {
+            return Direction.DOWN;
+        }
+        for (Direction side : Direction.Plane.HORIZONTAL) {
+            BlockPos beside = pos.relative(side);
+            if (BlockUtil.isSolid(beside) && partOf(beside) == Part.WALL) {
+                return side;
+            }
+        }
+        return null;
+    }
+
+    private boolean placeTorch(BlockPos pos) {
+        int slot = BlockUtil.findBlockSlot(block -> block == Blocks.TORCH || block == Blocks.SOUL_TORCH);
+        if (slot == -1) {
+            return false;
+        }
+        Direction support = torchSupport(pos);
+        if (support == null) {
+            return false;
+        }
+        slots.select(slot);
+        boolean placed = BlockUtil.place(pos, support, true, true);
         slots.restoreIfMine();
-        int ready = pave.isOn() ? Math.min(cleared, paved) : cleared;
-        mc.options.keyUp.setDown(ready >= walker.travelled() + LEAD);
+        return placed;
+    }
+
+    // Walks once the stretch just ahead is finished or only holds work out of reach.
+    private void walk(double here) {
+        slots.restoreIfMine();
+        boolean go = stretchDone(here + 1, here + LEAD);
+        if (freeLook.isOn()) {
+            stopWalking();
+            if (go) {
+                walker.walkAlong(WALK_SPEED);
+            }
+            return;
+        }
+        walking = go;
+        mc.options.keyUp.setDown(go || InputUtil.physicallyHeld(mc.options.keyUp));
+    }
+
+    private boolean stretchDone(double from, double to) {
+        double reach = mc.player.blockInteractionRange();
+        for (BlockPos pos : stretch) {
+            double along = walker.alongOf(pos);
+            if (along < from || along > to) {
+                continue;
+            }
+            if (!needsClearing(pos) && !needsFilling(pos)) {
+                continue;
+            }
+            if (!skipUnreachable.isOn() || BlockUtil.distanceTo(pos) <= reach) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private void stopWalking() {
+        if (walking) {
+            walking = false;
+            mc.options.keyUp.setDown(InputUtil.physicallyHeld(mc.options.keyUp));
+        }
     }
 
     private boolean allowed(Block block) {
-        if (blocks.size() == 0) {
-            return false;
-        }
-        return blocks.contains(block);
+        return blocks.size() != 0 && blocks.contains(block);
     }
 
-    private List<BlockPos> tunnelSlice(int depth) {
-        List<BlockPos> result = new ArrayList<>(width.getInt() * height.getInt());
-        for (int lane = leftLane(); lane <= rightLane(); lane++) {
-            for (int up = 0; up < height.getInt(); up++) {
-                result.add(walker.blockAt(depth, lane, up));
-            }
-        }
-        return result;
-    }
-
-    private List<BlockPos> floorSlice(int depth) {
-        List<BlockPos> result = new ArrayList<>(width.getInt());
-        for (int lane = leftLane(); lane <= rightLane(); lane++) {
-            result.add(walker.blockAt(depth, lane, -1));
-        }
-        return result;
+    private static boolean isTorch(Block block) {
+        return block == Blocks.TORCH || block == Blocks.WALL_TORCH
+            || block == Blocks.SOUL_TORCH || block == Blocks.SOUL_WALL_TORCH;
     }
 
     private int leftLane() {
@@ -319,14 +516,36 @@ public final class HighwayBuilder extends Module {
         if (!walker.isLocked() || !inGame()) {
             return;
         }
-        AABB near = new AABB(walker.blockAt(1, leftLane(), -1));
-        AABB far = new AABB(walker.blockAt(Math.max(1, cleared), rightLane(), height.getInt() - 1));
-        event.getBatch().outlineBox(near.minmax(far).inflate(0.005), TUNNEL_COLOR, true);
+        if (outline.isOn()) {
+            drawStretch(event);
+        }
         if (mineTarget != null) {
             event.getBatch().outlineBlock(mineTarget, MINE_COLOR, false);
         }
-        if (paveTarget != null) {
-            event.getBatch().outlineBlock(paveTarget, PAVE_COLOR, false);
+        if (placeTarget != null) {
+            event.getBatch().outlineBlock(placeTarget, PLACE_COLOR, false);
+        }
+    }
+
+    // A frame around the tunnel from just behind the player to the end of the reach.
+    private void drawStretch(Render3DEvent event) {
+        int color = ColorUtil.withAlpha(outlineColor.getColor(), 255);
+        double here = Math.floor(walker.travelled());
+        double from = here - BEHIND;
+        double to = here + AHEAD + 1;
+        double left = leftLane() - 0.5;
+        double right = rightLane() + 0.5;
+        int tall = height.getInt();
+        Vec3[] corners = {
+            walker.pointAt(from, left, 0), walker.pointAt(from, right, 0),
+            walker.pointAt(to, right, 0), walker.pointAt(to, left, 0)
+        };
+        for (int i = 0; i < 4; i++) {
+            Vec3 a = corners[i];
+            Vec3 b = corners[(i + 1) % 4];
+            event.getBatch().line(a, b, color, true);
+            event.getBatch().line(a.add(0, tall, 0), b.add(0, tall, 0), color, true);
+            event.getBatch().line(a, a.add(0, tall, 0), color, true);
         }
     }
 }

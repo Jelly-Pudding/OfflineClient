@@ -15,6 +15,7 @@ import com.jellypudding.offlineclient.util.RenderUtil;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 
+import java.util.ArrayList;
 import java.util.List;
 
 // Draws one setting row and turns clicks on it into changes.
@@ -25,6 +26,9 @@ public final class SettingWidget {
     private static final int VALUE_BAND = GuiTheme.SETTING_HEIGHT - 5;
     private static final int INDENT = 10;
     private static final int BOX = 9;
+
+    // Each level of sub option steps in by this much with a guide line beside it.
+    private static final int SUB_INDENT = 8;
 
     // A colour row carries a hue bar then a saturation bar then a brightness bar.
     private static final int COLOR_BARS = 3;
@@ -66,6 +70,9 @@ public final class SettingWidget {
         private ColorSetting color;
         private int channel;
 
+        // How far the row being dragged sits in from the block edge.
+        private int indent;
+
         public boolean isActive() {
             return slider != null || color != null;
         }
@@ -73,10 +80,10 @@ public final class SettingWidget {
         // Called every frame with the geometry of the settings block.
         public void follow(int x, int width, int mouseX) {
             if (slider != null) {
-                slider.setFromSlider(fraction(x, width, mouseX));
+                slider.setFromSlider(fraction(x + indent, width - indent, mouseX));
             }
             if (color != null) {
-                setChannel(color, channel, (float) fraction(x, width, mouseX));
+                setChannel(color, channel, (float) fraction(x + indent, width - indent, mouseX));
             }
         }
 
@@ -137,17 +144,20 @@ public final class SettingWidget {
 
         switch (setting) {
             case BoolSetting b -> {
-                context.text(font, b.getName(), x + PAD, ty, nameColor, false);
+                context.text(font, trimEnd(font, b.getName(), w - 2 * PAD - BOX - 4),
+                    x + PAD, ty, nameColor, false);
                 checkbox(context, x + w - PAD - BOX, y + (h - BOX) / 2, b.isOn());
             }
             case NumberSetting n -> {
-                context.text(font, n.getName(), x + PAD, bandY, nameColor, false);
+                int room = w - 2 * PAD - font.width(n.getValueString()) - 6;
+                context.text(font, trimEnd(font, n.getName(), room), x + PAD, bandY, nameColor, false);
                 renderNumber(context, font, n, x, y, w, mouseX, mouseY, hoverAllowed, host);
             }
             case KeybindSetting k -> {
-                context.text(font, k.getName(), x + PAD, ty, nameColor, false);
-                keyChip(context, font, x + w - PAD, y, host.isBinding(k) ? "press a key" : k.getKeyName(),
-                    host.isBinding(k));
+                String label = host.isBinding(k) ? "press a key" : k.getKeyName();
+                int room = w - 2 * PAD - font.width(label) - 12;
+                context.text(font, trimEnd(font, k.getName(), room), x + PAD, ty, nameColor, false);
+                keyChip(context, font, x + w - PAD, y, label, host.isBinding(k));
             }
             case EnumSetting<?> e -> {
                 context.text(font, e.getName(), x + PAD, ty, nameColor, false);
@@ -157,12 +167,14 @@ public final class SettingWidget {
                     GuiTheme.accentText(), false);
             }
             case ColorSetting c -> {
-                context.text(font, c.getName(), x + PAD, bandY, nameColor, false);
+                int room = w - 2 * PAD - BOX - rainbowChipWidth(font) - 8;
+                context.text(font, trimEnd(font, c.getName(), room), x + PAD, bandY, nameColor, false);
                 renderColor(context, font, c, x, y, w);
             }
             case RegistryListSetting<?> r -> {
-                context.text(font, r.getName(), x + PAD, ty, nameColor, false);
                 String value = r.size() + " chosen";
+                int room = w - 2 * PAD - font.width(value) - 6;
+                context.text(font, trimEnd(font, r.getName(), room), x + PAD, ty, nameColor, false);
                 context.text(font, value, x + w - PAD - font.width(value), ty,
                     GuiTheme.accentText(), false);
             }
@@ -303,9 +315,11 @@ public final class SettingWidget {
 
     private static void renderText(GuiGraphicsExtractor context, Font font, TextSetting t,
                                    int x, int y, int w, int nameColor, int ty, Host host) {
-        context.text(font, t.getName(), x + PAD, ty, nameColor, false);
+        // The name gives way first. The value keeps at least half the row.
+        String name = trimEnd(font, t.getName(), (w - 2 * PAD) / 2);
+        context.text(font, name, x + PAD, ty, nameColor, false);
         boolean editing = host.isEditing(t);
-        int room = w - 2 * PAD - 6 - font.width(t.getName());
+        int room = w - 2 * PAD - 6 - font.width(name);
         if (editing) {
             host.getEditField().render(context, font, x + w - PAD - room, ty, room,
                 GuiTheme.accentText(), true);
@@ -332,6 +346,37 @@ public final class SettingWidget {
         return height;
     }
 
+    /**
+     * How far in each visible row sits. A sub option only steps in whilst it
+     * follows its parent or a sibling directly. Anywhere else it reads as a
+     * row of its own so the guide never hangs off the wrong setting.
+     */
+    private static int[] indents(List<Setting<?>> settings) {
+        int[] result = new int[settings.size()];
+        // The previous row and its ancestors from the top down.
+        List<Setting<?>> open = new ArrayList<>();
+        for (int i = 0; i < settings.size(); i++) {
+            Setting<?> setting = settings.get(i);
+            if (!setting.isVisible()) {
+                continue;
+            }
+            int depth = open.indexOf(setting.getParent()) + 1;
+            while (open.size() > depth) {
+                open.removeLast();
+            }
+            result[i] = depth * SUB_INDENT;
+            open.add(setting);
+        }
+        return result;
+    }
+
+    // A hairline down the side of a sub option that ties it to its parent.
+    private static void subGuide(GuiGraphicsExtractor context, int x, int y, int indent, int h) {
+        int guideX = x + PAD + indent - SUB_INDENT + 1;
+        context.fill(guideX, y, guideX + 1, y + h, GuiTheme.accentOn(GuiTheme.BG_SETTING, 0.45f));
+        context.guiRenderState.up();
+    }
+
     public static int blockContentX(int rowX) {
         return rowX + INDENT + 3;
     }
@@ -340,7 +385,6 @@ public final class SettingWidget {
         return rowW - INDENT - 5;
     }
 
-    // Pairs with clickBlock.
     public static void renderBlock(GuiGraphicsExtractor context, Font font, Module module,
                                    int rowX, int rowY, int rowW, int mouseX, int mouseY,
                                    boolean hoverAllowed, Host host) {
@@ -356,31 +400,43 @@ public final class SettingWidget {
         int cw = blockContentWidth(rowW);
         int y = rowY + 2;
         List<Setting<?>> settings = module.getSettings();
+        int[] indents = indents(settings);
         for (int i = 0; i < settings.size(); i++) {
             Setting<?> setting = settings.get(i);
             if (!setting.isVisible()) {
                 continue;
             }
-            render(context, font, setting, cx, y, cw, mouseX, mouseY, hoverAllowed, host);
-            y += rowHeight(setting);
+            int h = rowHeight(setting);
+            int indent = indents[i];
+            if (indent > 0) {
+                subGuide(context, cx, y, indent, h);
+            }
+            render(context, font, setting, cx + indent, y, cw - indent, mouseX, mouseY,
+                hoverAllowed, host);
+            y += h;
         }
         // The bind of the module itself closes the block.
         render(context, font, module.getKeybind(), cx, y, cw, mouseX, mouseY, hoverAllowed, host);
     }
 
-    // Pairs with renderBlock.
     public static boolean clickBlock(Module module, double mx, double my, int rowX, int rowY,
                                      int rowW, int button, Host host, Drag drag) {
         int cx = blockContentX(rowX);
         int cw = blockContentWidth(rowW);
         int y = rowY + 2;
-        for (Setting<?> setting : module.getSettings()) {
+        List<Setting<?>> settings = module.getSettings();
+        int[] indents = indents(settings);
+        for (int i = 0; i < settings.size(); i++) {
+            Setting<?> setting = settings.get(i);
             if (!setting.isVisible()) {
                 continue;
             }
             int h = rowHeight(setting);
             if (isOver(mx, my, cx, y, cw, h)) {
-                click(setting, mx, my, cx, y, cw, button, host, drag);
+                // The gutter beside a sub option still belongs to its row.
+                int indent = indents[i];
+                drag.indent = indent;
+                click(setting, mx, my, cx + indent, y, cw - indent, button, host, drag);
                 return true;
             }
             y += h;
@@ -456,6 +512,10 @@ public final class SettingWidget {
     public static String trimEnd(Font font, String text, int room) {
         if (font.width(text) <= room) {
             return text;
+        }
+        // Nothing beats a lone dot.
+        if (room < font.width("..")) {
+            return "";
         }
         String value = text;
         while (font.width(value) > room && value.length() > 2) {

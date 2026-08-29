@@ -12,7 +12,7 @@ public final class CameraTweaks extends Module {
         "Uses your own third person distance instead of the vanilla four blocks.", true);
     private final NumberSetting distance = new NumberSetting("Distance",
         "How far behind you the third person camera sits.", 10, 1, 64, 0.5, " blocks")
-        .visibleWhen(customDistance::isOn);
+        .under(customDistance);
     private final BoolSetting noClip = new BoolSetting("No clip",
         "Lets the camera pass through walls instead of snapping back to your head.", true);
 

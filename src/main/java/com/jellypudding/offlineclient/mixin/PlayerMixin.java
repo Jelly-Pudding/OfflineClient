@@ -1,6 +1,8 @@
 package com.jellypudding.offlineclient.mixin;
 
+import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.modules.movement.EdgeGuard;
+import com.jellypudding.offlineclient.modules.movement.NoClip;
 import com.jellypudding.offlineclient.modules.world.Scaffold;
 import com.jellypudding.offlineclient.util.Modules;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
@@ -46,5 +48,16 @@ public abstract class PlayerMixin {
             return Math.min(depth, 0.6f);
         }
         return depth;
+    }
+    // The physics flag is rebuilt from this every tick. NoClip answers yes.
+    @WrapOperation(method = "tick()V",
+        at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/world/entity/player/Player;isSpectator()Z", ordinal = 0))
+    private boolean wrapNoPhysics(Player player, Operation<Boolean> original) {
+        if (original.call(player)) {
+            return true;
+        }
+        NoClip noClip = Modules.get(NoClip.class);
+        return player == OfflineClient.MC.player && noClip != null && noClip.passesThroughBlocks();
     }
 }

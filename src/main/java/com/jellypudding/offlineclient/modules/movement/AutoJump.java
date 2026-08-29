@@ -12,8 +12,10 @@ public final class AutoJump extends Module {
     public enum When { SPRINTING, MOVING, ALWAYS }
 
     private final EnumSetting<When> when = new EnumSetting<>("Jump when",
-        "Picks whether to jump whilst sprinting or whilst moving or always.",
-        When.SPRINTING);
+        "When a jump is due.", When.SPRINTING)
+        .describe(When.SPRINTING, "Jumps only whilst you sprint.")
+        .describe(When.MOVING, "Jumps whilst you move at all.")
+        .describe(When.ALWAYS, "Jumps even whilst you stand still.");
 
     public AutoJump() {
         super("AutoJump", "Jumps for you whenever you are on the ground.", Category.MOVEMENT);

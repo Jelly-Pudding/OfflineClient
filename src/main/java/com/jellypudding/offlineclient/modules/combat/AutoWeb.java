@@ -21,7 +21,6 @@ import net.minecraft.world.phys.Vec3;
 import java.util.ArrayList;
 import java.util.List;
 
-// The placement helper here is shared with SelfWeb.
 public final class AutoWeb extends Module {
 
     // How far ahead of a moving target the web lands.

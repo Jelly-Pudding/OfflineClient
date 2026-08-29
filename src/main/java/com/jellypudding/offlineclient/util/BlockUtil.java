@@ -12,6 +12,7 @@ import net.minecraft.world.InteractionResult;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.EmptyBlockGetter;
 import net.minecraft.world.level.block.AnvilBlock;
 import net.minecraft.world.level.block.BaseEntityBlock;
@@ -40,6 +41,7 @@ import net.minecraft.world.level.block.TrapDoorBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.VoxelShape;
@@ -418,6 +420,37 @@ public final class BlockUtil {
             }
         }
         return best;
+    }
+
+    /**
+     * True when a straight line from the eyes reaches the nearest face of the
+     * block without passing through anything solid.
+     */
+    public static boolean canSee(BlockPos pos) {
+        Vec3 eye = MC.player.getEyePosition();
+        Vec3 point = hitPoint(pos, facingSide(pos));
+        BlockHitResult hit = MC.level.clip(new ClipContext(eye, point,
+            ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, MC.player));
+        // A target with no collider lets the ray run all the way to the end point.
+        return hit.getType() == HitResult.Type.MISS || hit.getBlockPos().equals(pos);
+    }
+
+    // A plain right click on the nearest face. Nothing is placed by the call itself.
+    public static boolean useOn(BlockPos pos, boolean rotate, boolean swing) {
+        Direction side = facingSide(pos);
+        Vec3 hit = hitPoint(pos, side);
+        if (rotate) {
+            faceVector(hit);
+        }
+        InteractionResult outcome = MC.gameMode.useItemOn(MC.player, InteractionHand.MAIN_HAND,
+            new BlockHitResult(hit, side, pos, false));
+        if (!outcome.consumesAction()) {
+            return false;
+        }
+        if (swing) {
+            MC.player.swing(InteractionHand.MAIN_HAND);
+        }
+        return true;
     }
 
     public static boolean isStandingOn(BlockPos pos) {

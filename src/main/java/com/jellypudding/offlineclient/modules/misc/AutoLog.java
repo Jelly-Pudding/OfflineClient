@@ -5,16 +5,21 @@ import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.InventoryUtil;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 
 public final class AutoLog extends Module {
 
     private final NumberSetting health = new NumberSetting("Health",
         "Disconnect at or below this many hearts.", 3, 0.5, 9.5, 0.5, " hearts");
+    private final NumberSetting totems = new NumberSetting("Totems",
+        "Also disconnect with fewer totems than this. Zero ignores totems.", 0, 0, 10, 1, "");
 
     public AutoLog() {
         super("AutoLog", "Logs you out when your health gets low.", Category.MISC);
-        addSettings(health);
+        addSettings(health, totems);
     }
 
     @Override

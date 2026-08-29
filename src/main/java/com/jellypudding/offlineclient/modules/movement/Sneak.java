@@ -21,11 +21,12 @@ public final class Sneak extends Module {
     public enum Mode { LEGIT, PACKET }
 
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
-        "Legit really crouches. Packet keeps your full speed.",
-        Mode.LEGIT);
+        "How the sneak is done.", Mode.LEGIT)
+        .describe(Mode.LEGIT, "Really crouches. You move at sneaking speed.")
+        .describe(Mode.PACKET, "Only tells the server. You keep your full speed.");
     private final BoolSetting skipWhileFlying = new BoolSetting("Skip whilst flying",
         "Do not hold sneak whilst flying.", true)
-        .visibleWhen(() -> mode.is(Mode.LEGIT));
+        .under(mode, Mode.LEGIT);
 
     // Read from the packet thread.
     private volatile Mode applied;

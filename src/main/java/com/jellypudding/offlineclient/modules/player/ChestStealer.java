@@ -25,8 +25,9 @@ public final class ChestStealer extends Module {
     private final NumberSetting delay = new NumberSetting("Delay",
         "Ticks between each item grab.", 1, 0, 10, 1, " ticks");
     private final EnumSetting<ListMode> listMode = new EnumSetting<>("List mode",
-        "Whitelist takes only the listed items. Blacklist takes everything else.",
-        ListMode.BLACKLIST);
+        "What the list means.", ListMode.BLACKLIST)
+        .describe(ListMode.WHITELIST, "Takes only the listed items.")
+        .describe(ListMode.BLACKLIST, "Takes everything except the listed items.");
     private final RegistryListSetting<Item> items = new RegistryListSetting<Item>("Items",
         "The items the list applies to. Click to pick them.", BuiltInRegistries.ITEM,
         List.of());

@@ -42,7 +42,10 @@ public final class Scaffold extends Module {
         "Hold jump to build straight up.", true);
     private final NumberSetting towerSpeed = new NumberSetting("Tower speed",
         "How hard each tower jump pushes you up.", 0.42, 0.3, 0.5, 0.01)
-        .min(0.1).max(1).visibleWhen(tower::isOn);
+        .min(0.1).max(1).under(tower);
+    private final BoolSetting towerWhilstMoving = new BoolSetting("Tower whilst moving",
+        "Keeps the tower boost on whilst you walk. Off means jump only lifts you when you stand still.", false)
+        .under(tower);
     private final NumberSetting lookAhead = new NumberSetting("Look ahead",
         "Ticks of movement to build ahead of you.", 2, 0, 5, 1, " ticks").min(0).max(10);
     private final BoolSetting rotate = new BoolSetting("Rotate",
@@ -56,7 +59,7 @@ public final class Scaffold extends Module {
 
     public Scaffold() {
         super("Scaffold", "Places blocks under you as you walk.", Category.WORLD);
-        addSettings(blocks, tower, towerSpeed, lookAhead, rotate, swapBack,
+        addSettings(blocks, tower, towerSpeed, towerWhilstMoving, lookAhead, rotate, swapBack,
             onlyOnClick, down);
         searchTags("bridge", "auto bridge", "tower");
     }
@@ -199,6 +202,10 @@ public final class Scaffold extends Module {
 
     private void towerUp(Vec3 velocity) {
         if (mc.player.getAbilities().flying) {
+            return;
+        }
+        // A block placed under a moving player often lands beside them instead.
+        if (!towerWhilstMoving.isOn() && mc.player.input.getMoveVector().lengthSquared() > 1.0E-6f) {
             return;
         }
         if (mc.player.onGround()) {

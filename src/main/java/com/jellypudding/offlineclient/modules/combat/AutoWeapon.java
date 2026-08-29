@@ -23,21 +23,7 @@ import net.minecraft.world.item.enchantment.Enchantments;
 
 public final class AutoWeapon extends Module {
 
-    public enum Prefer {
-        SWORD("Sword"),
-        AXE("Axe");
-
-        private final String name;
-
-        Prefer(String name) {
-            this.name = name;
-        }
-
-        @Override
-        public String toString() {
-            return name;
-        }
-    }
+    public enum Prefer { SWORD, AXE }
 
     private final EnumSetting<Prefer> prefer = new EnumSetting<>("Prefer",
         "Which kind of weapon wins when both are close in damage.", Prefer.SWORD);
@@ -49,7 +35,7 @@ public final class AutoWeapon extends Module {
         "Return to the slot you had selected once you stop fighting.", false);
     private final NumberSetting releaseTime = new NumberSetting("Release time",
         "Ticks without an attack before switching back.", 20, 1, 100, 1, " ticks")
-        .visibleWhen(switchBack::isOn);
+        .under(switchBack);
 
     private final SlotSwap slots = new SlotSwap();
     private int timer;
