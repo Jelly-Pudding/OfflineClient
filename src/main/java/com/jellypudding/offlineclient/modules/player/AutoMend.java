@@ -75,7 +75,7 @@ public final class AutoMend extends Module {
 
     @Override
     protected void onDisable() {
-        slots.restore();
+        slots.restoreIfMine();
         throwing = false;
     }
 
@@ -88,13 +88,15 @@ public final class AutoMend extends Module {
         bottles = countBottles();
 
         if (worstPercent < 0) {
-            slots.restore();
+            slots.restoreIfMine();
             return;
         }
         if (worstPercent >= threshold.getInt()) {
-            slots.restore();
+            slots.restoreIfMine();
             if (autoDisable.isOn()) {
-                ChatUtil.message("§aEverything is repaired.");
+                if (bottles > 0) {
+                    ChatUtil.message("§aEverything is repaired.");
+                }
                 setEnabled(false);
             }
             return;
@@ -139,36 +141,30 @@ public final class AutoMend extends Module {
     private int lowestDurability() {
         int lowest = -1;
         for (EquipmentSlot slot : REPAIRABLE) {
-            ItemStack stack = mc.player.getItemBySlot(slot);
+            ItemStack stack = slot == EquipmentSlot.MAINHAND ? heldTool() : mc.player.getItemBySlot(slot);
             if (stack.isEmpty() || !stack.isDamageableItem() || stack.getMaxDamage() <= 0) {
                 continue;
             }
             if (ItemUtil.enchantLevel(Enchantments.MENDING, stack) <= 0) {
                 continue;
             }
-            int percent = 100 - stack.getDamageValue() * 100 / stack.getMaxDamage();
+            int percent = (int) (100 - stack.getDamageValue() * 100.0 / stack.getMaxDamage());
             lowest = lowest < 0 ? percent : Math.min(lowest, percent);
         }
         return lowest;
     }
 
+    // The tool stays in the slot the bottle swap came from.
+    private ItemStack heldTool() {
+        int home = slots.previousSlot();
+        return home == -1 ? mc.player.getMainHandItem() : mc.player.getInventory().getItem(home);
+    }
+
     private int countBottles() {
-        int total = 0;
-        for (int i = 0; i < 9; i++) {
-            ItemStack stack = mc.player.getInventory().getItem(i);
-            if (stack.is(Items.EXPERIENCE_BOTTLE)) {
-                total += stack.getCount();
-            }
-        }
-        return total;
+        return InventoryUtil.count(Items.EXPERIENCE_BOTTLE, InventoryUtil.HOTBAR_SIZE);
     }
 
     private int findBottle() {
-        for (int i = 0; i < 9; i++) {
-            if (mc.player.getInventory().getItem(i).is(Items.EXPERIENCE_BOTTLE)) {
-                return i;
-            }
-        }
-        return -1;
+        return InventoryUtil.findSlot(Items.EXPERIENCE_BOTTLE, InventoryUtil.HOTBAR_SIZE);
     }
 }

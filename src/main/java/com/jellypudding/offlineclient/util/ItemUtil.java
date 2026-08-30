@@ -38,8 +38,21 @@ public final class ItemUtil {
     }
 
     public static boolean nearlyBroken(ItemStack stack) {
-        return stack.isDamageableItem()
-            && stack.getMaxDamage() - stack.getDamageValue() <= BREAK_MARGIN;
+        return nearlyBroken(stack, BREAK_MARGIN);
+    }
+
+    // True when this many durability points or fewer remain.
+    public static boolean nearlyBroken(ItemStack stack, int margin) {
+        return stack.isDamageableItem() && stack.getMaxDamage() - stack.getDamageValue() <= margin;
+    }
+
+    // True when the remaining durability is at or under this share of the whole.
+    public static boolean wornBelow(ItemStack stack, double share) {
+        if (!stack.isDamageableItem()) {
+            return false;
+        }
+        int max = stack.getMaxDamage();
+        return max - stack.getDamageValue() <= max * share;
     }
 
     // The level of an enchantment on a stack. Zero when absent.
@@ -73,7 +86,7 @@ public final class ItemUtil {
 
     /**
      * The inventory slot that mines the block fastest. Only the first slots
-     * up to the limit are searched so nine keeps to the hotbar. Only stacks
+     * up to the limit are searched. Nine keeps to the hotbar. Only stacks
      * the filter accepts count and only speeds above the floor. Minus one
      * when none does.
      */
@@ -116,18 +129,20 @@ public final class ItemUtil {
     public static double attributeValue(ItemStack stack, Holder<Attribute> attribute, EquipmentSlot slot) {
         ItemAttributeModifiers modifiers = stack.getItem().components()
             .getOrDefault(DataComponents.ATTRIBUTE_MODIFIERS, ItemAttributeModifiers.EMPTY);
-        double result = 0;
+        double flat = 0;
+        double scale = 1;
         for (ItemAttributeModifiers.Entry entry : modifiers.modifiers()) {
             if (entry.attribute() != attribute || !entry.slot().test(slot)) {
                 continue;
             }
             double amount = entry.modifier().amount();
-            result += switch (entry.modifier().operation()) {
-                case ADD_VALUE -> amount;
-                case ADD_MULTIPLIED_BASE -> 0;
-                case ADD_MULTIPLIED_TOTAL -> amount * result;
-            };
+            switch (entry.modifier().operation()) {
+                case ADD_VALUE -> flat += amount;
+                case ADD_MULTIPLIED_BASE -> {
+                }
+                case ADD_MULTIPLIED_TOTAL -> scale *= 1 + amount;
+            }
         }
-        return result;
+        return flat * scale;
     }
 }

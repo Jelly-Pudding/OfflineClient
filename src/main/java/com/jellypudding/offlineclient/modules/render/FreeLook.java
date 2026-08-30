@@ -7,6 +7,7 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.client.CameraType;
 import net.minecraft.util.Mth;
@@ -56,10 +57,11 @@ public final class FreeLook extends Module {
     @Override
     protected void onEnable() {
         swapped = null;
-        primed = mc.player != null;
         if (mc.player == null) {
+            setEnabled(false);
             return;
         }
+        primed = true;
         yaw = mc.player.getYRot();
         pitch = mc.player.getXRot();
         savedCamera = mc.options.getCameraType();
@@ -89,8 +91,7 @@ public final class FreeLook extends Module {
 
     // Mouse movement lands here instead of turning the player.
     public void turn(double deltaYaw, double deltaPitch) {
-        // The 0.15 factor matches how the game turns the player.
-        double factor = 0.15 * sensitivity.getValue();
+        double factor = InputUtil.MOUSE_TURN * sensitivity.getValue();
         yaw += (float) (deltaYaw * factor);
         pitch = Mth.clamp(pitch + (float) (deltaPitch * factor), -90f, 90f);
     }

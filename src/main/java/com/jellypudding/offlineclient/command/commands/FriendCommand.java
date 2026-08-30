@@ -5,6 +5,8 @@ import com.jellypudding.offlineclient.command.Command;
 import com.jellypudding.offlineclient.friend.FriendManager;
 import com.jellypudding.offlineclient.util.ChatUtil;
 
+import java.util.Locale;
+
 public final class FriendCommand extends Command {
 
     public FriendCommand() {
@@ -20,18 +22,18 @@ public final class FriendCommand extends Command {
             if (friends.getAll().isEmpty()) {
                 ChatUtil.message("§7Your friends list is empty.");
             } else {
-                ChatUtil.message("§3Friends: §b" + String.join("§7, §b", friends.getAll()));
+                ChatUtil.message("§3Friends: §b" + String.join("§7 §b", friends.getAll()));
             }
             return;
         }
 
         if (args.length != 2) {
-            ChatUtil.error("Usage: " + getUsage());
+            usage();
             return;
         }
 
         String name = args[1];
-        switch (args[0].toLowerCase()) {
+        switch (args[0].toLowerCase(Locale.ROOT)) {
             case "add" -> {
                 if (OfflineClient.MC.player != null
                     && name.equalsIgnoreCase(OfflineClient.MC.player.getGameProfile().name())) {
@@ -51,7 +53,7 @@ public final class FriendCommand extends Command {
                     ChatUtil.error(name + " is not on your friends list.");
                 }
             }
-            default -> ChatUtil.error("Usage: " + getUsage());
+            default -> usage();
         }
         OfflineClient.INSTANCE.getConfigManager().saveSoon();
     }

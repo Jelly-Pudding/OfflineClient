@@ -45,7 +45,7 @@ public final class AutoCity extends Module {
 
     public AutoCity() {
         super("AutoCity", "Mines the block guarding an enemy in a hole.", Category.COMBAT);
-        addSettings(targetRange, breakRange, support, chatInfo, switchTool, rotate,
+        addSettings(targetRange, breakRange, switchTool, support, chatInfo, rotate,
             toggleOff, render);
         searchTags("city", "surround", "obsidian");
     }
@@ -138,10 +138,7 @@ public final class AutoCity extends Module {
             return false;
         }
         slots.select(slot);
-        Direction side = BlockUtil.findPlaceSupport(below);
-        boolean placed = side != null
-            ? BlockUtil.place(below, side, rotate.isOn(), true)
-            : BlockUtil.placeDirect(below, rotate.isOn(), true);
+        boolean placed = BlockUtil.placeAny(below, rotate.isOn(), true);
         slots.restore();
         return placed;
     }

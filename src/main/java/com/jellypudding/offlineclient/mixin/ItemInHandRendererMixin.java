@@ -4,6 +4,7 @@ import com.jellypudding.offlineclient.modules.render.Freecam;
 import com.jellypudding.offlineclient.modules.render.HandView;
 import com.jellypudding.offlineclient.modules.render.NoShieldOverlay;
 import com.jellypudding.offlineclient.util.Modules;
+
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.llamalad7.mixinextras.injector.ModifyReturnValue;
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -18,6 +19,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.ItemUseAnimation;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -25,9 +27,11 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(ItemInHandRenderer.class)
 public abstract class ItemInHandRendererMixin {
 
+    @Unique
     private static final String SUBMIT_HANDS = "submitHandsWithItems(FLcom/mojang/blaze3d/vertex/PoseStack;"
         + "Lnet/minecraft/client/renderer/SubmitNodeCollector;Lnet/minecraft/client/player/LocalPlayer;I)V";
 
+    @Unique
     private static final String SUBMIT_ARM = "submitArmWithItem(Lnet/minecraft/client/player/AbstractClientPlayer;"
         + "FFLnet/minecraft/world/InteractionHand;FLnet/minecraft/world/item/ItemStack;F"
         + "Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/SubmitNodeCollector;I)V";
@@ -113,6 +117,7 @@ public abstract class ItemInHandRendererMixin {
         offlineclient$lowerShield(stack, poseStack, false);
     }
 
+    @Unique
     private static void offlineclient$lowerShield(ItemStack stack, PoseStack poseStack, boolean blocking) {
         if (stack.getUseAnimation() != ItemUseAnimation.BLOCK) {
             return;

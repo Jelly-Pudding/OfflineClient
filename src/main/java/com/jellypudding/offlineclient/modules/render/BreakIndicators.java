@@ -59,9 +59,9 @@ public final class BreakIndicators extends Module {
         "Adds a faint tint inside each box.", true);
     private final BoolSetting throughWalls = new BoolSetting("Through walls",
         "Show boxes behind blocks.", true);
-    private final BoolSetting progressColor = new BoolSetting("Color by progress",
+    private final BoolSetting progressColor = new BoolSetting("Colour by progress",
         "Fade from green to red as the block gives way.", true);
-    private final ColorSetting color = new ColorSetting("Color",
+    private final ColorSetting color = new ColorSetting("Colour",
         "Box colour when progress colouring is off.", 20, false)
         .unless(progressColor);
     private final BoolSetting grow = new BoolSetting("Grow",
@@ -88,7 +88,7 @@ public final class BreakIndicators extends Module {
 
     @Override
     public String getSuffix() {
-        return indicators.isEmpty() ? null : String.valueOf(indicators.size());
+        return count(indicators.size());
     }
 
     @Override
@@ -202,7 +202,8 @@ public final class BreakIndicators extends Module {
                 continue;
             }
             AABB box = boxOf(indicator);
-            Vec3 top = new Vec3(box.getCenter().x, box.maxY + 0.3, box.getCenter().z);
+            Vec3 centre = box.getCenter();
+            Vec3 top = new Vec3(centre.x, box.maxY + 0.3, centre.z);
             Vec3 screen = WorldToScreen.project(top);
             if (screen != null) {
                 drawName(event.getContext(), indicator, screen);

@@ -7,6 +7,7 @@ import com.jellypudding.offlineclient.gui.RegistryPickerScreen;
 import com.jellypudding.offlineclient.gui.WindowGuiScreen;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.KeyMapping;
@@ -30,7 +31,7 @@ public final class InvWalk extends Module {
         "Also let the jump key work.", true);
 
     public InvWalk() {
-        super("InvWalk", "Walk about whilst a screen is open.", Category.PLAYER);
+        super("InvWalk", "Lets you walk about whilst a screen is open.", Category.PLAYER);
         addSettings(sneak, sprint, jump);
         searchTags("inventory walk", "inv move", "menu walk");
     }
@@ -54,10 +55,7 @@ public final class InvWalk extends Module {
             return;
         }
         for (KeyMapping mapping : keys()) {
-            InputConstants.Key bound = mapping.key;
-            boolean down = bound.getType() == InputConstants.Type.KEYSYM
-                && InputConstants.isKeyDown(mc.getWindow(), bound.getValue());
-            mapping.setDown(down);
+            mapping.setDown(InputUtil.physicallyHeld(mapping));
         }
     }
 
@@ -94,14 +92,11 @@ public final class InvWalk extends Module {
     }
 
     private void release() {
-        if (mc.gui == null || mc.gui.screen() == null) {
-            return;
-        }
         List<KeyMapping> all = List.of(mc.options.keyUp, mc.options.keyDown,
             mc.options.keyLeft, mc.options.keyRight, mc.options.keyShift,
             mc.options.keySprint, mc.options.keyJump);
         for (KeyMapping mapping : all) {
-            mapping.setDown(false);
+            InputUtil.release(mapping);
         }
     }
 }

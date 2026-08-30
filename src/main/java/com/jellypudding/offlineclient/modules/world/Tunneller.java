@@ -97,7 +97,7 @@ public final class Tunneller extends Module {
     protected void onDisable() {
         BlockMiner.release();
         slots.restoreIfMine();
-        mc.options.keyUp.setDown(InputUtil.physicallyHeld(mc.options.keyUp));
+        InputUtil.release(mc.options.keyUp);
         walker.clear();
         current = null;
     }
@@ -106,6 +106,7 @@ public final class Tunneller extends Module {
     private void onTick(TickEvent event) {
         current = null;
         if (!inGame()) {
+            InputUtil.release(mc.options.keyUp);
             return;
         }
         if (!walker.isLocked()) {
@@ -124,7 +125,7 @@ public final class Tunneller extends Module {
         current = nextBlock();
 
         if (current != null) {
-            mc.options.keyUp.setDown(false);
+            InputUtil.release(mc.options.keyUp);
             if (!BlockMiner.mine(current, true)) {
                 current = null;
             }

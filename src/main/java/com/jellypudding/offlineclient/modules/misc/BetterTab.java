@@ -6,6 +6,7 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.ColorUtil;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.multiplayer.PlayerInfo;
@@ -26,7 +27,7 @@ public final class BetterTab extends Module {
         "Show the exact latency instead of the signal bars.", true);
     private final BoolSetting friends = new BoolSetting("Friends",
         "Paint people on your friend list in their own colour.", true);
-    private final ColorSetting friendColor = new ColorSetting("Friend color",
+    private final ColorSetting friendColor = new ColorSetting("Friend colour",
         "Colour for friends in the list.", 210, false)
         .under(friends);
     private final BoolSetting raiseLimit = new BoolSetting("Raise limit",
@@ -56,7 +57,7 @@ public final class BetterTab extends Module {
         if (!isEnabled() || !raiseLimit.isOn()) {
             return VANILLA_LIMIT;
         }
-        return (long) Math.max(1, limit.getValue());
+        return limit.getInt();
     }
 
     // Drawn in the column vanilla fills with the signal bars.
@@ -64,10 +65,7 @@ public final class BetterTab extends Module {
         Font font = mc.font;
         int latency = info.getLatency();
         String text = latency < 0 ? "?" : String.valueOf(Math.min(latency, 9999));
-        int color = latency < 0 ? 0xFF909090
-            : latency < 100 ? 0xFF50FF50
-            : latency < 250 ? 0xFFFFD040 : 0xFFFF5050;
-        context.text(font, text, x + width - font.width(text) - 1, y, color, false);
+        context.text(font, text, x + width - font.width(text) - 1, y, ColorUtil.ping(latency), false);
     }
 
     // Anyone who is not a friend keeps the server's styling.

@@ -33,7 +33,7 @@ public final class CityEsp extends Module {
         "Adds a faint tint inside each box.", true);
     private final BoolSetting throughWalls = new BoolSetting("Through walls",
         "Show boxes behind blocks.", true);
-    private final ColorSetting color = new ColorSetting("Color",
+    private final ColorSetting color = new ColorSetting("Colour",
         "Box colour.", 0, false);
 
     private final List<BlockPos> targets = new ArrayList<>();
@@ -46,7 +46,7 @@ public final class CityEsp extends Module {
 
     @Override
     public String getSuffix() {
-        return targets.isEmpty() ? null : String.valueOf(targets.size());
+        return count(targets.size());
     }
 
     @Override

@@ -21,7 +21,7 @@ import org.lwjgl.glfw.GLFW;
 public final class RecoveryScreen extends Screen {
 
     // Destructive marks an action that needs a second click to go through.
-    private record Action(String label, String description, Runnable run, String doneMessage,
+    private record Action(String label, String description, Runnable task, String doneMessage,
                           boolean destructive) {
     }
 
@@ -247,7 +247,7 @@ public final class RecoveryScreen extends Screen {
         }
 
         armed = -1;
-        action.run().run();
+        action.task().run();
         flashed = index;
         flashUntil = now + FLASH_MS;
         status = action.doneMessage();

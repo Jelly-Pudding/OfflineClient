@@ -8,36 +8,45 @@ import com.jellypudding.offlineclient.modules.combat.CrystalAura;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.RotationManager;
 import com.jellypudding.offlineclient.util.RotationPriority;
-import com.jellypudding.offlineclient.util.Modules;
+import net.minecraft.util.Mth;
+import net.minecraft.world.InteractionHand;
 
 import java.util.concurrent.ThreadLocalRandom;
 
-// Sends silly rotations to the server whilst the local view is left alone.
+// Sends silly rotations and swings to the server whilst the local view is left alone.
 public final class Derp extends Module {
 
-    public enum Mode { SPIN, SHAKE, HEADBANG, RANDOM }
+    public enum Mode { SPIN, SHAKE, HEADBANG, FLAIL, RANDOM }
+
+    // Ticks between arm swings whilst flailing. A swing takes about six to play out.
+    private static final int FLAIL_GAP = 3;
 
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
-        "How your head moves to everyone else.", Mode.SPIN)
+        "How you look to everyone else.", Mode.SPIN)
         .describe(Mode.SPIN, "Turns your head round and round.")
         .describe(Mode.SHAKE, "Shakes your head from side to side.")
         .describe(Mode.HEADBANG, "Nods your head up and down.")
-        .describe(Mode.RANDOM, "Points your head somewhere new every tick.");
+        .describe(Mode.FLAIL, "Waves both arms about.")
+        .describe(Mode.RANDOM, "Points your head somewhere new every tick and flails now and then.");
     private final NumberSetting speed = new NumberSetting("Speed",
-        "How fast the head moves.", 30, 1, 90, 1, " degrees").min(1).max(180);
+        "How far the head moves each tick.", 30, 1, 90, 1, " degrees").min(1).max(180)
+        .under(mode, Mode.SPIN, Mode.SHAKE, Mode.HEADBANG);
     private final BoolSetting pauseInCombat = new BoolSetting("Pause in combat",
         "Stops whilst your hands are busy or CrystalAura has a target.", true);
 
     private float yaw;
     private float pitch;
     private boolean rising = true;
+    private boolean left;
+    private int flailTimer;
 
     public Derp() {
-        super("Derp", "Makes your head look ridiculous to everyone else.", Category.MISC);
+        super("Derp", "Makes you look ridiculous to everyone else.", Category.MISC);
         addSettings(mode, speed, pauseInCombat);
-        searchTags("derp", "silly", "troll", "spin");
+        searchTags("derp", "silly", "troll", "spin", "flail");
     }
 
     @Override
@@ -47,6 +56,7 @@ public final class Derp extends Module {
 
     @Override
     protected void onEnable() {
+        flailTimer = 0;
         if (inGame()) {
             yaw = mc.player.getYRot();
             pitch = mc.player.getXRot();
@@ -61,6 +71,9 @@ public final class Derp extends Module {
         if (pauseInCombat.isOn() && aimingModuleActive()) {
             return;
         }
+        if (flailTimer > 0) {
+            flailTimer--;
+        }
 
         float step = speed.getFloat();
         switch (mode.getValue()) {
@@ -69,7 +82,9 @@ public final class Derp extends Module {
                 pitch = 0;
             }
             case SHAKE -> {
-                yaw = mc.player.getYRot() + (yaw < mc.player.getYRot() ? step : -step);
+                // Alternates either side of where the player really looks.
+                left = !left;
+                yaw = mc.player.getYRot() + (left ? step : -step);
                 pitch = mc.player.getXRot();
             }
             case HEADBANG -> {
@@ -81,27 +96,40 @@ public final class Derp extends Module {
                     rising = true;
                 }
             }
+            case FLAIL -> {
+                flail();
+                return;
+            }
             case RANDOM -> {
                 yaw = ThreadLocalRandom.current().nextFloat(-180f, 180f);
                 pitch = ThreadLocalRandom.current().nextFloat(-90f, 90f);
+                if (ThreadLocalRandom.current().nextInt(4) == 0) {
+                    flail();
+                }
             }
         }
-        yaw = wrap(yaw);
+        yaw = Mth.wrapDegrees(yaw);
         pitch = Math.clamp(pitch, -90f, 90f);
 
         RotationManager.requestExact(yaw, pitch, RotationPriority.IDLE);
     }
 
+    // Swings the arms in turn. The server plays the animation to everyone.
+    private void flail() {
+        if (flailTimer > 0) {
+            return;
+        }
+        flailTimer = FLAIL_GAP;
+        left = !left;
+        mc.player.swing(left ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND);
+    }
+
     private boolean aimingModuleActive() {
-        if (mc.player.swinging || mc.options.keyAttack.isDown() || mc.player.isUsingItem()) {
+        if (mc.player.swinging && !mode.is(Mode.FLAIL) && !mode.is(Mode.RANDOM)
+            || mc.options.keyAttack.isDown() || mc.player.isUsingItem()) {
             return true;
         }
         CrystalAura crystalAura = Modules.get(CrystalAura.class);
         return crystalAura != null && crystalAura.isEnabled() && crystalAura.hasTarget();
-    }
-
-    private static float wrap(float degrees) {
-        float wrapped = degrees % 360f;
-        return wrapped > 180f ? wrapped - 360f : wrapped < -180f ? wrapped + 360f : wrapped;
     }
 }

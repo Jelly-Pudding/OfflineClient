@@ -5,6 +5,7 @@ import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.ExclusivityGroup;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockMiner;
@@ -14,7 +15,6 @@ import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.InteractionHand;
-import net.minecraft.world.InteractionResult;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
@@ -23,8 +23,6 @@ import net.minecraft.world.level.block.CocoaBlock;
 import net.minecraft.world.level.block.CropBlock;
 import net.minecraft.world.level.block.NetherWartBlock;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.phys.BlockHitResult;
-import net.minecraft.world.phys.Vec3;
 
 import java.util.HashMap;
 import java.util.Iterator;
@@ -129,7 +127,7 @@ public final class AutoFarm extends Module {
             return;
         }
         // A held attack or an open container means the player is busy by hand.
-        if (mc.options.keyAttack.isDown() || mc.player.isUsingItem() || mc.gui.screen() != null) {
+        if (InputUtil.physicallyHeld(mc.options.keyAttack) || mc.player.isUsingItem() || mc.gui.screen() != null) {
             slots.restoreIfMine();
             return;
         }
@@ -207,7 +205,7 @@ public final class AutoFarm extends Module {
             return false;
         }
         slots.select(slot);
-        if (useOn(target)) {
+        if (BlockUtil.useOn(target, rotate.isOn(), true)) {
             lastBonemeal = now;
         }
         return true;
@@ -251,22 +249,6 @@ public final class AutoFarm extends Module {
             }
         }
         return null;
-    }
-
-    // Bone meal goes on through a plain right click. No block is placed.
-    private boolean useOn(BlockPos pos) {
-        Direction side = BlockUtil.facingSide(pos);
-        Vec3 hit = BlockUtil.hitPoint(pos, side);
-        if (rotate.isOn()) {
-            BlockUtil.faceVector(hit);
-        }
-        InteractionResult outcome = mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND,
-            new BlockHitResult(hit, side, pos, false));
-        if (!outcome.consumesAction()) {
-            return false;
-        }
-        mc.player.swing(InteractionHand.MAIN_HAND);
-        return true;
     }
 
     private boolean ripe(BlockPos pos) {

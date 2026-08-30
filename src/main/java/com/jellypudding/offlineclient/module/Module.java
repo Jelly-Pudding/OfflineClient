@@ -9,6 +9,7 @@ import net.minecraft.client.Minecraft;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 
 public abstract class Module {
 
@@ -83,9 +84,9 @@ public abstract class Module {
 
     // Spaces and case are ignored.
     public Setting<?> getSetting(String settingName) {
-        String wanted = settingName.replace(" ", "").toLowerCase();
+        String wanted = settingName.replace(" ", "").toLowerCase(Locale.ROOT);
         for (Setting<?> setting : settings) {
-            if (setting.getName().replace(" ", "").toLowerCase().equals(wanted)) {
+            if (setting.getName().replace(" ", "").toLowerCase(Locale.ROOT).equals(wanted)) {
                 return setting;
             }
         }
@@ -169,6 +170,11 @@ public abstract class Module {
     // Extra info shown next to the name in the HUD list.
     public String getSuffix() {
         return null;
+    }
+
+    // A suffix for how many things a module is tracking. Null whilst none.
+    protected static String count(int n) {
+        return n == 0 ? null : String.valueOf(n);
     }
 
     public String getDisplayName() {

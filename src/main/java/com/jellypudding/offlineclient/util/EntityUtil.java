@@ -17,6 +17,8 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
+import java.util.function.Predicate;
+
 public final class EntityUtil {
 
     // Health points in one heart.
@@ -38,13 +40,23 @@ public final class EntityUtil {
     private EntityUtil() {
     }
 
+    // Health plus the absorption hearts on top of it.
+    public static float totalHealth(LivingEntity entity) {
+        return entity.getHealth() + entity.getAbsorptionAmount();
+    }
+
+    // The most the bar can hold with the absorption on top.
+    public static float totalMaxHealth(LivingEntity entity) {
+        return entity.getMaxHealth() + entity.getAbsorptionAmount();
+    }
+
     // Zero hearts turns the check off.
     public static boolean healthAtOrBelow(double hearts) {
         Player player = OfflineClient.MC.player;
         if (hearts <= 0 || player == null) {
             return false;
         }
-        return player.getHealth() + player.getAbsorptionAmount() <= hearts * HEART;
+        return totalHealth(player) <= hearts * HEART;
     }
 
     // True when an end crystal sits within the distance.
@@ -74,6 +86,12 @@ public final class EntityUtil {
     public static boolean isFriend(Entity entity) {
         return entity instanceof Player player
             && OfflineClient.INSTANCE.getFriendManager().isFriend(nameOf(player));
+    }
+
+    // A living player who is not a friend and not watching from spectator.
+    public static boolean isEnemy(Entity entity) {
+        return entity instanceof Player player && player.isAlive() && !player.isSpectator()
+            && !isFriend(player);
     }
 
     // The broad families the filters in the render modules work with.
@@ -183,27 +201,29 @@ public final class EntityUtil {
         return 0xFF000000 | r << 16 | g << 8;
     }
 
-    // Friends and spectators never count. Null when nobody is close.
-    public static Player nearestEnemy(double range) {
+    // The closest entity within the range that passes the test. Null when none does.
+    public static Entity nearest(double range, Predicate<Entity> test) {
         Minecraft mc = OfflineClient.MC;
         if (mc.player == null || mc.level == null) {
             return null;
         }
-        Player best = null;
+        Entity best = null;
         double bestDistance = range;
-        for (Player player : mc.level.players()) {
-            if (player == mc.player || !player.isAlive() || player.isSpectator()) {
+        for (Entity entity : mc.level.entitiesForRendering()) {
+            if (entity == mc.player || !test.test(entity)) {
                 continue;
             }
-            if (isFriend(player)) {
-                continue;
-            }
-            double distance = mc.player.distanceTo(player);
+            double distance = mc.player.distanceTo(entity);
             if (distance <= bestDistance) {
                 bestDistance = distance;
-                best = player;
+                best = entity;
             }
         }
         return best;
+    }
+
+    // Friends and spectators never count. Null when nobody is close.
+    public static Player nearestEnemy(double range) {
+        return (Player) nearest(range, EntityUtil::isEnemy);
     }
 }

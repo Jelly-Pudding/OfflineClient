@@ -70,7 +70,11 @@ public final class VoidEsp extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || mc.level.dimension() == Level.END) {
+        if (!inGame()) {
+            return;
+        }
+        if (mc.level.dimension() == Level.END) {
+            scanner.reset();
             return;
         }
         int layers = depth.getInt();

@@ -16,7 +16,7 @@ public abstract class ClientInputMixin {
     @Shadow
     protected Vec2 moveVector;
 
-    // Every sprint check in the game asks this. A sideways step counts as forward whilst Sprint says so.
+    // Every sprint check in the game asks this. A sideways step counts as forward whilst Sprint allows it.
     @Inject(method = "hasForwardImpulse()Z", at = @At("HEAD"), cancellable = true)
     private void onHasForwardImpulse(CallbackInfoReturnable<Boolean> cir) {
         Sprint sprint = Modules.get(Sprint.class);

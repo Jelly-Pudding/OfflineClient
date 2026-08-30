@@ -59,7 +59,8 @@ public final class NoInteract extends Module {
         if (!inGame() || mc.hitResult == null) {
             return;
         }
-        if (mc.hitResult instanceof BlockHitResult hit && blocksUse(hit.getBlockPos())) {
+        if (mc.hitResult instanceof BlockHitResult hit && hit.getType() == HitResult.Type.BLOCK
+            && blocksUse(hit.getBlockPos())) {
             event.cancel();
         }
         if (mc.hitResult instanceof EntityHitResult hit && blocksHit(hit.getEntity())) {

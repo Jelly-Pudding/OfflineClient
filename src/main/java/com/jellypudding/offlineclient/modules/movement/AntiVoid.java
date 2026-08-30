@@ -11,7 +11,6 @@ import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.HoverDip;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
@@ -79,7 +78,7 @@ public final class AntiVoid extends Module {
             placeTries = 0;
             return;
         }
-        // A caught player hangs still so the speed only starts the catch.
+        // A caught player hangs still. The speed only starts the catch.
         Vec3 motion = mc.player.getDeltaMovement();
         if ((!wasCatching && motion.y > FALLING) || !voidBelow()) {
             placeTries = 0;
@@ -145,10 +144,7 @@ public final class AntiVoid extends Module {
             return false;
         }
         slots.select(slot);
-        Direction support = BlockUtil.findPlaceSupport(target);
-        boolean placed = support != null
-            ? BlockUtil.place(target, support, rotate.isOn(), true)
-            : BlockUtil.placeDirect(target, rotate.isOn(), true);
+        boolean placed = BlockUtil.placeAny(target, rotate.isOn(), true);
         slots.restore();
         if (!placed) {
             return false;

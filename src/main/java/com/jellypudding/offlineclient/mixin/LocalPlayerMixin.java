@@ -54,7 +54,8 @@ public abstract class LocalPlayerMixin extends AbstractClientPlayer {
     @Shadow
     public float oPortalEffectIntensity;
 
-    private LocalPlayerMixin(OfflineClient client, ClientLevel level, GameProfile profile) {
+    // Never called. The compiler only wants a constructor for the parent.
+    private LocalPlayerMixin(ClientLevel level, GameProfile profile) {
         super(level, profile);
     }
 
@@ -99,6 +100,7 @@ public abstract class LocalPlayerMixin extends AbstractClientPlayer {
         return original.call(instance);
     }
 
+    @Unique
     private static boolean offlineclient$noSlowdown() {
         NoSlowdown noSlowdown = Modules.get(NoSlowdown.class);
         if (noSlowdown != null && noSlowdown.skipsItems()) {

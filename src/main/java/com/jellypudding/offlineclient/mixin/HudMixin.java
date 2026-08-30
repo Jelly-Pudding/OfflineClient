@@ -57,6 +57,7 @@ public class HudMixin {
             ci.cancel();
         }
     }
+
     // One HUD element each. Every one is skipped at the head of its own extract call.
     @Inject(method = "extractSpyglassOverlay", at = @At("HEAD"), cancellable = true)
     private void onSpyglass(CallbackInfo ci) {

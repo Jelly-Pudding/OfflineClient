@@ -1,7 +1,5 @@
 package com.jellypudding.offlineclient.config;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -21,8 +19,6 @@ import java.util.Locale;
  * remembers the server and the dimension it was marked in.
  */
 public final class WaypointStore {
-
-    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     public record Waypoint(String name, int x, int y, int z, String dimension, String server) {
     }
@@ -138,10 +134,6 @@ public final class WaypointStore {
             o.addProperty("server", waypoint.server());
             root.add(o);
         }
-        try {
-            Files.writeString(file, GSON.toJson(root));
-        } catch (IOException e) {
-            OfflineClient.LOG.error("Failed to save waypoints", e);
-        }
+        ConfigManager.write(file, root);
     }
 }

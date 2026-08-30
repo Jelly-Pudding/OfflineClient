@@ -51,12 +51,12 @@ public final class NewChunks extends Module {
         "Also draws the chunks judged old since you switched this on.", false);
     private final BoolSetting showUnjudged = new BoolSetting("Show unjudged",
         "Also draws the chunks that arrived without enough liquid to judge.", false);
-    private final ColorSetting newColor = new ColorSetting("New color",
+    private final ColorSetting newColor = new ColorSetting("New colour",
         "Colour of the fresh chunks.", 0, false);
-    private final ColorSetting oldColor = new ColorSetting("Old color",
+    private final ColorSetting oldColor = new ColorSetting("Old colour",
         "Colour of the chunks that were already on disk.", 220, false)
         .under(showOld);
-    private final ColorSetting unjudgedColor = new ColorSetting("Unjudged color",
+    private final ColorSetting unjudgedColor = new ColorSetting("Unjudged colour",
         "Colour of the chunks with no verdict.", 60, false)
         .under(showUnjudged);
     private final BoolSetting fill = new BoolSetting("Fill",
@@ -73,7 +73,7 @@ public final class NewChunks extends Module {
         "How long after a chunk lands a liquid flow still counts as fresh.", 60, 5, 300, 5, "s")
         .min(1).max(3600);
     private final NumberSetting minSpread = new NumberSetting("Min spread",
-        "How far a flow must have run from its source before it proves a chunk old. Raise it where chunks are ticked before they are sent such as single player.",
+        "How far a flow must have run from its source before it proves a chunk old. Raise it on servers that tick chunks before sending them.",
         1, 1, 7, 1, " blocks").min(1).max(7);
     private final BoolSetting showReasons = new BoolSetting("Show reasons",
         "Marks the liquid block that decided each verdict.", false);
@@ -171,7 +171,7 @@ public final class NewChunks extends Module {
      * been written into it yet.
      */
     public void onChunkLoaded(int x, int z) {
-        if (!isEnabled() || mc.level == null) {
+        if (!isEnabled() || mc.level == null || !sameWorld()) {
             return;
         }
         long key = ChunkPos.pack(x, z);
@@ -190,6 +190,16 @@ public final class NewChunks extends Module {
             oldChunks.add(key);
             reasons.put(key, found);
         }
+    }
+
+    // A rejoin gives a fresh level object even in the same dimension.
+    private boolean sameWorld() {
+        if (world != null && world.get() == mc.level) {
+            return true;
+        }
+        world = new WeakReference<>(mc.level);
+        reset();
+        return false;
     }
 
     // Fired on the netty thread.
@@ -214,10 +224,7 @@ public final class NewChunks extends Module {
         if (!inGame()) {
             return;
         }
-        if (world == null || world.get() != mc.level) {
-            // A rejoin gives a fresh level object even in the same dimension.
-            world = new WeakReference<>(mc.level);
-            reset();
+        if (!sameWorld()) {
             return;
         }
         ticks++;

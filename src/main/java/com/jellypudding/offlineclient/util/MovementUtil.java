@@ -10,6 +10,12 @@ public final class MovementUtil {
     private MovementUtil() {
     }
 
+    // Blocks per tick at a speed of one. Every flight module shares the pace.
+    public static final double FLY_HORIZONTAL = 0.5;
+    public static final double FLY_VERTICAL = 0.225;
+
+    public static final float VANILLA_FLY_SPEED = 0.05f;
+
     /**
      * The way the movement keys point in world space. Vec3.ZERO whilst none
      * of them is held.

@@ -49,6 +49,7 @@ public abstract class PlayerMixin {
         }
         return depth;
     }
+
     // The physics flag is rebuilt from this every tick. NoClip answers yes.
     @WrapOperation(method = "tick()V",
         at = @At(value = "INVOKE",

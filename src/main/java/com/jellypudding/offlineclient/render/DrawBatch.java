@@ -84,17 +84,14 @@ public final class DrawBatch {
         float y2 = (float) b.maxY;
         float z2 = (float) b.maxZ;
 
-        // bottom
         edge(x1, y1, z1, x2, y1, z1, color, throughWalls);
         edge(x2, y1, z1, x2, y1, z2, color, throughWalls);
         edge(x2, y1, z2, x1, y1, z2, color, throughWalls);
         edge(x1, y1, z2, x1, y1, z1, color, throughWalls);
-        // top
         edge(x1, y2, z1, x2, y2, z1, color, throughWalls);
         edge(x2, y2, z1, x2, y2, z2, color, throughWalls);
         edge(x2, y2, z2, x1, y2, z2, color, throughWalls);
         edge(x1, y2, z2, x1, y2, z1, color, throughWalls);
-        // pillars
         edge(x1, y1, z1, x1, y2, z1, color, throughWalls);
         edge(x2, y1, z1, x2, y2, z1, color, throughWalls);
         edge(x2, y1, z2, x2, y2, z2, color, throughWalls);

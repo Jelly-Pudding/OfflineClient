@@ -38,12 +38,7 @@ public final class AutoDrop extends Module {
         if (!inGame() || mc.player.isSpectator()) {
             return;
         }
-        // Other containers number their slots differently.
-        if (mc.gui.screen() instanceof AbstractContainerScreen
-            && !(mc.gui.screen() instanceof InventoryScreen)) {
-            return;
-        }
-        if (mc.player.containerMenu.containerId != 0 || !mc.player.containerMenu.getCarried().isEmpty()) {
+        if (!InventoryUtil.canClick() || !InventoryUtil.carried().isEmpty()) {
             return;
         }
         if (timer > 0) {
@@ -52,7 +47,7 @@ public final class AutoDrop extends Module {
         }
 
         int first = hotbar.isOn() ? 0 : 9;
-        for (int i = first; i < 36; i++) {
+        for (int i = first; i < InventoryUtil.WHOLE_INVENTORY; i++) {
             ItemStack stack = mc.player.getInventory().getItem(i);
             if (stack.isEmpty() || !items.contains(stack.getItem())) {
                 continue;

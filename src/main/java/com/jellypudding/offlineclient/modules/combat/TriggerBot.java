@@ -30,6 +30,11 @@ public final class TriggerBot extends Module {
         addSettings(timer.settings());
     }
 
+    @Override
+    protected void onEnable() {
+        timer.clear();
+    }
+
     @Subscribe
     private void onTick(TickEvent event) {
         if (!inGame() || mc.gui.screen() != null || mc.player.isSpectator()) {

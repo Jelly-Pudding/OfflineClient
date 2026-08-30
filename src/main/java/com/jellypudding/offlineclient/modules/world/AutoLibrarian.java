@@ -12,6 +12,7 @@ import com.jellypudding.offlineclient.setting.TextSetting;
 import com.jellypudding.offlineclient.util.BlockMiner;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.ItemUtil;
@@ -62,12 +63,12 @@ public final class AutoLibrarian extends Module {
     private enum Stage { FIND_VILLAGER, FIND_LECTERN, OPEN_TRADE, READ_TRADE, BREAK_LECTERN, PLACE_LECTERN }
 
     private final TextSetting wanted = new TextSetting("Wanted books",
-        "Enchantments separated by spaces with an optional lowest level after a colon such as mending unbreaking:3.",
+        "Enchantments separated by spaces. A colon and a number sets the lowest level. Example: mending unbreaking:3",
         "mending unbreaking:3 sharpness:5 protection:4 efficiency:5 fortune:3 looting:3 silk_touch");
     private final NumberSetting maxPrice = new NumberSetting("Max price",
         "The most emeralds a wanted book may cost.", 64, 1, 64, 1, " emeralds").max(64);
     private final BoolSetting lockIn = new BoolSetting("Lock in",
-        "Buys the book once so the villager keeps the trade. Needs emeralds and paper or a book.", false);
+        "Buys the book once and the villager keeps the trade. Needs emeralds and paper or a book.", false);
     private final NumberSetting range = new NumberSetting("Range",
         "How far the villager and its lectern may be.", 5, 1, 6, 0.1).max(6);
     private final BoolSetting rotate = new BoolSetting("Rotate",
@@ -143,22 +144,7 @@ public final class AutoLibrarian extends Module {
 
     // A level one librarian that has not traded yet. Its trades can still change.
     private void findVillager() {
-        Villager best = null;
-        double bestDistance = range.getValue();
-        for (Entity entity : mc.level.entitiesForRendering()) {
-            if (!(entity instanceof Villager candidate) || !candidate.isAlive() || spent.contains(candidate.getId())) {
-                continue;
-            }
-            if (!candidate.getVillagerData().profession().is(VillagerProfession.LIBRARIAN)
-                || candidate.getVillagerData().level() != 1) {
-                continue;
-            }
-            double distance = mc.player.distanceTo(candidate);
-            if (distance <= bestDistance) {
-                bestDistance = distance;
-                best = candidate;
-            }
-        }
+        Villager best = (Villager) EntityUtil.nearest(range.getValue(), this::trainable);
         if (best == null) {
             ChatUtil.error("No fresh librarian in reach."
                 + (spent.isEmpty() ? "" : " " + spent.size() + " nearby already traded."));
@@ -167,6 +153,15 @@ public final class AutoLibrarian extends Module {
         }
         villager = best;
         stage = Stage.FIND_LECTERN;
+    }
+
+    // A living level one librarian that has not traded yet.
+    private boolean trainable(Entity entity) {
+        if (!(entity instanceof Villager candidate) || !candidate.isAlive() || spent.contains(candidate.getId())) {
+            return false;
+        }
+        return candidate.getVillagerData().profession().is(VillagerProfession.LIBRARIAN)
+            && candidate.getVillagerData().level() == 1;
     }
 
     private void findLectern() {
@@ -303,7 +298,7 @@ public final class AutoLibrarian extends Module {
             menu.setSelectionHint(index);
             menu.tryMoveItems(index);
             mc.player.connection.send(new ServerboundSelectTradePacket(index));
-            mc.gameMode.handleContainerInput(menu.containerId, RESULT_SLOT, 0, ContainerInput.PICKUP, mc.player);
+            mc.gameMode.handleContainerInput(menu.containerId, RESULT_SLOT, 0, ContainerInput.QUICK_MOVE, mc.player);
         }
         closeTrade();
         setEnabled(false);

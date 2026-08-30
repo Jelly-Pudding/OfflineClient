@@ -20,59 +20,68 @@ import net.minecraft.world.phys.shapes.CollisionContext;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * A hole with somebody already in it cannot be filled. The server refuses a
+ * block inside a player. The point is to seal the holes around an enemy
+ * before they reach one.
+ */
 public final class HoleFiller extends Module {
 
     // How far ahead of a moving target the search looks.
     private static final double LEAD_TICKS = 8;
 
-    // How close a target has to be to a hole for it to count as theirs.
-    private static final double FEET_RANGE = 1.6;
-
-    private final NumberSetting targetRange = new NumberSetting("Target range",
-        "How far away enemies are considered.", 7, 1, 12, 0.5, " blocks");
     private final NumberSetting range = new NumberSetting("Range",
         "How far you can reach to place.", 4.5, 1, 6, 0.1);
+    private final BoolSetting nearEnemies = new BoolSetting("Near enemies only",
+        "Only fill holes an enemy could reach. Off fills every hole in range.", true);
+    private final NumberSetting targetRange = new NumberSetting("Target range",
+        "How close an enemy has to be to a hole for it to count.", 5, 1, 12, 0.5, " blocks")
+        .under(nearEnemies);
+    private final BoolSetting predict = new BoolSetting("Predict",
+        "Fills the holes a moving enemy is heading for first.", true)
+        .under(nearEnemies);
     private final NumberSetting perTick = new NumberSetting("Blocks per tick",
         "How many blocks to place in one round.", 2, 1, 4, 1);
     private final NumberSetting delay = new NumberSetting("Delay",
         "Ticks to wait between placing rounds.", 1, 0, 10, 1, " ticks");
     private final BoolSetting genuineOnly = new BoolSetting("Genuine holes",
         "Only fill holes that are blast proof on every side.", true);
-    private final BoolSetting predict = new BoolSetting("Predict",
-        "Also fill the holes a moving target is heading for.", true);
+    private final BoolSetting ownHole = new BoolSetting("Keep own hole",
+        "Never fill the hole you stand in or next to.", true);
     private final BoolSetting rotate = new BoolSetting("Rotate",
         "Send a look packet toward each block.", true);
     private final BoolSetting render = new BoolSetting("Show holes",
         "Outline the holes waiting to be filled.", true);
 
-    private final List<Player> targets = new ArrayList<>();
+    private final List<Player> enemies = new ArrayList<>();
     private final List<BlockPos> holes = new ArrayList<>();
     private int timer;
     private final SlotSwap slots = new SlotSwap();
 
     public HoleFiller() {
-        super("HoleFiller", "Fills the holes an enemy hides in with obsidian.", Category.COMBAT);
-        addSettings(targetRange, range, perTick, delay, genuineOnly, predict, rotate, render);
+        super("HoleFiller", "Seals the holes around an enemy before they can hide in one.", Category.COMBAT);
+        addSettings(range, nearEnemies, targetRange, predict, perTick, delay, genuineOnly, ownHole,
+            rotate, render);
         searchTags("hole", "obsidian", "crystal", "fill");
     }
 
     @Override
     public String getSuffix() {
-        return holes.isEmpty() ? null : String.valueOf(holes.size());
+        return count(holes.size());
     }
 
     @Override
     protected void onEnable() {
         timer = 0;
         slots.forget();
-        targets.clear();
+        enemies.clear();
         holes.clear();
     }
 
     @Override
     protected void onDisable() {
         slots.restore();
-        targets.clear();
+        enemies.clear();
         holes.clear();
     }
 
@@ -80,11 +89,11 @@ public final class HoleFiller extends Module {
     private void onTick(TickEvent event) {
         holes.clear();
         if (!inGame() || mc.player.isSpectator()) {
-            targets.clear();
+            enemies.clear();
             return;
         }
-        collectTargets();
-        if (targets.isEmpty()) {
+        collectEnemies();
+        if (nearEnemies.isOn() && enemies.isEmpty()) {
             slots.restore();
             return;
         }
@@ -110,14 +119,9 @@ public final class HoleFiller extends Module {
             if (placed >= perTick.getInt()) {
                 break;
             }
-            Direction support = BlockUtil.findPlaceSupport(pos);
-            if (support != null) {
-                BlockUtil.place(pos, support, rotate.isOn(), true);
-            } else {
-                BlockUtil.placeDirect(pos, rotate.isOn(), true);
+            if (BlockUtil.placeAny(pos, rotate.isOn(), true)) {
+                placed++;
             }
-            // The packet leaves whatever the local result is.
-            placed++;
         }
         if (placed > 0) {
             timer = delay.getInt();
@@ -125,31 +129,42 @@ public final class HoleFiller extends Module {
         slots.restore();
     }
 
-    private void collectTargets() {
-        targets.clear();
+    private void collectEnemies() {
+        enemies.clear();
+        double reach = range.getValue() + targetRange.getValue();
         for (Player player : mc.level.players()) {
-            if (player == mc.player || !player.isAlive() || player.isSpectator() || player.isCreative()) {
+            if (!EntityUtil.isEnemy(player) || player.isCreative()) {
                 continue;
             }
-            if (EntityUtil.isFriend(player)) {
-                continue;
-            }
-            if (mc.player.distanceTo(player) <= targetRange.getValue()) {
-                targets.add(player);
+            if (mc.player.distanceTo(player) <= reach) {
+                enemies.add(player);
             }
         }
     }
 
     private void collectHoles() {
-        // positionsWithin already hands them back nearest first.
+        BlockPos own = mc.player.blockPosition();
+        // positionsWithin hands them back nearest first. Predicted holes are pulled forward.
+        List<BlockPos> soon = new ArrayList<>();
         for (BlockPos pos : BlockUtil.positionsWithin(range.getValue())) {
-            if (!open(pos) || !floored(pos) || !claimed(pos)) {
+            if (ownHole.isOn() && own.distManhattan(pos) <= 1) {
                 continue;
             }
-            holes.add(pos.immutable());
+            if (!open(pos) || !floored(pos)) {
+                continue;
+            }
+            if (!nearEnemies.isOn()) {
+                holes.add(pos.immutable());
+            } else if (headedFor(pos)) {
+                soon.add(pos.immutable());
+            } else if (nearAnEnemy(pos)) {
+                holes.add(pos.immutable());
+            }
         }
+        holes.addAll(0, soon);
     }
 
+    // Open and empty. A hole with a player in it is not open.
     private boolean open(BlockPos pos) {
         if (!BlockUtil.isReplaceable(pos) || !BlockUtil.state(pos.above()).isAir()) {
             return false;
@@ -175,25 +190,33 @@ public final class HoleFiller extends Module {
         return true;
     }
 
-    // True when a target stands in the hole or is moving onto it.
-    private boolean claimed(BlockPos pos) {
+    private boolean nearAnEnemy(BlockPos pos) {
         Vec3 top = Vec3.upFromBottomCenterOf(pos, 1);
-        for (Player target : targets) {
-            if (target.getY() <= pos.getY() - 1) {
-                continue;
-            }
-            if (target.position().distanceTo(top) < FEET_RANGE) {
-                return true;
-            }
-            if (predict.isOn() && ahead(target).distanceTo(top) < FEET_RANGE) {
+        for (Player enemy : enemies) {
+            if (enemy.position().distanceTo(top) <= targetRange.getValue()) {
                 return true;
             }
         }
         return false;
     }
 
-    private Vec3 ahead(Player target) {
-        return target.position().add(EntityUtil.velocityOf(target).scale(LEAD_TICKS));
+    // True when a moving enemy will be standing on the spot shortly.
+    private boolean headedFor(BlockPos pos) {
+        if (!predict.isOn()) {
+            return false;
+        }
+        Vec3 top = Vec3.upFromBottomCenterOf(pos, 1);
+        for (Player enemy : enemies) {
+            Vec3 pace = EntityUtil.velocityOf(enemy);
+            if (pace.horizontalDistanceSqr() < 0.0004) {
+                continue;
+            }
+            Vec3 ahead = enemy.position().add(pace.x * LEAD_TICKS, 0, pace.z * LEAD_TICKS);
+            if (ahead.distanceTo(top) < 1.5) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Subscribe

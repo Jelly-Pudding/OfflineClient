@@ -9,6 +9,7 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
+import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.ItemUtil;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
@@ -59,7 +60,7 @@ public final class AttributeSwap extends Module {
         if (!(event.getTarget() instanceof LivingEntity target)) {
             return;
         }
-        int selected = mc.player.getInventory().getSelectedSlot();
+        int selected = InventoryUtil.selectedSlot();
         int best = bestSlot(target, selected);
         if (best == -1) {
             return;
@@ -89,7 +90,7 @@ public final class AttributeSwap extends Module {
         double bestDamage = AutoWeapon.weaponDamage(
             mc.player.getInventory().getItem(selected), target) + minGain.getValue();
         int best = -1;
-        for (int i = 0; i < 9; i++) {
+        for (int i = 0; i < InventoryUtil.HOTBAR_SIZE; i++) {
             if (i == selected) {
                 continue;
             }

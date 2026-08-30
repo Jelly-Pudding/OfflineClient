@@ -11,7 +11,7 @@ public final class Reach extends Module {
         "How far you can reach.", 5, 3, 6, 0.05, " blocks");
 
     public Reach() {
-        super("Reach", "Interact with blocks and entities from further away.", Category.PLAYER);
+        super("Reach", "Reaches blocks and entities from further away.", Category.PLAYER);
         addSettings(range);
     }
 

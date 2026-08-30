@@ -63,7 +63,7 @@ public final class SoundBlocker extends Module {
             if (keepMusic.isOn() && source == SoundSource.MUSIC) {
                 return false;
             }
-        } else if (!sounds.getValue().contains(instance.getIdentifier())) {
+        } else if (!sounds.contains(BuiltInRegistries.SOUND_EVENT.getValue(instance.getIdentifier()))) {
             return false;
         }
         muted.incrementAndGet();

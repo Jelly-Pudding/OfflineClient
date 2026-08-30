@@ -8,6 +8,7 @@ import com.jellypudding.offlineclient.modules.render.Esp;
 import com.jellypudding.offlineclient.modules.render.Freecam;
 import com.jellypudding.offlineclient.util.BlockMiner;
 import com.jellypudding.offlineclient.util.Modules;
+
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
@@ -15,6 +16,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.entity.Entity;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -50,6 +52,7 @@ public abstract class MinecraftMixin {
         }
     }
 
+    @Unique
     private static boolean offlineclient$freecamBlocks() {
         Freecam freecam = Modules.get(Freecam.class);
         return freecam != null && freecam.blocksClicks();
@@ -113,7 +116,8 @@ public abstract class MinecraftMixin {
         return false;
     }
 
-    private Multitask offlineclient$module() {
+    @Unique
+    private static Multitask offlineclient$module() {
         return Modules.get(Multitask.class);
     }
 }

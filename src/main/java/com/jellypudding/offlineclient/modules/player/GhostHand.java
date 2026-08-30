@@ -19,7 +19,7 @@ import java.util.Set;
 public final class GhostHand extends Module {
 
     public GhostHand() {
-        super("GhostHand", "Open containers through walls.", Category.PLAYER);
+        super("GhostHand", "Opens containers through walls.", Category.PLAYER);
         searchTags("through walls", "chest");
     }
 
@@ -52,7 +52,7 @@ public final class GhostHand extends Module {
             }
             BlockHitResult hit = new BlockHitResult(Vec3.atCenterOf(pos), Direction.UP, pos, true);
             InteractionResult result = mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND, hit);
-            if (result instanceof InteractionResult.Success) {
+            if (result.consumesAction()) {
                 mc.player.swing(InteractionHand.MAIN_HAND);
             }
             event.cancel();

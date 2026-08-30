@@ -137,12 +137,7 @@ public final class Quiver extends Module {
     }
 
     private int firstArrow() {
-        for (int i = 0; i < 36; i++) {
-            if (isArrow(mc.player.getInventory().getItem(i))) {
-                return i;
-            }
-        }
-        return -1;
+        return InventoryUtil.findSlot(Quiver::isArrow, InventoryUtil.WHOLE_INVENTORY);
     }
 
     // Inventory index of the arrow that should be fired next.
@@ -152,7 +147,7 @@ public final class Quiver extends Module {
                 continue;
             }
             MobEffect effect = BuiltInRegistries.MOB_EFFECT.getValue(id);
-            for (int i = 0; i < 36; i++) {
+            for (int i = 0; i < InventoryUtil.WHOLE_INVENTORY; i++) {
                 ItemStack stack = mc.player.getInventory().getItem(i);
                 if (stack.is(Items.TIPPED_ARROW) && hasEffect(stack, effect)) {
                     return i;
@@ -162,12 +157,7 @@ public final class Quiver extends Module {
         if (!plainFallback.isOn()) {
             return -1;
         }
-        for (int i = 0; i < 36; i++) {
-            if (mc.player.getInventory().getItem(i).is(Items.ARROW)) {
-                return i;
-            }
-        }
-        return -1;
+        return InventoryUtil.findSlot(Items.ARROW, InventoryUtil.WHOLE_INVENTORY);
     }
 
     private static boolean hasEffect(ItemStack stack, MobEffect effect) {

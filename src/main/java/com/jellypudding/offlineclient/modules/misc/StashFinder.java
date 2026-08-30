@@ -58,7 +58,7 @@ public final class StashFinder extends Module {
 
     @Override
     public String getSuffix() {
-        return String.valueOf(stashes.size());
+        return count(stashes.size());
     }
 
     @Subscribe

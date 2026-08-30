@@ -8,9 +8,9 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.Modules;
-import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.core.Holder;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectInstance;
@@ -27,7 +27,7 @@ public final class AutoGap extends Module {
     // Ticks to wait after a bite whilst the effects land. A laggy server needs a moment.
     private static final int SETTLE_TICKS = 20;
 
-    // The least ticks between two apples so a slow server never gets a second one for the same reason.
+    // The least ticks between two apples. A slow server never gets a second one for the same reason.
     private static final int MEAL_GAP = 100;
 
     // Ticks to give the hand before the bite is written off.
@@ -108,10 +108,11 @@ public final class AutoGap extends Module {
             return;
         }
         if (mc.player.isDeadOrDying()) {
-            // Respawn rebuilds the inventory.
+            // Respawn rebuilds the inventory and restarts the tick count.
             loan.forget();
             stopEating();
             settle = 0;
+            lastMeal = Integer.MIN_VALUE / 2;
             return;
         }
         if (settle > 0) {
@@ -148,16 +149,13 @@ public final class AutoGap extends Module {
     }
 
     private boolean handBusy() {
-        AutoEat eat = Modules.get(AutoEat.class);
-        AutoPotion potion = Modules.get(AutoPotion.class);
-        return (eat != null && eat.isBusy()) || (potion != null && potion.isDrinking());
+        return Modules.feeding(this);
     }
 
     private boolean wantsApple() {
         if (EntityUtil.healthAtOrBelow(health.getValue())) {
             return true;
         }
-        // Both apples grant absorption.
         if (absorption.isOn() && isRunningOut(MobEffects.ABSORPTION)) {
             return true;
         }
@@ -222,16 +220,13 @@ public final class AutoGap extends Module {
     }
 
     private void releaseKey() {
-        // Give the key back without forcing it up.
-        boolean physicallyHeld = InputConstants.isKeyDown(
-            mc.getWindow(), mc.options.keyUse.key.getValue());
-        mc.options.keyUse.setDown(physicallyHeld);
+        InputUtil.release(mc.options.keyUse);
     }
 
     private int findApple() {
         int plain = -1;
         int enchanted = -1;
-        for (int i = 0; i < 36; i++) {
+        for (int i = 0; i < InventoryUtil.WHOLE_INVENTORY; i++) {
             ItemStack stack = mc.player.getInventory().getItem(i);
             if (plain == -1 && stack.is(Items.GOLDEN_APPLE)) {
                 plain = i;

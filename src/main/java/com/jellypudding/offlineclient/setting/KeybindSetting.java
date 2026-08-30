@@ -10,12 +10,12 @@ public final class KeybindSetting extends Setting<Integer> {
 
     public static final int UNBOUND = GLFW.GLFW_KEY_UNKNOWN;
 
+    // Returned by keyFromName when the text is not a key at all.
+    public static final int UNKNOWN = Integer.MIN_VALUE;
+
     public KeybindSetting(String name, String description, int defaultKey) {
         super(name, description, defaultKey);
     }
-
-    // Returned by keyFromName when the text is not a key at all.
-    public static final int UNKNOWN = Integer.MIN_VALUE;
 
     public boolean isBound() {
         return value != UNBOUND;
@@ -41,7 +41,6 @@ public final class KeybindSetting extends Setting<Integer> {
                     return GLFW.GLFW_KEY_F1 + number - 1;
                 }
             } catch (NumberFormatException ignored) {
-                return UNKNOWN;
             }
             return UNKNOWN;
         }

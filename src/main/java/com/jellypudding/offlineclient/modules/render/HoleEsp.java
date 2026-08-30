@@ -40,6 +40,10 @@ public final class HoleEsp extends Module {
     private record Hole(AABB box, Wall wall) {
     }
 
+    // Reused by every column test. One scan probes thousands of positions.
+    private final BlockPos.MutableBlockPos probe = new BlockPos.MutableBlockPos();
+    private final BlockPos.MutableBlockPos under = new BlockPos.MutableBlockPos();
+
     private final NumberSetting horizontal = new NumberSetting("Horizontal range",
         "How far sideways to look for holes.", 8, 1, 16, 1, " blocks").max(32);
     private final NumberSetting vertical = new NumberSetting("Vertical range",
@@ -73,7 +77,7 @@ public final class HoleEsp extends Module {
 
     @Override
     public String getSuffix() {
-        return holes.isEmpty() ? null : String.valueOf(holes.size());
+        return count(holes.size());
     }
 
     @Override
@@ -114,20 +118,16 @@ public final class HoleEsp extends Module {
                 for (int dy = -v; dy <= v; dy++) {
                     cursor.set(center.getX() + dx, center.getY() + dy, center.getZ() + dz);
                     // A blast proof floor is rare.
-                    if (wallAt(cursor.below()) == null) {
+                    if (wallAt(under.setWithOffset(cursor, Direction.DOWN)) == null) {
                         continue;
                     }
                     if (!isOpen(cursor)) {
                         continue;
                     }
-                    BlockPos pos = cursor.immutable();
-                    if (ignoreOwn.isOn() && pos.equals(center)) {
+                    if ((ignoreOwn.isOn() && cursor.equals(center)) || seen.contains(cursor)) {
                         continue;
                     }
-                    if (seen.contains(pos)) {
-                        continue;
-                    }
-                    check(pos, seen);
+                    check(cursor.immutable(), seen);
                 }
             }
         }
@@ -197,7 +197,7 @@ public final class HoleEsp extends Module {
     // The block and the ones above it must have no collision.
     private boolean isOpen(BlockPos pos) {
         int needed = minHeight.getInt();
-        BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+        BlockPos.MutableBlockPos cursor = probe;
         for (int i = 0; i < needed; i++) {
             cursor.set(pos.getX(), pos.getY() + i, pos.getZ());
             BlockState state = mc.level.getBlockState(cursor);
@@ -222,7 +222,7 @@ public final class HoleEsp extends Module {
         if (!breakable && BlockUtil.blocksMotion(state)) {
             return Wall.BEDROCK;
         }
-        if (breakable && block.getExplosionResistance() >= 600 && BlockUtil.blocksMotion(state)) {
+        if (breakable && block.getExplosionResistance() >= BlockUtil.BLAST_PROOF && BlockUtil.blocksMotion(state)) {
             return Wall.OBSIDIAN;
         }
         return null;

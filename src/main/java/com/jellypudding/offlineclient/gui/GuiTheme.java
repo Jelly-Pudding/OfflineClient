@@ -4,6 +4,7 @@ import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.modules.misc.ClickGuiModule;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.util.ColorUtil;
+import com.jellypudding.offlineclient.util.Modules;
 
 // Shared colours and metrics for the ClickGUI and HUD.
 public final class GuiTheme {
@@ -44,14 +45,8 @@ public final class GuiTheme {
         return rowY + (rowHeight - TEXT_HEIGHT) / 2;
     }
 
-    private static ColorSetting accentSetting;
-
     public static ColorSetting accentSetting() {
-        if (accentSetting == null) {
-            accentSetting = OfflineClient.INSTANCE.getModuleManager()
-                .get(ClickGuiModule.class).getAccent();
-        }
-        return accentSetting;
+        return Modules.get(ClickGuiModule.class).getAccent();
     }
 
     public static int accent() {

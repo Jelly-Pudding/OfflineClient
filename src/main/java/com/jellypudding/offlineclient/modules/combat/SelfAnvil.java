@@ -8,7 +8,6 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.AnvilBlock;
 
 // Drops an anvil onto your own head. Nobody can walk into a hole with an anvil in it.
@@ -53,10 +52,7 @@ public final class SelfAnvil extends Module {
             return;
         }
         slots.select(slot);
-        Direction support = BlockUtil.findPlaceSupport(target);
-        boolean placed = support != null
-            ? BlockUtil.place(target, support, rotate.isOn(), true)
-            : BlockUtil.placeDirect(target, rotate.isOn(), true);
+        boolean placed = BlockUtil.placeAny(target, rotate.isOn(), true);
         slots.restore();
         if (placed) {
             setEnabled(false);

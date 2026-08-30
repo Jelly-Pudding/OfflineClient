@@ -5,6 +5,7 @@ import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.Render2DEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.render.WorldToScreen;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
@@ -46,7 +47,7 @@ public final class Nametags extends Module {
         "Show how far away the player is.", false);
     private final BoolSetting items = new BoolSetting("Items",
         "Show what they hold in each hand.", true);
-    private final BoolSetting armor = new BoolSetting("Armor",
+    private final BoolSetting armor = new BoolSetting("Armour",
         "Show their armour next to the held items.", true);
     private final BoolSetting durability = new BoolSetting("Durability",
         "Show the durability bar on each item.", true);
@@ -111,7 +112,7 @@ public final class Nametags extends Module {
 
         String name = player.getGameProfile().name();
         boolean friend = OfflineClient.INSTANCE.getFriendManager().isFriend(name);
-        int nameColor = friend ? 0xFF4C9BFF : player == mc.player ? 0xFFB0FFB0 : 0xFFFFFFFF;
+        int nameColor = friend ? EntityUtil.FRIEND_COLOR : player == mc.player ? 0xFFB0FFB0 : 0xFFFFFFFF;
 
         List<String> parts = new ArrayList<>();
         List<Integer> colors = new ArrayList<>();
@@ -119,22 +120,21 @@ public final class Nametags extends Module {
         colors.add(nameColor);
 
         if (health.isOn()) {
-            float hp = player.getHealth() + player.getAbsorptionAmount();
-            float max = player.getMaxHealth() + player.getAbsorptionAmount();
+            float hp = EntityUtil.totalHealth(player);
+            float max = EntityUtil.totalMaxHealth(player);
             parts.add(String.format(" %.0f", hp));
             colors.add(ColorUtil.health(max <= 0 ? 0 : hp / max));
         }
         if (ping.isOn()) {
             int latency = latencyOf(player);
             if (latency >= 0) {
-                int color = latency < 100 ? 0xFF50FF50 : latency < 250 ? 0xFFFFD040 : 0xFFFF5050;
                 parts.add(" " + latency + "ms");
-                colors.add(color);
+                colors.add(ColorUtil.ping(latency));
             }
         }
         if (distance.isOn() && player != mc.player) {
             parts.add(String.format(" %.1fm", tag.distance()));
-            colors.add(0xFFB0B0C0);
+            colors.add(RenderUtil.MUTED_TEXT);
         }
 
         // Shrink with distance down to half size.

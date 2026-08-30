@@ -48,8 +48,9 @@ public final class AntiAfk extends Module {
             mc.player.jumpFromGround();
         }
         if (look.isOn()) {
+            // The vanilla turn keeps the last frame in step. A raw set snaps the head.
             float delta = ThreadLocalRandom.current().nextFloat(-15f, 15f);
-            mc.player.setYRot(mc.player.getYRot() + delta);
+            mc.player.turn(delta / 0.15, 0);
         }
         if (swing.isOn()) {
             mc.player.swing(InteractionHand.MAIN_HAND);

@@ -14,7 +14,7 @@ public final class ToggleCommand extends Command {
     @Override
     public void execute(String[] args) {
         if (args.length != 1) {
-            ChatUtil.error("Usage: " + getUsage());
+            usage();
             return;
         }
         Module module = OfflineClient.INSTANCE.getModuleManager().get(args[0]);

@@ -33,7 +33,7 @@ public final class AutoTool extends Module {
     private final BoolSetting fortune = new BoolSetting("Fortune on ores",
         "Takes a Fortune tool for ores and crops even when a plain one is faster.", true);
     private final BoolSetting silkTouch = new BoolSetting("Silk touch on ender chests",
-        "Takes a Silk Touch pickaxe for an ender chest so it drops whole.", true);
+        "Takes a Silk Touch pickaxe for an ender chest. It then drops whole.", true);
     private final BoolSetting switchBack = new BoolSetting("Switch back",
         "Returns to the slot you had once you stop mining.", true);
     private final BoolSetting antiBreak = new BoolSetting("Anti break",
@@ -85,7 +85,7 @@ public final class AutoTool extends Module {
             return;
         }
         BlockState state = mc.level.getBlockState(event.getPos());
-        int selected = mc.player.getInventory().getSelectedSlot();
+        int selected = InventoryUtil.selectedSlot();
         ItemStack held = mc.player.getInventory().getItem(selected);
         int slots = fromInventory.isOn() ? InventoryUtil.WHOLE_INVENTORY : InventoryUtil.HOTBAR_SIZE;
         Predicate<ItemStack> allowed = stack -> (!antiBreak.isOn() || !isNearlyBroken(stack))
@@ -93,11 +93,13 @@ public final class AutoTool extends Module {
 
         int best = enchantedPick(state, slots, allowed);
         if (best == -1) {
-            // A tool about to snap is worth leaving even for a slower one.
             boolean heldWornOut = antiBreak.isOn() && isNearlyBroken(held);
-            // A fast enchanted tool beats a plain better one.
-            float heldSpeed = heldWornOut ? -1 : ItemUtil.miningSpeed(held, state);
+            float heldSpeed = heldWornOut ? 1 : ItemUtil.miningSpeed(held, state);
             best = ItemUtil.bestToolSlot(state, heldSpeed, allowed, slots);
+            // A tool about to snap is worth leaving even for a bare hand.
+            if (best == -1 && heldWornOut) {
+                best = InventoryUtil.freeHotbarSlot();
+            }
         }
         // Nothing better than a hand and the hand itself is better than what is held.
         if (best == -1 && hands.isOn() && ItemUtil.miningSpeed(held, state) <= 1
@@ -158,11 +160,7 @@ public final class AutoTool extends Module {
         loan.giveBack(switchBack.isOn() && loan.stillMine());
     }
 
-    private boolean isNearlyBroken(ItemStack stack) {
-        if (!stack.isDamageableItem()) {
-            return false;
-        }
-        int max = stack.getMaxDamage();
-        return max - stack.getDamageValue() <= max * LOW_DURABILITY;
+    private static boolean isNearlyBroken(ItemStack stack) {
+        return ItemUtil.wornBelow(stack, LOW_DURABILITY);
     }
 }

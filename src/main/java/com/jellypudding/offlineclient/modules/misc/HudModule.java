@@ -119,7 +119,7 @@ public final class HudModule extends Module {
             context.text(font, OfflineClient.NAME, EDGE, EDGE, watermarkColor.getColor(), true);
         }
         int offset = font.width(OfflineClient.NAME) + 6;
-        context.text(font, "v" + OfflineClient.VERSION, EDGE + offset, EDGE, 0xFFB0B0C0, true);
+        context.text(font, "v" + OfflineClient.VERSION, EDGE + offset, EDGE, RenderUtil.MUTED_TEXT, true);
 
         popScaled(context, pushed);
     }
@@ -169,7 +169,7 @@ public final class HudModule extends Module {
         int floor = context.guiHeight() - EDGE;
         int y = floor - font.lineHeight;
         boolean pushed = pushScaled(context, infoScale.getFloat(), EDGE, floor);
-        context.text(font, line, EDGE, y, 0xFFB0B0C0, true);
+        context.text(font, line, EDGE, y, RenderUtil.MUTED_TEXT, true);
         popScaled(context, pushed);
     }
 }

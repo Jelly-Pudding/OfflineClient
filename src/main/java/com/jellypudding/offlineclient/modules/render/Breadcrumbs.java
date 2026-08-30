@@ -29,7 +29,7 @@ public final class Breadcrumbs extends Module {
 
     private final BoolSetting throughWalls = new BoolSetting("Through walls",
         "Show the trail through blocks.", true);
-    private final ColorSetting color = new ColorSetting("Color",
+    private final ColorSetting color = new ColorSetting("Colour",
         "Trail colour.", 190, false);
     private final BoolSetting keepTrail = new BoolSetting("Keep trail",
         "The trail survives toggling the module off and on.", true);
@@ -45,14 +45,14 @@ public final class Breadcrumbs extends Module {
     private int sinceSave;
 
     public Breadcrumbs() {
-        super("Breadcrumbs", "Draws a trail behind you so you can find your way back.", Category.RENDER);
+        super("Breadcrumbs", "Draws a trail behind you to lead you back.", Category.RENDER);
         addSettings(throughWalls, color, keepTrail, persist, spacing, fade);
         searchTags("trail", "path", "waypoint");
     }
 
     @Override
     public String getSuffix() {
-        return trail.isEmpty() ? null : String.valueOf(trail.size());
+        return count(trail.size());
     }
 
     @Override

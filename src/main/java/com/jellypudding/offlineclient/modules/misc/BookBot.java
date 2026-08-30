@@ -68,7 +68,7 @@ public final class BookBot extends Module {
     private final NumberSetting delay = new NumberSetting("Delay",
         "Ticks between books.", 20, 1, 200, 1, " ticks").min(1);
     private final BoolSetting sign = new BoolSetting("Sign",
-        "Signs the book so it can no longer be edited.", true);
+        "Signs the book and locks it against editing.", true);
     private final TextSetting title = new TextSetting("Title",
         "Title given to a signed book.", "Offline").under(sign);
     private final BoolSetting number = new BoolSetting("Number books",
@@ -107,13 +107,7 @@ public final class BookBot extends Module {
             return;
         }
         if (!isBlankBook(mc.player.getMainHandItem())) {
-            int slot = -1;
-            for (int i = 0; i < InventoryUtil.WHOLE_INVENTORY; i++) {
-                if (isBlankBook(mc.player.getInventory().getItem(i))) {
-                    slot = i;
-                    break;
-                }
-            }
+            int slot = InventoryUtil.findSlot(BookBot::isBlankBook, InventoryUtil.WHOLE_INVENTORY);
             if (slot == -1) {
                 ChatUtil.message("§bBookBot §7has no blank books left.");
                 setEnabled(false);
@@ -212,7 +206,7 @@ public final class BookBot extends Module {
 
     private void send(List<String> text) {
         String name = title.getValue();
-        if (number.isOn() && written > 0) {
+        if (number.isOn()) {
             name += " " + (written + 1);
         }
         Optional<String> signed = sign.isOn() ? Optional.of(name) : Optional.empty();

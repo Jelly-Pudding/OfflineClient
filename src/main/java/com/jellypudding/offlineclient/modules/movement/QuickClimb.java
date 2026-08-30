@@ -10,7 +10,7 @@ import net.minecraft.world.phys.Vec3;
 public final class QuickClimb extends Module {
 
     private final NumberSetting speed = new NumberSetting("Speed",
-        "Climbing speed where vanilla is 0.2.", 0.3, 0.15, 2, 0.05);
+        "How fast you climb in blocks a tick. Vanilla is 0.2.", 0.3, 0.15, 2, 0.05, " blocks");
 
     public QuickClimb() {
         super("QuickClimb", "Climb ladders and vines much faster.", Category.MOVEMENT);

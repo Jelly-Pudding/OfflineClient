@@ -1,9 +1,9 @@
 package com.jellypudding.offlineclient.modules.combat;
 
 import com.jellypudding.offlineclient.module.RespawnBlockBreaker;
+import com.jellypudding.offlineclient.util.ExplosionUtil;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.attribute.EnvironmentAttributes;
 import net.minecraft.world.level.block.Blocks;
 
 public final class AntiAnchor extends RespawnBlockBreaker {
@@ -16,8 +16,7 @@ public final class AntiAnchor extends RespawnBlockBreaker {
     // An anchor that sets a spawn point never goes off.
     @Override
     protected boolean explodesHere() {
-        return !mc.level.environmentAttributes()
-            .getValue(EnvironmentAttributes.RESPAWN_ANCHOR_WORKS, mc.player.blockPosition());
+        return ExplosionUtil.anchorsExplodeHere();
     }
 
     @Override

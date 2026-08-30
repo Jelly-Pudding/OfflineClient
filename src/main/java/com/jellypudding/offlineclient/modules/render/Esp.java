@@ -47,16 +47,16 @@ public final class Esp extends Module {
     private final BoolSetting items = new BoolSetting("Items",
         "Highlight dropped items.", false);
     private final RegistryListSetting<EntityType<?>> entities =
-        new RegistryListSetting<EntityType<?>>("Entities",
+        new RegistryListSetting<>("Entities",
             "Extra entity types to highlight.",
             BuiltInRegistries.ENTITY_TYPE, List.of(EntityTypes.END_CRYSTAL));
     private final NumberSetting range = new NumberSetting("Range",
         "Furthest an entity can be and still show.", 128, 16, 256, 8, " blocks").min(1);
-    private final EnumSetting<Coloring> coloring = new EnumSetting<>("Color mode",
+    private final EnumSetting<Coloring> coloring = new EnumSetting<>("Colour mode",
         "How the colour is chosen.", Coloring.DISTANCE)
         .describe(Coloring.DISTANCE, "Red up close fading to green far away.")
         .describe(Coloring.HEALTH, "Green at full health down to red near death.");
-    private final BoolSetting friendColor = new BoolSetting("Friend color",
+    private final BoolSetting friendColor = new BoolSetting("Friend colour",
         "Paint friends blue instead.", true);
     private final BoolSetting fill = new BoolSetting("Fill",
         "Adds a faint tint inside each box.", false)
@@ -80,7 +80,6 @@ public final class Esp extends Module {
             return;
         }
         DrawBatch batch = event.getBatch();
-        // The loop below runs for every entity every frame.
         Hitboxes hitboxes = Modules.get(Hitboxes.class);
         for (Entity entity : mc.level.entitiesForRendering()) {
             if (!matches(entity)) {
@@ -151,7 +150,7 @@ public final class Esp extends Module {
         if (max <= 0) {
             return EntityUtil.colorOf(living);
         }
-        float left = Math.clamp((living.getHealth() + living.getAbsorptionAmount()) / max, 0f, 1f);
+        float left = Math.clamp(EntityUtil.totalHealth(living) / max, 0f, 1f);
         return ColorUtil.hsv(left * HEALTH_HUE, 0.85f, 1f);
     }
 }

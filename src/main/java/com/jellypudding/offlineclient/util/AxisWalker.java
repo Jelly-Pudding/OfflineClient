@@ -21,7 +21,6 @@ public final class AxisWalker {
     private static final double MAX_CENTRE_PUSH = 0.1;
 
     private Direction axis;
-    private Direction right;
     private BlockPos origin;
     private int floorY;
 
@@ -39,7 +38,6 @@ public final class AxisWalker {
     // Takes the line from where the player faces snapped to the nearest eighth turn when asked.
     public void lock(boolean allowDiagonal) {
         axis = MC.player.getDirection();
-        right = axis.getClockWise();
         origin = MC.player.blockPosition();
         floorY = origin.getY();
 
@@ -66,14 +64,6 @@ public final class AxisWalker {
         return axis != null;
     }
 
-    public Direction axis() {
-        return axis;
-    }
-
-    public boolean isDiagonal() {
-        return diagonal;
-    }
-
     // Reads as north east for a diagonal and north for a straight line.
     public String heading() {
         if (!diagonal) {
@@ -86,10 +76,6 @@ public final class AxisWalker {
 
     public int floorY() {
         return floorY;
-    }
-
-    public Direction right() {
-        return right;
     }
 
     // Keeps the view and the footing on the line the work started on.
@@ -153,11 +139,6 @@ public final class AxisWalker {
     // Blocks along the line from the origin to a position on a straight line.
     public int depthOf(BlockPos pos) {
         return (int) Math.round(alongOf(pos));
-    }
-
-    // Blocks to the right of the line a position sits on a straight line.
-    public int laneOf(BlockPos pos) {
-        return (int) Math.round(acrossOf(pos));
     }
 
     // Blocks ahead then to the right then up. Whole blocks only on a straight line.

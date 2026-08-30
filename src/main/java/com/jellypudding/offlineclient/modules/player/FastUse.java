@@ -34,7 +34,7 @@ public final class FastUse extends Module {
     private final BoolSetting food = new BoolSetting("Food",
         "Anything you can eat or drink.", true).under(mode, Mode.CHOSEN_ONLY);
     private final BoolSetting pearls = new BoolSetting("Ender pearls",
-        "Ender pearls.", true).under(mode, Mode.CHOSEN_ONLY);
+        "Throws ender pearls with no delay.", true).under(mode, Mode.CHOSEN_ONLY);
     private final BoolSetting potions = new BoolSetting("Splash potions",
         "Splash and lingering potions.", true).under(mode, Mode.CHOSEN_ONLY);
     private final BoolSetting experience = new BoolSetting("Experience bottles",

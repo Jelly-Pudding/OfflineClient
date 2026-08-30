@@ -47,10 +47,13 @@ public final class Blink extends Module {
         owner = new WeakReference<>(mc.player);
     }
 
+    // Packets sent by release come straight back through this handler.
+    private boolean releasing;
+
     @Subscribe
     private void onPacketSend(PacketSendEvent event) {
         LocalPlayer player = mc.player;
-        if (player == null || !(event.getPacket() instanceof ServerboundMovePlayerPacket)) {
+        if (releasing || player == null || !(event.getPacket() instanceof ServerboundMovePlayerPacket)) {
             return;
         }
         if (player != owner.get()) {
@@ -59,9 +62,9 @@ public final class Blink extends Module {
             owner = new WeakReference<>(player);
         }
         if (held.size() >= limit.getInt()) {
-            // Disabling releases everything held.
-            setEnabled(false);
-            setEnabled(true);
+            // Toggling the module from the packet thread would edit the bus mid dispatch.
+            release();
+            owner = new WeakReference<>(player);
             return;
         }
         event.cancel();
@@ -70,15 +73,25 @@ public final class Blink extends Module {
 
     @Override
     protected void onDisable() {
+        release();
+    }
+
+    // Sends everything held on to the server. Positions of a dead player are dropped.
+    private void release() {
         LocalPlayer player = mc.player;
         LocalPlayer captured = owner.get();
         owner = new WeakReference<>(null);
         boolean replay = player != null && player == captured;
-        Packet<?> packet;
-        while ((packet = held.poll()) != null) {
-            if (replay) {
-                player.connection.send(packet);
+        releasing = true;
+        try {
+            Packet<?> packet;
+            while ((packet = held.poll()) != null) {
+                if (replay) {
+                    player.connection.send(packet);
+                }
             }
+        } finally {
+            releasing = false;
         }
     }
 }

@@ -93,11 +93,7 @@ public final class AutoReplenish extends Module {
     }
 
     private static boolean feederBusy() {
-        AutoEat eat = Modules.get(AutoEat.class);
-        AutoGap gap = Modules.get(AutoGap.class);
-        AutoPotion potion = Modules.get(AutoPotion.class);
-        return (eat != null && eat.isBusy()) || (gap != null && gap.isBusy())
-            || (potion != null && potion.isDrinking());
+        return Modules.feeding(null);
     }
 
     private boolean check(int index, ItemStack now) {
@@ -126,7 +122,7 @@ public final class AutoReplenish extends Module {
             return false;
         }
         // Only the held slot and the offhand may take from the hotbar.
-        if (source < 9 && index < 9 && index != mc.player.getInventory().getSelectedSlot()) {
+        if (source < 9 && index < 9 && index != InventoryUtil.selectedSlot()) {
             return false;
         }
 
@@ -144,7 +140,7 @@ public final class AutoReplenish extends Module {
         int best = -1;
         int bestCount = 0;
         int lowest = fromHotbar.isOn() ? 0 : 9;
-        int selected = mc.player.getInventory().getSelectedSlot();
+        int selected = InventoryUtil.selectedSlot();
         for (int i = 35; i >= lowest; i--) {
             if (i == excludedIndex || i == selected) {
                 continue;
@@ -165,7 +161,7 @@ public final class AutoReplenish extends Module {
     }
 
     private void snapshot() {
-        for (int i = 0; i < 9; i++) {
+        for (int i = 0; i < InventoryUtil.HOTBAR_SIZE; i++) {
             previous[i] = mc.player.getInventory().getItem(i).copy();
         }
         previous[OFFHAND_INDEX] = mc.player.getOffhandItem().copy();

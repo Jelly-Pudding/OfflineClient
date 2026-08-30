@@ -12,6 +12,7 @@ import com.mojang.math.Axis;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
+import java.util.Locale;
 
 /**
  * Changes how the first person hands look and move. Every hook lives in
@@ -30,7 +31,7 @@ public final class HandView extends Module {
     private final BoolSetting noEating = new BoolSetting("No eating animation",
         "Food stays still whilst you eat instead of bobbing off screen.", false);
     private final BoolSetting swordSlash = new BoolSetting("Sword slash",
-        "A sword swing uses the resting pose so the blade never fills the screen.", false);
+        "A sword swing uses the resting pose and the blade never fills the screen.", false);
     private final EnumSetting<SwingHand> swingHand = new EnumSetting<>("Swing hand",
         "Which hand is swung on a hit.", SwingHand.NORMAL)
         .describe(SwingHand.NORMAL, "Whichever hand the game would swing.")
@@ -141,7 +142,7 @@ public final class HandView extends Module {
         private final NumberSetting roll;
 
         Adjust(String label, String what) {
-            enabled = new BoolSetting("Adjust " + label.toLowerCase(),
+            enabled = new BoolSetting("Adjust " + label.toLowerCase(Locale.ROOT),
                 "Reshapes " + what + ".", false);
             scale = new NumberSetting(label + " scale",
                 "How big it is drawn.", 1, 0.1, 3, 0.05, "x").min(0.01).under(enabled);

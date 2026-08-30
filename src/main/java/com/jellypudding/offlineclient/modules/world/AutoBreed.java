@@ -30,7 +30,7 @@ public final class AutoBreed extends Module {
 
     public enum Hand { MAIN_HAND, OFF_HAND }
 
-    private final RegistryListSetting<EntityType<?>> animals = new RegistryListSetting<EntityType<?>>("Animals",
+    private final RegistryListSetting<EntityType<?>> animals = new RegistryListSetting<>("Animals",
         "The animals to feed.", BuiltInRegistries.ENTITY_TYPE,
         List.of(EntityTypes.COW, EntityTypes.MOOSHROOM, EntityTypes.SHEEP, EntityTypes.PIG,
             EntityTypes.CHICKEN, EntityTypes.HORSE, EntityTypes.DONKEY, EntityTypes.WOLF,
@@ -55,9 +55,12 @@ public final class AutoBreed extends Module {
     private final BoolSetting rotate = new BoolSetting("Rotate",
         "Turn toward the animal on the server side.", true);
 
+    private static final int FULL_COOLDOWN = 6600;
+
     // Every animal fed and the tick it was fed on.
     private final Map<Integer, Integer> fed = new LinkedHashMap<>();
     private int count;
+    private int lastTick;
 
     public AutoBreed() {
         super("AutoBreed", "Breeds the animals around you with the food you hold.", Category.WORLD);
@@ -102,8 +105,8 @@ public final class AutoBreed extends Module {
             if (mc.gameMode.interact(mc.player, animal, hit, useHand).consumesAction()) {
                 mc.player.swing(useHand);
                 count++;
+                fed.put(animal.getId(), now);
             }
-            fed.put(animal.getId(), now);
             return;
         }
     }
@@ -121,12 +124,16 @@ public final class AutoBreed extends Module {
 
     // An animal only comes back onto the list when feeding again is allowed.
     private void forgetOld(int now) {
-        if (!repeat.isOn()) {
-            return;
+        // The tick count restarts on a respawn.
+        if (now < lastTick) {
+            fed.clear();
         }
+        lastTick = now;
+        // Without repeats an animal only comes back after the longest cooldown the game has.
+        int keep = repeat.isOn() ? interval.getInt() : FULL_COOLDOWN;
         Iterator<Map.Entry<Integer, Integer>> it = fed.entrySet().iterator();
         while (it.hasNext()) {
-            if (now - it.next().getValue() >= interval.getInt()) {
+            if (now - it.next().getValue() >= keep) {
                 it.remove();
             }
         }

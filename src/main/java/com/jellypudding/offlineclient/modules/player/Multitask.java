@@ -18,7 +18,7 @@ public final class Multitask extends Module {
         "Hit entities whilst you are eating or drawing a bow.", true);
 
     public Multitask() {
-        super("Multitask", "Mine and place blocks whilst you eat or draw a bow.",
+        super("Multitask", "Lets you mine and place blocks whilst you eat or draw a bow.",
             Category.PLAYER);
         addSettings(whileMining, whileUsing, attackWhileUsing);
         searchTags("multi task", "eat and mine", "bow mine");

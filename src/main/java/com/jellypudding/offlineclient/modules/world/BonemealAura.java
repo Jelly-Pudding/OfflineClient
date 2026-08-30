@@ -10,6 +10,7 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.BonemealableBlock;
@@ -22,7 +23,6 @@ import net.minecraft.world.level.block.StemBlock;
 import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 // Feeds bone meal to whatever is still growing around you.
@@ -49,7 +49,7 @@ public final class BonemealAura extends Module {
         "Keeps going whilst your hands are busy with a mount.", false);
     private final EnumSetting<TakeFrom> takeFrom = new EnumSetting<>("Take from",
         "Where bone meal may be taken from.", TakeFrom.HANDS)
-        .describe(TakeFrom.HANDS, "Only uses what is already in your hands.")
+        .describe(TakeFrom.HANDS, "Only uses bone meal already in your main hand.")
         .describe(TakeFrom.HOTBAR, "Switches to bone meal in the hotbar.")
         .describe(TakeFrom.INVENTORY, "Borrows bone meal from anywhere in the inventory.");
     private final BoolSetting saplings = new BoolSetting("Saplings",
@@ -92,7 +92,7 @@ public final class BonemealAura extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || mc.player.isSpectator() || mc.gui.screen() != null) {
+        if (!inGame() || mc.gameMode == null || mc.player.isSpectator() || mc.gui.screen() != null) {
             return;
         }
         if (!fastPlace.isOn() && mc.rightClickDelay > 0) {
@@ -113,12 +113,17 @@ public final class BonemealAura extends Module {
             return;
         }
         if (multi.isOn()) {
-            for (BlockPos pos : targets) {
-                if (BlockUtil.useOn(pos, rotate.isOn(), false)) {
+            // The furthest plants go first. A fed plant grows and hides the ones behind it.
+            // Only the nearest asks to turn. The rotation manager keeps one angle a tick.
+            int before = fed;
+            for (int i = targets.size() - 1; i >= 0; i--) {
+                if (BlockUtil.useOn(targets.get(i), rotate.isOn() && i == 0, false)) {
                     fed++;
                 }
             }
-            mc.player.swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+            if (fed > before) {
+                mc.player.swing(InteractionHand.MAIN_HAND);
+            }
             return;
         }
         if (BlockUtil.useOn(targets.getFirst(), rotate.isOn(), true)) {
@@ -145,10 +150,7 @@ public final class BonemealAura extends Module {
         return false;
     }
 
-    /**
-     * The furthest plants come first. A fed plant grows and can block the
-     * view of the ones behind it.
-     */
+    // Nearest first.
     private List<BlockPos> targets() {
         List<BlockPos> result = new ArrayList<>();
         for (BlockPos pos : BlockUtil.positionsWithin(range.getValue())) {
@@ -156,7 +158,6 @@ public final class BonemealAura extends Module {
                 result.add(pos);
             }
         }
-        Collections.reverse(result);
         return result;
     }
 

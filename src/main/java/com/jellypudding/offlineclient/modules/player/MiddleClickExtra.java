@@ -14,7 +14,7 @@ public final class MiddleClickExtra extends Module {
         "Say in chat who was added or removed.", true);
 
     public MiddleClickExtra() {
-        super("MiddleClickExtra", "Middle click a player to toggle them as a friend.", Category.PLAYER);
+        super("MiddleClickExtra", "Toggles a player as a friend on middle click.", Category.PLAYER);
         addSettings(notify);
         searchTags("friend", "add friend");
     }

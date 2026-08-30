@@ -38,7 +38,6 @@ public final class Panel {
     private boolean sizeTop;
     private boolean sizeBottom;
 
-    // Zero means show everything that fits on screen.
     private int viewHeight;
     private int screenHeight;
 
@@ -146,6 +145,10 @@ public final class Panel {
 
     public void scroll(int dy) {
         scrollBar.scroll(dy, rowsHeight(), viewportHeight());
+    }
+
+    public void wheel(double scrollY) {
+        scroll(ScrollBar.wheelDelta(scrollY, rowsHeight(), viewportHeight()));
     }
 
     // The grab bands sit on the border and just outside it.

@@ -7,6 +7,8 @@ import com.jellypudding.offlineclient.util.ChatUtil;
 
 import java.util.List;
 
+import java.util.Locale;
+
 public final class ProfileCommand extends Command {
 
     public ProfileCommand() {
@@ -23,18 +25,18 @@ public final class ProfileCommand extends Command {
             if (profiles.isEmpty()) {
                 ChatUtil.message("§7You have no saved profiles.");
             } else {
-                ChatUtil.message("§3Profiles: §b" + String.join("§7, §b", profiles));
+                ChatUtil.message("§3Profiles: §b" + String.join("§7 §b", profiles));
             }
             return;
         }
 
         if (args.length != 2) {
-            ChatUtil.error("Usage: " + getUsage());
+            usage();
             return;
         }
 
         String name = args[1];
-        switch (args[0].toLowerCase()) {
+        switch (args[0].toLowerCase(Locale.ROOT)) {
             case "save" -> {
                 config.saveProfile(name);
                 ChatUtil.message("§aSaved profile §b" + name + "§a.");
@@ -46,7 +48,7 @@ public final class ProfileCommand extends Command {
                     ChatUtil.error("No profile named " + name + ".");
                 }
             }
-            default -> ChatUtil.error("Usage: " + getUsage());
+            default -> usage();
         }
     }
 }

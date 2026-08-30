@@ -39,7 +39,9 @@ public final class CommandManager {
         new WaypointCommand()
     );
 
-    private String prefix = ".";
+    public static final String DEFAULT_PREFIX = ".";
+
+    private String prefix = DEFAULT_PREFIX;
 
     public CommandManager() {
         OfflineClient.INSTANCE.getEventBus().register(this);
@@ -127,6 +129,7 @@ public final class CommandManager {
         for (Command c : commands) {
             if (c.matches(tokens[0])) {
                 command = c;
+                break;
             }
         }
         if (command == null) {

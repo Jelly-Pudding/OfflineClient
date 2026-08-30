@@ -17,7 +17,6 @@ import net.minecraft.world.phys.Vec3;
  */
 public final class RotationManager {
 
-    // Registered on the event bus once from OfflineClient.init.
     public static final RotationManager INSTANCE = new RotationManager();
 
     // The most degrees a managed rotation moves in one tick.
@@ -44,16 +43,22 @@ public final class RotationManager {
     private float projectedYaw;
     private float projectedPitch;
 
+    // A yaw and pitch published together. The packet thread never sees half a tick.
+    private record Angle(float yaw, float pitch) {
+    }
+
     /**
      * Touched by the packet send hook on whichever thread sent the packet.
      * Every field the hook reaches has to be visible from that thread.
      */
-    private volatile float heldYaw;
-    private volatile float heldPitch;
+    private volatile Angle held = new Angle(0, 0);
     private volatile boolean writeRotation;
     private volatile float serverYaw;
     private volatile float serverPitch;
     private volatile boolean rotationSent;
+
+    // The player the server angle was last seeded from.
+    private LocalPlayer seededFor;
 
     private RotationManager() {
     }
@@ -129,8 +134,9 @@ public final class RotationManager {
         }
         priority = asked;
 
-        float fromYaw = holding ? heldYaw : MC.player.getYRot();
-        float fromPitch = holding ? heldPitch : MC.player.getXRot();
+        Angle from = held;
+        float fromYaw = holding ? from.yaw() : MC.player.getYRot();
+        float fromPitch = holding ? from.pitch() : MC.player.getXRot();
         projectedYaw = Mth.wrapDegrees(Mth.approachDegrees(fromYaw, yaw, step));
         projectedPitch = Math.clamp(Mth.approach(fromPitch, pitch, step), -90f, 90f);
         projected = true;
@@ -139,17 +145,21 @@ public final class RotationManager {
     // Settles who owns the view for this tick. Runs after every request.
     @Subscribe(priority = Integer.MIN_VALUE)
     private void onPreMotion(PreMotionEvent event) {
+        if (MC.player != seededFor) {
+            // A fresh player has sent nothing yet. Its view is what the server assumes.
+            seededFor = MC.player;
+            serverYaw = MC.player.getYRot();
+            serverPitch = MC.player.getXRot();
+        }
         boolean wasHolding = holding;
         holding = priority != null;
         rotationSent = false;
 
         if (holding) {
-            heldYaw = projectedYaw;
-            heldPitch = projectedPitch;
+            held = new Angle(projectedYaw, projectedPitch);
         } else if (wasHolding) {
             // The hold ended. The server is told where the view really points.
-            heldYaw = MC.player.getYRot();
-            heldPitch = MC.player.getXRot();
+            held = new Angle(MC.player.getYRot(), MC.player.getXRot());
         }
 
         writeRotation = holding || wasHolding;
@@ -175,8 +185,9 @@ public final class RotationManager {
         if (player == null) {
             return;
         }
-        if (writeRotation && !carries(move, heldYaw, heldPitch)) {
-            move = PacketUtil.withRotation(move, player, heldYaw, heldPitch);
+        Angle angle = held;
+        if (writeRotation && !carries(move, angle.yaw(), angle.pitch())) {
+            move = PacketUtil.withRotation(move, player, angle.yaw(), angle.pitch());
             event.setPacket(move);
         }
         if (move.hasRotation()) {
@@ -190,8 +201,9 @@ public final class RotationManager {
     @Subscribe(priority = Integer.MIN_VALUE)
     private void onPostMotion(PostMotionEvent event) {
         if (writeRotation && !rotationSent && MC.player != null) {
+            Angle angle = held;
             MC.player.connection.send(new ServerboundMovePlayerPacket.Rot(
-                heldYaw, heldPitch, MC.player.onGround(), MC.player.horizontalCollision));
+                angle.yaw(), angle.pitch(), MC.player.onGround(), MC.player.horizontalCollision));
         }
         writeRotation = false;
     }

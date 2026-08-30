@@ -9,6 +9,7 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -32,7 +33,7 @@ public final class AutoNametag extends Module {
     // Ticks before the same mob is tried again.
     private static final int COOLDOWN = 20;
 
-    private final RegistryListSetting<EntityType<?>> entities = new RegistryListSetting<EntityType<?>>("Entities",
+    private final RegistryListSetting<EntityType<?>> entities = new RegistryListSetting<>("Entities",
         "The mobs to name.", BuiltInRegistries.ENTITY_TYPE,
         List.of(EntityTypes.VILLAGER, EntityTypes.HORSE, EntityTypes.WOLF, EntityTypes.CAT));
     private final NumberSetting range = new NumberSetting("Range",
@@ -43,6 +44,7 @@ public final class AutoNametag extends Module {
         "Turn toward the mob on the server side.", true);
 
     private final Map<Integer, Integer> tried = new HashMap<>();
+    private int lastTick;
     private final SlotSwap slots = new SlotSwap();
     private int named;
 
@@ -80,18 +82,14 @@ public final class AutoNametag extends Module {
             return;
         }
         int now = mc.player.tickCount;
+        if (now < lastTick) {
+            tried.clear();
+        }
+        lastTick = now;
         tried.values().removeIf(expiry -> expiry <= now);
         ItemStack tag = mc.player.getInventory().getItem(slot);
 
-        Entity target = null;
-        double best = range.getValue();
-        for (Entity entity : mc.level.entitiesForRendering()) {
-            double distance = mc.player.distanceTo(entity);
-            if (distance <= best && wanted(entity, tag)) {
-                best = distance;
-                target = entity;
-            }
-        }
+        Entity target = EntityUtil.nearest(range.getValue(), entity -> wanted(entity, tag));
         if (target == null) {
             slots.restoreIfMine();
             return;

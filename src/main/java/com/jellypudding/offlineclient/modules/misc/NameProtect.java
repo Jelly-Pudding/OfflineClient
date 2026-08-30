@@ -20,7 +20,7 @@ public final class NameProtect extends Module {
     private final TextSetting alias = new TextSetting("Alias",
         "The name shown instead of yours.", DEFAULT_ALIAS);
     private final BoolSetting colored = new BoolSetting("Colour it",
-        "Paints your name so you can pick it out at a glance.", false);
+        "Paints your name to make it easy to pick out.", false);
     private final ColorSetting color = new ColorSetting("Colour",
         "The colour your name is painted.", 140, false)
         .under(colored);

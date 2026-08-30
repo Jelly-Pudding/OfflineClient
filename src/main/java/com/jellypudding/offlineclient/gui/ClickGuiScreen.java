@@ -34,7 +34,6 @@ public final class ClickGuiScreen extends GuiScreenBase {
     private static final int TILE_GAP = 8;
     private static final int TILE_TOP = 30;
     private static final int FOOTER_HEIGHT = 12;
-    // Two pixels of inset above the rows and two below them.
     private static final int PADDING = 4;
     private static final int TOOLTIP_WIDTH = 170;
 
@@ -46,8 +45,11 @@ public final class ClickGuiScreen extends GuiScreenBase {
     private String wrappedFor;
     private final List<String> wrappedLines = new ArrayList<>();
 
-    // Nudged panels mapped to the position they came from.
-    private final Map<Panel, int[]> nudged = new HashMap<>();
+    // Where a panel sat before the search results pushed it aside.
+    private record Home(int x, int y) {
+    }
+
+    private final Map<Panel, Home> nudged = new HashMap<>();
 
     // Panels with no saved layout. Tiled once the screen size is known.
     private final List<Panel> freshPanels = new ArrayList<>();
@@ -72,7 +74,7 @@ public final class ClickGuiScreen extends GuiScreenBase {
                 this, startX, 30);
             // Saved layouts override the default height cap right after.
             panel.setViewHeight(190);
-            if (!restorePanelState(panel)) {
+            if (!restorePanelStateSafely(panel)) {
                 freshPanels.add(panel);
             }
             panels.add(panel);
@@ -81,6 +83,16 @@ public final class ClickGuiScreen extends GuiScreenBase {
         // The panel that was on top last time comes back on top.
         panels.sort(Comparator.comparingInt(panel -> layers.getOrDefault(panel, 0)));
         layers.clear();
+    }
+
+    // A hand edited or corrupt layout must never stop the GUI opening.
+    private boolean restorePanelStateSafely(Panel panel) {
+        try {
+            return restorePanelState(panel);
+        } catch (RuntimeException e) {
+            OfflineClient.LOG.warn("Ignoring a broken saved layout for {}", panel.getTitle(), e);
+            return false;
+        }
     }
 
     private boolean restorePanelState(Panel panel) {
@@ -124,11 +136,12 @@ public final class ClickGuiScreen extends GuiScreenBase {
     protected void saveState() {
         restoreNudged();
         JsonObject gui = OfflineClient.INSTANCE.getConfigManager().getGuiState();
-        for (Panel panel : panels) {
+        for (int layer = 0; layer < panels.size(); layer++) {
+            Panel panel = panels.get(layer);
             JsonObject state = new JsonObject();
             state.addProperty("x", panel.getX());
             state.addProperty("y", panel.getY());
-            state.addProperty("layer", panels.indexOf(panel));
+            state.addProperty("layer", layer);
             state.addProperty("collapsed", panel.isCollapsed());
             state.addProperty("height", panel.getViewHeight());
             state.addProperty("width", panel.getWidth());
@@ -189,7 +202,7 @@ public final class ClickGuiScreen extends GuiScreenBase {
 
     private void restoreNudged() {
         for (var entry : nudged.entrySet()) {
-            entry.getKey().setPosition(entry.getValue()[0], entry.getValue()[1]);
+            entry.getKey().setPosition(entry.getValue().x(), entry.getValue().y());
         }
         nudged.clear();
     }
@@ -365,9 +378,9 @@ public final class ClickGuiScreen extends GuiScreenBase {
                 nudged.remove(panel);
                 continue;
             }
-            int[] origin = nudged.get(panel);
-            int homeX = origin != null ? origin[0] : panel.getX();
-            int homeY = origin != null ? origin[1] : panel.getY();
+            Home origin = nudged.get(panel);
+            int homeX = origin != null ? origin.x() : panel.getX();
+            int homeY = origin != null ? origin.y() : panel.getY();
             // A nudged panel stays aside until the box loses focus with
             // nothing typed.
             boolean overlaps = (searchActive && origin != null)
@@ -376,15 +389,15 @@ public final class ClickGuiScreen extends GuiScreenBase {
 
             if (overlaps) {
                 if (origin == null) {
-                    nudged.put(panel, new int[] {homeX, homeY});
+                    nudged.put(panel, new Home(homeX, homeY));
                 }
                 boolean left = homeX + panel.getWidth() / 2 < width / 2;
                 int target = left ? rx - panel.getWidth() - 6 : rx2 + 6;
                 target = Math.clamp(target, 0, Math.max(0, width - panel.getWidth()));
                 slideX(panel, target, homeY);
             } else if (origin != null) {
-                slideX(panel, origin[0], origin[1]);
-                if (panel.getX() == origin[0]) {
+                slideX(panel, origin.x(), origin.y());
+                if (panel.getX() == origin.x()) {
                     nudged.remove(panel);
                 }
             }
@@ -588,14 +601,14 @@ public final class ClickGuiScreen extends GuiScreenBase {
         if (isSearching() && !searchRows.isEmpty()
             && SettingWidget.isOver(mouseX, mouseY, searchX(), resultsTop(),
                 searchWidth, resultsBoxHeight())) {
-            resultsScroll.scroll((int) Math.round(scrollY * 16), resultsContentHeight(),
-                resultsViewHeight());
+            resultsScroll.scroll(ScrollBar.wheelDelta(scrollY, resultsContentHeight(), resultsViewHeight()),
+                resultsContentHeight(), resultsViewHeight());
             return true;
         }
         for (int i = panels.size() - 1; i >= 0; i--) {
             Panel panel = panels.get(i);
             if (panel.isOver(mouseX, mouseY)) {
-                panel.scroll((int) Math.round(scrollY * 16));
+                panel.wheel(scrollY);
                 return true;
             }
         }

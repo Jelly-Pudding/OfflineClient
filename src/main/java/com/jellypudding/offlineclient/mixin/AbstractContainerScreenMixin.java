@@ -13,7 +13,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(AbstractContainerScreen.class)
 public abstract class AbstractContainerScreenMixin {
 
-    // The paint goes down first so the item sits on top of it.
+    // The paint goes down before the item and sits under it.
     @Inject(method = "extractSlot", at = @At("HEAD"))
     private void onExtractSlot(GuiGraphicsExtractor graphics, Slot slot, int mouseX, int mouseY,
                                CallbackInfo ci) {

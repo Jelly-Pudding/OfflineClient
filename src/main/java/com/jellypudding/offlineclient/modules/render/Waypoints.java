@@ -19,11 +19,12 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
+import java.util.Locale;
 
 public final class Waypoints extends Module {
 
     private final BoolSetting beam = new BoolSetting("Beam",
-        "Draw a tall line so a marker is visible over hills.", true);
+        "Draws a tall line that shows a marker over hills.", true);
     private final NumberSetting beamHeight = new NumberSetting("Beam height",
         "How far the line reaches up and down.", 64, 8, 320, 8, " blocks").min(1);
     private final BoolSetting box = new BoolSetting("Box",
@@ -50,7 +51,7 @@ public final class Waypoints extends Module {
 
     @Override
     public String getSuffix() {
-        return shown.isEmpty() ? null : String.valueOf(shown.size());
+        return count(shown.size());
     }
 
     @Override
@@ -70,7 +71,7 @@ public final class Waypoints extends Module {
 
     // The same name always gets the same hue.
     private static int colorOf(String name) {
-        return ColorUtil.hsv(Math.floorMod(name.toLowerCase().hashCode(), 360), 0.7f, 1f);
+        return ColorUtil.hsv(Math.floorMod(name.toLowerCase(Locale.ROOT).hashCode(), 360), 0.7f, 1f);
     }
 
     @Subscribe

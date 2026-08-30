@@ -279,13 +279,17 @@ public final class ChunkScanner<T> {
             try {
                 results.put(entry.getKey(), future.get());
                 stale = true;
-            } catch (InterruptedException | ExecutionException ignored) {
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            } catch (ExecutionException e) {
                 // A chunk that unloaded mid scan is scanned again later.
+                OfflineClient.LOG.debug("Chunk scan failed", e.getCause());
             }
         }
     }
 
-    public static ChunkPos affectedChunk(Packet<?> packet) {
+    private static ChunkPos affectedChunk(Packet<?> packet) {
         if (packet instanceof ClientboundBlockUpdatePacket update) {
             return ChunkPos.containing(update.getPos());
         }

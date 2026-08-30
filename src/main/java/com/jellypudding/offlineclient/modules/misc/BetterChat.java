@@ -21,7 +21,7 @@ public final class BetterChat extends Module {
     private static final int VANILLA_HISTORY = 100;
     private static final DateTimeFormatter CLOCK = DateTimeFormatter.ofPattern("HH:mm");
 
-    // Two numbers of three digits or more with a gap between them read as coordinates.
+    // A number of three digits or more then one of two or more read as coordinates.
     private static final Pattern COORDINATES = Pattern.compile("-?\\d{3,}[\\s,;/]+-?\\d{2,}");
 
     private final BoolSetting timestamps = new BoolSetting("Timestamps",
@@ -82,5 +82,10 @@ public final class BetterChat extends Module {
         heldBack = message;
         event.cancel();
         ChatUtil.message("That looks like coordinates. Send it again if you mean it.");
+    }
+
+    @Override
+    protected void onDisable() {
+        heldBack = null;
     }
 }

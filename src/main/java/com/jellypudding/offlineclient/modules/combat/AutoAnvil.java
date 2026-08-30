@@ -105,7 +105,7 @@ public final class AutoAnvil extends Module {
             return;
         }
 
-        // Several look packets in one tick look obviously wrong to the server.
+        // Only the first placement of the tick turns.
         boolean rotated = placeTrigger(feet);
 
         int anvilSlot = BlockUtil.findBlockSlot(block -> block instanceof AnvilBlock);
@@ -115,10 +115,7 @@ public final class AutoAnvil extends Module {
         }
         slots.select(anvilSlot);
         boolean turn = rotate.isOn() && !rotated;
-        Direction support = BlockUtil.findPlaceSupport(above);
-        boolean placed = support != null
-            ? BlockUtil.place(above, support, turn, true)
-            : BlockUtil.placeDirect(above, turn, true);
+        boolean placed = BlockUtil.placeAny(above, turn, true);
         if (placed) {
             timer = delay.getInt();
         }

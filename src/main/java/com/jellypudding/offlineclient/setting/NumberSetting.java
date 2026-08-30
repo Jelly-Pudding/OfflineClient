@@ -20,6 +20,12 @@ public final class NumberSetting extends Setting<Double> {
     private double hardMin;
     private double hardMax = Double.POSITIVE_INFINITY;
 
+    // Set whilst a slider drag is running.
+    private double activeSliderMax = -1;
+
+    // The highest value typed this session. The slider keeps covering it after the value drops.
+    private double sessionMax;
+
     public NumberSetting(String name, String description, double defaultValue,
                          double sliderMin, double sliderMax, double step) {
         this(name, description, defaultValue, sliderMin, sliderMax, step, "");
@@ -88,15 +94,6 @@ public final class NumberSetting extends Setting<Double> {
             sessionMax = Math.max(sessionMax, value);
         }
     }
-
-    // Set whilst a slider drag is running.
-    private double activeSliderMax = -1;
-
-    /**
-     * The highest value typed this session. The slider keeps covering it
-     * even after the value drops.
-     */
-    private double sessionMax;
 
     // A typed value above the normal range stretches the slider.
     private double sliderTop() {

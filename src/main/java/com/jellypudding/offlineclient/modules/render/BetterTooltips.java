@@ -4,11 +4,11 @@ import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.ClientTickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.render.ContainerPreview;
 import com.jellypudding.offlineclient.render.MapPreview;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
-import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.gui.screens.inventory.ContainerScreen;
 import net.minecraft.client.gui.screens.inventory.tooltip.ClientTooltipComponent;
 import net.minecraft.client.renderer.state.MapRenderState;
@@ -117,7 +117,7 @@ public final class BetterTooltips extends Module {
 
     // The game lets go of every key binding whilst a screen is open.
     private static boolean shiftHeld() {
-        return InputConstants.isKeyDown(mc.getWindow(), mc.options.keyShift.key.getValue());
+        return InputUtil.physicallyHeld(mc.options.keyShift);
     }
 
     private ClientTooltipComponent mapPreview(ItemStack stack) {

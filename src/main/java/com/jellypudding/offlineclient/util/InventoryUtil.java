@@ -11,6 +11,7 @@ import net.minecraft.client.gui.screens.inventory.HopperScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.client.gui.screens.inventory.ShulkerBoxScreen;
 import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.function.Predicate;
@@ -33,6 +34,10 @@ public final class InventoryUtil {
     }
 
     // The hotbar sits after the rest in network slot order.
+    // Container slots of the worn armour in the survival inventory. Helmet first.
+    public static final int ARMOR_START = 5;
+    public static final int CHEST_SLOT = ARMOR_START + 1;
+
     public static int networkSlot(int inventoryIndex) {
         return inventoryIndex < HOTBAR_SIZE ? HOTBAR_START + inventoryIndex : inventoryIndex;
     }
@@ -105,6 +110,32 @@ public final class InventoryUtil {
 
     public static int selectedSlot() {
         return MC.player.getInventory().getSelectedSlot();
+    }
+
+    // The first inventory index up to the limit that passes the test. Minus one when none does.
+    public static int findSlot(Predicate<ItemStack> test, int limit) {
+        for (int i = 0; i < limit; i++) {
+            if (test.test(MC.player.getInventory().getItem(i))) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    public static int findSlot(Item item, int limit) {
+        return findSlot(stack -> stack.is(item), limit);
+    }
+
+    // How many of an item the first slots up to the limit hold between them.
+    public static int count(Item item, int limit) {
+        int total = 0;
+        for (int i = 0; i < limit; i++) {
+            ItemStack stack = MC.player.getInventory().getItem(i);
+            if (stack.is(item)) {
+                total += stack.getCount();
+            }
+        }
+        return total;
     }
 
     // The slot already in hand wins. Minus one when nothing matches.
@@ -297,6 +328,11 @@ public final class InventoryUtil {
             taken = -1;
         }
 
+        // The slot the player had before the first select. Minus one whilst none.
+        public int previousSlot() {
+            return previous;
+        }
+
         public boolean isHolding() {
             return previous != -1;
         }
@@ -310,7 +346,7 @@ public final class InventoryUtil {
 
         private int slot = -1;
 
-        // Notes where a stack left on the cursor belongs.
+        // Records where a stack left on the cursor belongs.
         public void hold(int networkSlot) {
             slot = networkSlot;
         }

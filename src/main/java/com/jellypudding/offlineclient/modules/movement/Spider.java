@@ -10,8 +10,8 @@ import net.minecraft.world.phys.Vec3;
 public final class Spider extends Module {
 
     private final NumberSetting speed = new NumberSetting("Speed",
-        "Climb speed in blocks per tick where small numbers are already fast.",
-        0.2, 0.1, 0.5, 0.05).max(1);
+        "How fast you go up the wall in blocks a tick.",
+        0.2, 0.1, 0.5, 0.05, " blocks").max(1);
 
     public Spider() {
         super("Spider", "Climb up any wall like a spider.", Category.MOVEMENT);

@@ -1,5 +1,9 @@
 package com.jellypudding.offlineclient.command;
 
+import com.jellypudding.offlineclient.util.ChatUtil;
+
+
+
 public abstract class Command {
 
     private final String name;
@@ -24,6 +28,10 @@ public abstract class Command {
 
     public String getUsage() {
         return usage;
+    }
+
+    protected void usage() {
+        ChatUtil.error("Usage: " + usage);
     }
 
     public boolean matches(String input) {

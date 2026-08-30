@@ -9,9 +9,9 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.Modules;
-import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.InteractionHand;
@@ -146,8 +146,7 @@ public final class AutoEat extends Module {
             continueEating();
             return;
         }
-        AutoGap gap = Modules.get(AutoGap.class);
-        if (gap != null && gap.isBusy()) {
+        if (Modules.feeding(this)) {
             return;
         }
         // A carried stack would be dropped by a slot swap.
@@ -179,7 +178,7 @@ public final class AutoEat extends Module {
 
     /**
      * How many inventory slots may be searched. A swap needs the survival
-     * inventory so a screen limits the search to the hotbar. Hands means the
+     * inventory. A screen limits the search to the hotbar. Hands means the
      * held slot alone and the offhand is checked separately.
      */
     private int slotLimit() {
@@ -294,17 +293,13 @@ public final class AutoEat extends Module {
     }
 
     private void stopEating() {
-        if (!eating) {
-            return;
+        if (eating) {
+            eating = false;
+            healing = false;
+            started = false;
+            InputUtil.release(mc.options.keyUse);
         }
-        eating = false;
-        healing = false;
-        started = false;
-        // Give the key back without forcing it up.
-        boolean physicallyHeld = InputConstants.isKeyDown(
-            mc.getWindow(), mc.options.keyUse.key.getValue());
-        mc.options.keyUse.setDown(physicallyHeld);
-
+        // A loan whose return was refused earlier gets another go.
         loan.giveBack();
     }
 

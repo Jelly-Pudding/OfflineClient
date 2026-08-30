@@ -6,7 +6,7 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 
-// ScreenMixin skips the dark tint behind a screen whilst this says so.
+// ScreenMixin skips the dark tint behind a screen.
 public final class NoBackground extends Module {
 
     private final BoolSetting allScreens = new BoolSetting("All screens",

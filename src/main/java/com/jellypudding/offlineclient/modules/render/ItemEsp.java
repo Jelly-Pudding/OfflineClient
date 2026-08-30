@@ -32,7 +32,7 @@ public final class ItemEsp extends Module {
         .under(limitRange);
     private final BoolSetting everything = new BoolSetting("Everything",
         "Show every dropped item.", true);
-    private final RegistryListSetting<Item> items = new RegistryListSetting<Item>("Items",
+    private final RegistryListSetting<Item> items = new RegistryListSetting<>("Items",
         "The items to show.", BuiltInRegistries.ITEM,
         List.of(Items.DIAMOND, Items.NETHERITE_INGOT, Items.ENCHANTED_GOLDEN_APPLE,
             Items.ELYTRA, Items.TOTEM_OF_UNDYING, Items.SHULKER_BOX))

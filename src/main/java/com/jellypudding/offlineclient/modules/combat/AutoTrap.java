@@ -13,7 +13,6 @@ import com.jellypudding.offlineclient.util.BlockUtil.TrapMode;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
 import net.minecraft.world.entity.player.Player;
 
 import java.util.ArrayList;
@@ -116,13 +115,9 @@ public final class AutoTrap extends Module {
             if (done >= perTick.getInt()) {
                 break;
             }
-            Direction support = BlockUtil.findPlaceSupport(pos);
-            // Several look packets in one tick look obviously wrong to the server.
             boolean turn = rotate.isOn() && !rotated;
             rotated |= turn;
-            boolean ok = support != null
-                ? BlockUtil.place(pos, support, turn, true)
-                : BlockUtil.placeDirect(pos, turn, true);
+            boolean ok = BlockUtil.placeAny(pos, turn, true);
             if (ok) {
                 done++;
                 placed = true;

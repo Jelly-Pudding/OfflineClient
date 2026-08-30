@@ -78,7 +78,11 @@ public final class WindowGuiScreen extends GuiScreenBase {
         tabs.add(ALL);
         tabCounts = new int[tabs.size()];
         tab = tabs.getFirst();
-        restoreState();
+        try {
+            restoreState();
+        } catch (RuntimeException e) {
+            OfflineClient.LOG.warn("Ignoring a broken saved window layout", e);
+        }
     }
 
     private void restoreState() {
@@ -578,7 +582,7 @@ public final class WindowGuiScreen extends GuiScreenBase {
         int h = contentHeight();
         if (SettingWidget.isOver(mouseX, mouseY, listX(), top, listWidth(), h)) {
             refreshListed();
-            scrollBar.scroll((int) Math.round(scrollY * 16), totalHeight(), h);
+            scrollBar.scroll(ScrollBar.wheelDelta(scrollY, totalHeight(), h), totalHeight(), h);
             return true;
         }
         return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);

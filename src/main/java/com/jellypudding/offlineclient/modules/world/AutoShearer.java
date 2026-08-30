@@ -7,13 +7,13 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
+import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.ItemUtil;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Shearable;
-import net.minecraft.world.entity.animal.sheep.Sheep;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.phys.EntityHitResult;
 
@@ -56,13 +56,7 @@ public final class AutoShearer extends Module {
         if (!inGame() || mc.player.isSpectator() || mc.gui.screen() != null) {
             return;
         }
-        Entity target = null;
-        for (Entity entity : mc.level.entitiesForRendering()) {
-            if (ready(entity) && mc.player.distanceTo(entity) <= range.getValue()) {
-                target = entity;
-                break;
-            }
-        }
+        Entity target = EntityUtil.nearest(range.getValue(), AutoShearer::ready);
         if (target == null) {
             slots.restoreIfMine();
             return;
@@ -84,11 +78,7 @@ public final class AutoShearer extends Module {
         slots.restoreIfMine();
     }
 
-    // Lambs grow their wool later. A sheared sheep has none to give yet.
     private static boolean ready(Entity entity) {
-        if (entity instanceof Sheep sheep) {
-            return sheep.isAlive() && !sheep.isBaby() && sheep.readyForShearing();
-        }
         return entity instanceof Shearable shearable && entity.isAlive() && shearable.readyForShearing();
     }
 }

@@ -2,6 +2,7 @@ package com.jellypudding.offlineclient.event;
 
 import com.jellypudding.offlineclient.OfflineClient;
 
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -19,8 +20,11 @@ public final class EventBus {
         void invoke(Event event) {
             try {
                 method.invoke(listener, event);
-            } catch (Exception e) {
+            } catch (InvocationTargetException e) {
                 OfflineClient.LOG.error("Error in event handler {}.{}",
+                    listener.getClass().getSimpleName(), method.getName(), e.getCause());
+            } catch (IllegalAccessException e) {
+                OfflineClient.LOG.error("Cannot reach event handler {}.{}",
                     listener.getClass().getSimpleName(), method.getName(), e);
             }
         }

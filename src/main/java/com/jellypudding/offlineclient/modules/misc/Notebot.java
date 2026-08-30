@@ -31,11 +31,14 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import java.util.stream.Stream;
 
 /**
@@ -93,7 +96,7 @@ public final class Notebot extends Module {
     private final Map<BlockPos, Integer> tuning = new HashMap<>();
 
     // Blocks struck this tick for the renderer.
-    private final List<BlockPos> struck = new ArrayList<>();
+    private final Set<BlockPos> struck = new HashSet<>();
 
     private final Random random = new Random();
 
@@ -123,7 +126,7 @@ public final class Notebot extends Module {
     // The bind pauses a running song. Off the module it switches on as usual.
     @Override
     public void onKeybind() {
-        if (!isEnabled() || stage != Stage.PLAY && stage != Stage.PREVIEW) {
+        if (!isEnabled() || (stage != Stage.PLAY && stage != Stage.PREVIEW)) {
             toggle();
             return;
         }
@@ -184,7 +187,7 @@ public final class Notebot extends Module {
     private Path pickFile(Path folder) {
         List<Path> files = new ArrayList<>();
         try (Stream<Path> stream = Files.list(folder)) {
-            stream.filter(p -> p.getFileName().toString().toLowerCase().endsWith(".nbs")).forEach(files::add);
+            stream.filter(p -> p.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".nbs")).forEach(files::add);
         } catch (IOException ignored) {
         }
         if (files.isEmpty()) {
@@ -195,9 +198,9 @@ public final class Notebot extends Module {
         if (song.isBlank()) {
             return files.get(random.nextInt(files.size()));
         }
-        String wanted = song.getValue().trim().toLowerCase();
+        String wanted = song.getValue().trim().toLowerCase(Locale.ROOT);
         for (Path file : files) {
-            String name = file.getFileName().toString().toLowerCase();
+            String name = file.getFileName().toString().toLowerCase(Locale.ROOT);
             if (name.equals(wanted) || name.equals(wanted + ".nbs")) {
                 return file;
             }

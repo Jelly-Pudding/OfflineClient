@@ -1,6 +1,5 @@
 package com.jellypudding.offlineclient.modules.combat;
 
-import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.PreMotionEvent;
 import com.jellypudding.offlineclient.module.Category;
@@ -64,7 +63,7 @@ public final class KillAura extends Module {
     private final BoolSetting autoWeapon = new BoolSetting("Auto weapon",
         "Switches to your best sword or axe before each hit.", false);
     private final BoolSetting weaponSwapBack = new BoolSetting("Swap back",
-        "Returns to the slot you had the moment the hit has gone out. Off stays on the weapon.", false)
+        "Returns to the slot you had once the hit has gone out.", false)
         .under(autoWeapon);
     private final BoolSetting breakShields = new BoolSetting("Break shields",
         "Reach for an axe whilst the target holds a raised shield.", true);
@@ -153,8 +152,8 @@ public final class KillAura extends Module {
     // Crystals hurt far more than a sword. Only the ticks around a real
     // place or break are given up.
     private boolean crystalsBusy() {
-        CrystalAura crystals = Modules.get(CrystalAura.class);
-        return crystals != null && crystals.isEnabled() && crystals.isActing();
+        CrystalAura crystals = Modules.active(CrystalAura.class);
+        return crystals != null && crystals.isActing();
     }
 
     // Hits everything in reach on one swing then sets the next wait.

@@ -31,9 +31,9 @@ public final class LiquidFiller extends Module {
     private final NumberSetting range = new NumberSetting("Range",
         "How far you can reach to place.", 4.5, 1, 6, 0.1).min(1);
     private final BoolSetting water = new BoolSetting("Water",
-        "Fill water.", true);
+        "Fills water.", true);
     private final BoolSetting lava = new BoolSetting("Lava",
-        "Fill lava.", true);
+        "Fills lava.", true);
     private final BoolSetting flowing = new BoolSetting("Flowing",
         "Also fill flowing liquid and not just the source blocks.", false);
     private final RegistryListSetting<Block> blocks = new RegistryListSetting<>("Blocks",
@@ -68,7 +68,7 @@ public final class LiquidFiller extends Module {
 
     @Override
     public String getSuffix() {
-        return targets.isEmpty() ? null : String.valueOf(targets.size());
+        return count(targets.size());
     }
 
     @Override
@@ -80,7 +80,7 @@ public final class LiquidFiller extends Module {
 
     @Override
     protected void onDisable() {
-        slots.restore();
+        slots.restoreIfMine();
         targets.clear();
     }
 

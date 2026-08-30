@@ -57,7 +57,7 @@ public final class AntiPacketKick extends Module {
     private volatile Thread drainer;
 
     public AntiPacketKick() {
-        super("AntiPacketKick", "Spreads packet bursts out so the server does not drop you.",
+        super("AntiPacketKick", "Spreads packet bursts out and keeps the server from dropping you.",
             Category.MISC);
         addSettings(limit, queueSize, notify);
         searchTags("flood", "throttle", "rate limit");

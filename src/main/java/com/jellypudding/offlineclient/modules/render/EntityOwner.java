@@ -5,6 +5,7 @@ import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.Render2DEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.render.WorldToScreen;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
@@ -128,7 +129,7 @@ public final class EntityOwner extends Module {
 
     private static int colorFor(String name) {
         if (OfflineClient.INSTANCE.getFriendManager().isFriend(name)) {
-            return 0xFF4C9BFF;
+            return EntityUtil.FRIEND_COLOR;
         }
         return 0xFFFFD060;
     }

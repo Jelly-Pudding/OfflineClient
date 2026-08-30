@@ -59,6 +59,11 @@ public final class BlockUtil {
     // Blast resistance a block needs to survive a crystal. Obsidian and up.
     public static final float BLAST_PROOF = 600;
 
+    // The widest cube scan that still fits in one tick.
+    private static final double MAX_SCAN_RANGE = 16;
+
+    private static final AABB FULL_CUBE = new AABB(0, 0, 0, 1, 1, 1);
+
     // Top covers the head. Full seals the sides at head height as well.
     public enum TrapMode { TOP, FULL }
 
@@ -99,8 +104,7 @@ public final class BlockUtil {
 
     // Nearest first.
     public static List<BlockPos> positionsWithin(double range) {
-        // Sixteen blocks is the widest scan that still fits in one tick.
-        range = Math.min(range, 16);
+        range = Math.min(range, MAX_SCAN_RANGE);
         Vec3 eye = MC.player.getEyePosition();
         double limitSq = range * range;
         int r = (int) Math.ceil(range);
@@ -147,10 +151,7 @@ public final class BlockUtil {
         return MC.player.getBoundingBox().intersects(block);
     }
 
-    /**
-     * The direction from the target toward the neighbour it can be placed
-     * against. Null when there is nothing to build on.
-     */
+    // Places against the neighbour in the support direction. True when the click was taken.
     public static boolean place(BlockPos target, Direction support, boolean rotate, boolean swing) {
         BlockPos against = target.relative(support);
         Direction face = support.getOpposite();
@@ -161,15 +162,25 @@ public final class BlockUtil {
             faceVector(hit);
         }
 
-        BlockHitResult result = new BlockHitResult(hit, face, against, false);
-        InteractionResult outcome = MC.gameMode.useItemOn(MC.player, InteractionHand.MAIN_HAND, result);
-        if (outcome.consumesAction()) {
-            if (swing) {
-                MC.player.swing(InteractionHand.MAIN_HAND);
-            }
-            return true;
+        return click(new BlockHitResult(hit, face, against, false), swing);
+    }
+
+    // Right clicks a face. True when the game accepted the click.
+    private static boolean click(BlockHitResult hit, boolean swing) {
+        InteractionResult outcome = MC.gameMode.useItemOn(MC.player, InteractionHand.MAIN_HAND, hit);
+        if (!outcome.consumesAction()) {
+            return false;
         }
-        return false;
+        if (swing) {
+            MC.player.swing(InteractionHand.MAIN_HAND);
+        }
+        return true;
+    }
+
+    // Places against a neighbour when there is one and clicks the spot itself otherwise.
+    public static boolean placeAny(BlockPos target, boolean rotate, boolean swing) {
+        Direction support = findPlaceSupport(target);
+        return support != null ? place(target, support, rotate, swing) : placeDirect(target, rotate, swing);
     }
 
     // The server accepts a click on a replaceable block as a placement there.
@@ -181,15 +192,7 @@ public final class BlockUtil {
         if (rotate) {
             faceVector(hit);
         }
-        BlockHitResult result = new BlockHitResult(hit, facingSide(target), target, false);
-        InteractionResult outcome = MC.gameMode.useItemOn(MC.player, InteractionHand.MAIN_HAND, result);
-        if (outcome.consumesAction()) {
-            if (swing) {
-                MC.player.swing(InteractionHand.MAIN_HAND);
-            }
-            return true;
-        }
-        return false;
+        return click(new BlockHitResult(hit, facingSide(target), target, false), swing);
     }
 
     // Looks at a point without moving the view.
@@ -232,8 +235,7 @@ public final class BlockUtil {
 
     // The closest position within the range that passes the test.
     public static BlockPos nearestWithin(double range, Predicate<BlockPos> test) {
-        // Sixteen blocks is the widest scan that still fits in one tick.
-        range = Math.min(range, 16);
+        range = Math.min(range, MAX_SCAN_RANGE);
         Vec3 eye = MC.player.getEyePosition();
         BlockPos centre = BlockPos.containing(eye);
         int r = (int) Math.ceil(range);
@@ -400,7 +402,7 @@ public final class BlockUtil {
     // Taken from the real shape and not from a full cube.
     public static Vec3 hitPoint(BlockPos pos, Direction side) {
         VoxelShape shape = state(pos).getShape(MC.level, pos);
-        AABB box = shape.isEmpty() ? new AABB(0, 0, 0, 1, 1, 1) : shape.bounds();
+        AABB box = shape.isEmpty() ? FULL_CUBE : shape.bounds();
         Vec3 center = Vec3.atLowerCornerOf(pos).add(box.getCenter());
         double halfX = (box.maxX - box.minX) * 0.5;
         double halfY = (box.maxY - box.minY) * 0.5;
@@ -442,15 +444,7 @@ public final class BlockUtil {
         if (rotate) {
             faceVector(hit);
         }
-        InteractionResult outcome = MC.gameMode.useItemOn(MC.player, InteractionHand.MAIN_HAND,
-            new BlockHitResult(hit, side, pos, false));
-        if (!outcome.consumesAction()) {
-            return false;
-        }
-        if (swing) {
-            MC.player.swing(InteractionHand.MAIN_HAND);
-        }
-        return true;
+        return click(new BlockHitResult(hit, side, pos, false), swing);
     }
 
     public static boolean isStandingOn(BlockPos pos) {

@@ -2,6 +2,7 @@ package com.jellypudding.offlineclient.modules.movement;
 
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.PacketReceiveEvent;
+import com.jellypudding.offlineclient.event.events.PostMotionEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
@@ -13,6 +14,7 @@ import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.MovementUtil;
+
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.protocol.game.ClientboundPlayerPositionPacket;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
@@ -61,9 +63,6 @@ public final class ElytraFly extends Module {
     // Ticks to leave the server alone after asking for a glide.
     private static final int RESTART_COOLDOWN = 5;
 
-    // Container slot the chest piece sits in on the survival inventory.
-    private static final int CHEST_SLOT = 6;
-
     // Pitched further down than this is a dive and the height is let go when asked.
     private static final float HOLD_PITCH_LIMIT = 25;
 
@@ -88,10 +87,6 @@ public final class ElytraFly extends Module {
     private static final double HOVER_GAP = 0.4;
     private static final double HOVER_SINK = 0.1;
 
-    // The pace of Flight so a speed of one means the same in both modules.
-    private static final double PACKET_HORIZONTAL = 0.5;
-    private static final double PACKET_VERTICAL = 0.225;
-
     // Bounce turns to the nearest of these headings.
     private static final float YAW_SNAP = 45;
 
@@ -108,19 +103,19 @@ public final class ElytraFly extends Module {
         "How hard jump and sneak push you up and down.", 1, 0.2, 5, 0.1, "x")
         .min(0.1).max(20).under(mode, Mode.CONTROL, Mode.PACKET);
     private final BoolSetting holdHeight = new BoolSetting("Hold height",
-        "Stops the glide sinking. Whilst neither jump nor sneak is held you stay at the height you are at.", true)
+        "Holds you at your current height whilst neither jump nor sneak is held.", true)
         .under(mode, Mode.CONTROL);
     private final BoolSetting lookToDive = new BoolSetting("Look to dive",
         "Looking down steeply lets the glide dive as it would without the hold.", false)
         .under(holdHeight);
-    private final BoolSetting autoHover = new BoolSetting("Auto hover",
-        "Sneak still takes you down but the descent stops just above the ground instead of landing.", false)
+    private final BoolSetting autoHover = new BoolSetting("Hover on sneak",
+        "Sneaking sinks you slowly and stops a block above the ground instead of landing.", false)
         .under(mode, Mode.CONTROL);
     private final BoolSetting instantStop = new BoolSetting("Instant stop",
         "Kills your momentum when you release the keys.", false)
         .under(mode, Mode.CONTROL);
     private final BoolSetting sneakDrop = new BoolSetting("Sneak to drop",
-        "Holding sneak ends the glide. Wins over Auto hover.", false)
+        "Holding sneak ends the glide. Wins over Hover on sneak.", false)
         .under(mode, Mode.CONTROL);
     private final NumberSetting cruiseSpeed = new NumberSetting("Cruise speed",
         "The speed the dive and climb cycle aims for.", 30, 10, 60, 1, " bps")
@@ -170,6 +165,9 @@ public final class ElytraFly extends Module {
     private final BoolSetting durabilityGuard = new BoolSetting("Durability guard",
         "Stops helping and warns you when the elytra is nearly broken.", true);
 
+    // The mode the last tick ran under.
+    private Mode applied;
+
     private int restartCooldown;
     // Ticks left to force the elytra open after a standing jump.
     private int takeOffWindow;
@@ -178,7 +176,7 @@ public final class ElytraFly extends Module {
     // True from a sneak drop until the sneak key is let go. Keeps the glide from restarting.
     private boolean dropped;
 
-    // The height being held or NaN whilst the keys have it and the drift learned so far.
+    // The height being held or NaN whilst the keys have it and the drift learned to date.
     private double heldY = Double.NaN;
     private double holdBias;
 
@@ -199,7 +197,7 @@ public final class ElytraFly extends Module {
         super("ElytraFly", "Full elytra control without firework rockets.", Category.MOVEMENT);
         addSettings(mode, speed, climbSpeed, holdHeight, lookToDive, autoHover, instantStop, sneakDrop,
             cruiseSpeed, holdAltitude, rockets, rocketDelay, lockYaw, bouncePitch, restartDelay,
-            groundStart, autoTakeOff, keepGliding, stopInWater, chunkGuard, chunkLookahead,
+            autoTakeOff, groundStart, keepGliding, stopInWater, chunkGuard, chunkLookahead,
             noCrash, crashLookAhead, replaceElytra, replaceAt, durabilityGuard);
         searchTags("elytra", "glide", "fly", "cruise", "bounce", "packet fly");
     }
@@ -220,6 +218,7 @@ public final class ElytraFly extends Module {
 
     @Override
     protected void onEnable() {
+        applied = mode.getValue();
         restartCooldown = 0;
         takeOffWindow = 0;
         wasGliding = false;
@@ -237,7 +236,7 @@ public final class ElytraFly extends Module {
     protected void onDisable() {
         cruising = false;
         releaseBounceKeys();
-        if (mc.player != null && mode.is(Mode.PACKET)) {
+        if (mc.player != null && applied == Mode.PACKET) {
             endPacketFlight();
         }
     }
@@ -246,6 +245,14 @@ public final class ElytraFly extends Module {
     private void onTick(TickEvent event) {
         if (!inGame() || mc.player.isSpectator()) {
             return;
+        }
+        // A mode change lets go of whatever the old mode was holding.
+        if (applied != mode.getValue()) {
+            releaseBounceKeys();
+            if (applied == Mode.PACKET) {
+                endPacketFlight();
+            }
+            applied = mode.getValue();
         }
         if (restartCooldown > 0) {
             restartCooldown--;
@@ -321,8 +328,8 @@ public final class ElytraFly extends Module {
     /**
      * Sweeps the whole body along the flight path a tick at a time and
      * brakes before the first tick that would touch a block. The sweep uses
-     * the real hitbox so a wall just off the line of sight still counts. The
-     * glide adds speed back every tick so the brake leaves a margin.
+     * the real hitbox and a wall just off the line of sight still counts. The
+     * glide adds speed back every tick which is why the brake leaves a margin.
      */
     private void brakeForBlocks() {
         Vec3 velocity = mc.player.getDeltaMovement();
@@ -343,7 +350,7 @@ public final class ElytraFly extends Module {
                 allowed = 0;
             }
             if (pace > allowed) {
-                mc.player.setDeltaMovement(velocity.scale(pace == 0 ? 0 : allowed / pace));
+                mc.player.setDeltaMovement(velocity.scale(allowed / pace));
             }
             return;
         }
@@ -360,16 +367,19 @@ public final class ElytraFly extends Module {
         }
         int best = -1;
         int bestLeft = worn.getMaxDamage() - worn.getDamageValue();
-        for (int i = 0; i < 36; i++) {
+        for (int i = 0; i < InventoryUtil.WHOLE_INVENTORY; i++) {
             ItemStack stack = mc.player.getInventory().getItem(i);
+            if (!stack.is(Items.ELYTRA)) {
+                continue;
+            }
             int left = stack.getMaxDamage() - stack.getDamageValue();
-            if (stack.is(Items.ELYTRA) && left > bestLeft) {
+            if (left > bestLeft) {
                 bestLeft = left;
                 best = i;
             }
         }
         if (best != -1) {
-            InventoryUtil.swap(InventoryUtil.networkSlot(best), CHEST_SLOT);
+            InventoryUtil.swap(InventoryUtil.networkSlot(best), InventoryUtil.CHEST_SLOT);
         }
     }
 
@@ -397,7 +407,7 @@ public final class ElytraFly extends Module {
     private void controlTick() {
         Input keys = mc.player.input.keyPresses;
         Vec3 velocity = mc.player.getDeltaMovement();
-        double accel = 0.08 * speed.getValue();
+        double accel = GRAVITY * speed.getValue();
 
         double vx = velocity.x;
         double vy = velocity.y;
@@ -431,9 +441,9 @@ public final class ElytraFly extends Module {
         float pitch = mc.player.getXRot();
         boolean holding = false;
         if (keys.jump()) {
-            vy += 0.08 * climb;
+            vy += GRAVITY * climb;
         } else if (keys.shift()) {
-            vy = autoHover.isOn() ? hover(vy, climb) : vy - 0.04 * climb;
+            vy = autoHover.isOn() ? hover(vy, climb) : vy - GRAVITY / 2 * climb;
         } else if (holdHeight.isOn() && pitch < 0 && steering) {
             // Looking up whilst moving climbs. The lift only stops the sink underneath the climb.
             vy = Math.max(vy, glideSink(pitch));
@@ -466,7 +476,7 @@ public final class ElytraFly extends Module {
     /**
      * Holds the height the player had when the vertical keys were let go. The
      * sink for the current pitch is cancelled and any drift that still creeps
-     * in is pulled back and learned so it stops creeping at all.
+     * in is pulled back and learned until it stops creeping at all.
      */
     private double holdHeight(double vy) {
         double y = mc.player.getY();
@@ -484,7 +494,7 @@ public final class ElytraFly extends Module {
     private double hover(double vy, double climb) {
         double gap = groundGap(HOVER_APPROACH);
         if (gap < 0) {
-            return vy - 0.04 * climb;
+            return vy - GRAVITY / 2 * climb;
         }
         if (gap <= HOVER_GAP) {
             return Math.max(vy, glideSink(mc.player.getXRot()));
@@ -534,6 +544,18 @@ public final class ElytraFly extends Module {
 
         float wanted = diving ? DIVE_PITCH : CLIMB_PITCH;
         forcedPitch = forcedPitch + Mth.clamp(wanted - forcedPitch, -PITCH_STEP, PITCH_STEP);
+    }
+
+    /**
+     * The cruise angle goes on after the entity tick has saved the old one.
+     * The camera then eases between the two over the frame instead of
+     * jumping the whole step at once.
+     */
+    @Subscribe
+    private void onPostMotion(PostMotionEvent event) {
+        if (!cruising || !inGame()) {
+            return;
+        }
         mc.player.setXRot(forcedPitch);
         if (lockYaw.isOn()) {
             mc.player.setYRot(cruiseYaw);
@@ -567,7 +589,7 @@ public final class ElytraFly extends Module {
         abilities.setFlyingSpeed(0);
 
         Input keys = mc.player.input.keyPresses;
-        double vertical = PACKET_VERTICAL * climbSpeed.getValue();
+        double vertical = MovementUtil.FLY_VERTICAL * climbSpeed.getValue();
         double vy = 0;
         if (keys.jump()) {
             vy += vertical;
@@ -575,7 +597,7 @@ public final class ElytraFly extends Module {
         if (keys.shift()) {
             vy -= vertical;
         }
-        double horizontal = PACKET_HORIZONTAL * speed.getValue();
+        double horizontal = MovementUtil.FLY_HORIZONTAL * speed.getValue();
         Vec3 heading = MovementUtil.inputDirection();
         mc.player.setDeltaMovement(heading.x * horizontal, vy, heading.z * horizontal);
 
@@ -589,12 +611,12 @@ public final class ElytraFly extends Module {
             return;
         }
         mc.player.getAbilities().flying = false;
-        mc.player.getAbilities().setFlyingSpeed(0.05f);
+        mc.player.getAbilities().setFlyingSpeed(MovementUtil.VANILLA_FLY_SPEED);
     }
 
     /**
      * Holds forward and jump and reopens the wings every hop. A rubberband
-     * closes them for a moment so the server settles before the next one.
+     * closes them for a moment to let the server settle before the next one.
      */
     private void bounceTick() {
         if (rubberbanded) {
@@ -631,8 +653,8 @@ public final class ElytraFly extends Module {
             return;
         }
         bounceKeys = false;
-        mc.options.keyUp.setDown(InputUtil.physicallyHeld(mc.options.keyUp));
-        mc.options.keyJump.setDown(InputUtil.physicallyHeld(mc.options.keyJump));
+        InputUtil.release(mc.options.keyUp);
+        InputUtil.release(mc.options.keyJump);
     }
 
     // Fired on the netty thread.

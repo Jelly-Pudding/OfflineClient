@@ -56,6 +56,15 @@ public final class PacketCanceller extends Module {
 
     @Override
     protected void onEnable() {
+        reset();
+    }
+
+    @Override
+    protected void onDisable() {
+        reset();
+    }
+
+    private void reset() {
         dropped.set(0);
         synchronized (pending) {
             seen.clear();
@@ -91,7 +100,7 @@ public final class PacketCanceller extends Module {
 
     @Subscribe(priority = 200)
     private void onPacketSend(PacketSendEvent event) {
-        note(event.getPacket());
+        remember(event.getPacket());
         if (matches(outgoingNames, event.getPacket())) {
             event.cancel();
             dropped.incrementAndGet();
@@ -100,14 +109,14 @@ public final class PacketCanceller extends Module {
 
     @Subscribe(priority = 200)
     private void onPacketReceive(PacketReceiveEvent event) {
-        note(event.getPacket());
+        remember(event.getPacket());
         if (matches(incomingNames, event.getPacket())) {
             event.cancel();
             dropped.incrementAndGet();
         }
     }
 
-    private void note(Packet<?> packet) {
+    private void remember(Packet<?> packet) {
         if (!learn.isOn()) {
             return;
         }

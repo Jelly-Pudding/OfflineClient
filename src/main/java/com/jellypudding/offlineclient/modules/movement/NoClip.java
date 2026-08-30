@@ -13,8 +13,8 @@ import net.minecraft.world.phys.Vec3;
 /**
  * PlayerMixin keeps the physics flag off whilst this is active. A vanilla
  * server refuses any move into a block it did not see you in and pulls you
- * back so the module only works where the server allows it. After a pull
- * back the collision comes back for a moment so you settle instead of
+ * back. The module only works where the server allows it. After a pull
+ * back the collision comes back for a moment to let you settle instead of
  * fighting the server every tick.
  */
 public final class NoClip extends Module {
@@ -23,14 +23,14 @@ public final class NoClip extends Module {
     private static final int SETTLE_TICKS = 10;
 
     private final NumberSetting speed = new NumberSetting("Speed",
-        "Blocks a tick you move through the world.", 0.5, 0.1, 5, 0.1, "");
+        "Blocks a tick you move through the world.", 0.5, 0.1, 5, 0.1, " blocks");
 
     // Set from the packet thread when the server sends the player back.
     private volatile boolean pulledBack;
     private int settle;
 
     public NoClip() {
-        super("NoClip", "Turns your collision off. A vanilla server puts you back the moment you enter a block so this only works where that check has been removed.",
+        super("NoClip", "Turns your collision off. Only works on servers without the vanilla movement check.",
             Category.MOVEMENT);
         addSettings(speed);
         searchTags("phase", "through walls");

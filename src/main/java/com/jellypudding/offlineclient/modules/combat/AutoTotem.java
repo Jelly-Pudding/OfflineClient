@@ -7,6 +7,7 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
+import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.ExplosionUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.Swap;
@@ -15,9 +16,7 @@ import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.boss.enderdragon.EndCrystal;
-import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.RespawnAnchorBlock;
 import net.minecraft.world.level.block.state.BlockState;
@@ -96,14 +95,13 @@ public final class AutoTotem extends Module {
         }
 
         float minHealth = health.getFloat();
-        if (minHealth > 0 && mc.player.getHealth() > minHealth * 2f && !threatened()) {
+        if (minHealth > 0 && !EntityUtil.healthAtOrBelow(minHealth) && !threatened()) {
             return;
         }
 
         if (!InventoryUtil.canClick()) {
             return;
         }
-        // Anything already on the cursor belongs to the player.
         if (!InventoryUtil.carried().isEmpty()) {
             return;
         }
@@ -128,7 +126,7 @@ public final class AutoTotem extends Module {
             && mc.player.getDeltaMovement().length() > ELYTRA_TRIGGER_SPEED) {
             return true;
         }
-        float headroom = ExplosionUtil.totalHealth(mc.player);
+        float headroom = EntityUtil.totalHealth(mc.player);
         if (fall.isOn() && fallDamage() >= headroom) {
             return true;
         }
@@ -165,40 +163,28 @@ public final class AutoTotem extends Module {
                 continue;
             }
             worst = Math.max(worst, ExplosionUtil.blastDamage(mc.player,
-                Vec3.atCenterOf(pos), ExplosionUtil.RESPAWN_BLOCK_POWER));
+                Vec3.atCenterOf(pos), ExplosionUtil.RESPAWN_BLOCK_POWER, Vec3.ZERO, ExplosionUtil.halvesOf(pos)));
         }
         return worst;
     }
 
-    // A bed only goes off outside the overworld and an anchor only outside the nether.
     private boolean isCharge(BlockState state) {
         if (state.getBlock() instanceof BedBlock) {
-            return mc.level.dimension() != Level.OVERWORLD;
+            return ExplosionUtil.bedsExplodeHere();
         }
-        return state.getBlock() instanceof RespawnAnchorBlock
-            && mc.level.dimension() != Level.NETHER;
+        return state.getBlock() instanceof RespawnAnchorBlock && ExplosionUtil.anchorsExplodeHere();
     }
 
     // Every totem the player owns. The one already equipped counts.
     private int countTotems() {
-        int total = mc.player.getOffhandItem().is(Items.TOTEM_OF_UNDYING)
+        int offhand = mc.player.getOffhandItem().is(Items.TOTEM_OF_UNDYING)
             ? mc.player.getOffhandItem().getCount() : 0;
-        for (int i = 0; i < 36; i++) {
-            ItemStack stack = mc.player.getInventory().getItem(i);
-            if (stack.is(Items.TOTEM_OF_UNDYING)) {
-                total += stack.getCount();
-            }
-        }
-        return total;
+        return offhand + InventoryUtil.count(Items.TOTEM_OF_UNDYING, InventoryUtil.WHOLE_INVENTORY);
     }
 
     // Network slot of the first totem in the inventory. Minus one when there is none.
     private int findTotem() {
-        for (int i = 0; i < 36; i++) {
-            if (mc.player.getInventory().getItem(i).is(Items.TOTEM_OF_UNDYING)) {
-                return InventoryUtil.networkSlot(i);
-            }
-        }
-        return -1;
+        int slot = InventoryUtil.findSlot(Items.TOTEM_OF_UNDYING, InventoryUtil.WHOLE_INVENTORY);
+        return slot == -1 ? -1 : InventoryUtil.networkSlot(slot);
     }
 }

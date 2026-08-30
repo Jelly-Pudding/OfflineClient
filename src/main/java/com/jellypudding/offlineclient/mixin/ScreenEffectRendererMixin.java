@@ -42,6 +42,7 @@ public class ScreenEffectRendererMixin {
             ci.cancel();
         }
     }
+
     // The totem pop and the trial key animation come through here.
     @Inject(method = "renderItemActivationAnimation", at = @At("HEAD"), cancellable = true)
     private void onItemActivation(PoseStack poseStack, float partialTick,

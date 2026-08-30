@@ -40,7 +40,7 @@ public final class XRay extends Module {
             Blocks.COPPER_ORE, Blocks.DEEPSLATE_COPPER_ORE,
             Blocks.ANCIENT_DEBRIS, Blocks.NETHER_GOLD_ORE, Blocks.NETHER_QUARTZ_ORE));
     private final BoolSetting lava = new BoolSetting("Lava",
-        "Show lava so you do not dig into it.", true);
+        "Shows lava before you dig into it.", true);
     private final BoolSetting water = new BoolSetting("Water",
         "Show water.", false);
     private final BoolSetting exposedOnly = new BoolSetting("Exposed only",

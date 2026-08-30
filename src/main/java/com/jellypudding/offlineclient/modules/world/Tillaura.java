@@ -52,7 +52,7 @@ public final class Tillaura extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || mc.player.isSpectator() || mc.gui.screen() != null) {
+        if (!inGame() || mc.gameMode == null || mc.player.isSpectator() || mc.gui.screen() != null) {
             return;
         }
         if (mc.gameMode.isDestroying() || mc.player.isHandsBusy()) {

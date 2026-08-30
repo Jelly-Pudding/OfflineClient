@@ -16,7 +16,7 @@ public final class TimeChanger extends Module {
     public TimeChanger() {
         super("TimeChanger", "Shows the world at a time of day you pick.", Category.RENDER);
         addSettings(time);
-        searchTags("day", "night", "no weather", "moon");
+        searchTags("day", "night", "time of day", "moon");
     }
 
     @Override

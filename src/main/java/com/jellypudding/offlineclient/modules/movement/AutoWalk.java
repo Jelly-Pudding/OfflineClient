@@ -50,6 +50,6 @@ public final class AutoWalk extends Module {
     // The key state only changes again on a real key event.
     @Override
     protected void onDisable() {
-        mc.options.keyUp.setDown(InputUtil.physicallyHeld(mc.options.keyUp));
+        InputUtil.release(mc.options.keyUp);
     }
 }

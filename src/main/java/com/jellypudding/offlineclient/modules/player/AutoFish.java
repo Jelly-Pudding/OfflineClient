@@ -5,6 +5,7 @@ import com.jellypudding.offlineclient.event.events.PacketReceiveEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ItemUtil;
@@ -38,6 +39,7 @@ public final class AutoFish extends Module {
     private final BoolSetting antiBreak = new BoolSetting("Anti break",
         "Never use a rod that is about to break.", true);
 
+    private final InventoryUtil.SlotSwap slots = new InventoryUtil.SlotSwap();
     private int castTimer;
     private int reelTimer = -1;
     private int patienceTimer;
@@ -56,6 +58,11 @@ public final class AutoFish extends Module {
     @Override
     public String getSuffix() {
         return caught + " caught";
+    }
+
+    @Override
+    protected void onDisable() {
+        slots.restoreIfMine();
     }
 
     @Override
@@ -82,8 +89,8 @@ public final class AutoFish extends Module {
 
         if (autoSwitch.isOn()) {
             int rodSlot = bestRod();
-            if (rodSlot != -1 && rodSlot != mc.player.getInventory().getSelectedSlot()) {
-                mc.player.getInventory().setSelectedSlot(rodSlot);
+            if (rodSlot != -1) {
+                slots.select(rodSlot);
             }
         }
         ItemStack held = mc.player.getMainHandItem();
@@ -91,7 +98,7 @@ public final class AutoFish extends Module {
             return;
         }
         // Reeling in wears the rod down as much as casting does.
-        if (antiBreak.isOn() && held.getMaxDamage() - held.getDamageValue() <= NEARLY_BROKEN) {
+        if (antiBreak.isOn() && ItemUtil.nearlyBroken(held, NEARLY_BROKEN)) {
             return;
         }
 
@@ -176,12 +183,12 @@ public final class AutoFish extends Module {
     private int bestRod() {
         int bestSlot = -1;
         int bestScore = -1;
-        for (int i = 0; i < 9; i++) {
+        for (int i = 0; i < InventoryUtil.HOTBAR_SIZE; i++) {
             ItemStack stack = mc.player.getInventory().getItem(i);
             if (!(stack.getItem() instanceof FishingRodItem)) {
                 continue;
             }
-            if (antiBreak.isOn() && stack.getMaxDamage() - stack.getDamageValue() <= NEARLY_BROKEN) {
+            if (antiBreak.isOn() && ItemUtil.nearlyBroken(stack, NEARLY_BROKEN)) {
                 continue;
             }
             int score = ItemUtil.enchantLevel(Enchantments.LURE, stack)

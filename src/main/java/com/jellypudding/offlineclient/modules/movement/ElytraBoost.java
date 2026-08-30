@@ -35,6 +35,7 @@ public final class ElytraBoost extends Module {
     private int lastFireTick = Integer.MIN_VALUE / 2;
     private boolean warned;
     private final InventoryUtil.HotbarLoan loan = new InventoryUtil.HotbarLoan();
+    private final InventoryUtil.SlotSwap slots = new InventoryUtil.SlotSwap();
 
     public ElytraBoost() {
         super("ElytraBoost", "Press the bind whilst gliding to fire a firework rocket.", Category.MOVEMENT);
@@ -81,6 +82,10 @@ public final class ElytraBoost extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
+        if (inGame() && !mc.player.isFallFlying()) {
+            // Borrowed rockets go home once the glide is over.
+            loan.giveBack();
+        }
         if (!auto.isOn() || !usable() || !mc.player.isFallFlying()) {
             return;
         }
@@ -134,13 +139,12 @@ public final class ElytraBoost extends Module {
             return;
         }
         warned = false;
-        int previous = mc.player.getInventory().getSelectedSlot();
-        if (slot != previous) {
-            mc.player.getInventory().setSelectedSlot(slot);
-        }
+        slots.select(slot);
         use(InteractionHand.MAIN_HAND);
-        if (swapBack.isOn() && slot != previous) {
-            mc.player.getInventory().setSelectedSlot(previous);
+        if (swapBack.isOn()) {
+            slots.restoreIfMine();
+        } else {
+            slots.forget();
         }
     }
 
@@ -150,11 +154,11 @@ public final class ElytraBoost extends Module {
             if (!mc.player.getInventory().getItem(i).is(Items.FIREWORK_ROCKET)) {
                 continue;
             }
-            int before = mc.player.getInventory().getSelectedSlot();
+            int before = InventoryUtil.selectedSlot();
             if (!loan.select(i)) {
                 return -1;
             }
-            int slot = mc.player.getInventory().getSelectedSlot();
+            int slot = InventoryUtil.selectedSlot();
             // The loan selected the slot for us. The caller decides what to hold.
             mc.player.getInventory().setSelectedSlot(before);
             return slot;
@@ -170,13 +174,7 @@ public final class ElytraBoost extends Module {
     }
 
     private int countRockets() {
-        int total = 0;
-        for (int i = 0; i < 9; i++) {
-            ItemStack stack = mc.player.getInventory().getItem(i);
-            if (stack.is(Items.FIREWORK_ROCKET)) {
-                total += stack.getCount();
-            }
-        }
+        int total = InventoryUtil.count(Items.FIREWORK_ROCKET, InventoryUtil.HOTBAR_SIZE);
         ItemStack offhand = mc.player.getOffhandItem();
         if (offhand.is(Items.FIREWORK_ROCKET)) {
             total += offhand.getCount();

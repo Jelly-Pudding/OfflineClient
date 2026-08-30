@@ -5,6 +5,7 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.module.ModuleManager;
 import com.jellypudding.offlineclient.modules.player.AutoEat;
 import com.jellypudding.offlineclient.modules.player.AutoGap;
+import com.jellypudding.offlineclient.modules.player.AutoPotion;
 
 import java.util.Map;
 import java.util.Set;
@@ -51,6 +52,20 @@ public final class Modules {
     public static boolean enabled(Class<? extends Module> type) {
         Module module = get(type);
         return module != null && module.isEnabled();
+    }
+
+    // True whilst a feeder other than the asker holds the use key.
+    public static boolean feeding(Module asker) {
+        AutoEat eat = get(AutoEat.class);
+        if (eat != null && eat != asker && eat.isBusy()) {
+            return true;
+        }
+        AutoGap gap = get(AutoGap.class);
+        if (gap != null && gap != asker && gap.isBusy()) {
+            return true;
+        }
+        AutoPotion potion = get(AutoPotion.class);
+        return potion != null && potion != asker && potion.isDrinking();
     }
 
     // True whilst either feeder is putting something away.

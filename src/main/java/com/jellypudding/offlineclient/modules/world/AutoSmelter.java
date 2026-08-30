@@ -46,7 +46,7 @@ public final class AutoSmelter extends Module {
     private final BoolSetting stopWhenEmpty = new BoolSetting("Stop when empty",
         "Turns off once you have nothing left to smelt or burn.", true);
     private final BoolSetting closeScreen = new BoolSetting("Close screen",
-        "Closes the furnace after every round so you can carry on.", false);
+        "Closes the furnace after every round to let you carry on.", false);
 
     private int taken;
 
@@ -127,7 +127,10 @@ public final class AutoSmelter extends Module {
         int slot = findPlayerSlot(furnace, stack -> inputs.contains(stack.getItem())
             && mc.level.recipeAccess().propertySet(recipes).test(stack));
         if (slot == -1) {
-            giveUp("Nothing left to smelt.");
+            // The last item may still be cooking.
+            if (furnace.getBurnProgress() <= 0) {
+                giveUp("Nothing left to smelt.");
+            }
             return;
         }
         quickMove(furnace, slot);

@@ -7,6 +7,7 @@ import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.ExclusivityGroup;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.render.DrawBatch;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
@@ -66,7 +67,7 @@ public final class Nuker extends Module {
         .describe(Mode.ALL, "Every block in range.")
         .describe(Mode.SELECTED, "Only the block type you click.")
         .describe(Mode.LIST, "Whatever the list below allows.");
-    private final RegistryListSetting<Block> blocks = new RegistryListSetting<Block>("Blocks",
+    private final RegistryListSetting<Block> blocks = new RegistryListSetting<>("Blocks",
         "The blocks the list applies to. Click to pick them.", BuiltInRegistries.BLOCK,
         List.of(Blocks.BEDROCK, Blocks.BARRIER, Blocks.REINFORCED_DEEPSLATE,
             Blocks.SPAWNER, Blocks.TRIAL_SPAWNER, Blocks.VAULT, Blocks.END_PORTAL_FRAME,
@@ -208,7 +209,7 @@ public final class Nuker extends Module {
             return;
         }
         // Holding attack means the player is mining by hand.
-        if (mc.options.keyAttack.isDown() || mc.player.isUsingItem()) {
+        if (InputUtil.physicallyHeld(mc.options.keyAttack) || mc.player.isUsingItem()) {
             current = null;
             slots.restoreIfMine();
             return;
@@ -384,12 +385,7 @@ public final class Nuker extends Module {
         if (cached != null) {
             return cached;
         }
-        Vec3 eye = mc.player.getEyePosition();
-        Vec3 point = BlockUtil.hitPoint(pos, BlockUtil.facingSide(pos));
-        BlockHitResult hit = mc.level.clip(new ClipContext(eye, point,
-            ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, mc.player));
-        // A target with no collider lets the ray run all the way to the end point.
-        boolean result = hit.getType() == HitResult.Type.MISS || hit.getBlockPos().equals(pos);
+        boolean result = BlockUtil.canSee(pos);
         sightCache.put(pos, result);
         return result;
     }

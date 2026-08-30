@@ -15,8 +15,6 @@ import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.RotationManager;
 import com.jellypudding.offlineclient.util.RotationPriority;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
-import net.minecraft.world.attribute.EnvironmentAttributes;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
@@ -140,8 +138,7 @@ public final class AnchorAura extends Module {
     }
 
     private boolean explodesHere() {
-        return !mc.level.environmentAttributes()
-            .getValue(EnvironmentAttributes.RESPAWN_ANCHOR_WORKS, mc.player.blockPosition());
+        return ExplosionUtil.anchorsExplodeHere();
     }
 
     /**
@@ -204,9 +201,8 @@ public final class AnchorAura extends Module {
                 continue;
             }
             Vec3 center = Vec3.atCenterOf(pos);
-            float damage = ExplosionUtil.blastDamage(target, center, ExplosionUtil.RESPAWN_BLOCK_POWER);
-            // The self check raycasts.
-            if (damage < minDamage.getFloat() || damage <= bestDamage || !selfSafe(center)) {
+            float damage = ExplosionUtil.blastDamage(target, center, ExplosionUtil.RESPAWN_BLOCK_POWER, Vec3.ZERO, pos);
+            if (damage < minDamage.getFloat() || damage <= bestDamage || !selfSafe(center, pos)) {
                 continue;
             }
             bestDamage = damage;
@@ -232,8 +228,8 @@ public final class AnchorAura extends Module {
                 continue;
             }
             Vec3 center = Vec3.atCenterOf(pos);
-            float damage = ExplosionUtil.blastDamage(target, center, ExplosionUtil.RESPAWN_BLOCK_POWER);
-            if (damage < minDamage.getFloat() || damage <= bestDamage || !selfSafe(center)) {
+            float damage = ExplosionUtil.blastDamage(target, center, ExplosionUtil.RESPAWN_BLOCK_POWER, Vec3.ZERO, pos);
+            if (damage < minDamage.getFloat() || damage <= bestDamage || !selfSafe(center, pos)) {
                 continue;
             }
             bestDamage = damage;
@@ -252,11 +248,8 @@ public final class AnchorAura extends Module {
         }
 
         slots.select(slot);
-        Direction support = BlockUtil.findPlaceSupport(best);
         // The turn above already picked the angle.
-        boolean placed = support != null
-            ? BlockUtil.place(best, support, false, true)
-            : BlockUtil.placeDirect(best, false, true);
+        boolean placed = BlockUtil.placeAny(best, false, true);
         if (placed) {
             placeTimer = placeDelay.getInt();
         }
@@ -276,9 +269,9 @@ public final class AnchorAura extends Module {
         return BlockUtil.interact(pos, BlockUtil.facingSide(pos));
     }
 
-    private boolean selfSafe(Vec3 source) {
+    private boolean selfSafe(Vec3 source, BlockPos anchor) {
         return ExplosionUtil.selfSafe(source, ExplosionUtil.RESPAWN_BLOCK_POWER,
-            maxSelfDamage.getFloat(), antiSuicide.isOn());
+            maxSelfDamage.getFloat(), antiSuicide.isOn(), anchor);
     }
 
     @Subscribe

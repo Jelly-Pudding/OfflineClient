@@ -51,13 +51,6 @@ public abstract class CameraMixin {
         if (freeLook != null) {
             freeLook.restoreRotation();
         }
-    }
-
-    @Inject(method = "update(Lnet/minecraft/client/DeltaTracker;)V",
-        at = @At(value = "INVOKE",
-            target = "Lnet/minecraft/client/Camera;alignWithEntity(F)V",
-            shift = At.Shift.AFTER))
-    private void onUpdate(DeltaTracker deltaTracker, CallbackInfo ci) {
         Freecam freecam = Modules.active(Freecam.class);
         if (freecam == null) {
             return;

@@ -34,7 +34,7 @@ import java.util.function.Predicate;
  * the stretch around the player is checked and the nearest job in reach is
  * done. Clearing comes first and then the floor and the walls and the
  * ceiling. Blocks with nothing to lean on are placed straight into the air
- * the way AirPlace does so a wall or a floor can start anywhere. The line
+ * the way AirPlace does and a wall or a floor can start anywhere. The line
  * may run diagonally in which case the shell is picked by distance from it.
  */
 public final class HighwayBuilder extends Module {
@@ -74,7 +74,7 @@ public final class HighwayBuilder extends Module {
         "Walks on past blocks you cannot reach from the line instead of waiting for them.", true)
         .under(movement, Movement.AUTO);
     private final RegistryListSetting<Block> blocks = new RegistryListSetting<>("Blocks",
-        "The blocks allowed in the build. The first one you carry gets used.",
+        "The blocks allowed in the build. The one in your hand wins and otherwise the first in the hotbar.",
         BuiltInRegistries.BLOCK,
         List.of(Blocks.OBSIDIAN, Blocks.NETHERRACK, Blocks.BLACKSTONE, Blocks.BASALT,
             Blocks.COBBLESTONE, Blocks.COBBLED_DEEPSLATE));
@@ -99,7 +99,7 @@ public final class HighwayBuilder extends Module {
         "Blocks between one torch and the next.", 8, 2, 16, 1, " blocks").min(1)
         .under(torches);
     private final NumberSetting torchHeight = new NumberSetting("Torch height",
-        "Blocks of air under the torch. Zero stands it on the floor and anything higher hangs it on the wall. Capped one below the height.",
+        "Blocks of air under each torch. Zero stands it on the floor and more hangs it on the wall. Never above the tunnel.",
         0, 0, 4, 1, " blocks").min(0).max(8).under(torches);
     private final BoolSetting stopWhenEmpty = new BoolSetting("Stop when empty",
         "Turns the module off once you run out of blocks.", true);
@@ -181,6 +181,7 @@ public final class HighwayBuilder extends Module {
         mineTarget = null;
         placeTarget = null;
         if (!inGame()) {
+            stopWalking();
             return;
         }
         if (!walker.isLocked()) {
@@ -239,7 +240,7 @@ public final class HighwayBuilder extends Module {
     /**
      * Collects every block of the tunnel and its shell between two depths
      * along the line. The box around the player is sieved by distance along
-     * and across the line so a diagonal works the same as a straight run.
+     * and across the line. A diagonal works the same as a straight run.
      */
     private void gatherStretch(double from, double to) {
         stretch.clear();
@@ -268,8 +269,8 @@ public final class HighwayBuilder extends Module {
     }
 
     /**
-     * Does the nearest job across the stretch. Clearing wins over filling so
-     * nothing is built into a block that still has to come out. True when
+     * Does the nearest job across the stretch. Clearing wins over filling.
+     * Nothing is built into a block that still has to come out. True when
      * the tick was spent on something.
      */
     private boolean work() {
@@ -462,7 +463,11 @@ public final class HighwayBuilder extends Module {
             return;
         }
         walking = go;
-        mc.options.keyUp.setDown(go || InputUtil.physicallyHeld(mc.options.keyUp));
+        if (go) {
+            mc.options.keyUp.setDown(true);
+        } else {
+            InputUtil.release(mc.options.keyUp);
+        }
     }
 
     private boolean stretchDone(double from, double to) {
@@ -485,12 +490,16 @@ public final class HighwayBuilder extends Module {
     private void stopWalking() {
         if (walking) {
             walking = false;
-            mc.options.keyUp.setDown(InputUtil.physicallyHeld(mc.options.keyUp));
+            InputUtil.release(mc.options.keyUp);
         }
     }
 
+    // An empty list means any plain building block will do.
     private boolean allowed(Block block) {
-        return blocks.size() != 0 && blocks.contains(block);
+        if (blocks.size() == 0) {
+            return BlockUtil.isBuildingBlock(block, BlockPos.ZERO);
+        }
+        return blocks.contains(block);
     }
 
     private static boolean isTorch(Block block) {

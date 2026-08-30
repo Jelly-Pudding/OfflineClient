@@ -6,6 +6,7 @@ import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.ExclusivityGroup;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
@@ -66,6 +67,7 @@ public final class Excavator extends Module {
 
     // One hit blocks already sent and the tick they may be sent again.
     private final Map<BlockPos, Integer> attempted = new HashMap<>();
+    private int lastTick;
 
     public Excavator() {
         super("Excavator", "Digs out a box. Press the bind at each corner whilst it is on.", Category.WORLD);
@@ -187,7 +189,7 @@ public final class Excavator extends Module {
             return;
         }
         // Holding attack means the player is mining by hand.
-        if (mc.options.keyAttack.isDown() || mc.player.isUsingItem()) {
+        if (InputUtil.physicallyHeld(mc.options.keyAttack) || mc.player.isUsingItem()) {
             return;
         }
         if (remaining.isEmpty()) {
@@ -211,6 +213,10 @@ public final class Excavator extends Module {
      */
     private boolean breakInstantly() {
         int now = mc.player.tickCount;
+        if (now < lastTick) {
+            attempted.clear();
+        }
+        lastTick = now;
         attempted.values().removeIf(expiry -> expiry <= now);
         int sent = 0;
         while (sent < perTick.getInt()) {
@@ -235,19 +241,17 @@ public final class Excavator extends Module {
         Iterator<BlockPos> it = remaining.iterator();
         while (it.hasNext()) {
             BlockPos pos = it.next();
-            if (!diggable(pos)) {
+            if (!BlockUtil.diggable(pos)) {
                 it.remove();
                 continue;
             }
-            if (BlockUtil.distanceTo(pos) <= range.getValue() && wanted.test(pos)) {
+            // The block underfoot waits until the player has moved off it.
+            if (!BlockUtil.isStandingOn(pos) && BlockUtil.distanceTo(pos) <= range.getValue()
+                && wanted.test(pos)) {
                 return pos;
             }
         }
         return null;
-    }
-
-    private boolean diggable(BlockPos pos) {
-        return BlockUtil.diggable(pos) && !BlockUtil.isStandingOn(pos);
     }
 
     private static String text(BlockPos pos) {

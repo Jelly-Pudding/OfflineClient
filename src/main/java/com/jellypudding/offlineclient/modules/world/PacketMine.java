@@ -8,6 +8,7 @@ import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.ExclusivityGroup;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.render.DrawBatch;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.util.BlockMiner;
@@ -85,7 +86,7 @@ public final class PacketMine extends Module {
     @Override
     protected void onEnable() {
         clear();
-        attackHeld = mc.options.keyAttack.isDown();
+        attackHeld = InputUtil.physicallyHeld(mc.options.keyAttack);
     }
 
     @Override
@@ -108,7 +109,7 @@ public final class PacketMine extends Module {
     // Samples the attack key after the game has handled this tick's clicks.
     @Subscribe
     private void onClientTick(ClientTickEvent event) {
-        attackHeld = mc.options.keyAttack.isDown();
+        attackHeld = InputUtil.physicallyHeld(mc.options.keyAttack);
     }
 
     // A fresh left click on a block makes it the target.

@@ -41,7 +41,7 @@ public final class Burrow extends Module {
         "How to get above the block as it goes in.", Lift.PACKET)
         .describe(Lift.JUMP, "Jumps for real.")
         .describe(Lift.PACKET, "Sends position packets to hop up without moving on screen.");
-    private final BoolSetting center = new BoolSetting("Center",
+    private final BoolSetting center = new BoolSetting("Centre",
         "Snap to the middle of your block first.", true);
     private final BoolSetting rotate = new BoolSetting("Rotate",
         "Send a look packet toward the block as it goes down.", true);

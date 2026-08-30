@@ -1,6 +1,7 @@
 package com.jellypudding.offlineclient.gui;
 
 import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.modules.misc.ClickGuiModule;
 import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
@@ -35,7 +36,8 @@ public abstract class GuiScreenBase extends Screen implements SettingWidget.Host
     private KeybindSetting bindingTarget;
     private Setting<?> editingSetting;
     private final TextField editField = new TextField();
-    private long suppressCharsUntil;
+    // The character of the key just bound arrives right after the key event and must be eaten.
+    private boolean eatNextChar;
 
     protected GuiScreenBase() {
         super(Component.literal("ClickGUI"));
@@ -194,7 +196,8 @@ public abstract class GuiScreenBase extends Screen implements SettingWidget.Host
                 try {
                     number.setValue(Double.parseDouble(editField.get()));
                     OfflineClient.INSTANCE.getConfigManager().saveSoon();
-                } catch (NumberFormatException ignored) {
+                } catch (NumberFormatException e) {
+                    ChatUtil.error(editField.get() + " is not a number.");
                 }
             }
         } else if (editingSetting instanceof TextSetting text) {
@@ -226,6 +229,7 @@ public abstract class GuiScreenBase extends Screen implements SettingWidget.Host
 
     protected final boolean handleCommonKey(KeyEvent event) {
         int key = event.key();
+        eatNextChar = false;
         if (editingSetting != null) {
             if (key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_KP_ENTER) {
                 commitEditing();
@@ -246,8 +250,9 @@ public abstract class GuiScreenBase extends Screen implements SettingWidget.Host
             }
             bindingTarget = null;
             OfflineClient.INSTANCE.getConfigManager().saveSoon();
-            // The character for this key press arrives right after this callback.
-            suppressCharsUntil = System.currentTimeMillis() + 150;
+            // Only a key that types a character has one to swallow.
+            eatNextChar = key >= GLFW.GLFW_KEY_SPACE && key <= GLFW.GLFW_KEY_WORLD_2
+                || key >= GLFW.GLFW_KEY_KP_0 && key <= GLFW.GLFW_KEY_KP_EQUAL;
             return true;
         }
 
@@ -280,7 +285,11 @@ public abstract class GuiScreenBase extends Screen implements SettingWidget.Host
     }
 
     protected final boolean handleCommonChar(char c) {
-        if (System.currentTimeMillis() < suppressCharsUntil || bindingTarget != null) {
+        if (eatNextChar) {
+            eatNextChar = false;
+            return true;
+        }
+        if (bindingTarget != null) {
             return true;
         }
         if (editingSetting != null) {

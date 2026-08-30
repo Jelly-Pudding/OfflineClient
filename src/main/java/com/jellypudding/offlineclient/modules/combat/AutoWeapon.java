@@ -11,6 +11,7 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
+import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.ItemUtil;
 import net.minecraft.tags.EntityTypeTags;
 import net.minecraft.tags.ItemTags;
@@ -81,13 +82,10 @@ public final class AutoWeapon extends Module {
         }
 
         int best = bestSlot(target);
-        int selected = mc.player.getInventory().getSelectedSlot();
-        if (best == -1 || best == selected) {
-            timer = releaseTime.getInt();
-            return;
+        int selected = InventoryUtil.selectedSlot();
+        if (best != -1 && best != selected) {
+            slots.select(best);
         }
-
-        slots.select(best);
         timer = releaseTime.getInt();
     }
 
@@ -130,7 +128,7 @@ public final class AutoWeapon extends Module {
         double swordDamage = 0;
         double axeDamage = 0;
 
-        for (int i = 0; i < 9; i++) {
+        for (int i = 0; i < InventoryUtil.HOTBAR_SIZE; i++) {
             ItemStack stack = mc.player.getInventory().getItem(i);
             if (stack.isEmpty()) {
                 continue;

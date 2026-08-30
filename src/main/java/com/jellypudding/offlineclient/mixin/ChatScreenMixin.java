@@ -58,7 +58,8 @@ public abstract class ChatScreenMixin extends Screen {
             return;
         }
         List<String> options = OfflineClient.INSTANCE.getCommandManager().complete(text);
-        if (options.isEmpty()) {
+        // With nothing to choose between the arrows keep walking the chat history.
+        if (options.isEmpty() || (key != GLFW.GLFW_KEY_TAB && options.size() < 2)) {
             return;
         }
         cir.setReturnValue(true);
@@ -108,7 +109,7 @@ public abstract class ChatScreenMixin extends Screen {
         }
 
         int picked = offlineclient$pickFor(text, options.size());
-        // The list scrolls so the pick is always among the rows shown.
+        // The list scrolls to keep the pick among the rows shown.
         int shown = Math.min(8, options.size());
         int first = Math.clamp(picked - shown + 1, 0, options.size() - shown);
         String overflow = options.size() > shown

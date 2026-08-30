@@ -48,4 +48,10 @@ public final class AutoReconnect extends Module {
         ConnectScreen.startConnecting(mc.gui.screen(), mc,
             ServerAddress.parseString(lastServer.ip), lastServer, false, null);
     }
+
+    @Override
+    protected void onDisable() {
+        lastServer = null;
+        countdown = -1;
+    }
 }

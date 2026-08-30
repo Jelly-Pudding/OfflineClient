@@ -7,9 +7,30 @@ public final class ColorUtil {
 
     // HSV to opaque ARGB. Hue is in degrees and wraps around.
     public static int hsv(float hue, float saturation, float value) {
-        float h = ((hue % 360f) + 360f) % 360f;
-        int rgb = java.awt.Color.HSBtoRGB(h / 360f, Math.clamp(saturation, 0f, 1f), Math.clamp(value, 0f, 1f));
-        return 0xFF000000 | (rgb & 0xFFFFFF);
+        float h = (((hue % 360f) + 360f) % 360f) / 60f;
+        float s = Math.clamp(saturation, 0f, 1f);
+        float v = Math.clamp(value, 0f, 1f);
+        int sector = (int) h;
+        float f = h - sector;
+        float p = v * (1 - s);
+        float q = v * (1 - s * f);
+        float t = v * (1 - s * (1 - f));
+        float r;
+        float g;
+        float b;
+        switch (sector % 6) {
+            case 0 -> { r = v; g = t; b = p; }
+            case 1 -> { r = q; g = v; b = p; }
+            case 2 -> { r = p; g = v; b = t; }
+            case 3 -> { r = p; g = q; b = v; }
+            case 4 -> { r = t; g = p; b = v; }
+            default -> { r = v; g = p; b = q; }
+        }
+        return 0xFF000000 | channel(r) << 16 | channel(g) << 8 | channel(b);
+    }
+
+    private static int channel(float share) {
+        return Math.clamp(Math.round(share * 255f), 0, 255);
     }
 
     // The offset shifts the phase between adjacent characters or entries.
@@ -48,6 +69,14 @@ public final class ColorUtil {
             return 0xFF40E060;
         }
         return fraction > HURT ? 0xFFFFC040 : 0xFFFF4040;
+    }
+
+    // Green under a hundred milliseconds. Amber under two hundred and fifty. Red beyond.
+    public static int ping(int latency) {
+        if (latency < 0) {
+            return 0xFF909090;
+        }
+        return latency < 100 ? 0xFF50FF50 : latency < 250 ? 0xFFFFD040 : 0xFFFF5050;
     }
 
     public static int lerp(int from, int to, float t) {

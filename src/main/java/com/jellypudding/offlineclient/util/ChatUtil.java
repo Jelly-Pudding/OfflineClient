@@ -19,7 +19,6 @@ public final class ChatUtil {
         message("§c" + message);
     }
 
-    // Announces the new state of a module and marks the config for saving.
     public static void toggled(Module module) {
         message("§b" + module.getName() + " §7is now "
             + (module.isEnabled() ? "§aenabled" : "§cdisabled") + "§7.");

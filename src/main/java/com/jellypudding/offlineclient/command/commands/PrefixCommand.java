@@ -13,7 +13,7 @@ public final class PrefixCommand extends Command {
     @Override
     public void execute(String[] args) {
         if (args.length != 1) {
-            ChatUtil.error("Usage: " + getUsage());
+            usage();
             return;
         }
         if (!OfflineClient.INSTANCE.getCommandManager().setPrefix(args[0])) {

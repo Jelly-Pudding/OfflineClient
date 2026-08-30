@@ -30,9 +30,10 @@ public final class Speed extends Module {
 
     // Each level of the speed effect adds a fifth and each level of slowness takes off just under a sixth.
     private static final double SPEED_PER_LEVEL = 0.2;
-    private static final double SLOWNESS_PER_LEVEL = 0.15;
 
     private static final double TICKS_PER_SECOND = 20;
+
+    private static final String TIMER_KEY = "speed";
 
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
         "How the speed is gained.", Mode.STRAFE)
@@ -73,7 +74,7 @@ public final class Speed extends Module {
 
     @Override
     protected void onDisable() {
-        Timer.override("speed", 1f);
+        Timer.override(TIMER_KEY, 1f);
     }
 
     @Override
@@ -87,7 +88,7 @@ public final class Speed extends Module {
     @Subscribe
     private void onClientTick(ClientTickEvent event) {
         if (!inGame()) {
-            Timer.override("speed", 1f);
+            Timer.override(TIMER_KEY, 1f);
             return;
         }
         if (forceSprint.isOn() && !mc.player.isShiftKeyDown() && !mc.player.isUsingItem()) {
@@ -102,7 +103,7 @@ public final class Speed extends Module {
         }
         Vec3 heading = MovementUtil.inputDirection();
         boolean moving = heading.lengthSqr() > 0;
-        Timer.override("speed", moving ? timer.getFloat() : 1f);
+        Timer.override(TIMER_KEY, moving ? timer.getFloat() : 1f);
 
         if (mc.player.isSpectator() || mc.player.isPassenger()) {
             return;
@@ -140,7 +141,7 @@ public final class Speed extends Module {
         mc.player.setDeltaMovement(heading.x * speed, velocity.y, heading.z * speed);
     }
 
-    // The whole game runs faster under a timer so the cap shrinks with it to stay true in real seconds.
+    // Under a timer the whole game runs faster. The cap shrinks with it to stay true in real seconds.
     private double capped(double perTick) {
         if (!capSpeed.isOn()) {
             return perTick;
@@ -157,7 +158,7 @@ public final class Speed extends Module {
         }
         MobEffectInstance slow = mc.player.getEffect(MobEffects.SLOWNESS);
         if (slow != null) {
-            speed *= Math.max(0, 1 - SLOWNESS_PER_LEVEL * (slow.getAmplifier() + 1));
+            speed *= Math.max(0, 1 - NoSlowdown.SLOWNESS_PER_LEVEL * (slow.getAmplifier() + 1));
         }
         return speed;
     }

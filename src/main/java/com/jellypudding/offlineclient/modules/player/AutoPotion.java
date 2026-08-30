@@ -8,9 +8,9 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.Modules;
-import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.effect.MobEffect;
@@ -49,7 +49,7 @@ public final class AutoPotion extends Module {
     private final BoolSetting topUp = new BoolSetting("Top up",
         "Drink again when an effect you already have is about to run out.", true);
     private final NumberSetting topUpAt = new NumberSetting("Top up at",
-        "Seconds of effect left before topping up.", 10, 1, 60, 1, " s")
+        "Seconds of effect left before topping up.", 10, 1, 60, 1, "s")
         .min(1).under(topUp);
 
     private boolean drinking;
@@ -116,9 +116,7 @@ public final class AutoPotion extends Module {
     }
 
     private boolean handBusy() {
-        AutoEat eat = Modules.get(AutoEat.class);
-        AutoGap gap = Modules.get(AutoGap.class);
-        return (eat != null && eat.isBusy()) || (gap != null && gap.isBusy());
+        return Modules.feeding(this);
     }
 
     private int findWanted() {
@@ -154,7 +152,7 @@ public final class AutoPotion extends Module {
     }
 
     private int findPotion(Predicate<MobEffect> wanted) {
-        for (int i = 0; i < 36; i++) {
+        for (int i = 0; i < InventoryUtil.WHOLE_INVENTORY; i++) {
             ItemStack stack = mc.player.getInventory().getItem(i);
             if (!isPotion(stack)) {
                 continue;
@@ -209,16 +207,12 @@ public final class AutoPotion extends Module {
     }
 
     private void stopDrinking() {
-        if (!drinking) {
-            return;
+        if (drinking) {
+            drinking = false;
+            started = false;
+            InputUtil.release(mc.options.keyUse);
         }
-        drinking = false;
-        started = false;
-        // Give the key back without forcing it up.
-        boolean physicallyHeld = InputConstants.isKeyDown(
-            mc.getWindow(), mc.options.keyUse.key.getValue());
-        mc.options.keyUse.setDown(physicallyHeld);
-
+        // A loan whose return was refused earlier gets another go.
         loan.giveBack();
     }
 }

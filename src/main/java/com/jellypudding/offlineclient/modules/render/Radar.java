@@ -35,7 +35,7 @@ public final class Radar extends Module {
     private final NumberSetting margin = new NumberSetting("Margin",
         "Gap between the radar and the screen edge.", 6, 0, 40, 1, " px").min(0);
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Turn the radar so the way you face points up.", true);
+        "Turns the radar until the way you face points up.", true);
     private final BoolSetting players = new BoolSetting("Players",
         "Show other players.", true);
     private final BoolSetting sleeping = new BoolSetting("Sleeping players",
@@ -47,7 +47,7 @@ public final class Radar extends Module {
     private final BoolSetting water = new BoolSetting("Water animals",
         "Show fish and squid and dolphins.", false);
     private final BoolSetting bats = new BoolSetting("Bats",
-        "Show bats. They clutter every cave.", false);
+        "Show bats.", false);
     private final BoolSetting invisible = new BoolSetting("Invisible",
         "Show entities that are under an invisibility effect.", true);
     private final BoolSetting items = new BoolSetting("Items",

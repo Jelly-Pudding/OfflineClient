@@ -7,6 +7,7 @@ import com.jellypudding.offlineclient.event.events.Render3DEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.render.DrawBatch;
 import com.jellypudding.offlineclient.render.WorldToScreen;
 import com.jellypudding.offlineclient.setting.BoolSetting;
@@ -80,7 +81,7 @@ public final class LogoutSpots extends Module {
 
     @Override
     public String getSuffix() {
-        return spots.isEmpty() ? null : String.valueOf(spots.size());
+        return count(spots.size());
     }
 
     @Override
@@ -106,10 +107,6 @@ public final class LogoutSpots extends Module {
 
     @Subscribe
     private void onPacketReceive(PacketReceiveEvent event) {
-        // Nothing drains these queues outside a world.
-        if (mc.level == null) {
-            return;
-        }
         if (event.getPacket() instanceof ClientboundPlayerInfoRemovePacket remove) {
             loggedOut.addAll(remove.profileIds());
         } else if (event.getPacket() instanceof ClientboundPlayerInfoUpdatePacket update
@@ -154,8 +151,8 @@ public final class LogoutSpots extends Module {
             spots.remove(player.getUUID());
             lastSeen.put(player.getUUID(), new Spot(
                 player.getGameProfile().name(), player.getBoundingBox(),
-                player.getHealth() + player.getAbsorptionAmount(),
-                player.getMaxHealth() + player.getAbsorptionAmount()));
+                EntityUtil.totalHealth(player),
+                EntityUtil.totalMaxHealth(player)));
         }
     }
 

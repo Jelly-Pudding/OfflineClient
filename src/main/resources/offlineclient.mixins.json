@@ -42,6 +42,7 @@
     "ParticleEngineMixin",
     "PickMixin",
     "PlayerMixin",
+    "ProjectileUtilMixin",
     "PlayerTabOverlayMixin",
     "ScreenEffectRendererMixin",
     "ScreenMixin",

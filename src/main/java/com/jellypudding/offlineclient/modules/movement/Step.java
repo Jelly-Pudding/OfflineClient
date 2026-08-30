@@ -10,6 +10,7 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.Modules;
+import com.jellypudding.offlineclient.util.MovementUtil;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import net.minecraft.world.level.block.BedBlock;
@@ -32,8 +33,8 @@ public final class Step extends Module {
 
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
         "How the step is done.", Mode.SIMPLE)
-        .describe(Mode.SIMPLE, "Raises the step height so you walk straight up. Any height.")
-        .describe(Mode.LEGIT, "Sends the packets of a real jump so anti cheats see nothing odd. One block only.");
+        .describe(Mode.SIMPLE, "Raises the step height. You walk straight up any height.")
+        .describe(Mode.LEGIT, "Sends the packets of a real jump. Anti cheats see nothing odd. One block only.");
     private final NumberSetting height = new NumberSetting("Height",
         "How high you can step up without jumping.", 1, 0.6, 3, 0.1, " blocks")
         .under(mode, Mode.SIMPLE);
@@ -48,7 +49,7 @@ public final class Step extends Module {
         "Hearts at or below which the step stays off.", 5, 0.5, 10, 0.5, " hearts")
         .under(safeStep);
     private final BoolSetting stepDown = new BoolSetting("Step down",
-        "Snaps you down small drops instead of falling them. EdgeGuard wins at any edge it is guarding.", false);
+        "Snaps you down small drops instead of letting you fall. EdgeGuard wins at any edge it is guarding.", false);
     private final NumberSetting downDistance = new NumberSetting("Down distance",
         "Longest drop that is snapped.", 3, 0.5, 10, 0.5, " blocks")
         .under(stepDown);
@@ -88,7 +89,7 @@ public final class Step extends Module {
     }
 
     private boolean inDanger() {
-        float hearts = (mc.player.getHealth() + mc.player.getAbsorptionAmount()) / 2f;
+        float hearts = EntityUtil.totalHealth(mc.player) / 2f;
         return hearts <= safeHealth.getFloat() || EntityUtil.crystalNearby(6);
     }
 
@@ -120,7 +121,7 @@ public final class Step extends Module {
         if (mc.player.input.getMoveVector().lengthSquared() < 1.0E-6f) {
             return;
         }
-        // The lip is probed just above the feet so a ledge under the box counts.
+        // The lip is probed just above the feet. A ledge under the box then counts.
         AABB probe = mc.player.getBoundingBox().move(0, 0.05, 0).inflate(0.05);
         if (!mc.level.noCollision(mc.player, probe.move(0, 1, 0))) {
             return;
@@ -151,7 +152,7 @@ public final class Step extends Module {
             || mc.player.isShiftKeyDown()) {
             return;
         }
-        if (mc.player.xxa == 0 && mc.player.zza == 0) {
+        if (MovementUtil.inputDirection().lengthSqr() == 0) {
             return;
         }
         // An edge EdgeGuard is holding you on is not one to snap down from.

@@ -25,10 +25,6 @@ public final class VehicleFly extends Module {
 
     public enum Mode { CONTROL, GLIDE }
 
-    // Blocks per tick at a speed of one. The same pace as the Flight module.
-    private static final double HORIZONTAL_UNIT = 0.5;
-    private static final double VERTICAL_UNIT = 0.225;
-
     // A drop longer than this starts to hurt.
     private static final double SAFE_DROP = 3;
 
@@ -115,7 +111,7 @@ public final class VehicleFly extends Module {
 
         blockDismount = dismountSafety.isOn() && dropIsUnsafe(vehicle);
 
-        double limit = verticalSpeed.getValue() * VERTICAL_UNIT;
+        double limit = verticalSpeed.getValue() * MovementUtil.FLY_VERTICAL;
         double vy;
         if (mc.options.keyJump.isDown()) {
             vy = limit;
@@ -131,10 +127,8 @@ public final class VehicleFly extends Module {
         double vx = velocity.x;
         double vz = velocity.z;
         if (mode.is(Mode.CONTROL)) {
-            vx = 0;
-            vz = 0;
             Vec3 heading = MovementUtil.inputDirection();
-            double h = speed.getValue() * HORIZONTAL_UNIT;
+            double h = speed.getValue() * MovementUtil.FLY_HORIZONTAL;
             vx = heading.x * h;
             vz = heading.z * h;
             if (faceView.isOn()) {
@@ -162,7 +156,7 @@ public final class VehicleFly extends Module {
         return mc.level.noCollision(vehicle, box.minmax(box.move(0, -SAFE_DROP, 0)));
     }
 
-    // Fired on the netty thread. A shift flag whilst riding makes the server dismount the player.
+    // Fired on whichever thread sent the packet. A shift flag whilst riding makes the server dismount the player.
     @Subscribe
     private void onPacketSend(PacketSendEvent event) {
         if (!blockDismount || !(event.getPacket() instanceof ServerboundPlayerInputPacket packet)) {

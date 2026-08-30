@@ -23,7 +23,7 @@ public final class ChestSwap extends Module {
 
     private final BoolSetting best = new BoolSetting("Best chestplate",
         "Reach for the strongest chestplate instead of the first one found.", true);
-    private final BoolSetting countProtection = new BoolSetting("Count Protection",
+    private final BoolSetting countProtection = new BoolSetting("Count protection",
         "A well enchanted piece can beat a higher tier plain one.", true)
         .under(best);
 
@@ -66,19 +66,18 @@ public final class ChestSwap extends Module {
     }
 
     private boolean equipElytra() {
-        for (int i = 0; i < 36; i++) {
-            if (isElytra(mc.player.getInventory().getItem(i))) {
-                wear(i);
-                return true;
-            }
+        int slot = InventoryUtil.findSlot(this::isElytra, InventoryUtil.WHOLE_INVENTORY);
+        if (slot == -1) {
+            return false;
         }
-        return false;
+        wear(slot);
+        return true;
     }
 
     private boolean equipChestplate() {
         int found = -1;
         double bestScore = 0;
-        for (int i = 0; i < 36; i++) {
+        for (int i = 0; i < InventoryUtil.WHOLE_INVENTORY; i++) {
             ItemStack stack = mc.player.getInventory().getItem(i);
             if (!isChestplate(stack)) {
                 continue;

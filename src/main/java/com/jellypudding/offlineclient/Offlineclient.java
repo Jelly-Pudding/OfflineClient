@@ -19,7 +19,7 @@ public enum OfflineClient {
     INSTANCE;
 
     public static final String NAME = "OfflineClient";
-    public static final String VERSION = "0.4.0";
+    public static final String VERSION = "0.5.0";
     public static final String SERVER_NAME = "minecraftoffline.net";
     public static final String SERVER_ADDRESS = "minecraftoffline.net";
 
@@ -42,6 +42,7 @@ public enum OfflineClient {
         friendManager = new FriendManager();
         commandManager = new CommandManager();
         moduleManager = new ModuleManager();
+        moduleManager.enableDefaults();
 
         configManager = new ConfigManager(folder);
         configManager.load();

@@ -6,7 +6,7 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.Modules;
 
 import java.math.BigDecimal;
-import java.util.HashMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.Map;
 
 // Behaviour lives in DeltaTrackerMixin. Other modules can push a temporary override.
@@ -15,7 +15,7 @@ public final class Timer extends Module {
     private final NumberSetting speed = new NumberSetting("Speed",
         "Game speed multiplier.", 2, 0.1, 10, 0.1, "x");
 
-    private final Map<String, Float> overrides = new HashMap<>();
+    private final Map<String, Float> overrides = new ConcurrentHashMap<>();
 
     public Timer() {
         super("Timer", "Speeds up or slows down the whole game client side.", Category.MISC);

@@ -16,7 +16,6 @@ import net.minecraft.network.protocol.game.ClientboundPlayerPositionPacket;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.attribute.EnvironmentAttributes;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.phys.BlockHitResult;
@@ -64,7 +63,7 @@ public final class NoFall extends Module {
         "Picks the water back up once it has broken your fall.", true)
         .under(mode, Mode.WATER_BUCKET, Mode.BOTH);
     private final BoolSetting pauseOnMace = new BoolSetting("Pause on mace",
-        "Leaves the fall alone whilst you hold a mace so the smash still lands.", true);
+        "Leaves the fall alone whilst you hold a mace. The smash still lands.", true);
 
     /**
      * The count the server holds. Every movement packet that goes out is
@@ -233,7 +232,7 @@ public final class NoFall extends Module {
 
     /**
      * Mirrors what the server will hold after each movement packet. Runs after
-     * every other rewrite so the packet seen here is the one that goes out.
+     * every other rewrite. The packet seen here is the one that goes out.
      */
     @Subscribe(priority = -100)
     private void onPacketSend(PacketSendEvent event) {
@@ -332,7 +331,7 @@ public final class NoFall extends Module {
     // The bucket raycasts from the live client rotation and the packet carries it.
     // Pointing down for the call itself is enough. A bucket anywhere in the inventory is borrowed.
     private void placeWater() {
-        int slot = findItem(Items.WATER_BUCKET);
+        int slot = InventoryUtil.findSlot(Items.WATER_BUCKET, InventoryUtil.WHOLE_INVENTORY);
         BlockPos ground = groundBelow();
         if (slot == -1 || ground == null || !loan.select(slot)) {
             return;
@@ -372,7 +371,7 @@ public final class NoFall extends Module {
             loan.giveBack();
             return;
         }
-        int bucket = findItem(Items.BUCKET);
+        int bucket = InventoryUtil.findSlot(Items.BUCKET, InventoryUtil.WHOLE_INVENTORY);
         if (bucket != -1 && loan.select(bucket)) {
             if (lookingDown(() ->
                 mc.gameMode.useItem(mc.player, InteractionHand.MAIN_HAND).consumesAction())) {
@@ -383,13 +382,4 @@ public final class NoFall extends Module {
         loan.giveBack();
     }
 
-    // The first slot anywhere in the inventory holding the item or minus one.
-    private int findItem(Item item) {
-        for (int i = 0; i < InventoryUtil.WHOLE_INVENTORY; i++) {
-            if (mc.player.getInventory().getItem(i).is(item)) {
-                return i;
-            }
-        }
-        return -1;
-    }
 }

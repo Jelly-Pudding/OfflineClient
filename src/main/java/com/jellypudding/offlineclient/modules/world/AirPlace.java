@@ -31,18 +31,18 @@ public final class AirPlace extends Module {
         4.5, 1, 6, 0.1).min(0.5);
     private final BoolSetting guide = new BoolSetting("Guide",
         "Outline the spot the block will land in.", true);
-    private final ColorSetting color = new ColorSetting("Guide color",
+    private final ColorSetting color = new ColorSetting("Guide colour",
         "Colour of the outline.", 0, false).under(guide);
 
     private BlockPos target;
 
     public AirPlace() {
-        super("AirPlace", "Place blocks in mid air where your crosshair points.", Category.PLAYER);
+        super("AirPlace", "Places blocks in mid air where your crosshair points.", Category.WORLD);
         addSettings(range, guide, color);
         searchTags("air place", "midair", "build");
     }
 
-    // Read by LocalPlayerMixin so blocks placed in the air can be built onto from the same distance.
+    // Read by LocalPlayerMixin. Blocks placed in the air can then be built onto from the same distance.
     public double getRange() {
         return range.getValue();
     }

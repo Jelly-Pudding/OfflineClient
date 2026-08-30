@@ -62,7 +62,7 @@ public final class VeinMiner extends Module {
 
     @Override
     public String getSuffix() {
-        return vein.isEmpty() ? null : String.valueOf(vein.size());
+        return count(vein.size());
     }
 
     @Override

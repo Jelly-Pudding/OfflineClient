@@ -27,10 +27,11 @@ import java.util.Deque;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Predicate;
 
 /**
  * Brews the chosen potion whilst a brewing stand is open. The ingredient
- * chain is worked out from the game's own brewing rules so any potion a
+ * chain is worked out from the game's own brewing rules. Any potion a
  * server allows can be made.
  */
 public final class AutoBrewer extends Module {
@@ -43,7 +44,7 @@ public final class AutoBrewer extends Module {
     private static final int FUEL_SLOT = 4;
     private static final int FIRST_PLAYER_SLOT = 5;
 
-    // Ticks between two actions so the server can answer the last one.
+    // Ticks between two actions. The server gets time to answer the last one.
     private static final int SETTLE_TICKS = 5;
 
     // Water goes through at most three ingredients and then the two forms.
@@ -123,6 +124,9 @@ public final class AutoBrewer extends Module {
             if (stand.slots.get(i).getItem().isEmpty()) {
                 continue;
             }
+            if (!isWaterBottle(stand.slots.get(i).getItem())) {
+                brewed++;
+            }
             quickMove(stand, i);
             if (!stand.slots.get(i).getItem().isEmpty()) {
                 ChatUtil.error("No room in the inventory for the finished potions.");
@@ -130,7 +134,6 @@ public final class AutoBrewer extends Module {
                 return;
             }
         }
-        brewed += BOTTLE_SLOTS;
         stage = Stage.FILL;
     }
 
@@ -155,6 +158,10 @@ public final class AutoBrewer extends Module {
         // The leftover of the last ingredient goes home before the next one.
         if (!stand.slots.get(INGREDIENT_SLOT).getItem().isEmpty()) {
             quickMove(stand, INGREDIENT_SLOT);
+            if (!stand.slots.get(INGREDIENT_SLOT).getItem().isEmpty()) {
+                ChatUtil.error("No room in the inventory for the leftover ingredient.");
+                setEnabled(false);
+            }
             return;
         }
         if (step >= plan.size()) {
@@ -251,7 +258,7 @@ public final class AutoBrewer extends Module {
         return stack.is(Items.POTION) && contentsOf(stack).is(Potions.WATER);
     }
 
-    private static int findPlayerSlot(BrewingStandMenu stand, java.util.function.Predicate<ItemStack> test) {
+    private static int findPlayerSlot(BrewingStandMenu stand, Predicate<ItemStack> test) {
         for (int i = FIRST_PLAYER_SLOT; i < stand.slots.size(); i++) {
             if (test.test(stand.slots.get(i).getItem())) {
                 return i;

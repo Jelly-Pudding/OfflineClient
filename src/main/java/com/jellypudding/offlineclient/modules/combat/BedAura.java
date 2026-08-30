@@ -17,8 +17,6 @@ import com.jellypudding.offlineclient.util.RotationPriority;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.tags.ItemTags;
-import net.minecraft.world.attribute.BedRule;
-import net.minecraft.world.attribute.EnvironmentAttributes;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
@@ -142,9 +140,7 @@ public final class BedAura extends Module {
     }
 
     private boolean explodesHere() {
-        BedRule rule = mc.level.environmentAttributes()
-            .getValue(EnvironmentAttributes.BED_RULE, mc.player.blockPosition());
-        return rule.explodes();
+        return ExplosionUtil.bedsExplodeHere();
     }
 
     /**
@@ -162,10 +158,10 @@ public final class BedAura extends Module {
             if (BlockUtil.distanceTo(pos) > range.getValue()) {
                 continue;
             }
-            Vec3 center = Vec3.atCenterOf(headOf(pos, state));
-            float damage = ExplosionUtil.blastDamage(target, center, ExplosionUtil.RESPAWN_BLOCK_POWER);
-            // The self check raycasts.
-            if (damage < minDamage.getFloat() || damage <= bestDamage || !selfSafe(center)) {
+            BlockPos head = headOf(pos, state);
+            Vec3 center = Vec3.atCenterOf(head);
+            float damage = ExplosionUtil.blastDamage(target, center, ExplosionUtil.RESPAWN_BLOCK_POWER, Vec3.ZERO, pos, head);
+            if (damage < minDamage.getFloat() || damage <= bestDamage || !selfSafe(center, pos, head)) {
                 continue;
             }
             bestDamage = damage;
@@ -236,8 +232,8 @@ public final class BedAura extends Module {
                     continue;
                 }
                 Vec3 center = Vec3.atCenterOf(head);
-                float damage = ExplosionUtil.blastDamage(target, center, ExplosionUtil.RESPAWN_BLOCK_POWER);
-                if (damage < minDamage.getFloat() || damage <= bestDamage || !selfSafe(center)) {
+                float damage = ExplosionUtil.blastDamage(target, center, ExplosionUtil.RESPAWN_BLOCK_POWER, Vec3.ZERO, foot, head);
+                if (damage < minDamage.getFloat() || damage <= bestDamage || !selfSafe(center, foot, head)) {
                     continue;
                 }
                 bestDamage = damage;
@@ -248,15 +244,12 @@ public final class BedAura extends Module {
     }
 
     private boolean layBed(Spot spot) {
-        Direction support = BlockUtil.findPlaceSupport(spot.foot());
         // The bed follows the yaw the client holds when the placement runs.
         float heldYaw = mc.player.getYRot();
         mc.player.setYRot(spot.facing().toYRot());
         try {
             // The turn above already picked the direction.
-            return support != null
-                ? BlockUtil.place(spot.foot(), support, false, true)
-                : BlockUtil.placeDirect(spot.foot(), false, true);
+            return BlockUtil.placeAny(spot.foot(), false, true);
         } finally {
             mc.player.setYRot(heldYaw);
         }
@@ -298,9 +291,9 @@ public final class BedAura extends Module {
         return BlockUtil.positionsAround(target.blockPosition(), (int) Math.ceil(range.getValue()));
     }
 
-    private boolean selfSafe(Vec3 source) {
+    private boolean selfSafe(Vec3 source, BlockPos foot, BlockPos head) {
         return ExplosionUtil.selfSafe(source, ExplosionUtil.RESPAWN_BLOCK_POWER,
-            maxSelfDamage.getFloat(), antiSuicide.isOn());
+            maxSelfDamage.getFloat(), antiSuicide.isOn(), foot, head);
     }
 
     @Subscribe

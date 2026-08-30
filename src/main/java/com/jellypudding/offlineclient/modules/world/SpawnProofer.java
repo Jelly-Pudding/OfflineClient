@@ -50,7 +50,7 @@ public final class SpawnProofer extends Module {
 
     @Override
     public String getSuffix() {
-        return targets.isEmpty() ? null : String.valueOf(targets.size());
+        return count(targets.size());
     }
 
     @Override
@@ -62,7 +62,7 @@ public final class SpawnProofer extends Module {
 
     @Override
     protected void onDisable() {
-        slots.restore();
+        slots.restoreIfMine();
         targets.clear();
     }
 

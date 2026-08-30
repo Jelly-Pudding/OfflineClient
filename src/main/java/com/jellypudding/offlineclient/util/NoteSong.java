@@ -130,6 +130,9 @@ public final class NoteSong {
         readString(in);
         readString(in);
         float tempo = readShort(in) / 100f;
+        if (tempo <= 0) {
+            throw new IOException("Bad tempo " + tempo);
+        }
         in.readBoolean();
         in.readByte();
         in.readByte();
@@ -197,7 +200,7 @@ public final class NoteSong {
         }
         StringBuilder text = new StringBuilder(length);
         for (int i = 0; i < length; i++) {
-            char c = (char) in.readByte();
+            char c = (char) in.readUnsignedByte();
             text.append(c == '\r' ? ' ' : c);
         }
         return text.toString();

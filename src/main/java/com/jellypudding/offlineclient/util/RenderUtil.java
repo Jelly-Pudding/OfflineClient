@@ -9,6 +9,9 @@ import java.util.List;
 // 2D drawing helpers on top of GuiGraphicsExtractor.
 public final class RenderUtil {
 
+    // Grey for text that should sit back from the main line.
+    public static final int MUTED_TEXT = 0xFFB0B0C0;
+
     private RenderUtil() {
     }
 
@@ -149,23 +152,23 @@ public final class RenderUtil {
 
     public static final int STAR_SIZE = 11;
 
-    // Sample points per pixel side. Sixteen per pixel smooths the edges.
+    // Sample points per pixel side.
     private static final int STAR_SAMPLES = 4;
     // Inner radius of a regular five point star as a share of the outer.
     private static final double STAR_INNER = 0.382;
     // How much smaller the cut out of the hollow star is.
     private static final double STAR_HOLLOW = 0.6;
 
-    private static float[] starFill;
-    private static float[] starRing;
+    private static final float[] STAR_FILL = rasteriseStar(1);
+    private static final float[] STAR_RING = ring(STAR_FILL, rasteriseStar(STAR_HOLLOW));
 
     /**
      * A five point star with soft edges. Chosen is solid and not chosen is
      * a hollow ring of the same shape. Each pixel carries the share of its
-     * sample points that land inside the shape so the points stay crisp.
+     * sample points that land inside the shape. The points stay crisp.
      */
     public static void star(GuiGraphicsExtractor context, int x, int y, int color, boolean filled) {
-        float[] cover = filled ? starFill() : starRing();
+        float[] cover = filled ? STAR_FILL : STAR_RING;
         for (int row = 0; row < STAR_SIZE; row++) {
             for (int col = 0; col < STAR_SIZE; col++) {
                 float share = cover[row * STAR_SIZE + col];
@@ -177,23 +180,13 @@ public final class RenderUtil {
         }
     }
 
-    private static float[] starFill() {
-        if (starFill == null) {
-            starFill = rasteriseStar(1);
+    // The outer shape with the inner one cut away.
+    private static float[] ring(float[] outer, float[] inner) {
+        float[] result = new float[outer.length];
+        for (int i = 0; i < outer.length; i++) {
+            result[i] = Math.max(0, outer[i] - inner[i]);
         }
-        return starFill;
-    }
-
-    private static float[] starRing() {
-        if (starRing == null) {
-            float[] outer = starFill();
-            float[] inner = rasteriseStar(STAR_HOLLOW);
-            starRing = new float[outer.length];
-            for (int i = 0; i < outer.length; i++) {
-                starRing[i] = Math.max(0, outer[i] - inner[i]);
-            }
-        }
-        return starRing;
+        return result;
     }
 
     // Coverage of every pixel by a star scaled about the middle of the cell.

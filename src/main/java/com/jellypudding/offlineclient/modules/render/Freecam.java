@@ -11,6 +11,7 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.InputUtil;
 import net.minecraft.client.player.ClientInput;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.util.Mth;
@@ -248,9 +249,8 @@ public final class Freecam extends Module {
 
     // Mouse movement lands here instead of turning the player.
     public void turn(double deltaYaw, double deltaPitch) {
-        // The 0.15 factor matches how the game turns the player.
-        camYaw += (float) (deltaYaw * 0.15);
-        camPitch = Mth.clamp(camPitch + (float) (deltaPitch * 0.15), -90f, 90f);
+        camYaw += (float) (deltaYaw * InputUtil.MOUSE_TURN);
+        camPitch = Mth.clamp(camPitch + (float) (deltaPitch * InputUtil.MOUSE_TURN), -90f, 90f);
     }
 
     public Vec3 getCamPos(float partialTicks) {

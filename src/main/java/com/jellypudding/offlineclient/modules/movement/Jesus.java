@@ -33,6 +33,9 @@ public final class Jesus extends Module {
     private static final double RISE_SPEED = 0.11;
     // Extra lift per tick whilst bobbing in dolphin mode.
     private static final double DOLPHIN_LIFT = 0.04;
+
+    // Ticks out of the water before the surface counts as solid again.
+    private static final int SETTLED = 10;
     // How far the sent height wobbles above and below the real one.
     private static final double PACKET_WOBBLE = 0.05;
 
@@ -44,7 +47,7 @@ public final class Jesus extends Module {
         "Also walk on lava.", false)
         .under(mode, Mode.SOLID);
     private final BoolSetting climbOn = new BoolSetting("Climb on",
-        "Liquid level with your feet counts as a solid block so you step or jump onto it instead of wading in. Keeps you out of lava.", true)
+        "Liquid level with your feet counts as solid. You step or jump onto it instead of wading in.", true)
         .under(mode, Mode.SOLID);
     private final BoolSetting riseToSurface = new BoolSetting("Rise to surface",
         "Pushes you up out of the liquid when you are in it. Off lets you swim about as normal.", true)
@@ -54,7 +57,7 @@ public final class Jesus extends Module {
         .under(mode, Mode.SOLID);
     private final NumberSetting dipFall = new NumberSetting("Dip fall",
         "Fall further than this and you sink instead of landing.",
-        4, 0, 20, 0.5, "m")
+        4, 0, 20, 0.5, " blocks")
         .under(mode, Mode.SOLID);
     private final BoolSetting powderSnow = new BoolSetting("Powder snow",
         "Also walk on powder snow.", true);
@@ -63,7 +66,7 @@ public final class Jesus extends Module {
         true)
         .under(mode, Mode.SOLID);
 
-    private int ticksSinceExit = 10;
+    private int ticksSinceExit = SETTLED;
 
     public Jesus() {
         super("Jesus", "Walk on water and lava.", Category.MOVEMENT);
@@ -78,7 +81,7 @@ public final class Jesus extends Module {
 
     @Override
     protected void onEnable() {
-        ticksSinceExit = 10;
+        ticksSinceExit = SETTLED;
     }
 
     private boolean active() {
@@ -163,7 +166,7 @@ public final class Jesus extends Module {
         if (inSolidLiquid) {
             // Swimming stays vanilla until the player climbs out on their own.
             if (!riseToSurface.isOn()) {
-                ticksSinceExit = 10;
+                ticksSinceExit = SETTLED;
                 return;
             }
             mc.player.setDeltaMovement(velocity.x, RISE_SPEED, velocity.z);

@@ -11,6 +11,7 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.ProjectileUtil;
+
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
@@ -18,6 +19,9 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.BowItem;
 import net.minecraft.world.item.CrossbowItem;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
 // The pitch comes from the real arrow physics and the flight time leads the target.
@@ -185,12 +189,11 @@ public final class BowAimbot extends Module {
     // Turns the player toward the point the arrow needs to fly through.
     private void aim(LivingEntity entity, double speed) {
         Vec3 eye = mc.player.getEyePosition();
-        Vec3 aimPoint = entity.getBoundingBox().getCenter();
+        Vec3 aimPoint = visiblePoint(entity, eye);
         Vec3 targetVelocity = predict.isOn() ? EntityUtil.velocityOf(entity) : Vec3.ZERO;
 
-        // An arrow keeps the shooter's momentum and the vertical part only carries whilst
-        // airborne. The server reads that momentum as the distance the last packet moved
-        // so the real displacement is used rather than the client's own velocity.
+        // The server hands the arrow the distance the last packet moved.
+        // The vertical part only counts in the air.
         Vec3 own = EntityUtil.velocityOf(mc.player);
         Vec3 drift = new Vec3(own.x, mc.player.onGround() ? 0 : own.y, own.z);
 
@@ -219,8 +222,31 @@ public final class BowAimbot extends Module {
             pitch = (float) -solution[0];
         }
 
+        // The view itself turns. A bow shot has to leave from where the camera points.
         mc.player.setYRot(yaw);
         mc.player.setXRot(Math.clamp(pitch, -90f, 90f));
+    }
+
+    /**
+     * The middle of the target when it is in view. Otherwise the highest
+     * part that is. A target in a hole shows only the head and chest and an
+     * arrow aimed at the middle hits the rim.
+     */
+    private Vec3 visiblePoint(LivingEntity entity, Vec3 eye) {
+        AABB box = entity.getBoundingBox();
+        double x = (box.minX + box.maxX) / 2;
+        double z = (box.minZ + box.maxZ) / 2;
+        double height = box.maxY - box.minY;
+        double[] shares = {0.5, 0.75, 0.9, 0.3};
+        for (double share : shares) {
+            Vec3 point = new Vec3(x, box.minY + height * share, z);
+            HitResult hit = mc.level.clip(new ClipContext(eye, point,
+                ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, mc.player));
+            if (hit.getType() == HitResult.Type.MISS) {
+                return point;
+            }
+        }
+        return box.getCenter();
     }
 
     // Sum of the drag series over the flight. How far the inherited speed really carries.

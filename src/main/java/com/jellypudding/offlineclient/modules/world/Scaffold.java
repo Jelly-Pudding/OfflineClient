@@ -4,6 +4,7 @@ import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
@@ -99,13 +100,13 @@ public final class Scaffold extends Module {
         if (sneaking && !jumping && !down.isOn()) {
             return;
         }
-        if (onlyOnClick.isOn() && !mc.options.keyUse.isDown()) {
+        if (onlyOnClick.isOn() && !InputUtil.physicallyHeld(mc.options.keyUse)) {
             return;
         }
         descending = sneaking && !jumping && down.isOn();
 
         int targetY = Mth.floor(pos.y) - 1;
-        if (down.isOn() && sneaking && !jumping) {
+        if (descending) {
             targetY--;
         }
 

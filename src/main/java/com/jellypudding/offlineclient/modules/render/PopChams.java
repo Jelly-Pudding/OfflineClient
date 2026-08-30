@@ -26,7 +26,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 // LevelExtractorMixin feeds the frozen copies into the frame.
 public final class PopChams extends Module {
 
-    // The state is built on the render thread.
+    // The state is built on the game thread during extraction.
     private static final class Ghost {
 
         private final Player player;
@@ -45,7 +45,7 @@ public final class PopChams extends Module {
 
     private final NumberSetting duration = new NumberSetting("Duration",
         "How long the copy takes to fade away.", 1.5, 0.5, 5, 0.1, "s").min(0.1).max(30);
-    private final ColorSetting color = new ColorSetting("Color",
+    private final ColorSetting color = new ColorSetting("Colour",
         "Copy colour.", 0, false);
     private final NumberSetting opacity = new NumberSetting("Opacity",
         "How solid the copy starts out.", 0.6, 0.1, 1, 0.05).min(0.05).max(1);
@@ -105,7 +105,7 @@ public final class PopChams extends Module {
         }
     }
 
-    // Called from the render thread once the world entities are extracted.
+    // Called on the game thread once the world entities are extracted.
     public void addGhosts(LevelRenderState level, float partialTicks) {
         if (ghosts.isEmpty() || mc.level == null) {
             return;

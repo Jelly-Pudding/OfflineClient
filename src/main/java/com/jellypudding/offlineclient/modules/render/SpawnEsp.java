@@ -21,9 +21,9 @@ public final class SpawnEsp extends Module {
     // How far above the floor the marker is drawn.
     private static final double LIFT = 0.02;
 
-    private final NumberSetting horizontal = new NumberSetting("Range",
+    private final NumberSetting horizontal = new NumberSetting("Horizontal range",
         "How far sideways to look.", 16, 4, 48, 2, " blocks").max(64);
-    private final NumberSetting vertical = new NumberSetting("Height",
+    private final NumberSetting vertical = new NumberSetting("Vertical range",
         "How far up and down to look.", 6, 1, 24, 1, " blocks").max(64);
     private final NumberSetting light = new NumberSetting("Light",
         "Highest block light a spot may have.", 0, 0, 15, 1).min(0).max(15);
@@ -45,7 +45,7 @@ public final class SpawnEsp extends Module {
 
     @Override
     public String getSuffix() {
-        return spots.isEmpty() ? null : String.valueOf(spots.size());
+        return count(spots.size());
     }
 
     @Override

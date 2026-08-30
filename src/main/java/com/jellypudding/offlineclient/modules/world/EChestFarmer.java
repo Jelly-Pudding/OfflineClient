@@ -114,12 +114,15 @@ public final class EChestFarmer extends Module {
 
     // Silk touch would give the chest back whole.
     private void breakChest() {
-        int slot = ItemUtil.bestToolSlot(BlockUtil.state(target), 0,
+        int slot = ItemUtil.bestToolSlot(BlockUtil.state(target), 1,
             stack -> ItemUtil.enchantLevel(Enchantments.SILK_TOUCH, stack) == 0,
             InventoryUtil.HOTBAR_SIZE);
-        if (slot != -1) {
-            slots.select(slot);
+        if (slot == -1) {
+            ChatUtil.error("No pickaxe without Silk Touch in the hotbar.");
+            setEnabled(false);
+            return;
         }
+        slots.select(slot);
         BlockMiner.mine(target, rotate.isOn());
     }
 
@@ -144,14 +147,7 @@ public final class EChestFarmer extends Module {
     }
 
     private int obsidianCount() {
-        int total = 0;
-        for (int i = 0; i < InventoryUtil.WHOLE_INVENTORY; i++) {
-            ItemStack stack = mc.player.getInventory().getItem(i);
-            if (stack.is(Items.OBSIDIAN)) {
-                total += stack.getCount();
-            }
-        }
-        return total;
+        return InventoryUtil.count(Items.OBSIDIAN, InventoryUtil.WHOLE_INVENTORY);
     }
 
     @Subscribe

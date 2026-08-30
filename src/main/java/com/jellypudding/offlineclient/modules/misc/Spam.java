@@ -29,7 +29,7 @@ public final class Spam extends Module {
 
         @Override
         public String toString() {
-            return this == SEQUENCE ? "In order" : name();
+            return this == SEQUENCE ? "In order" : "Random";
         }
     }
 
@@ -47,9 +47,9 @@ public final class Spam extends Module {
     private final NumberSetting delay = new NumberSetting("Delay",
         "Seconds between messages.", 5, 0.1, 60, 0.1, "s").min(0.1).max(600);
     private final BoolSetting randomise = new BoolSetting("Randomise",
-        "Varies the delay so it looks less robotic.", false);
+        "Varies the delay to look less robotic.", false);
     private final BoolSetting vary = new BoolSetting("Vary text",
-        "Makes small random changes to each message so repeats get past a spam filter.", false);
+        "Makes small random changes to each message to get repeats past a spam filter.", false);
     private final NumberSetting variation = new NumberSetting("Variation",
         "How many changes each message gets. A letter changes case or doubles or the line gains a tail.",
         1, 1, 5, 1).max(20)

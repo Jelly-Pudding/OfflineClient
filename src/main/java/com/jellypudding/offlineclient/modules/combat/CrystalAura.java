@@ -10,11 +10,13 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.ExplosionUtil;
-import com.jellypudding.offlineclient.util.InventoryUtil;
+import com.jellypudding.offlineclient.util.InventoryUtil.HotbarLoan;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
+import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.ItemUtil;
 import com.jellypudding.offlineclient.util.RotationManager;
 import com.jellypudding.offlineclient.util.RotationPriority;
+
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.protocol.game.ServerboundAttackPacket;
@@ -76,17 +78,17 @@ public final class CrystalAura extends Module {
         "Never touch a crystal that could kill you.", true);
     private final BoolSetting predict = new BoolSetting("Predict",
         "Score the damage where a moving target is heading.", true);
-    private final BoolSetting facePlace = new BoolSetting("Face place",
-        "Ignore the minimum damage once the target is nearly finished.", true);
-    private final NumberSetting facePlaceHealth = new NumberSetting("Face place health",
-        "Health plus absorption at or below this counts as nearly finished.", 8, 1, 20, 0.5)
+    private final BoolSetting facePlace = new BoolSetting("Finisher",
+        "Drops the minimum damage once the target is nearly dead or their armour is about to give out.", true);
+    private final NumberSetting facePlaceHealth = new NumberSetting("Finisher health",
+        "Health plus absorption at or below this counts as nearly dead.", 8, 1, 20, 0.5)
         .under(facePlace);
     private final BoolSetting onlyOwn = new BoolSetting("Only own",
         "Only hit crystals you placed yourself.", false);
     private final BoolSetting oldPlacement = new BoolSetting("Old placement",
         "Require two air blocks above the base like older servers.", false);
     private final BoolSetting support = new BoolSetting("Support",
-        "Place obsidian from your hotbar when there is nothing to crystal.", true);
+        "Places obsidian under the target when there is nothing to crystal. Taken from the inventory when the hotbar has none.", true);
     private final BoolSetting smartDelay = new BoolSetting("Smart delay",
         "Skip a hit whilst the target is still in damage immunity.", true);
     private final BoolSetting antiWeakness = new BoolSetting("Anti weakness",
@@ -101,11 +103,18 @@ public final class CrystalAura extends Module {
     // Ticks that other combat modules stand aside for after a real action.
     private static final int BUSY_TICKS = 8;
 
+    // How far around the target a support block may be laid.
+    private static final int SUPPORT_REACH = 3;
+    private static final int SUPPORT_RISE = 2;
+
     private int placeTimer;
     private int breakTimer;
     private int refillTimer;
     private int busyTimer;
     private final SlotSwap slots = new SlotSwap();
+
+    // Obsidian borrowed from the inventory for a support block.
+    private final HotbarLoan loan = new HotbarLoan();
     private BlockPos planned;
     private String targetName;
     private String status;
@@ -166,6 +175,7 @@ public final class CrystalAura extends Module {
     protected void onDisable() {
         busyTimer = 0;
         slots.restore();
+        loan.giveBack();
         planned = null;
         targetName = null;
         entities.clear();
@@ -285,10 +295,11 @@ public final class CrystalAura extends Module {
         BlockPos base = bestBase(target);
         planned = base;
         if (base == null) {
-            if (support.isOn() && placeSupport(target)) {
-                return;
+            if (support.isOn()) {
+                placeSupport(target);
+            } else {
+                status = "(no safe spot)";
             }
-            status = "(no safe spot)";
             return;
         }
         InteractionHand hand = crystalHand();
@@ -321,7 +332,6 @@ public final class CrystalAura extends Module {
         for (BlockPos base : BlockPos.betweenClosed(feet.offset(-r, -r, -r), feet.offset(r, r, r))) {
             BlockPos above = base.above();
             Vec3 crystalPos = Vec3.atBottomCenterOf(above);
-            // The cheap reach test first.
             if (eye.distanceTo(crystalPos) > furthest) {
                 continue;
             }
@@ -373,7 +383,7 @@ public final class CrystalAura extends Module {
         if (!facePlace.isOn()) {
             return false;
         }
-        if (ExplosionUtil.totalHealth(target) <= facePlaceHealth.getFloat()) {
+        if (EntityUtil.totalHealth(target) <= facePlaceHealth.getFloat()) {
             return true;
         }
         for (EquipmentSlot slot : ItemUtil.ARMOR_SLOTS) {
@@ -415,7 +425,7 @@ public final class CrystalAura extends Module {
 
         int bestSlot = -1;
         double bestBonus = 0;
-        for (int i = 0; i < 9; i++) {
+        for (int i = 0; i < InventoryUtil.HOTBAR_SIZE; i++) {
             ItemStack stack = mc.player.getInventory().getItem(i);
             if (stack.isEmpty()) {
                 continue;
@@ -476,12 +486,12 @@ public final class CrystalAura extends Module {
         if (free == -1) {
             return;
         }
-        for (int i = 9; i < 36; i++) {
+        for (int i = InventoryUtil.HOTBAR_SIZE; i < InventoryUtil.WHOLE_INVENTORY; i++) {
             if (!mc.player.getInventory().getItem(i).is(Items.END_CRYSTAL)) {
                 continue;
             }
             refillTimer = REFILL_DELAY;
-            InventoryUtil.swap(i, InventoryUtil.networkSlot(free));
+            InventoryUtil.swap(InventoryUtil.networkSlot(i), InventoryUtil.networkSlot(free));
             return;
         }
     }
@@ -491,7 +501,7 @@ public final class CrystalAura extends Module {
      * True whenever the support has taken this tick.
      */
     private boolean placeSupport(Player target) {
-        int slot = InventoryUtil.hotbarSlot(stack -> stack.is(Items.OBSIDIAN));
+        int slot = InventoryUtil.findSlot(Items.OBSIDIAN, InventoryUtil.WHOLE_INVENTORY);
         if (slot == -1) {
             status = "(no obsidian)";
             return false;
@@ -500,7 +510,9 @@ public final class CrystalAura extends Module {
         BlockPos feet = target.blockPosition();
         BlockPos best = null;
         float bestDamage = 0;
-        for (BlockPos pos : BlockPos.betweenClosed(feet.offset(-3, -2, -3), feet.offset(3, 2, 3))) {
+        BlockPos low = feet.offset(-SUPPORT_REACH, -SUPPORT_RISE, -SUPPORT_REACH);
+        BlockPos high = feet.offset(SUPPORT_REACH, SUPPORT_RISE, SUPPORT_REACH);
+        for (BlockPos pos : BlockPos.betweenClosed(low, high)) {
             if (!BlockUtil.isReplaceable(pos) || !BlockUtil.state(pos.above()).isAir()) {
                 continue;
             }
@@ -530,11 +542,13 @@ public final class CrystalAura extends Module {
             return true;
         }
 
-        slots.select(slot);
-        Direction side = BlockUtil.findPlaceSupport(best);
-        boolean placed = side != null
-            ? BlockUtil.place(best, side, false, true)
-            : BlockUtil.placeDirect(best, false, true);
+        if (slot < InventoryUtil.HOTBAR_SIZE) {
+            slots.select(slot);
+        } else if (!loan.select(slot)) {
+            status = "(no room for obsidian)";
+            return true;
+        }
+        boolean placed = BlockUtil.placeAny(best, false, true);
         if (placed) {
             status = "(placing support)";
             placeTimer = placeDelay.getInt();

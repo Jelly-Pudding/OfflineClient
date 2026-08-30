@@ -21,11 +21,11 @@ public final class HoleSnap extends Module {
     private final NumberSetting maxHeight = new NumberSetting("Max height",
         "How far below you a hole is still snapped to.", 10, 1, 20, 1, " blocks");
     private final NumberSetting minPitch = new NumberSetting("Min pitch",
-        "Only snaps whilst you look down at least this far.", 0, -90, 90, 5, "°");
+        "Only snaps whilst you look down at least this far.", 0, -90, 90, 5, " degrees");
     private final BoolSetting pull = new BoolSetting("Pull down",
         "Also pulls you down into the hole.", false);
     private final NumberSetting pullSpeed = new NumberSetting("Pull speed",
-        "Blocks a tick the pull adds.", 0.3, 0.1, 5, 0.1, "")
+        "Blocks a tick the pull adds.", 0.3, 0.1, 5, 0.1, " blocks")
         .under(pull);
     private final BoolSetting cancelJump = new BoolSetting("Cancel jump",
         "Jumping is ignored whilst a hole is under you.", false);
@@ -34,7 +34,7 @@ public final class HoleSnap extends Module {
     private BlockPos holeStoodIn;
 
     public HoleSnap() {
-        super("HoleSnap", "Stops your movement over a hole so you drop straight in.",
+        super("HoleSnap", "Stops your movement over a hole and drops you straight in.",
             Category.MOVEMENT);
         addSettings(maxHeight, minPitch, pull, pullSpeed, cancelJump);
         searchTags("anchor", "hole", "crystal pvp");

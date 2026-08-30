@@ -20,17 +20,15 @@ public final class Flight extends Module {
 
     public enum Mode { CREATIVE, DIRECT }
 
-    private static final float VANILLA_FLY_SPEED = 0.05f;
 
     /**
      * The pace creative flight settles at in blocks per tick. Direct mode
-     * uses the same numbers so a speed of one means the same in both.
+     * uses the same numbers. A speed of one means the same in both.
      */
-    private static final double CREATIVE_HORIZONTAL = 0.5;
-    private static final double CREATIVE_VERTICAL = 0.225;
-
     // How much one wheel notch changes the speed.
     private static final double SCROLL_STEP = 0.1;
+
+    private static final String TIMER_KEY = "flight";
 
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
         "How the flight handles.", Mode.CREATIVE)
@@ -69,7 +67,7 @@ public final class Flight extends Module {
      * pushes up and down with. The horizontal setting must not leak into it.
      */
     public float verticalFlySpeed() {
-        return (float) (VANILLA_FLY_SPEED * verticalSpeed.getValue());
+        return (float) (MovementUtil.VANILLA_FLY_SPEED * verticalSpeed.getValue());
     }
 
     @Override
@@ -79,12 +77,12 @@ public final class Flight extends Module {
 
     @Override
     protected void onDisable() {
-        Timer.override("flight", 1f);
+        Timer.override(TIMER_KEY, 1f);
         if (mc.player == null) {
             return;
         }
         Abilities abilities = mc.player.getAbilities();
-        abilities.setFlyingSpeed(VANILLA_FLY_SPEED);
+        abilities.setFlyingSpeed(MovementUtil.VANILLA_FLY_SPEED);
         if (!mc.player.isCreative() && !mc.player.isSpectator()) {
             abilities.flying = false;
         }
@@ -94,7 +92,7 @@ public final class Flight extends Module {
     @Subscribe
     private void onClientTick(ClientTickEvent event) {
         if (!inGame()) {
-            Timer.override("flight", 1f);
+            Timer.override(TIMER_KEY, 1f);
         }
     }
 
@@ -104,7 +102,7 @@ public final class Flight extends Module {
             return;
         }
         double step = event.getAmount() > 0 ? SCROLL_STEP : -SCROLL_STEP;
-        // Snapped to the step so the value reads cleanly after a long scroll.
+        // Snapped to the step. The value then reads cleanly after a long scroll.
         double next = Math.round((horizontalSpeed.getValue() + step) / SCROLL_STEP) * SCROLL_STEP;
         horizontalSpeed.setValue(Math.max(horizontalSpeed.getHardMin(), next));
         OfflineClient.INSTANCE.getConfigManager().saveSoon();
@@ -118,7 +116,7 @@ public final class Flight extends Module {
         }
         boolean moving = MovementUtil.inputDirection().lengthSqr() > 0
             || mc.options.keyJump.isDown() || mc.options.keyShift.isDown();
-        Timer.override("flight", moving ? timer.getFloat() : 1f);
+        Timer.override(TIMER_KEY, moving ? timer.getFloat() : 1f);
 
         if (mode.is(Mode.CREATIVE)) {
             creativeTick();
@@ -133,7 +131,7 @@ public final class Flight extends Module {
     private void creativeTick() {
         Abilities abilities = mc.player.getAbilities();
         abilities.flying = true;
-        abilities.setFlyingSpeed((float) (VANILLA_FLY_SPEED * horizontalSpeed.getValue()));
+        abilities.setFlyingSpeed((float) (MovementUtil.VANILLA_FLY_SPEED * horizontalSpeed.getValue()));
     }
 
     private void directTick() {
@@ -142,7 +140,7 @@ public final class Flight extends Module {
         abilities.flying = true;
         abilities.setFlyingSpeed(0);
 
-        double vertical = CREATIVE_VERTICAL * verticalSpeed.getValue();
+        double vertical = MovementUtil.FLY_VERTICAL * verticalSpeed.getValue();
         double vy = 0;
         if (mc.options.keyJump.isDown()) {
             vy += vertical;
@@ -151,7 +149,7 @@ public final class Flight extends Module {
             vy -= vertical;
         }
 
-        double horizontal = CREATIVE_HORIZONTAL * horizontalSpeed.getValue();
+        double horizontal = MovementUtil.FLY_HORIZONTAL * horizontalSpeed.getValue();
         Vec3 heading = MovementUtil.inputDirection();
         mc.player.setDeltaMovement(heading.x * horizontal, vy, heading.z * horizontal);
     }

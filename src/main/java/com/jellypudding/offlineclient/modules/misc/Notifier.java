@@ -47,7 +47,7 @@ public final class Notifier extends Module {
     private final BoolSetting visualRange = new BoolSetting("Visual range",
         "Say when a player enters or leaves your render distance.", true);
     private final BoolSetting totemPops = new BoolSetting("Totem pops",
-        "Say when a player pops a totem and how many so far.", true);
+        "Says when a player pops a totem and how many they have popped.", true);
     private final BoolSetting ownTotems = new BoolSetting("Own totems",
         "Also count your own totem pops.", false)
         .under(totemPops);

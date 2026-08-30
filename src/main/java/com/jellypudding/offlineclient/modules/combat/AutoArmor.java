@@ -19,13 +19,9 @@ import net.minecraft.world.item.enchantment.Enchantments;
 
 public final class AutoArmor extends Module {
 
-    private static final EquipmentSlot[] SLOTS = {
-        EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET
-    };
-
     private final NumberSetting delay = new NumberSetting("Delay",
         "Ticks between each swap.", 2, 0, 20, 1, " ticks");
-    private final BoolSetting useEnchantments = new BoolSetting("Count Protection",
+    private final BoolSetting useEnchantments = new BoolSetting("Count protection",
         "Weigh the Protection enchantment when comparing pieces.", true);
 
     private int timer;
@@ -44,7 +40,6 @@ public final class AutoArmor extends Module {
         if (!InventoryUtil.canClick()) {
             return;
         }
-        // Anything already on the cursor belongs to the player.
         if (!InventoryUtil.carried().isEmpty()) {
             return;
         }
@@ -53,8 +48,8 @@ public final class AutoArmor extends Module {
             return;
         }
 
-        for (int slotIndex = 0; slotIndex < SLOTS.length; slotIndex++) {
-            EquipmentSlot slot = SLOTS[slotIndex];
+        for (int slotIndex = 0; slotIndex < ItemUtil.ARMOR_SLOTS.size(); slotIndex++) {
+            EquipmentSlot slot = ItemUtil.ARMOR_SLOTS.get(slotIndex);
 
             if (slot == EquipmentSlot.CHEST
                 && mc.player.getItemBySlot(slot).is(Items.ELYTRA)) {
@@ -66,12 +61,10 @@ public final class AutoArmor extends Module {
                 continue;
             }
 
-            // The armour slots sit right after the crafting grid.
-            int armorNetworkSlot = 5 + slotIndex;
+            int armorNetworkSlot = InventoryUtil.ARMOR_START + slotIndex;
             if (InventoryUtil.swap(InventoryUtil.networkSlot(upgrade), armorNetworkSlot) != Swap.REFUSED) {
                 timer = delay.getInt();
             }
-            // One piece a tick.
             return;
         }
     }
@@ -84,7 +77,7 @@ public final class AutoArmor extends Module {
         }
         int best = -1;
         double bestScore = score(worn, slot);
-        for (int i = 0; i < 36; i++) {
+        for (int i = 0; i < InventoryUtil.WHOLE_INVENTORY; i++) {
             double stackScore = score(mc.player.getInventory().getItem(i), slot);
             if (stackScore > bestScore) {
                 bestScore = stackScore;

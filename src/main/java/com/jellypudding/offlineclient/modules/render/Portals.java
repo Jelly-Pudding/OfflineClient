@@ -65,7 +65,7 @@ public final class Portals extends Module {
 
     @Override
     public String getSuffix() {
-        return groups.isEmpty() ? null : String.valueOf(groups.size());
+        return count(groups.size());
     }
 
     @Override

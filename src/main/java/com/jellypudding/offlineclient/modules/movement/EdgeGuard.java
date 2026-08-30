@@ -9,7 +9,7 @@ import net.minecraft.world.phys.Vec3;
 
 /**
  * Holds you on a ledge the way sneaking does but at full speed. Where the
- * run ahead would land is simulated a tick at a time so a shallow step that
+ * run ahead would land is simulated a tick at a time. A shallow step that
  * leads straight into a long drop still counts. The clamp itself lives in
  * LocalPlayerMixin and PlayerMixin.
  */

@@ -8,6 +8,8 @@ import net.minecraft.core.BlockPos;
 
 import java.util.List;
 
+import java.util.Locale;
+
 public final class WaypointCommand extends Command {
 
     public WaypointCommand() {
@@ -18,15 +20,15 @@ public final class WaypointCommand extends Command {
     @Override
     public void execute(String[] args) {
         if (args.length == 0) {
-            ChatUtil.error("Usage: " + getUsage());
+            usage();
             return;
         }
-        switch (args[0].toLowerCase()) {
+        switch (args[0].toLowerCase(Locale.ROOT)) {
             case "add", "set" -> add(args);
             case "remove", "delete", "del" -> remove(args);
             case "list" -> list();
             case "clear" -> clear();
-            default -> ChatUtil.error("Usage: " + getUsage());
+            default -> usage();
         }
     }
 

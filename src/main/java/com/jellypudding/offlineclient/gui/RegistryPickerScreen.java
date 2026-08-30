@@ -295,7 +295,7 @@ public final class RegistryPickerScreen<T> extends Screen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
-        int dy = (int) Math.round(scrollY * 16);
+        int dy = ScrollBar.wheelDelta(scrollY);
         int h = listHeight();
         if (SettingWidget.isOver(mouseX, mouseY, leftX(), LIST_TOP, COL_WIDTH, h)) {
             leftBar.scroll(dy, available.size() * ROW_HEIGHT, h);

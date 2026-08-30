@@ -14,11 +14,11 @@ import com.jellypudding.offlineclient.util.ChunkScanner;
 import com.jellypudding.offlineclient.util.ColorUtil;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -61,9 +61,6 @@ public final class Search extends Module {
         Map.entry(Blocks.BEACON, 0xFF80D0FF),
         Map.entry(Blocks.ENCHANTING_TABLE, 0xFFE070FF));
 
-    // A box flush with the block fights it for depth.
-    private static final double INSET = 0.02;
-
     private final NumberSetting range = new NumberSetting("Range",
         "Chunk radius to scan around you.", 4, 1, 8, 1, " chunks").max(16);
     private final NumberSetting limit = new NumberSetting("Limit",
@@ -85,6 +82,10 @@ public final class Search extends Module {
     private volatile boolean listChanged = true;
     private List<Target> drawn = List.of();
 
+    // The scan list and the chunk the last draw list was cut for.
+    private List<Target> cutFrom;
+    private long cutChunk;
+
     public Search() {
         super("Search", "Highlights chosen blocks through walls.", Category.RENDER);
         addSettings(range, limit, tracers, blocks);
@@ -94,7 +95,7 @@ public final class Search extends Module {
 
     @Override
     public String getSuffix() {
-        return drawn.isEmpty() ? null : String.valueOf(drawn.size());
+        return count(drawn.size());
     }
 
     @Override
@@ -157,7 +158,7 @@ public final class Search extends Module {
         scanner.update(range.getInt(), (view, out) -> view.forEachMatching(
             state -> query.containsKey(state.getBlock()),
             (x, y, z, state) -> out.add(new Target(
-                new AABB(new BlockPos(x, y, z)).deflate(INSET), query.get(state.getBlock())))));
+                DrawBatch.blockBox(new BlockPos(x, y, z)), query.get(state.getBlock())))));
 
         rebuildDrawList();
     }
@@ -166,6 +167,12 @@ public final class Search extends Module {
     private void rebuildDrawList() {
         List<Target> all = scanner.results();
         int max = limit.getInt();
+        long chunk = ChunkPos.pack(mc.player.blockPosition());
+        if (all == cutFrom && chunk == cutChunk && drawn.size() == Math.min(max, all.size())) {
+            return;
+        }
+        cutFrom = all;
+        cutChunk = chunk;
         if (all.size() > max) {
             Vec3 eye = mc.player.getEyePosition();
             all = new ArrayList<>(all);

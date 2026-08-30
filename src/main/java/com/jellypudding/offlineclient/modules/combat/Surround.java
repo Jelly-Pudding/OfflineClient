@@ -9,6 +9,7 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
+import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.ExplosionUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.RotationPriority;
@@ -20,14 +21,19 @@ import net.minecraft.server.level.BlockDestructionProgress;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.boss.enderdragon.EndCrystal;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.CollisionContext;
 
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.SortedSet;
 
@@ -42,7 +48,7 @@ public final class Surround extends Module {
         "Blocks to use in order of preference.",
         BuiltInRegistries.BLOCK,
         List.of(Blocks.OBSIDIAN, Blocks.CRYING_OBSIDIAN));
-    private final BoolSetting center = new BoolSetting("Center",
+    private final BoolSetting center = new BoolSetting("Centre",
         "Snap to the middle of your block to line every side up.", true);
     private final BoolSetting onlyOnGround = new BoolSetting("Only on ground",
         "Wait until you are standing on something.", true);
@@ -65,6 +71,13 @@ public final class Surround extends Module {
     private final BoolSetting render = new BoolSetting("Show sides",
         "Outline the four side positions by how well they hold.", true);
 
+    // How far off an enemy still decides which side is walled first.
+    private static final double THREAT_RANGE = 12;
+
+    // Ticks a hit crystal is left alone before it is hit again.
+    private static final int HIT_MEMORY = 10;
+
+    private final Map<Integer, Integer> hitCrystals = new HashMap<>();
     private int timer;
     private BlockPos anchor;
     private final SlotSwap slots = new SlotSwap();
@@ -203,6 +216,11 @@ public final class Surround extends Module {
                 result.add(pos);
             }
         }
+        // The side facing the nearest enemy goes first. That is where the crystal comes from.
+        Player enemy = EntityUtil.nearestEnemy(THREAT_RANGE);
+        if (enemy != null) {
+            result.sort(Comparator.comparingDouble(pos -> enemy.distanceToSqr(Vec3.atCenterOf(pos))));
+        }
         // The lower ring goes down first. The pocket is sealed before it is raised.
         if (doubleHeight.isOn()) {
             BlockPos head = feet.above();
@@ -233,7 +251,9 @@ public final class Surround extends Module {
      * crystal touching such a side is hit unless popping it would kill us.
      */
     private void protectSides(BlockPos feet) {
-        float health = ExplosionUtil.totalHealth(mc.player);
+        int now = mc.player.tickCount;
+        hitCrystals.values().removeIf(tick -> now - tick > HIT_MEMORY);
+        float health = EntityUtil.totalHealth(mc.player);
         for (Direction side : Direction.Plane.HORIZONTAL) {
             BlockPos pos = feet.relative(side);
             if (!BlockUtil.isReplaceable(pos) && !beingMined(pos)) {
@@ -244,6 +264,11 @@ public final class Surround extends Module {
                 if (ExplosionUtil.crystalDamage(mc.player, crystal.position()) >= health) {
                     continue;
                 }
+                // One hit a crystal. A second packet before it pops is wasted.
+                if (hitCrystals.containsKey(crystal.getId())) {
+                    continue;
+                }
+                hitCrystals.put(crystal.getId(), now);
                 if (rotate.isOn()) {
                     BlockUtil.faceVector(crystal.position(), RotationPriority.ATTACK);
                 }

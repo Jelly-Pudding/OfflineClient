@@ -12,7 +12,6 @@ import net.minecraft.world.entity.player.Player;
 // EntityRendererMixin flags them and LivingEntityRendererMixin forces the body to render.
 public final class TrueSight extends Module {
 
-    // Looked up once per entity every frame.
     private static volatile TrueSight instance;
 
     private final BoolSetting players = new BoolSetting("Players",
@@ -48,6 +47,6 @@ public final class TrueSight extends Module {
     }
 
     public int tint() {
-        return ColorUtil.withAlpha(0xFFFFFFFF, (int) (strength.getValue() * 255));
+        return ColorUtil.fade(0xFFFFFFFF, strength.getFloat());
     }
 }

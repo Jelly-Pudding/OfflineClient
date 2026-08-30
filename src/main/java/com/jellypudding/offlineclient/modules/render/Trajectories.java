@@ -75,6 +75,9 @@ public final class Trajectories extends Module {
 
     private final BoolSetting otherPlayers = new BoolSetting("Other players",
         "Also show where other players are aiming.", true);
+    // Other players further off than this get no arc.
+    private static final double OTHER_RANGE_SQ = 64 * 64;
+
     private final BoolSetting hitBox = new BoolSetting("Hit box",
         "Draw a box where the projectile lands.", true);
     private final NumberSetting steps = new NumberSetting("Steps",
@@ -97,7 +100,7 @@ public final class Trajectories extends Module {
             return;
         }
         for (Player player : mc.level.players()) {
-            if (player == mc.player || player.isSpectator() || player.distanceToSqr(mc.player) > 64 * 64) {
+            if (player == mc.player || player.isSpectator() || player.distanceToSqr(mc.player) > OTHER_RANGE_SQ) {
                 continue;
             }
             draw(event.getBatch(), player, partialTicks);
@@ -148,8 +151,9 @@ public final class Trajectories extends Module {
             double charge = 1;
             if (player.isUsingItem() && player.getUseItem() == stack) {
                 charge = BowItem.getPowerForTime(player.getTicksUsingItem());
+                // A bow this early in the draw does not fire.
                 if (charge < 0.1) {
-                    charge = 1;
+                    return null;
                 }
             }
             return new Launch(charge * ARROW.power(), ARROW.gravity(), ARROW.airDrag(),
@@ -260,7 +264,7 @@ public final class Trajectories extends Module {
             EntityHitResult entityHit = ProjectileUtil.getEntityHitResult(shooter, previous, end,
                 new AABB(previous, end).inflate(1),
                 entity -> entity != shooter && !entity.isSpectator() && entity.isAlive() && entity.isPickable(),
-                64 * 64);
+                OTHER_RANGE_SQ);
             if (entityHit != null && entityHit.getType() != HitResult.Type.MISS) {
                 points.add(entityHit.getLocation());
                 type = HitResult.Type.ENTITY;

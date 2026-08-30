@@ -80,7 +80,12 @@ public final class ChestEsp extends Module {
 
     @Override
     public String getSuffix() {
-        return targets.isEmpty() ? null : String.valueOf(targets.size());
+        return count(targets.size());
+    }
+
+    @Override
+    protected void onDisable() {
+        targets.clear();
     }
 
     @Subscribe

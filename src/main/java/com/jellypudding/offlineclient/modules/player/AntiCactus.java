@@ -3,7 +3,7 @@ package com.jellypudding.offlineclient.modules.player;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 
-// BlockCollisionsMixin gives a cactus a full block shape so you never touch it.
+// BlockCollisionsMixin gives a cactus a full block shape. You never touch it.
 public final class AntiCactus extends Module {
 
     public AntiCactus() {

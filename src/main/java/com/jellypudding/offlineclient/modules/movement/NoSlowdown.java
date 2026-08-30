@@ -9,13 +9,13 @@ import net.minecraft.world.level.block.Blocks;
 /**
  * Each source of slowdown is lifted by its own hook. Items and sneaking and
  * slowness live in LocalPlayerMixin. Hunger is FoodDataMixin and the blocks
- * have a mixin each. Slime is slowed twice by vanilla so both the step and
+ * have a mixin each. Vanilla slows slime twice. Both the step and
  * the friction are covered. Cobwebs share WebBlockMixin with NoWeb.
  */
 public final class NoSlowdown extends Module {
 
     // Slowness takes this share of the speed off per level.
-    private static final double SLOWNESS_PER_LEVEL = 0.15;
+    public static final double SLOWNESS_PER_LEVEL = 0.15;
 
     // The friction of plain ground. Slime is stickier which drags the top speed down.
     private static final float NORMAL_FRICTION = 0.6f;

@@ -7,6 +7,9 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 public final class ScrollBar {
 
     private static final int MIN_THUMB = 12;
+
+    // Pixels one notch of the wheel moves.
+    private static final int WHEEL_STEP = 16;
     // Extra grab room to the left of the track.
     private static final int GRAB = 3;
 
@@ -14,6 +17,16 @@ public final class ScrollBar {
     private boolean dragging;
     private int dragStartY;
     private int dragStartOffset;
+
+    public static int wheelDelta(double scrollY) {
+        return (int) Math.round(scrollY * WHEEL_STEP);
+    }
+
+    // A list several screens long moves further per notch. Up to double the step.
+    public static int wheelDelta(double scrollY, int total, int view) {
+        double screens = view <= 0 ? 1 : (double) total / view;
+        return (int) Math.round(scrollY * WHEEL_STEP * Math.clamp(screens / 2, 1, 2));
+    }
 
     public int getOffset() {
         return offset;

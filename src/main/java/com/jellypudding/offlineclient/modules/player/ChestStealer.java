@@ -28,7 +28,7 @@ public final class ChestStealer extends Module {
         "What the list means.", ListMode.BLACKLIST)
         .describe(ListMode.WHITELIST, "Takes only the listed items.")
         .describe(ListMode.BLACKLIST, "Takes everything except the listed items.");
-    private final RegistryListSetting<Item> items = new RegistryListSetting<Item>("Items",
+    private final RegistryListSetting<Item> items = new RegistryListSetting<>("Items",
         "The items the list applies to. Click to pick them.", BuiltInRegistries.ITEM,
         List.of());
     private final BoolSetting close = new BoolSetting("Close when done",
@@ -78,7 +78,7 @@ public final class ChestStealer extends Module {
         }
 
         AbstractContainerMenu menu = mc.player.containerMenu;
-        int containerSlots = menu.slots.size() - 36;
+        int containerSlots = menu.slots.size() - InventoryUtil.WHOLE_INVENTORY;
         if (containerSlots <= 0) {
             return;
         }

@@ -11,6 +11,8 @@ import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen;
+
+import java.util.Locale;
 import org.lwjgl.glfw.GLFW;
 
 // Turns the camera whilst a chest or inventory is open. Hold mode leaves the
@@ -21,7 +23,7 @@ public final class GUIMove extends Module {
 
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
         "When the view turns.", Mode.HOLD_KEY)
-        .describe(Mode.HOLD_KEY, "Turns only whilst the key is held so the pointer stays free for clicking.")
+        .describe(Mode.HOLD_KEY, "Turns only whilst the key is held. The pointer stays free for clicking.")
         .describe(Mode.ALWAYS, "Turns the whole time the screen is open.");
     private final KeybindSetting hold = new KeybindSetting("Hold key",
         "Keep this key down to look around.", GLFW.GLFW_KEY_LEFT_ALT)
@@ -32,7 +34,7 @@ public final class GUIMove extends Module {
     private double savedY;
 
     public GUIMove() {
-        super("GUIMove", "Look around whilst a chest or inventory is open.", Category.PLAYER);
+        super("GUIMove", "Lets you look around whilst a chest or inventory is open.", Category.PLAYER);
         addSettings(mode, hold);
         searchTags("gui move", "inv rotate", "menu look", "inventory look");
     }
@@ -51,7 +53,7 @@ public final class GUIMove extends Module {
             return "always";
         }
         // Naming the key here is the only hint most people get.
-        return hold.isBound() ? hold.getKeyName().toLowerCase() : "no key";
+        return hold.isBound() ? hold.getKeyName().toLowerCase(Locale.ROOT) : "no key";
     }
 
     @Override

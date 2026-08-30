@@ -15,7 +15,6 @@ import net.minecraft.world.entity.player.Player;
 // EntityRendererMixin flags the target and LivingEntityRendererMixin swaps the render type.
 public final class Chams extends Module {
 
-    // Looked up once per entity every frame.
     private static volatile Chams instance;
 
     private final BoolSetting players = new BoolSetting("Players",
@@ -26,11 +25,11 @@ public final class Chams extends Module {
         "Show your own body in third person.", false);
     private final BoolSetting throughWalls = new BoolSetting("Through walls",
         "Draw the model over blocks instead of only tinting it.", true);
-    private final ColorSetting color = new ColorSetting("Color",
+    private final ColorSetting color = new ColorSetting("Colour",
         "Model colour.", 300, false);
     private final NumberSetting opacity = new NumberSetting("Opacity",
         "How solid the model looks.", 0.7, 0.1, 1, 0.05).min(0.05).max(1);
-    private final BoolSetting friendColor = new BoolSetting("Friend color",
+    private final BoolSetting friendColor = new BoolSetting("Friend colour",
         "Paint friends blue instead.", true);
 
     public Chams() {
@@ -73,6 +72,6 @@ public final class Chams extends Module {
             && EntityUtil.isFriend(player)) {
             base = EntityUtil.FRIEND_COLOR;
         }
-        return ColorUtil.withAlpha(base, (int) (opacity.getValue() * 255));
+        return ColorUtil.fade(base, opacity.getFloat());
     }
 }

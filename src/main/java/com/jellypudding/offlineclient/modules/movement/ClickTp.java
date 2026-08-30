@@ -98,8 +98,9 @@ public final class ClickTp extends Module {
 
     private void teleport(Vec3 target) {
         int steps = (int) Math.ceil(mc.player.position().distanceTo(target) / PACKET_STEP) - 1;
+        // One giant hop is exactly what gets a player kicked.
         if (steps > MAX_STEPS) {
-            steps = 0;
+            return;
         }
         for (int i = 0; i < steps; i++) {
             mc.player.connection.send(new ServerboundMovePlayerPacket.StatusOnly(true, true));

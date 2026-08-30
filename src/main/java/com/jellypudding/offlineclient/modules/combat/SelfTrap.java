@@ -12,7 +12,6 @@ import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.BlockUtil.TrapMode;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
 
 import java.util.List;
 
@@ -87,10 +86,7 @@ public final class SelfTrap extends Module {
         slots.select(slot);
 
         BlockPos target = missing.getFirst();
-        Direction support = BlockUtil.findPlaceSupport(target);
-        boolean ok = support != null
-            ? BlockUtil.place(target, support, rotate.isOn(), true)
-            : BlockUtil.placeDirect(target, rotate.isOn(), true);
+        boolean ok = BlockUtil.placeAny(target, rotate.isOn(), true);
         if (ok) {
             placed = true;
             timer = delay.getInt();

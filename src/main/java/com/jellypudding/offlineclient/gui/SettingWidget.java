@@ -349,7 +349,7 @@ public final class SettingWidget {
     /**
      * How far in each visible row sits. A sub option only steps in whilst it
      * follows its parent or a sibling directly. Anywhere else it reads as a
-     * row of its own so the guide never hangs off the wrong setting.
+     * row of its own and the guide never hangs off the wrong setting.
      */
     private static int[] indents(List<Setting<?>> settings) {
         int[] result = new int[settings.size()];
