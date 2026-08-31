@@ -96,7 +96,7 @@ public final class CrystalAura extends Module {
     private final BoolSetting pauseOnUse = new BoolSetting("Pause on use",
         "Hold off whilst eating or drawing a bow.", true);
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Send a look packet toward the crystal spot.", true);
+        "Send a look packet towards the crystal spot.", true);
     private final BoolSetting render = new BoolSetting("Show placement",
         "Outline the base block the next crystal goes on.", true);
 
@@ -549,6 +549,8 @@ public final class CrystalAura extends Module {
             return true;
         }
         boolean placed = BlockUtil.placeAny(best, false, true);
+        // The block goes down before the borrowed stack heads home.
+        loan.giveBack();
         if (placed) {
             status = "(placing support)";
             placeTimer = placeDelay.getInt();

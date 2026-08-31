@@ -42,7 +42,7 @@ public final class PacketMine extends Module {
     private final BoolSetting autoTool = new BoolSetting("Auto tool",
         "Holds your fastest tool whilst the block breaks.", true);
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Turn toward the block on the server side.", true);
+        "Turn towards the block on the server side.", true);
     private final BoolSetting render = new BoolSetting("Render",
         "Draws a box that turns green when the block is due to fall.", true);
     private final BoolSetting rebreak = new BoolSetting("Rebreak",

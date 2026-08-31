@@ -222,6 +222,8 @@ public final class ConfigManager {
         }
         // A profile saved before a setting existed must not keep the old value of it.
         resetModulesQuietly();
+        // A profile lists its own friends and never adds to the ones already loaded.
+        OfflineClient.INSTANCE.getFriendManager().clear();
         applyRoot(root);
         saveNow();
         return true;

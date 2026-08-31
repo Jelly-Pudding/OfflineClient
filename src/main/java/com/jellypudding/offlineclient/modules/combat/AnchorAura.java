@@ -47,7 +47,7 @@ public final class AnchorAura extends Module {
     private final BoolSetting antiSuicide = new BoolSetting("Anti suicide",
         "Never set off an anchor that could kill you.", true);
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Send a look packet toward the anchor.", true);
+        "Send a look packet towards the anchor.", true);
     private final BoolSetting render = new BoolSetting("Show placement",
         "Outline the spot the next anchor goes in.", true);
 
@@ -248,7 +248,7 @@ public final class AnchorAura extends Module {
         }
 
         slots.select(slot);
-        // The turn above already picked the angle.
+        // The rotation has already been asked for. Placing must not ask again.
         boolean placed = BlockUtil.placeAny(best, false, true);
         if (placed) {
             placeTimer = placeDelay.getInt();

@@ -30,7 +30,7 @@ public final class Tillaura extends Module {
     private final BoolSetting lineOfSight = new BoolSetting("Line of sight",
         "Only tills blocks you can see from where you stand.", true);
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Turn toward the block on the server side.", true);
+        "Turn towards the block on the server side.", true);
 
     private int tilled;
 

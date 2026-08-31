@@ -28,7 +28,7 @@ public class SplashManagerMixin {
         "The marquis of snakes!",
         "The rest is confetti.",
         "It's you. It's me. It's us.",
-        "It could look like someone you know or it could be a stranger in a crowd.",
+        "It could be a stranger in a crowd.",
         "What is the opposite of a miracle?"
     );
 

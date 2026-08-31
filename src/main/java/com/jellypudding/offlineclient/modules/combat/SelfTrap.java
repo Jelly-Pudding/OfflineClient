@@ -24,7 +24,7 @@ public final class SelfTrap extends Module {
     private final NumberSetting delay = new NumberSetting("Delay",
         "Ticks to wait between placements.", 1, 0, 5, 1, " ticks");
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Send a look packet toward each block.", true);
+        "Send a look packet towards each block.", true);
     private final BoolSetting toggleOff = new BoolSetting("Toggle off when done",
         "Turn off once every spot is filled.", true);
     private final BoolSetting render = new BoolSetting("Show blocks",

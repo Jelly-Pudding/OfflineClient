@@ -68,7 +68,8 @@ public final class Freecam extends Module {
     private float camPitch;
     private ClientInput dummyInput;
     private ClientInput realInput;
-    private boolean initialized;
+    // The player the camera was seeded from. A respawn or a portal hands out a new one.
+    private LocalPlayer seededFor;
     private float lastHealth;
 
     public Freecam() {
@@ -125,7 +126,7 @@ public final class Freecam extends Module {
 
     @Override
     protected void onEnable() {
-        initialized = false;
+        seededFor = null;
         if (mc.player != null) {
             init();
         }
@@ -137,7 +138,7 @@ public final class Freecam extends Module {
         camYaw = mc.player.getYRot();
         camPitch = mc.player.getXRot();
         lastHealth = mc.player.getHealth();
-        initialized = true;
+        seededFor = mc.player;
     }
 
     // Hands the player an input object that reads no keys.
@@ -160,7 +161,7 @@ public final class Freecam extends Module {
         if (!inGame()) {
             return;
         }
-        if (!initialized) {
+        if (mc.player != seededFor) {
             init();
         }
         syncInput();
@@ -240,7 +241,7 @@ public final class Freecam extends Module {
     @Override
     protected void onDisable() {
         restoreInput();
-        initialized = false;
+        seededFor = null;
         // The chunks around the body were meshed from the camera's side.
         if (reloadChunks.isOn() && mc.levelExtractor != null) {
             mc.levelExtractor.allChanged();

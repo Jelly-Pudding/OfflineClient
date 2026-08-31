@@ -51,7 +51,7 @@ public final class AutoWeb extends Module {
     private final BoolSetting doubles = new BoolSetting("Upper body",
         "Also web the block their head is in.", false);
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Send a look packet toward each web.", true);
+        "Send a look packet towards each web.", true);
     private final BoolSetting render = new BoolSetting("Show webs",
         "Outline the spots being webbed. Done ones fade.", true);
 

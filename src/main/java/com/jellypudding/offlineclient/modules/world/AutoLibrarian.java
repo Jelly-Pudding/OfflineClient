@@ -37,7 +37,6 @@ import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import net.minecraft.world.item.enchantment.ItemEnchantments;
 import net.minecraft.world.item.trading.MerchantOffer;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.Vec3;
 
@@ -72,7 +71,7 @@ public final class AutoLibrarian extends Module {
     private final NumberSetting range = new NumberSetting("Range",
         "How far the villager and its lectern may be.", 5, 1, 6, 0.1).max(6);
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Turn toward the villager and lectern on the server side.", true);
+        "Turn towards the villager and lectern on the server side.", true);
 
     private Stage stage;
     private Villager villager;

@@ -8,9 +8,9 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.EntityUtil;
-import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.Modules;
+import com.jellypudding.offlineclient.util.UseHold;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.effect.MobEffect;
@@ -33,9 +33,6 @@ public final class AutoPotion extends Module {
     // Ticks to wait after a drink whilst the effect and the health land.
     private static final int SETTLE_TICKS = 10;
 
-    // Ticks to give the hand before the drink is written off.
-    private static final int START_TIMEOUT = 20;
-
     private static final int SECOND = 20;
 
     private final NumberSetting health = new NumberSetting("Health",
@@ -53,8 +50,7 @@ public final class AutoPotion extends Module {
         .min(1).under(topUp);
 
     private boolean drinking;
-    private boolean started;
-    private int waited;
+    private final UseHold use = new UseHold();
     private int settle;
     private final InventoryUtil.HotbarLoan loan = new InventoryUtil.HotbarLoan();
 
@@ -179,8 +175,7 @@ public final class AutoPotion extends Module {
             return;
         }
         drinking = true;
-        started = false;
-        waited = 0;
+        use.begin();
     }
 
     private void continueDrinking() {
@@ -189,16 +184,9 @@ public final class AutoPotion extends Module {
             stopDrinking();
             return;
         }
-        if (mc.player.isUsingItem()) {
-            started = true;
-        } else if (started) {
+        if (!use.tick()) {
             finishDrink();
-            return;
-        } else if (++waited > START_TIMEOUT) {
-            finishDrink();
-            return;
         }
-        mc.options.keyUse.setDown(true);
     }
 
     private void finishDrink() {
@@ -209,8 +197,7 @@ public final class AutoPotion extends Module {
     private void stopDrinking() {
         if (drinking) {
             drinking = false;
-            started = false;
-            InputUtil.release(mc.options.keyUse);
+            use.release();
         }
         // A loan whose return was refused earlier gets another go.
         loan.giveBack();

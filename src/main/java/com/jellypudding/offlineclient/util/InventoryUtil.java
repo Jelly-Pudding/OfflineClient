@@ -5,7 +5,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.ContainerScreen;
-import net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen;
 import net.minecraft.client.gui.screens.inventory.DispenserScreen;
 import net.minecraft.client.gui.screens.inventory.HopperScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
@@ -51,14 +50,14 @@ public final class InventoryUtil {
         STRANDED
     }
 
-    // The game throws the click away when a different container is open.
+    // The game throws the click away unless the survival inventory is the live menu.
+    // The creative screen swaps in a menu of its own where the slot numbers differ.
     public static boolean canClick() {
-        if (MC.player.containerMenu.containerId != 0) {
+        if (MC.player.containerMenu != MC.player.inventoryMenu) {
             return false;
         }
         return !(MC.gui.screen() instanceof AbstractContainerScreen)
-            || MC.gui.screen() instanceof InventoryScreen
-            || MC.gui.screen() instanceof CreativeModeInventoryScreen;
+            || MC.gui.screen() instanceof InventoryScreen;
     }
 
     /**

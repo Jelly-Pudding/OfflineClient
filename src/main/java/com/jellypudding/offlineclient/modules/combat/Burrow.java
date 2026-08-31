@@ -44,7 +44,7 @@ public final class Burrow extends Module {
     private final BoolSetting center = new BoolSetting("Centre",
         "Snap to the middle of your block first.", true);
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Send a look packet toward the block as it goes down.", true);
+        "Send a look packet towards the block as it goes down.", true);
 
     private final SlotSwap slots = new SlotSwap();
     private BlockPos anchor;

@@ -96,9 +96,10 @@ public final class HandView extends Module {
             if (swordSlash.isOn() && mainItem.is(ItemTags.SWORDS)) {
                 return 0;
             }
-            return mainItem.isEmpty() ? progress : progress + mainSwing.getFloat();
+            // The slider reaches minus one and the pose has no meaning below zero.
+            return mainItem.isEmpty() ? progress : Math.max(0f, progress + mainSwing.getFloat());
         }
-        return offItem.isEmpty() ? progress : progress + offSwing.getFloat();
+        return offItem.isEmpty() ? progress : Math.max(0f, progress + offSwing.getFloat());
     }
 
     public boolean skipsSwap() {

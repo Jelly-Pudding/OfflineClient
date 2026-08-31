@@ -2,14 +2,21 @@ package com.jellypudding.offlineclient.modules.combat;
 
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.AttackEntityEvent;
+import com.jellypudding.offlineclient.event.events.PostMotionEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
+import net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.Items;
 
+/**
+ * A critical hit needs the server to believe the player is falling. Packet
+ * mode builds that belief out of position packets and never moves the player.
+ * The two jump modes leave the ground for real.
+ */
 public final class Criticals extends Module {
 
     // The server rebuilds fall distance from the gap between position packets.
@@ -19,12 +26,16 @@ public final class Criticals extends Module {
     // The packet that settles back down has to stay above zero for the drop to hold.
     private static final double CRIT_SETTLE = 1.1e-5;
 
-    // Five blocks is the threshold a mace smash needs and twenty two keeps the
-    // bonus at the flat cap.
-    private static final double MACE_LIFT = 22.36;
+    /**
+     * The server allows a hundred squared blocks of movement for each position
+     * packet it has taken this tick and stops counting past the fifth. Three
+     * settling packets buy the lift an allowance of four hundred and the
+     * return home is covered by the fifth.
+     */
+    private static final int MACE_SETTLE_PACKETS = 3;
 
-    // Leading packets that keep the movement checker from rejecting the lift.
-    private static final int MACE_SETTLE_PACKETS = 4;
+    // The fourth packet allows four hundred squared blocks which is twenty of travel.
+    private static final double MACE_LIFT = 19.9;
 
     public enum Mode { PACKET, MINI_JUMP, FULL_JUMP }
 
@@ -37,15 +48,30 @@ public final class Criticals extends Module {
     private final BoolSetting mace = new BoolSetting("Mace smash",
         "Fakes a long fall whilst holding a mace to land every swing as a smash attack.", false);
 
+    private final BoolSetting stopSprint = new BoolSetting("Stop sprinting",
+        "Drops sprint for the hit and takes it straight back. A sprinting player cannot crit.", true);
+
+    // True between dropping sprint for a hit and handing it back.
+    private boolean resumeSprint;
+
     public Criticals() {
         super("Criticals", "Makes every melee hit a critical hit.", Category.COMBAT);
-        addSettings(mode, mace);
+        addSettings(mode, mace, stopSprint);
         searchTags("crit", "mace", "smash");
     }
 
     @Override
     public String getSuffix() {
         return mode.getValueString();
+    }
+
+    @Override
+    protected void onDisable() {
+        // Leaving mid hit would leave the server believing the sprint had ended.
+        if (resumeSprint && inGame() && mc.player.isSprinting()) {
+            sendSprint(ServerboundPlayerCommandPacket.Action.START_SPRINTING);
+        }
+        resumeSprint = false;
     }
 
     @Subscribe
@@ -57,6 +83,7 @@ public final class Criticals extends Module {
         if (!mc.player.onGround() || mc.player.isInWater() || mc.player.isInLava()) {
             return;
         }
+        dropSprint();
         if (mace.isOn() && mc.player.getMainHandItem().is(Items.MACE)) {
             smash();
             return;
@@ -76,6 +103,35 @@ public final class Criticals extends Module {
             }
             case FULL_JUMP -> mc.player.jumpFromGround();
         }
+    }
+
+    /**
+     * The server refuses a critical to anyone it believes is sprinting. This
+     * is the packet pair a player makes by letting go of sprint for the swing.
+     * The client keeps sprinting throughout and never sees a stutter.
+     */
+    private void dropSprint() {
+        if (!stopSprint.isOn() || resumeSprint || !mc.player.isSprinting()) {
+            return;
+        }
+        sendSprint(ServerboundPlayerCommandPacket.Action.STOP_SPRINTING);
+        resumeSprint = true;
+    }
+
+    // The attack packet has gone out by this point.
+    @Subscribe
+    private void onPostMotion(PostMotionEvent event) {
+        if (!resumeSprint) {
+            return;
+        }
+        resumeSprint = false;
+        if (inGame() && mc.player.isSprinting()) {
+            sendSprint(ServerboundPlayerCommandPacket.Action.START_SPRINTING);
+        }
+    }
+
+    private void sendSprint(ServerboundPlayerCommandPacket.Action action) {
+        mc.player.connection.send(new ServerboundPlayerCommandPacket(mc.player, action));
     }
 
     private void smash() {

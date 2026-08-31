@@ -67,12 +67,19 @@ public abstract class LocalPlayerMixin extends AbstractClientPlayer {
         OfflineClient.INSTANCE.getEventBus().post(TickEvent.INSTANCE);
     }
 
-    @Inject(method = "sendPosition()V", at = @At("HEAD"))
+    /**
+     * A mounted player never reaches sendPosition. Vanilla sends a rotation and
+     * a vehicle packet from the other side of this branch instead. Both events
+     * therefore straddle the branch so an aura still works on a horse.
+     */
+    @Inject(method = "tick()V",
+        at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/client/player/LocalPlayer;isPassenger()Z"))
     private void onPreMotion(CallbackInfo ci) {
         OfflineClient.INSTANCE.getEventBus().post(PreMotionEvent.INSTANCE);
     }
 
-    @Inject(method = "sendPosition()V", at = @At("TAIL"))
+    @Inject(method = "tick()V", at = @At("TAIL"))
     private void onPostMotion(CallbackInfo ci) {
         OfflineClient.INSTANCE.getEventBus().post(PostMotionEvent.INSTANCE);
     }
@@ -219,7 +226,8 @@ public abstract class LocalPlayerMixin extends AbstractClientPlayer {
         if (fastBreak == null) {
             return speed;
         }
-        if (!onGround() && !isInWater() && fastBreak.removesAirPenalty()) {
+        // Vanilla divides purely on being off the ground. Water has its own factor.
+        if (!onGround() && fastBreak.removesAirPenalty()) {
             speed *= 5;
         }
         return speed * fastBreak.speedMultiplier();

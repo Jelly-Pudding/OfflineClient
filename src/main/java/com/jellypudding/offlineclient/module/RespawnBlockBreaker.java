@@ -41,7 +41,7 @@ public abstract class RespawnBlockBreaker extends Module {
         switchTool = new BoolSetting("Switch tool",
             "Swap to your fastest hotbar tool first.", true);
         rotate = new BoolSetting("Rotate",
-            "Turn toward the block on the server side.", true);
+            "Turn towards the block on the server side.", true);
         render = new BoolSetting("Show target",
             "Outline the block being broken.", true);
         addSettings(range, onlyDangerous, switchTool, rotate, render);

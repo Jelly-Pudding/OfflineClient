@@ -11,6 +11,12 @@ import org.lwjgl.glfw.GLFW;
  */
 public final class Zoom extends Module {
 
+    // Share of the remaining distance the ease covers each frame.
+    private static final double EASE = 0.3;
+
+    // Below this the ease has arrived.
+    private static final double SETTLED = 0.005;
+
     private final NumberSetting factor = new NumberSetting("Factor",
         "How far to zoom in.", 4, 2, 10, 0.5, "x").min(1);
 
@@ -26,12 +32,19 @@ public final class Zoom extends Module {
         return factor.getValueString();
     }
 
-    public float applyZoom(float fov) {
+    /**
+     * Eases the zoom on once a camera update. The world and the hand each read
+     * the field of view separately and both have to see the same value.
+     */
+    public void advance() {
         double target = isEnabled() ? factor.getValue() : 1;
-        smoothed += (target - smoothed) * 0.3;
-        if (Math.abs(smoothed - target) < 0.005) {
+        smoothed += (target - smoothed) * EASE;
+        if (Math.abs(smoothed - target) < SETTLED) {
             smoothed = target;
         }
+    }
+
+    public float applyZoom(float fov) {
         return (float) (fov / smoothed);
     }
 }

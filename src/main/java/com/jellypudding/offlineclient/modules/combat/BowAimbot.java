@@ -186,7 +186,7 @@ public final class BowAimbot extends Module {
         return walls.isOn() || mc.player.hasLineOfSight(entity);
     }
 
-    // Turns the player toward the point the arrow needs to fly through.
+    // Turns the player towards the point the arrow needs to fly through.
     private void aim(LivingEntity entity, double speed) {
         Vec3 eye = mc.player.getEyePosition();
         Vec3 aimPoint = visiblePoint(entity, eye);

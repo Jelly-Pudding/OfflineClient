@@ -46,10 +46,13 @@ public final class HoleFiller extends Module {
         "Ticks to wait between placing rounds.", 1, 0, 10, 1, " ticks");
     private final BoolSetting genuineOnly = new BoolSetting("Genuine holes",
         "Only fill holes that are blast proof on every side.", true);
+    private final BoolSetting doubles = new BoolSetting("Two wide holes",
+        "Also count a hole whose one open side is the other half of a two wide hole.", true)
+        .under(genuineOnly);
     private final BoolSetting ownHole = new BoolSetting("Keep own hole",
         "Never fill the hole you stand in or next to.", true);
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Send a look packet toward each block.", true);
+        "Send a look packet towards each block.", true);
     private final BoolSetting render = new BoolSetting("Show holes",
         "Outline the holes waiting to be filled.", true);
 
@@ -60,8 +63,8 @@ public final class HoleFiller extends Module {
 
     public HoleFiller() {
         super("HoleFiller", "Seals the holes around an enemy before they can hide in one.", Category.COMBAT);
-        addSettings(range, nearEnemies, targetRange, predict, perTick, delay, genuineOnly, ownHole,
-            rotate, render);
+        addSettings(range, nearEnemies, targetRange, predict, perTick, delay, genuineOnly, doubles,
+            ownHole, rotate, render);
         searchTags("hole", "obsidian", "crystal", "fill");
     }
 
@@ -174,20 +177,46 @@ public final class HoleFiller extends Module {
 
     // True when the spot is really a hole.
     private boolean floored(BlockPos pos) {
-        if (!genuineOnly.isOn()) {
-            return BlockUtil.isSolid(pos.below());
+        if (!BlockUtil.isSolid(pos.below())) {
+            return false;
         }
-        for (Direction side : Direction.values()) {
-            if (side == Direction.UP) {
+        if (!genuineOnly.isOn()) {
+            return true;
+        }
+        if (!blastProof(pos.below())) {
+            return false;
+        }
+        BlockPos gap = null;
+        for (Direction side : Direction.Plane.HORIZONTAL) {
+            BlockPos wall = pos.relative(side);
+            if (blastProof(wall)) {
                 continue;
             }
-            BlockPos wall = pos.relative(side);
-            if (!BlockUtil.isSolid(wall)
-                || BlockUtil.state(wall).getBlock().getExplosionResistance() < BlockUtil.BLAST_PROOF) {
+            if (gap != null || !doubles.isOn()) {
+                return false;
+            }
+            gap = wall;
+        }
+        return gap == null || isOtherHalf(gap, pos);
+    }
+
+    // The far half of a two wide hole. Walled on its own three sides.
+    private boolean isOtherHalf(BlockPos half, BlockPos pos) {
+        if (!open(half) || !blastProof(half.below())) {
+            return false;
+        }
+        for (Direction side : Direction.Plane.HORIZONTAL) {
+            BlockPos wall = half.relative(side);
+            if (!wall.equals(pos) && !blastProof(wall)) {
                 return false;
             }
         }
         return true;
+    }
+
+    private boolean blastProof(BlockPos pos) {
+        return BlockUtil.isSolid(pos)
+            && BlockUtil.state(pos).getBlock().getExplosionResistance() >= BlockUtil.BLAST_PROOF;
     }
 
     private boolean nearAnEnemy(BlockPos pos) {

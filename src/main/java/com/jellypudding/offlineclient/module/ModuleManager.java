@@ -185,7 +185,6 @@ import com.jellypudding.offlineclient.util.ChatUtil;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -481,7 +480,7 @@ public final class ModuleManager {
         return new ArrayList<>(modules.values());
     }
 
-    // Alphabetical. A module sits where the eye expects it.
+    // Registration order. Every category lists its everyday modules first.
     public List<Module> getByCategory(Category category) {
         List<Module> result = new ArrayList<>();
         for (Module module : modules.values()) {

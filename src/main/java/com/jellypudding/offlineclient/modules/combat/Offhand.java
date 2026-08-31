@@ -5,11 +5,13 @@ import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.Swap;
 import com.jellypudding.offlineclient.util.Modules;
+import net.minecraft.tags.ItemTags;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 
@@ -42,6 +44,8 @@ public final class Offhand extends Module {
     private final NumberSetting totemHealth = new NumberSetting("Totem health",
         "Swaps to a totem once you drop to this many hearts. Zero never swaps.",
         7, 0, 10, 0.5, " hearts");
+    private final BoolSetting swordGapple = new BoolSetting("Sword gapple",
+        "Brings an apple across whilst you hold use with a sword. Eat without leaving the sword.", false);
     private final NumberSetting delay = new NumberSetting("Delay",
         "Ticks to wait between swaps.", 0, 0, 20, 1, " ticks");
 
@@ -50,7 +54,7 @@ public final class Offhand extends Module {
 
     public Offhand() {
         super("Offhand", "Keeps a chosen item in your offhand.", Category.COMBAT);
-        addSettings(item, totemHealth, delay);
+        addSettings(item, totemHealth, swordGapple, delay);
         searchTags("totem", "crystal", "gapple");
     }
 
@@ -124,7 +128,21 @@ public final class Offhand extends Module {
         if (totemHealth.getFloat() > 0 && haveTotem && EntityUtil.healthAtOrBelow(totemHealth.getValue())) {
             return Items.TOTEM_OF_UNDYING;
         }
-        return item.getValue().item;
+        Item apple = swordApple();
+        return apple != null ? apple : item.getValue().item;
+    }
+
+    // The apple to bring across whilst a sword is held and use is down.
+    private Item swordApple() {
+        if (!swordGapple.isOn() || !mc.options.keyUse.isDown()
+            || !mc.player.getInventory().getSelectedItem().is(ItemTags.SWORDS)) {
+            return null;
+        }
+        if (mc.player.getOffhandItem().is(Items.ENCHANTED_GOLDEN_APPLE)
+            || findSlot(Items.ENCHANTED_GOLDEN_APPLE) != -1) {
+            return Items.ENCHANTED_GOLDEN_APPLE;
+        }
+        return findSlot(Items.GOLDEN_APPLE) == -1 ? null : Items.GOLDEN_APPLE;
     }
 
     // Network slot of the first stack of the item. Minus one when absent.

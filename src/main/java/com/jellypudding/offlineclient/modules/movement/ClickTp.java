@@ -9,31 +9,35 @@ import net.minecraft.client.Camera;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemUseAnimation;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
-import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
 /**
- * Teleports you onto the block you right click. The move is split into
- * packets of ten blocks because the server refuses a longer single step.
+ * Teleports you onto the block you right click. The server grants a hundred
+ * squared blocks of movement for each position packet it has taken this tick
+ * and stops counting past the fifth. A long trip is therefore walked as one
+ * hop a tick rather than crammed into a single burst that would be refused.
  */
 public final class ClickTp extends Module {
 
-    private static final double PACKET_STEP = 10;
+    // Three fillers then the hop itself. The fifth is left for the client's own packet.
+    private static final int FILLER_PACKETS = 3;
 
-    // The server kicks for more steps than this in one tick.
-    private static final int MAX_STEPS = 19;
+    // The fourth packet allows four hundred squared blocks which is twenty of travel.
+    private static final double MAX_HOP = 19.9;
 
     private final NumberSetting range = new NumberSetting("Range",
         "How far away the clicked block may be.", 100, 10, 200, 10, " blocks");
+
+    // Where the current trip ends. Null whilst there is no trip.
+    private Vec3 destination;
 
     public ClickTp() {
         super("ClickTp", "Teleports you to the block you right click.", Category.MOVEMENT);
@@ -41,9 +45,27 @@ public final class ClickTp extends Module {
         searchTags("teleport", "click teleport");
     }
 
+    @Override
+    protected void onEnable() {
+        destination = null;
+    }
+
+    @Override
+    protected void onDisable() {
+        destination = null;
+    }
+
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || !mc.options.keyUse.isDown() || mc.gui.screen() != null) {
+        if (!inGame() || mc.player.isDeadOrDying()) {
+            destination = null;
+            return;
+        }
+        if (destination != null) {
+            hop();
+            return;
+        }
+        if (!mc.options.keyUse.isDown() || mc.gui.screen() != null) {
             return;
         }
         if (mc.player.getMainHandItem().getUseAnimation() != ItemUseAnimation.NONE) {
@@ -67,21 +89,19 @@ public final class ClickTp extends Module {
         }
         double top = shape.isEmpty() ? 1 : shape.max(Direction.Axis.Y);
         Direction side = hit.getDirection();
-        Vec3 target = new Vec3(pos.getX() + 0.5 + side.getStepX(), pos.getY() + top,
+        destination = new Vec3(pos.getX() + 0.5 + side.getStepX(), pos.getY() + top,
             pos.getZ() + 0.5 + side.getStepZ());
-        teleport(target);
+        hop();
     }
 
-    // A normal use on an entity or a block placement keeps its normal meaning.
+    // A use on an entity or a block placement keeps its normal meaning.
     private boolean busyWithTarget() {
         HitResult hit = mc.hitResult;
         if (hit == null) {
             return false;
         }
         if (hit.getType() == HitResult.Type.ENTITY) {
-            EntityHitResult entityHit = (EntityHitResult) hit;
-            return mc.player.interactOn(entityHit.getEntity(), InteractionHand.MAIN_HAND,
-                hit.getLocation()) != InteractionResult.PASS;
+            return true;
         }
         return hit.getType() == HitResult.Type.BLOCK
             && mc.player.getMainHandItem().getItem() instanceof BlockItem;
@@ -96,16 +116,27 @@ public final class ClickTp extends Module {
             ClipContext.Fluid.NONE, mc.player));
     }
 
-    private void teleport(Vec3 target) {
-        int steps = (int) Math.ceil(mc.player.position().distanceTo(target) / PACKET_STEP) - 1;
-        // One giant hop is exactly what gets a player kicked.
-        if (steps > MAX_STEPS) {
-            return;
-        }
-        for (int i = 0; i < steps; i++) {
+    // Moves as far along the trip as one tick of packets is allowed to carry.
+    private void hop() {
+        Vec3 from = mc.player.position();
+        double left = from.distanceTo(destination);
+        boolean arriving = left <= MAX_HOP;
+        Vec3 step = arriving
+            ? destination
+            : from.add(destination.subtract(from).scale(MAX_HOP / left));
+
+        for (int i = 0; i < FILLER_PACKETS; i++) {
             mc.player.connection.send(new ServerboundMovePlayerPacket.StatusOnly(true, true));
         }
-        mc.player.connection.send(new ServerboundMovePlayerPacket.Pos(target, true, true));
-        mc.player.setPos(target);
+        mc.player.connection.send(new ServerboundMovePlayerPacket.Pos(step, true, true));
+        mc.player.setPos(step);
+        // The rest of the tick still runs the physics. Gravity between hops would
+        // otherwise gather into a fall the landing has to pay for.
+        mc.player.setDeltaMovement(Vec3.ZERO);
+        mc.player.fallDistance = 0;
+
+        if (arriving) {
+            destination = null;
+        }
     }
 }

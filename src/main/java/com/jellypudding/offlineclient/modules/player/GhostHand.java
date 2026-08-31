@@ -18,6 +18,9 @@ import java.util.Set;
 // Opens containers through walls.
 public final class GhostHand extends Module {
 
+    // The delay a normal right click leaves behind.
+    private static final int USE_DELAY = 4;
+
     public GhostHand() {
         super("GhostHand", "Opens containers through walls.", Category.PLAYER);
         searchTags("through walls", "chest");
@@ -51,6 +54,8 @@ public final class GhostHand extends Module {
                 continue;
             }
             BlockHitResult hit = new BlockHitResult(Vec3.atCenterOf(pos), Direction.UP, pos, true);
+            // Cancelling skips the delay the game would have set itself.
+            mc.rightClickDelay = USE_DELAY;
             InteractionResult result = mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND, hit);
             if (result.consumesAction()) {
                 mc.player.swing(InteractionHand.MAIN_HAND);

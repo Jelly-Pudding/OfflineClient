@@ -52,7 +52,7 @@ public final class Excavator extends Module {
         "How many one hit blocks to break each tick in Instant mode.", 4, 1, 16, 1)
         .min(1).under(speed, Speed.INSTANT);
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Turn toward each block on the server side.", true);
+        "Turn towards each block on the server side.", true);
 
     public enum Speed { LEGIT, INSTANT }
 

@@ -46,7 +46,7 @@ public final class VeinMiner extends Module {
         .describe(Targets.ORES_AND_LOGS, "Ore veins and tree trunks.")
         .describe(Targets.ANY_BLOCK, "Any run of matching blocks.");
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Turn toward each block on the server side.", true);
+        "Turn towards each block on the server side.", true);
 
     private final Set<BlockPos> vein = new LinkedHashSet<>();
     private String veinFamily;

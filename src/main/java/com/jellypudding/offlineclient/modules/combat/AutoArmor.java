@@ -23,12 +23,17 @@ public final class AutoArmor extends Module {
         "Ticks between each swap.", 2, 0, 20, 1, " ticks");
     private final BoolSetting useEnchantments = new BoolSetting("Count protection",
         "Weigh the Protection enchantment when comparing pieces.", true);
+    private final BoolSetting antiBreak = new BoolSetting("Anti break",
+        "Takes a worn piece off before it shatters and never puts one on.", true);
+    private final NumberSetting durability = new NumberSetting("Durability",
+        "Uses left at which a piece counts as worn out.", 10, 1, 100, 1, " uses")
+        .under(antiBreak);
 
     private int timer;
 
     public AutoArmor() {
         super("AutoArmor", "Automatically wears the best armour you have.", Category.COMBAT);
-        addSettings(delay, useEnchantments);
+        addSettings(delay, useEnchantments, antiBreak, durability);
     }
 
     @Subscribe
@@ -56,17 +61,38 @@ public final class AutoArmor extends Module {
                 continue;
             }
 
+            int armorNetworkSlot = InventoryUtil.ARMOR_START + slotIndex;
             int upgrade = bestUpgrade(slot);
             if (upgrade == -1) {
+                // Nothing better to wear. A shattering piece still comes off.
+                if (wornOut(mc.player.getItemBySlot(slot)) && stow(armorNetworkSlot)) {
+                    return;
+                }
                 continue;
             }
 
-            int armorNetworkSlot = InventoryUtil.ARMOR_START + slotIndex;
             if (InventoryUtil.swap(InventoryUtil.networkSlot(upgrade), armorNetworkSlot) != Swap.REFUSED) {
                 timer = delay.getInt();
             }
             return;
         }
+    }
+
+    // Moves a worn out piece into the first free inventory slot.
+    private boolean stow(int armorNetworkSlot) {
+        int free = InventoryUtil.findSlot(ItemStack::isEmpty, InventoryUtil.WHOLE_INVENTORY);
+        if (free == -1) {
+            return false;
+        }
+        if (InventoryUtil.swap(armorNetworkSlot, InventoryUtil.networkSlot(free)) == Swap.REFUSED) {
+            return false;
+        }
+        timer = delay.getInt();
+        return true;
+    }
+
+    private boolean wornOut(ItemStack stack) {
+        return antiBreak.isOn() && ItemUtil.nearlyBroken(stack, durability.getInt());
     }
 
     private int bestUpgrade(EquipmentSlot slot) {
@@ -89,6 +115,9 @@ public final class AutoArmor extends Module {
 
     private double score(ItemStack stack, EquipmentSlot slot) {
         if (stack.isEmpty() || stack.is(Items.ELYTRA) || ItemUtil.equipSlot(stack) != slot) {
+            return -1;
+        }
+        if (wornOut(stack)) {
             return -1;
         }
         double armor = ItemUtil.attributeValue(stack, Attributes.ARMOR, slot);

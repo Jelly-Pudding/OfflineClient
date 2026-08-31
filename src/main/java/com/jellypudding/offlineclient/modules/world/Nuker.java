@@ -23,14 +23,12 @@ import com.jellypudding.offlineclient.util.ItemUtil;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.InteractionHand;
-import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
-import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -97,7 +95,7 @@ public final class Nuker extends Module {
         "Holds your fastest tool before the break packets go out.", true)
         .under(speed, Speed.INSTANT);
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Turn toward the block on the server side.", true)
+        "Turn towards the block on the server side.", true)
         .under(speed, Speed.LEGIT);
     private final EnumSetting<Order> order = new EnumSetting<>("Order",
         "Which block gets broken first.", Order.NEAREST)

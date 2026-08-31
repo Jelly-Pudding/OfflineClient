@@ -50,7 +50,7 @@ public final class Scaffold extends Module {
     private final NumberSetting lookAhead = new NumberSetting("Look ahead",
         "Ticks of movement to build ahead of you.", 2, 0, 5, 1, " ticks").min(0).max(10);
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Turn toward each block on the server side.", true);
+        "Turn towards each block on the server side.", true);
     private final BoolSetting swapBack = new BoolSetting("Swap back",
         "Returns to the slot you had after every placement.", true);
     private final BoolSetting onlyOnClick = new BoolSetting("Only on click",
@@ -170,8 +170,7 @@ public final class Scaffold extends Module {
         }
 
         slots.select(slot);
-        // Only the first block of a tick turns. Several look packets in one
-        // tick look obviously wrong to the server.
+        // Only the first block of a tick turns. A burst of look packets is a plain tell.
         boolean turn = rotate.isOn() && !rotatedThisTick;
         rotatedThisTick |= turn;
         boolean placed = BlockUtil.place(target, support, turn, true);

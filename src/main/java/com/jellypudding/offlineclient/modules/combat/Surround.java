@@ -57,7 +57,7 @@ public final class Surround extends Module {
     private final NumberSetting delay = new NumberSetting("Delay",
         "Ticks to wait between placing rounds.", 0, 0, 5, 1, " ticks");
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Send a look packet toward each block as it goes down.", true);
+        "Send a look packet towards each block as it goes down.", true);
     private final BoolSetting doubleHeight = new BoolSetting("Double height",
         "Also wall the four sides at head height to stop a face place.", false);
     private final BoolSetting protect = new BoolSetting("Protect",

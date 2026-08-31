@@ -59,6 +59,8 @@ public final class BetterTooltips extends Module {
     @Override
     protected void onDisable() {
         hovered = ItemStack.EMPTY;
+        // The copy belongs to the server it was taken on.
+        remembered.clear();
     }
 
     // Called from the mixin whilst the game builds an item tooltip.

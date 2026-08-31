@@ -17,6 +17,7 @@ import com.jellypudding.offlineclient.util.RenderUtil;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.protocol.game.ClientboundBlockDestructionPacket;
+import net.minecraft.server.level.BlockDestructionProgress;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
@@ -27,6 +28,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
+import java.util.SortedSet;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 // The server sends a destruction stage from zero to nine for every block being broken.
@@ -127,7 +129,29 @@ public final class BreakIndicators extends Module {
         while ((stage = pending.poll()) != null) {
             apply(stage, now);
         }
+        if (self.isOn()) {
+            applyOwnProgress(now);
+        }
         indicators.values().removeIf(indicator -> now - indicator.updated > TIMEOUT_MS);
+    }
+
+    /**
+     * The server never sends your own break progress back. The client writes
+     * it into the same map the packet fills.
+     */
+    private void applyOwnProgress(long now) {
+        if (!inGame()) {
+            return;
+        }
+        int own = mc.player.getId();
+        for (SortedSet<BlockDestructionProgress> column : mc.level.destructionProgress().values()) {
+            for (BlockDestructionProgress progress : column) {
+                if (progress.getId() == own) {
+                    apply(new Stage(own, progress.getPos(), progress.getProgress()), now);
+                    return;
+                }
+            }
+        }
     }
 
     private void apply(Stage stage, long now) {

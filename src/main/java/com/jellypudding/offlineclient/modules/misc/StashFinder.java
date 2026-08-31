@@ -7,6 +7,8 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
@@ -25,7 +27,8 @@ import java.util.Set;
 
 public final class StashFinder extends Module {
 
-    private record Stash(ResourceKey<Level> dimension, ChunkPos pos, int containers) {
+    // The server is part of the identity. Two servers share their dimension keys.
+    private record Stash(String server, ResourceKey<Level> dimension, ChunkPos pos, int containers) {
     }
 
     private static final int SCANS_PER_TICK = 4;
@@ -50,6 +53,9 @@ public final class StashFinder extends Module {
 
     private ResourceKey<Level> dimension;
 
+    // A new world object means a new server or a new dimension.
+    private ClientLevel lastLevel;
+
     public StashFinder() {
         super("StashFinder", "Points out chunks packed with containers as you travel.", Category.MISC);
         addSettings(minimum, extraTypes);
@@ -66,8 +72,9 @@ public final class StashFinder extends Module {
         if (!inGame()) {
             return;
         }
-        if (mc.level.dimension() != dimension) {
-            // Chunk coordinates mean something different in each dimension.
+        if (mc.level != lastLevel) {
+            // Chunk coordinates mean something different in every world.
+            lastLevel = mc.level;
             dimension = mc.level.dimension();
             scanned.clear();
         }
@@ -119,7 +126,7 @@ public final class StashFinder extends Module {
         if (containers < minimum.getInt() || known(pos)) {
             return;
         }
-        stashes.add(new Stash(dimension, pos, containers));
+        stashes.add(new Stash(serverName(), dimension, pos, containers));
         if (stashes.size() > MAX_STASHES) {
             stashes.removeFirst();
         }
@@ -127,8 +134,10 @@ public final class StashFinder extends Module {
     }
 
     private boolean known(ChunkPos pos) {
+        String server = serverName();
         for (Stash stash : stashes) {
-            if (stash.dimension() == dimension && stash.pos().equals(pos)) {
+            if (stash.server().equals(server) && stash.dimension() == dimension
+                && stash.pos().equals(pos)) {
                 return true;
             }
         }
@@ -143,6 +152,11 @@ public final class StashFinder extends Module {
             return false;
         }
         return blockEntity instanceof BarrelBlockEntity || blockEntity instanceof ShulkerBoxBlockEntity;
+    }
+
+    private String serverName() {
+        ServerData server = mc.getCurrentServer();
+        return server == null ? "" : server.ip;
     }
 
     private void report(ChunkPos pos, int containers) {

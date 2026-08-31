@@ -34,7 +34,7 @@ public final class AutoTrap extends Module {
     private final NumberSetting perTick = new NumberSetting("Blocks per tick",
         "How many blocks to place in one round.", 2, 1, 4, 1);
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Send a look packet toward each block.", true);
+        "Send a look packet towards each block.", true);
     private final BoolSetting toggleOff = new BoolSetting("Toggle off when done",
         "Turn off once the target is boxed in.", false);
     private final BoolSetting render = new BoolSetting("Show blocks",

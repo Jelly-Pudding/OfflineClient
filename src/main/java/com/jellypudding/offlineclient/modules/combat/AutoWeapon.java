@@ -120,6 +120,27 @@ public final class AutoWeapon extends Module {
         return bestWeaponSlot(target, true, 2, true);
     }
 
+    /**
+     * The hotbar slot holding the strongest axe or minus one. Only an axe
+     * staggers a raised shield however hard the sword beside it hits.
+     */
+    public static int bestAxeSlot(LivingEntity target, boolean skipBreaking) {
+        int best = -1;
+        double bestDamage = 0;
+        for (int i = 0; i < InventoryUtil.HOTBAR_SIZE; i++) {
+            ItemStack stack = mc.player.getInventory().getItem(i);
+            if (!stack.is(ItemTags.AXES) || (skipBreaking && ItemUtil.nearlyBroken(stack))) {
+                continue;
+            }
+            double damage = weaponDamage(stack, target);
+            if (damage > bestDamage) {
+                bestDamage = damage;
+                best = i;
+            }
+        }
+        return best;
+    }
+
     // The hotbar slot holding the strongest weapon against this target or minus one.
     public static int bestWeaponSlot(LivingEntity target, boolean preferSword,
                                      double margin, boolean skipBreaking) {

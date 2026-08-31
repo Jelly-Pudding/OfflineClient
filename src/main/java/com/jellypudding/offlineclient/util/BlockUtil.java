@@ -50,6 +50,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
 
 public final class BlockUtil {
@@ -74,8 +75,12 @@ public final class BlockUtil {
         return MC.level.getBlockState(pos);
     }
 
+    /**
+     * Outside the world the game hands back void air which reads as
+     * replaceable. The server refuses every placement there.
+     */
     public static boolean isReplaceable(BlockPos pos) {
-        return state(pos).canBeReplaced();
+        return MC.level.isInWorldBounds(pos) && state(pos).canBeReplaced();
     }
 
     public static boolean isSolid(BlockPos pos) {
@@ -131,6 +136,29 @@ public final class BlockUtil {
             result.add(entry.pos());
         }
         return result;
+    }
+
+    // Every position in range in no particular order. The same mutable
+    // position is handed over each time and is only valid inside the call.
+    public static void forEachWithin(double range, Consumer<BlockPos> action) {
+        range = Math.min(range, MAX_SCAN_RANGE);
+        Vec3 eye = MC.player.getEyePosition();
+        BlockPos centre = BlockPos.containing(eye);
+        int r = (int) Math.ceil(range);
+        double limitSq = range * range;
+        BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+        for (int dx = -r; dx <= r; dx++) {
+            for (int dy = -r; dy <= r; dy++) {
+                for (int dz = -r; dz <= r; dz++) {
+                    double ox = centre.getX() + dx + 0.5 - eye.x;
+                    double oy = centre.getY() + dy + 0.5 - eye.y;
+                    double oz = centre.getZ() + dz + 0.5 - eye.z;
+                    if (ox * ox + oy * oy + oz * oz <= limitSq) {
+                        action.accept(cursor.set(centre.getX() + dx, centre.getY() + dy, centre.getZ() + dz));
+                    }
+                }
+            }
+        }
     }
 
     public static Iterable<BlockPos> positionsAround(BlockPos center, int radius) {

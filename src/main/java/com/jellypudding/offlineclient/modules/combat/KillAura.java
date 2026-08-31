@@ -13,6 +13,7 @@ import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.RotationManager;
 import com.jellypudding.offlineclient.util.RotationPriority;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
@@ -43,8 +44,10 @@ public final class KillAura extends Module {
         .max(360);
     private final BoolSetting players = new BoolSetting("Players",
         "Swing at other players.", true);
-    private final BoolSetting mobs = new BoolSetting("Mobs",
-        "Swing at mobs both hostile and passive.", false);
+    private final BoolSetting hostile = new BoolSetting("Hostile mobs",
+        "Swing at anything that hunts you.", false);
+    private final BoolSetting passive = new BoolSetting("Passive mobs",
+        "Swing at animals and villagers and other harmless mobs.", false);
     private final EnumSetting<Priority> priority = new EnumSetting<>("Priority",
         "Which one to pick first when several are in range.", Priority.NEAREST)
         .describe(Priority.NEAREST, "Attacks the closest target first.")
@@ -53,7 +56,7 @@ public final class KillAura extends Module {
     private final NumberSetting maxTargets = new NumberSetting("Max targets",
         "How many entities to swing at in one go.", 1, 1, 8, 1);
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Send a look packet toward the target without moving your view.", true);
+        "Send a look packet towards the target without moving your view.", true);
     private final NumberSetting rotateSpeed = new NumberSetting("Rotate speed",
         "How many degrees the look packet may turn in one tick.", 45, 15, 180, 5, " degrees")
         .min(1).max(180)
@@ -76,26 +79,26 @@ public final class KillAura extends Module {
         .under(players);
     private final BoolSetting ignoreNamed = new BoolSetting("Ignore named",
         "Skip mobs wearing a name tag.", true)
-        .under(mobs);
+        .under(hostile, () -> hostile.isOn() || passive.isOn());
     private final BoolSetting ignoreTamed = new BoolSetting("Ignore tamed",
         "Skip tamed animals.", true)
-        .under(mobs);
+        .under(hostile, () -> hostile.isOn() || passive.isOn());
     private final BoolSetting ignoreBabies = new BoolSetting("Ignore babies",
         "Skip baby animals.", true)
-        .under(mobs);
+        .under(hostile, () -> hostile.isOn() || passive.isOn());
     private final BoolSetting ignoreCooldown = new BoolSetting("Ignore cooldown",
         "Swings before the attack cooldown ends. Hits land weaker but far more often.", false);
     private final BoolSetting pauseOnUse = new BoolSetting("Pause on use",
         "Hold off whilst eating or blocking or drawing a bow or mining.", true);
-    private final BoolSetting pauseOnContainers = new BoolSetting("Pause in GUIs",
-        "No swinging whilst a chest or inventory screen is open.", true);
+    private final BoolSetting pauseOnContainers = new BoolSetting("Pause in containers",
+        "No swinging whilst a chest or your inventory is open. Chat and the menus carry on.", true);
 
     private final AttackTimer timer = new AttackTimer();
     private final SlotSwap slots = new SlotSwap();
 
     public KillAura() {
         super("KillAura", "Automatically swings at nearby mobs and players.", Category.COMBAT);
-        addSettings(range, wallsRange, fov, players, mobs, priority, maxTargets);
+        addSettings(range, wallsRange, fov, players, hostile, passive, priority, maxTargets);
         addSettings(timer.settings());
         addSettings(rotate, rotateSpeed, walls, autoWeapon, weaponSwapBack, breakShields,
             weaponOnly, onlyOnClick, ignoreCreative, ignoreNamed, ignoreTamed,
@@ -133,7 +136,7 @@ public final class KillAura extends Module {
         if (pauseOnUse.isOn() && (mc.player.isUsingItem() || mc.gameMode.isDestroying())) {
             return true;
         }
-        if (pauseOnContainers.isOn() && mc.gui.screen() != null) {
+        if (pauseOnContainers.isOn() && mc.gui.screen() instanceof AbstractContainerScreen) {
             return true;
         }
         if (onlyOnClick.isOn() && !mc.options.keyAttack.isDown()) {
@@ -194,10 +197,13 @@ public final class KillAura extends Module {
             return;
         }
         // An axe staggers a raised shield whilst a sword bounces off it.
-        boolean blocking = breakShields.isOn() && target.isBlocking();
-        int best = blocking
-            ? AutoWeapon.bestWeaponSlot(target, false, 0, true)
-            : AutoWeapon.bestWeaponSlot(target);
+        int best = -1;
+        if (breakShields.isOn() && target.isBlocking()) {
+            best = AutoWeapon.bestAxeSlot(target, true);
+        }
+        if (best == -1) {
+            best = AutoWeapon.bestWeaponSlot(target);
+        }
         if (best != -1) {
             slots.select(best);
         }
@@ -230,7 +236,7 @@ public final class KillAura extends Module {
                     continue;
                 }
             } else if (living instanceof Mob mob) {
-                if (!mobs.isOn() || ignored(mob)) {
+                if (!wanted(mob) || ignored(mob)) {
                     continue;
                 }
             } else {
@@ -269,6 +275,11 @@ public final class KillAura extends Module {
         Vec3 feet = target.position().add(0, 0.1, 0);
         return mc.level.clip(new ClipContext(eye, feet, ClipContext.Block.COLLIDER,
             ClipContext.Fluid.NONE, mc.player)).getType() == HitResult.Type.MISS;
+    }
+
+    // Hostile covers everything that would come for you on its own.
+    private boolean wanted(Mob mob) {
+        return EntityUtil.kindOf(mob) == EntityUtil.Kind.HOSTILE ? hostile.isOn() : passive.isOn();
     }
 
     private boolean ignored(Mob mob) {

@@ -72,7 +72,7 @@ public final class AutoFarm extends Module {
     private final NumberSetting perTick = new NumberSetting("Blocks per tick",
         "How many crops to cut each tick.", 4, 1, 16, 1);
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Turn toward the spot on the server side before planting.", true);
+        "Turn towards the spot on the server side before planting.", true);
 
     private final Map<BlockPos, Integer> attempted = new HashMap<>();
     private final Map<BlockPos, Planting> plantings = new HashMap<>();

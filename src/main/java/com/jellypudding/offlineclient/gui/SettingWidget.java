@@ -465,7 +465,7 @@ public final class SettingWidget {
     // The hit test has already been done by the caller.
     public static void click(Setting<?> setting, double mx, double my, int x, int y, int width,
                              int button, Host host, Drag drag) {
-        // Only the two buttons the rows above answer reach a setting.
+        // Only the left and the right button act on a setting.
         if (button != 0 && button != 1) {
             return;
         }

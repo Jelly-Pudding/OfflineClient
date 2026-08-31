@@ -10,8 +10,9 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 
 /**
- * EntityMixin feeds the expansion into the crosshair pick and
- * AttackRangeMixin widens the matching reach check.
+ * Two separate paths grow a target. A melee swing reads the single margin on
+ * the weapon and the game applies it to every entity alike. An arrow reads the
+ * pick radius of the entity it met and that is what the kind toggles change.
  */
 public final class Hitboxes extends Module {
 
@@ -19,9 +20,9 @@ public final class Hitboxes extends Module {
         "How far the hitbox grows on every side.", 0.25, 0.05, 1, 0.05, " blocks")
         .min(0).max(2);
     private final BoolSetting players = new BoolSetting("Players",
-        "Grow player hitboxes.", true);
+        "Grow players. Arrows only take the bigger box on the kinds ticked here.", true);
     private final BoolSetting mobs = new BoolSetting("Mobs",
-        "Grow mob hitboxes.", false);
+        "Grow mobs. Arrows only take the bigger box on the kinds ticked here.", false);
 
     public Hitboxes() {
         super("Hitboxes", "Makes entities easier to hit by growing their hitboxes.", Category.COMBAT);

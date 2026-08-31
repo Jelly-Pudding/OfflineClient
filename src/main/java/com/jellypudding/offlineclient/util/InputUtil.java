@@ -2,9 +2,11 @@ package com.jellypudding.offlineclient.util;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.mojang.blaze3d.platform.InputConstants;
+import com.mojang.blaze3d.platform.Window;
 import net.minecraft.client.KeyMapping;
+import org.lwjgl.glfw.GLFW;
 
-// The real state of the keyboard. A module forcing a mapping down is ignored here.
+// The real state of the keyboard and mouse. A module forcing a mapping down is ignored here.
 public final class InputUtil {
 
     // Degrees of turn per unit of mouse movement. The same factor the game uses.
@@ -19,17 +21,37 @@ public final class InputUtil {
         return key.getType() == InputConstants.Type.KEYSYM && key.getValue() == code;
     }
 
-    // Lets go of a key a module was holding down without lifting a finger that is really on it.
-    public static void release(KeyMapping mapping) {
-        mapping.setDown(physicallyHeld(mapping));
+    /**
+     * Holds a key down on behalf of a module. Use and attack are toggles under
+     * the accessibility options where setting them down flips them instead.
+     */
+    public static void hold(KeyMapping mapping) {
+        if (!mapping.isDown()) {
+            mapping.setDown(true);
+        }
     }
 
-    // True only whilst the player really holds the bound key. A mouse bind falls back to the mapping.
+    /**
+     * Lets go of a key a module was holding without lifting a finger really on
+     * it. A toggle bound key throws away a plain false and has to be flipped.
+     */
+    public static void release(KeyMapping mapping) {
+        boolean held = physicallyHeld(mapping);
+        mapping.setDown(held);
+        if (mapping.isDown() != held) {
+            mapping.setDown(true);
+        }
+    }
+
+    // True only whilst the player really holds the bound key or button.
     public static boolean physicallyHeld(KeyMapping mapping) {
         InputConstants.Key key = mapping.key;
-        if (key.getType() != InputConstants.Type.KEYSYM) {
-            return mapping.isDown();
-        }
-        return InputConstants.isKeyDown(OfflineClient.MC.getWindow(), key.getValue());
+        Window window = OfflineClient.MC.getWindow();
+        return switch (key.getType()) {
+            case KEYSYM -> InputConstants.isKeyDown(window, key.getValue());
+            // Use and attack are mouse bound by default.
+            case MOUSE -> GLFW.glfwGetMouseButton(window.handle(), key.getValue()) == GLFW.GLFW_PRESS;
+            default -> mapping.isDown();
+        };
     }
 }

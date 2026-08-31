@@ -31,6 +31,15 @@ public abstract class CameraMixin {
     @Shadow
     protected abstract void setRotation(float yaw, float pitch);
 
+    // The world and the hand each read the field of view. One ease a frame keeps them level.
+    @Inject(method = "update(Lnet/minecraft/client/DeltaTracker;)V", at = @At("HEAD"))
+    private void onCameraUpdate(DeltaTracker deltaTracker, CallbackInfo ci) {
+        Zoom zoom = Modules.get(Zoom.class);
+        if (zoom != null) {
+            zoom.advance();
+        }
+    }
+
     // FreeLook lends its look angles to the camera entity for the alignment call.
     @Inject(method = "update(Lnet/minecraft/client/DeltaTracker;)V",
         at = @At(value = "INVOKE",

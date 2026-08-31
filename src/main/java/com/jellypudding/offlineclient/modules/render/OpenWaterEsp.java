@@ -37,7 +37,7 @@ public final class OpenWaterEsp extends Module {
         }
         FishingHook bobber = mc.player.fishing;
         boolean open = bobber.calculateOpenWater(bobber.blockPosition());
-        AABB box = new AABB(-2, -1, -2, 3, 2, 3).move(bobber.blockPosition());
+        AABB box = new AABB(-2, -1, -2, 3, 3, 3).move(bobber.blockPosition());
         event.getBatch().outlineBox(box, open ? OPEN_COLOR : SHALLOW_COLOR, false);
     }
 }

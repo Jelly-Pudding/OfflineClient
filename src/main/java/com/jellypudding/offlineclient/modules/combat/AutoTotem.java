@@ -149,23 +149,30 @@ public final class AutoTotem extends Module {
     // The worst single charge in range.
     private float blastThreat() {
         double range = blastRange.getValue();
+        // Thousands of positions every tick. Nothing is collected and nothing is sorted.
+        float[] worst = {crystalThreat(range)};
+        BlockUtil.forEachWithin(range, pos -> worst[0] = Math.max(worst[0], chargeThreat(pos)));
+        return worst[0];
+    }
+
+    private float crystalThreat(double range) {
         float worst = 0;
         for (Entity entity : mc.level.entitiesForRendering()) {
-            if (!(entity instanceof EndCrystal) || entity.distanceTo(mc.player) > range) {
-                continue;
+            if (entity instanceof EndCrystal && entity.distanceTo(mc.player) <= range) {
+                worst = Math.max(worst, ExplosionUtil.crystalDamage(mc.player, entity.position()));
             }
-            worst = Math.max(worst,
-                ExplosionUtil.crystalDamage(mc.player, entity.position()));
-        }
-        for (BlockPos pos : BlockUtil.positionsWithin(range)) {
-            BlockState state = BlockUtil.state(pos);
-            if (!isCharge(state)) {
-                continue;
-            }
-            worst = Math.max(worst, ExplosionUtil.blastDamage(mc.player,
-                Vec3.atCenterOf(pos), ExplosionUtil.RESPAWN_BLOCK_POWER, Vec3.ZERO, ExplosionUtil.halvesOf(pos)));
         }
         return worst;
+    }
+
+    // Damage a bed or an anchor standing here would deal. Zero when there is none.
+    private float chargeThreat(BlockPos pos) {
+        if (!isCharge(BlockUtil.state(pos))) {
+            return 0;
+        }
+        BlockPos charge = pos.immutable();
+        return ExplosionUtil.blastDamage(mc.player, Vec3.atCenterOf(charge),
+            ExplosionUtil.RESPAWN_BLOCK_POWER, Vec3.ZERO, ExplosionUtil.halvesOf(charge));
     }
 
     private boolean isCharge(BlockState state) {

@@ -8,9 +8,9 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.EntityUtil;
-import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.Modules;
+import com.jellypudding.offlineclient.util.UseHold;
 import net.minecraft.core.Holder;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectInstance;
@@ -29,9 +29,6 @@ public final class AutoGap extends Module {
 
     // The least ticks between two apples. A slow server never gets a second one for the same reason.
     private static final int MEAL_GAP = 100;
-
-    // Ticks to give the hand before the bite is written off.
-    private static final int START_TIMEOUT = 20;
 
     public enum Choice { PLAIN_FIRST, ENCHANTED_FIRST, ENCHANTED_ONLY }
 
@@ -60,9 +57,8 @@ public final class AutoGap extends Module {
         "Keeps your normal speed whilst an apple goes down.", false);
 
     private boolean eating;
-    private boolean started;
+    private final UseHold use = new UseHold();
     private boolean needsEnchanted;
-    private int waited;
     private int settle;
     private int lastMeal = Integer.MIN_VALUE / 2;
     private final InventoryUtil.HotbarLoan loan = new InventoryUtil.HotbarLoan();
@@ -106,6 +102,10 @@ public final class AutoGap extends Module {
         if (!inGame() || mc.player.isSpectator()) {
             stopEating();
             return;
+        }
+        // A fresh world hands you a player whose tick count starts again at zero.
+        if (mc.player.tickCount < lastMeal) {
+            lastMeal = Integer.MIN_VALUE / 2;
         }
         if (mc.player.isDeadOrDying()) {
             // Respawn rebuilds the inventory and restarts the tick count.
@@ -176,8 +176,7 @@ public final class AutoGap extends Module {
             return;
         }
         eating = true;
-        started = false;
-        waited = 0;
+        use.begin();
     }
 
     private void continueEating() {
@@ -186,23 +185,15 @@ public final class AutoGap extends Module {
             stopEating();
             return;
         }
-        if (mc.player.isUsingItem()) {
-            started = true;
-        } else if (started) {
+        if (!use.tick()) {
             finishBite();
-            return;
-        } else if (++waited > START_TIMEOUT) {
-            finishBite();
-            return;
         }
-        mc.options.keyUse.setDown(true);
     }
 
     private void finishBite() {
         boolean keep = hold.isOn() && !loan.isLent();
-        releaseKey();
+        use.release();
         eating = false;
-        started = false;
         settle = SETTLE_TICKS;
         lastMeal = mc.player.tickCount;
         if (!keep) {
@@ -212,15 +203,10 @@ public final class AutoGap extends Module {
 
     private void stopEating() {
         if (eating) {
-            releaseKey();
+            use.release();
             eating = false;
-            started = false;
         }
         loan.giveBack();
-    }
-
-    private void releaseKey() {
-        InputUtil.release(mc.options.keyUse);
     }
 
     private int findApple() {

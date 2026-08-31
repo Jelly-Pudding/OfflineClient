@@ -43,6 +43,10 @@ public final class TunnelEsp extends Module {
 
     private final ChunkScanner<Spot> scanner = new ChunkScanner<>();
 
+    // The scan bounds the cached chunks were built with.
+    private int lastLow = Integer.MIN_VALUE;
+    private int lastHigh = Integer.MIN_VALUE;
+
     public TunnelEsp() {
         super("TunnelESP", "Highlights hand dug tunnels underground.", Category.RENDER);
         addSettings(range, bottom, top, height, fill);
@@ -76,6 +80,12 @@ public final class TunnelEsp extends Module {
         }
         int low = bottom.getInt();
         int high = top.getInt();
+        // The scan reads these once a chunk. A change has to throw the cache away.
+        if (low != lastLow || high != lastHigh) {
+            lastLow = low;
+            lastHigh = high;
+            scanner.reset();
+        }
         scanner.update(range.getInt(), (view, out) -> {
             int baseX = view.pos().getMinBlockX();
             int baseZ = view.pos().getMinBlockZ();

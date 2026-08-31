@@ -41,7 +41,7 @@ public final class AutoNametag extends Module {
     private final BoolSetting rename = new BoolSetting("Rename",
         "Also names mobs that already carry a different name.", true);
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Turn toward the mob on the server side.", true);
+        "Turn towards the mob on the server side.", true);
 
     private final Map<Integer, Integer> tried = new HashMap<>();
     private int lastTick;

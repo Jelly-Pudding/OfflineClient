@@ -40,7 +40,7 @@ public final class BonemealAura extends Module {
     private final BoolSetting lineOfSight = new BoolSetting("Line of sight",
         "Only feeds plants you can see from where you stand.", true);
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Turn toward the plant on the server side.", true);
+        "Turn towards the plant on the server side.", true);
     private final BoolSetting fastPlace = new BoolSetting("Fast place",
         "Ignores the right click cooldown between plants.", true);
     private final BoolSetting whileBreaking = new BoolSetting("Use whilst breaking",
@@ -95,6 +95,11 @@ public final class BonemealAura extends Module {
         if (!inGame() || mc.gameMode == null || mc.player.isSpectator() || mc.gui.screen() != null) {
             return;
         }
+        if (mc.player.isDeadOrDying()) {
+            // Respawn hands out a fresh inventory and the borrowed slots no longer mean anything.
+            loan.forget();
+            return;
+        }
         if (!fastPlace.isOn() && mc.rightClickDelay > 0) {
             return;
         }
@@ -110,6 +115,7 @@ public final class BonemealAura extends Module {
             return;
         }
         if (!holdBoneMeal()) {
+            loan.giveBack();
             return;
         }
         if (multi.isOn()) {

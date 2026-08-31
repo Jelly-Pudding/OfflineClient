@@ -105,6 +105,16 @@ public final class RotationManager {
             && Math.abs(pitchNow - pitch) <= tolerance;
     }
 
+    /**
+     * True once the angle has really reached the server. Only for placements
+     * whose outcome depends on the yaw the server holds such as a bed. Every
+     * other caller wants isFacing because the block position rides the packet.
+     */
+    public static boolean sentIsFacing(float yaw, float pitch, float tolerance) {
+        return Mth.degreesDifferenceAbs(INSTANCE.serverYaw, yaw) <= tolerance
+            && Math.abs(INSTANCE.serverPitch - pitch) <= tolerance;
+    }
+
     // The angle the server last heard. The camera itself whilst nothing is held.
     public static float serverYaw() {
         return INSTANCE.serverYaw;

@@ -25,7 +25,7 @@ public final class AutoShearer extends Module {
     private final BoolSetting antiBreak = new BoolSetting("Anti break",
         "Never uses shears that are about to break.", true);
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Turn toward the animal on the server side.", true);
+        "Turn towards the animal on the server side.", true);
 
     private final SlotSwap slots = new SlotSwap();
     private int sheared;

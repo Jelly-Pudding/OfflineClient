@@ -42,6 +42,11 @@ public final class VoidEsp extends Module {
 
     private final ChunkScanner<Hole> scanner = new ChunkScanner<>();
 
+    // The scan settings the cached chunks were built with.
+    private int lastLayers = -1;
+    private boolean lastOpen;
+    private boolean lastRoof;
+
     public VoidEsp() {
         super("VoidESP", "Shows holes in the bedrock that lead to the void.", Category.RENDER);
         addSettings(range, depth, airOnly, netherRoof, fill);
@@ -80,6 +85,13 @@ public final class VoidEsp extends Module {
         int layers = depth.getInt();
         boolean open = airOnly.isOn();
         boolean roof = netherRoof.isOn() && mc.level.dimension() == Level.NETHER;
+        // The scan reads these once a chunk. A change has to throw the cache away.
+        if (layers != lastLayers || open != lastOpen || roof != lastRoof) {
+            lastLayers = layers;
+            lastOpen = open;
+            lastRoof = roof;
+            scanner.reset();
+        }
 
         scanner.update(range.getInt(), (view, out) -> {
             int baseX = view.pos().getMinBlockX();

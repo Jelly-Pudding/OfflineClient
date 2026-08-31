@@ -12,6 +12,9 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.TextSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.InventoryUtil;
+import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
+import com.jellypudding.offlineclient.util.ItemUtil;
 import com.jellypudding.offlineclient.util.NoteSong;
 import com.jellypudding.offlineclient.util.NoteSong.Note;
 import net.minecraft.core.BlockPos;
@@ -73,7 +76,7 @@ public final class Notebot extends Module {
     private final BoolSetting foldNotes = new BoolSetting("Fold notes",
         "Moves notes outside the two octave range by an octave instead of dropping them.", true);
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Turn toward the note block on the server side.", true);
+        "Turn towards the note block on the server side.", true);
     private final BoolSetting swing = new BoolSetting("Swing",
         "Swings the arm on every hit.", true);
     private final BoolSetting playNext = new BoolSetting("Play next",
@@ -85,6 +88,9 @@ public final class Notebot extends Module {
 
     private NoteSong loaded;
     private Stage stage;
+    // Holds a slot that cannot finish a note block whilst the song plays.
+    private final SlotSwap slots = new SlotSwap();
+
     private boolean paused;
     private int tick;
     private int waitTicks;
@@ -153,6 +159,7 @@ public final class Notebot extends Module {
         assigned.clear();
         tuning.clear();
         struck.clear();
+        slots.restore();
     }
 
     private static Path songsFolder() {
@@ -368,9 +375,35 @@ public final class Notebot extends Module {
             stage = Stage.TUNE;
             return;
         }
+        if (mc.player.getAbilities().instabuild) {
+            ChatUtil.error("Notebot cannot strike note blocks in creative. They break instead.");
+            setEnabled(false);
+            return;
+        }
+        holdSafeItem();
         ChatUtil.message("§bNotebot §7tuned. Playing.");
         tick = 0;
         stage = Stage.PLAY;
+    }
+
+    /**
+     * The server turns a strike into a break whenever the held item would finish
+     * the block in one go. The gentlest thing in the hotbar is held instead.
+     */
+    private void holdSafeItem() {
+        BlockState note = Blocks.NOTE_BLOCK.defaultBlockState();
+        int best = -1;
+        float slowest = ItemUtil.miningSpeed(mc.player.getInventory().getSelectedItem(), note);
+        for (int i = 0; i < InventoryUtil.HOTBAR_SIZE; i++) {
+            float speed = ItemUtil.miningSpeed(mc.player.getInventory().getItem(i), note);
+            if (speed < slowest) {
+                slowest = speed;
+                best = i;
+            }
+        }
+        if (best != -1) {
+            slots.select(best);
+        }
     }
 
     private void play() {

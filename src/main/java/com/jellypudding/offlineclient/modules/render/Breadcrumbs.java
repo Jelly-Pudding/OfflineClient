@@ -62,8 +62,12 @@ public final class Breadcrumbs extends Module {
         }
         sinceSave = 0;
         if (persist.isOn() && inGame()) {
+            // A trail kept from another world would be drawn at the wrong coordinates
+            // and then saved over this world.
+            if (dimension != mc.level.dimension()) {
+                trail.clear();
+            }
             dimension = mc.level.dimension();
-            // A kept trail already holds what the file holds.
             if (trail.isEmpty()) {
                 load();
             }

@@ -248,7 +248,7 @@ public final class BedAura extends Module {
         float heldYaw = mc.player.getYRot();
         mc.player.setYRot(spot.facing().toYRot());
         try {
-            // The turn above already picked the direction.
+            // The rotation has already been asked for. Placing must not ask again.
             return BlockUtil.placeAny(spot.foot(), false, true);
         } finally {
             mc.player.setYRot(heldYaw);
@@ -277,14 +277,15 @@ public final class BedAura extends Module {
     }
 
     /**
-     * Asks for the exact yaw that lays a bed along the side. A yaw a step short
-     * of the target turns the bed a quarter of the way round.
+     * Asks for the exact yaw that lays a bed along the side. The server reads
+     * the direction from the yaw it holds when the click arrives. The placement
+     * therefore waits for the turn to have gone out rather than only be asked for.
      */
     private boolean faceAlong(Direction facing, Vec3 point) {
         float yaw = facing.toYRot();
         float pitch = RotationManager.pitchTo(point);
         RotationManager.requestExact(yaw, pitch, RotationPriority.AURA);
-        return RotationManager.isFacing(yaw, pitch, RotationManager.BLOCK_TOLERANCE);
+        return RotationManager.sentIsFacing(yaw, pitch, RotationManager.BLOCK_TOLERANCE);
     }
 
     private Iterable<BlockPos> nearby(Player target) {

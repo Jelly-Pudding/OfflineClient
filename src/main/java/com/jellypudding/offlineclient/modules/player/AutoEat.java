@@ -9,9 +9,9 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.EntityUtil;
-import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.Modules;
+import com.jellypudding.offlineclient.util.UseHold;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.InteractionHand;
@@ -32,9 +32,6 @@ public final class AutoEat extends Module {
 
     // Ticks to wait after a meal whilst the food and the healing land.
     private static final int SETTLE_TICKS = 10;
-
-    // Ticks to give the hand before the meal is written off.
-    private static final int START_TIMEOUT = 20;
 
     // A golden apple takes a moment to land. Rechecking too early eats a second one.
     private static final int HEAL_SETTLE_TICKS = 30;
@@ -79,8 +76,7 @@ public final class AutoEat extends Module {
 
     private boolean eating;
     private boolean healing;
-    private boolean started;
-    private int waited;
+    private final UseHold use = new UseHold();
     private int settle;
     private final InventoryUtil.HotbarLoan loan = new InventoryUtil.HotbarLoan();
 
@@ -235,16 +231,14 @@ public final class AutoEat extends Module {
         // The offhand needs no swap at all.
         if (slot == Inventory.SLOT_OFFHAND) {
             eating = true;
-            started = false;
-            waited = 0;
+            use.begin();
             return;
         }
         if (!loan.select(slot)) {
             return;
         }
         eating = true;
-        started = false;
-        waited = 0;
+        use.begin();
     }
 
     private void continueEating() {
@@ -252,16 +246,10 @@ public final class AutoEat extends Module {
             stopEating();
             return;
         }
-        if (mc.player.isUsingItem()) {
-            started = true;
-        } else if (started) {
-            finishMeal();
-            return;
-        } else if (++waited > START_TIMEOUT) {
+        if (!use.tick()) {
             finishMeal();
             return;
         }
-        mc.options.keyUse.setDown(true);
         // A screen stops the game reading the use key. The meal is started by hand.
         if (busy() && !mc.player.isUsingItem()) {
             mc.gameMode.useItem(mc.player, offhandUsable()
@@ -276,13 +264,10 @@ public final class AutoEat extends Module {
         settle = wasHealing ? HEAL_SETTLE_TICKS : SETTLE_TICKS;
     }
 
-    // The use key hits the main hand first. Anything usable there would fire instead.
+    // The use key hits the main hand first. Food there would fire instead of the offhand.
     private boolean offhandUsable() {
-        if (!offhand.isOn()) {
-            return false;
-        }
-        ItemStack main = mc.player.getInventory().getSelectedItem();
-        return main.isEmpty() || main.has(DataComponents.FOOD);
+        return offhand.isOn()
+            && !mc.player.getInventory().getSelectedItem().has(DataComponents.FOOD);
     }
 
     private boolean holdingFood() {
@@ -296,8 +281,7 @@ public final class AutoEat extends Module {
         if (eating) {
             eating = false;
             healing = false;
-            started = false;
-            InputUtil.release(mc.options.keyUse);
+            use.release();
         }
         // A loan whose return was refused earlier gets another go.
         loan.giveBack();

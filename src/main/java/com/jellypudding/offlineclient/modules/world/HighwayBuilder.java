@@ -191,6 +191,10 @@ public final class HighwayBuilder extends Module {
             return;
         }
         boolean auto = movement.is(Movement.AUTO);
+        // Manual hands the walking back rather than leaving the key held.
+        if (!auto) {
+            stopWalking();
+        }
         walker.holdAxis(auto && !freeLook.isOn());
         trackProgress();
 
@@ -388,10 +392,7 @@ public final class HighwayBuilder extends Module {
             return false;
         }
         slots.select(slot);
-        Direction support = BlockUtil.findPlaceSupport(target);
-        boolean placed = support != null
-            ? BlockUtil.place(target, support, true, true)
-            : BlockUtil.placeDirect(target, true, true);
+        boolean placed = BlockUtil.placeAny(target, true, true);
         if (placed) {
             idleTicks = 0;
         }

@@ -27,7 +27,7 @@ public final class SelfWeb extends Module {
     private final BoolSetting toggleOff = new BoolSetting("Toggle off when done",
         "Turn off once the web is down.", true);
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Send a look packet toward the web.", true);
+        "Send a look packet towards the web.", true);
 
     private final SlotSwap slots = new SlotSwap();
 

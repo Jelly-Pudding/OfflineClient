@@ -33,7 +33,7 @@ public final class AutoCity extends Module {
     private final BoolSetting chatInfo = new BoolSetting("Chat info",
         "Say why the module stopped.", true);
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Turn toward the block on the server side.", true);
+        "Turn towards the block on the server side.", true);
     private final BoolSetting toggleOff = new BoolSetting("Toggle off when done",
         "Turn off once the block is gone.", true);
     private final BoolSetting render = new BoolSetting("Show target",

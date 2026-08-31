@@ -16,7 +16,6 @@ import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.ItemUtil;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.level.block.Blocks;
@@ -36,11 +35,11 @@ public final class EChestFarmer extends Module {
     private final BoolSetting stopAtAmount = new BoolSetting("Stop at amount",
         "Turns off once you hold enough obsidian.", false);
     private final BoolSetting countExisting = new BoolSetting("Count existing",
-        "Obsidian you already carry counts toward the amount.", false).under(stopAtAmount);
+        "Obsidian you already carry counts towards the amount.", false).under(stopAtAmount);
     private final NumberSetting amount = new NumberSetting("Amount",
         "How much obsidian to gather.", 64, 8, 256, 8).min(1).max(2304).under(stopAtAmount);
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Turn toward the chest on the server side.", true);
+        "Turn towards the chest on the server side.", true);
     private final BoolSetting render = new BoolSetting("Show target",
         "Outlines where the chest goes.", true);
 
@@ -85,6 +84,11 @@ public final class EChestFarmer extends Module {
             target = null;
             return;
         }
+        // Stepping onto the spot would leave every placement refused.
+        if (BlockUtil.intersectsPlayer(target)) {
+            target = null;
+            return;
+        }
         if (stopAtAmount.isOn() && gathered() >= amount.getInt()) {
             ChatUtil.message("§bEChestFarmer §7gathered enough obsidian.");
             setEnabled(false);
@@ -105,6 +109,10 @@ public final class EChestFarmer extends Module {
         }
         BlockPos above = hit.getBlockPos().above();
         BlockState state = BlockUtil.state(above);
+        // A spot the player is standing in refuses every placement.
+        if (BlockUtil.intersectsPlayer(above)) {
+            return false;
+        }
         if (!state.canBeReplaced() && !state.is(Blocks.ENDER_CHEST)) {
             return false;
         }

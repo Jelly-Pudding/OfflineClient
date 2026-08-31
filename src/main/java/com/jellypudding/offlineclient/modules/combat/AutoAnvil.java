@@ -37,7 +37,7 @@ public final class AutoAnvil extends Module {
     private final BoolSetting trigger = new BoolSetting("Place trigger",
         "Put a button or a plate at their feet to break every anvil on landing.", true);
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Send a look packet toward each block.", true);
+        "Send a look packet towards each block.", true);
     private final BoolSetting toggleOff = new BoolSetting("Toggle off when done",
         "Turn off once the target has no helmet left.", false);
     private final BoolSetting render = new BoolSetting("Show spot",

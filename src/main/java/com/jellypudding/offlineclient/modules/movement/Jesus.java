@@ -139,8 +139,8 @@ public final class Jesus extends Module {
 
     /**
      * Liquid below the feet is always solid. With Climb on the liquid level
-     * with the feet is solid too whilst the player stands on dry ground so
-     * they walk into a wall of it and step or jump on top.
+     * with the feet is solid too whilst the player stands on dry ground.
+     * They walk into a wall of it and step or jump on top.
      */
     private double highestSolidLevel() {
         double feet = mc.player.getY();

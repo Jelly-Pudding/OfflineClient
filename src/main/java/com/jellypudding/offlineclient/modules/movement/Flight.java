@@ -21,10 +21,6 @@ public final class Flight extends Module {
     public enum Mode { CREATIVE, DIRECT }
 
 
-    /**
-     * The pace creative flight settles at in blocks per tick. Direct mode
-     * uses the same numbers. A speed of one means the same in both.
-     */
     // How much one wheel notch changes the speed.
     private static final double SCROLL_STEP = 0.1;
 
