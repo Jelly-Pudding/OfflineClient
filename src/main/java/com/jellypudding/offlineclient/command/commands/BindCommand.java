@@ -5,6 +5,8 @@ import com.jellypudding.offlineclient.command.Command;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.command.CommandManager;
+import java.util.List;
 
 public final class BindCommand extends Command {
 
@@ -38,5 +40,10 @@ public final class BindCommand extends Command {
                 + module.getKeybind().getKeyName() + "§7.");
         }
         OfflineClient.INSTANCE.getConfigManager().saveSoon();
+    }
+
+    @Override
+    public List<String> complete(String[] tokens, int index, String current) {
+        return index == 1 ? CommandManager.filter(current, CommandManager.moduleIds()) : List.of();
     }
 }

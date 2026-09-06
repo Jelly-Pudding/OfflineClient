@@ -14,10 +14,8 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundEvents;
 import org.lwjgl.glfw.GLFW;
 
-/**
- * Reached from the title screen. Puts the client back into a known good
- * state when a saved setting makes the game unplayable.
- */
+// Reached from the title screen. Puts the client back into a known good
+// state when a saved setting makes the game unplayable.
 public final class RecoveryScreen extends Screen {
 
     // Destructive marks an action that needs a second click to go through.
@@ -34,7 +32,7 @@ public final class RecoveryScreen extends Screen {
     private static final float TITLE_SCALE = 2f;
     private static final String SUBTITLE = "Puts the client back into a known good state.";
 
-    // Room above the buttons for the title block and below them for the two status lines.
+    // Room above the buttons for the title and below them for the status lines.
     private static final int TITLE_ROOM = 70;
     private static final int FOOT_ROOM = 34;
 
@@ -120,20 +118,20 @@ public final class RecoveryScreen extends Screen {
             // The flash fades out. A repeated click still reads as a new one.
             float flash = flashing ? Math.clamp((flashUntil - now) / (float) FLASH_MS, 0f, 1f) : 0f;
             int fill = flashing
-                ? ColorUtil.lerp(GuiTheme.BG_PANEL, GuiTheme.GREEN, flash * 0.55f)
-                : hovered ? GuiTheme.BG_ROW_HOVER : GuiTheme.BG_PANEL;
+                ? ColorUtil.lerp(GuiTheme.bgPanel(), GuiTheme.GREEN, flash * 0.55f)
+                : hovered ? GuiTheme.bgRowHover() : GuiTheme.bgPanel();
             int edge = flashing ? GuiTheme.GREEN
                 : waiting ? 0xFFE05050
-                : hovered ? GuiTheme.accent() : GuiTheme.EDGE;
+                : hovered ? GuiTheme.accent() : GuiTheme.edge();
 
             RenderUtil.roundedBorderedRect(context, buttonX(), y,
                 buttonX() + BUTTON_WIDTH, y + BUTTON_HEIGHT, GuiTheme.CORNER, fill, edge);
             context.guiRenderState.up();
 
             String label = waiting ? "click again to confirm" : action.label();
-            int labelColor = flashing ? GuiTheme.TEXT
+            int labelColor = flashing ? GuiTheme.text()
                 : waiting ? 0xFFFF9090
-                : hovered ? GuiTheme.accentText() : GuiTheme.TEXT;
+                : hovered ? GuiTheme.accentText() : GuiTheme.text();
             context.centeredText(font, label, width / 2, GuiTheme.textY(y, BUTTON_HEIGHT), labelColor);
 
             if (flashing) {
@@ -147,7 +145,7 @@ public final class RecoveryScreen extends Screen {
 
         int footY = topY() + listHeight() + 8;
         if (hovering != null) {
-            context.centeredText(font, hovering, width / 2, footY, GuiTheme.TEXT_DIM);
+            context.centeredText(font, hovering, width / 2, footY, GuiTheme.textDim());
         }
         // The status keeps its own line. Hovering a button never hides it.
         if (!status.isEmpty()) {
@@ -157,14 +155,14 @@ public final class RecoveryScreen extends Screen {
         boolean overBack = overBack(mouseX, mouseY);
         RenderUtil.roundedBorderedRect(context, backX(), backY(), backX() + BACK_WIDTH,
             backY() + BACK_HEIGHT, GuiTheme.CORNER,
-            overBack ? GuiTheme.BG_ROW_HOVER : GuiTheme.BG_PANEL,
-            overBack ? GuiTheme.accent() : GuiTheme.EDGE);
+            overBack ? GuiTheme.bgRowHover() : GuiTheme.bgPanel(),
+            overBack ? GuiTheme.accent() : GuiTheme.edge());
         context.guiRenderState.up();
         context.centeredText(font, "back", width / 2, GuiTheme.textY(backY(), BACK_HEIGHT),
-            overBack ? GuiTheme.accentText() : GuiTheme.TEXT);
+            overBack ? GuiTheme.accentText() : GuiTheme.text());
     }
 
-    // The title in the accent at twice the usual size with a rule and a line of small print.
+    // The title in the accent at twice size with a rule and small print below.
     private void renderTitle(GuiGraphicsExtractor context, Font font) {
         String title = OfflineClient.NAME + " Recovery";
         int fullWidth = font.width(title);
@@ -177,7 +175,7 @@ public final class RecoveryScreen extends Screen {
         int ruleY = y + (int) (GuiTheme.TEXT_HEIGHT * TITLE_SCALE) + 7;
         int half = (int) (fullWidth * TITLE_SCALE / 2);
         rule(context, width / 2 - half, width / 2 + half, ruleY);
-        context.centeredText(font, SUBTITLE, width / 2, ruleY + 7, GuiTheme.TEXT_DIM);
+        context.centeredText(font, SUBTITLE, width / 2, ruleY + 7, GuiTheme.textDim());
     }
 
     // A hairline that fades out towards both ends.

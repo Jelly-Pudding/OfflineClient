@@ -8,9 +8,11 @@ import com.jellypudding.offlineclient.modules.combat.CrystalAura;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.RotationManager;
 import com.jellypudding.offlineclient.util.RotationPriority;
+import net.minecraft.network.protocol.game.ServerboundSwingPacket;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 
@@ -19,7 +21,10 @@ import java.util.concurrent.ThreadLocalRandom;
 // Sends silly rotations and swings to the server whilst the local view is left alone.
 public final class Derp extends Module {
 
-    public enum Mode { SPIN, SHAKE, HEADBANG, FLAIL, RANDOM }
+    public enum Mode { SPIN, SHAKE, HEADBANG, FLAIL, TWERK, RANDOM }
+
+    // Ticks a full crouch and stand takes at the slowest twerk speed.
+    private static final int TWERK_SLOWEST = 11;
 
     // Ticks between arm swings whilst flailing. A swing takes about six to play out.
     private static final int FLAIL_GAP = 3;
@@ -30,10 +35,14 @@ public final class Derp extends Module {
         .describe(Mode.SHAKE, "Shakes your head from side to side.")
         .describe(Mode.HEADBANG, "Nods your head up and down.")
         .describe(Mode.FLAIL, "Waves both arms about.")
+        .describe(Mode.TWERK, "Crouches up and down on the spot.")
         .describe(Mode.RANDOM, "Points your head somewhere new every tick and flails now and then.");
     private final NumberSetting speed = new NumberSetting("Speed",
         "How far the head moves each tick.", 30, 1, 90, 1, " degrees").min(1).max(180)
         .under(mode, Mode.SPIN, Mode.SHAKE, Mode.HEADBANG);
+    private final NumberSetting twerkSpeed = new NumberSetting("Twerk speed",
+        "How fast you crouch up and down.", 5, 1, 10, 1).min(1).max(10)
+        .under(mode, Mode.TWERK);
     private final BoolSetting pauseInCombat = new BoolSetting("Pause in combat",
         "Stops whilst your hands are busy or CrystalAura has a target.", true);
 
@@ -42,10 +51,12 @@ public final class Derp extends Module {
     private boolean rising = true;
     private boolean left;
     private int flailTimer;
+    private int twerkTimer;
+    private boolean crouched;
 
     public Derp() {
         super("Derp", "Makes you look ridiculous to everyone else.", Category.MISC);
-        addSettings(mode, speed, pauseInCombat);
+        addSettings(mode, speed, twerkSpeed, pauseInCombat);
         searchTags("derp", "silly", "troll", "spin", "flail");
     }
 
@@ -55,8 +66,17 @@ public final class Derp extends Module {
     }
 
     @Override
+    protected void onDisable() {
+        if (crouched) {
+            InputUtil.release(mc.options.keyShift);
+            crouched = false;
+        }
+    }
+
+    @Override
     protected void onEnable() {
         flailTimer = 0;
+        twerkTimer = 0;
         if (inGame()) {
             yaw = mc.player.getYRot();
             pitch = mc.player.getXRot();
@@ -100,6 +120,10 @@ public final class Derp extends Module {
                 flail();
                 return;
             }
+            case TWERK -> {
+                twerk();
+                return;
+            }
             case RANDOM -> {
                 yaw = ThreadLocalRandom.current().nextFloat(-180f, 180f);
                 pitch = ThreadLocalRandom.current().nextFloat(-90f, 90f);
@@ -114,14 +138,31 @@ public final class Derp extends Module {
         RotationManager.requestExact(yaw, pitch, RotationPriority.IDLE);
     }
 
-    // Swings the arms in turn. The server plays the animation to everyone.
+    // Holds and releases the sneak key so everyone sees you bob up and down.
+    private void twerk() {
+        if (twerkTimer > 0) {
+            twerkTimer--;
+            return;
+        }
+        twerkTimer = TWERK_SLOWEST - twerkSpeed.getInt();
+        crouched = !crouched;
+        if (crouched) {
+            InputUtil.hold(mc.options.keyShift);
+        } else {
+            InputUtil.release(mc.options.keyShift);
+        }
+    }
+
+    // Swings the arms in turn. Only the packet goes out.
+    // The server plays the animation but never echoes it back so the view stays still.
     private void flail() {
         if (flailTimer > 0) {
             return;
         }
         flailTimer = FLAIL_GAP;
         left = !left;
-        mc.player.swing(left ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND);
+        mc.player.connection.send(new ServerboundSwingPacket(
+            left ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND));
     }
 
     private boolean aimingModuleActive() {

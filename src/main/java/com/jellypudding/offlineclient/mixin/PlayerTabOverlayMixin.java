@@ -1,6 +1,8 @@
 package com.jellypudding.offlineclient.mixin;
 
 import com.jellypudding.offlineclient.modules.misc.BetterTab;
+import com.jellypudding.offlineclient.modules.misc.NameProtect;
+import com.jellypudding.offlineclient.util.Modules;
 import com.llamalad7.mixinextras.injector.ModifyReturnValue;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.PlayerTabOverlay;
@@ -33,6 +35,10 @@ public class PlayerTabOverlayMixin {
         method = "getNameForDisplay(Lnet/minecraft/client/multiplayer/PlayerInfo;)Lnet/minecraft/network/chat/Component;",
         at = @At("RETURN"))
     private Component onGetNameForDisplay(Component original, PlayerInfo info) {
+        NameProtect nameProtect = Modules.get(NameProtect.class);
+        if (nameProtect != null) {
+            original = nameProtect.filter(original);
+        }
         BetterTab tab = BetterTab.get();
         return tab == null ? original : tab.decorate(original, info);
     }
@@ -42,5 +48,14 @@ public class PlayerTabOverlayMixin {
     private long onPlayerLimit(long original) {
         BetterTab tab = BetterTab.get();
         return tab == null ? original : tab.playerLimit();
+    }
+
+    // Vanilla wraps to a new column after twenty rows.
+    @ModifyConstant(
+        method = "extractRenderState(Lnet/minecraft/client/gui/GuiGraphicsExtractor;ILnet/minecraft/world/scores/Scoreboard;Lnet/minecraft/world/scores/Objective;)V",
+        constant = @Constant(intValue = 20))
+    private int onColumnHeight(int original) {
+        BetterTab tab = BetterTab.get();
+        return tab == null ? original : tab.columnHeight();
     }
 }

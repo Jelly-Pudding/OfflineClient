@@ -7,15 +7,19 @@ import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.ExclusivityGroup;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
+import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.TextSetting;
 import com.jellypudding.offlineclient.util.BlockMiner;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.FaceMode;
+import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
-import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.ItemUtil;
+import com.jellypudding.offlineclient.util.RotationPriority;
+import com.jellypudding.offlineclient.util.SwingMode;
 import net.minecraft.client.gui.screens.inventory.MerchantScreen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -40,16 +44,14 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.Vec3;
 
-import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Set;
 
-/**
- * Rerolls a fresh librarian's book trade by breaking and replacing its
- * lectern until it offers a book from the wanted list.
- */
+// Rerolls a fresh librarian's book trade by breaking and replacing its
+// lectern until it offers a book from the wanted list.
 public final class AutoLibrarian extends Module {
 
     private static final int VILLAGER_COLOR = 0xFF30E030;
@@ -61,28 +63,45 @@ public final class AutoLibrarian extends Module {
 
     private enum Stage { FIND_VILLAGER, FIND_LECTERN, OPEN_TRADE, READ_TRADE, BREAK_LECTERN, PLACE_LECTERN }
 
+    public enum Update { OFF, REMOVE, PRICE }
+
+    // One entry of the wanted list along with the text it was written as.
+    private record Wish(String token, Holder<Enchantment> enchantment, int level, int price) {
+    }
+
     private final TextSetting wanted = new TextSetting("Wanted books",
-        "Enchantments separated by spaces. A colon and a number sets the lowest level. Example: mending unbreaking:3",
+        "Enchantments separated by spaces. A colon and a number sets the lowest level and a"
+            + " second one sets the most emeralds. Example: mending unbreaking:3:20",
         "mending unbreaking:3 sharpness:5 protection:4 efficiency:5 fortune:3 looting:3 silk_touch");
     private final NumberSetting maxPrice = new NumberSetting("Max price",
-        "The most emeralds a wanted book may cost.", 64, 1, 64, 1, " emeralds").max(64);
+        "The most emeralds a book may cost when its own entry names no price.",
+        64, 1, 64, 1, " emeralds").max(64);
+    private final EnumSetting<Update> updateBooks = new EnumSetting<>("Update books",
+        "What to do with a book on the list once a villager has learnt it.", Update.OFF)
+        .describe(Update.OFF, "Leave the list alone.")
+        .describe(Update.REMOVE, "Strike it off so the next villager learns something else.")
+        .describe(Update.PRICE, "Lower its price so the next villager has to beat this one.");
     private final BoolSetting lockIn = new BoolSetting("Lock in",
         "Buys the book once and the villager keeps the trade. Needs emeralds and paper or a book.", false);
     private final NumberSetting range = new NumberSetting("Range",
         "How far the villager and its lectern may be.", 5, 1, 6, 0.1).max(6);
-    private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Turn towards the villager and lectern on the server side.", true);
+    private final NumberSetting repairMode = new NumberSetting("Repair mode",
+        "Stops using a tool once this many uses are left. Nought never stops.",
+        1, 0, 100, 1, " uses").min(0);
+    private final EnumSetting<FaceMode> faceTarget = FaceMode.setting(FaceMode.SERVER);
+    private final EnumSetting<SwingMode> swing = SwingMode.setting(SwingMode.BOTH);
 
     private Stage stage;
     private Villager villager;
     private BlockPos lectern;
     private final Set<Integer> spent = new HashSet<>();
-    private final SlotSwap slots = new SlotSwap();
+    private final InventoryUtil.HotbarLoan loan = new InventoryUtil.HotbarLoan();
     private int cooldown;
+    private boolean sneaking;
 
     public AutoLibrarian() {
         super("AutoLibrarian", "Rerolls a librarian until it sells a book you want.", Category.WORLD);
-        addSettings(wanted, maxPrice, lockIn, range, rotate);
+        addSettings(wanted, maxPrice, updateBooks, lockIn, range, repairMode, faceTarget, swing);
         searchTags("villager trainer", "enchanted book", "lectern");
     }
 
@@ -117,7 +136,8 @@ public final class AutoLibrarian extends Module {
     @Override
     protected void onDisable() {
         BlockMiner.release();
-        slots.restoreIfMine();
+        loan.giveBack();
+        stopSneaking();
         villager = null;
         lectern = null;
     }
@@ -130,6 +150,9 @@ public final class AutoLibrarian extends Module {
         if (cooldown > 0) {
             cooldown--;
             return;
+        }
+        if (stage != Stage.PLACE_LECTERN) {
+            stopSneaking();
         }
         switch (stage) {
             case FIND_VILLAGER -> findVillager();
@@ -198,12 +221,11 @@ public final class AutoLibrarian extends Module {
             setEnabled(false);
             return;
         }
-        if (rotate.isOn()) {
-            BlockUtil.faceVector(villager.getBoundingBox().getCenter());
-        }
-        EntityHitResult hit = new EntityHitResult(villager, villager.getBoundingBox().getCenter());
+        Vec3 centre = villager.getBoundingBox().getCenter();
+        faceTarget.getValue().face(centre, RotationPriority.PLACE);
+        EntityHitResult hit = new EntityHitResult(villager, centre);
         if (mc.gameMode.interact(mc.player, villager, hit, InteractionHand.MAIN_HAND).consumesAction()) {
-            mc.player.swing(InteractionHand.MAIN_HAND);
+            swing.getValue().swing(InteractionHand.MAIN_HAND);
         }
         mc.rightClickDelay = 4;
     }
@@ -229,8 +251,9 @@ public final class AutoLibrarian extends Module {
         for (MerchantOffer offer : menu.getOffers()) {
             ItemStack book = offer.getResult();
             if (book.is(Items.ENCHANTED_BOOK)) {
-                if (isWanted(offer)) {
-                    accept(menu, index, book);
+                Wish match = wishFor(offer);
+                if (match != null) {
+                    accept(menu, index, book, match, offer.getCostA().getCount());
                     return;
                 }
                 ChatUtil.message("§bAutoLibrarian §7offered §f" + book.getHoverName().getString()
@@ -243,45 +266,50 @@ public final class AutoLibrarian extends Module {
         stage = Stage.BREAK_LECTERN;
     }
 
-    private boolean isWanted(MerchantOffer offer) {
-        if (offer.getCostA().getCount() > maxPrice.getInt()) {
-            return false;
-        }
+    // The wanted entry the offer satisfies or null when none does.
+    private Wish wishFor(MerchantOffer offer) {
+        int price = offer.getCostA().getCount();
         ItemEnchantments enchantments = EnchantmentHelper.getEnchantmentsForCrafting(offer.getResult());
-        Map<Holder<Enchantment>, Integer> wishes = wishes();
-        for (Holder<Enchantment> enchantment : enchantments.keySet()) {
-            Integer level = wishes.get(enchantment);
-            if (level != null && enchantments.getLevel(enchantment) >= level) {
-                return true;
+        for (Wish wish : wishes()) {
+            if (price > wish.price()) {
+                continue;
+            }
+            if (enchantments.getLevel(wish.enchantment()) >= wish.level()) {
+                return wish;
             }
         }
-        return false;
+        return null;
     }
 
     // The wanted list parsed against the enchantment registry of this world.
-    private Map<Holder<Enchantment>, Integer> wishes() {
-        Map<Holder<Enchantment>, Integer> result = new HashMap<>();
+    private List<Wish> wishes() {
+        List<Wish> result = new ArrayList<>();
         var registry = mc.level.registryAccess().lookupOrThrow(Registries.ENCHANTMENT);
-        for (String entry : wanted.getValue().toLowerCase(Locale.ROOT).split("\\s+")) {
-            if (entry.isBlank()) {
+        for (String token : wanted.getValue().toLowerCase(Locale.ROOT).split("\\s+")) {
+            if (token.isBlank()) {
                 continue;
             }
-            String[] parts = entry.split(":");
+            List<String> parts = new ArrayList<>(List.of(token.split(":")));
+            // A trailing number is the level and two of them are the level then the price.
+            int price = maxPrice.getInt();
             int level = 1;
-            if (parts.length > 1) {
-                try {
-                    level = Integer.parseInt(parts[parts.length - 1]);
-                } catch (NumberFormatException ignored) {
+            if (parts.size() > 1 && isNumber(parts.get(parts.size() - 1))) {
+                int last = Integer.parseInt(parts.remove(parts.size() - 1));
+                if (parts.size() > 1 && isNumber(parts.get(parts.size() - 1))) {
+                    price = last;
+                    level = Integer.parseInt(parts.remove(parts.size() - 1));
+                } else {
+                    level = last;
                 }
             }
-            Identifier id = Identifier.tryParse(parts.length > 1 && !isNumber(parts[1])
-                ? parts[0] + ":" + parts[1] : parts[0]);
+            Identifier id = Identifier.tryParse(String.join(":", parts));
             if (id == null) {
                 continue;
             }
-            ResourceKey<Enchantment> key = ResourceKey.create(Registries.ENCHANTMENT, id);
-            int lowest = level;
-            registry.get(key).ifPresent(holder -> result.put(holder, lowest));
+            int wantedLevel = level;
+            int wantedPrice = price;
+            registry.get(ResourceKey.create(Registries.ENCHANTMENT, id))
+                .ifPresent(holder -> result.add(new Wish(token, holder, wantedLevel, wantedPrice)));
         }
         return result;
     }
@@ -290,7 +318,7 @@ public final class AutoLibrarian extends Module {
         return !text.isEmpty() && text.chars().allMatch(Character::isDigit);
     }
 
-    private void accept(MerchantMenu menu, int index, ItemStack book) {
+    private void accept(MerchantMenu menu, int index, ItemStack book, Wish wish, int price) {
         ChatUtil.message("§bAutoLibrarian §7found §f" + book.getHoverName().getString() + "§7.");
         if (lockIn.isOn()) {
             // Buying once fixes the offers for good.
@@ -299,8 +327,38 @@ public final class AutoLibrarian extends Module {
             mc.player.connection.send(new ServerboundSelectTradePacket(index));
             mc.gameMode.handleContainerInput(menu.containerId, RESULT_SLOT, 0, ContainerInput.QUICK_MOVE, mc.player);
         }
+        updateWanted(wish, price);
         closeTrade();
         setEnabled(false);
+    }
+
+    // Strikes the book off the list or asks the next villager for a better price.
+    private void updateWanted(Wish wish, int price) {
+        if (updateBooks.is(Update.OFF)) {
+            return;
+        }
+        String replacement = "";
+        if (updateBooks.is(Update.PRICE) && price > 1) {
+            replacement = wish.enchantment().getRegisteredName() + ":" + wish.level()
+                + ":" + (price - 1);
+        }
+        List<String> kept = new ArrayList<>();
+        boolean done = false;
+        for (String token : wanted.getValue().split("\\s+")) {
+            if (token.isBlank()) {
+                continue;
+            }
+            if (!done && token.equalsIgnoreCase(wish.token())) {
+                done = true;
+                if (!replacement.isEmpty()) {
+                    kept.add(replacement);
+                }
+                continue;
+            }
+            kept.add(token);
+        }
+        wanted.setValue(String.join(" ", kept));
+        ChatUtil.message("§bAutoLibrarian §7wanted books updated.");
     }
 
     private void closeTrade() {
@@ -318,11 +376,13 @@ public final class AutoLibrarian extends Module {
             return;
         }
         int tool = ItemUtil.bestToolSlot(BlockUtil.state(lectern), 1,
-            stack -> !ItemUtil.nearlyBroken(stack), InventoryUtil.HOTBAR_SIZE);
+            stack -> !ItemUtil.nearlyBroken(stack, repairMode.getInt()), InventoryUtil.HOTBAR_SIZE);
         if (tool != -1) {
-            slots.select(tool);
+            loan.select(tool);
         }
-        BlockMiner.mine(lectern, rotate.isOn());
+        Direction side = BlockUtil.facingSide(lectern);
+        faceTarget.getValue().face(BlockUtil.hitPoint(lectern, side), RotationPriority.MINE);
+        BlockMiner.mine(lectern, false, swing.getValue());
     }
 
     private void placeLectern() {
@@ -330,7 +390,8 @@ public final class AutoLibrarian extends Module {
             return;
         }
         if (BlockUtil.state(lectern).is(Blocks.LECTERN)) {
-            slots.restoreIfMine();
+            stopSneaking();
+            loan.giveBack();
             // The villager needs a moment to take the new job site up.
             cooldown = 20;
             stage = Stage.OPEN_TRADE;
@@ -340,9 +401,9 @@ public final class AutoLibrarian extends Module {
             stage = Stage.BREAK_LECTERN;
             return;
         }
-        int slot = InventoryUtil.hotbarSlot(stack -> stack.is(Items.LECTERN));
+        int slot = InventoryUtil.findSlot(Items.LECTERN, InventoryUtil.WHOLE_INVENTORY);
         if (slot == -1) {
-            ChatUtil.error("No lectern in the hotbar to put back.");
+            ChatUtil.error("No lectern left to put back.");
             setEnabled(false);
             return;
         }
@@ -350,8 +411,28 @@ public final class AutoLibrarian extends Module {
         if (support == null) {
             return;
         }
-        slots.select(slot);
-        BlockUtil.place(lectern, support, rotate.isOn(), true);
+        if (!loan.select(slot)) {
+            return;
+        }
+        // Sneaking stops the click opening a chest or a trapdoor underneath.
+        InputUtil.hold(mc.options.keyShift);
+        sneaking = true;
+        if (!mc.player.isShiftKeyDown()) {
+            return;
+        }
+        BlockPos against = lectern.relative(support);
+        faceTarget.getValue().face(BlockUtil.hitPoint(against, support.getOpposite()),
+            RotationPriority.PLACE);
+        if (BlockUtil.place(lectern, support, false, false)) {
+            swing.getValue().swing(InteractionHand.MAIN_HAND);
+        }
+    }
+
+    private void stopSneaking() {
+        if (sneaking) {
+            InputUtil.release(mc.options.keyShift);
+            sneaking = false;
+        }
     }
 
     @Subscribe

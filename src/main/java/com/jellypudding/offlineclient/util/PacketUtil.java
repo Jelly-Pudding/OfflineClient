@@ -1,11 +1,28 @@
 package com.jellypudding.offlineclient.util;
 
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.network.Connection;
+import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 
 public final class PacketUtil {
 
+    // The live connection. Set from the netty thread on every packet read.
+    private static volatile Connection connection;
+
     private PacketUtil() {
+    }
+
+    public static void noteConnection(Connection live) {
+        connection = live;
+    }
+
+    // Sends straight down the wire. Works before a world exists.
+    public static void send(Packet<?> packet) {
+        Connection live = connection;
+        if (live != null && live.isConnected()) {
+            live.send(packet);
+        }
     }
 
     public static ServerboundMovePlayerPacket withOnGround(ServerboundMovePlayerPacket packet,

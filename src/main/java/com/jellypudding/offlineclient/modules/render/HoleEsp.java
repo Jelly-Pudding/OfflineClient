@@ -5,8 +5,10 @@ import com.jellypudding.offlineclient.event.events.Render3DEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.render.BoxStyle;
 import com.jellypudding.offlineclient.render.DrawBatch;
 import com.jellypudding.offlineclient.setting.BoolSetting;
+import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ColorUtil;
@@ -26,15 +28,9 @@ import java.util.Set;
 public final class HoleEsp extends Module {
 
     private enum Wall {
-        BEDROCK(0xFF50FF40),
-        OBSIDIAN(0xFFFF4040),
-        MIXED(0xFFFFA030);
-
-        private final int color;
-
-        Wall(int color) {
-            this.color = color;
-        }
+        BEDROCK,
+        OBSIDIAN,
+        MIXED
     }
 
     private record Hole(AABB box, Wall wall) {
@@ -60,8 +56,23 @@ public final class HoleEsp extends Module {
         "Ticks between scans.", 2, 1, 20, 1, " ticks").min(1);
     private final NumberSetting height = new NumberSetting("Height",
         "How tall the drawn box is.", 0.3, 0.1, 1, 0.1).min(0.05);
-    private final BoolSetting fill = new BoolSetting("Fill",
-        "Adds a faint tint inside each box.", true);
+    private final BoxStyle style = BoxStyle.shapeOnly(BoxStyle.Shape.BOTH);
+    private final BoolSetting topFace = new BoolSetting("Top face",
+        "Tint the top of each box.", true).visibleWhen(style::drawsSides);
+    private final BoolSetting bottomFace = new BoolSetting("Bottom face",
+        "Tint the floor of each box.", false).visibleWhen(style::drawsSides);
+    private final ColorSetting bedrockTop = new ColorSetting("Bedrock top",
+        "Colour at the top of a bedrock hole.", 96, 1f, 1f, false);
+    private final ColorSetting bedrockBottom = new ColorSetting("Bedrock bottom",
+        "Colour the sides of a bedrock hole fade down to.", 96, 1f, 1f, false);
+    private final ColorSetting obsidianTop = new ColorSetting("Obsidian top",
+        "Colour at the top of an obsidian hole.", 0, 1f, 1f, false);
+    private final ColorSetting obsidianBottom = new ColorSetting("Obsidian bottom",
+        "Colour the sides of an obsidian hole fade down to.", 0, 1f, 1f, false);
+    private final ColorSetting mixedTop = new ColorSetting("Mixed top",
+        "Colour at the top of a hole walled in bedrock and obsidian.", 30, 1f, 1f, false);
+    private final ColorSetting mixedBottom = new ColorSetting("Mixed bottom",
+        "Colour the sides of a mixed hole fade down to.", 30, 1f, 1f, false);
     private final BoolSetting throughWalls = new BoolSetting("Through walls",
         "Show holes behind blocks.", true);
 
@@ -70,8 +81,10 @@ public final class HoleEsp extends Module {
 
     public HoleEsp() {
         super("HoleESP", "Highlights safe holes to stand in.", Category.RENDER);
-        addSettings(horizontal, vertical, minHeight, doubles, ignoreOwn, webs, refresh,
-            height, fill, throughWalls);
+        addSettings(horizontal, vertical, minHeight, doubles, ignoreOwn, webs, refresh, height);
+        addSettings(style.settings());
+        addSettings(topFace, bottomFace, bedrockTop, bedrockBottom, obsidianTop, obsidianBottom,
+            mixedTop, mixedBottom, throughWalls);
         searchTags("bedrock", "obsidian", "crystal");
     }
 
@@ -133,10 +146,8 @@ public final class HoleEsp extends Module {
         }
     }
 
-    /**
-     * Every side but the top must be bedrock or obsidian. One side may be
-     * another open block for a double hole and its own sides must be safe too.
-     */
+    // Every side but the top must be bedrock or obsidian.
+    // One side may be an open block for a double hole if its own sides are safe too.
     private void check(BlockPos pos, Set<BlockPos> seen) {
         int bedrock = 0;
         int obsidian = 0;
@@ -232,11 +243,40 @@ public final class HoleEsp extends Module {
     private void onRender3D(Render3DEvent event) {
         DrawBatch batch = event.getBatch();
         boolean through = throughWalls.isOn();
+        float share = style.fillShare();
         for (Hole hole : holes) {
-            batch.outlineBox(hole.box(), hole.wall().color, through);
-            if (fill.isOn()) {
-                batch.solidBox(hole.box(), ColorUtil.withAlpha(hole.wall().color, 50), through);
+            int top = topColor(hole.wall());
+            int bottom = bottomColor(hole.wall());
+            AABB box = hole.box();
+            if (style.drawsSides()) {
+                batch.gradientSides(box, ColorUtil.fade(bottom, 0), ColorUtil.fade(top, share), through);
+                if (topFace.isOn()) {
+                    batch.solidFace(box, Direction.UP, ColorUtil.fade(top, share), through);
+                }
+                if (bottomFace.isOn()) {
+                    batch.solidFace(box, Direction.DOWN, ColorUtil.fade(bottom, share), through);
+                }
+            }
+            if (style.drawsLines()) {
+                batch.outlineBox(box, top, through);
+                batch.outlineFace(box, Direction.DOWN, bottom, through);
             }
         }
+    }
+
+    private int topColor(Wall wall) {
+        return switch (wall) {
+            case BEDROCK -> bedrockTop.getColor();
+            case OBSIDIAN -> obsidianTop.getColor();
+            case MIXED -> mixedTop.getColor();
+        };
+    }
+
+    private int bottomColor(Wall wall) {
+        return switch (wall) {
+            case BEDROCK -> bedrockBottom.getColor();
+            case OBSIDIAN -> obsidianBottom.getColor();
+            case MIXED -> mixedBottom.getColor();
+        };
     }
 }

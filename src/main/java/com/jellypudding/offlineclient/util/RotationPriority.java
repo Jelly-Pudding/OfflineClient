@@ -1,9 +1,6 @@
 package com.jellypudding.offlineclient.util;
 
-/**
- * Declared from the least important to the most important and compared in
- * that order.
- */
+// Declared from the least important to the most important and compared in that order.
 public enum RotationPriority {
 
     // Cosmetic turning.

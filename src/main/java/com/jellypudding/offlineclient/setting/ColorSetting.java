@@ -4,7 +4,8 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.jellypudding.offlineclient.util.ColorUtil;
 
-// A colour stored as a hue from 0 to 360 with saturation and brightness plus an optional rainbow mode.
+// A colour stored as a hue from nought to 360 with saturation and brightness.
+// Rainbow mode cycles the hue on its own.
 public final class ColorSetting extends Setting<Float> {
 
     // Full saturation and full brightness.
@@ -14,15 +15,27 @@ public final class ColorSetting extends Setting<Float> {
     private static final float DEFAULT_SATURATION = 0.75f;
 
     private final boolean defaultRainbow;
+    private final float defaultSaturation;
+    private final float defaultBrightness;
 
     private boolean rainbow;
-    private float saturation = DEFAULT_SATURATION;
-    private float brightness = FULL;
+    private float saturation;
+    private float brightness;
 
     public ColorSetting(String name, String description, float defaultHue, boolean defaultRainbow) {
+        this(name, description, defaultHue, DEFAULT_SATURATION, FULL, defaultRainbow);
+    }
+
+    // A default of any shade. Zero saturation gives white and grey.
+    public ColorSetting(String name, String description, float defaultHue, float defaultSaturation,
+                        float defaultBrightness, boolean defaultRainbow) {
         super(name, description, defaultHue);
         this.defaultRainbow = defaultRainbow;
+        this.defaultSaturation = defaultSaturation;
+        this.defaultBrightness = defaultBrightness;
         this.rainbow = defaultRainbow;
+        this.saturation = defaultSaturation;
+        this.brightness = defaultBrightness;
     }
 
     // Current ARGB colour.
@@ -79,8 +92,8 @@ public final class ColorSetting extends Setting<Float> {
     public void reset() {
         super.reset();
         rainbow = defaultRainbow;
-        saturation = DEFAULT_SATURATION;
-        brightness = FULL;
+        saturation = defaultSaturation;
+        brightness = defaultBrightness;
     }
 
     @Override
@@ -102,8 +115,8 @@ public final class ColorSetting extends Setting<Float> {
         if (o.has("hue")) {
             setHue(o.get("hue").getAsFloat());
         }
-        setSaturation(o.has("saturation") ? o.get("saturation").getAsFloat() : DEFAULT_SATURATION);
-        setBrightness(o.has("brightness") ? o.get("brightness").getAsFloat() : FULL);
+        setSaturation(o.has("saturation") ? o.get("saturation").getAsFloat() : defaultSaturation);
+        setBrightness(o.has("brightness") ? o.get("brightness").getAsFloat() : defaultBrightness);
         if (o.has("rainbow")) {
             rainbow = o.get("rainbow").getAsBoolean();
         }

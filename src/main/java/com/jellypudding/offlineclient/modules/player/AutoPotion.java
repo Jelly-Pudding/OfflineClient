@@ -24,10 +24,8 @@ import net.minecraft.world.item.alchemy.PotionContents;
 import java.util.List;
 import java.util.function.Predicate;
 
-/**
- * Drinks a potion when health drops or the player catches fire or an effect
- * is about to run out. Bottles anywhere in the inventory count.
- */
+// Drinks a potion when health drops or you catch fire or an effect is about to end.
+// Bottles anywhere in the inventory count.
 public final class AutoPotion extends Module {
 
     // Ticks to wait after a drink whilst the effect and the health land.

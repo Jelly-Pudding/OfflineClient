@@ -4,10 +4,8 @@ import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 
-/**
- * Lifts the three vanilla checks that stop one action whilst another is
- * running. The work is done in MinecraftMixin which reads these settings.
- */
+// Lifts the three vanilla checks that stop one action whilst another is running.
+// The work is done in MinecraftMixin which reads these settings.
 public final class Multitask extends Module {
 
     private final BoolSetting whileMining = new BoolSetting("Use whilst mining",

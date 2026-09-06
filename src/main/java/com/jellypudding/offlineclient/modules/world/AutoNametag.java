@@ -5,6 +5,7 @@ import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
+import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
@@ -12,6 +13,7 @@ import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
+import com.jellypudding.offlineclient.util.TargetPriority;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
@@ -38,6 +40,7 @@ public final class AutoNametag extends Module {
         List.of(EntityTypes.VILLAGER, EntityTypes.HORSE, EntityTypes.WOLF, EntityTypes.CAT));
     private final NumberSetting range = new NumberSetting("Range",
         "How close a mob has to be.", 5, 1, 6, 0.1).max(6);
+    private final EnumSetting<TargetPriority> priority = TargetPriority.setting("Names", TargetPriority.NEAREST);
     private final BoolSetting rename = new BoolSetting("Rename",
         "Also names mobs that already carry a different name.", true);
     private final BoolSetting rotate = new BoolSetting("Rotate",
@@ -50,7 +53,7 @@ public final class AutoNametag extends Module {
 
     public AutoNametag() {
         super("AutoNametag", "Names every chosen mob near you with the tag you carry.", Category.WORLD);
-        addSettings(entities, range, rename, rotate);
+        addSettings(entities, range, priority, rename, rotate);
         searchTags("name tag", "rename mobs");
     }
 
@@ -89,7 +92,8 @@ public final class AutoNametag extends Module {
         tried.values().removeIf(expiry -> expiry <= now);
         ItemStack tag = mc.player.getInventory().getItem(slot);
 
-        Entity target = EntityUtil.nearest(range.getValue(), entity -> wanted(entity, tag));
+        Entity target = EntityUtil.best(range.getValue(), priority.getValue(),
+            entity -> wanted(entity, tag));
         if (target == null) {
             slots.restoreIfMine();
             return;

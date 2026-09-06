@@ -3,6 +3,7 @@ package com.jellypudding.offlineclient.mixin;
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.modules.movement.EdgeGuard;
 import com.jellypudding.offlineclient.modules.movement.NoClip;
+import com.jellypudding.offlineclient.modules.movement.Sprint;
 import com.jellypudding.offlineclient.modules.world.Scaffold;
 import com.jellypudding.offlineclient.util.Modules;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
@@ -11,6 +12,7 @@ import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
@@ -18,10 +20,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(Player.class)
 public abstract class PlayerMixin {
 
-    /**
-     * Vanilla sneaking clamps the player to the edge. Scaffold has already
-     * placed the block below whilst it is building downward.
-     */
+    // Vanilla sneaking clamps the player to the edge. Scaffold has already
+    // placed the block below whilst it is building downward.
     @Inject(
         method = "maybeBackOffFromEdge(Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/entity/MoverType;)Lnet/minecraft/world/phys/Vec3;",
         at = @At("HEAD"),
@@ -34,10 +34,8 @@ public abstract class PlayerMixin {
         }
     }
 
-    /**
-     * The sneak edge check probes down by the step height. EdgeGuard holds the
-     * probe at the vanilla depth.
-     */
+    // The sneak edge check probes down by the step height. EdgeGuard holds
+    // the probe at the vanilla depth.
     @WrapOperation(
         method = "maybeBackOffFromEdge(Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/entity/MoverType;)Lnet/minecraft/world/phys/Vec3;",
         at = @At(value = "INVOKE",
@@ -48,6 +46,33 @@ public abstract class PlayerMixin {
             return Math.min(depth, 0.6f);
         }
         return depth;
+    }
+
+    // A landed hit halves the speed and clears the sprint. Sprint can keep both.
+    @WrapOperation(
+        method = "causeExtraKnockback(Lnet/minecraft/world/entity/Entity;FLnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/damagesource/DamageSource;FZ)V",
+        at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/world/entity/player/Player;setDeltaMovement(Lnet/minecraft/world/phys/Vec3;)V"))
+    private void wrapHitSlowdown(Player player, Vec3 velocity, Operation<Void> original) {
+        if (!offlineclient$keepsSprint(player)) {
+            original.call(player, velocity);
+        }
+    }
+
+    @WrapOperation(
+        method = "causeExtraKnockback(Lnet/minecraft/world/entity/Entity;FLnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/damagesource/DamageSource;FZ)V",
+        at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/world/entity/player/Player;setSprinting(Z)V"))
+    private void wrapHitSprintStop(Player player, boolean sprinting, Operation<Void> original) {
+        if (!offlineclient$keepsSprint(player)) {
+            original.call(player, sprinting);
+        }
+    }
+
+    @Unique
+    private static boolean offlineclient$keepsSprint(Player player) {
+        Sprint sprint = Modules.get(Sprint.class);
+        return player == OfflineClient.MC.player && sprint != null && sprint.keepsSprintOnHit();
     }
 
     // The physics flag is rebuilt from this every tick. NoClip answers yes.

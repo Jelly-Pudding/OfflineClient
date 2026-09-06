@@ -54,7 +54,8 @@ public final class ClickGuiScreen extends GuiScreenBase {
     // Panels with no saved layout. Tiled once the screen size is known.
     private final List<Panel> freshPanels = new ArrayList<>();
 
-    // The saved stacking order. Higher draws on top. Only used whilst the panels are built.
+    // The saved stacking order. Higher draws on top. Only used whilst the
+    // panels are built.
     private final Map<Panel, Integer> layers = new HashMap<>();
 
     // The results box is centred. Dragging either edge widens it both ways.
@@ -83,6 +84,7 @@ public final class ClickGuiScreen extends GuiScreenBase {
         // The panel that was on top last time comes back on top.
         panels.sort(Comparator.comparingInt(panel -> layers.getOrDefault(panel, 0)));
         layers.clear();
+        restoreSearch();
     }
 
     // A hand edited or corrupt layout must never stop the GUI opening.
@@ -156,6 +158,7 @@ public final class ClickGuiScreen extends GuiScreenBase {
             gui.add(panel.getTitle(), state);
         }
         gui.addProperty("searchWidth", searchWidth);
+        saveSearch();
         OfflineClient.INSTANCE.getConfigManager().saveNow();
     }
 
@@ -176,10 +179,8 @@ public final class ClickGuiScreen extends GuiScreenBase {
         return false;
     }
 
-    /**
-     * Panels saved on a bigger screen can end up outside the window. This
-     * runs again on every resize.
-     */
+    // Panels saved on a bigger screen can end up outside the window. This
+    // runs again on every resize.
     @Override
     protected void init() {
         super.init();
@@ -207,11 +208,8 @@ public final class ClickGuiScreen extends GuiScreenBase {
         nudged.clear();
     }
 
-    /**
-     * Lays the untouched panels out in centred rows. Starting them hard against
-     * the left edge leaves every bit of slack on one side and looks lopsided on
-     * a first run.
-     */
+    // Lays untouched panels out in centred rows. Starting hard against the
+    // left edge leaves slack on one side and looks lopsided on a first run.
     private void tilePanels() {
         if (freshPanels.isEmpty()) {
             return;
@@ -304,10 +302,8 @@ public final class ClickGuiScreen extends GuiScreenBase {
         return ScrollBar.trackX(searchX() + 2, searchWidth - 4);
     }
 
-    /**
-     * An expanded row can be taller than the view. Its top edge is pinned into
-     * sight and the rest is reached by scrolling.
-     */
+    // An expanded row can be taller than the view. Its top edge is pinned
+    // into sight and the rest is reached by scrolling.
     private void keepVisible(ModuleRow target) {
         int view = resultsViewHeight();
         int top = 0;
@@ -443,14 +439,14 @@ public final class ClickGuiScreen extends GuiScreenBase {
         RenderUtil.shadow(context, x, y, x + searchWidth, y + box, 3);
         context.guiRenderState.up();
         RenderUtil.roundedBorderedRect(context, x, y, x + searchWidth, y + box,
-            GuiTheme.CORNER + 1, GuiTheme.BG_WINDOW, GuiTheme.accent());
+            GuiTheme.CORNER + 1, GuiTheme.bgWindow(), GuiTheme.accent());
         context.guiRenderState.up();
 
         int rowX = x + 2;
         int viewTop = y + 2;
         if (searchRows.isEmpty()) {
             context.text(font, "no matches", rowX + 5, GuiTheme.textY(viewTop, FOOTER_HEIGHT),
-                GuiTheme.TEXT_DIM, false);
+                GuiTheme.textDim(), false);
             return;
         }
 
@@ -544,10 +540,8 @@ public final class ClickGuiScreen extends GuiScreenBase {
         return super.mouseClicked(event, doubleClick);
     }
 
-    /**
-     * The border of the box is left alone. A click there falls through to the
-     * edge resize.
-     */
+    // The border of the box is left alone. A click there falls through to
+    // the edge resize.
     private boolean clickResults(double mx, double my, int button) {
         int rowX = searchX() + 2;
         int rowsW = searchWidth - 4;
@@ -573,7 +567,7 @@ public final class ClickGuiScreen extends GuiScreenBase {
         }
         for (ModuleRow row : searchRows) {
             if (row.mouseClicked(mx, my, button)) {
-                // Keys now belong to whatever the row is editing and not to the search box.
+                // Keys go to whatever the row is editing and not the search box.
                 searchFocused = false;
                 keepVisible(row);
                 return true;

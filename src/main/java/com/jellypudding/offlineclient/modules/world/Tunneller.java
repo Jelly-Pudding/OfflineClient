@@ -22,10 +22,8 @@ import net.minecraft.world.phys.AABB;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Digs a straight tunnel and walks along it. The axis is taken from the facing
- * when it starts.
- */
+// Digs a straight tunnel and walks along it.
+// The axis is taken from the facing when it starts.
 public final class Tunneller extends Module {
 
     private static final int TUNNEL_COLOR = 0xFF40C0FF;

@@ -10,5 +10,8 @@ public enum ExclusivityGroup {
     WEAPON_SWAP,
 
     // Takes over a fall. Two of these cancel each other out in mid air.
-    FALL_CONTROL
+    FALL_CONTROL,
+
+    // Decides what happens at the lip of a block. One jumps off it and the other stops there.
+    EDGE
 }

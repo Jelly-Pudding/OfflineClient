@@ -30,10 +30,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.function.Predicate;
 
-/**
- * Scans loaded chunks on a background thread and caches what each one
- * held. A chunk is only scanned again once the server changes it.
- */
+// Scans loaded chunks on a background thread and caches what each one held.
+// A chunk is only scanned again once the server changes it.
 public final class ChunkScanner<T> {
 
     // Two workers keep one slow module from stalling another.
@@ -54,10 +52,8 @@ public final class ChunkScanner<T> {
         void accept(int x, int y, int z, BlockState state);
     }
 
-    /**
-     * A chunk and its eight neighbours captured on the main thread. Reads
-     * outside the captured area come back as void air.
-     */
+    // A chunk and its eight neighbours captured on the main thread.
+    // Reads outside the captured area come back as void air.
     public static final class View {
 
         private static final BlockState OUTSIDE = Blocks.VOID_AIR.defaultBlockState();
@@ -117,10 +113,8 @@ public final class ChunkScanner<T> {
             return get(pos.getX(), pos.getY(), pos.getZ());
         }
 
-        /**
-         * Every block of the centre chunk the test accepts. A section whose
-         * palette cannot hold one is skipped whole.
-         */
+        // Every block of the centre chunk the test accepts.
+        // A section whose palette cannot hold one is skipped whole.
         public void forEachMatching(Predicate<BlockState> wanted, BlockVisitor out) {
             LevelChunkSection[] sections = centre.getSections();
             int baseX = centre.getPos().getMinBlockX();

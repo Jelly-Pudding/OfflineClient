@@ -6,16 +6,14 @@ import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.modules.combat.AutoCity;
+import com.jellypudding.offlineclient.render.BoxStyle;
 import com.jellypudding.offlineclient.render.DrawBatch;
 import com.jellypudding.offlineclient.setting.BoolSetting;
-import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
-import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.phys.AABB;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -29,18 +27,17 @@ public final class CityEsp extends Module {
         "How far you can reach to mine.", 4.5, 1, 6, 0.1).min(1);
     private final BoolSetting nearestOnly = new BoolSetting("Nearest only",
         "Only mark the closest enemy.", false);
-    private final BoolSetting fill = new BoolSetting("Fill",
-        "Adds a faint tint inside each box.", true);
+    private final BoxStyle style = new BoxStyle(BoxStyle.Shape.BOTH, 0);
     private final BoolSetting throughWalls = new BoolSetting("Through walls",
         "Show boxes behind blocks.", true);
-    private final ColorSetting color = new ColorSetting("Colour",
-        "Box colour.", 0, false);
 
     private final List<BlockPos> targets = new ArrayList<>();
 
     public CityEsp() {
         super("CityESP", "Highlights the block that would open up a surrounded enemy.", Category.RENDER);
-        addSettings(targetRange, breakRange, nearestOnly, fill, throughWalls, color);
+        addSettings(targetRange, breakRange, nearestOnly);
+        addSettings(style.settings());
+        addSettings(throughWalls);
         searchTags("city", "surround", "obsidian", "autocity");
     }
 
@@ -97,16 +94,10 @@ public final class CityEsp extends Module {
             return;
         }
         DrawBatch batch = event.getBatch();
-        int argb = color.getColor();
         boolean through = throughWalls.isOn();
         for (BlockPos pos : targets) {
-            if (BlockUtil.state(pos).isAir()) {
-                continue;
-            }
-            AABB box = DrawBatch.blockBox(pos);
-            batch.outlineBox(box, argb, through);
-            if (fill.isOn()) {
-                batch.solidBox(box, ColorUtil.withAlpha(argb, 50), through);
+            if (!BlockUtil.state(pos).isAir()) {
+                style.draw(batch, pos, through);
             }
         }
     }

@@ -9,6 +9,7 @@ import com.jellypudding.offlineclient.modules.misc.Timer;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.MovementUtil;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
@@ -28,7 +29,8 @@ public final class Speed extends Module {
 
     private static final double BASE_SPEED = 0.2806;
 
-    // Each level of the speed effect adds a fifth and each level of slowness takes off just under a sixth.
+    // Each level of the speed effect adds a fifth.
+    // Each level of slowness takes off just under a sixth.
     private static final double SPEED_PER_LEVEL = 0.2;
 
     private static final double TICKS_PER_SECOND = 20;
@@ -96,7 +98,8 @@ public final class Speed extends Module {
         }
     }
 
-    @Subscribe
+    // Runs after HoleSnap so a hole it has found is not pushed past.
+    @Subscribe(priority = -10)
     private void onTick(TickEvent event) {
         if (!inGame()) {
             return;
@@ -106,6 +109,10 @@ public final class Speed extends Module {
         Timer.override(TIMER_KEY, moving ? timer.getFloat() : 1f);
 
         if (mc.player.isSpectator() || mc.player.isPassenger()) {
+            return;
+        }
+        HoleSnap holeSnap = Modules.get(HoleSnap.class);
+        if (holeSnap != null && holeSnap.holdsMovement()) {
             return;
         }
         if (mc.player.isShiftKeyDown() && !whilstSneaking.isOn()) {
@@ -141,7 +148,8 @@ public final class Speed extends Module {
         mc.player.setDeltaMovement(heading.x * speed, velocity.y, heading.z * speed);
     }
 
-    // Under a timer the whole game runs faster. The cap shrinks with it to stay true in real seconds.
+    // Under a timer the whole game runs faster.
+    // The cap shrinks with it to stay true in real seconds.
     private double capped(double perTick) {
         if (!capSpeed.isOn()) {
             return perTick;
@@ -168,7 +176,8 @@ public final class Speed extends Module {
         if (!mc.player.onGround()) {
             return;
         }
-        // Whilst the key is held the game jumps on its own. Two jumps in one tick stack the sprint boost twice.
+        // Whilst the key is held the game jumps on its own.
+        // Two jumps in one tick stack the sprint boost twice.
         if (!mc.player.input.keyPresses.jump()) {
             mc.player.jumpFromGround();
         }

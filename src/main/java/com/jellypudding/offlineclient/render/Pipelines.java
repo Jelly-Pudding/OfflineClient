@@ -15,10 +15,8 @@ import net.minecraft.resources.Identifier;
 
 import java.util.Optional;
 
-/**
- * Render types for drawing lines and boxes in the world. Each one comes in a
- * normal variant and a through walls variant that skips the depth test.
- */
+// Render types for drawing lines and boxes in the world. Each one comes in
+// a normal variant and a through walls variant that skips the depth test.
 public final class Pipelines {
 
     // Vanilla lines with custom shaders that skip fog.

@@ -1,13 +1,16 @@
 package com.jellypudding.offlineclient.gui;
 
+import com.google.gson.JsonObject;
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.modules.misc.ClickGuiModule;
+import com.jellypudding.offlineclient.modules.render.Blur;
 import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
-import com.jellypudding.offlineclient.setting.RegistryListSetting;
+import com.jellypudding.offlineclient.setting.PickList;
 import com.jellypudding.offlineclient.setting.Setting;
 import com.jellypudding.offlineclient.setting.TextSetting;
+import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.RenderUtil;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -17,14 +20,16 @@ import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
 import org.lwjgl.glfw.GLFW;
 
-/**
- * Shared by both ClickGUI styles. Owns the search box and the typing and
- * binding state.
- */
+// Shared by both ClickGUI styles. Owns the search box and the typing and
+// binding state.
 public abstract class GuiScreenBase extends Screen implements SettingWidget.Host {
 
     public static final int SEARCH_HEIGHT = 14;
     private static final int SEARCH_INDENT = GuiTheme.PAD;
+    // A multiplication sign. The closest thing to a cross the font has.
+    private static final String CLEAR = "×";
+    private static final int CLEAR_ZONE = 12;
+    private static final String SEARCH_KEY = "search";
 
     protected final TextField searchBox = new TextField();
     protected boolean searchFocused;
@@ -36,7 +41,8 @@ public abstract class GuiScreenBase extends Screen implements SettingWidget.Host
     private KeybindSetting bindingTarget;
     private Setting<?> editingSetting;
     private final TextField editField = new TextField();
-    // The character of the key just bound arrives right after the key event and must be eaten.
+    // The character of the key just bound arrives right after the key
+    // event and must be eaten.
     private boolean eatNextChar;
 
     protected GuiScreenBase() {
@@ -58,7 +64,11 @@ public abstract class GuiScreenBase extends Screen implements SettingWidget.Host
 
     @Override
     public void extractBackground(GuiGraphicsExtractor context, int mouseX, int mouseY, float deltaTicks) {
-        // The vanilla blur washes the panel colours out.
+        // The vanilla blur washes the panel colours out. Blur adds its own when asked.
+        Blur blur = Modules.get(Blur.class);
+        if (blur != null && blur.wants(this)) {
+            blur.blurHere(context);
+        }
         context.fillGradient(0, 0, width, height, 0x70101018, 0xA0060610);
     }
 
@@ -108,31 +118,43 @@ public abstract class GuiScreenBase extends Screen implements SettingWidget.Host
             hovered, searchFocused, tally);
     }
 
-    // Returns the width the text had to work with.
+    // Returns the width the text had to work with. A box holding text shows
+    // a cross at its right end that clears it.
     public static int searchField(GuiGraphicsExtractor context, Font font, int x, int y, int w,
                                   TextField field, String placeholder, boolean active,
                                   boolean hovered, boolean caret, String tally) {
         int h = SEARCH_HEIGHT;
-        int border = active ? GuiTheme.accent() : (hovered ? GuiTheme.TEXT_FAINT : GuiTheme.EDGE);
+        int border = active ? GuiTheme.accent() : (hovered ? GuiTheme.textFaint() : GuiTheme.edge());
         RenderUtil.roundedBorderedRect(context, x, y, x + w, y + h, GuiTheme.CORNER,
-            GuiTheme.BG_PANEL, border);
+            GuiTheme.bgPanel(), border);
         context.guiRenderState.up();
 
         int textX = x + SEARCH_INDENT;
         int textY = GuiTheme.textY(y, h);
-        int tallyRoom = 0;
-        if (tally != null) {
-            tallyRoom = font.width(tally) + GuiTheme.PAD;
-            context.text(font, tally, x + w - GuiTheme.PAD - font.width(tally), textY,
-                GuiTheme.TEXT_DIM, false);
+        int right = x + w - GuiTheme.PAD;
+        if (!field.isEmpty()) {
+            context.text(font, CLEAR, right - CLEAR_ZONE + (CLEAR_ZONE - font.width(CLEAR)) / 2,
+                textY, GuiTheme.textDim(), false);
+            right -= CLEAR_ZONE;
         }
-        int room = w - SEARCH_INDENT - GuiTheme.PAD - tallyRoom;
+        if (tally != null) {
+            right -= font.width(tally);
+            context.text(font, tally, right, textY, GuiTheme.textDim(), false);
+            right -= GuiTheme.PAD;
+        }
+        int room = right - textX;
         if (field.isEmpty() && !caret) {
-            context.text(font, placeholder, textX, textY, GuiTheme.TEXT_FAINT, false);
+            context.text(font, placeholder, textX, textY, GuiTheme.textFaint(), false);
         } else {
-            field.render(context, font, textX, textY, room, GuiTheme.TEXT, caret);
+            field.render(context, font, textX, textY, room, GuiTheme.text(), caret);
         }
         return room;
+    }
+
+    // True over the clearing cross of a box that holds text.
+    public static boolean overClear(TextField field, double mx, double my, int x, int y, int w) {
+        return !field.isEmpty() && SettingWidget.isOver(mx, my,
+            x + w - GuiTheme.PAD - CLEAR_ZONE, y, CLEAR_ZONE, SEARCH_HEIGHT);
     }
 
     protected final boolean clickSearchBox(double mx, double my, int x, int y, int w) {
@@ -141,8 +163,31 @@ public abstract class GuiScreenBase extends Screen implements SettingWidget.Host
             return false;
         }
         searchFocused = true;
+        if (overClear(searchBox, mx, my, x, y, w)) {
+            searchBox.clear();
+            onSearchChanged();
+            return true;
+        }
         searchBox.click(OfflineClient.MC.font, searchTextX, searchRoom, mx, false);
         return true;
+    }
+
+    // The search survives closing the GUI. Reopening lands on the same
+    // results and the cross in the box clears them. Both styles share it.
+    protected final void restoreSearch() {
+        JsonObject gui = OfflineClient.INSTANCE.getConfigManager().getGuiState();
+        if (!gui.has(SEARCH_KEY) || !gui.get(SEARCH_KEY).isJsonPrimitive()) {
+            return;
+        }
+        String text = gui.get(SEARCH_KEY).getAsString();
+        if (!text.isEmpty()) {
+            searchBox.set(text);
+            onSearchChanged();
+        }
+    }
+
+    protected final void saveSearch() {
+        OfflineClient.INSTANCE.getConfigManager().getGuiState().addProperty(SEARCH_KEY, searchBox.get());
     }
 
     @Override
@@ -156,13 +201,13 @@ public abstract class GuiScreenBase extends Screen implements SettingWidget.Host
     }
 
     @Override
-    public void openPicker(RegistryListSetting<?> setting) {
+    public void openPicker(PickList<?> setting) {
         commitEditing();
         openPickerTyped(setting);
     }
 
-    private <T> void openPickerTyped(RegistryListSetting<T> setting) {
-        OfflineClient.MC.gui.setScreen(new RegistryPickerScreen<>(this, setting));
+    private <T> void openPickerTyped(PickList<T> setting) {
+        OfflineClient.MC.gui.setScreen(new ListPickerScreen<>(this, setting));
     }
 
     @Override
@@ -282,6 +327,11 @@ public abstract class GuiScreenBase extends Screen implements SettingWidget.Host
             return true;
         }
         return false;
+    }
+
+    // True whilst a key press would type or bind rather than reach the game.
+    public boolean isTyping() {
+        return searchFocused || editingSetting != null || bindingTarget != null;
     }
 
     protected final boolean handleCommonChar(char c) {

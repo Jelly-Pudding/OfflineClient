@@ -1,19 +1,25 @@
 package com.jellypudding.offlineclient.modules.movement;
 
+import com.jellypudding.offlineclient.event.Subscribe;
+import com.jellypudding.offlineclient.event.events.Render3DEvent;
+import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
+import com.jellypudding.offlineclient.module.ExclusivityGroup;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.setting.BoolSetting;
+import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.MovementUtil;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
-/**
- * Holds you on a ledge the way sneaking does but at full speed. Where the
- * run ahead would land is simulated a tick at a time. A shallow step that
- * leads straight into a long drop still counts. The clamp itself lives in
- * LocalPlayerMixin and PlayerMixin.
- */
+// Holds you on a ledge the way sneaking does but at full speed by simulating
+// the run ahead a tick at a time. The clamp itself lives in LocalPlayerMixin and PlayerMixin.
 public final class EdgeGuard extends Module {
+
+    public enum Mode { HOLD, SNEAK }
 
     // Vanilla air physics for a player.
     private static final double GRAVITY = 0.08;
@@ -31,15 +37,46 @@ public final class EdgeGuard extends Module {
     // Lets a drop of exactly the allowed depth through.
     private static final double TOLERANCE = 1e-4;
 
+    private static final int EDGE_BOX_COLOR = 0xFF4080FF;
+    private static final int PLAYER_BOX_COLOR = 0xFF60E060;
+
+    private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
+        "What happens at an edge.", Mode.HOLD)
+        .describe(Mode.HOLD, "Holds you at the edge at full speed.")
+        .describe(Mode.SNEAK, "Presses sneak for you as you reach an edge the way a careful player would.");
     private final NumberSetting maxDrop = new NumberSetting("Max drop",
         "Edges you would fall further than this from stop you.",
         0.5, 0.5, 10, 0.5, " blocks");
+    private final BoolSetting safeSneak = new BoolSetting("Safe sneak",
+        "Also holds you at the edge in case the sneak comes too late.", true)
+        .under(mode, Mode.SNEAK);
+    private final BoolSetting sneakWhenSprinting = new BoolSetting("Sneak when sprinting",
+        "Also sneaks whilst you hold the sprint key. Off lets a sprint run straight off.", true)
+        .under(mode, Mode.SNEAK);
+    private final NumberSetting edgeDistance = new NumberSetting("Edge distance",
+        "How far before the edge the sneak starts.", 0.3, 0, 0.3, 0.01, " blocks")
+        .min(0).max(0.3).under(mode, Mode.SNEAK);
+    private final BoolSetting showEdgeBox = new BoolSetting("Show edge box",
+        "Draws the box the edge check looks under.", false)
+        .under(mode, Mode.SNEAK);
+    private final BoolSetting showPlayerBox = new BoolSetting("Show player box",
+        "Also draws your own box.", false)
+        .under(showEdgeBox);
+
+    private boolean sneaking;
 
     public EdgeGuard() {
         super("EdgeGuard", "Stops you from going over edges without the sneak slowdown.",
             Category.MOVEMENT);
-        addSettings(maxDrop);
+        addSettings(mode, maxDrop, safeSneak, sneakWhenSprinting, edgeDistance, showEdgeBox,
+            showPlayerBox);
         searchTags("safewalk", "safe walk", "edge", "ledge");
+    }
+
+    // Parkour leaps from the same lip EdgeGuard holds you at.
+    @Override
+    public ExclusivityGroup getExclusivityGroup() {
+        return ExclusivityGroup.EDGE;
     }
 
     @Override
@@ -47,9 +84,17 @@ public final class EdgeGuard extends Module {
         return maxDrop.getValueString();
     }
 
+    @Override
+    protected void onDisable() {
+        letGoOfSneak();
+    }
+
     // True when the run ahead ends in a drop deeper than allowed.
     public boolean shouldGuard() {
         if (!isEnabled() || !inGame()) {
+            return false;
+        }
+        if (mode.is(Mode.SNEAK) && (!safeSneak.isOn() || sprintOverrides())) {
             return false;
         }
         AABB box = mc.player.getBoundingBox();
@@ -57,12 +102,62 @@ public final class EdgeGuard extends Module {
         return landsBelow(box, mc.player.getDeltaMovement(), mc.player.onGround(), limitY);
     }
 
-    /**
-     * Plays the movement forward until the player lands or passes the limit.
-     * Whilst still supported the run carries on at its current speed. Once
-     * airborne the vanilla drag and gravity take over with the keys still
-     * pushing.
-     */
+    @Subscribe
+    private void onTick(TickEvent event) {
+        if (!inGame() || !mode.is(Mode.SNEAK) || sprintOverrides()) {
+            letGoOfSneak();
+            return;
+        }
+        if (mc.player.onGround() && dropUnder(edgeBox())) {
+            InputUtil.hold(mc.options.keyShift);
+            sneaking = true;
+        } else {
+            letGoOfSneak();
+        }
+    }
+
+    @Subscribe
+    private void onRender3D(Render3DEvent event) {
+        if (!showEdgeBox.isOn() || !mode.is(Mode.SNEAK) || !inGame()) {
+            return;
+        }
+        AABB box = EntityUtil.lerpedBox(mc.player, event.getPartialTicks());
+        event.getBatch().outlineBox(shrink(box), EDGE_BOX_COLOR, false);
+        if (showPlayerBox.isOn()) {
+            event.getBatch().outlineBox(box, PLAYER_BOX_COLOR, false);
+        }
+    }
+
+    private boolean sprintOverrides() {
+        return !sneakWhenSprinting.isOn() && mc.options.keySprint.isDown();
+    }
+
+    private void letGoOfSneak() {
+        if (sneaking) {
+            InputUtil.release(mc.options.keyShift);
+            sneaking = false;
+        }
+    }
+
+    // The player box pulled in from the sides. Standing with only the rim of the
+    // feet over the drop leaves nothing under it.
+    private AABB edgeBox() {
+        return shrink(mc.player.getBoundingBox());
+    }
+
+    private AABB shrink(AABB box) {
+        double edge = edgeDistance.getValue();
+        return box.inflate(-edge, 0, -edge);
+    }
+
+    // True when the fall under the box would be deeper than allowed.
+    private boolean dropUnder(AABB box) {
+        double depth = maxDrop.getValue() + TOLERANCE;
+        return mc.level.noCollision(mc.player, box.expandTowards(0, -depth, 0));
+    }
+
+    // Plays the movement forward until the player lands or passes the limit. A
+    // supported run keeps its speed then vanilla drag and gravity take over once airborne.
     private boolean landsBelow(AABB box, Vec3 velocity, boolean supported, double limitY) {
         double vx = velocity.x;
         double vy = velocity.y;

@@ -44,6 +44,13 @@ public final class AntiPacketKick extends Module {
         200, 20, 1000, 10, " packets").min(1);
     private final BoolSetting notify = new BoolSetting("Notify",
         "Say in chat the first time a burst gets paced.", true);
+    private final BoolSetting acceptHuge = new BoolSetting("Accept huge packets",
+        "Reads incoming packets of any size instead of dropping the connection.", true);
+    private final BoolSetting catchErrors = new BoolSetting("Catch errors",
+        "Throws away a packet the client cannot read instead of disconnecting.", false);
+    private final BoolSetting logErrors = new BoolSetting("Log errors",
+        "Prints each caught error to chat.", true)
+        .under(catchErrors);
 
     // Filled from the netty thread and drained on the main thread.
     private final ConcurrentLinkedQueue<Packet<?>> held = new ConcurrentLinkedQueue<>();
@@ -59,8 +66,21 @@ public final class AntiPacketKick extends Module {
     public AntiPacketKick() {
         super("AntiPacketKick", "Spreads packet bursts out and keeps the server from dropping you.",
             Category.MISC);
-        addSettings(limit, queueSize, notify);
+        addSettings(limit, queueSize, notify, acceptHuge, catchErrors, logErrors);
         searchTags("flood", "throttle", "rate limit");
+    }
+
+    // Read from the netty thread whilst a packet is being decoded.
+    public boolean acceptsHugePackets() {
+        return isEnabled() && acceptHuge.isOn();
+    }
+
+    public boolean catchesErrors() {
+        return isEnabled() && catchErrors.isOn();
+    }
+
+    public boolean logsErrors() {
+        return logErrors.isOn();
     }
 
     @Override

@@ -4,6 +4,8 @@ import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.command.Command;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.command.CommandManager;
+import java.util.List;
 
 public final class ToggleCommand extends Command {
 
@@ -28,5 +30,10 @@ public final class ToggleCommand extends Command {
         }
         module.toggle();
         ChatUtil.toggled(module);
+    }
+
+    @Override
+    public List<String> complete(String[] tokens, int index, String current) {
+        return index == 1 ? CommandManager.filter(current, CommandManager.moduleIds()) : List.of();
     }
 }

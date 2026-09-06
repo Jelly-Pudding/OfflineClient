@@ -96,7 +96,7 @@ public final class BonemealAura extends Module {
             return;
         }
         if (mc.player.isDeadOrDying()) {
-            // Respawn hands out a fresh inventory and the borrowed slots no longer mean anything.
+            // Respawn gives a fresh inventory so a borrowed slot could hold anything.
             loan.forget();
             return;
         }
@@ -119,8 +119,8 @@ public final class BonemealAura extends Module {
             return;
         }
         if (multi.isOn()) {
-            // The furthest plants go first. A fed plant grows and hides the ones behind it.
-            // Only the nearest asks to turn. The rotation manager keeps one angle a tick.
+            // Furthest plants first as a fed plant grows and hides the ones behind it.
+            // Only the nearest turns since the rotation manager keeps one angle a tick.
             int before = fed;
             for (int i = targets.size() - 1; i >= 0; i--) {
                 if (BlockUtil.useOn(targets.get(i), rotate.isOn() && i == 0, false)) {

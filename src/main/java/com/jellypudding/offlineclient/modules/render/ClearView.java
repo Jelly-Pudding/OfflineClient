@@ -3,10 +3,18 @@ package com.jellypudding.offlineclient.modules.render;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
+import com.jellypudding.offlineclient.setting.EnumSetting;
+import com.jellypudding.offlineclient.setting.RegistryListSetting;
+import net.minecraft.core.particles.ParticleType;
+import net.minecraft.core.registries.BuiltInRegistries;
+
+import java.util.List;
 
 // Overlay removal happens in HudMixin and ScreenEffectRendererMixin and
 // FogRendererMixin and ParticleEngineMixin which check these settings.
 public final class ClearView extends Module {
+
+    public enum Particles { KEEP, HIDE_ALL, HIDE_CHOSEN }
 
     private final BoolSetting pumpkin = new BoolSetting("Pumpkin",
         "Removes the carved pumpkin overlay.", true);
@@ -22,8 +30,16 @@ public final class ClearView extends Module {
         "Removes the block texture drawn over your view when your head is inside one.", true);
     private final BoolSetting fog = new BoolSetting("Fog",
         "Pushes fog far enough away that it never hides anything.", false);
-    private final BoolSetting particles = new BoolSetting("Particles",
-        "Stops every particle from spawning.", false);
+    private final EnumSetting<Particles> particles = new EnumSetting<>("Particles",
+        "Which particles are stopped from spawning.", Particles.KEEP)
+        .describe(Particles.KEEP, "Every particle spawns as normal.")
+        .describe(Particles.HIDE_ALL, "No particle spawns at all.")
+        .describe(Particles.HIDE_CHOSEN, "Only the particle types picked below are stopped.");
+    private final RegistryListSetting<ParticleType<?>> particleTypes = new RegistryListSetting<>(
+        "Particle types", "The particles that are stopped.", BuiltInRegistries.PARTICLE_TYPE, List.of())
+        .under(particles, Particles.HIDE_CHOSEN);
+    private final BoolSetting eatingCrumbs = new BoolSetting("Eating crumbs",
+        "Stops the crumbs that fly whilst something is eaten.", false);
     private final BoolSetting spyglass = new BoolSetting("Spyglass",
         "Removes the black frame whilst you look through a spyglass.", false);
     private final BoolSetting bossBars = new BoolSetting("Boss bars",
@@ -38,11 +54,18 @@ public final class ClearView extends Module {
         "Hides the potion effect icons in the top right corner.", false);
     private final BoolSetting totemPop = new BoolSetting("Totem pop",
         "Skips the totem animation that fills the screen.", false);
+    private final BoolSetting crosshair = new BoolSetting("Crosshair",
+        "Hides the crosshair.", false);
+    private final BoolSetting magicText = new BoolSetting("Magic text",
+        "Scrambled text is drawn as plain letters.", false);
+    private final BoolSetting signatureBar = new BoolSetting("Chat signature bar",
+        "Hides the coloured bar beside signed chat lines.", false);
 
     public ClearView() {
         super("ClearView", "Removes screen overlays that hide what you need to see.", Category.RENDER);
         addSettings(pumpkin, powderSnow, vignette, fire, water, blockInFace, fog, particles,
-            spyglass, bossBars, scoreboard, titles, itemNames, effectIcons, totemPop);
+            particleTypes, eatingCrumbs, spyglass, bossBars, scoreboard, titles, itemNames,
+            effectIcons, totemPop, crosshair, magicText, signatureBar);
         searchTags("no fog", "no fire", "no overlay", "no particles", "norender");
     }
 
@@ -74,8 +97,29 @@ public final class ClearView extends Module {
         return fog.isOn();
     }
 
-    public boolean blocksParticles() {
-        return particles.isOn();
+    public boolean blocksAllParticles() {
+        return particles.is(Particles.HIDE_ALL);
+    }
+
+    public boolean blocksParticle(ParticleType<?> type) {
+        return particles.is(Particles.HIDE_ALL)
+            || particles.is(Particles.HIDE_CHOSEN) && particleTypes.contains(type);
+    }
+
+    public boolean blocksEatingCrumbs() {
+        return eatingCrumbs.isOn();
+    }
+
+    public boolean blocksCrosshair() {
+        return crosshair.isOn();
+    }
+
+    public boolean blocksMagicText() {
+        return magicText.isOn();
+    }
+
+    public boolean blocksSignatureBar() {
+        return signatureBar.isOn();
     }
 
     public boolean blocksSpyglass() {

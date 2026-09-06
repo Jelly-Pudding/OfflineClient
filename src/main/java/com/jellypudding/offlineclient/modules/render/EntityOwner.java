@@ -1,5 +1,7 @@
 package com.jellypudding.offlineclient.modules.render;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.Render2DEvent;
@@ -19,14 +21,28 @@ import net.minecraft.world.entity.OwnableEntity;
 import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.phys.Vec3;
 
+import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class EntityOwner extends Module {
 
     private record Label(String name, int color, Vec3 screen, double distance) {
     }
+
+    private static final String SESSION_SERVER = "https://sessionserver.mojang.com/session/minecraft/profile/";
+    private static final HttpClient HTTP = HttpClient.newHttpClient();
+
+    // Names fetched for owners who are not online. An empty name is a lookup in flight.
+    private final Map<UUID, String> names = new ConcurrentHashMap<>();
 
     private final NumberSetting scale = new NumberSetting("Scale",
         "Size of the labels.", 1, 0.5, 3, 0.1).min(0.1);
@@ -124,7 +140,42 @@ public final class EntityOwner extends Module {
         if (info != null) {
             return info.getProfile().name();
         }
+        return lookedUp(uuid);
+    }
+
+    // The name the session server knows for an offline owner. Fetched once on
+    // a worker thread and the short id shows until it arrives.
+    private String lookedUp(UUID uuid) {
+        String known = names.get(uuid);
+        if (known != null) {
+            return known.isEmpty() ? uuid.toString().substring(0, 8) : known;
+        }
+        names.put(uuid, "");
+        Thread.ofVirtual().name("offlineclient owner lookup").start(() -> {
+            String name = fetchName(uuid);
+            if (name != null) {
+                names.put(uuid, name);
+            }
+        });
         return uuid.toString().substring(0, 8);
+    }
+
+    private static String fetchName(UUID uuid) {
+        try {
+            HttpRequest request = HttpRequest.newBuilder(URI.create(SESSION_SERVER
+                + uuid.toString().replace("-", ""))).timeout(Duration.ofSeconds(10)).GET().build();
+            HttpResponse<String> response = HTTP.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() != 200) {
+                return null;
+            }
+            JsonObject json = JsonParser.parseString(response.body()).getAsJsonObject();
+            return json.has("name") ? json.get("name").getAsString() : null;
+        } catch (IOException | RuntimeException e) {
+            return null;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return null;
+        }
     }
 
     private static int colorFor(String name) {

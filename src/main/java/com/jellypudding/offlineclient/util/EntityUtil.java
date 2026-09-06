@@ -1,18 +1,33 @@
 package com.jellypudding.offlineclient.util;
 
 import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.modules.misc.NameProtect;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.NeutralMob;
+import net.minecraft.world.entity.TamableAnimal;
 import net.minecraft.world.entity.ambient.AmbientCreature;
+import net.minecraft.world.entity.animal.allay.Allay;
 import net.minecraft.world.entity.animal.AgeableWaterCreature;
+import net.minecraft.world.entity.animal.equine.AbstractHorse;
+import net.minecraft.world.entity.animal.feline.Ocelot;
+import net.minecraft.world.entity.animal.fish.Pufferfish;
 import net.minecraft.world.entity.animal.fish.WaterAnimal;
+import net.minecraft.world.entity.animal.fox.Fox;
+import net.minecraft.world.entity.animal.golem.AbstractGolem;
 import net.minecraft.world.entity.boss.enderdragon.EndCrystal;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.monster.Enemy;
+import net.minecraft.world.entity.monster.Shulker;
+import net.minecraft.world.entity.monster.cubemob.AbstractCubeMob;
+import net.minecraft.world.entity.monster.piglin.AbstractPiglin;
+import net.minecraft.world.entity.monster.zombie.ZombieVillager;
+import net.minecraft.world.entity.npc.villager.AbstractVillager;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -78,9 +93,46 @@ public final class EntityUtil {
         return BuiltInRegistries.ENTITY_TYPE.wrapAsHolder(entity.getType()).is(tag);
     }
 
+    // A mob somebody has tamed or saddled or won the trust of. Never a fair target.
+    public static boolean isPet(Mob mob) {
+        if (mob instanceof TamableAnimal tamable) {
+            return tamable.isTame();
+        }
+        if (mob instanceof AbstractHorse horse) {
+            return horse.isTamed();
+        }
+        if (mob instanceof Ocelot ocelot) {
+            return ocelot.isTrusting();
+        }
+        if (mob instanceof Fox fox) {
+            return OfflineClient.MC.player != null && fox.trusts(OfflineClient.MC.player);
+        }
+        return mob.isSaddled();
+    }
+
+    // A mob that only fights once provoked.
+    public static boolean isNeutral(Mob mob) {
+        return mob instanceof NeutralMob || mob instanceof AbstractPiglin || mob instanceof Pufferfish;
+    }
+
+    // True whilst a neutral mob has no quarrel with anyone.
+    public static boolean isCalm(Mob mob) {
+        if (mob instanceof Pufferfish pufferfish) {
+            return pufferfish.getPuffState() == 0;
+        }
+        return isNeutral(mob) && !mob.isAggressive();
+    }
+
     // The account name of a player or null.
     public static String nameOf(Player player) {
         return player == null ? null : player.getGameProfile().name();
+    }
+
+    // The name to draw for a player. NameProtect may swap it for an alias.
+    public static String displayNameOf(Player player) {
+        String name = nameOf(player);
+        NameProtect nameProtect = Modules.get(NameProtect.class);
+        return nameProtect == null || name == null ? name : nameProtect.display(name);
     }
 
     public static boolean isFriend(Entity entity) {
@@ -97,10 +149,8 @@ public final class EntityUtil {
     // The broad families the filters in the render modules work with.
     public enum Kind { PLAYER, HOSTILE, PASSIVE, WATER, AMBIENT, ITEM, OTHER }
 
-    /**
-     * Hostile covers anything that hunts the player. Water is fish and squid
-     * and dolphins. Ambient is bats. Passive is every other living thing.
-     */
+    // Hostile covers anything that hunts the player. Water is fish squid and dolphins.
+    // Ambient is bats. Passive is every other living thing.
     public static Kind kindOf(Entity entity) {
         if (entity instanceof Player) {
             return Kind.PLAYER;
@@ -120,23 +170,37 @@ public final class EntityUtil {
         return entity instanceof LivingEntity ? Kind.PASSIVE : Kind.OTHER;
     }
 
-    public static boolean matches(Entity entity, boolean players, boolean mobs, boolean items) {
-        if (entity instanceof Player player) {
-            return players && player.isAlive() && !player.isSpectator();
+    // The narrow families the per species switches work with. A shulker is a golem
+    // to the game so it is picked out first.
+    public enum Species { WATER, BAT, SLIME, SHULKER, VILLAGER, ZOMBIE_VILLAGER, GOLEM, ALLAY, OTHER }
+
+    public static Species speciesOf(Entity entity) {
+        if (entity instanceof ZombieVillager) {
+            return Species.ZOMBIE_VILLAGER;
         }
-        if (entity instanceof ItemEntity) {
-            return items;
+        if (entity instanceof AbstractVillager) {
+            return Species.VILLAGER;
         }
-        if (entity instanceof LivingEntity living) {
-            return mobs && living.isAlive();
+        if (entity instanceof AbstractCubeMob) {
+            return Species.SLIME;
         }
-        return false;
+        if (entity instanceof Shulker) {
+            return Species.SHULKER;
+        }
+        if (entity instanceof AbstractGolem) {
+            return Species.GOLEM;
+        }
+        if (entity instanceof Allay) {
+            return Species.ALLAY;
+        }
+        return switch (kindOf(entity)) {
+            case WATER -> Species.WATER;
+            case AMBIENT -> Species.BAT;
+            default -> Species.OTHER;
+        };
     }
 
-    /**
-     * From the eyes to the nearest point of the hitbox. This is how the game
-     * measures reach.
-     */
+    // From the eyes to the nearest point of the hitbox. This is how the game measures reach.
     public static double reachDistance(Player from, Entity to) {
         Vec3 eye = from.getEyePosition();
         AABB box = to.getBoundingBox();
@@ -173,11 +237,8 @@ public final class EntityUtil {
         return entity.getBoundingBox().move(lerped.subtract(entity.position()));
     }
 
-    /**
-     * Friends are blue. Players fade from red when close to green when far.
-     * Hostile mobs are red and passive ones green with sea life blue and
-     * bats purple. Items are yellow.
-     */
+    // Friends are blue. Players fade red to green with distance. Items are yellow.
+    // Hostile mobs are red passive mobs green sea life blue and bats purple.
     public static int colorOf(Entity entity) {
         if (entity instanceof Player) {
             return isFriend(entity) ? FRIEND_COLOR : distanceColor(entity);
@@ -225,5 +286,30 @@ public final class EntityUtil {
     // Friends and spectators never count. Null when nobody is close.
     public static Player nearestEnemy(double range) {
         return (Player) nearest(range, EntityUtil::isEnemy);
+    }
+
+    // The entity in range the priority likes best or null.
+    public static Entity best(double range, TargetPriority priority, Predicate<Entity> test) {
+        Minecraft mc = OfflineClient.MC;
+        if (mc.player == null || mc.level == null) {
+            return null;
+        }
+        Entity best = null;
+        double bestScore = Double.MAX_VALUE;
+        for (Entity entity : mc.level.entitiesForRendering()) {
+            if (entity == mc.player || !test.test(entity) || mc.player.distanceTo(entity) > range) {
+                continue;
+            }
+            double score = priority.score(entity);
+            if (score < bestScore) {
+                bestScore = score;
+                best = entity;
+            }
+        }
+        return best;
+    }
+
+    public static Player bestEnemy(double range, TargetPriority priority) {
+        return (Player) best(range, priority, EntityUtil::isEnemy);
     }
 }

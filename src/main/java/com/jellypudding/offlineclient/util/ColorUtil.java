@@ -79,6 +79,42 @@ public final class ColorUtil {
         return latency < 100 ? 0xFF50FF50 : latency < 250 ? 0xFFFFD040 : 0xFFFF5050;
     }
 
+    // A shade of one colour moved onto another. The result keeps how much lighter or
+    // duller the shade is than the base so a whole palette can be recoloured at once.
+    public static int retint(int shade, int base, int wanted) {
+        if ((base & 0xFFFFFF) == (wanted & 0xFFFFFF)) {
+            return shade;
+        }
+        float[] one = hsvOf(shade);
+        float[] from = hsvOf(base);
+        float[] to = hsvOf(wanted);
+        float saturation = from[1] <= 0 ? to[1] : to[1] * (one[1] / from[1]);
+        float value = from[2] <= 0 ? to[2] : to[2] * (one[2] / from[2]);
+        return withAlpha(hsv(to[0], Math.clamp(saturation, 0f, 1f), Math.clamp(value, 0f, 1f)),
+            shade >>> 24);
+    }
+
+    // Hue in degrees then saturation then value each from nought to one.
+    public static float[] hsvOf(int color) {
+        float red = (color >> 16 & 0xFF) / 255f;
+        float green = (color >> 8 & 0xFF) / 255f;
+        float blue = (color & 0xFF) / 255f;
+        float max = Math.max(red, Math.max(green, blue));
+        float min = Math.min(red, Math.min(green, blue));
+        float spread = max - min;
+        float hue = 0;
+        if (spread > 0) {
+            if (max == red) {
+                hue = 60 * (((green - blue) / spread) % 6);
+            } else if (max == green) {
+                hue = 60 * ((blue - red) / spread + 2);
+            } else {
+                hue = 60 * ((red - green) / spread + 4);
+            }
+        }
+        return new float[] {(hue + 360) % 360, max <= 0 ? 0 : spread / max, max};
+    }
+
     public static int lerp(int from, int to, float t) {
         t = Math.clamp(t, 0f, 1f);
         int a = (int) (((from >> 24) & 0xFF) + (((to >> 24) & 0xFF) - ((from >> 24) & 0xFF)) * t);

@@ -2,23 +2,46 @@ package com.jellypudding.offlineclient.command;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.command.commands.BindCommand;
+import com.jellypudding.offlineclient.command.commands.BindsCommand;
+import com.jellypudding.offlineclient.command.commands.ClearCommand;
+import com.jellypudding.offlineclient.command.commands.DamageCommand;
+import com.jellypudding.offlineclient.command.commands.DisconnectCommand;
+import com.jellypudding.offlineclient.command.commands.DismountCommand;
+import com.jellypudding.offlineclient.command.commands.DropCommand;
+import com.jellypudding.offlineclient.command.commands.EnderChestCommand;
+import com.jellypudding.offlineclient.command.commands.FovCommand;
 import com.jellypudding.offlineclient.command.commands.FriendCommand;
+import com.jellypudding.offlineclient.command.commands.GetPosCommand;
+import com.jellypudding.offlineclient.command.commands.GotoCommand;
 import com.jellypudding.offlineclient.command.commands.GuiCommand;
+import com.jellypudding.offlineclient.command.commands.HClipCommand;
+import com.jellypudding.offlineclient.command.commands.AuthorCommand;
+import com.jellypudding.offlineclient.command.commands.JumpCommand;
+import com.jellypudding.offlineclient.command.commands.SimulationDistanceCommand;
+import com.jellypudding.offlineclient.command.commands.TpCommand;
 import com.jellypudding.offlineclient.command.commands.HelpCommand;
+import com.jellypudding.offlineclient.command.commands.HudCommand;
+import com.jellypudding.offlineclient.command.commands.MacroCommand;
+import com.jellypudding.offlineclient.command.commands.ModulesCommand;
+import com.jellypudding.offlineclient.command.commands.NbtCommand;
+import com.jellypudding.offlineclient.command.commands.PeekCommand;
 import com.jellypudding.offlineclient.command.commands.PrefixCommand;
 import com.jellypudding.offlineclient.command.commands.ProfileCommand;
+import com.jellypudding.offlineclient.command.commands.RenderDistanceCommand;
+import com.jellypudding.offlineclient.command.commands.ResetCommand;
+import com.jellypudding.offlineclient.command.commands.RotationCommand;
+import com.jellypudding.offlineclient.command.commands.SayCommand;
+import com.jellypudding.offlineclient.command.commands.ServerCommand;
 import com.jellypudding.offlineclient.command.commands.SetCommand;
 import com.jellypudding.offlineclient.command.commands.ToggleCommand;
+import com.jellypudding.offlineclient.command.commands.VClipCommand;
 import com.jellypudding.offlineclient.command.commands.WaypointCommand;
+import com.jellypudding.offlineclient.command.commands.XRayCommand;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.ChatSendEvent;
 import com.jellypudding.offlineclient.module.Module;
-import com.jellypudding.offlineclient.setting.BoolSetting;
-import com.jellypudding.offlineclient.setting.ColorSetting;
-import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.Setting;
 import com.jellypudding.offlineclient.util.ChatUtil;
-import net.minecraft.client.player.AbstractClientPlayer;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -36,7 +59,34 @@ public final class CommandManager {
         new FriendCommand(),
         new PrefixCommand(),
         new ProfileCommand(),
-        new WaypointCommand()
+        new WaypointCommand(),
+        new ModulesCommand(),
+        new BindsCommand(),
+        new ResetCommand(),
+        new SayCommand(),
+        new ServerCommand(),
+        new GetPosCommand(),
+        new GotoCommand(),
+        new VClipCommand(),
+        new HClipCommand(),
+        new DropCommand(),
+        new DismountCommand(),
+        new FovCommand(),
+        new ClearCommand(),
+        new DisconnectCommand(),
+        new PeekCommand(),
+        new NbtCommand(),
+        new XRayCommand(),
+        new RenderDistanceCommand(),
+        new RotationCommand(),
+        new DamageCommand(),
+        new EnderChestCommand(),
+        new MacroCommand(),
+        new HudCommand(),
+        new TpCommand(),
+        new SimulationDistanceCommand(),
+        new JumpCommand(),
+        new AuthorCommand()
     );
 
     public static final String DEFAULT_PREFIX = ".";
@@ -85,19 +135,45 @@ public final class CommandManager {
             }
         }
 
-        // A bare module name like .fastfall toggles the module.
+        // A bare module name like .fastfall toggles the module. Anything after
+        // it reads as a setting so .step height 5 is short for .set step height 5.
         Module module = OfflineClient.INSTANCE.getModuleManager().get(name);
-        if (module != null && !module.isTogglable()) {
-            module = null;
-        }
-        if (module != null && args.length == 0) {
-            module.toggle();
-            ChatUtil.toggled(module);
-            return true;
+        if (module != null) {
+            if (args.length > 0) {
+                return runSet(name, args);
+            }
+            if (module.isTogglable()) {
+                module.toggle();
+                ChatUtil.toggled(module);
+                return true;
+            }
         }
 
         ChatUtil.error("Unknown command. Try §f" + prefix + "help");
         return true;
+    }
+
+    private boolean runSet(String moduleName, String[] args) {
+        String[] setArgs = new String[args.length + 1];
+        setArgs[0] = moduleName;
+        System.arraycopy(args, 0, setArgs, 1, args.length);
+        try {
+            find("set").execute(setArgs);
+        } catch (Exception e) {
+            ChatUtil.error("Error: " + e.getMessage());
+            OfflineClient.LOG.error("Command set failed", e);
+        }
+        return true;
+    }
+
+    // Null when nothing answers to the name or one of its aliases.
+    private Command find(String name) {
+        for (Command command : commands) {
+            if (command.matches(name)) {
+                return command;
+            }
+        }
+        return null;
     }
 
     @Subscribe(priority = 100)
@@ -122,110 +198,29 @@ public final class CommandManager {
                 names.add(command.getName());
             }
             names.addAll(moduleIds());
-            return matches(current, names);
+            return filter(current, names);
         }
 
-        Command command = null;
-        for (Command c : commands) {
-            if (c.matches(tokens[0])) {
-                command = c;
-                break;
-            }
-        }
+        Command command = find(tokens[0]);
         if (command == null) {
-            return List.of();
-        }
-
-        return switch (command.getName()) {
-            case "toggle", "bind" -> index == 1 ? matches(current, moduleIds()) : List.of();
-            case "set" -> completeSet(tokens, index, current);
-            case "friend" -> completeFriend(tokens, index, current);
-            case "profile" -> completeProfile(tokens, index, current);
-            case "waypoint" -> completeWaypoint(tokens, index, current);
-            default -> List.of();
-        };
-    }
-
-    private List<String> completeWaypoint(String[] tokens, int index, String current) {
-        if (index == 1) {
-            return matches(current, List.of("add", "remove", "list", "clear"));
-        }
-        if (index == 2 && !tokens[1].equalsIgnoreCase("add")) {
-            return matches(current, WaypointCommand.names());
-        }
-        return List.of();
-    }
-
-    private List<String> completeSet(String[] tokens, int index, String current) {
-        if (index == 1) {
-            return matches(current, moduleIds());
-        }
-        Module module = OfflineClient.INSTANCE.getModuleManager().get(tokens[1]);
-        if (module == null) {
-            return List.of();
-        }
-        if (index == 2) {
-            List<String> ids = new ArrayList<>();
-            for (Setting<?> setting : module.getSettings()) {
-                ids.add(settingId(setting));
+            // A module name in front reads like the set command without the word set.
+            if (OfflineClient.INSTANCE.getModuleManager().get(tokens[0]) == null) {
+                return List.of();
             }
-            return matches(current, ids);
+            String[] shifted = new String[tokens.length + 1];
+            shifted[0] = "set";
+            System.arraycopy(tokens, 0, shifted, 1, tokens.length);
+            return find("set").complete(shifted, index + 1, current);
         }
-        if (index == 3) {
-            Setting<?> setting = module.getSetting(tokens[2]);
-            return switch (setting) {
-                case BoolSetting ignored -> matches(current, List.of("true", "false"));
-                case EnumSetting<?> e -> {
-                    List<String> options = new ArrayList<>();
-                    for (Object constant : e.getValue().getDeclaringClass().getEnumConstants()) {
-                        options.add(((Enum<?>) constant).name().toLowerCase(Locale.ROOT));
-                    }
-                    yield matches(current, options);
-                }
-                case ColorSetting ignored -> matches(current, List.of("rainbow"));
-                case null, default -> List.of();
-            };
-        }
-        return List.of();
+
+        return command.complete(tokens, index, current);
     }
 
-    private List<String> completeFriend(String[] tokens, int index, String current) {
-        if (index == 1) {
-            return matches(current, List.of("add", "remove", "list"));
-        }
-        if (index != 2) {
-            return List.of();
-        }
-        if (tokens[1].equalsIgnoreCase("remove")) {
-            return matches(current, new ArrayList<>(OfflineClient.INSTANCE.getFriendManager().getAll()));
-        }
-        if (tokens[1].equalsIgnoreCase("add") && OfflineClient.MC.level != null) {
-            List<String> names = new ArrayList<>();
-            String self = OfflineClient.MC.player == null
-                ? "" : OfflineClient.MC.player.getGameProfile().name();
-            for (AbstractClientPlayer player : OfflineClient.MC.level.players()) {
-                String name = player.getGameProfile().name();
-                if (!name.equalsIgnoreCase(self)
-                    && !OfflineClient.INSTANCE.getFriendManager().isFriend(name)) {
-                    names.add(name);
-                }
-            }
-            return matches(current, names);
-        }
-        return List.of();
-    }
 
-    private List<String> completeProfile(String[] tokens, int index, String current) {
-        if (index == 1) {
-            return matches(current, List.of("save", "load", "list"));
-        }
-        if (index == 2 && tokens[1].equalsIgnoreCase("load")) {
-            return matches(current, OfflineClient.INSTANCE.getConfigManager().listProfiles());
-        }
-        return List.of();
-    }
 
-    private static List<String> moduleIds() {
+
+
+    public static List<String> moduleIds() {
         List<String> ids = new ArrayList<>();
         for (Module module : OfflineClient.INSTANCE.getModuleManager().getAll()) {
             ids.add(module.getName().toLowerCase(Locale.ROOT));
@@ -238,7 +233,8 @@ public final class CommandManager {
         return setting.getName().replace(" ", "").toLowerCase(Locale.ROOT);
     }
 
-    private static List<String> matches(String current, List<String> options) {
+    // The options that carry on from what has been typed.
+    public static List<String> filter(String current, List<String> options) {
         List<String> result = new ArrayList<>();
         for (String option : options) {
             if (option.toLowerCase(Locale.ROOT).startsWith(current)) {

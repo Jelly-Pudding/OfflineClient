@@ -19,10 +19,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-/**
- * The chunk mesher asks this module which blocks to keep. Chunks are rebuilt
- * whenever a setting changes.
- */
+// The chunk mesher asks this module which blocks to keep.
+// Chunks are rebuilt whenever a setting changes.
 public final class XRay extends Module {
 
     // The chunk mesher reads this once per block.
@@ -49,10 +47,8 @@ public final class XRay extends Module {
         "How visible the hidden blocks stay.",
         0, 0, 100, 5, "%").max(100);
 
-    /**
-     * Alpha of the block being meshed on the current worker thread. Minus one
-     * means the block is untouched.
-     */
+    // Alpha of the block being meshed on the current worker thread. Minus one
+    // means the block is untouched.
     private static final ThreadLocal<Integer> MESH_ALPHA = ThreadLocal.withInitial(() -> -1);
 
     // Read from worker threads and replaced whole.
@@ -68,9 +64,30 @@ public final class XRay extends Module {
         instance = this;
     }
 
+    // Puts a block on the list or takes it off. True when it went on.
+    public boolean toggleBlock(Block block) {
+        if (blocks.contains(block)) {
+            blocks.remove(block);
+            return false;
+        }
+        blocks.add(block);
+        return true;
+    }
+
     // Null before the client has started.
     public static XRay get() {
         return instance;
+    }
+
+    // The alpha the chunk mesher gives this block. Minus one leaves it alone
+    // and zero skips it. WallHack drives the same path with the list turned round.
+    public static int meshAlphaFor(BlockGetter level, BlockState state, BlockPos pos) {
+        XRay xray = instance;
+        if (xray != null && xray.isEnabled()) {
+            return xray.alphaFor(level, state, pos);
+        }
+        WallHack wallHack = WallHack.get();
+        return wallHack == null ? -1 : wallHack.alphaFor(state.getBlock());
     }
 
     public static void setMeshAlpha(int alpha) {
@@ -156,10 +173,8 @@ public final class XRay extends Module {
         return visible.contains(block);
     }
 
-    /**
-     * Minus one leaves the block alone and zero skips it. Anything else is the
-     * alpha for a see through version.
-     */
+    // Minus one leaves the block alone and zero skips it. Anything else is the
+    // alpha for a see through version.
     public int alphaFor(BlockGetter level, BlockState state, BlockPos pos) {
         if (!isEnabled()) {
             return -1;

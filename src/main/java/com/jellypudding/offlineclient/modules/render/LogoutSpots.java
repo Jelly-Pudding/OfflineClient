@@ -8,9 +8,11 @@ import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.render.BoxStyle;
 import com.jellypudding.offlineclient.render.DrawBatch;
 import com.jellypudding.offlineclient.render.WorldToScreen;
 import com.jellypudding.offlineclient.setting.BoolSetting;
+import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.RenderUtil;
@@ -36,26 +38,31 @@ public final class LogoutSpots extends Module {
     private record Spot(String name, AABB box, float health, float maxHealth) {
     }
 
-    private static final int COLOR = 0xFFFF40FF;
-
     // Players remembered at once.
     private static final int MAX_TRACKED = 512;
     // Markers kept at once.
     private static final int MAX_SPOTS = 128;
+    // A flat marker still needs a sliver of height so its edges have a direction.
+    private static final double FLAT_HEIGHT = 0.01;
 
-    private final NumberSetting scale = new NumberSetting("Scale",
-        "Size of the nametag.", 1, 0.5, 3, 0.1).min(0.1);
-    private final BoolSetting nametag = new BoolSetting("Nametag",
-        "Show the name and health above the box.", true);
-    private final BoolSetting fill = new BoolSetting("Fill",
-        "Adds a faint tint inside the box.", true);
+    private final BoolSetting fullHeight = new BoolSetting("Full height",
+        "Draw the whole body box. Off draws a flat square at the feet.", true);
+    private final BoxStyle style = new BoxStyle(BoxStyle.Shape.BOTH, 300f);
     private final BoolSetting tracers = new BoolSetting("Tracers",
         "Draw a line to every spot.", false);
+    private final BoolSetting nametag = new BoolSetting("Nametag",
+        "Show the name and health above the box.", true);
+    private final NumberSetting scale = new NumberSetting("Scale",
+        "Size of the nametag.", 1, 0.5, 3, 0.1, "").min(0.1).under(nametag);
+    private final ColorSetting nameColor = new ColorSetting("Name colour",
+        "Colour of the name text.", 0, 0f, 1f, false).under(nametag);
+    private final ColorSetting nameBackground = new ColorSetting("Name background colour",
+        "Colour behind the name.", 0, 0f, 0f, false).under(nametag);
+    private final NumberSetting nameBackgroundOpacity = new NumberSetting("Name background opacity",
+        "How solid the background behind the name is.", 30, 0, 100, 5, "%").under(nametag);
 
-    /**
-     * Kept even after a player walks out of view. Access ordered. The player
-     * seen least recently is the one that drops when the store fills up.
-     */
+    // Kept even after a player walks out of view. Access ordered.
+    // The least recently seen player drops when the store fills up.
     private final Map<UUID, Spot> lastSeen = new LinkedHashMap<UUID, Spot>(16, 0.75f, true) {
         @Override
         protected boolean removeEldestEntry(Map.Entry<UUID, Spot> eldest) {
@@ -75,7 +82,9 @@ public final class LogoutSpots extends Module {
 
     public LogoutSpots() {
         super("LogoutSpots", "Marks where players logged out.", Category.RENDER);
-        addSettings(scale, nametag, fill, tracers);
+        addSettings(fullHeight);
+        addSettings(style.settings());
+        addSettings(tracers, nametag, scale, nameColor, nameBackground, nameBackgroundOpacity);
         searchTags("log out", "disconnect");
     }
 
@@ -160,14 +169,15 @@ public final class LogoutSpots extends Module {
     private void onRender3D(Render3DEvent event) {
         DrawBatch batch = event.getBatch();
         for (Spot spot : spots.values()) {
-            batch.outlineBox(spot.box(), COLOR, true);
-            if (fill.isOn()) {
-                batch.solidBox(spot.box(), ColorUtil.withAlpha(COLOR, 40), true);
-            }
+            style.draw(batch, fullHeight.isOn() ? spot.box() : footprint(spot.box()), true);
             if (tracers.isOn()) {
-                batch.tracer(spot.box().getCenter(), COLOR, true);
+                batch.tracer(spot.box().getCenter(), style.lineColor(), true);
             }
         }
+    }
+
+    private static AABB footprint(AABB box) {
+        return new AABB(box.minX, box.minY, box.minZ, box.maxX, box.minY + FLAT_HEIGHT, box.maxZ);
     }
 
     @Subscribe
@@ -189,6 +199,7 @@ public final class LogoutSpots extends Module {
         float fraction = spot.maxHealth() <= 0 ? 0 : spot.health() / spot.maxHealth();
         RenderUtil.label(context, mc.font, screen.x, screen.y, scale.getFloat(),
             List.of(spot.name(), String.format(" %.0f", spot.health())),
-            List.of(COLOR, ColorUtil.health(fraction)));
+            List.of(nameColor.getColor(), ColorUtil.health(fraction)),
+            ColorUtil.fade(nameBackground.getColor(), nameBackgroundOpacity.getFloat() / 100f));
     }
 }

@@ -6,8 +6,10 @@ import com.jellypudding.offlineclient.event.events.Render3DEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.render.BoxStyle;
 import com.jellypudding.offlineclient.render.DrawBatch;
 import com.jellypudding.offlineclient.setting.BoolSetting;
+import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ChunkScanner;
 import net.minecraft.core.BlockPos;
@@ -25,10 +27,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/**
- * Nearby chunks are scanned through the section palette on a background thread
- * and touching portal blocks are merged into one box per portal.
- */
+// Nearby chunks are scanned through the section palette on a background thread.
+// Touching portal blocks are merged into one box per portal.
 public final class Portals extends Module {
 
     private record Spot(BlockPos pos, Block block) {
@@ -37,19 +37,28 @@ public final class Portals extends Module {
     private record Group(AABB box, int color) {
     }
 
-    private static final int NETHER_COLOR = 0xFFB050FF;
-    private static final int END_COLOR = 0xFF50FFB0;
-    private static final int GATEWAY_COLOR = 0xFF40C8FF;
-
     // Ticks between merges. The boxes only move when a portal is built or broken.
     private static final int MERGE_INTERVAL = 20;
 
     private final NumberSetting range = new NumberSetting("Range",
-        "Chunk radius to scan around you.", 6, 1, 8, 1, " chunks").max(16);
+        "Chunk radius to scan around you. Only chunks the game has loaded can be scanned.", 6, 1, 8, 1, " chunks").max(64);
+    private final BoxStyle style = BoxStyle.shapeOnly(BoxStyle.Shape.LINES);
     private final BoolSetting nether = new BoolSetting("Nether portals",
         "Show nether portals.", true);
+    private final ColorSetting netherColor = new ColorSetting("Nether colour",
+        "Colour of nether portals.", 276, 0.69f, 1f, false).under(nether);
     private final BoolSetting end = new BoolSetting("End portals",
-        "Show end portals and gateways.", true);
+        "Show the black portal blocks in a stronghold.", true);
+    private final ColorSetting endColor = new ColorSetting("End colour",
+        "Colour of end portals.", 156, 0.69f, 1f, false).under(end);
+    private final BoolSetting frames = new BoolSetting("End portal frames",
+        "Show the frame blocks around a stronghold portal.", true);
+    private final ColorSetting frameColor = new ColorSetting("Frame colour",
+        "Colour of end portal frames.", 210, 0.75f, 1f, false).under(frames);
+    private final BoolSetting gateways = new BoolSetting("End gateways",
+        "Show the gateways that throw you to the outer islands.", true);
+    private final ColorSetting gatewayColor = new ColorSetting("Gateway colour",
+        "Colour of end gateways.", 50, 0.75f, 1f, false).under(gateways);
     private final BoolSetting tracers = new BoolSetting("Tracers",
         "Draw a line to every portal.", false);
 
@@ -59,7 +68,10 @@ public final class Portals extends Module {
 
     public Portals() {
         super("Portals", "Highlights portals through walls.", Category.RENDER);
-        addSettings(range, nether, end, tracers);
+        addSettings(range);
+        addSettings(style.settings());
+        addSettings(nether, netherColor, end, endColor, frames, frameColor,
+            gateways, gatewayColor, tracers);
         searchTags("portal esp", "nether portal", "end portal");
     }
 
@@ -82,19 +94,22 @@ public final class Portals extends Module {
 
     private static boolean isPortal(Block block) {
         return block == Blocks.NETHER_PORTAL || block == Blocks.END_PORTAL
-            || block == Blocks.END_GATEWAY;
+            || block == Blocks.END_GATEWAY || block == Blocks.END_PORTAL_FRAME;
     }
 
     // Zero for a portal the settings hide.
     private int colorOf(Block block) {
         if (block == Blocks.NETHER_PORTAL) {
-            return nether.isOn() ? NETHER_COLOR : 0;
+            return nether.isOn() ? netherColor.getColor() : 0;
         }
         if (block == Blocks.END_PORTAL) {
-            return end.isOn() ? END_COLOR : 0;
+            return end.isOn() ? endColor.getColor() : 0;
+        }
+        if (block == Blocks.END_PORTAL_FRAME) {
+            return frames.isOn() ? frameColor.getColor() : 0;
         }
         if (block == Blocks.END_GATEWAY) {
-            return end.isOn() ? GATEWAY_COLOR : 0;
+            return gateways.isOn() ? gatewayColor.getColor() : 0;
         }
         return 0;
     }
@@ -167,7 +182,7 @@ public final class Portals extends Module {
     private void onRender3D(Render3DEvent event) {
         DrawBatch batch = event.getBatch();
         for (Group group : groups) {
-            batch.outlineBox(group.box(), group.color(), true);
+            style.draw(batch, group.box(), group.color(), true);
             if (tracers.isOn()) {
                 batch.tracer(group.box().getCenter(), group.color(), true);
             }

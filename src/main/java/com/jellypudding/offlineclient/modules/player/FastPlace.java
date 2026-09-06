@@ -8,10 +8,7 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
 
-/**
- * Other items are handled by FastUse. Both share the delay cap in
- * FastUse.capUseDelay.
- */
+// Other items are handled by FastUse. Both share the delay cap in FastUse.capUseDelay.
 public final class FastPlace extends Module {
 
     private final NumberSetting delay = new NumberSetting("Delay",

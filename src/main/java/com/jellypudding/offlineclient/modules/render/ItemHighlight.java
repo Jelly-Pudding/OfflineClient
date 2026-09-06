@@ -2,6 +2,7 @@ package com.jellypudding.offlineclient.modules.render;
 
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
@@ -24,11 +25,18 @@ public final class ItemHighlight extends Module {
         "Colour painted behind a matching item.", 130, false);
     private final NumberSetting strength = new NumberSetting("Strength",
         "How solid the paint is.", 50, 10, 100, 5, "%").max(100);
+    private final BoolSetting hotbar = new BoolSetting("Hotbar",
+        "Also paints the hotbar whilst you play with no inventory open.", true);
 
     public ItemHighlight() {
-        super("ItemHighlight", "Paints a colour behind the items you pick in any inventory screen.", Category.RENDER);
-        addSettings(items, color, strength);
+        super("ItemHighlight", "Paints a colour behind the items you pick in any inventory and the hotbar.", Category.RENDER);
+        addSettings(items, color, strength, hotbar);
         searchTags("inventory highlight", "slot colour");
+    }
+
+    // Zero when the hotbar is not painted or the stack is not one to pick out.
+    public int hotbarColorFor(ItemStack stack) {
+        return hotbar.isOn() ? colorFor(stack) : 0;
     }
 
     // Zero when the stack is not one to pick out.

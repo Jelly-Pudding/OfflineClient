@@ -1,5 +1,6 @@
 package com.jellypudding.offlineclient.modules.render;
 
+import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.PacketReceiveEvent;
 import com.jellypudding.offlineclient.event.events.Render3DEvent;
@@ -36,13 +37,8 @@ import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-/**
- * Marks the chunks the server generated whilst the client watched. World
- * generation lays liquid down as source blocks and the spreading only happens
- * once a chunk is live. A chunk that arrives already holding flowing liquid was
- * therefore read back off the disk. A chunk that starts flowing after it lands
- * was made just now.
- */
+// Judges chunks fresh or old by watching when their liquid starts to flow.
+// Liquid already flowing on arrival means the chunk was loaded from disk.
 public final class NewChunks extends Module {
 
     private static final int MAX_CHUNKS = 16384;
@@ -74,9 +70,13 @@ public final class NewChunks extends Module {
         .min(1).max(3600);
     private final NumberSetting minSpread = new NumberSetting("Min spread",
         "How far a flow must have run from its source before it proves a chunk old. Raise it on servers that tick chunks before sending them.",
-        1, 1, 7, 1, " blocks").min(1).max(7);
+        3, 1, 7, 1, " blocks").min(1).max(7);
     private final BoolSetting showReasons = new BoolSetting("Show reasons",
         "Marks the liquid block that decided each verdict.", false);
+    private final NumberSetting opacity = new NumberSetting("Opacity",
+        "How solid the squares are drawn.", 75, 10, 100, 5, "%").min(1).max(100);
+    private final BoolSetting logChunks = new BoolSetting("Log chunks",
+        "Writes every verdict to the game log so you can read them back later.", false);
     private final BoolSetting notice = new BoolSetting("Notice",
         "Explains the limits in chat when you switch this on.", true);
 
@@ -109,8 +109,8 @@ public final class NewChunks extends Module {
     public NewChunks() {
         super("NewChunks", "Marks fresh and old chunks that load whilst this is on.",
             Category.RENDER);
-        addSettings(showOld, showUnjudged, newColor, oldColor, unjudgedColor, fill,
-            followHeight, drawHeight, distance, settle, minSpread, showReasons, notice);
+        addSettings(showOld, showUnjudged, newColor, oldColor, unjudgedColor, opacity, fill,
+            followHeight, drawHeight, distance, settle, minSpread, showReasons, logChunks, notice);
         searchTags("new chunks", "fresh terrain", "exploit");
     }
 
@@ -164,12 +164,8 @@ public final class NewChunks extends Module {
         }
     }
 
-    /**
-     * Called from ClientPacketListenerMixin the moment a chunk has been put into
-     * the world. Every later packet in the stream is still waiting. The chunk
-     * therefore still holds exactly what the server sent and no flow update has
-     * been written into it yet.
-     */
+    // Called from ClientPacketListenerMixin the moment a chunk lands. Every later
+    // packet is still waiting so no flow update has been written into it yet.
     public void onChunkLoaded(int x, int z) {
         if (!isEnabled() || mc.level == null || !sameWorld()) {
             return;
@@ -189,6 +185,13 @@ public final class NewChunks extends Module {
         if (found != null) {
             oldChunks.add(key);
             reasons.put(key, found);
+            log("old", x, z);
+        }
+    }
+
+    private void log(String verdict, int x, int z) {
+        if (logChunks.isOn()) {
+            OfflineClient.LOG.info("NewChunks {} chunk at {} {}", verdict, x * 16, z * 16);
         }
     }
 
@@ -241,15 +244,13 @@ public final class NewChunks extends Module {
             if (ticks - seen <= window && newChunks.add(key)) {
                 reasons.put(key, pos);
                 revision++;
+                log("new", ChunkPos.getX(key), ChunkPos.getZ(key));
             }
         }
     }
 
-    /**
-     * The first flowing liquid in the chunk or null. The palette test is only a
-     * prefilter. It reads the palette which can still list a state the section
-     * stopped holding. Every hit is confirmed against the real blocks.
-     */
+    // The first flowing liquid in the chunk or null. The palette test is only a prefilter
+    // so every hit is confirmed against the real blocks.
     private static BlockPos findFlowingLiquid(LevelChunk chunk, int spread) {
         LevelChunkSection[] sections = chunk.getSections();
         int minY = chunk.getMinY();
@@ -279,10 +280,8 @@ public final class NewChunks extends Module {
         return !fluid.isEmpty() && !fluid.isSource();
     }
 
-    /**
-     * How many blocks a flow has run from its source. A source is zero and
-     * each block of flow drops the level by one. Falling liquid reads as one.
-     */
+    // How many blocks a flow has run from its source. A source is zero and
+    // each block of flow drops the level by one. Falling liquid reads as one.
     private static int spreadOf(BlockState state) {
         FluidState fluid = state.getFluidState();
         if (fluid.isEmpty() || fluid.isSource()) {
@@ -308,9 +307,11 @@ public final class NewChunks extends Module {
         }
 
         double y = followHeight.isOn() ? mc.player.getY() : drawHeight.getValue();
-        drawAll(event.getBatch(), visibleNew, newColor.getColor(), y);
-        drawAll(event.getBatch(), visibleOld, oldColor.getColor(), y);
-        drawAll(event.getBatch(), visibleUnjudged, unjudgedColor.getColor(), y);
+        float share = opacity.getFloat() / 100f;
+        drawAll(event.getBatch(), visibleNew, ColorUtil.fade(newColor.getColor(), share), y);
+        drawAll(event.getBatch(), visibleOld, ColorUtil.fade(oldColor.getColor(), share), y);
+        drawAll(event.getBatch(), visibleUnjudged,
+            ColorUtil.fade(unjudgedColor.getColor(), share), y);
 
         if (showReasons.isOn()) {
             markReasons(event.getBatch(), visibleNew, newColor.getColor());
@@ -345,11 +346,8 @@ public final class NewChunks extends Module {
         return (showOld.isOn() ? 1 : 0) | (showUnjudged.isOn() ? 2 : 0) | distance.getInt() << 2;
     }
 
-    /**
-     * Walks the square of chunks around the player instead of the whole store.
-     * The work per frame is then tied to the draw distance and never to how far
-     * the player has travelled.
-     */
+    // Walks the square of chunks around the player instead of the whole store. The work
+    // per frame is then tied to the draw distance not to how far the player has gone.
     private void rebuildVisible(int centerX, int centerZ) {
         clearVisible();
         int limit = distance.getInt();

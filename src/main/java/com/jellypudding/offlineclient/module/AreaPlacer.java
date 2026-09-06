@@ -16,17 +16,15 @@ import net.minecraft.world.level.block.Block;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * The shape shared by the modules that fill nearby positions from a chosen
- * list of blocks. A subclass says which positions it wants and how each one
- * is clicked. Everything else is the same round of placements a tick.
- */
+// Shared by modules that fill nearby positions from a chosen block list.
+// A subclass picks the positions and how each is clicked. The rest is one round a tick.
 public abstract class AreaPlacer extends Module {
 
     // Alpha the targets beyond this round are drawn at.
     private static final int QUEUED_ALPHA = 0x80;
 
     protected final NumberSetting range;
+    protected final NumberSetting wallsRange;
     protected final RegistryListSetting<Block> blocks;
     protected final NumberSetting perTick;
     protected final NumberSetting delay;
@@ -47,6 +45,8 @@ public abstract class AreaPlacer extends Module {
         this.color = color;
         range = new NumberSetting("Range",
             "How far you can reach to place.", 4.5, 1, 6, 0.1).min(1);
+        wallsRange = new NumberSetting("Walls range",
+            "How far to place with no clear view from your eyes.", 4.5, 0, 6, 0.1).min(0).max(6);
         blocks = new RegistryListSetting<>("Blocks", blocksDescription,
             BuiltInRegistries.BLOCK, defaultBlocks);
         perTick = new NumberSetting("Blocks per tick",
@@ -63,6 +63,29 @@ public abstract class AreaPlacer extends Module {
 
     // Clicks one position. True once a placement has gone out.
     protected abstract boolean placeOn(BlockPos pos);
+
+    // True when the spot is in reach and either in plain sight or inside the walls range.
+    protected boolean inReach(BlockPos pos) {
+        if (!withinRange(pos, range.getValue())) {
+            return false;
+        }
+        return withinRange(pos, wallsRange.getValue()) || BlockUtil.canSee(pos);
+    }
+
+    // Straight line distance from the eyes. A subclass may measure another way.
+    protected boolean withinRange(BlockPos pos, double reach) {
+        return BlockUtil.distanceTo(pos) <= reach;
+    }
+
+    // Which blocks may be taken from the hotbar. A subclass may invert the list.
+    protected boolean allowed(Block block) {
+        return blocks.contains(block);
+    }
+
+    // How many blocks go down this round. A subclass may cap it lower.
+    protected int roundSize() {
+        return perTick.getInt();
+    }
 
     @Override
     public String getSuffix() {
@@ -98,7 +121,7 @@ public abstract class AreaPlacer extends Module {
             return;
         }
 
-        int slot = BlockUtil.findBlockSlot(blocks::contains);
+        int slot = BlockUtil.findBlockSlot(this::allowed);
         if (slot == -1) {
             slots.restore();
             return;
@@ -106,8 +129,9 @@ public abstract class AreaPlacer extends Module {
         slots.select(slot);
 
         int placed = 0;
+        int round = roundSize();
         for (BlockPos pos : targets) {
-            if (placed >= perTick.getInt()) {
+            if (placed >= round) {
                 break;
             }
             if (placeOn(pos)) {
@@ -125,7 +149,7 @@ public abstract class AreaPlacer extends Module {
         if (!render.isOn()) {
             return;
         }
-        int next = perTick.getInt();
+        int next = roundSize();
         for (int i = 0; i < targets.size(); i++) {
             int argb = i < next ? color : ColorUtil.withAlpha(color, QUEUED_ALPHA);
             event.getBatch().outlineBlock(targets.get(i), argb, false);

@@ -13,12 +13,15 @@ public class EntityRenderStateMixin implements IRenderState {
     @Unique
     private boolean offlineclient$chams;
     @Unique
+    private boolean offlineclient$flat;
+    @Unique
     private boolean offlineclient$forceVisible;
 
     @Override
     public void offlineclient$clear() {
         offlineclient$tint = 0;
         offlineclient$chams = false;
+        offlineclient$flat = false;
         offlineclient$forceVisible = false;
     }
 
@@ -40,6 +43,16 @@ public class EntityRenderStateMixin implements IRenderState {
     @Override
     public void offlineclient$setChams(boolean chams) {
         offlineclient$chams = chams;
+    }
+
+    @Override
+    public boolean offlineclient$isFlat() {
+        return offlineclient$flat;
+    }
+
+    @Override
+    public void offlineclient$setFlat(boolean flat) {
+        offlineclient$flat = flat;
     }
 
     @Override

@@ -6,10 +6,8 @@ import net.minecraft.client.gui.screens.inventory.tooltip.ClientTooltipComponent
 import net.minecraft.client.renderer.state.MapRenderState;
 import org.joml.Matrix3x2fStack;
 
-/**
- * The map always draws at its native size of one hundred and twenty eight
- * pixels and the pose does the scaling.
- */
+// The map always draws at its native size of one hundred and twenty eight
+// pixels and the pose does the scaling.
 public final class MapPreview implements ClientTooltipComponent {
 
     private static final int NATIVE_SIZE = 128;

@@ -84,12 +84,8 @@ public final class ItemUtil {
         return bestToolSlot(state, 1, stack -> true, InventoryUtil.HOTBAR_SIZE);
     }
 
-    /**
-     * The inventory slot that mines the block fastest. Only the first slots
-     * up to the limit are searched. Nine keeps to the hotbar. Only stacks
-     * the filter accepts count and only speeds above the floor. Minus one
-     * when none does.
-     */
+    // The inventory slot that mines the block fastest. Only the first slots up to the
+    // limit are searched. Only stacks the filter accepts and speeds above one count.
     public static int bestToolSlot(BlockState state, float floor, Predicate<ItemStack> allowed,
                                    int slots) {
         int bestSlot = -1;
@@ -122,10 +118,8 @@ public final class ItemUtil {
         return equippable == null ? null : equippable.slot();
     }
 
-    /**
-     * Sums a flat attribute the item grants in a slot. Multiplier style
-     * modifiers scale a base of zero.
-     */
+    // Sums a flat attribute the item grants in a slot. Multiplier style
+    // modifiers scale a base of zero.
     public static double attributeValue(ItemStack stack, Holder<Attribute> attribute, EquipmentSlot slot) {
         ItemAttributeModifiers modifiers = stack.getItem().components()
             .getOrDefault(DataComponents.ATTRIBUTE_MODIFIERS, ItemAttributeModifiers.EMPTY);

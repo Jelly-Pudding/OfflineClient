@@ -56,10 +56,8 @@ public abstract class Setting<T> {
         return (S) this;
     }
 
-    /**
-     * Makes this a sub option of another setting. The GUI draws it indented
-     * beneath the parent and only whilst the supplier returns true.
-     */
+    // Makes this a sub option of another setting. The GUI draws it
+    // indented beneath the parent and only whilst the supplier returns true.
     public <S extends Setting<T>> S under(Setting<?> parent, Supplier<Boolean> visibility) {
         this.parent = parent;
         return visibleWhen(visibility);

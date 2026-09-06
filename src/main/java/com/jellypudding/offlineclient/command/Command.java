@@ -2,7 +2,7 @@ package com.jellypudding.offlineclient.command;
 
 import com.jellypudding.offlineclient.util.ChatUtil;
 
-
+import java.util.List;
 
 public abstract class Command {
 
@@ -47,4 +47,10 @@ public abstract class Command {
     }
 
     public abstract void execute(String[] args);
+
+    // Suggestions for the token being typed. Token nought is the command name itself
+    // so the first argument is index one.
+    public List<String> complete(String[] tokens, int index, String current) {
+        return List.of();
+    }
 }

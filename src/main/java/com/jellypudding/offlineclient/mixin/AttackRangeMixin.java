@@ -27,11 +27,8 @@ public abstract class AttackRangeMixin {
         return hitboxes == null ? hitboxMargin : hitboxMargin + hitboxes.margin();
     }
 
-    /**
-     * The crosshair pick inflates every entity box by this accessor. Growing
-     * it here is what makes the bigger box actually take the hit. The server
-     * allows three blocks of slack on top of the weapon's reach.
-     */
+    // The crosshair pick inflates every entity box using this accessor.
+    // Growing it here lands hits since the server allows three blocks of slack.
     @ModifyReturnValue(method = "hitboxMargin()F", at = @At("RETURN"))
     private float onHitboxMargin(float original) {
         Hitboxes hitboxes = Modules.get(Hitboxes.class);

@@ -1,6 +1,9 @@
 package com.jellypudding.offlineclient.mixin;
 
 import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.util.Modules;
+import com.jellypudding.offlineclient.modules.misc.BetterChat;
+import com.jellypudding.offlineclient.modules.render.Blur;
 import com.jellypudding.offlineclient.event.events.ChatSendEvent;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.EditBox;
@@ -40,10 +43,8 @@ public abstract class ChatScreenMixin extends Screen {
     @Unique
     private String offlineclient$pickedFor = "";
 
-    /**
-     * Vanilla completion only knows server commands. Tab takes the picked
-     * completion and the up and down arrows move the pick through the list.
-     */
+    // Vanilla completion only knows server commands.
+    // Tab takes the picked completion and up or down arrows move the pick through the list.
     @Inject(method = "keyPressed(Lnet/minecraft/client/input/KeyEvent;)Z",
         at = @At("HEAD"),
         cancellable = true)
@@ -92,6 +93,17 @@ public abstract class ChatScreenMixin extends Screen {
         }
         offlineclient$picked = Math.min(offlineclient$picked, count - 1);
         return offlineclient$picked;
+    }
+
+    // The chat draws no background of its own so the blur has to be asked for here.
+    @Inject(method = "extractBackground(Lnet/minecraft/client/gui/GuiGraphicsExtractor;IIF)V",
+        at = @At("HEAD"))
+    private void onExtractBackground(GuiGraphicsExtractor context, int mouseX, int mouseY,
+                                     float partialTicks, CallbackInfo ci) {
+        Blur blur = Modules.get(Blur.class);
+        if (blur != null && blur.wants((Screen) (Object) this)) {
+            blur.blurHere(context);
+        }
     }
 
     @Inject(method = "extractRenderState(Lnet/minecraft/client/gui/GuiGraphicsExtractor;IIF)V",
@@ -149,6 +161,14 @@ public abstract class ChatScreenMixin extends Screen {
         return common;
     }
 
+    @Inject(method = "init", at = @At("TAIL"))
+    private void onInit(CallbackInfo ci) {
+        BetterChat betterChat = Modules.get(BetterChat.class);
+        if (betterChat != null && betterChat.liftsBoxLimit()) {
+            input.setMaxLength(Integer.MAX_VALUE);
+        }
+    }
+
     @Inject(method = "handleChatInput(Ljava/lang/String;Z)V",
         at = @At("HEAD"),
         cancellable = true)
@@ -159,14 +179,26 @@ public abstract class ChatScreenMixin extends Screen {
 
         ChatSendEvent event = new ChatSendEvent(message);
         OfflineClient.INSTANCE.getEventBus().post(event);
-        if (!event.isCancelled()) {
+        if (event.isCancelled()) {
+            // The command goes into chat history but never to the server.
+            ci.cancel();
+            if (addToHistory) {
+                minecraft.gui.hud.getChat().addRecentChat(message);
+            }
             return;
         }
 
-        // The command goes into chat history but never to the server.
+        BetterChat betterChat = Modules.get(BetterChat.class);
+        String rewritten = betterChat == null ? message : betterChat.rewrite(message);
+        if (rewritten.equals(message)) {
+            return;
+        }
+
+        // The typed line is what goes into the history. The dressed one goes to the server.
         ci.cancel();
         if (addToHistory) {
             minecraft.gui.hud.getChat().addRecentChat(message);
         }
+        minecraft.player.connection.sendChat(rewritten);
     }
 }

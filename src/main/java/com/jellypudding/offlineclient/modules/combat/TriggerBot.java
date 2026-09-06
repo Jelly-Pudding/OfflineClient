@@ -5,29 +5,47 @@ import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
+import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.AttackTimer;
+import com.jellypudding.offlineclient.util.EntityFilter;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.FaceMode;
 import com.jellypudding.offlineclient.util.Modules;
+import com.jellypudding.offlineclient.util.RotationPriority;
+import com.jellypudding.offlineclient.util.TargetPriority;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.phys.EntityHitResult;
+
+import java.util.List;
 
 public final class TriggerBot extends Module {
 
+    // Hitbox reach is shorter than the centre distance so the scan runs wider.
+    private static final double SCAN_MARGIN = 4;
+
     private final NumberSetting range = new NumberSetting("Range",
-        "Maximum reach in blocks.", 4.2, 1, 6, 0.05).max(6);
-    private final BoolSetting players = new BoolSetting("Players",
-        "Swing at players under your crosshair.", true);
-    private final BoolSetting mobs = new BoolSetting("Mobs",
-        "Swing at mobs under your crosshair.", true);
+        "Maximum reach in blocks.", 4.2, 1, 10, 0.05).max(10);
+    private final NumberSetting fov = new NumberSetting("FOV",
+        "Only hit what sits within this angle of your view. Small values act as a crosshair check.",
+        30, 30, 360, 10, " degrees").max(360);
+    private final EnumSetting<TargetPriority> priority =
+        TargetPriority.setting("Attacks", TargetPriority.CLOSEST_ANGLE);
+    private final EntityFilter filter = EntityFilter.living("Swing at", "hit", true,
+        EntityFilter.Pick.ALL, List.of());
+    private final BoolSetting onlyOnClick = new BoolSetting("Only on click",
+        "Only swing whilst you hold the attack key down.", false);
+    private final EnumSetting<FaceMode> faceTarget = FaceMode.setting(FaceMode.SPAM);
     private final AttackTimer timer = new AttackTimer();
 
     public TriggerBot() {
         super("TriggerBot", "Swings at whatever your crosshair is on.", Category.COMBAT);
-        addSettings(range, players, mobs);
+        addSettings(range, fov, priority);
+        addSettings(filter.settings());
+        addSettings(onlyOnClick, faceTarget);
         addSettings(timer.settings());
+        searchTags("click aura", "trigger");
     }
 
     @Override
@@ -43,35 +61,35 @@ public final class TriggerBot extends Module {
         if (mc.player.isUsingItem() || mc.gameMode.isDestroying() || Modules.eating()) {
             return;
         }
-        if (mc.player.getAttackStrengthScale(0.5f) < 1) {
+        if (onlyOnClick.isOn() && !mc.options.keyAttack.isDown()) {
             return;
         }
-        if (!timer.ready()) {
+        if (mc.player.getAttackStrengthScale(0.5f) < 1 || !timer.ready()) {
             return;
         }
-        if (!(mc.hitResult instanceof EntityHitResult hit)) {
+        Entity target = EntityUtil.best(range.getValue() + SCAN_MARGIN, priority.getValue(),
+            this::attackable);
+        if (target == null) {
             return;
         }
-        if (!(hit.getEntity() instanceof LivingEntity target) || !target.isAlive()) {
-            return;
-        }
-        // The crosshair reaches further than the server allows a hit.
-        if (EntityUtil.reachDistance(mc.player, target) > range.getValue()) {
-            return;
-        }
-        if (target instanceof Player player) {
-            if (!players.isOn()) {
-                return;
-            }
-            if (EntityUtil.isFriend(player)) {
-                return;
-            }
-        } else if (!mobs.isOn()) {
-            return;
-        }
-
+        // The look packet goes out first so the server sees a fair hit.
+        faceTarget.getValue().face(target.getBoundingBox().getCenter(), RotationPriority.ATTACK);
         mc.gameMode.attack(mc.player, target);
         mc.player.swing(InteractionHand.MAIN_HAND);
         timer.spent();
+    }
+
+    private boolean attackable(Entity entity) {
+        if (!(entity instanceof LivingEntity living) || !living.isAlive()) {
+            return false;
+        }
+        if (EntityUtil.isFriend(entity) || !filter.matches(entity)) {
+            return false;
+        }
+        // The crosshair reaches further than the server allows a hit.
+        if (EntityUtil.reachDistance(mc.player, entity) > range.getValue()) {
+            return false;
+        }
+        return fov.getValue() >= 360 || EntityUtil.lookAngleTo(entity) <= fov.getValue() / 2;
     }
 }

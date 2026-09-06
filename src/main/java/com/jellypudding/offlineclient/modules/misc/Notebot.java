@@ -2,14 +2,18 @@ package com.jellypudding.offlineclient.modules.misc;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.Subscribe;
+import com.jellypudding.offlineclient.event.events.Render2DEvent;
 import com.jellypudding.offlineclient.event.events.Render3DEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.render.BoxStyle;
+import com.jellypudding.offlineclient.render.WorldToScreen;
 import com.jellypudding.offlineclient.setting.BoolSetting;
+import com.jellypudding.offlineclient.setting.ChoiceListSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
-import com.jellypudding.offlineclient.setting.TextSetting;
+import com.jellypudding.offlineclient.setting.Setting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
@@ -17,6 +21,7 @@ import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.ItemUtil;
 import com.jellypudding.offlineclient.util.NoteSong;
 import com.jellypudding.offlineclient.util.NoteSong.Note;
+import com.jellypudding.offlineclient.util.RenderUtil;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;
@@ -25,7 +30,6 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.NoteBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.NoteBlockInstrument;
-import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 
@@ -33,6 +37,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -44,33 +50,60 @@ import java.util.Random;
 import java.util.Set;
 import java.util.stream.Stream;
 
-/**
- * Plays Note Block Studio songs on the note blocks around you. Blocks are
- * tuned with right clicks first and then struck on the beat. Songs live in
- * the offlineclient songs folder. The bind pauses and resumes.
- */
+// Plays Note Block Studio songs on the note blocks around you.
+// Blocks are tuned with clicks then struck on the beat. The bind pauses and resumes.
 public final class Notebot extends Module {
 
     public enum Instruments { EXACT, ANY }
 
+    public enum Detect { BLOCK_STATE, BELOW_BLOCK }
+
+    // Where the notes of one instrument are sent. Same leaves them alone.
+    public enum Remap {
+        SAME, NONE, HARP, BASEDRUM, SNARE, HAT, BASS, FLUTE, BELL, GUITAR, CHIME,
+        XYLOPHONE, IRON_XYLOPHONE, COW_BELL, DIDGERIDOO, BIT, BANJO, PLING
+    }
+
     private enum Stage { SCAN, TUNE, RECHECK, PLAY, PREVIEW }
 
-    private static final int TUNED_COLOR = 0xFF30E030;
-    private static final int UNTUNED_COLOR = 0xFFE03030;
-    private static final int HIT_COLOR = 0xFFFFA000;
+    // The instruments a note block can be tuned to.
+    private static final NoteBlockInstrument[] PLAYABLE = {
+        NoteBlockInstrument.HARP, NoteBlockInstrument.BASEDRUM, NoteBlockInstrument.SNARE,
+        NoteBlockInstrument.HAT, NoteBlockInstrument.BASS, NoteBlockInstrument.FLUTE,
+        NoteBlockInstrument.BELL, NoteBlockInstrument.GUITAR, NoteBlockInstrument.CHIME,
+        NoteBlockInstrument.XYLOPHONE, NoteBlockInstrument.IRON_XYLOPHONE,
+        NoteBlockInstrument.COW_BELL, NoteBlockInstrument.DIDGERIDOO, NoteBlockInstrument.BIT,
+        NoteBlockInstrument.BANJO, NoteBlockInstrument.PLING
+    };
 
     // Note block pitches wrap after this many clicks.
     private static final int PITCHES = 25;
 
-    private final TextSetting song = new TextSetting("Song",
-        "File name in the songs folder. Blank picks one at random.", "");
+    private static final int TEXT_COLOR = 0xFF30E030;
+    private static final int OWED_COLOR = 0xFFE03030;
+
+    private final ChoiceListSetting songs = new ChoiceListSetting("Songs",
+        "Which files in the songs folder to play. Click to pick them. An empty list plays any.",
+        Notebot::songNames);
     private final EnumSetting<Instruments> instruments = new EnumSetting<>("Instruments",
         "How strictly the block under a note block must match.", Instruments.EXACT)
         .describe(Instruments.EXACT, "Each note needs a block with the right instrument.")
         .describe(Instruments.ANY, "Any note block will do. Every note plays on whatever is there.");
+    private final EnumSetting<Detect> detect = new EnumSetting<>("Detect instrument",
+        "Where the instrument of a note block is read from.", Detect.BLOCK_STATE)
+        .describe(Detect.BLOCK_STATE, "From the note block itself.")
+        .describe(Detect.BELOW_BLOCK, "From the block underneath for servers that alter the state.")
+        .under(instruments, Instruments.EXACT);
+    private final BoolSetting remap = new BoolSetting("Remap instruments",
+        "Sends the notes of one instrument to another or drops them.", false)
+        .under(instruments, Instruments.EXACT);
+    private final Map<NoteBlockInstrument, EnumSetting<Remap>> remaps =
+        new EnumMap<>(NoteBlockInstrument.class);
     private final NumberSetting tunePerTick = new NumberSetting("Tune per tick",
         "How many note blocks to click in one tick whilst tuning. Paper servers want one.",
         1, 1, 20, 1).min(1);
+    private final NumberSetting tuneDelay = new NumberSetting("Tune delay",
+        "Ticks between one round of tuning clicks and the next.", 1, 1, 20, 1, " ticks").min(1);
     private final NumberSetting recheckDelay = new NumberSetting("Recheck delay",
         "Ticks to wait after tuning before the blocks are read back.", 10, 1, 40, 1, " ticks").min(1);
     private final BoolSetting foldNotes = new BoolSetting("Fold notes",
@@ -85,6 +118,22 @@ public final class Notebot extends Module {
         "Plays the song through your own speakers instead of note blocks.", false);
     private final BoolSetting render = new BoolSetting("Show blocks",
         "Outlines the note blocks the song uses.", true);
+    private final BoxStyle untunedStyle = new BoxStyle("Untuned", BoxStyle.Shape.LINES, 0f)
+        .under(render);
+    private final BoxStyle tunedStyle = new BoxStyle("Tuned", BoxStyle.Shape.LINES, 0.33f)
+        .under(render);
+    private final BoxStyle hitStyle = new BoxStyle("Hit", BoxStyle.Shape.BOTH, 0.1f)
+        .under(render);
+    private final BoolSetting renderText = new BoolSetting("Show notes",
+        "Draws the pitch of each note block above it.", true)
+        .under(render);
+    private final NumberSetting textScale = new NumberSetting("Note scale",
+        "How big that text is drawn.", 1.5, 0.5, 4, 0.1).min(0.1).max(10)
+        .under(renderText);
+    private final BoolSetting showScanned = new BoolSetting("Show scanned",
+        "Also outlines every note block found in the scan.", false);
+    private final BoxStyle scannedStyle = new BoxStyle("Scanned", BoxStyle.Shape.LINES, 0.16f)
+        .under(showScanned);
 
     private NoteSong loaded;
     private Stage stage;
@@ -104,13 +153,63 @@ public final class Notebot extends Module {
     // Blocks struck this tick for the renderer.
     private final Set<BlockPos> struck = new HashSet<>();
 
+    // Every note block the scan saw whether the song uses it or not.
+    private final Set<BlockPos> scanned = new HashSet<>();
+
+    // Ticks left before the next round of tuning clicks.
+    private int tuneWait;
+
     private final Random random = new Random();
 
     public Notebot() {
         super("Notebot", "Plays songs on the note blocks around you.", Category.MISC);
-        addSettings(song, instruments, tunePerTick, recheckDelay, foldNotes, rotate, swing,
+        addSettings(songs, instruments, detect, remap);
+        addSettings(buildRemaps());
+        addSettings(tunePerTick, tuneDelay, recheckDelay, foldNotes, rotate, swing,
             playNext, preview, render);
+        addSettings(untunedStyle.settings());
+        addSettings(tunedStyle.settings());
+        addSettings(hitStyle.settings());
+        addSettings(renderText, textScale, showScanned);
+        addSettings(scannedStyle.settings());
         searchTags("note block", "music", "nbs");
+    }
+
+    // One row per instrument a note block can play.
+    private Setting<?>[] buildRemaps() {
+        List<Setting<?>> rows = new ArrayList<>();
+        for (NoteBlockInstrument instrument : PLAYABLE) {
+            EnumSetting<Remap> row = new EnumSetting<>(rowName(instrument),
+                "Which instrument these notes are sent to.", Remap.SAME)
+                .describe(Remap.SAME, "Leaves these notes alone.")
+                .describe(Remap.NONE, "Drops these notes.")
+                .under(remap, () -> remap.isOn() && instruments.is(Instruments.EXACT));
+            remaps.put(instrument, row);
+            rows.add(row);
+        }
+        return rows.toArray(new Setting<?>[0]);
+    }
+
+    private static String rowName(NoteBlockInstrument instrument) {
+        String words = instrument.name().toLowerCase(Locale.ROOT).replace('_', ' ');
+        return Character.toUpperCase(words.charAt(0)) + words.substring(1) + " notes";
+    }
+
+    // The names the song picker offers.
+    private static Collection<String> songNames() {
+        List<String> names = new ArrayList<>();
+        try (Stream<Path> stream = Files.list(songsFolder())) {
+            stream.map(file -> file.getFileName().toString())
+                .filter(Notebot::isSong)
+                .forEach(names::add);
+        } catch (IOException ignored) {
+        }
+        return names;
+    }
+
+    private static boolean isSong(String name) {
+        String lower = name.toLowerCase(Locale.ROOT);
+        return lower.endsWith(".nbs") || lower.endsWith(".txt");
     }
 
     @Override
@@ -147,6 +246,7 @@ public final class Notebot extends Module {
         paused = false;
         assigned.clear();
         tuning.clear();
+        scanned.clear();
         if (inGame()) {
             loadSong();
         }
@@ -159,6 +259,7 @@ public final class Notebot extends Module {
         assigned.clear();
         tuning.clear();
         struck.clear();
+        scanned.clear();
         slots.restore();
     }
 
@@ -177,7 +278,7 @@ public final class Notebot extends Module {
             return;
         }
         try {
-            loaded = NoteSong.read(file).foldedIntoRange(foldNotes.isOn());
+            loaded = NoteSong.read(file).remapped(remapTable()).foldedIntoRange(foldNotes.isOn());
         } catch (IOException e) {
             ChatUtil.error("Could not read " + file.getFileName() + ".");
             setEnabled(false);
@@ -190,35 +291,38 @@ public final class Notebot extends Module {
             + (loaded.author().isBlank() ? "" : " §7by §f" + loaded.author()) + "§7.");
     }
 
-    // The named file or a random one. Null when nothing fits and the module is off.
+    // A picked file or a random one. Null when nothing fits and the module is off.
     private Path pickFile(Path folder) {
         List<Path> files = new ArrayList<>();
         try (Stream<Path> stream = Files.list(folder)) {
-            stream.filter(p -> p.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".nbs")).forEach(files::add);
+            stream.filter(file -> isSong(file.getFileName().toString()))
+                .filter(file -> songs.size() == 0 || songs.contains(file.getFileName().toString()))
+                .forEach(files::add);
         } catch (IOException ignored) {
         }
         if (files.isEmpty()) {
-            ChatUtil.error("No .nbs songs in " + folder + ".");
+            ChatUtil.error("No songs to play in " + folder + ".");
             setEnabled(false);
             return null;
         }
-        if (song.isBlank()) {
-            return files.get(random.nextInt(files.size()));
+        return files.get(random.nextInt(files.size()));
+    }
+
+    // What each instrument in the file is turned into. Empty when nothing is remapped.
+    private Map<NoteBlockInstrument, NoteBlockInstrument> remapTable() {
+        Map<NoteBlockInstrument, NoteBlockInstrument> table = new EnumMap<>(NoteBlockInstrument.class);
+        if (!remap.isOn() || !instruments.is(Instruments.EXACT)) {
+            return table;
         }
-        String wanted = song.getValue().trim().toLowerCase(Locale.ROOT);
-        for (Path file : files) {
-            String name = file.getFileName().toString().toLowerCase(Locale.ROOT);
-            if (name.equals(wanted) || name.equals(wanted + ".nbs")) {
-                return file;
+        for (Map.Entry<NoteBlockInstrument, EnumSetting<Remap>> entry : remaps.entrySet()) {
+            Remap choice = entry.getValue().getValue();
+            if (choice == Remap.SAME) {
+                continue;
             }
+            table.put(entry.getKey(), choice == Remap.NONE
+                ? null : NoteBlockInstrument.valueOf(choice.name()));
         }
-        StringBuilder names = new StringBuilder();
-        for (Path file : files) {
-            names.append(names.isEmpty() ? "" : " ").append(file.getFileName());
-        }
-        ChatUtil.error("No song called " + song.getValue() + ". Available: " + names);
-        setEnabled(false);
-        return null;
+        return table;
     }
 
     @Subscribe
@@ -266,6 +370,7 @@ public final class Notebot extends Module {
     // Every note block in reach keyed by what it plays right now.
     private Map<Note, List<BlockPos>> findNoteBlocks() {
         Map<Note, List<BlockPos>> found = new LinkedHashMap<>();
+        scanned.clear();
         double reach = mc.player.blockInteractionRange();
         for (BlockPos pos : BlockUtil.positionsWithin(reach + 1)) {
             BlockState state = BlockUtil.state(pos);
@@ -275,15 +380,22 @@ public final class Notebot extends Module {
             if (!mc.player.isWithinBlockInteractionRange(pos, 1)) {
                 continue;
             }
-            found.computeIfAbsent(noteOf(state), k -> new ArrayList<>()).add(pos.immutable());
+            scanned.add(pos.immutable());
+            found.computeIfAbsent(noteOf(state, pos), k -> new ArrayList<>()).add(pos.immutable());
         }
         return found;
     }
 
-    private Note noteOf(BlockState state) {
+    private Note noteOf(BlockState state, BlockPos pos) {
         NoteBlockInstrument instrument = instruments.is(Instruments.EXACT)
-            ? state.getValue(NoteBlock.INSTRUMENT) : null;
+            ? instrumentAt(state, pos) : null;
         return new Note(instrument, state.getValue(NoteBlock.NOTE));
+    }
+
+    // Some servers alter the block state so the block underneath is the truth.
+    private NoteBlockInstrument instrumentAt(BlockState state, BlockPos pos) {
+        return detect.is(Detect.BELOW_BLOCK)
+            ? BlockUtil.state(pos.below()).instrument() : state.getValue(NoteBlock.INSTRUMENT);
     }
 
     // A note the song needs but the file stored with an instrument the scan ignores.
@@ -291,10 +403,8 @@ public final class Notebot extends Module {
         return instruments.is(Instruments.EXACT) ? note : new Note(null, note.pitch());
     }
 
-    /**
-     * Blocks already on the right pitch are kept as they are. The rest are
-     * handed out by instrument to the notes still missing.
-     */
+    // Blocks already on the right pitch are kept as they are.
+    // The rest are handed out by instrument to the notes still missing.
     private void assign(Map<Note, List<BlockPos>> found) {
         assigned.clear();
         List<Note> missing = new ArrayList<>();
@@ -343,6 +453,10 @@ public final class Notebot extends Module {
             stage = Stage.RECHECK;
             return;
         }
+        if (--tuneWait > 0) {
+            return;
+        }
+        tuneWait = tuneDelay.getInt();
         if (swing.isOn()) {
             mc.player.swing(InteractionHand.MAIN_HAND);
         }
@@ -386,10 +500,8 @@ public final class Notebot extends Module {
         stage = Stage.PLAY;
     }
 
-    /**
-     * The server turns a strike into a break whenever the held item would finish
-     * the block in one go. The gentlest thing in the hotbar is held instead.
-     */
+    // A strike becomes a break if the held item would finish the block in one go.
+    // The gentlest thing in the hotbar is held instead.
     private void holdSafeItem() {
         BlockState note = Blocks.NOTE_BLOCK.defaultBlockState();
         int best = -1;
@@ -469,13 +581,58 @@ public final class Notebot extends Module {
 
     @Subscribe
     private void onRender3D(Render3DEvent event) {
-        if (!render.isOn() || loaded == null) {
+        if (loaded == null) {
+            return;
+        }
+        if (showScanned.isOn()) {
+            for (BlockPos pos : scanned) {
+                if (!assigned.containsValue(pos)) {
+                    scannedStyle.draw(event.getBatch(), pos, false);
+                }
+            }
+        }
+        if (!render.isOn()) {
             return;
         }
         for (BlockPos pos : assigned.values()) {
-            int color = struck.contains(pos) ? HIT_COLOR
-                : tuning.containsKey(pos) ? UNTUNED_COLOR : TUNED_COLOR;
-            event.getBatch().outlineBox(new AABB(pos).deflate(0.01), color, false);
+            style(pos).draw(event.getBatch(), pos, false);
+        }
+    }
+
+    private BoxStyle style(BlockPos pos) {
+        if (struck.contains(pos)) {
+            return hitStyle;
+        }
+        return tuning.containsKey(pos) ? untunedStyle : tunedStyle;
+    }
+
+    // The pitch each block sits on with the clicks it still owes after it.
+    @Subscribe
+    private void onRender2D(Render2DEvent event) {
+        if (loaded == null || !render.isOn() || !renderText.isOn() || !inGame()) {
+            return;
+        }
+        for (BlockPos pos : assigned.values()) {
+            BlockState state = BlockUtil.state(pos);
+            if (!state.is(Blocks.NOTE_BLOCK)) {
+                continue;
+            }
+            Vec3 screen = WorldToScreen.project(new Vec3(pos.getX() + 0.5, pos.getY() + 1.2,
+                pos.getZ() + 0.5));
+            if (screen == null) {
+                continue;
+            }
+            Integer owed = tuning.get(pos);
+            List<String> parts = new ArrayList<>();
+            List<Integer> colors = new ArrayList<>();
+            parts.add(String.valueOf(state.getValue(NoteBlock.NOTE)));
+            colors.add(TEXT_COLOR);
+            if (owed != null) {
+                parts.add(" -" + owed);
+                colors.add(OWED_COLOR);
+            }
+            RenderUtil.label(event.getContext(), mc.font, screen.x, screen.y,
+                textScale.getFloat(), parts, colors);
         }
     }
 }

@@ -60,20 +60,16 @@ public final class InventoryUtil {
             || MC.gui.screen() instanceof InventoryScreen;
     }
 
-    /**
-     * True when the survival inventory is up with nothing on the cursor. Slot
-     * swaps and container clicks only land then.
-     */
+    // True when the survival inventory is up with nothing on the cursor.
+    // Slot swaps and container clicks only land then.
     public static boolean inventoryFree() {
         return MC.gui.screen() == null
             && MC.player.containerMenu.containerId == 0
             && carried().isEmpty();
     }
 
-    /**
-     * Plain storage only. Crafting and anvil and trade and mount screens put
-     * their own slots first and refuse a click into them.
-     */
+    // Plain storage only. Crafting and anvil and trade and mount screens put
+    // their own slots first and refuse a click into them.
     public static boolean isStorage(Screen screen) {
         return screen instanceof ContainerScreen
             || screen instanceof ShulkerBoxScreen
@@ -111,7 +107,7 @@ public final class InventoryUtil {
         return MC.player.getInventory().getSelectedSlot();
     }
 
-    // The first inventory index up to the limit that passes the test. Minus one when none does.
+    // The first index up to the limit that passes the test. Minus one when none does.
     public static int findSlot(Predicate<ItemStack> test, int limit) {
         for (int i = 0; i < limit; i++) {
             if (test.test(MC.player.getInventory().getItem(i))) {
@@ -165,10 +161,8 @@ public final class InventoryUtil {
         return whenFull;
     }
 
-    /**
-     * Holds an item from anywhere in the inventory. A stack outside the hotbar
-     * is moved in first and put back when the loan ends.
-     */
+    // Holds an item from anywhere in the inventory. A stack outside the hotbar
+    // is moved in first and put back when the loan ends.
     public static final class HotbarLoan {
 
         private int previousSlot = -1;
@@ -178,10 +172,8 @@ public final class InventoryUtil {
         // The hotbar slot the loan last selected.
         private int chosen = -1;
 
-        /**
-         * Selects the given inventory index and borrows it into the hotbar when
-         * it is not already there. False when the swap could not be made.
-         */
+        // Selects the given inventory index and borrows it into the hotbar when
+        // it is not already there. False when the swap could not be made.
         public boolean select(int inventorySlot) {
             if (MC.player == null || inventorySlot < 0) {
                 return false;
@@ -267,10 +259,7 @@ public final class InventoryUtil {
         }
     }
 
-    /**
-     * Remembers the hotbar slot a module took over. Each module owns its own
-     * instance.
-     */
+    // Remembers the hotbar slot a module took over. Each module owns its own instance.
     public static final class SlotSwap {
 
         private int previous = -1;
@@ -337,10 +326,8 @@ public final class InventoryUtil {
         }
     }
 
-    /**
-     * Remembers the slot a stack left on the cursor came from. The stack goes
-     * home again on the first call where the inventory will take a click.
-     */
+    // Remembers the slot a stack left on the cursor came from. The stack goes
+    // home again on the first call where the inventory will take a click.
     public static final class StrandedStack {
 
         private int slot = -1;

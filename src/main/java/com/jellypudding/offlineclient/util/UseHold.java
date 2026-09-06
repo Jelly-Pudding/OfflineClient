@@ -3,11 +3,8 @@ package com.jellypudding.offlineclient.util;
 import com.jellypudding.offlineclient.OfflineClient;
 import net.minecraft.client.Minecraft;
 
-/**
- * Holds the use key for a module that is eating or drinking. The hand takes a
- * moment to pick the item up and a use that never starts is written off rather
- * than held for ever.
- */
+// Holds the use key for a module that is eating or drinking. The hand takes a
+// moment to pick the item up and a use that never starts is written off rather than held.
 public final class UseHold {
 
     // Ticks the hand is given to start before the attempt is abandoned.

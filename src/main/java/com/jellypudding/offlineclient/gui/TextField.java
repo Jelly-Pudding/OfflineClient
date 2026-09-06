@@ -6,11 +6,8 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.input.KeyEvent;
 import org.lwjgl.glfw.GLFW;
 
-/**
- * One line of editable text with a caret and a selection. Every place the
- * client takes typed input routes through this for the same editing keys and
- * clipboard behaviour everywhere.
- */
+// One line of editable text with a caret and a selection. Every place the
+// client routes typed input through this for the same editing and clipboard keys.
 public final class TextField {
 
     @FunctionalInterface
@@ -35,6 +32,11 @@ public final class TextField {
 
     // Index of the leftmost drawn character. Keeps a long value scrolled to the caret.
     private int firstVisible;
+
+    // Pixels from the start of the text to each index. Measuring a substring for every
+    // character on every frame is what makes a long value crawl.
+    private int[] widths = {0};
+    private String measured = "";
 
     public String get() {
         return buffer.toString();
@@ -100,7 +102,8 @@ public final class TextField {
         boolean word = event.hasControlDown();
         switch (event.key()) {
             case GLFW.GLFW_KEY_LEFT -> {
-                // An unshifted arrow collapses a selection. The caret lands on the near end.
+                // An unshifted arrow collapses a selection. The caret
+                // lands on the near end.
                 if (!shift && hasSelection()) {
                     moveTo(selStart(), false);
                 } else {
@@ -225,10 +228,9 @@ public final class TextField {
         int target = (int) Math.round(mouseX - x);
         int position = firstVisible;
         while (position < buffer.length()) {
-            int next = font.width(buffer.substring(firstVisible, position + 1));
+            int next = width(firstVisible, position + 1);
             if (next > target) {
-                int here = font.width(buffer.substring(firstVisible, position));
-                if (target - here > next - target) {
+                if (target - width(firstVisible, position) > next - target) {
                     position++;
                 }
                 break;
@@ -238,32 +240,29 @@ public final class TextField {
         moveTo(position, extend);
     }
 
-    /**
-     * Draws the visible run of text with the selection behind it and the caret
-     * on top.
-     */
+    // Draws the visible run of text with the selection behind it and the
+    // caret on top.
     public void render(GuiGraphicsExtractor context, Font font, int x, int y, int room,
                        int color, boolean focused) {
         ensureVisible(font, room);
-        String visible = font.plainSubstrByWidth(buffer.substring(firstVisible), room);
-        int end = firstVisible + visible.length();
+        int end = lastFitting(firstVisible, room);
+        String visible = buffer.substring(firstVisible, end);
 
         if (hasSelection()) {
             int from = Math.clamp(selStart(), firstVisible, end);
             int to = Math.clamp(selEnd(), firstVisible, end);
             if (to > from) {
-                int left = x + font.width(buffer.substring(firstVisible, from));
-                int right = x + font.width(buffer.substring(firstVisible, to));
+                int left = x + width(firstVisible, from);
+                int right = x + width(firstVisible, to);
                 context.fill(left, y - 1, right, y + GuiTheme.TEXT_HEIGHT + 1,
-                    GuiTheme.accentOn(GuiTheme.BG_PANEL, 0.45f));
+                    GuiTheme.accentOn(GuiTheme.bgPanel(), 0.45f));
             }
         }
 
         context.text(font, visible, x, y, color, false);
 
         if (focused && (System.currentTimeMillis() / BLINK_MS) % 2 == 0) {
-            int caretX = x + font.width(buffer.substring(firstVisible,
-                Math.clamp(caret, firstVisible, end)));
+            int caretX = x + width(firstVisible, Math.clamp(caret, firstVisible, end));
             context.fill(caretX, y - 1, caretX + 1, y + GuiTheme.TEXT_HEIGHT + 1,
                 GuiTheme.accentText());
         }
@@ -271,16 +270,42 @@ public final class TextField {
 
     // Scrolls the window to keep the caret inside it and waste no room on the right.
     private void ensureVisible(Font font, int room) {
+        measure(font);
         firstVisible = Math.clamp(firstVisible, 0, buffer.length());
         if (firstVisible > caret) {
             firstVisible = caret;
         }
-        while (firstVisible < caret
-            && font.width(buffer.substring(firstVisible, caret)) > room) {
+        while (firstVisible < caret && width(firstVisible, caret) > room) {
             firstVisible++;
         }
-        while (firstVisible > 0 && font.width(buffer.substring(firstVisible - 1)) <= room) {
+        while (firstVisible > 0 && width(firstVisible - 1, buffer.length()) <= room) {
             firstVisible--;
+        }
+    }
+
+    // The index one past the last character that still fits in the room given.
+    private int lastFitting(int from, int room) {
+        int end = from;
+        while (end < buffer.length() && width(from, end + 1) <= room) {
+            end++;
+        }
+        return end;
+    }
+
+    // Pixels between two indexes of the text.
+    private int width(int from, int to) {
+        return widths[to] - widths[from];
+    }
+
+    private void measure(Font font) {
+        String text = buffer.toString();
+        if (text.equals(measured)) {
+            return;
+        }
+        measured = text;
+        widths = new int[text.length() + 1];
+        for (int i = 0; i < text.length(); i++) {
+            widths[i + 1] = widths[i] + font.width(String.valueOf(text.charAt(i)));
         }
     }
 }

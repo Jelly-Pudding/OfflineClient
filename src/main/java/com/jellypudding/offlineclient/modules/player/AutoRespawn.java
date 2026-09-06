@@ -4,6 +4,8 @@ import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.modules.render.Waypoints;
+import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.client.gui.screens.DeathScreen;
 
 public final class AutoRespawn extends Module {
@@ -18,6 +20,10 @@ public final class AutoRespawn extends Module {
             return;
         }
         if (mc.gui.screen() instanceof DeathScreen) {
+            Waypoints waypoints = Modules.get(Waypoints.class);
+            if (waypoints != null) {
+                waypoints.markDeath(mc.player.position());
+            }
             // Closing the screen stops repeat respawn packets.
             mc.player.respawn();
             mc.gui.setScreen(null);

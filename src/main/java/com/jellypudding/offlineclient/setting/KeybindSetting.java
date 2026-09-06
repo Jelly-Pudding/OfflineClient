@@ -2,6 +2,8 @@ package com.jellypudding.offlineclient.setting;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonPrimitive;
+import com.jellypudding.offlineclient.OfflineClient;
+import com.mojang.blaze3d.platform.InputConstants;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.Locale;
@@ -15,6 +17,11 @@ public final class KeybindSetting extends Setting<Integer> {
 
     public KeybindSetting(String name, String description, int defaultKey) {
         super(name, description, defaultKey);
+    }
+
+    // True whilst the bound key is physically down. Never true whilst unbound.
+    public boolean isHeld() {
+        return isBound() && InputConstants.isKeyDown(OfflineClient.MC.getWindow(), value);
     }
 
     public boolean isBound() {
@@ -69,14 +76,19 @@ public final class KeybindSetting extends Setting<Integer> {
     }
 
     public String getKeyName() {
-        if (!isBound()) {
+        return nameOfKey(value);
+    }
+
+    // The label shown for a raw GLFW key.
+    public static String nameOfKey(int key) {
+        if (key == UNBOUND) {
             return "None";
         }
-        String name = GLFW.glfwGetKeyName(value, 0);
+        String name = GLFW.glfwGetKeyName(key, 0);
         if (name != null) {
             return name.toUpperCase(Locale.ROOT);
         }
-        return switch (value) {
+        return switch (key) {
             case GLFW.GLFW_KEY_LEFT_SHIFT -> "LSHIFT";
             case GLFW.GLFW_KEY_RIGHT_SHIFT -> "RSHIFT";
             case GLFW.GLFW_KEY_LEFT_CONTROL -> "LCTRL";
@@ -98,8 +110,8 @@ public final class KeybindSetting extends Setting<Integer> {
             case GLFW.GLFW_KEY_PAGE_DOWN -> "PGDN";
             case GLFW.GLFW_KEY_INSERT -> "INSERT";
             case GLFW.GLFW_KEY_DELETE -> "DELETE";
-            default -> value >= GLFW.GLFW_KEY_F1 && value <= GLFW.GLFW_KEY_F25
-                ? "F" + (value - GLFW.GLFW_KEY_F1 + 1) : "KEY" + value;
+            default -> key >= GLFW.GLFW_KEY_F1 && key <= GLFW.GLFW_KEY_F25
+                ? "F" + (key - GLFW.GLFW_KEY_F1 + 1) : "KEY" + key;
         };
     }
 

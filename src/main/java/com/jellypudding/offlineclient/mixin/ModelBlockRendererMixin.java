@@ -21,10 +21,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.util.List;
 
-/**
- * XRay hooks for solid blocks. Chunk meshing runs on worker threads and
- * the per block alpha lives in a thread local on the XRay module.
- */
+// XRay hooks for solid blocks. Chunk meshing runs on worker threads and
+// the per block alpha lives in a thread local on the XRay module.
 @Mixin(ModelBlockRenderer.class)
 public abstract class ModelBlockRendererMixin {
 
@@ -42,12 +40,7 @@ public abstract class ModelBlockRendererMixin {
     private void onTesselate(BlockQuadOutput output, float x, float y, float z,
                              List<BlockStateModelPart> parts, BlockAndTintGetter level,
                              BlockState state, BlockPos pos, CallbackInfo ci) {
-        XRay xray = XRay.get();
-        if (xray == null || !xray.isEnabled()) {
-            XRay.setMeshAlpha(-1);
-            return;
-        }
-        int alpha = xray.alphaFor(level, state, pos);
+        int alpha = XRay.meshAlphaFor(level, state, pos);
         XRay.setMeshAlpha(alpha);
         if (alpha == 0) {
             ci.cancel();

@@ -16,10 +16,8 @@ public final class MovementUtil {
 
     public static final float VANILLA_FLY_SPEED = 0.05f;
 
-    /**
-     * The way the movement keys point in world space. Vec3.ZERO whilst none
-     * of them is held.
-     */
+    // The way the movement keys point in world space.
+    // Vec3.ZERO whilst none of them is held.
     public static Vec3 inputDirection() {
         LocalPlayer player = OfflineClient.MC.player;
         if (player == null) {

@@ -1,23 +1,17 @@
 package com.jellypudding.offlineclient.modules.combat;
 
-import com.jellypudding.offlineclient.event.Subscribe;
-import com.jellypudding.offlineclient.event.events.Render3DEvent;
-import com.jellypudding.offlineclient.event.events.TickEvent;
-import com.jellypudding.offlineclient.module.Category;
-import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.module.RespawnBlockAura;
 import com.jellypudding.offlineclient.setting.BoolSetting;
-import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
-import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.ExplosionUtil;
-import com.jellypudding.offlineclient.util.InventoryUtil;
-import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
+import com.jellypudding.offlineclient.util.FaceMode;
 import com.jellypudding.offlineclient.util.RotationManager;
 import com.jellypudding.offlineclient.util.RotationPriority;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.tags.ItemTags;
-import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.BedBlock;
@@ -29,139 +23,53 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.CollisionContext;
 
 // Only works where a bed explodes instead of letting anyone sleep.
-public final class BedAura extends Module {
+public final class BedAura extends RespawnBlockAura {
 
-    private final NumberSetting targetRange = new NumberSetting("Target range",
-        "How far away enemies are considered.", 8, 2, 16, 0.5, " blocks");
-    private final NumberSetting range = new NumberSetting("Range",
-        "Reach for placing and using beds.", 4.5, 1, 6, 0.1);
-    private final BoolSetting doPlace = new BoolSetting("Place",
-        "Place beds near the target.", true);
-    private final NumberSetting placeDelay = new NumberSetting("Place delay",
-        "Ticks to wait between placements.", 4, 0, 20, 1, " ticks");
-    private final BoolSetting doBreak = new BoolSetting("Break",
-        "Set off beds that are already down.", true);
-    private final NumberSetting breakDelay = new NumberSetting("Break delay",
-        "Ticks to wait between detonations.", 2, 0, 20, 1, " ticks");
-    private final NumberSetting minDamage = new NumberSetting("Min damage",
-        "Only act when the enemy would take at least this much.", 6, 0, 20, 0.5);
-    private final NumberSetting maxSelfDamage = new NumberSetting("Max self damage",
-        "Never take more than this from your own bed.", 8, 0, 20, 0.5);
-    private final BoolSetting antiSuicide = new BoolSetting("Anti suicide",
-        "Never set off a bed that could kill you.", true);
-    private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Send a look packet to lay the bed the way you want.", true);
-    private final BoolSetting render = new BoolSetting("Show placement",
-        "Outline the two blocks the next bed fills.", true);
+    private static final float HUE = 170;
 
-    private int placeTimer;
-    private int breakTimer;
-    private final SlotSwap slots = new SlotSwap();
-    private BlockPos plannedFoot;
-    private BlockPos plannedHead;
-    private BlockPos armed;
-    private String targetName;
-    private String status;
+    // Where a bed fits with the direction its head would point.
+    private record Spot(BlockPos foot, Direction facing) {
+    }
+
+    private final BoolSetting strictDirection = new BoolSetting("Strict direction",
+        "Only lays beds along the way you face or straight back from it.", false);
 
     public BedAura() {
-        super("BedAura", "Places beds near enemies and sets them off.", Category.COMBAT);
-        addSettings(targetRange, range, doPlace, placeDelay, doBreak, breakDelay,
-            minDamage, maxSelfDamage, antiSuicide, rotate, render);
+        super("BedAura", "Places beds near enemies and sets them off.", "beds", HUE);
+        addSettings(strictDirection);
         searchTags("bed bomb", "nether", "end", "cpvp");
     }
 
     @Override
-    public String getSuffix() {
-        return suffix(targetName, status);
-    }
-
-    @Override
-    protected void onEnable() {
-        placeTimer = 0;
-        breakTimer = 0;
-        slots.forget();
-        plannedFoot = null;
-        plannedHead = null;
-        armed = null;
-        targetName = null;
-        status = null;
-    }
-
-    @Override
-    protected void onDisable() {
-        slots.restore();
-        plannedFoot = null;
-        plannedHead = null;
-        armed = null;
-        targetName = null;
-        status = null;
-    }
-
-    @Subscribe
-    private void onTick(TickEvent event) {
-        plannedFoot = null;
-        plannedHead = null;
-        armed = null;
-        status = null;
-        if (!inGame() || mc.player.isSpectator()) {
-            targetName = null;
-            return;
-        }
-        if (placeTimer > 0) {
-            placeTimer--;
-        }
-        if (breakTimer > 0) {
-            breakTimer--;
-        }
-
-        if (!explodesHere()) {
-            targetName = null;
-            status = "(beds are safe here)";
-            return;
-        }
-
-        Player target = EntityUtil.nearestEnemy(targetRange.getValue());
-        targetName = EntityUtil.nameOf(target);
-        if (target == null) {
-            slots.restore();
-            return;
-        }
-        if (mc.player.isUsingItem()) {
-            slots.restore();
-            status = "(paused)";
-            return;
-        }
-
-        boolean acted = doBreak.isOn() && detonateBest(target);
-        if (!acted && doPlace.isOn() && placeTimer == 0) {
-            placeBest(target);
-        }
-        slots.restore();
-    }
-
-    private boolean explodesHere() {
+    protected boolean explodesHere() {
         return ExplosionUtil.bedsExplodeHere();
     }
 
-    /**
-     * Right clicks the bed in reach that would hurt the target most.
-     * True whenever such a bed is already there.
-     */
-    private boolean detonateBest(Player target) {
+    @Override
+    protected String safeHereStatus() {
+        return "(beds are safe here)";
+    }
+
+    @Override
+    protected boolean isAmmo(ItemStack stack) {
+        return stack.is(ItemTags.BEDS) && stack.getItem() instanceof BlockItem;
+    }
+
+    // Right clicks the bed in reach that would hurt the target most.
+    @Override
+    protected boolean detonateBest(LivingEntity target) {
         BlockPos best = null;
         float bestDamage = 0;
         for (BlockPos pos : nearby(target)) {
             BlockState state = BlockUtil.state(pos);
-            if (!(state.getBlock() instanceof BedBlock)) {
-                continue;
-            }
-            if (BlockUtil.distanceTo(pos) > range.getValue()) {
+            if (!(state.getBlock() instanceof BedBlock) || !inReach(pos, false)) {
                 continue;
             }
             BlockPos head = headOf(pos, state);
-            Vec3 center = Vec3.atCenterOf(head);
-            float damage = ExplosionUtil.blastDamage(target, center, ExplosionUtil.RESPAWN_BLOCK_POWER, Vec3.ZERO, pos, head);
-            if (damage < minDamage.getFloat() || damage <= bestDamage || !selfSafe(center, pos, head)) {
+            Vec3 centre = Vec3.atCenterOf(head);
+            float damage = ExplosionUtil.blastDamage(target, centre, ExplosionUtil.RESPAWN_BLOCK_POWER,
+                Vec3.ZERO, pos, head);
+            if (!worthIt(damage) || damage <= bestDamage || !selfSafe(centre, pos, head)) {
                 continue;
             }
             bestDamage = damage;
@@ -170,70 +78,60 @@ public final class BedAura extends Module {
         if (best == null) {
             return false;
         }
-        armed = best;
-        if (breakTimer > 0) {
-            return true;
-        }
-
-        Vec3 hit = Vec3.atCenterOf(best);
-        if (rotate.isOn() && !RotationManager.look(hit, RotationPriority.AURA,
-            RotationManager.BLOCK_TOLERANCE)) {
-            status = "(turning)";
+        arm(best);
+        if (!breakReady() || !look(Vec3.atCenterOf(best))) {
             return true;
         }
         if (BlockUtil.interact(best, Direction.UP)) {
-            breakTimer = breakDelay.getInt();
+            swing.getValue().swing(InteractionHand.MAIN_HAND);
+            fired();
         }
         return true;
     }
 
-    // Where a bed fits with the direction its head would point.
-    private record Spot(BlockPos foot, Direction facing) {
-    }
-
-    private void placeBest(Player target) {
-        int slot = bedSlot();
+    @Override
+    protected void placeBest(LivingEntity target) {
+        int slot = armAmmo("(no beds)");
         if (slot == -1) {
-            status = "(no beds)";
             return;
         }
         Block bed = ((BlockItem) mc.player.getInventory().getItem(slot).getItem()).getBlock();
         Spot spot = bestSpot(target, bed);
-        plannedFoot = spot == null ? null : spot.foot();
-        plannedHead = spot == null ? null : spot.foot().relative(spot.facing());
         if (spot == null) {
+            plan();
             status = "(no safe spot)";
             return;
         }
-        if (rotate.isOn() && !faceAlong(spot.facing(), Vec3.atCenterOf(spot.foot()))) {
+        plan(spot.foot(), spot.foot().relative(spot.facing()));
+        if (!faceAlong(spot.facing(), Vec3.atCenterOf(spot.foot()))) {
             status = "(turning)";
             return;
         }
-
-        slots.select(slot);
         if (layBed(spot)) {
-            placeTimer = placeDelay.getInt();
+            swing.getValue().swing(InteractionHand.MAIN_HAND);
+            placed();
         }
     }
 
-    private Spot bestSpot(Player target, Block bed) {
+    private Spot bestSpot(LivingEntity target, Block bed) {
         Spot best = null;
         float bestDamage = 0;
         for (BlockPos foot : nearby(target)) {
-            if (!free(foot, bed) || BlockUtil.distanceTo(foot) > range.getValue()) {
+            if (!free(foot, bed) || !placeable(foot) || !inReach(foot, true)) {
                 continue;
             }
             for (Direction facing : Direction.Plane.HORIZONTAL) {
-                if (!rotate.isOn() && facing != mc.player.getDirection()) {
+                if (!allowedFacing(facing)) {
                     continue;
                 }
                 BlockPos head = foot.relative(facing);
                 if (!free(head, bed)) {
                     continue;
                 }
-                Vec3 center = Vec3.atCenterOf(head);
-                float damage = ExplosionUtil.blastDamage(target, center, ExplosionUtil.RESPAWN_BLOCK_POWER, Vec3.ZERO, foot, head);
-                if (damage < minDamage.getFloat() || damage <= bestDamage || !selfSafe(center, foot, head)) {
+                Vec3 centre = Vec3.atCenterOf(head);
+                float damage = ExplosionUtil.blastDamage(target, centre, ExplosionUtil.RESPAWN_BLOCK_POWER,
+                    Vec3.ZERO, foot, head);
+                if (!worthIt(damage) || damage <= bestDamage || !selfSafe(centre, foot, head)) {
                     continue;
                 }
                 bestDamage = damage;
@@ -243,13 +141,22 @@ public final class BedAura extends Module {
         return best;
     }
 
+    // Without a rotation the bed can only follow the real facing. Strict keeps to that axis.
+    private boolean allowedFacing(Direction facing) {
+        Direction own = mc.player.getDirection();
+        if (faceTarget.is(FaceMode.OFF)) {
+            return facing == own;
+        }
+        return !strictDirection.isOn() || facing.getAxis() == own.getAxis();
+    }
+
     private boolean layBed(Spot spot) {
         // The bed follows the yaw the client holds when the placement runs.
         float heldYaw = mc.player.getYRot();
         mc.player.setYRot(spot.facing().toYRot());
         try {
             // The rotation has already been asked for. Placing must not ask again.
-            return BlockUtil.placeAny(spot.foot(), false, true);
+            return BlockUtil.placeAny(spot.foot(), false, false);
         } finally {
             mc.player.setYRot(heldYaw);
         }
@@ -268,48 +175,10 @@ public final class BedAura extends Module {
             && mc.level.isUnobstructed(bed.defaultBlockState(), pos, CollisionContext.empty());
     }
 
-    private int bedSlot() {
-        return InventoryUtil.hotbarSlot(BedAura::isBed);
-    }
-
-    private static boolean isBed(ItemStack stack) {
-        return stack.is(ItemTags.BEDS) && stack.getItem() instanceof BlockItem;
-    }
-
-    /**
-     * Asks for the exact yaw that lays a bed along the side. The server reads
-     * the direction from the yaw it holds when the click arrives. The placement
-     * therefore waits for the turn to have gone out rather than only be asked for.
-     */
+    // Bed direction comes from the yaw held server side when the click lands.
+    // Waits for the requested turn to actually be sent before placing.
     private boolean faceAlong(Direction facing, Vec3 point) {
-        float yaw = facing.toYRot();
-        float pitch = RotationManager.pitchTo(point);
-        RotationManager.requestExact(yaw, pitch, RotationPriority.AURA);
-        return RotationManager.sentIsFacing(yaw, pitch, RotationManager.BLOCK_TOLERANCE);
-    }
-
-    private Iterable<BlockPos> nearby(Player target) {
-        return BlockUtil.positionsAround(target.blockPosition(), (int) Math.ceil(range.getValue()));
-    }
-
-    private boolean selfSafe(Vec3 source, BlockPos foot, BlockPos head) {
-        return ExplosionUtil.selfSafe(source, ExplosionUtil.RESPAWN_BLOCK_POWER,
-            maxSelfDamage.getFloat(), antiSuicide.isOn(), foot, head);
-    }
-
-    @Subscribe
-    private void onRender3D(Render3DEvent event) {
-        if (!render.isOn()) {
-            return;
-        }
-        if (plannedFoot != null) {
-            event.getBatch().outlineBlock(plannedFoot, 0xFF40FFD0, false);
-        }
-        if (plannedHead != null) {
-            event.getBatch().outlineBlock(plannedHead, 0xFF40FFD0, false);
-        }
-        if (armed != null) {
-            event.getBatch().outlineBlock(armed, 0xFFFF4040, false);
-        }
+        return faceTarget.getValue().faceExact(facing.toYRot(),
+            RotationManager.pitchTo(point), RotationPriority.AURA);
     }
 }

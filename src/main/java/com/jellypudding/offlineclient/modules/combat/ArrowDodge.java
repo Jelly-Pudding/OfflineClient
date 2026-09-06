@@ -7,9 +7,11 @@ import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.render.DrawBatch;
 import com.jellypudding.offlineclient.setting.BoolSetting;
+import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.ProjectileUtil;
+import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.Projectile;
@@ -22,10 +24,8 @@ import net.minecraft.world.phys.Vec3;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Every projectile in range is flown forward and the first sidestep that
- * clears them all is taken.
- */
+// Flies every projectile in range forward and takes the first sidestep
+// that clears them all.
 public final class ArrowDodge extends Module {
 
     // Each axis of a sidestep at forty five degrees.
@@ -42,14 +42,20 @@ public final class ArrowDodge extends Module {
     private record Segment(Vec3 from, Vec3 to) {
     }
 
+    public enum Move { VELOCITY, PACKET }
+
     private final NumberSetting range = new NumberSetting("Range",
         "How far away a projectile is still watched.", 32, 8, 64, 4, " blocks").min(1);
     private final NumberSetting steps = new NumberSetting("Steps",
         "How many ticks of flight to predict.", 40, 5, 120, 5, " ticks").min(1).max(400);
     private final NumberSetting margin = new NumberSetting("Margin",
         "Extra space kept around you.", 0.4, 0, 2, 0.1);
+    private final EnumSetting<Move> move = new EnumSetting<>("Move",
+        "How the sidestep is made.", Move.VELOCITY)
+        .describe(Move.VELOCITY, "Pushes you sideways and lets the game carry you.")
+        .describe(Move.PACKET, "Steps sideways at once with a position packet.");
     private final NumberSetting speed = new NumberSetting("Speed",
-        "How hard each sidestep pushes.", 0.35, 0.05, 1.5, 0.05).min(0.01);
+        "How far each sidestep goes.", 0.35, 0.05, 1.5, 0.05).min(0.01);
     private final BoolSetting everything = new BoolSetting("All projectiles",
         "Dodge thrown items and fireballs as well as arrows.", false);
     private final BoolSetting ignoreOwn = new BoolSetting("Ignore own",
@@ -66,7 +72,7 @@ public final class ArrowDodge extends Module {
 
     public ArrowDodge() {
         super("ArrowDodge", "Sidesteps arrows and other projectiles aimed at you.", Category.COMBAT);
-        addSettings(range, steps, margin, speed, everything, ignoreOwn, ignoreFriends,
+        addSettings(range, steps, margin, move, speed, everything, ignoreOwn, ignoreFriends,
             groundCheck, draw);
         searchTags("dodge", "arrow", "projectile");
     }
@@ -117,8 +123,7 @@ public final class ArrowDodge extends Module {
                 if (hits(moved) || !isClear(offset)) {
                     continue;
                 }
-                Vec3 motion = mc.player.getDeltaMovement();
-                mc.player.setDeltaMovement(offset.x, motion.y, offset.z);
+                step(offset);
                 dodging = true;
                 return;
             }
@@ -178,6 +183,20 @@ public final class ArrowDodge extends Module {
             }
         }
         return false;
+    }
+
+    // A packet step lands at once. The velocity keeps whatever rise or fall was under way.
+    private void step(Vec3 offset) {
+        Vec3 motion = mc.player.getDeltaMovement();
+        if (move.is(Move.VELOCITY)) {
+            mc.player.setDeltaMovement(offset.x, motion.y, offset.z);
+            return;
+        }
+        Vec3 landing = mc.player.position().add(offset);
+        mc.player.connection.send(new ServerboundMovePlayerPacket.Pos(landing,
+            mc.player.onGround(), mc.player.horizontalCollision));
+        mc.player.setPos(landing);
+        mc.player.setDeltaMovement(0, motion.y, 0);
     }
 
     private boolean isClear(Vec3 offset) {

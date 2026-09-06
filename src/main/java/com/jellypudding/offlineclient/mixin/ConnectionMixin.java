@@ -3,19 +3,28 @@ package com.jellypudding.offlineclient.mixin;
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.events.PacketReceiveEvent;
 import com.jellypudding.offlineclient.event.events.PacketSendEvent;
+import com.jellypudding.offlineclient.modules.misc.AntiPacketKick;
+import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.Modules;
+import com.jellypudding.offlineclient.util.PacketUtil;
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import io.netty.channel.ChannelFutureListener;
+import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
+import io.netty.handler.timeout.TimeoutException;
 import net.minecraft.network.Connection;
 import net.minecraft.network.PacketListener;
+import net.minecraft.network.SkipPacketEncoderException;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBundlePacket;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -29,6 +38,7 @@ public abstract class ConnectionMixin extends SimpleChannelInboundHandler<Packet
         at = @At("HEAD"),
         argsOnly = true)
     private Packet<?> unpackBundle(Packet<?> packet) {
+        PacketUtil.noteConnection((Connection) (Object) this);
         if (!(packet instanceof ClientboundBundlePacket bundle)) {
             return packet;
         }
@@ -66,6 +76,20 @@ public abstract class ConnectionMixin extends SimpleChannelInboundHandler<Packet
             return;
         }
         original.call(event.getPacket(), listener);
+    }
+
+    // A timeout still has to disconnect. Anything else can be thrown away.
+    @Inject(method = "exceptionCaught", at = @At("HEAD"), cancellable = true)
+    private void onExceptionCaught(ChannelHandlerContext context, Throwable cause, CallbackInfo ci) {
+        AntiPacketKick module = Modules.get(AntiPacketKick.class);
+        if (module == null || !module.catchesErrors()
+            || cause instanceof TimeoutException || cause instanceof SkipPacketEncoderException) {
+            return;
+        }
+        if (module.logsErrors()) {
+            ChatUtil.error("Dropped a packet the client could not read: " + cause);
+        }
+        ci.cancel();
     }
 
     @WrapMethod(

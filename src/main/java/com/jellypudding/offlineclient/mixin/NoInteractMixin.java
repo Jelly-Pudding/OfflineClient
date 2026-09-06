@@ -33,11 +33,8 @@ public abstract class NoInteractMixin {
         }
     }
 
-    /**
-     * Blanks the crosshair target whilst a feeder holds the use key. Without
-     * this a chest or a villager under the crosshair swallows the bite. The
-     * real target goes back even where another mixin cancels the call.
-     */
+    // Blanks the crosshair target whilst a feeder holds the use key so a
+    // chest or villager does not swallow the bite then restores it after.
     @WrapMethod(method = "startUseItem()V")
     private void wrapStartUseItem(Operation<Void> original) {
         Minecraft mc = OfflineClient.MC;

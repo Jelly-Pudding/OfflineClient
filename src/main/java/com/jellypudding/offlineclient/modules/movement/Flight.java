@@ -4,6 +4,8 @@ import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.ClientTickEvent;
 import com.jellypudding.offlineclient.event.events.MouseScrollEvent;
+import com.jellypudding.offlineclient.event.events.PacketReceiveEvent;
+import com.jellypudding.offlineclient.event.events.PacketSendEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
@@ -13,18 +15,24 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.HoverDip;
 import com.jellypudding.offlineclient.util.MovementUtil;
+import com.jellypudding.offlineclient.util.PacketUtil;
+import net.minecraft.network.protocol.game.ClientboundPlayerAbilitiesPacket;
+import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import net.minecraft.world.entity.player.Abilities;
 import net.minecraft.world.phys.Vec3;
 
 public final class Flight extends Module {
 
     public enum Mode { CREATIVE, DIRECT }
-
+    public enum AntiKick { DIP, PACKET, OFF }
 
     // How much one wheel notch changes the speed.
     private static final double SCROLL_STEP = 0.1;
 
     private static final String TIMER_KEY = "flight";
+
+    // The server stops counting hover ticks on a packet that drops past 0.03125.
+    private static final double PACKET_DIP = 0.0313;
 
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
         "How the flight handles.", Mode.CREATIVE)
@@ -38,18 +46,34 @@ public final class Flight extends Module {
         "The mouse wheel changes the horizontal speed whilst you fly.", false);
     private final NumberSetting timer = new NumberSetting("Timer",
         "Also speeds up the game whilst you fly. 1 does nothing.", 1, 1, 3, 0.1, "x").min(1);
-    private final BoolSetting antiKick = new BoolSetting("AntiKick",
-        "Drifts down a little now and then to dodge the vanilla flight kick.", true);
+    private final BoolSetting throughFluids = new BoolSetting("Through fluids",
+        "Water and lava neither slow you down nor put you in the swimming pose.", true);
+    private final BoolSetting holdAbilities = new BoolSetting("Hold abilities",
+        "Stops a server ability update from flicking the flight off for a tick.", true)
+        .under(mode, Mode.CREATIVE);
+    private final EnumSetting<AntiKick> antiKick = new EnumSetting<>("AntiKick",
+        "How the vanilla flight kick is dodged.", AntiKick.DIP)
+        .describe(AntiKick.DIP, "Drifts down a little now and then and climbs straight back.")
+        .describe(AntiKick.PACKET, "Tells the server you dipped whilst you stay put. Needs air below you.")
+        .describe(AntiKick.OFF, "Does nothing about the kick.");
     private final NumberSetting antiKickInterval = new NumberSetting("Kick interval",
-        "Ticks between each little dip.", 70, 5, 80, 1, " ticks")
-        .under(antiKick);
+        "Ticks between each little dip.", 70, 5, 80, 1, " ticks").min(1)
+        .under(antiKick, AntiKick.DIP, AntiKick.PACKET);
+    private final NumberSetting dipTicks = new NumberSetting("Dip ticks",
+        "How many ticks each dip lasts before the climb back.", 1, 1, 20, 1, " ticks").min(1)
+        .under(antiKick, AntiKick.DIP);
 
     private final HoverDip dip = new HoverDip();
 
+    // Ticks since the last packet dip and what the next movement packet must carry.
+    private int packetTicks;
+    private volatile boolean dipPending;
+    private volatile boolean restorePending;
+
     public Flight() {
         super("Flight", "Lets you fly like in creative mode.", Category.MOVEMENT);
-        addSettings(mode, horizontalSpeed, verticalSpeed, scrollSpeed, timer, antiKick,
-            antiKickInterval);
+        addSettings(mode, horizontalSpeed, verticalSpeed, scrollSpeed, timer, throughFluids,
+            holdAbilities, antiKick, antiKickInterval, dipTicks);
         searchTags("fly");
     }
 
@@ -58,17 +82,23 @@ public final class Flight extends Module {
         return horizontalSpeed.getValueString();
     }
 
-    /**
-     * Read by LocalPlayerMixin in place of the fly speed creative flight
-     * pushes up and down with. The horizontal setting must not leak into it.
-     */
+    // Read by LocalPlayerMixin instead of the fly speed creative flight pushes with.
+    // The horizontal setting must not leak into it.
     public float verticalFlySpeed() {
         return (float) (MovementUtil.VANILLA_FLY_SPEED * verticalSpeed.getValue());
+    }
+
+    // Read by EntityMixin. Fluids stop counting as fluids for the local player.
+    public boolean throughFluids() {
+        return throughFluids.isOn();
     }
 
     @Override
     protected void onEnable() {
         dip.reset();
+        packetTicks = 0;
+        dipPending = false;
+        restorePending = false;
     }
 
     @Override
@@ -119,8 +149,10 @@ public final class Flight extends Module {
         } else {
             directTick();
         }
-        if (antiKick.isOn()) {
-            dip.tick(antiKickInterval.getInt());
+        switch (antiKick.getValue()) {
+            case DIP -> dip.tick(antiKickInterval.getInt(), dipTicks.getInt());
+            case PACKET -> packetDipTick();
+            case OFF -> { }
         }
     }
 
@@ -132,7 +164,7 @@ public final class Flight extends Module {
 
     private void directTick() {
         Abilities abilities = mc.player.getAbilities();
-        // The flying flag turns gravity off and zero fly speed disables the vanilla push.
+        // The flying flag turns gravity off and zero speed disables the vanilla push.
         abilities.flying = true;
         abilities.setFlyingSpeed(0);
 
@@ -148,5 +180,59 @@ public final class Flight extends Module {
         double horizontal = MovementUtil.FLY_HORIZONTAL * horizontalSpeed.getValue();
         Vec3 heading = MovementUtil.inputDirection();
         mc.player.setDeltaMovement(heading.x * horizontal, vy, heading.z * horizontal);
+    }
+
+    // Arms a dip for the next movement packet once the interval is up.
+    // A dip into a block would be refused by the server so it waits for air.
+    private void packetDipTick() {
+        packetTicks++;
+        if (packetTicks < antiKickInterval.getInt() || dipPending) {
+            return;
+        }
+        if (!mc.level.noCollision(mc.player, mc.player.getBoundingBox().move(0, -PACKET_DIP, 0))) {
+            return;
+        }
+        packetTicks = 0;
+        dipPending = true;
+    }
+
+    // The dip packet carries a lowered height and the one after it carries the
+    // real height back. A packet without a position is upgraded to hold one.
+    @Subscribe
+    private void onPacketSend(PacketSendEvent event) {
+        if (!antiKick.is(AntiKick.PACKET) || mc.player == null
+            || !(event.getPacket() instanceof ServerboundMovePlayerPacket packet)) {
+            return;
+        }
+        if (dipPending) {
+            dipPending = false;
+            restorePending = true;
+            event.setPacket(withHeight(packet, mc.player.getY() - PACKET_DIP));
+        } else if (restorePending) {
+            restorePending = false;
+            if (!packet.hasPosition()) {
+                event.setPacket(withHeight(packet, mc.player.getY()));
+            }
+        }
+    }
+
+    private ServerboundMovePlayerPacket withHeight(ServerboundMovePlayerPacket packet, double y) {
+        return PacketUtil.withPosition(packet, mc.player, packet.getX(mc.player.getX()), y,
+            packet.getZ(mc.player.getZ()), packet.isOnGround());
+    }
+
+    // Fired on the netty thread. The server may not switch the flight off.
+    // The rest of what the packet carries still lands.
+    @Subscribe
+    private void onPacketReceive(PacketReceiveEvent event) {
+        if (!holdAbilities.isOn() || !mode.is(Mode.CREATIVE) || mc.player == null
+            || !(event.getPacket() instanceof ClientboundPlayerAbilitiesPacket packet)) {
+            return;
+        }
+        event.cancel();
+        Abilities abilities = mc.player.getAbilities();
+        abilities.invulnerable = packet.isInvulnerable();
+        abilities.instabuild = packet.canInstabuild();
+        abilities.setWalkingSpeed(packet.getWalkingSpeed());
     }
 }

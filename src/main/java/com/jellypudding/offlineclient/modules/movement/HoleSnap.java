@@ -5,23 +5,32 @@ import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
+import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.util.Mth;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
 // Stops you dead over a hole and drops you in. Meant for getting into a hole under fire.
+// A hole is one block wide with a floor and four walls.
 public final class HoleSnap extends Module {
+
+    public enum Holes { BLAST_PROOF, ANY }
 
     // How hard one tick may pull towards the middle of the hole.
     private static final double CENTRE_PULL = 0.05;
 
+    private final EnumSetting<Holes> holes = new EnumSetting<>("Holes",
+        "Which holes count.", Holes.BLAST_PROOF)
+        .describe(Holes.BLAST_PROOF, "Only holes walled with obsidian or bedrock. The ones a crystal cannot open.")
+        .describe(Holes.ANY, "Any one block hole with solid walls and a floor.");
     private final NumberSetting maxHeight = new NumberSetting("Max height",
         "How far below you a hole is still snapped to.", 10, 1, 20, 1, " blocks");
     private final NumberSetting minPitch = new NumberSetting("Min pitch",
-        "Only snaps whilst you look down at least this far.", 0, -90, 90, 5, " degrees");
+        "Only snaps whilst you look down at least this far. Zero is level.", 0, -90, 90, 5, " degrees");
     private final BoolSetting pull = new BoolSetting("Pull down",
         "Also pulls you down into the hole.", false);
     private final NumberSetting pullSpeed = new NumberSetting("Pull speed",
@@ -36,14 +45,24 @@ public final class HoleSnap extends Module {
     public HoleSnap() {
         super("HoleSnap", "Stops your movement over a hole and drops you straight in.",
             Category.MOVEMENT);
-        addSettings(maxHeight, minPitch, pull, pullSpeed, cancelJump);
+        addSettings(holes, maxHeight, minPitch, pull, pullSpeed, cancelJump);
         searchTags("anchor", "hole", "crystal pvp");
+    }
+
+    @Override
+    public String getSuffix() {
+        return overHole ? "over hole" : null;
     }
 
     @Override
     protected void onEnable() {
         overHole = false;
         holeStoodIn = null;
+    }
+
+    // Read by Speed. Nothing else may push the player whilst a hole has them.
+    public boolean holdsMovement() {
+        return isEnabled() && overHole;
     }
 
     // Read by LocalPlayerMixin before a jump.
@@ -100,18 +119,22 @@ public final class HoleSnap extends Module {
     }
 
     private boolean isHole(BlockPos pos) {
-        if (!blastProof(pos.below())) {
+        if (BlockUtil.blocksMotion(BlockUtil.state(pos)) || !wall(pos.below())) {
             return false;
         }
         for (Direction side : Direction.Plane.HORIZONTAL) {
-            if (!blastProof(pos.relative(side))) {
+            if (!wall(pos.relative(side))) {
                 return false;
             }
         }
         return true;
     }
 
-    private boolean blastProof(BlockPos pos) {
-        return BlockUtil.state(pos).getBlock().getExplosionResistance() >= BlockUtil.BLAST_PROOF;
+    private boolean wall(BlockPos pos) {
+        BlockState state = BlockUtil.state(pos);
+        if (holes.is(Holes.ANY)) {
+            return BlockUtil.blocksMotion(state);
+        }
+        return state.getBlock().getExplosionResistance() >= BlockUtil.BLAST_PROOF;
     }
 }

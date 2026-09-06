@@ -3,6 +3,7 @@ package com.jellypudding.offlineclient.mixin;
 import com.jellypudding.offlineclient.modules.render.CameraTweaks;
 import com.jellypudding.offlineclient.modules.render.Freecam;
 import com.jellypudding.offlineclient.modules.render.FreeLook;
+import com.jellypudding.offlineclient.modules.render.WallHack;
 import com.jellypudding.offlineclient.modules.render.XRay;
 import com.jellypudding.offlineclient.modules.render.Zoom;
 import com.jellypudding.offlineclient.util.Modules;
@@ -75,7 +76,8 @@ public abstract class CameraMixin {
         at = @At("RETURN"))
     private void onExtractRenderState(CameraRenderState state, float partialTicks, CallbackInfo ci) {
         XRay xray = XRay.get();
-        if (xray != null && xray.isEnabled()) {
+        WallHack wallHack = Modules.get(WallHack.class);
+        if ((xray != null && xray.isEnabled()) || (wallHack != null && wallHack.showsHiddenChunks())) {
             state.smartCull = false;
         }
     }

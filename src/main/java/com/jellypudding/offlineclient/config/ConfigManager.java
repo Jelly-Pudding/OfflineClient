@@ -23,10 +23,8 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Stream;
 
-/**
- * Writes everything the client remembers to offlineclient/config.json.
- * Named profiles are saved next to it under offlineclient/profiles.
- */
+// Writes everything the client remembers to offlineclient/config.json.
+// Named profiles are saved next to it under offlineclient/profiles.
 public final class ConfigManager {
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
@@ -38,6 +36,9 @@ public final class ConfigManager {
     private final Path profilesFolder;
     private JsonObject guiState = new JsonObject();
     private final AtomicBoolean dirty = new AtomicBoolean();
+
+    // False until the client has said hello once.
+    private boolean greeted;
 
     // A save before the load has finished would wipe the file with defaults.
     private volatile boolean loaded;
@@ -106,6 +107,7 @@ public final class ConfigManager {
         }
         root.add("modules", modules);
         root.add("gui", guiState);
+        root.addProperty("greeted", greeted);
         return root;
     }
 
@@ -133,6 +135,7 @@ public final class ConfigManager {
             if (root.has("gui")) {
                 guiState = root.getAsJsonObject("gui");
             }
+            greeted = root.has("greeted") && root.get("greeted").getAsBoolean();
 
             int version = root.has("version") ? root.get("version").getAsInt() : 1;
             if (version < 2) {
@@ -194,6 +197,16 @@ public final class ConfigManager {
         saveNow();
     }
 
+    // True the first time this is asked after a fresh install.
+    public boolean needsGreeting() {
+        if (greeted) {
+            return false;
+        }
+        greeted = true;
+        saveSoon();
+        return true;
+    }
+
     public void resetGuiLayout() {
         guiState = new JsonObject();
         saveNow();
@@ -220,7 +233,7 @@ public final class ConfigManager {
         if (root == null) {
             return false;
         }
-        // A profile saved before a setting existed must not keep the old value of it.
+        // Settings missing from the profile must reset rather than keep their current value.
         resetModulesQuietly();
         // A profile lists its own friends and never adds to the ones already loaded.
         OfflineClient.INSTANCE.getFriendManager().clear();
@@ -247,7 +260,7 @@ public final class ConfigManager {
         return name.replaceAll("[^a-zA-Z0-9_-]", "_");
     }
 
-    // The file is swapped in whole. A crash mid write leaves the old one intact.
+    // Written to a temp file first so a crash mid write cannot corrupt the saved file.
     static void write(Path path, JsonElement root) {
         Path temp = path.resolveSibling(path.getFileName() + ".tmp");
         try {

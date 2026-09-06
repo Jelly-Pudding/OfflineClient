@@ -5,12 +5,16 @@ import com.jellypudding.offlineclient.event.events.Render3DEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.render.BoxStyle;
 import com.jellypudding.offlineclient.setting.BoolSetting;
+import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
+import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
+import com.jellypudding.offlineclient.util.TargetPriority;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Items;
@@ -22,20 +26,21 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
-/**
- * A runner covers about a third of a block a tick and a web only lands
- * where they are about to be. The spots are laid along their path from the
- * predicted position back to their feet and then round about.
- */
+// A runner moves about a third of a block a tick so webs are laid along
+// their predicted path from ahead back to their feet and then around them.
 public final class AutoWeb extends Module {
 
-    private static final int PENDING_COLOR = 0xFFF0F0F0;
-    private static final int DONE_COLOR = 0x60F0F0F0;
+    // How much of the colour a spot already webbed keeps.
+    private static final float DONE_FADE = 0.4f;
 
     private final NumberSetting targetRange = new NumberSetting("Target range",
         "How far away enemies are considered.", 8, 1, 16, 0.5, " blocks");
+    private final EnumSetting<TargetPriority> priority = TargetPriority.setting("Webs",
+        TargetPriority.NEAREST);
     private final NumberSetting range = new NumberSetting("Range",
-        "How far you can reach to place.", 4.5, 1, 6, 0.1);
+        "How far you can reach to place.", 4.5, 1, 6, 0.1, " blocks");
+    private final NumberSetting wallsRange = new NumberSetting("Walls range",
+        "Shorter reach for a spot you cannot see.", 4, 0, 6, 0.1, " blocks");
     private final NumberSetting perTick = new NumberSetting("Webs per tick",
         "How many webs go down in one tick.", 2, 1, 4, 1);
     private final NumberSetting delay = new NumberSetting("Delay",
@@ -54,6 +59,7 @@ public final class AutoWeb extends Module {
         "Send a look packet towards each web.", true);
     private final BoolSetting render = new BoolSetting("Show webs",
         "Outline the spots being webbed. Done ones fade.", true);
+    private final BoxStyle style = new BoxStyle(BoxStyle.Shape.BOTH, 270f).under(render);
 
     // Spots still to web then spots already webbed. The outline lasts the whole tick.
     private final List<BlockPos> pending = new ArrayList<>();
@@ -64,7 +70,9 @@ public final class AutoWeb extends Module {
 
     public AutoWeb() {
         super("AutoWeb", "Throws cobwebs at an enemy to lock them in place.", Category.COMBAT);
-        addSettings(targetRange, range, perTick, delay, predict, lead, cover, doubles, rotate, render);
+        addSettings(targetRange, priority, range, wallsRange, perTick, delay, predict, lead, cover,
+            doubles, rotate, render);
+        addSettings(style.settings());
         searchTags("cobweb", "web", "trap");
     }
 
@@ -99,7 +107,7 @@ public final class AutoWeb extends Module {
         if (timer > 0) {
             timer--;
         }
-        Player target = EntityUtil.nearestEnemy(targetRange.getValue());
+        Player target = EntityUtil.bestEnemy(targetRange.getValue(), priority.getValue());
         targetName = EntityUtil.nameOf(target);
         if (target == null) {
             return;
@@ -108,7 +116,7 @@ public final class AutoWeb extends Module {
         for (BlockPos spot : spotsFor(target)) {
             if (BlockUtil.state(spot).getBlock() == Blocks.COBWEB) {
                 done.add(spot);
-            } else if (webbable(spot) && BlockUtil.distanceTo(spot) <= range.getValue()) {
+            } else if (webbable(spot) && inReach(spot)) {
                 pending.add(spot);
             }
         }
@@ -158,6 +166,11 @@ public final class AutoWeb extends Module {
         }
     }
 
+    private boolean inReach(BlockPos pos) {
+        double reach = BlockUtil.canSee(Vec3.atCenterOf(pos)) ? range.getValue() : wallsRange.getValue();
+        return BlockUtil.distanceTo(pos) <= reach;
+    }
+
     static boolean webbable(BlockPos pos) {
         return BlockUtil.isReplaceable(pos) && BlockUtil.state(pos).getBlock() != Blocks.COBWEB;
     }
@@ -182,10 +195,11 @@ public final class AutoWeb extends Module {
             return;
         }
         for (BlockPos spot : pending) {
-            event.getBatch().outlineBlock(spot, PENDING_COLOR, false);
+            style.draw(event.getBatch(), spot, false);
         }
+        int faded = ColorUtil.fade(style.lineColor(), DONE_FADE);
         for (BlockPos spot : done) {
-            event.getBatch().outlineBlock(spot, DONE_COLOR, false);
+            style.draw(event.getBatch(), spot, faded, false);
         }
     }
 }

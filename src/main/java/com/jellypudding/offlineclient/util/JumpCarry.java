@@ -4,10 +4,8 @@ import com.jellypudding.offlineclient.OfflineClient;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.phys.Vec3;
 
-/**
- * Holds one horizontal speed for the length of a jump. The heading follows
- * the movement keys and stays where it was when they are let go.
- */
+// Holds one horizontal speed for the length of a jump. The heading follows
+// the movement keys and stays where it was when they are let go.
 public final class JumpCarry {
 
     private double speed;
@@ -32,7 +30,8 @@ public final class JumpCarry {
         push();
     }
 
-    // Keeps the speed up for one more tick. Lets go on landing or anywhere that is not plain air.
+    // Keeps the speed up for one more tick.
+    // Lets go on landing or anywhere that is not plain air.
     public void tick() {
         if (!active) {
             return;

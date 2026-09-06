@@ -6,10 +6,8 @@ import com.google.gson.JsonPrimitive;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 
-/**
- * A number with a slider in the GUI. The slider covers the useful range but
- * typed values can go past it up to any hard min and max.
- */
+// A number with a slider in the GUI. The slider covers the useful range
+// but typed values can go past it up to any hard min and max.
 public final class NumberSetting extends Setting<Double> {
 
     private final double sliderMin;

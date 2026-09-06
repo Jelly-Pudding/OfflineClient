@@ -59,11 +59,8 @@ public abstract class Module {
         this.tags = tags;
     }
 
-    /**
-     * How closely this module answers a search. Higher is a better answer and
-     * SearchRank.NO_MATCH means it does not answer the query at all. The name
-     * outranks a tag. A tag outranks the description.
-     */
+    // How closely this module matches a search query. Higher scores are better matches.
+    // The name outranks a tag and a tag outranks the description.
     public int searchScore(String query) {
         String bestTag = "";
         int bestTagScore = SearchRank.NO_MATCH;
@@ -75,7 +72,22 @@ public abstract class Module {
                 bestTag = tag;
             }
         }
-        return SearchRank.best(query, name, bestTag, description);
+        return SearchRank.best(query, name, bestTag, description, bestSettingName(query));
+    }
+
+    // The name of the setting that best answers the query or an empty string.
+    // Searching for a setting you half remember should find the module holding it.
+    public String bestSettingName(String query) {
+        String best = "";
+        int bestScore = SearchRank.NO_MATCH;
+        for (Setting<?> setting : settings) {
+            int score = SearchRank.score(setting.getName(), query);
+            if (score > bestScore) {
+                bestScore = score;
+                best = setting.getName();
+            }
+        }
+        return best;
     }
 
     public List<Setting<?>> getSettings() {

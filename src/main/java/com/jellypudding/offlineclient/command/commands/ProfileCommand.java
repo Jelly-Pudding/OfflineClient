@@ -8,6 +8,7 @@ import com.jellypudding.offlineclient.util.ChatUtil;
 import java.util.List;
 
 import java.util.Locale;
+import com.jellypudding.offlineclient.command.CommandManager;
 
 public final class ProfileCommand extends Command {
 
@@ -50,5 +51,17 @@ public final class ProfileCommand extends Command {
             }
             default -> usage();
         }
+    }
+
+    @Override
+    public List<String> complete(String[] tokens, int index, String current) {
+        if (index == 1) {
+            return CommandManager.filter(current, List.of("save", "load", "list"));
+        }
+        if (index == 2 && tokens[1].equalsIgnoreCase("load")) {
+            return CommandManager.filter(current,
+                OfflineClient.INSTANCE.getConfigManager().listProfiles());
+        }
+        return List.of();
     }
 }

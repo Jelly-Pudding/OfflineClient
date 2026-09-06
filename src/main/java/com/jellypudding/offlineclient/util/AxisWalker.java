@@ -7,11 +7,8 @@ import net.minecraft.core.Direction;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 
-/**
- * Holds the line and the floor a digging module works along. Also keeps the
- * player on the middle of that line. The line runs along a compass direction
- * or on request along a diagonal between two of them.
- */
+// Holds the line and floor a digging module works along and keeps the player centred.
+// The line runs along a compass direction or a diagonal between two of them.
 public final class AxisWalker {
 
     private static final Minecraft MC = OfflineClient.MC;

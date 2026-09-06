@@ -23,7 +23,6 @@ import java.util.Deque;
 
 public final class Breadcrumbs extends Module {
 
-    private static final int MAX_POINTS = 10000;
     // Ticks between disk writes.
     private static final int SAVE_INTERVAL = 600;
 
@@ -39,6 +38,9 @@ public final class Breadcrumbs extends Module {
         "How far you move before a new point is added.", 0.5, 0.1, 4, 0.1, " blocks").min(0.05);
     private final BoolSetting fade = new BoolSetting("Fade",
         "Older parts of the trail draw fainter.", false);
+    private final NumberSetting maxPoints = new NumberSetting("Max points",
+        "How many points the trail keeps before the oldest drop off.", 10000, 100, 10000, 100, " points")
+        .min(10).max(100000);
 
     private final Deque<Vec3> trail = new ArrayDeque<>();
     private ResourceKey<Level> dimension;
@@ -46,7 +48,7 @@ public final class Breadcrumbs extends Module {
 
     public Breadcrumbs() {
         super("Breadcrumbs", "Draws a trail behind you to lead you back.", Category.RENDER);
-        addSettings(throughWalls, color, keepTrail, persist, spacing, fade);
+        addSettings(throughWalls, color, keepTrail, persist, spacing, fade, maxPoints);
         searchTags("trail", "path", "waypoint");
     }
 
@@ -109,9 +111,7 @@ public final class Breadcrumbs extends Module {
             return;
         }
         trail.addLast(pos);
-        if (trail.size() > MAX_POINTS) {
-            trail.removeFirst();
-        }
+        trim();
     }
 
     @Subscribe
@@ -132,6 +132,12 @@ public final class Breadcrumbs extends Module {
             }
             previous = point;
             i++;
+        }
+    }
+
+    private void trim() {
+        while (trail.size() > maxPoints.getInt()) {
+            trail.removeFirst();
         }
     }
 
@@ -169,9 +175,7 @@ public final class Breadcrumbs extends Module {
                 }
                 trail.addLast(new Vec3(Double.parseDouble(parts[0]),
                     Double.parseDouble(parts[1]), Double.parseDouble(parts[2])));
-                if (trail.size() > MAX_POINTS) {
-                    trail.removeFirst();
-                }
+                trim();
             }
         } catch (IOException | NumberFormatException e) {
             OfflineClient.LOG.error("Failed to read trail", e);

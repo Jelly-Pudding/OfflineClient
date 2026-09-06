@@ -162,11 +162,8 @@ public final class RenderUtil {
     private static final float[] STAR_FILL = rasteriseStar(1);
     private static final float[] STAR_RING = ring(STAR_FILL, rasteriseStar(STAR_HOLLOW));
 
-    /**
-     * A five point star with soft edges. Chosen is solid and not chosen is
-     * a hollow ring of the same shape. Each pixel carries the share of its
-     * sample points that land inside the shape. The points stay crisp.
-     */
+    // A five point star with soft edges. Chosen is solid and not chosen is a hollow ring.
+    // Each pixel carries the share of its samples inside the shape so edges stay crisp.
     public static void star(GuiGraphicsExtractor context, int x, int y, int color, boolean filled) {
         float[] cover = filled ? STAR_FILL : STAR_RING;
         for (int row = 0; row < STAR_SIZE; row++) {
@@ -233,6 +230,30 @@ public final class RenderUtil {
         return inside;
     }
 
+    // A filled triangle between three screen points drawn as one pixel rows.
+    public static void triangle(GuiGraphicsExtractor context, double ax, double ay, double bx, double by,
+                                double cx, double cy, int color) {
+        int top = (int) Math.floor(Math.min(ay, Math.min(by, cy)));
+        int bottom = (int) Math.ceil(Math.max(ay, Math.max(by, cy)));
+        for (int row = top; row < bottom; row++) {
+            double y = row + 0.5;
+            double left = Double.MAX_VALUE;
+            double right = -Double.MAX_VALUE;
+            double[] xs = {ax, bx, cx, ax};
+            double[] ys = {ay, by, cy, ay};
+            for (int i = 0; i < 3; i++) {
+                if ((ys[i] <= y) != (ys[i + 1] <= y)) {
+                    double x = xs[i] + (y - ys[i]) * (xs[i + 1] - xs[i]) / (ys[i + 1] - ys[i]);
+                    left = Math.min(left, x);
+                    right = Math.max(right, x);
+                }
+            }
+            if (left <= right) {
+                context.fill((int) Math.round(left), row, (int) Math.round(right), row + 1, color);
+            }
+        }
+    }
+
     // Five pixels square.
     public static void tick(GuiGraphicsExtractor context, int x, int y, int color) {
         context.fill(x, y + 2, x + 1, y + 4, color);
@@ -249,12 +270,16 @@ public final class RenderUtil {
     private static final int TOOLTIP_BORDER = 0x50FFFFFF;
     private static final int TOOLTIP_TEXT = 0xFFD8D8E4;
 
-    /**
-     * A scaled label centred on a screen point. Each part carries its own
-     * colour and they run left to right on one line.
-     */
+    // A scaled label centred on a screen point. Each part carries its own
+    // colour and they run left to right on one line.
     public static void label(GuiGraphicsExtractor context, Font font, double screenX, double screenY,
                              float scale, List<String> parts, List<Integer> colors) {
+        label(context, font, screenX, screenY, scale, parts, colors, LABEL_BACKGROUND);
+    }
+
+    // The same label over a background of the module's own colour.
+    public static void label(GuiGraphicsExtractor context, Font font, double screenX, double screenY,
+                             float scale, List<String> parts, List<Integer> colors, int background) {
         int width = 0;
         for (String part : parts) {
             width += font.width(part);
@@ -264,7 +289,7 @@ public final class RenderUtil {
         pose.translate((float) screenX, (float) screenY);
         pose.scale(scale, scale);
         int half = width / 2;
-        context.fill(-half - 2, -2, half + 2, font.lineHeight, LABEL_BACKGROUND);
+        context.fill(-half - 2, -2, half + 2, font.lineHeight, background);
         context.guiRenderState.up();
         int x = -half;
         for (int i = 0; i < parts.size(); i++) {

@@ -14,13 +14,18 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-/**
- * Named coordinates saved to offlineclient/waypoints.json. Each one
- * remembers the server and the dimension it was marked in.
- */
+// Named coordinates saved to offlineclient/waypoints.json.
+// Each one remembers the server and the dimension it was marked in.
 public final class WaypointStore {
 
-    public record Waypoint(String name, int x, int y, int z, String dimension, String server) {
+    // A hue below zero means the colour comes from the name.
+    public record Waypoint(String name, int x, int y, int z, String dimension, String server, int hue) {
+
+        public static final int AUTO_HUE = -1;
+
+        public Waypoint withHue(int hue) {
+            return new Waypoint(name, x, y, z, dimension, server, hue);
+        }
     }
 
     private static WaypointStore instance;
@@ -66,6 +71,16 @@ public final class WaypointStore {
         save();
     }
 
+    // Null when no waypoint of that name is in this world.
+    public Waypoint find(String name) {
+        for (Waypoint waypoint : waypoints) {
+            if (sameSpot(waypoint, name)) {
+                return waypoint;
+            }
+        }
+        return null;
+    }
+
     public boolean remove(String name) {
         boolean removed = waypoints.removeIf(waypoint -> sameSpot(waypoint, name));
         if (removed) {
@@ -74,10 +89,8 @@ public final class WaypointStore {
         return removed;
     }
 
-    /**
-     * The name matches and the waypoint belongs to the world the player is
-     * standing in. A base in the Nether never stands in for one overworld.
-     */
+    // The name matches and the waypoint belongs to the world the player is standing in.
+    // A base in the Nether never stands in for one in the overworld.
     private static boolean sameSpot(Waypoint waypoint, String name) {
         return waypoint.name().equalsIgnoreCase(name)
             && waypoint.dimension().equals(currentDimension())
@@ -115,7 +128,8 @@ public final class WaypointStore {
                     o.get("y").getAsInt(),
                     o.get("z").getAsInt(),
                     o.get("dimension").getAsString(),
-                    o.get("server").getAsString()));
+                    o.get("server").getAsString(),
+                    o.has("hue") ? o.get("hue").getAsInt() : Waypoint.AUTO_HUE));
             }
         } catch (Exception e) {
             OfflineClient.LOG.error("Failed to read waypoints", e);
@@ -132,6 +146,9 @@ public final class WaypointStore {
             o.addProperty("z", waypoint.z());
             o.addProperty("dimension", waypoint.dimension());
             o.addProperty("server", waypoint.server());
+            if (waypoint.hue() >= 0) {
+                o.addProperty("hue", waypoint.hue());
+            }
             root.add(o);
         }
         ConfigManager.write(file, root);

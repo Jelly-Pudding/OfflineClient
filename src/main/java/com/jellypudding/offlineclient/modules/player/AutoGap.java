@@ -18,37 +18,44 @@ import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
-/**
- * Eats golden apples to hold buffs up. Only the enchanted apple grants fire
- * resistance.
- */
+// Eats golden apples to hold buffs up.
+// Only the enchanted apple grants fire resistance.
 public final class AutoGap extends Module {
 
     // Ticks to wait after a bite whilst the effects land. A laggy server needs a moment.
     private static final int SETTLE_TICKS = 20;
 
-    // The least ticks between two apples. A slow server never gets a second one for the same reason.
+    // Minimum ticks between two apples so a slow server has time to register one.
     private static final int MEAL_GAP = 100;
 
-    public enum Choice { PLAIN_FIRST, ENCHANTED_FIRST, ENCHANTED_ONLY }
+    public enum Choice { PLAIN_FIRST, PLAIN_ONLY, ENCHANTED_FIRST, ENCHANTED_ONLY }
 
+    private final BoolSetting always = new BoolSetting("Always",
+        "Eats apples back to back for as long as the module is on whatever your health or effects.",
+        false);
     private final NumberSetting health = new NumberSetting("Health",
         "Eat at or below this many hearts. Zero turns it off.", 7, 0, 10, 0.5, " hearts")
-        .min(0).max(20);
-    private final BoolSetting absorption = new BoolSetting("Absorption",
-        "Eat to keep the absorption effect topped up.", true);
-    private final BoolSetting regeneration = new BoolSetting("Regeneration",
-        "Eat to keep the regeneration effect topped up.", false);
-    private final BoolSetting fireResistance = new BoolSetting("Fire resistance",
-        "Eat to keep the fire resistance effect topped up.", false);
-    private final NumberSetting expiry = new NumberSetting("Expiry",
-        "Start eating this many ticks before an effect runs out.", 60, 0, 200, 10, " ticks")
-        .min(0);
+        .min(0).max(20)
+        .unless(always);
     private final EnumSetting<Choice> choice = new EnumSetting<>("Choice",
         "Which apple to reach for.", Choice.PLAIN_FIRST)
         .describe(Choice.PLAIN_FIRST, "Eats a plain apple and only takes an enchanted one when there is none.")
+        .describe(Choice.PLAIN_ONLY, "Never eats an enchanted apple.")
         .describe(Choice.ENCHANTED_FIRST, "Eats an enchanted apple and falls back to a plain one.")
         .describe(Choice.ENCHANTED_ONLY, "Never eats a plain apple.");
+    private final BoolSetting absorption = new BoolSetting("Absorption",
+        "Eat to keep the absorption effect topped up.", true)
+        .unless(always);
+    private final BoolSetting regeneration = new BoolSetting("Regeneration",
+        "Eat to keep the regeneration effect topped up.", false)
+        .unless(always);
+    private final BoolSetting fireResistance = new BoolSetting("Fire resistance",
+        "Eat to keep the fire resistance effect topped up. Only an enchanted apple gives it.", false)
+        .visibleWhen(() -> !always.isOn() && !choice.is(Choice.PLAIN_ONLY));
+    private final NumberSetting expiry = new NumberSetting("Expiry",
+        "Start eating this many ticks before an effect runs out.", 60, 0, 200, 10, " ticks")
+        .min(0)
+        .unless(always);
     private final BoolSetting hold = new BoolSetting("Keep held",
         "Stay on the apple slot between bites.", true);
     private final BoolSetting pauseCombat = new BoolSetting("Pause combat",
@@ -65,8 +72,8 @@ public final class AutoGap extends Module {
 
     public AutoGap() {
         super("AutoGap", "Eats golden apples to hold your buffs and your health up.", Category.PLAYER);
-        addSettings(health, absorption, regeneration, fireResistance, expiry, choice, hold, pauseCombat,
-            noSlowdown);
+        addSettings(always, health, choice, absorption, regeneration, fireResistance, expiry, hold,
+            pauseCombat, noSlowdown);
         searchTags("gapple", "golden apple", "egap");
     }
 
@@ -78,7 +85,7 @@ public final class AutoGap extends Module {
         return isEnabled() && eating;
     }
 
-    // Read by LocalPlayerMixin to keep the apple from slowing you down. Manual bites count too.
+    // Read by LocalPlayerMixin to stop the apple slowing you. Manual bites count too.
     public boolean suppressesSlowdown() {
         if (!isEnabled() || !noSlowdown.isOn() || mc.player == null || !mc.player.isUsingItem()) {
             return false;
@@ -136,7 +143,7 @@ public final class AutoGap extends Module {
             return;
         }
         // Health that is actually low is never made to wait. A buff top up is.
-        if (!EntityUtil.healthAtOrBelow(health.getValue())
+        if (!always.isOn() && !EntityUtil.healthAtOrBelow(health.getValue())
             && mc.player.tickCount - lastMeal < MEAL_GAP) {
             return;
         }
@@ -153,13 +160,14 @@ public final class AutoGap extends Module {
     }
 
     private boolean wantsApple() {
-        if (EntityUtil.healthAtOrBelow(health.getValue())) {
+        if (always.isOn() || EntityUtil.healthAtOrBelow(health.getValue())) {
             return true;
         }
         if (absorption.isOn() && isRunningOut(MobEffects.ABSORPTION)) {
             return true;
         }
-        if (fireResistance.isOn() && isRunningOut(MobEffects.FIRE_RESISTANCE)) {
+        if (fireResistance.isOn() && !choice.is(Choice.PLAIN_ONLY)
+            && isRunningOut(MobEffects.FIRE_RESISTANCE)) {
             needsEnchanted = true;
             return true;
         }
@@ -223,6 +231,9 @@ public final class AutoGap extends Module {
         if (needsEnchanted || choice.is(Choice.ENCHANTED_ONLY)) {
             return enchanted;
         }
+        if (choice.is(Choice.PLAIN_ONLY)) {
+            return plain;
+        }
         if (choice.is(Choice.ENCHANTED_FIRST)) {
             return enchanted != -1 ? enchanted : plain;
         }
@@ -232,6 +243,9 @@ public final class AutoGap extends Module {
     private boolean isApple(ItemStack stack) {
         if (needsEnchanted || choice.is(Choice.ENCHANTED_ONLY)) {
             return stack.is(Items.ENCHANTED_GOLDEN_APPLE);
+        }
+        if (choice.is(Choice.PLAIN_ONLY)) {
+            return stack.is(Items.GOLDEN_APPLE);
         }
         return stack.is(Items.GOLDEN_APPLE) || stack.is(Items.ENCHANTED_GOLDEN_APPLE);
     }

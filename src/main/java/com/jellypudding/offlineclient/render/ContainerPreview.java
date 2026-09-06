@@ -18,11 +18,36 @@ public final class ContainerPreview implements ClientTooltipComponent {
     private final List<ItemStack> items;
     private final int columns;
     private final int rows;
+    private final int background;
 
     public ContainerPreview(List<ItemStack> items, int columns) {
+        this(items, columns, BACKGROUND);
+    }
+
+    // A background of the box's own dye colour so a red shulker previews red.
+    public ContainerPreview(List<ItemStack> items, int columns, int background) {
         this.items = items;
         this.columns = Math.max(1, Math.min(columns, items.size()));
         this.rows = Math.max(1, (items.size() + this.columns - 1) / this.columns);
+        this.background = background;
+    }
+
+    // Draws the grid at a point on any screen and returns the index under the mouse or minus one.
+    public int drawAt(GuiGraphicsExtractor context, Font font, int x, int y, int mouseX, int mouseY) {
+        extractImage(font, x, y, 0, 0, context);
+        int hovered = -1;
+        for (int i = 0; i < items.size(); i++) {
+            int slotX = x + PADDING + i % columns * SLOT;
+            int slotY = y + PADDING + i / columns * SLOT;
+            if (mouseX >= slotX && mouseX < slotX + SLOT && mouseY >= slotY && mouseY < slotY + SLOT) {
+                hovered = i;
+            }
+        }
+        return hovered;
+    }
+
+    public ItemStack item(int index) {
+        return index < 0 || index >= items.size() ? ItemStack.EMPTY : items.get(index);
     }
 
     @Override
@@ -40,7 +65,7 @@ public final class ContainerPreview implements ClientTooltipComponent {
                              GuiGraphicsExtractor context) {
         int width = columns * SLOT + PADDING;
         int height = rows * SLOT + PADDING;
-        context.fill(x, y, x + width, y + height, BACKGROUND);
+        context.fill(x, y, x + width, y + height, background);
         context.outline(x, y, width, height, BORDER);
         for (int i = 0; i < items.size(); i++) {
             ItemStack stack = items.get(i);

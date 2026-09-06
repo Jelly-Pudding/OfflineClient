@@ -12,14 +12,13 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 
-/**
- * A song read from a Note Block Studio file. Notes are keyed by the game
- * tick they play on. The file format is little endian throughout.
- */
+// A song read from a Note Block Studio file. Notes are keyed by the game
+// tick they play on. The file format is little endian throughout.
 public final class NoteSong {
 
     // One note block pitch. Zero to twenty four.
@@ -28,6 +27,9 @@ public final class NoteSong {
 
     // Note Block Studio numbers keys from this offset below the note block range.
     private static final int KEY_OFFSET = 33;
+
+    private static final String NAME_HEADER = "// Name:";
+    private static final String AUTHOR_HEADER = "// Author:";
 
     public static final int LOWEST = 0;
     public static final int HIGHEST = 24;
@@ -78,10 +80,8 @@ public final class NoteSong {
         return ticks.isEmpty() ? 0 : ticks.lastKey();
     }
 
-    /**
-     * Notes outside the note block range are moved an octave at a time until
-     * they fit. Off means such notes are dropped instead.
-     */
+    // Notes outside the note block range are moved an octave at a time until
+    // they fit. Off means such notes are dropped instead.
     public NoteSong foldedIntoRange(boolean fold) {
         TreeMap<Integer, List<Note>> result = new TreeMap<>();
         for (Map.Entry<Integer, List<Note>> entry : ticks.entrySet()) {
@@ -107,10 +107,77 @@ public final class NoteSong {
         return new NoteSong(title, author, result);
     }
 
+    // Remaps or drops each instrument. A null in the map drops that note.
+    public NoteSong remapped(Map<NoteBlockInstrument, NoteBlockInstrument> map) {
+        if (map.isEmpty()) {
+            return this;
+        }
+        TreeMap<Integer, List<Note>> result = new TreeMap<>();
+        for (Map.Entry<Integer, List<Note>> entry : ticks.entrySet()) {
+            List<Note> kept = new ArrayList<>();
+            for (Note note : entry.getValue()) {
+                if (note.instrument() == null || !map.containsKey(note.instrument())) {
+                    kept.add(note);
+                    continue;
+                }
+                NoteBlockInstrument swapped = map.get(note.instrument());
+                if (swapped != null) {
+                    kept.add(new Note(swapped, note.pitch()));
+                }
+            }
+            if (!kept.isEmpty()) {
+                result.put(entry.getKey(), kept);
+            }
+        }
+        return new NoteSong(title, author, result);
+    }
+
     public static NoteSong read(Path file) throws IOException {
+        if (file.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".txt")) {
+            return readText(file);
+        }
         try (InputStream in = Files.newInputStream(file)) {
             return read(new DataInputStream(in), file.getFileName().toString());
         }
+    }
+
+    // A plain list of tick:note lines with an optional instrument number on the end.
+    private static NoteSong readText(Path file) throws IOException {
+        String fileName = file.getFileName().toString();
+        String title = fileName.substring(0, fileName.length() - 4);
+        String author = "";
+        TreeMap<Integer, List<Note>> ticks = new TreeMap<>();
+        NoteBlockInstrument[] all = NoteBlockInstrument.values();
+        for (String line : Files.readAllLines(file)) {
+            line = line.trim();
+            if (line.startsWith(NAME_HEADER)) {
+                title = line.substring(NAME_HEADER.length()).trim();
+                continue;
+            }
+            if (line.startsWith(AUTHOR_HEADER)) {
+                author = line.substring(AUTHOR_HEADER.length()).trim();
+                continue;
+            }
+            if (line.isEmpty() || line.startsWith("//")) {
+                continue;
+            }
+            String[] parts = line.split(":");
+            if (parts.length < 2) {
+                continue;
+            }
+            try {
+                int at = Integer.parseInt(parts[0].trim());
+                int pitch = Integer.parseInt(parts[1].trim());
+                int kind = parts.length > 2 ? Integer.parseInt(parts[2].trim()) : 0;
+                if (kind < 0 || kind >= all.length) {
+                    continue;
+                }
+                ticks.computeIfAbsent(at, k -> new ArrayList<>()).add(new Note(all[kind], pitch));
+            } catch (NumberFormatException ignored) {
+                // A line that is not two numbers is not a note.
+            }
+        }
+        return new NoteSong(title, author, ticks);
     }
 
     private static NoteSong read(DataInputStream in, String fileName) throws IOException {

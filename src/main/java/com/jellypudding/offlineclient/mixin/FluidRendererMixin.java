@@ -1,6 +1,8 @@
 package com.jellypudding.offlineclient.mixin;
 
+import com.jellypudding.offlineclient.modules.render.Ambience;
 import com.jellypudding.offlineclient.modules.render.XRay;
+import com.jellypudding.offlineclient.util.Modules;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import net.minecraft.client.renderer.block.BlockAndTintGetter;
@@ -10,15 +12,22 @@ import net.minecraft.core.Direction;
 import net.minecraft.util.ARGB;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.FluidState;
+import net.minecraft.tags.FluidTags;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-// XRay hooks for water and lava.
+// XRay hooks for water and lava plus the Ambience lava tint.
 @Mixin(FluidRenderer.class)
 public abstract class FluidRendererMixin {
+
+    // Set whilst the fluid being built is lava the module recolours.
+    @Unique
+    private static final ThreadLocal<Boolean> OFFLINECLIENT_LAVA =
+        ThreadLocal.withInitial(() -> false);
 
     @Inject(
         method = "tesselate(Lnet/minecraft/client/renderer/block/BlockAndTintGetter;Lnet/minecraft/core/BlockPos;Lnet/minecraft/client/renderer/block/FluidRenderer$Output;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/world/level/material/FluidState;)V",
@@ -26,12 +35,10 @@ public abstract class FluidRendererMixin {
         cancellable = true)
     private void onTesselate(BlockAndTintGetter level, BlockPos pos, FluidRenderer.Output output,
                              BlockState blockState, FluidState fluidState, CallbackInfo ci) {
-        XRay xray = XRay.get();
-        if (xray == null || !xray.isEnabled()) {
-            XRay.setMeshAlpha(-1);
-            return;
-        }
-        int alpha = xray.alphaFor(level, fluidState.createLegacyBlock(), null);
+        Ambience ambience = Modules.get(Ambience.class);
+        OFFLINECLIENT_LAVA.set(ambience != null && ambience.paintsLava()
+            && fluidState.is(FluidTags.LAVA));
+        int alpha = XRay.meshAlphaFor(level, fluidState.createLegacyBlock(), null);
         XRay.setMeshAlpha(alpha);
         if (alpha == 0) {
             ci.cancel();
@@ -66,6 +73,12 @@ public abstract class FluidRendererMixin {
             target = "Lcom/mojang/blaze3d/vertex/VertexConsumer;addVertex(FFFIFFIIFFF)V"),
         index = 3)
     private int onVertexColor(int color) {
+        if (OFFLINECLIENT_LAVA.get()) {
+            Ambience ambience = Modules.get(Ambience.class);
+            if (ambience != null) {
+                color = ambience.lavaColor();
+            }
+        }
         if (!XRay.meshingTranslucent()) {
             return color;
         }

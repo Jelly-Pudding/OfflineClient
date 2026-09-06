@@ -5,7 +5,6 @@ import com.jellypudding.offlineclient.event.events.PacketSendEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
-import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.Modules;
@@ -16,16 +15,21 @@ import net.minecraft.world.entity.player.Input;
 import java.lang.ref.WeakReference;
 
 // Legit mode holds the sneak key. Packet mode only tells the server.
+// Whilst flying the sneak key is the way down so legit mode tells the server instead.
 public final class Sneak extends Module {
 
     public enum Mode { LEGIT, PACKET }
+
+    public enum WhilstFlying { STOP, TELL_SERVER }
 
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
         "How the sneak is done.", Mode.LEGIT)
         .describe(Mode.LEGIT, "Really crouches. You move at sneaking speed.")
         .describe(Mode.PACKET, "Only tells the server. You keep your full speed.");
-    private final BoolSetting skipWhileFlying = new BoolSetting("Skip whilst flying",
-        "Do not hold sneak whilst flying.", true)
+    private final EnumSetting<WhilstFlying> whilstFlying = new EnumSetting<>("Whilst flying",
+        "What happens whilst you fly. Holding the key down would only make you sink.", WhilstFlying.STOP)
+        .describe(WhilstFlying.STOP, "Stops sneaking until you land.")
+        .describe(WhilstFlying.TELL_SERVER, "Tells the server you sneak and leaves the fly keys alone.")
         .under(mode, Mode.LEGIT);
 
     // Read from the packet thread.
@@ -36,7 +40,7 @@ public final class Sneak extends Module {
 
     public Sneak() {
         super("Sneak", "Keeps you sneaking.", Category.MOVEMENT);
-        addSettings(mode, skipWhileFlying);
+        addSettings(mode, whilstFlying);
         searchTags("crouch", "shift");
     }
 
@@ -69,32 +73,34 @@ public final class Sneak extends Module {
             undo(old);
         }
         if (applied == Mode.PACKET) {
-            packetTick();
+            tellServer(!mc.player.isPassenger());
             return;
         }
-        if (skipWhileFlying.isOn() && flying()) {
-            setShift(InputUtil.physicallyHeld(mc.options.keyShift));
+        if (!flying()) {
+            tellServer(false);
+            setShift(true);
             return;
         }
-        setShift(true);
+        setShift(InputUtil.physicallyHeld(mc.options.keyShift));
+        tellServer(whilstFlying.is(WhilstFlying.TELL_SERVER) && !mc.player.isPassenger());
     }
 
-    // A shift flag whilst riding makes the server dismount the player.
-    private void packetTick() {
+    // Keeps the server told the flag the mode wants.
+    // A shift flag whilst riding dismounts the player so the caller leaves it off then.
+    private void tellServer(boolean want) {
         LocalPlayer player = mc.player;
-        boolean want = !player.isPassenger();
         // A respawn or a dimension change wipes what the server was told.
-        if (want != forcing || (want && player != told.get())) {
-            forcing = want;
-            told = new WeakReference<>(want ? player : null);
-            tellServer(want);
+        if (want == forcing && (!want || player == told.get())) {
+            return;
         }
+        forcing = want;
+        told = new WeakReference<>(want ? player : null);
+        sendShift(want);
     }
 
     @Subscribe
     private void onPacketSend(PacketSendEvent event) {
-        if (applied != Mode.PACKET || !forcing
-            || !(event.getPacket() instanceof ServerboundPlayerInputPacket packet)) {
+        if (!forcing || !(event.getPacket() instanceof ServerboundPlayerInputPacket packet)) {
             return;
         }
         if (!packet.input().shift()) {
@@ -108,22 +114,18 @@ public final class Sneak extends Module {
         }
         if (old == Mode.LEGIT) {
             setShift(InputUtil.physicallyHeld(mc.options.keyShift));
-        } else if (forcing) {
-            forcing = false;
-            tellServer(false);
         }
+        tellServer(false);
     }
 
-    // The client's own record still holds the real key state.
-    private void tellServer(boolean shift) {
+    // Forces the server's shift flag since vanilla only corrects it on key change.
+    // The client's own record still holds the real key state regardless.
+    private void sendShift(boolean shift) {
         LocalPlayer player = mc.player;
         if (player == null) {
             return;
         }
         Input last = player.getLastSentInput();
-        if (last.shift() == shift) {
-            return;
-        }
         player.connection.send(new ServerboundPlayerInputPacket(withShift(last, shift)));
     }
 

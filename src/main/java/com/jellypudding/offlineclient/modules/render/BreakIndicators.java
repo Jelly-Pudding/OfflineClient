@@ -5,8 +5,10 @@ import com.jellypudding.offlineclient.event.events.PacketReceiveEvent;
 import com.jellypudding.offlineclient.event.events.Render2DEvent;
 import com.jellypudding.offlineclient.event.events.Render3DEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
+import com.jellypudding.offlineclient.mixin.MultiPlayerGameModeAccessor;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.render.BoxStyle;
 import com.jellypudding.offlineclient.render.DrawBatch;
 import com.jellypudding.offlineclient.render.WorldToScreen;
 import com.jellypudding.offlineclient.setting.BoolSetting;
@@ -17,34 +19,33 @@ import com.jellypudding.offlineclient.util.RenderUtil;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.protocol.game.ClientboundBlockDestructionPacket;
-import net.minecraft.server.level.BlockDestructionProgress;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.VoxelShape;
 
 import java.lang.ref.WeakReference;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
-import java.util.SortedSet;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 // The server sends a destruction stage from zero to nine for every block being broken.
 public final class BreakIndicators extends Module {
 
-    private record Stage(int breaker, BlockPos pos, int progress) {
+    private record Stage(int breaker, BlockPos pos, float progress) {
     }
 
     private static final class Indicator {
 
         private final BlockPos pos;
         private final String name;
-        private int progress;
+        private float progress;
         private long updated;
 
-        private Indicator(BlockPos pos, String name, int progress, long updated) {
+        private Indicator(BlockPos pos, String name, float progress, long updated) {
             this.pos = pos;
             this.name = name;
             this.progress = progress;
@@ -52,17 +53,27 @@ public final class BreakIndicators extends Module {
         }
     }
 
-    private static final int LOW_COLOR = 0xFF50FF50;
-    private static final int HIGH_COLOR = 0xFFFF3030;
+    private static final int STAGES = 10;
     // The server stops sending updates when a player walks off mid break.
     private static final long TIMEOUT_MS = 2000;
 
-    private final BoolSetting fill = new BoolSetting("Fill",
-        "Adds a faint tint inside each box.", true);
+    private final BoxStyle style = BoxStyle.shapeOnly(BoxStyle.Shape.BOTH);
     private final BoolSetting throughWalls = new BoolSetting("Through walls",
         "Show boxes behind blocks.", true);
     private final BoolSetting progressColor = new BoolSetting("Colour by progress",
-        "Fade from green to red as the block gives way.", true);
+        "Blend from the start colours to the end colours as the block gives way.", true);
+    private final ColorSetting startLine = new ColorSetting("Start line colour",
+        "Edge colour of a block that has just been hit.", 120, 0.9f, 0.99f, false)
+        .under(progressColor);
+    private final ColorSetting startFill = new ColorSetting("Start fill colour",
+        "Face colour of a block that has just been hit.", 120, 0.9f, 0.99f, false)
+        .under(progressColor);
+    private final ColorSetting endLine = new ColorSetting("End line colour",
+        "Edge colour of a block about to break.", 0, 0.9f, 1f, false)
+        .under(progressColor);
+    private final ColorSetting endFill = new ColorSetting("End fill colour",
+        "Face colour of a block about to break.", 0, 0.9f, 1f, false)
+        .under(progressColor);
     private final ColorSetting color = new ColorSetting("Colour",
         "Box colour when progress colouring is off.", 20, false)
         .unless(progressColor);
@@ -84,7 +95,9 @@ public final class BreakIndicators extends Module {
 
     public BreakIndicators() {
         super("BreakIndicators", "Shows blocks other players are mining.", Category.RENDER);
-        addSettings(fill, throughWalls, progressColor, color, grow, names, scale, self);
+        addSettings(style.settings());
+        addSettings(throughWalls, progressColor, startLine, startFill, endLine, endFill, color,
+            grow, names, scale, self);
         searchTags("mining", "break progress", "city");
     }
 
@@ -112,8 +125,13 @@ public final class BreakIndicators extends Module {
     @Subscribe
     private void onPacketReceive(PacketReceiveEvent event) {
         if (event.getPacket() instanceof ClientboundBlockDestructionPacket packet) {
-            pending.add(new Stage(packet.getId(), packet.getPos(), packet.getProgress()));
+            pending.add(new Stage(packet.getId(), packet.getPos(), stageFraction(packet.getProgress())));
         }
+    }
+
+    // Anything outside zero to nine means the job is over.
+    private static float stageFraction(int stage) {
+        return stage < 0 || stage >= STAGES ? -1 : (stage + 1) / (float) STAGES;
     }
 
     @Subscribe
@@ -135,23 +153,18 @@ public final class BreakIndicators extends Module {
         indicators.values().removeIf(indicator -> now - indicator.updated > TIMEOUT_MS);
     }
 
-    /**
-     * The server never sends your own break progress back. The client writes
-     * it into the same map the packet fills.
-     */
+    // The server never sends your own break progress back. The client keeps a
+    // smooth fraction of its own which beats the ten coarse stages.
     private void applyOwnProgress(long now) {
-        if (!inGame()) {
+        if (!inGame() || mc.gameMode == null) {
             return;
         }
-        int own = mc.player.getId();
-        for (SortedSet<BlockDestructionProgress> column : mc.level.destructionProgress().values()) {
-            for (BlockDestructionProgress progress : column) {
-                if (progress.getId() == own) {
-                    apply(new Stage(own, progress.getPos(), progress.getProgress()), now);
-                    return;
-                }
-            }
+        MultiPlayerGameModeAccessor mode = (MultiPlayerGameModeAccessor) mc.gameMode;
+        BlockPos pos = mode.offlineclient$destroyBlockPos();
+        if (!mc.gameMode.isDestroying() || pos == null) {
+            return;
         }
+        apply(new Stage(mc.player.getId(), pos, Math.clamp(mode.offlineclient$destroyProgress(), 0, 1)), now);
     }
 
     private void apply(Stage stage, long now) {
@@ -161,8 +174,7 @@ public final class BreakIndicators extends Module {
         if (!self.isOn() && stage.breaker() == mc.player.getId()) {
             return;
         }
-        // Anything outside zero to nine means the job is over.
-        if (stage.progress() < 0 || stage.progress() > 9) {
+        if (stage.progress() < 0) {
             indicators.remove(stage.breaker());
             return;
         }
@@ -191,29 +203,34 @@ public final class BreakIndicators extends Module {
         DrawBatch batch = event.getBatch();
         boolean through = throughWalls.isOn();
         for (Indicator indicator : indicators.values()) {
-            AABB box = boxOf(indicator);
-            int argb = colorOf(indicator);
-            batch.outlineBox(box, argb, through);
-            if (fill.isOn()) {
-                batch.solidBox(box, ColorUtil.withAlpha(argb, 50), through);
-            }
+            style.draw(batch, boxOf(indicator), lineColor(indicator), fillColor(indicator), through);
         }
     }
 
+    // The block's own outline so a slab or a fence gets a box its size.
     private AABB boxOf(Indicator indicator) {
-        AABB full = DrawBatch.blockBox(indicator.pos);
+        VoxelShape shape = mc.level.getBlockState(indicator.pos).getShape(mc.level, indicator.pos);
+        AABB full = shape.isEmpty() ? DrawBatch.blockBox(indicator.pos)
+            : shape.bounds().move(indicator.pos).deflate(DrawBatch.BLOCK_INSET);
         if (!grow.isOn()) {
             return full;
         }
-        double fraction = (indicator.progress + 1) / 10.0;
-        return full.deflate((1 - fraction) * 0.5);
+        double shrink = (1 - indicator.progress) * 0.5;
+        return full.deflate(shrink * full.getXsize(), shrink * full.getYsize(), shrink * full.getZsize());
     }
 
-    private int colorOf(Indicator indicator) {
+    private int lineColor(Indicator indicator) {
         if (!progressColor.isOn()) {
             return color.getColor();
         }
-        return ColorUtil.lerp(LOW_COLOR, HIGH_COLOR, indicator.progress / 9f);
+        return ColorUtil.lerp(startLine.getColor(), endLine.getColor(), indicator.progress);
+    }
+
+    private int fillColor(Indicator indicator) {
+        if (!progressColor.isOn()) {
+            return color.getColor();
+        }
+        return ColorUtil.lerp(startFill.getColor(), endFill.getColor(), indicator.progress);
     }
 
     @Subscribe
@@ -236,8 +253,8 @@ public final class BreakIndicators extends Module {
     }
 
     private void drawName(GuiGraphicsExtractor context, Indicator indicator, Vec3 screen) {
-        String text = indicator.name + " " + (indicator.progress + 1) * 10 + "%";
+        String text = indicator.name + " " + Math.round(indicator.progress * 100) + "%";
         RenderUtil.label(context, mc.font, screen.x, screen.y, scale.getFloat(),
-            List.of(text), List.of(colorOf(indicator)));
+            List.of(text), List.of(lineColor(indicator)));
     }
 }

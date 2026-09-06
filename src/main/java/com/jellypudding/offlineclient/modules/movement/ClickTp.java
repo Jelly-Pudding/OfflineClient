@@ -19,12 +19,8 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
-/**
- * Teleports you onto the block you right click. The server grants a hundred
- * squared blocks of movement for each position packet it has taken this tick
- * and stops counting past the fifth. A long trip is therefore walked as one
- * hop a tick rather than crammed into a single burst that would be refused.
- */
+// Teleports you onto the block you right click. The server only grants so much
+// movement per packet each tick so a long trip is walked as one hop a tick.
 public final class ClickTp extends Module {
 
     // Three fillers then the hop itself. The fifth is left for the client's own packet.

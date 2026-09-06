@@ -13,10 +13,8 @@ import net.minecraft.sounds.SoundSource;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
-/**
- * Silences the sounds you pick. The sound engine is the last stop for every
- * sound. Weather and the other sounds the client makes itself are caught too.
- */
+// Silences the sounds you pick. The sound engine is the last stop for every sound.
+// Weather and other sounds the client makes itself are caught too.
 public final class SoundBlocker extends Module {
 
     private final RegistryListSetting<SoundEvent> sounds = new RegistryListSetting<>("Sounds",

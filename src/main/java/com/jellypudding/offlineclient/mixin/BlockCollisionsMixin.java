@@ -3,10 +3,13 @@ package com.jellypudding.offlineclient.mixin;
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.modules.player.AntiCactus;
 import com.jellypudding.offlineclient.modules.movement.Jesus;
+import com.jellypudding.offlineclient.modules.world.Collisions;
 import com.jellypudding.offlineclient.util.Modules;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.BlockCollisions;
 import net.minecraft.world.level.CollisionGetter;
 import net.minecraft.world.level.block.Blocks;
@@ -29,15 +32,27 @@ public abstract class BlockCollisionsMixin {
                                           CollisionGetter getter, BlockPos pos,
                                           Operation<VoxelShape> original) {
         VoxelShape shape = original.call(context, state, getter, pos);
+        LocalPlayer player = OfflineClient.MC.player;
         if (!(context instanceof EntityCollisionContext entityContext)
-            || entityContext.getEntity() == null
-            || entityContext.getEntity() != OfflineClient.MC.player) {
+            || entityContext.getEntity() == null || player == null) {
             return shape;
         }
-        if (state.is(Blocks.CACTUS) && Modules.enabled(AntiCactus.class)) {
+        Entity entity = entityContext.getEntity();
+        // The ridden vehicle collides on the player's behalf whilst Jesus carries it.
+        if (entity != player && entity != player.getVehicle()) {
+            return shape;
+        }
+        if (entity == player && state.is(Blocks.CACTUS) && Modules.enabled(AntiCactus.class)) {
             return Shapes.block();
         }
+        Collisions collisions = Modules.active(Collisions.class);
+        if (collisions != null) {
+            VoxelShape forced = collisions.forcedShape(state, pos);
+            if (forced != null) {
+                return forced;
+            }
+        }
         Jesus jesus = Modules.get(Jesus.class);
-        return jesus == null ? shape : jesus.adjustShape(state, pos, shape);
+        return jesus == null ? shape : jesus.adjustShape(entity, state, pos, shape);
     }
 }

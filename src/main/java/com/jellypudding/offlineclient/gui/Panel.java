@@ -194,7 +194,7 @@ public final class Panel {
         RenderUtil.shadow(context, x - 1, y - 1, x + width + 1, y + contentH + 1, 3);
         context.guiRenderState.up();
         RenderUtil.roundedRect(context, x - 1, y - 1, x + width + 1, y + contentH + 1,
-            GuiTheme.CORNER + 1, GuiTheme.OUTLINE);
+            GuiTheme.CORNER + 1, GuiTheme.outline());
         context.guiRenderState.up();
         renderGrabBands(context, mouseX, mouseY, contentH);
         renderHeader(context, mouseX, mouseY);
@@ -228,7 +228,7 @@ public final class Panel {
         int w = width;
         int h = GuiTheme.HEADER_HEIGHT;
         RenderUtil.roundedRect(context, x, y, x + w, y + h, GuiTheme.CORNER,
-            GuiTheme.BG_HEADER, true, collapsed);
+            GuiTheme.bgHeader(), true, collapsed);
         context.guiRenderState.up();
         // Collapsed panels keep the underline clear of the rounded corners.
         int underlineTop = y + h - (collapsed ? 4 : 2);
@@ -244,7 +244,7 @@ public final class Panel {
         boolean overMarker = mouseX >= x + w - MARKER_ZONE && mouseX < x + w
             && mouseY >= y && mouseY < y + h;
         RenderUtil.chevron(context, x + w - 11, y + (h - 5) / 2, collapsed,
-            overMarker ? GuiTheme.TEXT : GuiTheme.TEXT_DIM);
+            overMarker ? GuiTheme.text() : GuiTheme.textDim());
     }
 
     private void renderRows(GuiGraphicsExtractor context, int mouseX, int mouseY) {
@@ -255,7 +255,7 @@ public final class Panel {
         int rowW = ScrollBar.rowWidth(w, rowsHeight(), viewH);
 
         RenderUtil.roundedRect(context, x, viewTop, x + w, viewTop + viewH + 2,
-            GuiTheme.CORNER, GuiTheme.BG_PANEL, false, true);
+            GuiTheme.CORNER, GuiTheme.bgPanel(), false, true);
         context.guiRenderState.up();
         if (viewH <= 0) {
             return;

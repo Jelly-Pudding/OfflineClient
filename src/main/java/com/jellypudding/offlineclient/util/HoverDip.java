@@ -4,10 +4,8 @@ import com.jellypudding.offlineclient.OfflineClient;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.phys.Vec3;
 
-/**
- * Dodges the vanilla flight kick. The server counts the ticks a player hangs
- * in the air without dropping and one dip of a few hundredths resets it.
- */
+// Dodges the vanilla flight kick. The server counts the ticks a player hangs in the
+// air without dropping and one dip of a few hundredths resets it.
 public final class HoverDip {
 
     private static final double DIP = 0.04;
@@ -18,16 +16,22 @@ public final class HoverDip {
         ticks = 0;
     }
 
-    // Runs every tick whilst hovering. Bends the motion on the two ticks of a dip.
     public void tick(int interval) {
-        if (ticks >= interval) {
+        tick(interval, 1);
+    }
+
+    // Runs every tick whilst hovering. Sinks for the dip ticks then climbs back
+    // over as many so the height is unchanged once the dip is over.
+    public void tick(int interval, int dipTicks) {
+        if (ticks >= Math.max(interval, dipTicks * 2)) {
             ticks = 0;
         }
-        double nudge = switch (ticks) {
-            case 0 -> -DIP;
-            case 1 -> DIP;
-            default -> 0;
-        };
+        double nudge = 0;
+        if (ticks < dipTicks) {
+            nudge = -DIP;
+        } else if (ticks < dipTicks * 2) {
+            nudge = DIP;
+        }
         if (nudge != 0) {
             LocalPlayer player = OfflineClient.MC.player;
             Vec3 velocity = player.getDeltaMovement();

@@ -31,7 +31,7 @@ public final class FakePlayer extends Module {
     private Body body;
 
     public FakePlayer() {
-        super("FakePlayer", "Spawns a copy of you for testing combat modules.", Category.MISC);
+        super("FakePlayer", "Spawns a copy of you that only you can see. Practise your combat on it.", Category.MISC);
         addSettings(copyGear, health);
         searchTags("dummy", "bot", "target");
     }
@@ -71,10 +71,8 @@ public final class FakePlayer extends Module {
         }
     }
 
-    /**
-     * Borrows the local player's tab entry for the skin. The level refuses
-     * two entities with the same UUID.
-     */
+    // Borrows the local player's tab entry for the skin.
+    // The level refuses two entities with the same UUID.
     public static final class Body extends RemotePlayer {
 
         // Far above any entity id the server hands out.
@@ -82,9 +80,18 @@ public final class FakePlayer extends Module {
 
         private final UUID skinOwner;
 
+        // A ghost is only a picture. Nothing hits it and it pushes nobody.
+        private final boolean ghost;
+
         Body(ClientLevel level, LocalPlayer source, float startHealth, boolean copyGear) {
+            this(level, source, startHealth, copyGear, false);
+        }
+
+        public Body(ClientLevel level, LocalPlayer source, float startHealth, boolean copyGear,
+                    boolean ghost) {
             super(level, new GameProfile(UUID.randomUUID(), source.getGameProfile().name()));
             skinOwner = source.getUUID();
+            this.ghost = ghost;
             setId(ID_BASE + ThreadLocalRandom.current().nextInt(100_000));
 
             copyPosition(source);
@@ -109,6 +116,21 @@ public final class FakePlayer extends Module {
                 }
                 ours.setSelectedSlot(theirs.getSelectedSlot());
             }
+        }
+
+        // Read by EntityRendererMixin. A ghost vanishes whilst the camera stands inside it.
+        public boolean hidesAroundCamera() {
+            return ghost;
+        }
+
+        @Override
+        public boolean isPushable() {
+            return !ghost && super.isPushable();
+        }
+
+        @Override
+        public boolean isPickable() {
+            return !ghost && super.isPickable();
         }
 
         @Override

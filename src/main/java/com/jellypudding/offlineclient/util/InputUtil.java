@@ -6,7 +6,7 @@ import com.mojang.blaze3d.platform.Window;
 import net.minecraft.client.KeyMapping;
 import org.lwjgl.glfw.GLFW;
 
-// The real state of the keyboard and mouse. A module forcing a mapping down is ignored here.
+// The real state of input devices. A module forcing a mapping down is ignored here.
 public final class InputUtil {
 
     // Degrees of turn per unit of mouse movement. The same factor the game uses.
@@ -21,20 +21,16 @@ public final class InputUtil {
         return key.getType() == InputConstants.Type.KEYSYM && key.getValue() == code;
     }
 
-    /**
-     * Holds a key down on behalf of a module. Use and attack are toggles under
-     * the accessibility options where setting them down flips them instead.
-     */
+    // Holds a key down on behalf of a module. Use and attack are toggles under
+    // the accessibility options where setting them down flips them instead.
     public static void hold(KeyMapping mapping) {
         if (!mapping.isDown()) {
             mapping.setDown(true);
         }
     }
 
-    /**
-     * Lets go of a key a module was holding without lifting a finger really on
-     * it. A toggle bound key throws away a plain false and has to be flipped.
-     */
+    // Lets go of a key a module was holding without really lifting a finger off it.
+    // A toggle bound key throws away a plain false and has to be flipped.
     public static void release(KeyMapping mapping) {
         boolean held = physicallyHeld(mapping);
         mapping.setDown(held);

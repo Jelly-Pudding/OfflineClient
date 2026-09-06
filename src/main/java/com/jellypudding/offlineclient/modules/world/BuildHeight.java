@@ -11,10 +11,8 @@ import net.minecraft.network.protocol.game.ServerboundUseItemOnPacket;
 import net.minecraft.world.phys.BlockHitResult;
 import java.util.concurrent.atomic.AtomicInteger;
 
-/**
- * Swaps the clicked side on the use packet at the world height limit. The
- * placement lands in the same spot because only a replaceable block is touched.
- */
+// Swaps the clicked side on the use packet at the world height limit. The
+// placement lands in the same spot since only a replaceable block is touched.
 public final class BuildHeight extends Module {
 
     public enum Limit { TOP, BOTTOM, BOTH }

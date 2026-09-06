@@ -14,6 +14,7 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.monster.cubemob.AbstractCubeMob;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
 
@@ -42,6 +43,8 @@ public final class Radar extends Module {
         "Keep players who are in a bed on the radar.", true).under(players);
     private final BoolSetting hostile = new BoolSetting("Hostile mobs",
         "Show zombies and skeletons and the rest.", false);
+    private final BoolSetting slimes = new BoolSetting("Slimes",
+        "Slimes and magma cubes show.", true).under(hostile);
     private final BoolSetting passive = new BoolSetting("Passive mobs",
         "Show animals and villagers.", false);
     private final BoolSetting water = new BoolSetting("Water animals",
@@ -56,11 +59,17 @@ public final class Radar extends Module {
         "Write player names next to their dot.", true);
     private final BoolSetting height = new BoolSetting("Height tint",
         "Fade dots that are far above or below you.", true);
+    private final NumberSetting tintDepth = new NumberSetting("Tint depth",
+        "Blocks above or below you at which a dot is at its faintest.", 40, 5, 128, 1, " blocks")
+        .min(1).under(height);
+    private final NumberSetting tintStrength = new NumberSetting("Tint strength",
+        "How faint the furthest dots get.", 65, 10, 100, 5, "%").min(0).max(100)
+        .under(height);
 
     public Radar() {
         super("Radar", "Draws a small map of nearby entities on your screen.", Category.RENDER);
-        addSettings(size, range, corner, margin, rotate, players, sleeping, hostile, passive,
-            water, bats, invisible, items, names, height);
+        addSettings(size, range, corner, margin, rotate, players, sleeping, hostile, slimes, passive,
+            water, bats, invisible, items, names, height, tintDepth, tintStrength);
         searchTags("minimap", "entity map");
     }
 
@@ -78,7 +87,7 @@ public final class Radar extends Module {
         return switch (EntityUtil.kindOf(entity)) {
             case PLAYER -> players.isOn() && !entity.isSpectator()
                 && (sleeping.isOn() || !((Player) entity).isSleeping());
-            case HOSTILE -> hostile.isOn();
+            case HOSTILE -> hostile.isOn() && (slimes.isOn() || !(entity instanceof AbstractCubeMob));
             case PASSIVE -> passive.isOn();
             case WATER -> water.isOn();
             case AMBIENT -> bats.isOn();
@@ -141,13 +150,15 @@ public final class Radar extends Module {
             int color = EntityUtil.colorOf(entity);
             if (height.isOn()) {
                 double drop = Math.abs(entity.getY() - eye.y);
-                color = ColorUtil.fade(color, (float) Math.clamp(1 - drop / 40.0, 0.35, 1));
+                float faintest = 1 - tintStrength.getFloat() / 100f;
+                color = ColorUtil.fade(color,
+                    (float) Math.clamp(1 - drop / tintDepth.getValue(), faintest, 1));
             }
             boolean isPlayer = entity instanceof Player;
             int dot = isPlayer ? 2 : 1;
             context.fill(px - dot, py - dot, px + dot + 1, py + dot + 1, color);
             if (isPlayer && names.isOn()) {
-                String name = entity.getName().getString();
+                String name = EntityUtil.displayNameOf((Player) entity);
                 int width = font.width(name);
                 int textX = px - width / 2;
                 if (width < box - 2) {

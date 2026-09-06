@@ -1,17 +1,25 @@
 package com.jellypudding.offlineclient.modules.combat;
 
 import com.jellypudding.offlineclient.event.Subscribe;
+import com.jellypudding.offlineclient.event.events.Render2DEvent;
 import com.jellypudding.offlineclient.event.events.Render3DEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.modules.render.Trajectories;
 import com.jellypudding.offlineclient.setting.BoolSetting;
+import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ColorUtil;
+import com.jellypudding.offlineclient.util.EntityFilter;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.ProjectileUtil;
+import com.jellypudding.offlineclient.util.RenderUtil;
+import com.jellypudding.offlineclient.util.TargetPriority;
 
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
@@ -24,43 +32,74 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
+import java.util.List;
+
 // The pitch comes from the real arrow physics and the flight time leads the target.
 public final class BowAimbot extends Module {
 
-    public enum Priority { NEAREST, LOW_HEALTH, CROSSHAIR }
+    public enum Calm { ALWAYS, ANGRY_ONLY, NEVER }
+
+
+    // Pixels below the middle of the screen the readout sits.
+    private static final int CROSSHAIR_GAP = 12;
 
     // Arrow speed in blocks per tick at a full bow draw.
     private static final double BOW_SPEED = 3.0;
     // Arrow speed in blocks per tick from a crossbow.
     private static final double CROSSBOW_SPEED = 3.15;
 
-    private final BoolSetting players = new BoolSetting("Players",
-        "Aim at other players.", true);
-    private final BoolSetting mobs = new BoolSetting("Mobs",
-        "Aim at mobs.", false);
+    private final EntityFilter filter = EntityFilter.living("Aim at", "aimed at", true,
+        EntityFilter.Pick.NONE, List.of());
+    private final BoolSetting babies = new BoolSetting("Babies",
+        "Also aim at baby mobs.", true);
+    private final BoolSetting named = new BoolSetting("Named mobs",
+        "Also aim at mobs that have been given a name tag.", false);
     private final NumberSetting range = new NumberSetting("Range",
         "Furthest target to aim at in blocks.", 40, 5, 80, 1);
-    private final EnumSetting<Priority> priority = new EnumSetting<>("Priority",
-        "Which target to pick when several are in range.", Priority.NEAREST)
-        .describe(Priority.NEAREST, "Aims at the closest target.")
-        .describe(Priority.LOW_HEALTH, "Aims at whoever has the least health left.")
-        .describe(Priority.CROSSHAIR, "Aims at the target nearest your crosshair.");
+    private final EnumSetting<TargetPriority> priority = TargetPriority.setting("Aims at",
+        TargetPriority.NEAREST);
     private final BoolSetting predict = new BoolSetting("Predict",
         "Lead moving targets by their speed and the arrow flight time.", true);
+    private final NumberSetting predictStrength = new NumberSetting("Predict strength",
+        "How much of the worked out lead is used.", 100, 0, 200, 5, "%").min(0).max(200)
+        .under(predict);
+    private final BoolSetting sleeping = new BoolSetting("Aim at sleeping",
+        "Also aim at players lying in a bed.", false);
+    private final BoolSetting invisible = new BoolSetting("Aim at invisible",
+        "Also aim at entities you cannot see.", false);
+    private final BoolSetting pets = new BoolSetting("Aim at pets",
+        "Also aim at tamed animals and mounts.", false);
+    private final EnumSetting<Calm> neutral = new EnumSetting<>("Neutral mobs",
+        "Whether mobs that only fight back are aimed at.", Calm.NEVER)
+        .describe(Calm.ALWAYS, "Always aim at them.")
+        .describe(Calm.ANGRY_ONLY, "Only once they have turned on you.")
+        .describe(Calm.NEVER, "Never aim at them.");
+    private final NumberSetting flying = new NumberSetting("Ignore flying",
+        "Skip players with no block this far under them. Nought turns it off.",
+        0, 0, 4, 0.5, " blocks").min(0);
     private final BoolSetting walls = new BoolSetting("Through walls",
         "Also aim at targets you cannot see.", false);
     private final BoolSetting render = new BoolSetting("Highlight",
         "Draw a box around the target that fills in as the bow charges.", true);
+    private final ColorSetting highlightColor = new ColorSetting("Highlight colour",
+        "Colour of that box.", 0, 0.81f, 1f, false).under(render);
+    private final BoolSetting readout = new BoolSetting("Charge readout",
+        "Write how far the bow is drawn under your crosshair.", true);
+    private final BoolSetting trajectory = new BoolSetting("Trajectory",
+        "Draw the arc the arrow will fly. The Trajectories module draws the same arc so it takes over whilst it is on.", true);
     private final BoolSetting noSlow = new BoolSetting("No slowdown",
         "Move at full speed whilst drawing.", true);
 
-    private LivingEntity target;
+    private Entity target;
     private float charge;
     private boolean wasDrawing;
 
     public BowAimbot() {
         super("BowAimbot", "Aims your bow or crossbow at the nearest target whilst you draw it.", Category.COMBAT);
-        addSettings(players, mobs, range, priority, predict, walls, render, noSlow);
+        addSettings(filter.settings());
+        addSettings(babies, named, sleeping, invisible, pets, neutral, flying,
+            range, priority, predict, predictStrength, walls,
+            render, highlightColor, readout, trajectory, noSlow);
         searchTags("bow aim", "crossbow", "aimbot", "arrow");
     }
 
@@ -99,12 +138,12 @@ public final class BowAimbot extends Module {
         if (target != null && !valid(target)) {
             target = null;
         }
-        // Crosshair mode picks once at the start of the draw whilst the
+        // The crosshair choice is made once at the start of the draw whilst the
         // rotation is still the player's own.
         boolean drawStart = !wasDrawing;
         wasDrawing = true;
-        if (target == null || (priority.getValue() == Priority.CROSSHAIR && drawStart)) {
-            target = pickTarget();
+        if (target == null || (priority.is(TargetPriority.CLOSEST_ANGLE) && drawStart)) {
+            target = EntityUtil.best(range.getValue(), priority.getValue(), this::valid);
         }
         if (target == null) {
             return;
@@ -139,58 +178,68 @@ public final class BowAimbot extends Module {
         return 0;
     }
 
-    private LivingEntity pickTarget() {
-        LivingEntity best = null;
-        double bestScore = Double.MAX_VALUE;
-        for (Entity entity : mc.level.entitiesForRendering()) {
-            if (!(entity instanceof LivingEntity living) || !valid(living)) {
-                continue;
-            }
-            double score = switch (priority.getValue()) {
-                case NEAREST -> mc.player.distanceToSqr(living);
-                case LOW_HEALTH -> living.getHealth();
-                case CROSSHAIR -> EntityUtil.lookAngleTo(living);
-            };
-            if (score < bestScore) {
-                bestScore = score;
-                best = living;
-            }
-        }
-        return best;
-    }
-
-    private boolean valid(LivingEntity entity) {
-        if (entity == mc.player || entity == mc.getCameraEntity()) {
+    private boolean valid(Entity entity) {
+        if (entity == mc.player || entity == mc.getCameraEntity() || !filter.matches(entity)) {
             return false;
         }
-        if (!entity.isAlive() || entity.isDeadOrDying() || entity.isSpectator()) {
+        if (!entity.isAlive() || mc.player.distanceTo(entity) > range.getValue()) {
             return false;
         }
-        if (mc.player.distanceTo(entity) > range.getValue()) {
+        if (!invisible.isOn() && entity.isInvisible()) {
             return false;
         }
         if (entity instanceof Player player) {
-            if (!players.isOn() || player.isCreative()) {
+            if (player.isCreative() || EntityUtil.isFriend(player)) {
                 return false;
             }
-            if (EntityUtil.isFriend(player)) {
+            if (!sleeping.isOn() && player.isSleeping()) {
                 return false;
             }
-        } else if (entity instanceof Mob) {
-            if (!mobs.isOn()) {
+            if (flying.getValue() > 0 && airborne(player)) {
                 return false;
             }
         } else {
-            return false;
+            if (!pets.isOn() && entity instanceof Mob mob && EntityUtil.isPet(mob)) {
+                return false;
+            }
+            if (entity instanceof Mob mob && EntityUtil.isNeutral(mob) && skipNeutral(mob)) {
+                return false;
+            }
+            if (entity instanceof LivingEntity living && living.isDeadOrDying()) {
+                return false;
+            }
+            if (!babies.isOn() && entity instanceof LivingEntity living && living.isBaby()) {
+                return false;
+            }
+            if (!named.isOn() && entity.hasCustomName()) {
+                return false;
+            }
         }
         return walls.isOn() || mc.player.hasLineOfSight(entity);
     }
 
+    private boolean skipNeutral(Mob mob) {
+        return switch (neutral.getValue()) {
+            case ALWAYS -> false;
+            case ANGRY_ONLY -> EntityUtil.isCalm(mob);
+            case NEVER -> true;
+        };
+    }
+
+    // True whilst nothing solid sits under the player within the set drop.
+    private boolean airborne(Player player) {
+        AABB feet = player.getBoundingBox().move(0, -flying.getValue(), 0)
+            .expandTowards(0, flying.getValue(), 0);
+        return mc.level.noCollision(player, feet);
+    }
+
     // Turns the player towards the point the arrow needs to fly through.
-    private void aim(LivingEntity entity, double speed) {
+    private void aim(Entity entity, double speed) {
         Vec3 eye = mc.player.getEyePosition();
         Vec3 aimPoint = visiblePoint(entity, eye);
-        Vec3 targetVelocity = predict.isOn() ? EntityUtil.velocityOf(entity) : Vec3.ZERO;
+        Vec3 targetVelocity = predict.isOn()
+            ? EntityUtil.velocityOf(entity).scale(predictStrength.getValue() / 100.0)
+            : Vec3.ZERO;
 
         // The server hands the arrow the distance the last packet moved.
         // The vertical part only counts in the air.
@@ -227,12 +276,9 @@ public final class BowAimbot extends Module {
         mc.player.setXRot(Math.clamp(pitch, -90f, 90f));
     }
 
-    /**
-     * The middle of the target when it is in view. Otherwise the highest
-     * part that is. A target in a hole shows only the head and chest and an
-     * arrow aimed at the middle hits the rim.
-     */
-    private Vec3 visiblePoint(LivingEntity entity, Vec3 eye) {
+    // Aims at the target's middle when it is visible otherwise the highest
+    // visible part since a target in a hole only shows head and chest.
+    private Vec3 visiblePoint(Entity entity, Vec3 eye) {
         AABB box = entity.getBoundingBox();
         double x = (box.minX + box.maxX) / 2;
         double z = (box.minZ + box.maxZ) / 2;
@@ -257,11 +303,8 @@ public final class BowAimbot extends Module {
         return (1 - Math.pow(ProjectileUtil.ARROW_DRAG, ticks)) / (1 - ProjectileUtil.ARROW_DRAG);
     }
 
-    /**
-     * Finds the lowest launch angle in degrees that lands an arrow on the
-     * point. Returns the angle and the flight time in ticks or null when
-     * the point is out of reach.
-     */
+    // Finds the lowest launch angle that lands an arrow on the point.
+    // Returns the angle and flight time in ticks or null when out of reach.
     private static double[] solve(Vec3 from, Vec3 to, double speed) {
         double dx = to.x - from.x;
         double dz = to.z - from.z;
@@ -311,10 +354,8 @@ public final class BowAimbot extends Module {
         return Math.log(1 - distance / reach) / Math.log(ProjectileUtil.ARROW_DRAG);
     }
 
-    /**
-     * Height an arrow has when it reaches the horizontal distance. Uses the
-     * closed form of the per tick drag and gravity update.
-     */
+    // Height an arrow reaches at the horizontal distance using the closed
+    // form of the per tick drag and gravity update.
     private static double heightAt(double angleDegrees, double distance, double speed) {
         double ticks = flightTicks(angleDegrees, distance, speed);
         if (Double.isNaN(ticks)) {
@@ -326,14 +367,36 @@ public final class BowAimbot extends Module {
         return (vertical + terminal) * fallen / (1 - ProjectileUtil.ARROW_DRAG) - terminal * ticks;
     }
 
+    // A word under the crosshair so you know when to let go.
     @Subscribe
-    private void onRender3D(Render3DEvent event) {
-        if (!render.isOn() || target == null || !inGame()) {
+    private void onRender2D(Render2DEvent event) {
+        if (!readout.isOn() || target == null || !inGame()) {
             return;
         }
-        int color = 0xFFFF3030;
-        event.getBatch().outlineBox(EntityUtil.lerpedBox(target, event.getPartialTicks()), color, true);
-        event.getBatch().solidBox(EntityUtil.lerpedBox(target, event.getPartialTicks()),
-            ColorUtil.withAlpha(color, (int) (90 * charge)), true);
+        String line = charge >= 1 ? "Target locked"
+            : "Charging " + Math.round(charge * 100) + "%";
+        GuiGraphicsExtractor context = event.getContext();
+        int x = (context.guiWidth() - mc.font.width(line)) / 2;
+        int y = context.guiHeight() / 2 + CROSSHAIR_GAP;
+        context.guiRenderState.up();
+        context.text(mc.font, line, x, y,
+            charge >= 1 ? highlightColor.getColor() : RenderUtil.MUTED_TEXT, true);
+    }
+
+    @Subscribe
+    private void onRender3D(Render3DEvent event) {
+        if (target == null || !inGame()) {
+            return;
+        }
+        if (render.isOn()) {
+            int color = highlightColor.getColor();
+            AABB box = EntityUtil.lerpedBox(target, event.getPartialTicks());
+            event.getBatch().outlineBox(box, color, true);
+            event.getBatch().solidBox(box, ColorUtil.withAlpha(color, (int) (90 * charge)), true);
+        }
+        Trajectories trajectories = Modules.get(Trajectories.class);
+        if (trajectory.isOn() && trajectories != null && !trajectories.isEnabled()) {
+            trajectories.draw(event.getBatch(), mc.player, event.getPartialTicks());
+        }
     }
 }

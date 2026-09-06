@@ -7,7 +7,7 @@ import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
-import com.jellypudding.offlineclient.setting.RegistryListSetting;
+import com.jellypudding.offlineclient.setting.PickList;
 import com.jellypudding.offlineclient.setting.Setting;
 import com.jellypudding.offlineclient.setting.TextSetting;
 import com.jellypudding.offlineclient.util.ColorUtil;
@@ -60,7 +60,7 @@ public final class SettingWidget {
 
         void startListening(KeybindSetting setting);
 
-        void openPicker(RegistryListSetting<?> setting);
+        void openPicker(PickList<?> setting);
     }
 
     // A slider or colour bar keeps following the mouse even when it leaves the row.
@@ -140,7 +140,7 @@ public final class SettingWidget {
             context.fill(x, y, x + w, y + h, 0x14FFFFFF);
             context.guiRenderState.up();
         }
-        int nameColor = hovered ? GuiTheme.TEXT : GuiTheme.TEXT_DIM;
+        int nameColor = hovered ? GuiTheme.text() : GuiTheme.textDim();
 
         switch (setting) {
             case BoolSetting b -> {
@@ -171,7 +171,7 @@ public final class SettingWidget {
                 context.text(font, trimEnd(font, c.getName(), room), x + PAD, bandY, nameColor, false);
                 renderColor(context, font, c, x, y, w);
             }
-            case RegistryListSetting<?> r -> {
+            case PickList<?> r -> {
                 String value = r.size() + " chosen";
                 int room = w - 2 * PAD - font.width(value) - 6;
                 context.text(font, trimEnd(font, r.getName(), room), x + PAD, ty, nameColor, false);
@@ -188,7 +188,7 @@ public final class SettingWidget {
                                      boolean hoverAllowed, Host host) {
         boolean editing = host.isEditing(n);
         boolean overValue = hoverAllowed && overNumberValue(font, mouseX, mouseY, n, x, y, w);
-        int highlight = editing || overValue ? GuiTheme.accentText() : GuiTheme.TEXT;
+        int highlight = editing || overValue ? GuiTheme.accentText() : GuiTheme.text();
         int valueY = GuiTheme.textY(y, VALUE_BAND);
         int right = x + w - PAD;
         int valueX;
@@ -209,12 +209,12 @@ public final class SettingWidget {
             underlineX = valueX;
         }
         context.fill(underlineX, y + VALUE_BAND - 1, right, y + VALUE_BAND,
-            editing || overValue ? GuiTheme.accentText() : GuiTheme.SCROLL_THUMB);
+            editing || overValue ? GuiTheme.accentText() : GuiTheme.scrollThumb());
 
         int barY = y + GuiTheme.SETTING_HEIGHT - 4;
         int barW = w - 2 * PAD;
         RenderUtil.roundedRect(context, x + PAD, barY, x + PAD + barW, barY + 3, 1,
-            GuiTheme.BG_ROW_HOVER);
+            GuiTheme.bgRowHover());
         context.guiRenderState.up();
         int fill = (int) (barW * n.getSliderFraction());
         if (fill > 0) {
@@ -265,11 +265,11 @@ public final class SettingWidget {
         int chipX = rainbowChipX(font, x, w);
         int chipW = rainbowChipWidth(font);
         RenderUtil.roundedBorderedRect(context, chipX, y + 1, chipX + chipW, y + 1 + BOX, 2,
-            c.isRainbow() ? GuiTheme.accentOn(GuiTheme.BG_SETTING, 0.7f) : GuiTheme.BG_ROW,
-            c.isRainbow() ? GuiTheme.accent() : GuiTheme.EDGE);
+            c.isRainbow() ? GuiTheme.accentOn(GuiTheme.bgSetting(), 0.7f) : GuiTheme.bgRow(),
+            c.isRainbow() ? GuiTheme.accent() : GuiTheme.edge());
         context.guiRenderState.up();
         context.text(font, RAINBOW_LABEL, chipX + 3, y + 1 + (BOX - GuiTheme.TEXT_HEIGHT) / 2,
-            c.isRainbow() ? GuiTheme.TEXT : GuiTheme.TEXT_FAINT, false);
+            c.isRainbow() ? GuiTheme.text() : GuiTheme.textFaint(), false);
 
         box(context, x + w - PAD - BOX, y + 1, BOX, c.getColor());
         int barX = x + PAD;
@@ -331,7 +331,7 @@ public final class SettingWidget {
             value = value.substring(1);
         }
         context.text(font, value, x + w - PAD - font.width(value), ty,
-            t.isBlank() ? GuiTheme.TEXT_FAINT : GuiTheme.TEXT, false);
+            t.isBlank() ? GuiTheme.textFaint() : GuiTheme.text(), false);
     }
 
     public static int blockHeight(Module module) {
@@ -346,11 +346,8 @@ public final class SettingWidget {
         return height;
     }
 
-    /**
-     * How far in each visible row sits. A sub option only steps in whilst it
-     * follows its parent or a sibling directly. Anywhere else it reads as a
-     * row of its own and the guide never hangs off the wrong setting.
-     */
+    // How far in each visible row sits. A sub option only steps in whilst
+    // it follows its parent or sibling directly and reads as its own row otherwise.
     private static int[] indents(List<Setting<?>> settings) {
         int[] result = new int[settings.size()];
         // The previous row and its ancestors from the top down.
@@ -373,7 +370,7 @@ public final class SettingWidget {
     // A hairline down the side of a sub option that ties it to its parent.
     private static void subGuide(GuiGraphicsExtractor context, int x, int y, int indent, int h) {
         int guideX = x + PAD + indent - SUB_INDENT + 1;
-        context.fill(guideX, y, guideX + 1, y + h, GuiTheme.accentOn(GuiTheme.BG_SETTING, 0.45f));
+        context.fill(guideX, y, guideX + 1, y + h, GuiTheme.accentOn(GuiTheme.bgSetting(), 0.45f));
         context.guiRenderState.up();
     }
 
@@ -392,8 +389,8 @@ public final class SettingWidget {
         int right = rowX + rowW - 2;
         int bottom = rowY + blockHeight(module) - 2;
         RenderUtil.roundedRect(context, x, rowY, right, bottom, GuiTheme.CORNER,
-            GuiTheme.BG_SETTING, false, true);
-        context.fill(x, rowY, x + 1, bottom, GuiTheme.accentOn(GuiTheme.BG_SETTING, 0.55f));
+            GuiTheme.bgSetting(), false, true);
+        context.fill(x, rowY, x + 1, bottom, GuiTheme.accentOn(GuiTheme.bgSetting(), 0.55f));
         context.guiRenderState.up();
 
         int cx = blockContentX(rowX);
@@ -456,15 +453,21 @@ public final class SettingWidget {
         int left = right - w;
         int top = y + 2;
         RenderUtil.roundedRect(context, left, top, right, top + h, 2,
-            listening ? GuiTheme.accentOn(GuiTheme.BG_ROW, 0.5f) : GuiTheme.BG_ROW_HOVER);
+            listening ? GuiTheme.accentOn(GuiTheme.bgRow(), 0.5f) : GuiTheme.bgRowHover());
         context.guiRenderState.up();
         context.text(font, label, left + 4, GuiTheme.textY(top, h),
-            listening ? GuiTheme.accentText() : GuiTheme.TEXT, false);
+            listening ? GuiTheme.accentText() : GuiTheme.text(), false);
     }
 
     // The hit test has already been done by the caller.
     public static void click(Setting<?> setting, double mx, double my, int x, int y, int width,
                              int button, Host host, Drag drag) {
+        // The middle button puts a setting back to how it started.
+        if (button == 2) {
+            setting.reset();
+            OfflineClient.INSTANCE.getConfigManager().saveSoon();
+            return;
+        }
         // Only the left and the right button act on a setting.
         if (button != 0 && button != 1) {
             return;
@@ -498,7 +501,7 @@ public final class SettingWidget {
                     return;
                 }
             }
-            case RegistryListSetting<?> r -> host.openPicker(r);
+            case PickList<?> r -> host.openPicker(r);
             case TextSetting t -> {
                 host.startEditing(t);
                 return;
@@ -526,7 +529,7 @@ public final class SettingWidget {
 
     private static void checkbox(GuiGraphicsExtractor context, int x, int y, boolean on) {
         RenderUtil.roundedBorderedRect(context, x, y, x + BOX, y + BOX, 2,
-            on ? GuiTheme.accent() : GuiTheme.BG_SETTING, on ? GuiTheme.accent() : GuiTheme.EDGE);
+            on ? GuiTheme.accent() : GuiTheme.bgSetting(), on ? GuiTheme.accent() : GuiTheme.edge());
         context.guiRenderState.up();
         if (on) {
             RenderUtil.tick(context, x + 2, y + 2, GuiTheme.contrastText(GuiTheme.accent()));
@@ -535,6 +538,6 @@ public final class SettingWidget {
 
     private static void box(GuiGraphicsExtractor context, int x, int y, int size, int color) {
         RenderUtil.roundedBorderedRect(context, x, y, x + size, y + size, 2,
-            color, GuiTheme.OUTLINE);
+            color, GuiTheme.outline());
     }
 }

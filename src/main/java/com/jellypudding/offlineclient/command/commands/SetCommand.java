@@ -15,6 +15,8 @@ import com.jellypudding.offlineclient.util.ChatUtil;
 
 import java.util.Arrays;
 import java.util.Locale;
+import java.util.ArrayList;
+import java.util.List;
 
 public final class SetCommand extends Command {
 
@@ -202,5 +204,40 @@ public final class SetCommand extends Command {
             return c.isRainbow() ? "rainbow" : "hue " + (int) c.getHue();
         }
         return setting.getValueString();
+    }
+
+    @Override
+    public List<String> complete(String[] tokens, int index, String current) {
+        if (index == 1) {
+            return CommandManager.filter(current, CommandManager.moduleIds());
+        }
+        Module module = OfflineClient.INSTANCE.getModuleManager().get(tokens[1]);
+        if (module == null) {
+            return List.of();
+        }
+        if (index == 2) {
+            List<String> ids = new ArrayList<>();
+            for (Setting<?> setting : module.getSettings()) {
+                ids.add(CommandManager.settingId(setting));
+            }
+            return CommandManager.filter(current, ids);
+        }
+        if (index != 3) {
+            return List.of();
+        }
+        return switch (module.getSetting(tokens[2])) {
+            case BoolSetting ignored -> CommandManager.filter(current, List.of("true", "false"));
+            case EnumSetting<?> choice -> CommandManager.filter(current, options(choice));
+            case ColorSetting ignored -> CommandManager.filter(current, List.of("rainbow"));
+            case null, default -> List.of();
+        };
+    }
+
+    private static List<String> options(EnumSetting<?> setting) {
+        List<String> names = new ArrayList<>();
+        for (Object constant : setting.getValue().getDeclaringClass().getEnumConstants()) {
+            names.add(((Enum<?>) constant).name().toLowerCase(Locale.ROOT));
+        }
+        return names;
     }
 }

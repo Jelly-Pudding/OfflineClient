@@ -10,13 +10,14 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.HoverDip;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
+import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 public final class AntiVoid extends Module {
 
-    public enum Mode { CATCH, PLACE_BLOCK }
+    public enum Mode { CATCH, PLACE_BLOCK, FLIGHT }
 
     // Fall speed that counts as a fall and not a step down.
     private static final double FALLING = -0.2;
@@ -27,31 +28,37 @@ public final class AntiVoid extends Module {
     // Ticks between the dips that keep the flight kick away whilst caught.
     private static final int DIP_INTERVAL = 60;
 
-    /**
-     * Ticks of placing in a row before the catch takes over. Open void has
-     * nothing to build against and every placement comes back as a ghost.
-     */
+    // Ticks of placing in a row before the catch takes over. Open void has
+    // nothing to build against and every placement comes back as a ghost.
     private static final int PLACE_LIMIT = 20;
 
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
         "What to do once the fall is spotted.", Mode.CATCH)
         .describe(Mode.CATCH, "Holds you still in the air. Press jump to climb whilst caught.")
-        .describe(Mode.PLACE_BLOCK, "Puts a block from your hotbar under your feet.");
+        .describe(Mode.PLACE_BLOCK, "Puts a block from your hotbar under your feet.")
+        .describe(Mode.FLIGHT, "Switches Flight on until you are back over solid ground.");
     private final NumberSetting depth = new NumberSetting("Depth",
         "Empty blocks below you that count as a void fall.", 12, 3, 40, 1, " blocks")
         .min(2).max(64);
     private final BoolSetting rotate = new BoolSetting("Rotate",
         "Face the block being placed for the server to accept it.", true)
         .under(mode, Mode.PLACE_BLOCK);
+    private final BoolSetting sneakToSink = new BoolSetting("Sneak to sink",
+        "Hold sneak to sink slowly whilst caught. Let go and you are caught again.", true)
+        .under(mode, Mode.CATCH);
+    private final NumberSetting sinkSpeed = new NumberSetting("Sink speed",
+        "Blocks a tick you sink whilst sneaking.", 0.2, 0.05, 1, 0.05, " blocks")
+        .under(sneakToSink);
 
     private final SlotSwap slots = new SlotSwap();
     private final HoverDip dip = new HoverDip();
     private boolean catching;
     private int placeTries;
+    private boolean flightStarted;
 
     public AntiVoid() {
         super("AntiVoid", "Stops you falling into the void.", Category.MOVEMENT);
-        addSettings(mode, depth, rotate);
+        addSettings(mode, depth, rotate, sneakToSink, sinkSpeed);
         searchTags("void", "anti void", "no void");
     }
 
@@ -64,6 +71,7 @@ public final class AntiVoid extends Module {
     protected void onDisable() {
         catching = false;
         placeTries = 0;
+        stopFlight();
     }
 
     @Subscribe
@@ -71,6 +79,14 @@ public final class AntiVoid extends Module {
         boolean wasCatching = catching;
         catching = false;
         if (!inGame() || mc.player.isSpectator()) {
+            return;
+        }
+        if (flightStarted) {
+            catching = true;
+            if (mc.player.onGround() || !voidBelow()) {
+                stopFlight();
+                catching = false;
+            }
             return;
         }
         if (mc.player.getAbilities().flying || mc.player.isFallFlying()
@@ -89,6 +105,10 @@ public final class AntiVoid extends Module {
         if (!wasCatching) {
             dip.reset();
         }
+        if (mode.is(Mode.FLIGHT)) {
+            startFlight();
+            return;
+        }
         if (mode.is(Mode.PLACE_BLOCK) && placeTries < PLACE_LIMIT && placeUnderfoot()) {
             placeTries++;
             return;
@@ -103,8 +123,33 @@ public final class AntiVoid extends Module {
             catching = false;
             return;
         }
+        if (sneakToSink.isOn() && mc.player.input.keyPresses.shift()) {
+            mc.player.setDeltaMovement(motion.x, -sinkSpeed.getValue(), motion.z);
+            return;
+        }
         mc.player.setDeltaMovement(motion.x, 0, motion.z);
         dip.tick(DIP_INTERVAL);
+    }
+
+    // Flight stays on until the player is over ground again or this module goes off.
+    private void startFlight() {
+        Flight flight = Modules.get(Flight.class);
+        if (flight == null || flight.isEnabled()) {
+            return;
+        }
+        flight.setEnabled(true);
+        flightStarted = true;
+    }
+
+    private void stopFlight() {
+        if (!flightStarted) {
+            return;
+        }
+        flightStarted = false;
+        Flight flight = Modules.get(Flight.class);
+        if (flight != null) {
+            flight.setEnabled(false);
+        }
     }
 
     private boolean voidBelow() {

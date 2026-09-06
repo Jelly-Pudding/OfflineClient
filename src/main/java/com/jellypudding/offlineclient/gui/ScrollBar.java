@@ -102,6 +102,6 @@ public final class ScrollBar {
         int range = total - view;
         int thumbY = top + (view - thumbH) * Math.clamp(offset, 0, range) / range;
         RenderUtil.roundedRect(context, trackX, thumbY, right, thumbY + thumbH, 2,
-            dragging || hovered ? GuiTheme.accent() : GuiTheme.SCROLL_THUMB);
+            dragging || hovered ? GuiTheme.accent() : GuiTheme.scrollThumb());
     }
 }

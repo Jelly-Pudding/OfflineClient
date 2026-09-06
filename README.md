@@ -22,18 +22,21 @@ A utility client custom designed for the anarchy lifesteal server [minecraftoffl
 - **RIGHT SHIFT** opens the ClickGUI. Its Style setting switches between draggable panels and a single window with a sidebar.
 - Chat commands use the `.` prefix. `.help` lists them. Typing just a module name toggles it.
 - Press **TAB** whilst typing a command to autocomplete it.
+- Middle click a setting in the ClickGUI to put it back to its default. `.reset <module>` does the whole module.
+- `.macro add <name> <lines>` saves a list of chat lines or commands and `.macro key <name> <key>` puts it on a key.
+- `.hud` opens the overlay editor or bind a key to the HUD module. Drag each piece where you want it and hold shift to ignore snapping.
 - Everything is saved to `.minecraft/offlineclient/config.json` automatically.
 - The title screen has a Recovery button that puts settings back to default.
 
 ## Modules
 | Category | Modules |
 | --- | --- |
-| Combat | KillAura · TriggerBot · AutoClicker · Criticals · AutoTotem · AutoArmor · AutoWeapon · BowAimbot · BowSpam · ArrowDodge · Quiver · Surround · CrystalAura · AnchorAura · BedAura · AutoCity · SelfTrap · AutoTrap · HoleFiller · Burrow · AutoWeb · SelfWeb · AntiBed · AntiAnchor · AttributeSwap · Offhand · Hitboxes · AutoAnvil |
-| Movement | Sprint · Speed · Flight · ElytraFly · NoFall · NoKnockback · Step · HighJump · NoSlowdown · EdgeGuard · Spider · QuickClimb · AutoWalk · Blink · Parkour · FastFall · Jesus · AutoJump · AntiPush · AntiVoid · LongJump · NoWeb · Sneak · ElytraBoost · VehicleFly · Glide |
-| Render | Fullbright · AntiBlind · ClearView · ClearSkies · ESP · Chams · PopChams · ChestESP · ItemESP · LogoutSpots · Portals · Search · HoleESP · CityESP · XRay · NewChunks · BreakIndicators · Nametags · Trajectories · Tracers · Breadcrumbs · BetterTooltips · TrueSight · EntityOwner · Radar · Waypoints · VoidESP · TunnelESP · SpawnESP · Freecam · FreeLook · Zoom · NoHurtCam · CameraTweaks |
-| Player | FastPlace · FastBreak · AutoRespawn · AutoEat · AutoGap · AutoPotion · AutoMend · ChestStealer · InventoryTweaks · AntiHunger · AutoTool · Reach · AutoFish · AutoDrop · NoRotate · NoInteract · NoMiningTrace · LiquidInteract · FastUse · AutoReplenish · InvWalk · GUIMove · Multitask · ChestSwap · PotionSaver · GhostHand · MiddleClickExtra · AirPlace · NoStatusEffects |
-| World | Scaffold · Nuker · VeinMiner · PacketMine · Excavator · Tunneller · HighwayBuilder · LiquidFiller · SpawnProofer · AutoSign · NoGhostBlocks · AutoFarm · BuildHeight |
-| Misc | ClickGUI · HUD · AntiAFK · AutoReconnect · AutoLog · Timer · FakePlayer · Notifier · NameProtect · Spam · AntiSpam · Derp · Panic · ServerSpoof · StashFinder · BetterTab · AntiPacketKick · PacketCanceller · SoundBlocker |
+| Combat | KillAura · TriggerBot · AutoClicker · Criticals · AutoTotem · AutoArmor · AutoWeapon · BowAimbot · BowSpam · ArrowDodge · Quiver · PotionArrows · Surround · CrystalAura · AnchorAura · BedAura · AutoCity · SelfTrap · AutoTrap · HoleFiller · Burrow · AutoWeb · SelfWeb · AntiBed · AntiAnchor · AttributeSwap · Offhand · Hitboxes · AutoAnvil · AimAssist · AntiAnvil · SelfAnvil |
+| Movement | Sprint · Speed · Flight · ElytraFly · NoFall · NoKnockback · Step · HighJump · NoSlowdown · EdgeGuard · Spider · QuickClimb · AutoWalk · AutoWasp · Blink · Parkour · FastFall · Jesus · AutoJump · AntiPush · AntiVoid · LongJump · NoWeb · Slippy · Sneak · ElytraBoost · VehicleFly · Glide · AirJump · ClickTp · HoleSnap · NoClip · TridentBoost |
+| Render | Fullbright · AntiBlind · ClearView · ESP · Chams · PopChams · ChestESP · ItemESP · ItemPhysics · LogoutSpots · Portals · Search · HoleESP · CityESP · XRay · WallHack · NewChunks · BreakIndicators · Nametags · Trajectories · Tracers · Breadcrumbs · Trail · BetterTooltips · TrueSight · EntityOwner · Radar · Waypoints · Marker · VoidESP · TunnelESP · SpawnESP · Freecam · FreeLook · Zoom · NoHurtCam · CameraTweaks · BlockSelection · Blur · BossStack · Ambience · HandView · ItemHighlight · NoBackground · NoRender · NoShieldOverlay · OpenWaterESP · TimeChanger · Weather |
+| Player | FastPlace · FastBreak · AutoRespawn · AutoEat · AutoGap · AutoPotion · AutoMend · ChestStealer · InventoryTweaks · AntiHunger · AutoTool · Reach · AutoFish · AutoDrop · NoRotate · NoInteract · NoMiningTrace · LiquidInteract · FastUse · AutoReplenish · InvWalk · Follow · GUIMove · Multitask · ChestSwap · PotionSaver · PortalMenus · GhostHand · MiddleClickExtra · AirPlace · NoStatusEffects · AntiCactus · Rotation |
+| World | Scaffold · Nuker · VeinMiner · PacketMine · Excavator · Tunneller · HighwayBuilder · LiquidFiller · SpawnProofer · AutoSign · NoGhostBlocks · AutoFarm · BuildHeight · AutoMount · EndermanLook · Flamethrower · Collisions · AutoBreed · AutoBrewer · AutoLibrarian · AutoNametag · AutoShearer · AutoSmelter · BonemealAura · EChestFarmer · Kaboom · TillAura |
+| Misc | ClickGUI · HUD · AntiAFK · AutoReconnect · AutoLog · Timer · FakePlayer · Notifier · NameProtect · Spam · AntiSpam · MessageAura · Derp · Panic · ServerSpoof · StashFinder · BetterTab · BetterBeacons · AntiPacketKick · PacketCanceller · PacketLogger · SoundBlocker · BookBot · Notebot · BetterChat · TabGUI |
 
 ## Build with Gradle
 Git clone the repository and then run this:

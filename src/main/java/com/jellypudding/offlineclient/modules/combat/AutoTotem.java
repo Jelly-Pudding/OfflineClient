@@ -6,26 +6,19 @@ import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
-import com.jellypudding.offlineclient.util.BlockUtil;
+import com.jellypudding.offlineclient.util.DamageUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
-import com.jellypudding.offlineclient.util.ExplosionUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.Swap;
-import net.minecraft.core.BlockPos;
-import net.minecraft.world.effect.MobEffectInstance;
-import net.minecraft.world.effect.MobEffects;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.boss.enderdragon.EndCrystal;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.level.block.BedBlock;
-import net.minecraft.world.level.block.RespawnAnchorBlock;
-import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.phys.Vec3;
 
 public final class AutoTotem extends Module {
 
     // Gliding into a wall kills outright. A totem is always worth holding.
     private static final double ELYTRA_TRIGGER_SPEED = 0.5;
+
+    // Health points in one heart.
+    private static final float HEART = 2;
 
     private final NumberSetting health = new NumberSetting("Health",
         "Puts a totem in your offhand once you drop to this many hearts. Zero keeps one there at all times.",
@@ -33,12 +26,14 @@ public final class AutoTotem extends Module {
     private final NumberSetting delay = new NumberSetting("Delay",
         "Ticks to wait before equipping the next totem.", 0, 0, 20, 1, " ticks");
     private final BoolSetting explosions = new BoolSetting("Explosions",
-        "Equip early when a nearby crystal or bed or anchor could take you out.", true);
+        "Equip early when a nearby crystal or bed or anchor could drop you to the health line.", true);
     private final NumberSetting blastRange = new NumberSetting("Blast range",
         "How far away a charge is counted as a threat.", 8, 2, 16, 0.5, " blocks")
         .under(explosions);
+    private final BoolSetting melee = new BoolSetting("Melee",
+        "Equip early when an enemy within five blocks holds a weapon that could do it.", true);
     private final BoolSetting fall = new BoolSetting("Fall",
-        "Equip early when the fall you are in would kill you.", true);
+        "Equip early when the fall you are in would do it.", true);
     private final BoolSetting elytra = new BoolSetting("Elytra",
         "Always hold a totem whilst gliding at speed.", true);
 
@@ -46,22 +41,32 @@ public final class AutoTotem extends Module {
     private int totems;
     private int timer;
     private boolean hadTotem;
+    private boolean locked;
+
+    private final BoolSetting counter = new BoolSetting("Totem counter",
+        "Show how many totems you have left next to the name.", true);
 
     public AutoTotem() {
         super("AutoTotem", "Keeps a totem of undying in your offhand.", Category.COMBAT);
-        addSettings(health, delay, explosions, blastRange, fall, elytra);
+        addSettings(health, delay, explosions, blastRange, melee, fall, elytra, counter);
         searchTags("totem", "pop");
     }
 
     @Override
     public String getSuffix() {
-        return totems + " left";
+        return counter.isOn() ? totems + " left" : null;
+    }
+
+    // True whilst the offhand is claimed for a totem. Offhand steps aside for it.
+    public boolean isLocked() {
+        return isEnabled() && locked;
     }
 
     @Override
     protected void onEnable() {
         timer = 0;
         hadTotem = false;
+        locked = false;
     }
 
     @Override
@@ -80,6 +85,8 @@ public final class AutoTotem extends Module {
             return;
         }
         totems = countTotems();
+        float minHealth = health.getFloat();
+        locked = totems > 0 && (minHealth <= 0 || threatened(minHealth));
 
         if (mc.player.getOffhandItem().is(Items.TOTEM_OF_UNDYING)) {
             hadTotem = true;
@@ -90,12 +97,7 @@ public final class AutoTotem extends Module {
             hadTotem = false;
         }
         int totemSlot = findTotem();
-        if (totemSlot == -1) {
-            return;
-        }
-
-        float minHealth = health.getFloat();
-        if (minHealth > 0 && !EntityUtil.healthAtOrBelow(minHealth) && !threatened()) {
+        if (totemSlot == -1 || !locked) {
             return;
         }
 
@@ -117,69 +119,16 @@ public final class AutoTotem extends Module {
         }
     }
 
-    /**
-     * True when something already in the world would kill before the health
-     * threshold could react.
-     */
-    private boolean threatened() {
+    // True when the health line is already crossed or something already in the world
+    // would push the player under it before the next tick could react.
+    private boolean threatened(float minHealth) {
         if (elytra.isOn() && mc.player.isFallFlying()
             && mc.player.getDeltaMovement().length() > ELYTRA_TRIGGER_SPEED) {
             return true;
         }
-        float headroom = EntityUtil.totalHealth(mc.player);
-        if (fall.isOn() && fallDamage() >= headroom) {
-            return true;
-        }
-        return explosions.isOn() && blastThreat() >= headroom;
-    }
-
-    // Vanilla takes half a heart for every block past the first three.
-    private float fallDamage() {
-        double drop = mc.player.fallDistance - 3;
-        if (drop <= 0 || mc.player.isFallFlying()) {
-            return 0;
-        }
-        MobEffectInstance jump = mc.player.getEffect(MobEffects.JUMP_BOOST);
-        if (jump != null) {
-            drop -= jump.getAmplifier() + 1;
-        }
-        return (float) Math.max(0, drop);
-    }
-
-    // The worst single charge in range.
-    private float blastThreat() {
-        double range = blastRange.getValue();
-        // Thousands of positions every tick. Nothing is collected and nothing is sorted.
-        float[] worst = {crystalThreat(range)};
-        BlockUtil.forEachWithin(range, pos -> worst[0] = Math.max(worst[0], chargeThreat(pos)));
-        return worst[0];
-    }
-
-    private float crystalThreat(double range) {
-        float worst = 0;
-        for (Entity entity : mc.level.entitiesForRendering()) {
-            if (entity instanceof EndCrystal && entity.distanceTo(mc.player) <= range) {
-                worst = Math.max(worst, ExplosionUtil.crystalDamage(mc.player, entity.position()));
-            }
-        }
-        return worst;
-    }
-
-    // Damage a bed or an anchor standing here would deal. Zero when there is none.
-    private float chargeThreat(BlockPos pos) {
-        if (!isCharge(BlockUtil.state(pos))) {
-            return 0;
-        }
-        BlockPos charge = pos.immutable();
-        return ExplosionUtil.blastDamage(mc.player, Vec3.atCenterOf(charge),
-            ExplosionUtil.RESPAWN_BLOCK_POWER, Vec3.ZERO, ExplosionUtil.halvesOf(charge));
-    }
-
-    private boolean isCharge(BlockState state) {
-        if (state.getBlock() instanceof BedBlock) {
-            return ExplosionUtil.bedsExplodeHere();
-        }
-        return state.getBlock() instanceof RespawnAnchorBlock && ExplosionUtil.anchorsExplodeHere();
+        float incoming = DamageUtil.possibleIncoming(blastRange.getValue(),
+            explosions.isOn(), melee.isOn(), fall.isOn());
+        return EntityUtil.totalHealth(mc.player) - incoming <= minHealth * HEART;
     }
 
     // Every totem the player owns. The one already equipped counts.

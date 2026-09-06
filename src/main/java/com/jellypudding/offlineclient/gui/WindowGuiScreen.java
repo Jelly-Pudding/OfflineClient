@@ -6,6 +6,7 @@ import com.google.gson.JsonObject;
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.modules.misc.ClickGuiModule;
 import com.jellypudding.offlineclient.util.RenderUtil;
 import com.jellypudding.offlineclient.util.SearchRank;
 import net.minecraft.client.gui.Font;
@@ -18,10 +19,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
-/**
- * A single centred window with a category sidebar and a module list. The
- * other half of the ClickGUI style setting.
- */
+// A single centred window with a category sidebar and a module list. The
+// other half of the ClickGUI style setting.
 public final class WindowGuiScreen extends GuiScreenBase {
 
     private static final int MAX_WIDTH = 640;
@@ -83,6 +82,7 @@ public final class WindowGuiScreen extends GuiScreenBase {
         } catch (RuntimeException e) {
             OfflineClient.LOG.warn("Ignoring a broken saved window layout", e);
         }
+        restoreSearch();
     }
 
     private void restoreState() {
@@ -125,6 +125,7 @@ public final class WindowGuiScreen extends GuiScreenBase {
         state.add("favourites", names(favourites));
         state.add("expanded", names(expanded));
         OfflineClient.INSTANCE.getConfigManager().getGuiState().add(STATE_KEY, state);
+        saveSearch();
         OfflineClient.INSTANCE.getConfigManager().saveNow();
     }
 
@@ -211,10 +212,8 @@ public final class WindowGuiScreen extends GuiScreenBase {
         }
     }
 
-    /**
-     * A search covers every category and not just the chosen sidebar row. The
-     * closest answer goes to the top. Favourites come first either way.
-     */
+    // A search covers every category and not just the chosen sidebar row.
+    // The closest answer goes to the top. Favourites come first either way.
     private void refreshListed() {
         refreshRanked();
         listed.clear();
@@ -288,7 +287,7 @@ public final class WindowGuiScreen extends GuiScreenBase {
         RenderUtil.shadow(context, wx, wy, wx + ww, wy + wh, 4);
         context.guiRenderState.up();
         RenderUtil.roundedBorderedRect(context, wx, wy, wx + ww, wy + wh,
-            GuiTheme.CORNER + 2, GuiTheme.BG_WINDOW, GuiTheme.EDGE);
+            GuiTheme.CORNER + 2, GuiTheme.bgWindow(), GuiTheme.edge());
         context.guiRenderState.up();
 
         renderTitle(context, font, wx, wy, ww);
@@ -303,16 +302,17 @@ public final class WindowGuiScreen extends GuiScreenBase {
 
     private void renderTitle(GuiGraphicsExtractor context, Font font, int wx, int wy, int ww) {
         RenderUtil.roundedRect(context, wx + 1, wy + 1, wx + ww - 1, wy + TITLE_HEIGHT,
-            GuiTheme.CORNER + 1, GuiTheme.BG_HEADER, true, false);
+            GuiTheme.CORNER + 1, GuiTheme.bgHeader(), true, false);
         context.guiRenderState.up();
         int titleY = GuiTheme.textY(wy, TITLE_HEIGHT - 2);
-        context.text(font, OfflineClient.NAME, wx + 10, titleY, GuiTheme.TEXT, false);
+        ClickGuiModule gui = OfflineClient.INSTANCE.getModuleManager().get(ClickGuiModule.class);
+        context.text(font, OfflineClient.NAME, wx + 10, titleY, gui.titleColor(), false);
         context.text(font, "v" + OfflineClient.VERSION,
-            wx + 14 + font.width(OfflineClient.NAME), titleY, GuiTheme.TEXT_FAINT, false);
+            wx + 14 + font.width(OfflineClient.NAME), titleY, gui.versionColor(), false);
         int on = tabCounts[Category.values().length + 1];
         String tally = on + " enabled";
         context.text(font, tally, wx + ww - 10 - font.width(tally), titleY,
-            on > 0 ? GuiTheme.accentText() : GuiTheme.TEXT_FAINT, false);
+            on > 0 ? GuiTheme.accentText() : GuiTheme.textFaint(), false);
         context.fill(wx + 1, wy + TITLE_HEIGHT - 1, wx + ww - 1, wy + TITLE_HEIGHT + 1,
             GuiTheme.accent());
     }
@@ -331,7 +331,7 @@ public final class WindowGuiScreen extends GuiScreenBase {
             boolean hovered = SettingWidget.isOver(mouseX, mouseY, x, y, w, h);
             if (selected || hovered) {
                 RenderUtil.roundedRect(context, x, y, x + w, y + h, GuiTheme.CORNER,
-                    selected ? GuiTheme.accentOn(GuiTheme.BG_ROW, 0.35f) : GuiTheme.BG_ROW_HOVER);
+                    selected ? GuiTheme.accentOn(GuiTheme.bgRow(), 0.35f) : GuiTheme.bgRowHover());
                 context.guiRenderState.up();
             }
             if (selected) {
@@ -341,9 +341,9 @@ public final class WindowGuiScreen extends GuiScreenBase {
             String tally = String.valueOf(tabCounts[i]);
             int tallyX = x + w - MARGIN - font.width(tally);
             context.text(font, SettingWidget.trimEnd(font, name, tallyX - x - 12), x + 8, ty,
-                selected || hovered ? GuiTheme.TEXT : GuiTheme.TEXT_DIM, false);
+                selected || hovered ? GuiTheme.text() : GuiTheme.textDim(), false);
             context.text(font, tally, tallyX, ty,
-                selected ? GuiTheme.TEXT_DIM : GuiTheme.TEXT_FAINT, false);
+                selected ? GuiTheme.textDim() : GuiTheme.textFaint(), false);
             y += pitch;
         }
         context.disableScissor();
@@ -360,7 +360,7 @@ public final class WindowGuiScreen extends GuiScreenBase {
 
         scrollBar.update(mouseY, total, h);
 
-        RenderUtil.roundedRect(context, x, top, x + w, top + h, GuiTheme.CORNER, GuiTheme.BG_PANEL);
+        RenderUtil.roundedRect(context, x, top, x + w, top + h, GuiTheme.CORNER, GuiTheme.bgPanel());
         context.guiRenderState.up();
 
         boolean mouseInView = SettingWidget.isOver(mouseX, mouseY, x, top, rowW, h);
@@ -379,7 +379,7 @@ public final class WindowGuiScreen extends GuiScreenBase {
         if (listed.isEmpty()) {
             String empty = isSearching() ? "no matches" : "nothing here";
             context.text(font, empty, x + 8, GuiTheme.textY(top, MODULE_ROW),
-                GuiTheme.TEXT_FAINT, false);
+                GuiTheme.textFaint(), false);
         }
         context.disableScissor();
 
@@ -399,8 +399,8 @@ public final class WindowGuiScreen extends GuiScreenBase {
         int rowTop = y + 1;
 
         int bg = on
-            ? GuiTheme.accentOn(GuiTheme.BG_ROW, hovered ? 0.42f : 0.26f)
-            : (hovered ? GuiTheme.BG_ROW_HOVER : GuiTheme.BG_ROW);
+            ? GuiTheme.accentOn(GuiTheme.bgRow(), hovered ? 0.42f : 0.26f)
+            : (hovered ? GuiTheme.bgRowHover() : GuiTheme.bgRow());
         RenderUtil.roundedRect(context, x + 2, rowTop, x + w - 2, rowTop + rowH,
             GuiTheme.CORNER, bg);
         context.guiRenderState.up();
@@ -411,31 +411,31 @@ public final class WindowGuiScreen extends GuiScreenBase {
 
         boolean favourite = favourites.contains(module.getName());
         RenderUtil.star(context, x + 8, y + (MODULE_ROW - RenderUtil.STAR_SIZE) / 2,
-            favourite ? STAR_COLOR : (hovered ? GuiTheme.TEXT_DIM : GuiTheme.TEXT_FAINT),
+            favourite ? STAR_COLOR : (hovered ? GuiTheme.textDim() : GuiTheme.textFaint()),
             favourite);
 
         int ty = GuiTheme.textY(y, MODULE_ROW);
         int pillRight = x + w - ARROW_ZONE - 2;
         int pillLeft = pillRight - PILL_WIDTH;
         context.text(font, module.getName(), x + FAV_ZONE + 2, ty,
-            on ? GuiTheme.TEXT : GuiTheme.TEXT_DIM, false);
+            on ? GuiTheme.text() : GuiTheme.textDim(), false);
 
         String suffix = on ? module.getSuffix() : null;
         int suffixX = x + FAV_ZONE + 5 + font.width(module.getName());
         int suffixRoom = pillLeft - 4 - suffixX;
         if (suffix != null && suffixRoom > 12) {
             context.text(font, SettingWidget.trimEnd(font, suffix, suffixRoom), suffixX, ty,
-                GuiTheme.TEXT_FAINT, false);
+                GuiTheme.textFaint(), false);
         }
 
         if (module.isTogglable()) {
             int pillTop = y + (MODULE_ROW - PILL_HEIGHT) / 2;
             RenderUtil.toggle(context, pillLeft, pillTop, PILL_WIDTH, PILL_HEIGHT, on,
-                GuiTheme.GREEN, GuiTheme.BG_SETTING,
-                on ? 0xFF0B2415 : (hovered ? GuiTheme.TEXT : GuiTheme.TEXT_DIM));
+                GuiTheme.GREEN, GuiTheme.bgSetting(),
+                on ? 0xFF0B2415 : (hovered ? GuiTheme.text() : GuiTheme.textDim()));
         }
         RenderUtil.chevron(context, x + w - 14, y + (MODULE_ROW - 3) / 2, !open,
-            hovered ? GuiTheme.TEXT : GuiTheme.TEXT_DIM);
+            hovered ? GuiTheme.text() : GuiTheme.textDim());
 
         if (hovered) {
             description = module.getDescription();
@@ -451,13 +451,13 @@ public final class WindowGuiScreen extends GuiScreenBase {
         int x = wx + 1;
         int y = wy + wh - DESC_HEIGHT - 1;
         RenderUtil.roundedRect(context, x, y, x + ww - 2, y + DESC_HEIGHT,
-            GuiTheme.CORNER + 1, GuiTheme.BG_HEADER, false, true);
-        context.fill(x, y, x + ww - 2, y + 1, GuiTheme.EDGE);
+            GuiTheme.CORNER + 1, GuiTheme.bgHeader(), false, true);
+        context.fill(x, y, x + ww - 2, y + 1, GuiTheme.edge());
         context.guiRenderState.up();
         boolean empty = description == null || description.isEmpty();
         String text = empty ? HINT : description;
         context.text(font, SettingWidget.trimEnd(font, text, ww - 20), x + 9,
-            GuiTheme.textY(y + 1, DESC_HEIGHT), empty ? GuiTheme.TEXT_FAINT : GuiTheme.TEXT, false);
+            GuiTheme.textY(y + 1, DESC_HEIGHT), empty ? GuiTheme.textFaint() : GuiTheme.text(), false);
     }
 
     @Override

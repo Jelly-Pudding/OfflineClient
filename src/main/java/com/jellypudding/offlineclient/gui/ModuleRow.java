@@ -76,8 +76,8 @@ public final class ModuleRow {
             && SettingWidget.isOver(mouseX, mouseY, x, y, w, GuiTheme.ROW_HEIGHT);
 
         boolean on = module.isEnabled();
-        int rest = on ? GuiTheme.accentOn(GuiTheme.BG_ROW, 0.26f) : GuiTheme.BG_ROW;
-        int lit = on ? GuiTheme.accentOn(GuiTheme.BG_ROW, 0.46f) : GuiTheme.BG_ROW_HOVER;
+        int rest = on ? GuiTheme.accentOn(GuiTheme.bgRow(), 0.26f) : GuiTheme.bgRow();
+        int lit = on ? GuiTheme.accentOn(GuiTheme.bgRow(), 0.46f) : GuiTheme.bgRowHover();
         context.fill(x, y, x + w, y + h, ColorUtil.lerp(rest, lit, hoverFade));
         context.fill(x, y + h, x + w, y + GuiTheme.ROW_HEIGHT, GuiTheme.RULE);
 
@@ -85,13 +85,13 @@ public final class ModuleRow {
         if (on) {
             context.fill(x, y, x + 2, y + h, GuiTheme.accent());
         }
-        int textColor = on ? GuiTheme.TEXT : GuiTheme.TEXT_DIM;
+        int textColor = on ? GuiTheme.text() : GuiTheme.textDim();
         // A fixed inset keeps the name still when the accent bar appears.
         int nameRoom = w - 7 - ARROW_ZONE;
         context.text(font, SettingWidget.trimEnd(font, module.getName(), nameRoom), x + 7,
             GuiTheme.textY(y, h), textColor, false);
         RenderUtil.chevron(context, x + w - 11, y + (h - 3) / 2, !expanded,
-            hovered ? GuiTheme.TEXT : GuiTheme.TEXT_FAINT);
+            hovered ? GuiTheme.text() : GuiTheme.textFaint());
 
         if (hovered) {
             host.setTooltip(module.getDescription());

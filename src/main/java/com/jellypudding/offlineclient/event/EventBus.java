@@ -10,10 +10,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Every method on a registered listener annotated with {@link Subscribe}
- * becomes a handler for its event type. Registering twice does nothing.
- */
+// A Subscribe method on a registered listener becomes a handler for its event type.
+// Registering the same listener twice does nothing.
 public final class EventBus {
 
     private record Handler(Object listener, Method method, int priority) {

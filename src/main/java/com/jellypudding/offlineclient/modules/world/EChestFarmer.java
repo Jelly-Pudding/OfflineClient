@@ -6,7 +6,9 @@ import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.ExclusivityGroup;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.render.BoxStyle;
 import com.jellypudding.offlineclient.setting.BoolSetting;
+import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockMiner;
 import com.jellypudding.offlineclient.util.BlockUtil;
@@ -14,23 +16,19 @@ import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.ItemUtil;
+import com.jellypudding.offlineclient.util.SwingMode;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 
-/**
- * An ender chest breaks into eight obsidian without silk touch. The chest
- * goes on the block you look at and is mined straight back out.
- */
+// An ender chest breaks into eight obsidian without silk touch. The chest
+// goes on the block you look at and is mined straight back out.
 public final class EChestFarmer extends Module {
-
-    private static final int TARGET_COLOR = 0xFFE03030;
 
     private final BoolSetting stopAtAmount = new BoolSetting("Stop at amount",
         "Turns off once you hold enough obsidian.", false);
@@ -40,8 +38,10 @@ public final class EChestFarmer extends Module {
         "How much obsidian to gather.", 64, 8, 256, 8).min(1).max(2304).under(stopAtAmount);
     private final BoolSetting rotate = new BoolSetting("Rotate",
         "Turn towards the chest on the server side.", true);
+    private final EnumSetting<SwingMode> swing = SwingMode.setting(SwingMode.BOTH);
     private final BoolSetting render = new BoolSetting("Show target",
         "Outlines where the chest goes.", true);
+    private final BoxStyle targetBox = new BoxStyle(BoxStyle.Shape.BOTH, 0).under(render);
 
     private BlockPos target;
     private int startCount;
@@ -49,7 +49,8 @@ public final class EChestFarmer extends Module {
 
     public EChestFarmer() {
         super("EChestFarmer", "Places and breaks ender chests to farm obsidian.", Category.WORLD);
-        addSettings(stopAtAmount, countExisting, amount, rotate, render);
+        addSettings(stopAtAmount, countExisting, amount, rotate, swing, render);
+        addSettings(targetBox.settings());
         searchTags("obsidian farm", "ender chest");
     }
 
@@ -131,7 +132,7 @@ public final class EChestFarmer extends Module {
             return;
         }
         slots.select(slot);
-        BlockMiner.mine(target, rotate.isOn());
+        BlockMiner.mine(target, rotate.isOn(), swing.getValue());
     }
 
     private void placeChest() {
@@ -147,7 +148,9 @@ public final class EChestFarmer extends Module {
             return;
         }
         slots.select(slot);
-        BlockUtil.place(target, support, rotate.isOn(), true);
+        if (BlockUtil.place(target, support, rotate.isOn(), false)) {
+            swing.getValue().swing();
+        }
     }
 
     private int gathered() {
@@ -161,7 +164,7 @@ public final class EChestFarmer extends Module {
     @Subscribe
     private void onRender3D(Render3DEvent event) {
         if (render.isOn() && target != null) {
-            event.getBatch().outlineBox(new AABB(target).deflate(1 / 16.0), TARGET_COLOR, false);
+            targetBox.draw(event.getBatch(), target, false);
         }
     }
 }

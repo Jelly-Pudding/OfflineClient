@@ -11,10 +11,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Module lookup for mixins and other hot paths. ModuleManager is null until the
- * client has started and this hands back null instead of throwing.
- */
+// Module lookup for mixins and other hot paths. ModuleManager is null until the
+// client has started and this hands back null instead of throwing.
 public final class Modules {
 
     private static final Map<Class<?>, Module> CACHE = new ConcurrentHashMap<>();

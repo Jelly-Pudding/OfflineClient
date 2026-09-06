@@ -88,10 +88,8 @@ public final class Glide extends Module {
         }
     }
 
-    /**
-     * True when there is anything to land on within the minimum height.
-     * Fluids are checked by hand because they carry no collision shape.
-     */
+    // True when there is anything to land on within the minimum height.
+    // Fluids are checked by hand because they carry no collision shape.
     private boolean groundIsNear() {
         double reach = minHeight.getValue();
         if (reach <= 0) {

@@ -11,10 +11,8 @@ import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 
-/**
- * The one owner of the rotation the server sees. Exactly one rotation rides
- * the vanilla movement packet each tick and the player's own view never moves.
- */
+// The one owner of the rotation the server sees. Exactly one rotation rides
+// the vanilla movement packet each tick and the player's own view never moves.
 public final class RotationManager {
 
     public static final RotationManager INSTANCE = new RotationManager();
@@ -28,7 +26,7 @@ public final class RotationManager {
     public static final float ENTITY_TOLERANCE = 25f;
 
     // A step that reaches any angle in one tick.
-    private static final float NO_STEP = 360f;
+    public static final float NO_STEP = 360f;
 
     private static final Minecraft MC = OfflineClient.MC;
 
@@ -47,10 +45,8 @@ public final class RotationManager {
     private record Angle(float yaw, float pitch) {
     }
 
-    /**
-     * Touched by the packet send hook on whichever thread sent the packet.
-     * Every field the hook reaches has to be visible from that thread.
-     */
+    // Touched by the packet send hook on whichever thread sent the packet.
+    // Every field the hook reaches has to be visible from that thread.
     private volatile Angle held = new Angle(0, 0);
     private volatile boolean writeRotation;
     private volatile float serverYaw;
@@ -63,26 +59,20 @@ public final class RotationManager {
     private RotationManager() {
     }
 
-    /**
-     * Asks for an angle this tick. The turn is spread over several ticks when
-     * the target is far from the angle the server holds.
-     */
+    // Asks for an angle this tick. The turn is spread over several ticks when
+    // the target is far from the angle the server holds.
     public static void request(float yaw, float pitch, RotationPriority priority) {
         INSTANCE.take(yaw, pitch, priority, STEP);
     }
 
-    /**
-     * Asks for an angle that has to arrive whole. Only for places where the
-     * exact number changes the outcome such as bed direction.
-     */
+    // Asks for an angle that has to arrive whole. Only for places where the
+    // exact number changes the outcome such as bed direction.
     public static void requestExact(float yaw, float pitch, RotationPriority priority) {
         INSTANCE.take(yaw, pitch, priority, NO_STEP);
     }
 
-    /**
-     * Asks for an angle at a chosen turn rate in degrees per tick. Used where a
-     * module exposes its own rotation speed.
-     */
+    // Asks for an angle at a chosen turn rate in degrees per tick. Used where a
+    // module exposes its own rotation speed.
     public static void request(float yaw, float pitch, RotationPriority priority, float step) {
         INSTANCE.take(yaw, pitch, priority, step);
     }
@@ -105,11 +95,8 @@ public final class RotationManager {
             && Math.abs(pitchNow - pitch) <= tolerance;
     }
 
-    /**
-     * True once the angle has really reached the server. Only for placements
-     * whose outcome depends on the yaw the server holds such as a bed. Every
-     * other caller wants isFacing because the block position rides the packet.
-     */
+    // True once the angle has really reached the server. Only for placements whose
+    // outcome depends on the yaw the server holds such as a bed. Others want isFacing.
     public static boolean sentIsFacing(float yaw, float pitch, float tolerance) {
         return Mth.degreesDifferenceAbs(INSTANCE.serverYaw, yaw) <= tolerance
             && Math.abs(INSTANCE.serverPitch - pitch) <= tolerance;
@@ -177,10 +164,8 @@ public final class RotationManager {
         projected = false;
     }
 
-    /**
-     * Puts the held angle on the movement packet vanilla was going to send
-     * anyway. Runs last and takes over only the angle.
-     */
+    // Puts the held angle on the movement packet vanilla was going to send
+    // anyway. Runs last and takes over only the angle.
     @Subscribe(priority = Integer.MIN_VALUE)
     private void onPacketSend(PacketSendEvent event) {
         if (!(event.getPacket() instanceof ServerboundMovePlayerPacket move)) {

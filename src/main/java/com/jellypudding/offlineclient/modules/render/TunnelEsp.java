@@ -6,19 +6,26 @@ import com.jellypudding.offlineclient.event.events.Render3DEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.render.BoxStyle;
 import com.jellypudding.offlineclient.render.DrawBatch;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChunkScanner;
-import com.jellypudding.offlineclient.util.ColorUtil;
+import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
+
+import java.util.List;
 
 // Highlights one wide two high corridors. Natural caves almost never make that shape.
 public final class TunnelEsp extends Module {
 
-    private static final int COLOR = 0xFFFFA030;
+    // A box is only ankle high so it can only touch the four sideways.
+    private static final Direction[] AROUND = {
+        Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST};
 
     // How open a neighbouring column is.
     private enum Side {
@@ -38,10 +45,15 @@ public final class TunnelEsp extends Module {
         "Highest height to search.", 62, -64, 320, 4).min(-2048).max(2048);
     private final NumberSetting height = new NumberSetting("Box height",
         "How tall the drawn box is.", 0.15, 0.05, 1, 0.05).min(0.01);
-    private final BoolSetting fill = new BoolSetting("Fill",
-        "Adds a faint tint inside each box.", true);
+    private final BoolSetting connected = new BoolSetting("Connected",
+        "Boxes that touch leave out the faces they share so a corridor draws as one strip.", true);
+    private final BoxStyle style = new BoxStyle(BoxStyle.Shape.BOTH, 39);
 
     private final ChunkScanner<Spot> scanner = new ChunkScanner<>();
+
+    // The spots the neighbour keys were built from.
+    private List<Spot> known = List.of();
+    private final LongOpenHashSet keys = new LongOpenHashSet();
 
     // The scan bounds the cached chunks were built with.
     private int lastLow = Integer.MIN_VALUE;
@@ -49,7 +61,8 @@ public final class TunnelEsp extends Module {
 
     public TunnelEsp() {
         super("TunnelESP", "Highlights hand dug tunnels underground.", Category.RENDER);
-        addSettings(range, bottom, top, height, fill);
+        addSettings(range, bottom, top, height, connected);
+        addSettings(style.settings());
         searchTags("tunnel", "base finder", "corridor");
     }
 
@@ -60,12 +73,18 @@ public final class TunnelEsp extends Module {
 
     @Override
     protected void onEnable() {
-        scanner.reset();
+        forget();
     }
 
     @Override
     protected void onDisable() {
+        forget();
+    }
+
+    private void forget() {
         scanner.reset();
+        known = List.of();
+        keys.clear();
     }
 
     @Subscribe
@@ -184,14 +203,31 @@ public final class TunnelEsp extends Module {
     private void onRender3D(Render3DEvent event) {
         DrawBatch batch = event.getBatch();
         double boxHeight = height.getValue();
-        boolean tint = fill.isOn();
-        for (Spot spot : scanner.results()) {
-            AABB box = new AABB(spot.x(), spot.y(), spot.z(),
-                spot.x() + 1, spot.y() + boxHeight, spot.z() + 1);
-            batch.outlineBox(box, COLOR, true);
-            if (tint) {
-                batch.solidBox(box, ColorUtil.withAlpha(COLOR, 60), true);
+        List<Spot> spots = scanner.results();
+        boolean join = connected.isOn();
+        if (join && spots != known) {
+            known = spots;
+            keys.clear();
+            for (Spot spot : spots) {
+                keys.add(BlockPos.asLong(spot.x(), spot.y(), spot.z()));
             }
         }
+        for (Spot spot : spots) {
+            AABB box = new AABB(spot.x(), spot.y(), spot.z(),
+                spot.x() + 1, spot.y() + boxHeight, spot.z() + 1);
+            style.drawJoined(batch, box, join ? sharedSides(spot) : 0, true);
+        }
+    }
+
+    // A bit for every side that another tunnel box is pressed against.
+    private int sharedSides(Spot spot) {
+        long key = BlockPos.asLong(spot.x(), spot.y(), spot.z());
+        int hidden = 0;
+        for (Direction side : AROUND) {
+            if (keys.contains(BlockPos.offset(key, side))) {
+                hidden |= DrawBatch.sideBit(side);
+            }
+        }
+        return hidden;
     }
 }

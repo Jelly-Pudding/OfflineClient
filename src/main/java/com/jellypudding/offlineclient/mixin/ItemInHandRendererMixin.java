@@ -3,6 +3,7 @@ package com.jellypudding.offlineclient.mixin;
 import com.jellypudding.offlineclient.modules.render.Freecam;
 import com.jellypudding.offlineclient.modules.render.HandView;
 import com.jellypudding.offlineclient.modules.render.NoShieldOverlay;
+import com.jellypudding.offlineclient.modules.render.Zoom;
 import com.jellypudding.offlineclient.util.Modules;
 
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
@@ -47,7 +48,8 @@ public abstract class ItemInHandRendererMixin {
     private void onSubmitHands(float partialTicks, PoseStack poseStack, SubmitNodeCollector collector,
                                LocalPlayer player, int light, CallbackInfo ci) {
         Freecam freecam = Modules.get(Freecam.class);
-        if (freecam != null && freecam.hidesHand()) {
+        Zoom zoom = Modules.get(Zoom.class);
+        if ((freecam != null && freecam.hidesHand()) || (zoom != null && zoom.hidesHand())) {
             ci.cancel();
         }
     }

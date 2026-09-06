@@ -129,7 +129,7 @@ public final class AutoBreed extends Module {
             fed.clear();
         }
         lastTick = now;
-        // Without repeats an animal only comes back after the longest cooldown the game has.
+        // Without repeats an animal only returns after the game's longest cooldown.
         int keep = repeat.isOn() ? interval.getInt() : FULL_COOLDOWN;
         Iterator<Map.Entry<Integer, Integer>> it = fed.entrySet().iterator();
         while (it.hasNext()) {

@@ -26,8 +26,9 @@ public abstract class WebBlockMixin {
         if (entity != OfflineClient.MC.player) {
             return;
         }
+        NoWeb noWeb = Modules.get(NoWeb.class);
         NoSlowdown noSlowdown = Modules.get(NoSlowdown.class);
-        if (Modules.enabled(NoWeb.class) || (noSlowdown != null && noSlowdown.skipsWebs())) {
+        if ((noWeb != null && noWeb.skipsWebs()) || (noSlowdown != null && noSlowdown.skipsWebs())) {
             ci.cancel();
         }
     }

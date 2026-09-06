@@ -7,11 +7,8 @@ import net.minecraft.core.Direction;
 import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;
 import net.minecraft.world.InteractionHand;
 
-/**
- * Lets modules mine blocks the same way a held left click does.
- * MinecraftMixin suppresses the vanilla abort that normally happens
- * every tick the attack key is up.
- */
+// Lets modules mine blocks the same way a held left click does.
+// MinecraftMixin suppresses the vanilla abort that runs every tick the attack key is up.
 public final class BlockMiner {
 
     private static final Minecraft MC = OfflineClient.MC;
@@ -24,11 +21,13 @@ public final class BlockMiner {
     private BlockMiner() {
     }
 
-    /**
-     * Called every tick until the block is gone. Switching to another block
-     * aborts the old one just like a crosshair move does.
-     */
+    // Called every tick until the block is gone.
+    // Switching to another block aborts the previous one just like a crosshair move does.
     public static boolean mine(BlockPos pos, boolean rotate) {
+        return mine(pos, rotate, SwingMode.BOTH);
+    }
+
+    public static boolean mine(BlockPos pos, boolean rotate, SwingMode swing) {
         if (MC.player == null || MC.level == null || MC.gameMode == null) {
             return false;
         }
@@ -46,16 +45,14 @@ public final class BlockMiner {
         if (!accepted) {
             return false;
         }
-        MC.player.swing(InteractionHand.MAIN_HAND);
+        swing.swing(InteractionHand.MAIN_HAND);
         keepControl();
         target = pos;
         return true;
     }
 
-    /**
-     * Sends the start and stop packets for a block in one go. The server
-     * queues anything slower than one hit and holds only one at a time.
-     */
+    // Sends the start and stop packets for a block in one go.
+    // The server queues anything slower than one hit and holds only one at a time.
     public static void breakInstantly(BlockPos pos) {
         if (MC.player == null || MC.level == null) {
             return;

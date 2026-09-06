@@ -14,10 +14,8 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
 import java.util.Locale;
 
-/**
- * Changes how the first person hands look and move. Every hook lives in
- * ItemInHandRendererMixin and LivingEntityMixin.
- */
+// Changes how the first person hands look and move.
+// Every hook lives in ItemInHandRendererMixin and LivingEntityMixin.
 public final class HandView extends Module {
 
     public enum SwingHand { NORMAL, MAIN_HAND, OFF_HAND }
@@ -134,7 +132,9 @@ public final class HandView extends Module {
     private static final class Adjust {
 
         private final BoolSetting enabled;
-        private final NumberSetting scale;
+        private final NumberSetting scaleX;
+        private final NumberSetting scaleY;
+        private final NumberSetting scaleZ;
         private final NumberSetting x;
         private final NumberSetting y;
         private final NumberSetting z;
@@ -145,8 +145,12 @@ public final class HandView extends Module {
         Adjust(String label, String what) {
             enabled = new BoolSetting("Adjust " + label.toLowerCase(Locale.ROOT),
                 "Reshapes " + what + ".", false);
-            scale = new NumberSetting(label + " scale",
-                "How big it is drawn.", 1, 0.1, 3, 0.05, "x").min(0.01).under(enabled);
+            scaleX = new NumberSetting(label + " scale x",
+                "How wide it is drawn.", 1, 0.1, 3, 0.05, "x").min(0.01).max(5).under(enabled);
+            scaleY = new NumberSetting(label + " scale y",
+                "How tall it is drawn.", 1, 0.1, 3, 0.05, "x").min(0.01).max(5).under(enabled);
+            scaleZ = new NumberSetting(label + " scale z",
+                "How deep it is drawn.", 1, 0.1, 3, 0.05, "x").min(0.01).max(5).under(enabled);
             x = new NumberSetting(label + " x",
                 "Sideways offset.", 0, -2, 2, 0.05).under(enabled);
             y = new NumberSetting(label + " y",
@@ -162,7 +166,7 @@ public final class HandView extends Module {
         }
 
         Setting<?>[] settings() {
-            return new Setting<?>[] { enabled, scale, x, y, z, pitch, yaw, roll };
+            return new Setting<?>[] { enabled, scaleX, scaleY, scaleZ, x, y, z, pitch, yaw, roll };
         }
 
         void apply(PoseStack pose) {
@@ -172,8 +176,7 @@ public final class HandView extends Module {
             pose.mulPose(Axis.XP.rotationDegrees(pitch.getFloat()));
             pose.mulPose(Axis.YP.rotationDegrees(yaw.getFloat()));
             pose.mulPose(Axis.ZP.rotationDegrees(roll.getFloat()));
-            float size = scale.getFloat();
-            pose.scale(size, size, size);
+            pose.scale(scaleX.getFloat(), scaleY.getFloat(), scaleZ.getFloat());
             pose.translate(x.getFloat(), y.getFloat(), z.getFloat());
         }
     }

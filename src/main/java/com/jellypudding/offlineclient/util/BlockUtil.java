@@ -12,6 +12,12 @@ import net.minecraft.world.InteractionResult;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.effect.MobEffectUtil;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.tags.FluidTags;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.EmptyBlockGetter;
 import net.minecraft.world.level.block.AnvilBlock;
@@ -75,10 +81,8 @@ public final class BlockUtil {
         return MC.level.getBlockState(pos);
     }
 
-    /**
-     * Outside the world the game hands back void air which reads as
-     * replaceable. The server refuses every placement there.
-     */
+    // Outside the world the game hands back void air which reads as replaceable.
+    // The server refuses every placement there.
     public static boolean isReplaceable(BlockPos pos) {
         return MC.level.isInWorldBounds(pos) && state(pos).canBeReplaced();
     }
@@ -213,10 +217,14 @@ public final class BlockUtil {
 
     // The server accepts a click on a replaceable block as a placement there.
     public static boolean placeDirect(BlockPos target, boolean rotate, boolean swing) {
+        return placeDirect(target, Vec3.atCenterOf(target), rotate, swing);
+    }
+
+    // The hit point decides which half a slab or a stair lands in.
+    public static boolean placeDirect(BlockPos target, Vec3 hit, boolean rotate, boolean swing) {
         if (!isReplaceable(target)) {
             return false;
         }
-        Vec3 hit = Vec3.atCenterOf(target);
         if (rotate) {
             faceVector(hit);
         }
@@ -291,10 +299,38 @@ public final class BlockUtil {
         return best;
     }
 
-    /**
-     * A hotbar slot holding something that survives a crystal and can still be
-     * broken again afterwards. Bedrock and other unbreakable blocks are no use.
-     */
+    public static boolean isBlastProof(BlockPos pos) {
+        return state(pos).getBlock().getExplosionResistance() >= BLAST_PROOF;
+    }
+
+    // True whilst the player stands in a hole walled with blast proof blocks.
+    // A two block hole counts when its second block is walled on its own.
+    public static boolean playerInHole() {
+        BlockPos feet = MC.player.blockPosition();
+        if (!isBlastProof(feet.below())) {
+            return false;
+        }
+        int open = 0;
+        for (Direction side : Direction.Plane.HORIZONTAL) {
+            BlockPos next = feet.relative(side);
+            if (isBlastProof(next)) {
+                continue;
+            }
+            open++;
+            if (!isBlastProof(next.below())) {
+                return false;
+            }
+            for (Direction other : Direction.Plane.HORIZONTAL) {
+                if (other != side.getOpposite() && !isBlastProof(next.relative(other))) {
+                    return false;
+                }
+            }
+        }
+        return open < 2;
+    }
+
+    // A hotbar slot holding something that survives a crystal and can be broken again.
+    // Bedrock and other unbreakable blocks are no use.
     public static int findBlastProofSlot() {
         return findBlockSlot(block ->
             block.getExplosionResistance() >= BLAST_PROOF && block.defaultDestroyTime() >= 0);
@@ -325,12 +361,22 @@ public final class BlockUtil {
 
     // The open spots above the head and at head height around it.
     public static List<BlockPos> trapSpots(BlockPos feet, boolean sealSides) {
+        return trapSpots(feet, true, sealSides, false);
+    }
+
+    // Any mix of the block over the head and the four at head height and the one underfoot.
+    public static List<BlockPos> trapSpots(BlockPos feet, boolean top, boolean sides, boolean bottom) {
         List<BlockPos> spots = new ArrayList<>();
-        addOpen(spots, feet.above(2));
-        if (sealSides) {
+        if (top) {
+            addOpen(spots, feet.above(2));
+        }
+        if (sides) {
             for (Direction side : Direction.Plane.HORIZONTAL) {
                 addOpen(spots, feet.above().relative(side));
             }
+        }
+        if (bottom) {
+            addOpen(spots, feet.below());
         }
         return spots;
     }
@@ -343,10 +389,8 @@ public final class BlockUtil {
         }
     }
 
-    /**
-     * Clicks a block face. Vanilla skips a block interaction whilst the player
-     * sneaks. The sneak is dropped for the click and put back straight after.
-     */
+    // Clicks a block face. Vanilla skips a block interaction whilst the player sneaks.
+    // The sneak is dropped for the click and put back straight after.
     public static boolean interact(BlockPos pos, Direction side) {
         boolean sneaking = MC.player.isShiftKeyDown();
         if (sneaking) {
@@ -364,10 +408,8 @@ public final class BlockUtil {
         return used;
     }
 
-    /**
-     * True for a plain full standable cube. Sand and gravel need something
-     * under the target to hold them up.
-     */
+    // True for a plain full standable cube.
+    // Sand and gravel need something under the target to hold them up.
     public static boolean isBuildingBlock(Block block, BlockPos target) {
         BlockState state = block.defaultBlockState();
         if (!state.isCollisionShapeFullBlock(EmptyBlockGetter.INSTANCE, BlockPos.ZERO)) {
@@ -405,10 +447,8 @@ public final class BlockUtil {
             || block instanceof RespawnAnchorBlock;
     }
 
-    /**
-     * A solid neighbour to place against. Blocks that open on click are skipped
-     * and the face closest to the eyes wins.
-     */
+    // A solid neighbour to place against. Blocks that open on click are skipped.
+    // The face closest to the eyes wins.
     public static Direction findPlaceSupport(BlockPos target) {
         Vec3 eye = MC.player.getEyePosition();
         Direction best = null;
@@ -452,10 +492,13 @@ public final class BlockUtil {
         return best;
     }
 
-    /**
-     * True when a straight line from the eyes reaches the nearest face of the
-     * block without passing through anything solid.
-     */
+    // True when nothing solid sits between the eyes and the point.
+    public static boolean canSee(Vec3 point) {
+        BlockHitResult hit = MC.level.clip(new ClipContext(MC.player.getEyePosition(), point,
+            ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, MC.player));
+        return hit.getType() == HitResult.Type.MISS;
+    }
+
     public static boolean canSee(BlockPos pos) {
         Vec3 eye = MC.player.getEyePosition();
         Vec3 point = hitPoint(pos, facingSide(pos));
@@ -490,6 +533,42 @@ public final class BlockUtil {
             return true;
         }
         return state(pos).getDestroyProgress(MC.player, MC.level, pos) >= 1;
+    }
+
+    // Progress one tick of mining with this tool would make. The tool need not be held.
+    // Follows the vanilla dig speed maths so a packet miner can time a tool it swapped away.
+    public static float breakDelta(ItemStack tool, BlockPos pos) {
+        BlockState state = state(pos);
+        float hardness = state.getDestroySpeed(MC.level, pos);
+        if (hardness < 0) {
+            return 0;
+        }
+        if (hardness == 0) {
+            return 1;
+        }
+        Player player = MC.player;
+        float speed = ItemUtil.miningSpeed(tool, state);
+        if (MobEffectUtil.hasDigSpeed(player)) {
+            speed *= 1 + (MobEffectUtil.getDigSpeedAmplification(player) + 1) * 0.2f;
+        }
+        MobEffectInstance fatigue = player.getEffect(MobEffects.MINING_FATIGUE);
+        if (fatigue != null) {
+            speed *= switch (fatigue.getAmplifier()) {
+                case 0 -> 0.3f;
+                case 1 -> 0.09f;
+                case 2 -> 0.0027f;
+                default -> 8.1E-4f;
+            };
+        }
+        speed *= (float) player.getAttributeValue(Attributes.BLOCK_BREAK_SPEED);
+        if (player.isEyeInFluid(FluidTags.WATER)) {
+            speed *= (float) player.getAttributeValue(Attributes.SUBMERGED_MINING_SPEED);
+        }
+        if (!player.onGround()) {
+            speed /= 5;
+        }
+        boolean rightTool = !state.requiresCorrectToolForDrops() || tool.isCorrectToolForDrops(state);
+        return speed / hardness / (rightTool ? 30 : 100);
     }
 
     public static int breakTicks(BlockPos pos) {

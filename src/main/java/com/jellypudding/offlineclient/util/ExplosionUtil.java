@@ -7,15 +7,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.util.Mth;
 import net.minecraft.world.attribute.EnvironmentAttributes;
-import net.minecraft.world.damagesource.CombatRules;
-import net.minecraft.world.damagesource.DamageSource;
-import net.minecraft.world.effect.MobEffectInstance;
-import net.minecraft.world.effect.MobEffects;
-import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.ai.attributes.Attributes;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.state.BlockState;
@@ -25,10 +17,8 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
-/**
- * Works out what an end crystal blast would do before it happens.
- * The numbers mirror the vanilla explosion code exactly.
- */
+// Works out what an end crystal blast would do before it happens.
+// The numbers mirror the vanilla explosion code exactly.
 public final class ExplosionUtil {
 
     private static final Minecraft MC = OfflineClient.MC;
@@ -67,18 +57,14 @@ public final class ExplosionUtil {
         return blastDamage(target, source, power, Vec3.ZERO);
     }
 
-    /**
-     * Damage with the target carried forward by the lead. The blast stays where it
-     * really is and the exposure raycast runs through the world that exists.
-     */
+    // Damage with the target carried forward by the lead. The blast stays where it
+    // really is and the exposure raycast runs through the world that exists.
     public static float blastDamage(LivingEntity target, Vec3 source, float power, Vec3 lead) {
         return blastDamage(target, source, power, lead, NOTHING);
     }
 
-    /**
-     * A bed or an anchor is removed before it goes off. The blocks named here
-     * are treated as gone for the line of sight.
-     */
+    // A bed or an anchor is removed before it goes off.
+    // The blocks named here are treated as gone for the line of sight.
     public static float blastDamage(LivingEntity target, Vec3 source, float power, Vec3 lead,
                                     BlockPos... ignored) {
         if (target == null || !target.isAlive()) {
@@ -127,11 +113,8 @@ public final class ExplosionUtil {
         return new BlockPos[] {pos, other};
     }
 
-    /**
-     * The share of the target the blast can see. The same grid of points
-     * vanilla samples over the hitbox. A ray that only meets an ignored block
-     * counts as clear.
-     */
+    // The share of the target the blast can see using the same grid of points vanilla
+    // samples over the hitbox. A ray that only meets an ignored block counts as clear.
     private static float seenPercent(Vec3 source, LivingEntity target, BlockPos[] ignored) {
         AABB box = target.getBoundingBox();
         double stepX = 1 / ((box.maxX - box.minX) * 2 + 1);
@@ -171,35 +154,8 @@ public final class ExplosionUtil {
         return false;
     }
 
-    // Applies difficulty scaling then armour then resistance then enchantments.
+    // The explosion source carries the blast protection weighting.
     private static float reduce(float damage, LivingEntity target) {
-        DamageSource source = MC.level.damageSources().explosion(null, null);
-
-        if (source.scalesWithDifficulty()) {
-            switch (MC.level.getLevelData().getDifficulty()) {
-                case EASY -> damage = Math.min(damage / 2 + 1, damage);
-                case HARD -> damage *= 1.5f;
-                default -> { }
-            }
-        }
-
-        float armor = (float) Math.floor(target.getAttributeValue(Attributes.ARMOR));
-        float toughness = (float) target.getAttributeValue(Attributes.ARMOR_TOUGHNESS);
-        damage = CombatRules.getDamageAfterAbsorb(target, damage, source, armor, toughness);
-
-        MobEffectInstance resistance = target.getEffect(MobEffects.RESISTANCE);
-        if (resistance != null) {
-            damage *= 1 - (resistance.getAmplifier() + 1) * 0.2f;
-        }
-
-        int protection = 0;
-        for (EquipmentSlot slot : ItemUtil.ARMOR_SLOTS) {
-            ItemStack piece = target.getItemBySlot(slot);
-            protection += ItemUtil.enchantLevel(Enchantments.PROTECTION, piece);
-            protection += 2 * ItemUtil.enchantLevel(Enchantments.BLAST_PROTECTION, piece);
-        }
-        damage = CombatRules.getDamageAfterMagicAbsorb(damage, protection);
-
-        return Math.max(damage, 0);
+        return DamageUtil.reduce(damage, target, MC.level.damageSources().explosion(null, null));
     }
 }

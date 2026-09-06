@@ -2,13 +2,17 @@ package com.jellypudding.offlineclient.mixin;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.events.Render2DEvent;
+import com.jellypudding.offlineclient.modules.render.Blur;
 import com.jellypudding.offlineclient.modules.render.ClearView;
+import com.jellypudding.offlineclient.modules.render.ItemHighlight;
 import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.Hud;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -19,6 +23,17 @@ import java.util.function.Predicate;
 
 @Mixin(Hud.class)
 public class HudMixin {
+
+    // A blur still fading out after a screen closed goes under the HUD.
+    @Inject(
+        method = "extractRenderState(Lnet/minecraft/client/gui/GuiGraphicsExtractor;Lnet/minecraft/client/DeltaTracker;)V",
+        at = @At("HEAD"))
+    private void onExtractHud(GuiGraphicsExtractor context, DeltaTracker tickCounter, CallbackInfo ci) {
+        Blur blur = Modules.get(Blur.class);
+        if (blur != null && blur.fadingWithoutScreen()) {
+            blur.blurHere(context);
+        }
+    }
 
     @Inject(
         method = "extractTabList(Lnet/minecraft/client/gui/GuiGraphicsExtractor;Lnet/minecraft/client/DeltaTracker;)V",
@@ -58,6 +73,21 @@ public class HudMixin {
         }
     }
 
+    // The paint goes down before the item and sits under it.
+    @Inject(method = "extractSlot(Lnet/minecraft/client/gui/GuiGraphicsExtractor;IILnet/minecraft/client/DeltaTracker;Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/world/item/ItemStack;I)V",
+        at = @At("HEAD"))
+    private void onExtractSlot(GuiGraphicsExtractor context, int x, int y, DeltaTracker tickCounter,
+                               Player player, ItemStack stack, int seed, CallbackInfo ci) {
+        ItemHighlight highlight = Modules.get(ItemHighlight.class);
+        if (highlight == null) {
+            return;
+        }
+        int color = highlight.hotbarColorFor(stack);
+        if (color != 0) {
+            context.fill(x, y, x + 16, y + 16, color);
+        }
+    }
+
     // One HUD element each. Every one is skipped at the head of its own extract call.
     @Inject(method = "extractSpyglassOverlay", at = @At("HEAD"), cancellable = true)
     private void onSpyglass(CallbackInfo ci) {
@@ -87,6 +117,11 @@ public class HudMixin {
     @Inject(method = "extractEffects", at = @At("HEAD"), cancellable = true)
     private void onEffects(CallbackInfo ci) {
         offlineclient$skip(ci, ClearView::blocksEffectIcons);
+    }
+
+    @Inject(method = "extractCrosshair", at = @At("HEAD"), cancellable = true)
+    private void onCrosshair(CallbackInfo ci) {
+        offlineclient$skip(ci, ClearView::blocksCrosshair);
     }
 
     @Unique

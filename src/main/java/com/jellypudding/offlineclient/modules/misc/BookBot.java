@@ -27,19 +27,25 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Random;
 
-/**
- * Fills book and quill after book and quill with text. Random text makes
- * heavy books and a file writes whatever you like.
- */
+// Fills book and quill after book and quill with text.
+// Random text makes heavy books and a file writes whatever you like.
 public final class BookBot extends Module {
 
     public enum Mode { RANDOM, FILE }
 
-    public enum Characters { ASCII, UNICODE }
+    public enum Characters { ASCII, UNICODE, PAPER }
 
     // Book limits the server enforces.
     private static final int MAX_PAGES = 100;
     private static final int MAX_PAGE_LENGTH = 1024;
+
+    // The Paper layout. Pages before this hold one wide character and the rest ASCII.
+    private static final int PAPER_LIGHT_PAGES = 50;
+    private static final int PAPER_MIXED_WIDE = 110;
+
+    // Three bytes and two bytes of UTF-8 each.
+    private static final char WIDE_CHARACTER = 0x4E00;
+    private static final char MIDDLE_CHARACTER = 0x00A9;
 
     // Width in pixels and lines of one book page.
     private static final int PAGE_WIDTH = 114;
@@ -56,12 +62,15 @@ public final class BookBot extends Module {
         "Which characters random text draws from.", Characters.UNICODE)
         .describe(Characters.ASCII, "Plain printable letters and symbols.")
         .describe(Characters.UNICODE, "Any printable character. Far heavier per page.")
+        .describe(Characters.PAPER, "A fixed hundred page layout sized to the Paper packet limit. Pages and characters are ignored.")
         .under(mode, Mode.RANDOM);
     private final NumberSetting pages = new NumberSetting("Pages",
-        "Pages per book.", 50, 1, MAX_PAGES, 1).max(MAX_PAGES).under(mode, Mode.RANDOM);
+        "Pages per book.", 50, 1, MAX_PAGES, 1).max(MAX_PAGES)
+        .under(mode, () -> mode.is(Mode.RANDOM) && !characters.is(Characters.PAPER));
     private final NumberSetting perPage = new NumberSetting("Characters per page",
         "How many characters each page holds.", 128, 1, MAX_PAGE_LENGTH, 1)
-        .max(MAX_PAGE_LENGTH).under(mode, Mode.RANDOM);
+        .max(MAX_PAGE_LENGTH)
+        .under(mode, () -> mode.is(Mode.RANDOM) && !characters.is(Characters.PAPER));
     private final BoolSetting wordWrap = new BoolSetting("Word wrap",
         "Breaks lines between words the way the book screen would.", true)
         .under(mode, Mode.FILE);
@@ -138,6 +147,9 @@ public final class BookBot extends Module {
     }
 
     private List<String> randomPages() {
+        if (characters.is(Characters.PAPER)) {
+            return paperPages();
+        }
         int high = characters.is(Characters.ASCII) ? 0x7F : 0xD800;
         List<String> result = new ArrayList<>();
         for (int page = 0; page < pages.getInt(); page++) {
@@ -151,6 +163,38 @@ public final class BookBot extends Module {
             result.add(text.toString());
         }
         return result;
+    }
+
+    // A hundred pages built to sit right on the Paper packet size limit. The
+    // first fifty are mostly one byte characters and the last fifty are three.
+    private List<String> paperPages() {
+        List<String> result = new ArrayList<>(MAX_PAGES);
+        for (int page = 0; page < MAX_PAGES; page++) {
+            StringBuilder text = new StringBuilder(MAX_PAGE_LENGTH);
+            if (page < PAPER_LIGHT_PAGES) {
+                text.append(wide(1)).append(narrow(MAX_PAGE_LENGTH - 1));
+            } else if (page == PAPER_LIGHT_PAGES) {
+                text.append(wide(PAPER_MIXED_WIDE)).append(MIDDLE_CHARACTER)
+                    .append(narrow(MAX_PAGE_LENGTH - PAPER_MIXED_WIDE - 1));
+            } else {
+                text.append(wide(MAX_PAGE_LENGTH));
+            }
+            result.add(text.toString());
+        }
+        return result;
+    }
+
+    private String wide(int count) {
+        return String.valueOf(WIDE_CHARACTER).repeat(count);
+    }
+
+    private String narrow(int count) {
+        StringBuilder text = new StringBuilder(count);
+        while (text.length() < count) {
+            int codePoint = random.nextInt(0x21, 0x7F);
+            text.appendCodePoint(codePoint);
+        }
+        return text.toString();
     }
 
     // Null when the file cannot be read. A message says why.

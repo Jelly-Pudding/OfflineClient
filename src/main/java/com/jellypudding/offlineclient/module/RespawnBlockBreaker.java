@@ -12,11 +12,8 @@ import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.ItemUtil;
 import net.minecraft.core.BlockPos;
 
-/**
- * The shape shared by the modules that break a respawn block placed beside
- * the player. A subclass says what counts as a threat and whether the world
- * lets that block go off at all.
- */
+// The shape shared by modules that break a respawn block placed beside the
+// player. A subclass says what counts as a threat and whether it can go off.
 public abstract class RespawnBlockBreaker extends Module {
 
     private static final int TARGET_COLOR = 0xFFFF4040;
@@ -47,7 +44,7 @@ public abstract class RespawnBlockBreaker extends Module {
         addSettings(range, onlyDangerous, switchTool, rotate, render);
     }
 
-    // True when a blast here would reach the player. Distance is only weighed when asked.
+    // True when a blast here would reach the player. Distance only matters when asked.
     protected boolean dangerous(BlockPos pos) {
         return ExplosionUtil.respawnBlockThreat(pos, range.getValue(), onlyDangerous.isOn());
     }

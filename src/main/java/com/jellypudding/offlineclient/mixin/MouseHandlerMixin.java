@@ -2,6 +2,7 @@ package com.jellypudding.offlineclient.mixin;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.events.MouseScrollEvent;
+import com.jellypudding.offlineclient.modules.combat.AimAssist;
 import com.jellypudding.offlineclient.modules.player.GUIMove;
 import com.jellypudding.offlineclient.modules.player.MiddleClickExtra;
 import com.jellypudding.offlineclient.modules.render.FreeLook;
@@ -36,11 +37,13 @@ public abstract class MouseHandlerMixin {
             return;
         }
         FreeLook freeLook = Modules.get(FreeLook.class);
-        if (freeLook != null && freeLook.isActive()) {
+        if (freeLook != null && freeLook.stealsMouse()) {
             freeLook.turn(deltaYaw, deltaPitch);
             return;
         }
-        original.call(player, deltaYaw, deltaPitch);
+        AimAssist aim = Modules.get(AimAssist.class);
+        double scale = aim == null ? 1 : aim.mouseScale();
+        original.call(player, deltaYaw * scale, deltaPitch * scale);
     }
 
     @Inject(method = "onButton(JLnet/minecraft/client/input/MouseButtonInfo;I)V",

@@ -8,7 +8,9 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.EggItem;
 import net.minecraft.world.item.EnderpearlItem;
@@ -19,10 +21,10 @@ import net.minecraft.world.item.SnowballItem;
 import net.minecraft.world.item.ThrowablePotionItem;
 import net.minecraft.world.item.WindChargeItem;
 
-/**
- * Cuts the four tick pause the game puts between right clicks. Blocks
- * are left to FastPlace which shares the same delay cap.
- */
+import java.util.List;
+
+// Cuts the four tick pause the game puts between right clicks. Blocks
+// are left to FastPlace which shares the same delay cap.
 public final class FastUse extends Module {
 
     public enum Mode { ALL_ITEMS, CHOSEN_ONLY }
@@ -41,19 +43,20 @@ public final class FastUse extends Module {
         "Bottles of enchanting.", true).under(mode, Mode.CHOSEN_ONLY);
     private final BoolSetting throwables = new BoolSetting("Snowballs and eggs",
         "Snowballs and eggs and wind charges.", false).under(mode, Mode.CHOSEN_ONLY);
+    private final RegistryListSetting<Item> items = new RegistryListSetting<>("Items",
+        "Any other items to speed up. Click to pick them.", BuiltInRegistries.ITEM, List.of())
+        .under(mode, Mode.CHOSEN_ONLY);
     private final NumberSetting cooldown = new NumberSetting("Cooldown",
         "Ticks to keep between uses. 0 is one use every tick.", 0, 0, 4, 1, " ticks").max(4);
 
     public FastUse() {
         super("FastUse", "Removes the delay between right clicks for items.", Category.PLAYER);
-        addSettings(mode, food, pearls, potions, experience, throwables, cooldown);
+        addSettings(mode, food, pearls, potions, experience, throwables, items, cooldown);
         searchTags("fast pearl", "fast eat", "fast throw", "right click delay");
     }
 
-    /**
-     * Shared cap on the vanilla right click delay. The game sets it to
-     * four on every use and counts it down once a tick.
-     */
+    // Shared cap on the vanilla right click delay. The game sets it to
+    // four on every use and counts it down once a tick.
     public static void capUseDelay(int ticks) {
         OfflineClient.MC.rightClickDelay = Math.min(OfflineClient.MC.rightClickDelay, Math.max(0, ticks));
     }
@@ -77,6 +80,9 @@ public final class FastUse extends Module {
 
     private boolean wanted(ItemStack stack) {
         Item item = stack.getItem();
+        if (items.contains(item)) {
+            return true;
+        }
         if (food.isOn() && (stack.has(DataComponents.FOOD) || stack.has(DataComponents.CONSUMABLE))) {
             return true;
         }

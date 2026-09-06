@@ -6,7 +6,11 @@ import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.ExclusivityGroup;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.path.PathFinder;
+import com.jellypudding.offlineclient.path.PathGoal;
+import com.jellypudding.offlineclient.path.PathWalker;
 import com.jellypudding.offlineclient.util.InputUtil;
+import com.jellypudding.offlineclient.render.BoxStyle;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
@@ -29,14 +33,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Predicate;
 
-/**
- * Digs out a box marked with two corners. Blocks come out from the top down.
- */
+// Digs out a box marked with two corners. Blocks come out from the top down.
 public final class Excavator extends Module {
 
-    private static final int BOX_COLOR = 0xFF40C0FF;
     private static final int CORNER_COLOR = 0xFFFFD040;
-    private static final int CURRENT_COLOR = 0xFFFF5030;
 
     private final NumberSetting range = new NumberSetting("Range",
         "How far from your eyes a block may be.",
@@ -53,11 +53,22 @@ public final class Excavator extends Module {
         .min(1).under(speed, Speed.INSTANT);
     private final BoolSetting rotate = new BoolSetting("Rotate",
         "Turn towards each block on the server side.", true);
+    private final BoolSetting walkTo = new BoolSetting("Walk to blocks",
+        "Walks to the next block whilst it is out of reach.", false);
+    private final BoolSetting keepActive = new BoolSetting("Keep active",
+        "Stays on after the box is done so you can mark another one.", false);
+    private final BoolSetting logSelection = new BoolSetting("Log selection",
+        "Prints each corner you mark to chat.", true);
+    private final BoxStyle boxStyle = BoxStyle.white(BoxStyle.Shape.BOTH);
+    private final BoxStyle targetStyle = new BoxStyle("Target", BoxStyle.Shape.BOTH, 0);
 
     public enum Speed { LEGIT, INSTANT }
 
     // Ticks before a one hit block that did not vanish is sent again.
     private static final int RETRY_TICKS = 10;
+
+    private final PathFinder finder = new PathFinder();
+    private final PathWalker walker = new PathWalker();
 
     private BlockPos first;
     private BlockPos second;
@@ -71,7 +82,9 @@ public final class Excavator extends Module {
 
     public Excavator() {
         super("Excavator", "Digs out a box. Press the bind at each corner whilst it is on.", Category.WORLD);
-        addSettings(range, maxBlocks, speed, perTick, rotate);
+        addSettings(range, maxBlocks, speed, perTick, rotate, walkTo, keepActive, logSelection);
+        addSettings(boxStyle.settings());
+        addSettings(targetStyle.settings());
         searchTags("dig", "cuboid", "selection", "quarry");
     }
 
@@ -111,6 +124,7 @@ public final class Excavator extends Module {
     }
 
     private void clear() {
+        stopWalking();
         first = null;
         second = null;
         remaining.clear();
@@ -118,10 +132,8 @@ public final class Excavator extends Module {
         current = null;
     }
 
-    /**
-     * The bind marks the block under the crosshair whilst the module is on.
-     * Pressing it with nothing in view turns the module off again.
-     */
+    // The bind marks the block under the crosshair whilst the module is on.
+    // Pressing it with nothing in view turns the module off again.
     @Override
     public void onKeybind() {
         if (!isEnabled() || !inGame()) {
@@ -147,8 +159,10 @@ public final class Excavator extends Module {
             second = null;
             return;
         }
-        ChatUtil.message("§bExcavator §7second corner at §f" + text(pos)
-            + "§7. §f" + remaining.size() + "§7 blocks to dig.");
+        if (logSelection.isOn()) {
+            ChatUtil.message("§bExcavator §7second corner at §f" + text(pos)
+                + "§7. §f" + remaining.size() + "§7 blocks to dig.");
+        }
     }
 
     // The top layers come first. Sand and gravel never drop onto a cleared spot.
@@ -190,11 +204,15 @@ public final class Excavator extends Module {
         }
         // Holding attack means the player is mining by hand.
         if (InputUtil.physicallyHeld(mc.options.keyAttack) || mc.player.isUsingItem()) {
+            stopWalking();
             return;
         }
         if (remaining.isEmpty()) {
             ChatUtil.message("§bExcavator §7finished that box.");
             clear();
+            if (!keepActive.isOn()) {
+                setEnabled(false);
+            }
             return;
         }
         if (speed.is(Speed.INSTANT) && breakInstantly()) {
@@ -205,12 +223,54 @@ public final class Excavator extends Module {
             remaining.remove(current);
             current = null;
         }
+        if (current == null && walkTo.isOn() && !remaining.isEmpty()) {
+            walkOn();
+        } else {
+            stopWalking();
+        }
     }
 
-    /**
-     * Sends the break packets for the one hit blocks in reach. True when any
-     * went out. Slower blocks fall through to the held click path.
-     */
+    // Heads for the closest block left whilst none of them is in reach.
+    private void walkOn() {
+        PathFinder.Result result = finder.poll();
+        if (result != null) {
+            walker.follow(result.nodes());
+        }
+        if (finder.busy()) {
+            return;
+        }
+        if (walker.arrived() || walker.lost()) {
+            BlockPos target = closestLeft();
+            if (target != null) {
+                finder.search(PathFinder.standingAt(mc.player),
+                    new PathGoal.Around(target, Math.max(1, range.getValue() - 1)));
+            }
+            return;
+        }
+        walker.tick(finder.liveRules());
+    }
+
+    private BlockPos closestLeft() {
+        Vec3 eye = mc.player.getEyePosition();
+        BlockPos best = null;
+        double bestDistance = Double.MAX_VALUE;
+        for (BlockPos pos : remaining) {
+            double distance = eye.distanceToSqr(Vec3.atCenterOf(pos));
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                best = pos;
+            }
+        }
+        return best;
+    }
+
+    private void stopWalking() {
+        finder.cancel();
+        walker.stop();
+    }
+
+    // Sends the break packets for the one hit blocks in reach. True when any
+    // went out. Slower blocks fall through to the held click path.
     private boolean breakInstantly() {
         int now = mc.player.tickCount;
         if (now < lastTick) {
@@ -264,15 +324,15 @@ public final class Excavator extends Module {
             return;
         }
         if (second == null) {
-            event.getBatch().outlineBox(new AABB(first).inflate(0.005), CORNER_COLOR, true);
+            boxStyle.draw(event.getBatch(), new AABB(first).inflate(0.005), true);
             return;
         }
         AABB box = new AABB(first).minmax(new AABB(second));
-        event.getBatch().outlineBox(box.inflate(0.005), BOX_COLOR, true);
+        boxStyle.draw(event.getBatch(), box.inflate(0.005), true);
         event.getBatch().outlineBox(new AABB(first).deflate(0.3), CORNER_COLOR, true);
         event.getBatch().outlineBox(new AABB(second).deflate(0.3), CORNER_COLOR, true);
         if (current != null) {
-            event.getBatch().outlineBlock(current, CURRENT_COLOR, false);
+            targetStyle.draw(event.getBatch(), current, false);
         }
     }
 }

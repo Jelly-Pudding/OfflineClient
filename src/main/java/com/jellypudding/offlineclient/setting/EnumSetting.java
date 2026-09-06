@@ -60,11 +60,8 @@ public final class EnumSetting<E extends Enum<E>> extends Setting<E> {
         return label(value);
     }
 
-    /**
-     * Display text for a constant. An enum overriding toString keeps its own
-     * wording. Everything else reads as a sentence with LOW_HEALTH becoming
-     * Low health.
-     */
+    // Display text for a constant. An enum overriding toString keeps its
+    // own wording and everything else reads as a sentence such as Low health.
     public static String label(Enum<?> constant) {
         String custom = constant.toString();
         if (!custom.equals(constant.name())) {

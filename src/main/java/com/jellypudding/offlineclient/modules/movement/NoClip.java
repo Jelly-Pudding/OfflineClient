@@ -10,13 +10,8 @@ import com.jellypudding.offlineclient.util.MovementUtil;
 import net.minecraft.network.protocol.game.ClientboundPlayerPositionPacket;
 import net.minecraft.world.phys.Vec3;
 
-/**
- * PlayerMixin keeps the physics flag off whilst this is active. A vanilla
- * server refuses any move into a block it did not see you in and pulls you
- * back. The module only works where the server allows it. After a pull
- * back the collision comes back for a moment to let you settle instead of
- * fighting the server every tick.
- */
+// PlayerMixin keeps physics off whilst active. Vanilla and singleplayer pull you back.
+// Only works on a server that skips that check.
 public final class NoClip extends Module {
 
     // Ticks the collision stays on after the server pulls the player back.
@@ -30,7 +25,7 @@ public final class NoClip extends Module {
     private int settle;
 
     public NoClip() {
-        super("NoClip", "Turns your collision off. Only works on servers without the vanilla movement check.",
+        super("NoClip", "Turns your collision off. Vanilla servers and single player pull you straight back. Only works where the server skips that check.",
             Category.MOVEMENT);
         addSettings(speed);
         searchTags("phase", "through walls");

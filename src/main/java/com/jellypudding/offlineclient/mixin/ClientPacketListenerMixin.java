@@ -1,11 +1,15 @@
 package com.jellypudding.offlineclient.mixin;
 
 import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.event.events.EntityAddedEvent;
 import com.jellypudding.offlineclient.modules.player.NoRotate;
 import com.jellypudding.offlineclient.modules.render.NewChunks;
+import com.jellypudding.offlineclient.modules.render.NoRender;
 import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.network.protocol.game.ClientboundAddEntityPacket;
 import net.minecraft.network.protocol.game.ClientboundLevelChunkWithLightPacket;
 import net.minecraft.network.protocol.game.ClientboundPlayerPositionPacket;
 import net.minecraft.network.protocol.game.ClientboundPlayerRotationPacket;
@@ -18,15 +22,36 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(ClientPacketListener.class)
 public abstract class ClientPacketListenerMixin {
 
+    // Dropped on the network thread before the packet is handed to the main thread.
+    @Inject(method = "handleAddEntity(Lnet/minecraft/network/protocol/game/ClientboundAddEntityPacket;)V",
+        at = @At("HEAD"), cancellable = true)
+    private void onDropAddEntity(ClientboundAddEntityPacket packet, CallbackInfo ci) {
+        NoRender noRender = Modules.get(NoRender.class);
+        if (noRender != null && noRender.dropsSpawnPacket(packet.getType())) {
+            ci.cancel();
+        }
+    }
+
+    // Runs once on the network thread to bounce to the main thread. Only the main run has the entity.
+    @Inject(method = "handleAddEntity(Lnet/minecraft/network/protocol/game/ClientboundAddEntityPacket;)V",
+        at = @At("TAIL"))
+    private void onAddEntity(ClientboundAddEntityPacket packet, CallbackInfo ci) {
+        if (!OfflineClient.MC.isSameThread() || OfflineClient.MC.level == null) {
+            return;
+        }
+        Entity entity = OfflineClient.MC.level.getEntity(packet.getId());
+        if (entity != null) {
+            OfflineClient.INSTANCE.getEventBus().post(new EntityAddedEvent(entity));
+        }
+    }
+
     @Unique
     private float offlineclient$savedYaw;
     @Unique
     private float offlineclient$savedPitch;
 
-    /**
-     * Packet handlers run once on the network thread to bounce onto the main
-     * thread. Only the main thread run touches the player.
-     */
+    // Packet handlers run once on the network thread to bounce onto the main thread.
+    // Only the main thread run touches the player.
     @Unique
     private boolean offlineclient$noRotateActive() {
         if (!OfflineClient.MC.isSameThread() || OfflineClient.MC.player == null) {
@@ -52,10 +77,8 @@ public abstract class ClientPacketListenerMixin {
         player.yBodyRot = offlineclient$savedYaw;
     }
 
-    /**
-     * The chunk is in the world and every later packet is still queued behind
-     * this one. NewChunks reads the liquid here whilst the data is untouched.
-     */
+    // The chunk is in the world and every later packet is still queued behind this one.
+    // NewChunks reads the liquid here whilst the data is untouched.
     @Inject(
         method = "handleLevelChunkWithLight"
             + "(Lnet/minecraft/network/protocol/game/ClientboundLevelChunkWithLightPacket;)V",

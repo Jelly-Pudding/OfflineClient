@@ -6,23 +6,33 @@ import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.modules.render.Freecam;
-import com.jellypudding.offlineclient.setting.BoolSetting;
+import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.Modules;
 import org.lwjgl.glfw.GLFW;
 
 public final class AirJump extends Module {
 
-    private final BoolSetting holdHeight = new BoolSetting("Hold height",
-        "Holding jump keeps you at the height of your last jump.", false);
+    public enum Mode { TAP, HOLD, JETPACK }
+
+    private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
+        "What holding the jump key does once you are off the ground.", Mode.TAP)
+        .describe(Mode.TAP, "Only a fresh press jumps again.")
+        .describe(Mode.HOLD, "Holding jump keeps you at the height of your last jump.")
+        .describe(Mode.JETPACK, "Holding jump climbs for as long as you hold it.");
 
     // The block height the last jump started from.
     private int level;
 
     public AirJump() {
         super("AirJump", "Lets you jump again whilst in the air.", Category.MOVEMENT);
-        addSettings(holdHeight);
-        searchTags("double jump", "mid air");
+        addSettings(mode);
+        searchTags("double jump", "mid air", "jetpack");
+    }
+
+    @Override
+    public String getSuffix() {
+        return mode.is(Mode.TAP) ? null : mode.getValueString();
     }
 
     @Override
@@ -47,10 +57,10 @@ public final class AirJump extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!holdHeight.isOn() || !airborne() || !mc.options.keyJump.isDown()) {
+        if (mode.is(Mode.TAP) || !airborne() || !mc.options.keyJump.isDown()) {
             return;
         }
-        if (mc.player.blockPosition().getY() == level) {
+        if (mode.is(Mode.JETPACK) || mc.player.blockPosition().getY() == level) {
             mc.player.jumpFromGround();
         }
     }

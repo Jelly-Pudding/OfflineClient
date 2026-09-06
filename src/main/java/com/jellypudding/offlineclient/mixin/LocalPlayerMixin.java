@@ -15,17 +15,23 @@ import com.jellypudding.offlineclient.modules.movement.NoKnockback;
 import com.jellypudding.offlineclient.modules.movement.LongJump;
 import com.jellypudding.offlineclient.modules.movement.NoSlowdown;
 import com.jellypudding.offlineclient.modules.movement.EdgeGuard;
+import com.jellypudding.offlineclient.modules.movement.Sprint;
 import com.jellypudding.offlineclient.modules.movement.Step;
+import com.jellypudding.offlineclient.modules.movement.VehicleFly;
+import com.jellypudding.offlineclient.modules.player.AutoDrop;
 import com.jellypudding.offlineclient.modules.player.AutoEat;
 import com.jellypudding.offlineclient.modules.player.AutoGap;
 import com.jellypudding.offlineclient.modules.player.FastBreak;
+import com.jellypudding.offlineclient.modules.player.PortalMenus;
 import com.jellypudding.offlineclient.modules.player.Reach;
 import com.jellypudding.offlineclient.modules.render.AntiBlind;
 import com.jellypudding.offlineclient.modules.world.AirPlace;
 import com.jellypudding.offlineclient.util.Modules;
+import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.mojang.authlib.GameProfile;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.player.LocalPlayer;
@@ -34,6 +40,7 @@ import net.minecraft.core.Holder;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.entity.PlayerRideableJumping;
 import net.minecraft.world.entity.player.Abilities;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
@@ -47,6 +54,15 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(LocalPlayer.class)
 public abstract class LocalPlayerMixin extends AbstractClientPlayer {
+
+    // The throw key never gives away an item AutoDrop is guarding.
+    @Inject(method = "drop(Z)Z", at = @At("HEAD"), cancellable = true)
+    private void onDrop(boolean whole, CallbackInfoReturnable<Boolean> cir) {
+        AutoDrop autoDrop = Modules.get(AutoDrop.class);
+        if (autoDrop != null && autoDrop.guards(OfflineClient.MC.player.getMainHandItem())) {
+            cir.setReturnValue(false);
+        }
+    }
 
     @Shadow
     public float portalEffectIntensity;
@@ -67,11 +83,8 @@ public abstract class LocalPlayerMixin extends AbstractClientPlayer {
         OfflineClient.INSTANCE.getEventBus().post(TickEvent.INSTANCE);
     }
 
-    /**
-     * A mounted player never reaches sendPosition. Vanilla sends a rotation and
-     * a vehicle packet from the other side of this branch instead. Both events
-     * therefore straddle the branch so an aura still works on a horse.
-     */
+    // A mounted player never reaches sendPosition in this method.
+    // Posting here on both sides of that branch keeps an aura working on a horse.
     @Inject(method = "tick()V",
         at = @At(value = "INVOKE",
             target = "Lnet/minecraft/client/player/LocalPlayer;isPassenger()Z"))
@@ -82,6 +95,16 @@ public abstract class LocalPlayerMixin extends AbstractClientPlayer {
     @Inject(method = "tick()V", at = @At("TAIL"))
     private void onPostMotion(CallbackInfo ci) {
         OfflineClient.INSTANCE.getEventBus().post(PostMotionEvent.INSTANCE);
+    }
+
+    // Vanilla closes any screen the moment the portal effect starts. With no
+    // screen in sight that branch never runs.
+    @ModifyExpressionValue(method = "handlePortalTransitionEffect(Z)V",
+        at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/client/gui/Gui;screen()Lnet/minecraft/client/gui/screens/Screen;",
+            ordinal = 0))
+    private Screen hideScreenFromPortal(Screen original) {
+        return Modules.active(PortalMenus.class) == null ? original : null;
     }
 
     @WrapOperation(method = "aiStep()V",
@@ -162,11 +185,34 @@ public abstract class LocalPlayerMixin extends AbstractClientPlayer {
         }
     }
 
-    /**
-     * The one place creative flight reads the fly speed for its push up and
-     * down. Flight hands over its own vertical speed there. The fly speed
-     * itself carries the horizontal setting and must not scale the climb.
-     */
+    // Rage sprint answers the three vanilla sprint rules itself. Anything that
+    // would normally refuse a sprint such as a wall or an item in use is ignored.
+    @Inject(method = "canStartSprinting()Z", at = @At("HEAD"), cancellable = true)
+    private void onCanStartSprinting(CallbackInfoReturnable<Boolean> cir) {
+        Sprint sprint = Modules.get(Sprint.class);
+        if (sprint != null && sprint.rage()) {
+            cir.setReturnValue(!isSprinting() && sprint.rageWantsSprint((LocalPlayer) (Object) this));
+        }
+    }
+
+    @Inject(method = "shouldStopRunSprinting()Z", at = @At("HEAD"), cancellable = true)
+    private void onShouldStopRunSprinting(CallbackInfoReturnable<Boolean> cir) {
+        Sprint sprint = Modules.get(Sprint.class);
+        if (sprint != null && sprint.rage()) {
+            cir.setReturnValue(!sprint.rageWantsSprint((LocalPlayer) (Object) this));
+        }
+    }
+
+    @Inject(method = "shouldStopSwimSprinting()Z", at = @At("HEAD"), cancellable = true)
+    private void onShouldStopSwimSprinting(CallbackInfoReturnable<Boolean> cir) {
+        Sprint sprint = Modules.get(Sprint.class);
+        if (sprint != null && sprint.rage()) {
+            cir.setReturnValue(!sprint.rageWantsSprint((LocalPlayer) (Object) this));
+        }
+    }
+
+    // The one place creative flight reads the fly speed for its push up
+    // and down. Flight hands over its own vertical speed instead of scaling it.
     @WrapOperation(method = "aiStep()V",
         at = @At(value = "INVOKE",
             target = "Lnet/minecraft/world/entity/player/Abilities;getFlyingSpeed()F"))
@@ -175,10 +221,8 @@ public abstract class LocalPlayerMixin extends AbstractClientPlayer {
         return flight == null ? original.call(abilities) : flight.verticalFlySpeed();
     }
 
-    /**
-     * Crowd pushing checks this on both sides of a collision. False here blocks
-     * incoming pushes and leaves outgoing ones alone.
-     */
+    // Crowd pushing checks this on both sides of a collision. False here
+    // blocks incoming pushes and leaves outgoing ones alone.
     @Override
     public boolean isPushable() {
         AntiPush antiPush = Modules.get(AntiPush.class);
@@ -215,22 +259,13 @@ public abstract class LocalPlayerMixin extends AbstractClientPlayer {
         super.onInsideBubbleColumn(downwards);
     }
 
-    /**
-     * The client predicts mining five times slower in the air. FastBreak fixes
-     * the server side by rewriting packets and can raise the rate outright.
-     */
+    // The client predicts mining five times slower in the air. FastBreak
+    // fixes the server side by rewriting packets and can raise the rate outright.
     @Override
     public float getDestroySpeed(BlockState state) {
         float speed = super.getDestroySpeed(state);
         FastBreak fastBreak = Modules.get(FastBreak.class);
-        if (fastBreak == null) {
-            return speed;
-        }
-        // Vanilla divides purely on being off the ground. Water has its own factor.
-        if (!onGround() && fastBreak.removesAirPenalty()) {
-            speed *= 5;
-        }
-        return speed * fastBreak.speedMultiplier();
+        return fastBreak == null ? speed : fastBreak.adjustSpeed(state, speed);
     }
 
     // Honey and soul sand slow through this factor alone.
@@ -267,6 +302,25 @@ public abstract class LocalPlayerMixin extends AbstractClientPlayer {
         return noSlowdown.withoutSlowness(speed, slowness.getAmplifier());
     }
 
+    // A jumping mount takes the jump key to charge its leap. VehicleFly wants it to lift.
+    @Inject(method = "jumpableVehicle()Lnet/minecraft/world/entity/PlayerRideableJumping;",
+        at = @At("HEAD"), cancellable = true)
+    private void onJumpableVehicle(CallbackInfoReturnable<PlayerRideableJumping> cir) {
+        VehicleFly vehicleFly = Modules.get(VehicleFly.class);
+        if (vehicleFly != null && vehicleFly.takesJumpKey()) {
+            cir.setReturnValue(null);
+        }
+    }
+
+    // The charge of a horse jump. One is a full power leap.
+    @Inject(method = "getJumpRidingScale()F", at = @At("HEAD"), cancellable = true)
+    private void onGetJumpRidingScale(CallbackInfoReturnable<Float> cir) {
+        VehicleFly vehicleFly = Modules.get(VehicleFly.class);
+        if (vehicleFly != null && vehicleFly.maxesJump()) {
+            cir.setReturnValue(1f);
+        }
+    }
+
     // Vanilla shoves the player out of any block they stand inside.
     @Inject(method = "moveTowardsClosestSpace(DD)V", at = @At("HEAD"), cancellable = true)
     private void onMoveTowardsClosestSpace(double x, double z, CallbackInfo ci) {
@@ -297,7 +351,7 @@ public abstract class LocalPlayerMixin extends AbstractClientPlayer {
         double range = super.blockInteractionRange();
         Reach reach = Modules.get(Reach.class);
         if (reach != null) {
-            range = reach.adjustRange(range);
+            range = reach.adjustBlockRange(range);
         }
         // A block placed in the air has to be reachable to build onto.
         AirPlace airPlace = Modules.active(AirPlace.class);
@@ -308,7 +362,7 @@ public abstract class LocalPlayerMixin extends AbstractClientPlayer {
     public double entityInteractionRange() {
         double vanilla = super.entityInteractionRange();
         Reach reach = Modules.get(Reach.class);
-        return reach == null ? vanilla : reach.adjustRange(vanilla);
+        return reach == null ? vanilla : reach.adjustEntityRange(vanilla);
     }
 
     @Override
