@@ -6,7 +6,6 @@ import com.jellypudding.offlineclient.hud.HudManager;
 import com.jellypudding.offlineclient.hud.HudManager.Placement;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.modules.misc.HudModule;
-import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.MouseButtonEvent;

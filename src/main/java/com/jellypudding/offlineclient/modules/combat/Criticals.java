@@ -266,7 +266,7 @@ public final class Criticals extends Module {
     }
 
     // The server refuses a critical hit to anyone it believes is sprinting.
-    // This drops sprint for the swing and the client never shows a stutter.
+    // Dropping sprint for the swing keeps the client from stuttering.
     private void dropSprint() {
         if (!stopSprint.isOn() || resumeSprint || !mc.player.isSprinting()) {
             return;

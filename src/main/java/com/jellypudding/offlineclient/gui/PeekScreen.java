@@ -22,7 +22,6 @@ import java.util.List;
 public final class PeekScreen extends Screen {
 
     private static final int COLUMNS = 9;
-    private static final int SLOT = 18;
     private static final int PAD = 8;
     private static final int TITLE_HEIGHT = 14;
 

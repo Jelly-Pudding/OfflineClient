@@ -1,6 +1,5 @@
 package com.jellypudding.offlineclient.command.commands;
 
-import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.command.Command;
 import com.jellypudding.offlineclient.command.CommandManager;
 import com.jellypudding.offlineclient.config.MacroStore;
