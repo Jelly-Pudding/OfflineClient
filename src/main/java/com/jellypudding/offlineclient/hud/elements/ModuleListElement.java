@@ -71,7 +71,7 @@ public final class ModuleListElement extends HudElement {
             : module.getName() + " [" + suffix + "]");
     }
 
-    // Rows are right aligned inside the block so the ragged edge faces inward.
+    // Rows are right aligned inside the block. The ragged edge faces inward.
     @Override
     public void render(GuiGraphicsExtractor context, Font font) {
         List<Module> enabled = sorted(font);

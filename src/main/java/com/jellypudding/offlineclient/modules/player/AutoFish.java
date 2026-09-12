@@ -44,7 +44,7 @@ import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 
 // A bite is spotted from the bobber's synced flag and from the splash sound near it.
-// The delays run at the server's tick rate so a lagging server still reels in on time.
+// The delays run at the server's tick rate. A lagging server still reels in on time.
 public final class AutoFish extends Module {
 
     // Durability points left that count as about to break.
@@ -230,7 +230,7 @@ public final class AutoFish extends Module {
         tryReel(bobber);
     }
 
-    // The patience clock is wound whilst no bobber is out so a cast made by
+    // The patience clock is wound whilst no bobber is out. A cast made by
     // hand is timed the same as one made here.
     private void tryCast() {
         reeling = false;
@@ -522,7 +522,7 @@ public final class AutoFish extends Module {
             return;
         }
         if (!sameWater) {
-            // The same aim landed somewhere new so the old note was wrong.
+            // The same aim landed somewhere new. The old note was wrong.
             Spot fixed = new Spot(lastSpot.playerPos(), lastSpot.yaw(), lastSpot.pitch(),
                 bobber.position());
             spots.remove(lastSpot);

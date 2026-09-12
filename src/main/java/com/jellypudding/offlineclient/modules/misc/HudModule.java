@@ -26,7 +26,7 @@ import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.Setting;
 
-// The overlay itself lives in the hud package. This module owns the elements so
+// The overlay itself lives in the hud package. This module owns the elements and
 // their settings save and show in the ClickGUI like any other module.
 public final class HudModule extends Module {
 
@@ -36,7 +36,7 @@ public final class HudModule extends Module {
     // addSettings is final and files the settings away without handing out the module.
     @SuppressWarnings("this-escape")
     public HudModule() {
-        super("HUD", "The overlay you see whilst playing. Drag the pieces about with the hud command.",
+        super("HUD", "The overlay you see whilst playing. Drag the pieces about with .hud edit.",
             Category.MISC);
         add(watermark, new ModuleListElement(), new InfoBarElement(),
             new ArmourElement(), new PotionTimersElement(), new ItemCounterElement(),

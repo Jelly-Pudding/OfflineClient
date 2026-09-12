@@ -112,7 +112,7 @@ public final class ItemEsp extends Module {
         count = found;
     }
 
-    // An item hitbox is tiny so the fancy box is grown and lifted clear of the floor.
+    // An item hitbox is tiny. The fancy box is grown and lifted clear of the floor.
     private AABB shown(AABB box) {
         return size.is(Size.ACCURATE) ? box : box.inflate(FANCY_GROW).move(0, FANCY_LIFT, 0);
     }

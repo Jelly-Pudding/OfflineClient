@@ -24,14 +24,14 @@ A utility client custom designed for the anarchy lifesteal server [minecraftoffl
 - Press **TAB** whilst typing a command to autocomplete it.
 - Middle click a setting in the ClickGUI to put it back to its default. `.reset <module>` does the whole module.
 - `.macro add <name> <lines>` saves a list of chat lines or commands and `.macro key <name> <key>` puts it on a key.
-- `.hud` opens the overlay editor or bind a key to the HUD module. Drag each piece where you want it and hold shift to ignore snapping.
+- `.hud` toggles the overlay and `.hud edit` opens the editor.
 - Everything is saved to `.minecraft/offlineclient/config.json` automatically.
 - The title screen has a Recovery button that puts settings back to default.
 
 ## Modules
 
 <details>
-<summary><b>Combat</b> (32)</summary>
+<summary><b>Combat</b> (36)</summary>
 
 | Module | What it does |
 | --- | --- |
@@ -59,6 +59,10 @@ A utility client custom designed for the anarchy lifesteal server [minecraftoffl
 | HoleFiller | Seals the holes around an enemy before they can hide in one. |
 | AutoWeb | Throws cobwebs at an enemy to lock them in place. |
 | SelfWeb | Webs your own block to stop knockback. |
+| TpAura | Teleports around a target whilst hitting it. |
+| ArrowDamage | Makes your arrows fly faster and hit harder. |
+| FightBot | Runs after a target and fights it for you. |
+| Protect | Follows a friend about and fights off whatever comes near. |
 | AutoTrap | Places blocks around an enemy to trap them. |
 | SelfTrap | Places blocks above your head to stop crystals. |
 | Burrow | Places a blast proof block inside your own hitbox. |
@@ -91,7 +95,7 @@ A utility client custom designed for the anarchy lifesteal server [minecraftoffl
 | AntiVoid | Stops you falling into the void. |
 | HoleSnap | Stops your movement over a hole and drops you straight in. |
 | EdgeGuard | Stops you from going over edges without the sneak slowdown. |
-| AutoWalk | Holds a movement key for you. |
+| AutoWalk | Walks for you. |
 | AutoWasp | Flies you straight at a player on your elytra. |
 | AutoJump | Jumps for you whenever you are on the ground. |
 | HighJump | Jump higher than normal. |
@@ -112,7 +116,7 @@ A utility client custom designed for the anarchy lifesteal server [minecraftoffl
 </details>
 
 <details>
-<summary><b>Render</b> (49)</summary>
+<summary><b>Render</b> (51)</summary>
 
 | Module | What it does |
 | --- | --- |
@@ -165,11 +169,13 @@ A utility client custom designed for the anarchy lifesteal server [minecraftoffl
 | BlockSelection | Recolours the outline on the block you are looking at. |
 | Blur | Blurs the world behind menus and fades the blur in and out. |
 | BossStack | Stacks boss bars that share a name and tightens the gap between them. |
+| RemoteView | See the world through the eyes of another player or mob. |
+| BaseFinder | Lights up every block a player put down near you. |
 
 </details>
 
 <details>
-<summary><b>Player</b> (32)</summary>
+<summary><b>Player</b> (34)</summary>
 
 | Module | What it does |
 | --- | --- |
@@ -183,6 +189,8 @@ A utility client custom designed for the anarchy lifesteal server [minecraftoffl
 | FastPlace | Removes the delay between placing blocks. |
 | FastBreak | Breaks blocks faster and without the vanilla wait. |
 | FastUse | Removes the delay between right clicks for items. |
+| Throw | Fires a whole stack of throwables in one click. |
+| AutoSwitch | Cycles through your hotbar slots on their own. |
 | Reach | Reaches blocks and entities from further away. |
 | Rotation | Locks your view to a chosen angle. |
 | NoRotate | Stops the server from turning your head on teleports. |
@@ -209,7 +217,7 @@ A utility client custom designed for the anarchy lifesteal server [minecraftoffl
 </details>
 
 <details>
-<summary><b>World</b> (28)</summary>
+<summary><b>World</b> (33)</summary>
 
 | Module | What it does |
 | --- | --- |
@@ -227,6 +235,11 @@ A utility client custom designed for the anarchy lifesteal server [minecraftoffl
 | BonemealAura | Feeds bone meal to the plants around you. |
 | AutoBreed | Breeds the animals around you with the food you hold. |
 | AutoShearer | Shears every sheep that comes near you. |
+| BuildRandom | Places your held block at random spots around you. |
+| InstantBunker | Builds a small bunker round you in one jump. |
+| InfinityMiner | Mines ore for ever and lets Mending heal the pickaxe on the way. |
+| AutoBuild | Builds a saved shape where you right click. |
+| TemplateTool | Saves a build as a shape AutoBuild can put up again. |
 | AutoNametag | Names every chosen mob near you with the tag you carry. |
 | AutoMount | Climbs onto the nearest rideable mob or vehicle. |
 | EndermanLook | Keeps your gaze off endermen or puts it right on them. |
@@ -245,14 +258,16 @@ A utility client custom designed for the anarchy lifesteal server [minecraftoffl
 </details>
 
 <details>
-<summary><b>Misc</b> (26)</summary>
+<summary><b>Misc</b> (28)</summary>
 
 | Module | What it does |
 | --- | --- |
 | ClickGUI | Opens the GUI and sets its accent colour. |
-| HUD | The overlay you see whilst playing. Drag the pieces about with the hud command. |
-| TabGUI | Toggles modules from a small list you walk with the arrow keys. |
+| HUD | The overlay you see whilst playing. Drag the pieces about with .hud edit. |
+| TabGUI | A module list on screen you steer with the arrow keys. No menu to open. |
 | Panic | Turns every enabled module off at once. |
+| MassTPA | Sends a teleport request to every player on the server. |
+| SkinDerp | Makes your skin layers blink on and off for everyone to see. |
 | AutoLog | Logs you out when your health gets low. |
 | AutoReconnect | Rejoins the server after you get disconnected. |
 | AntiAFK | Keeps you from being kicked for idling. |

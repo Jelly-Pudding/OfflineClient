@@ -201,7 +201,7 @@ public final class Offhand extends Module {
         };
     }
 
-    // Right clicking these uses them in the main hand so the offhand never fires.
+    // Right clicking these uses them in the main hand. The offhand never fires.
     private static boolean usable(ItemStack held) {
         return held.is(Items.BOW) || held.is(Items.CROSSBOW) || held.is(Items.TRIDENT)
             || held.has(DataComponents.FOOD);

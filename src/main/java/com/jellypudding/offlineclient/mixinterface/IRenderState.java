@@ -17,7 +17,7 @@ public interface IRenderState {
 
     void offlineclient$setChams(boolean chams);
 
-    // Swaps the skin for a plain white texture so only the tint shows.
+    // Swaps the skin for a plain white texture. Only the tint shows.
     boolean offlineclient$isFlat();
 
     void offlineclient$setFlat(boolean flat);

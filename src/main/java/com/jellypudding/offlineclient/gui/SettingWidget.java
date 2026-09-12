@@ -30,6 +30,9 @@ public final class SettingWidget {
     // Each level of sub option steps in by this much with a guide line beside it.
     private static final int SUB_INDENT = 8;
 
+    // The chevron gutter on a row that has sub options beneath it.
+    private static final int FOLD_ZONE = 8;
+
     // A colour row carries a hue bar then a saturation bar then a brightness bar.
     private static final int COLOR_BARS = 3;
     private static final int BAR_HEIGHT = 3;
@@ -337,22 +340,29 @@ public final class SettingWidget {
     public static int blockHeight(Module module) {
         int height = GuiTheme.SETTING_HEIGHT + 4;
         List<Setting<?>> settings = module.getSettings();
+        Layout layout = layout(settings);
         for (int i = 0; i < settings.size(); i++) {
-            Setting<?> setting = settings.get(i);
-            if (setting.isVisible()) {
-                height += rowHeight(setting);
+            if (layout.shown[i]) {
+                height += rowHeight(settings.get(i));
             }
         }
         return height;
     }
 
-    // How far in each visible row sits. A sub option only steps in whilst
-    // it follows its parent or sibling directly and reads as its own row otherwise.
-    private static int[] indents(List<Setting<?>> settings) {
-        int[] result = new int[settings.size()];
-        // The previous row and its ancestors from the top down.
+    // Where each row of a block sits. A row is shown whilst it is visible and no
+    // setting above it in its family is folded. A parent row carries the chevron.
+    private record Layout(int[] indent, boolean[] shown, boolean[] parent) {
+    }
+
+    // A sub option only steps in whilst it follows its parent or sibling
+    // directly and reads as its own row otherwise.
+    private static Layout layout(List<Setting<?>> settings) {
+        int count = settings.size();
+        Layout layout = new Layout(new int[count], new boolean[count], new boolean[count]);
+        // The previous row and its ancestors from the top down with their indexes.
         List<Setting<?>> open = new ArrayList<>();
-        for (int i = 0; i < settings.size(); i++) {
+        List<Integer> openAt = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
             Setting<?> setting = settings.get(i);
             if (!setting.isVisible()) {
                 continue;
@@ -360,11 +370,30 @@ public final class SettingWidget {
             int depth = open.indexOf(setting.getParent()) + 1;
             while (open.size() > depth) {
                 open.removeLast();
+                openAt.removeLast();
             }
-            result[i] = depth * SUB_INDENT;
+            layout.indent[i] = depth * SUB_INDENT;
+            layout.shown[i] = open.stream().noneMatch(Setting::isFolded);
+            if (depth > 0) {
+                layout.parent[openAt.get(depth - 1)] = true;
+            }
             open.add(setting);
+            openAt.add(i);
         }
-        return result;
+        return layout;
+    }
+
+    // The chevron that folds a family away. Lit whilst the pointer is on it.
+    private static void foldMarker(GuiGraphicsExtractor context, Setting<?> setting, int x, int y,
+                                   int w, int h, int mouseX, int mouseY, boolean hoverAllowed) {
+        boolean rowHovered = hoverAllowed && isOver(mouseX, mouseY, x, y, w, h);
+        boolean hovered = rowHovered && mouseX < x + FOLD_ZONE;
+        if (rowHovered) {
+            context.fill(x, y, x + FOLD_ZONE, y + h, 0x14FFFFFF);
+            context.guiRenderState.up();
+        }
+        RenderUtil.chevron(context, x + 1, y + (GuiTheme.SETTING_HEIGHT - 3) / 2, setting.isFolded(),
+            hovered ? GuiTheme.text() : GuiTheme.textFaint());
     }
 
     // A hairline down the side of a sub option that ties it to its parent.
@@ -397,19 +426,25 @@ public final class SettingWidget {
         int cw = blockContentWidth(rowW);
         int y = rowY + 2;
         List<Setting<?>> settings = module.getSettings();
-        int[] indents = indents(settings);
+        Layout layout = layout(settings);
         for (int i = 0; i < settings.size(); i++) {
-            Setting<?> setting = settings.get(i);
-            if (!setting.isVisible()) {
+            if (!layout.shown[i]) {
                 continue;
             }
+            Setting<?> setting = settings.get(i);
             int h = rowHeight(setting);
-            int indent = indents[i];
+            int indent = layout.indent[i];
             if (indent > 0) {
                 subGuide(context, cx, y, indent, h);
             }
-            render(context, font, setting, cx + indent, y, cw - indent, mouseX, mouseY,
-                hoverAllowed, host);
+            int sx = cx + indent;
+            int sw = cw - indent;
+            if (layout.parent[i]) {
+                foldMarker(context, setting, sx, y, sw, h, mouseX, mouseY, hoverAllowed);
+                sx += FOLD_ZONE;
+                sw -= FOLD_ZONE;
+            }
+            render(context, font, setting, sx, y, sw, mouseX, mouseY, hoverAllowed, host);
             y += h;
         }
         // The bind of the module itself closes the block.
@@ -422,18 +457,26 @@ public final class SettingWidget {
         int cw = blockContentWidth(rowW);
         int y = rowY + 2;
         List<Setting<?>> settings = module.getSettings();
-        int[] indents = indents(settings);
+        Layout layout = layout(settings);
         for (int i = 0; i < settings.size(); i++) {
-            Setting<?> setting = settings.get(i);
-            if (!setting.isVisible()) {
+            if (!layout.shown[i]) {
                 continue;
             }
+            Setting<?> setting = settings.get(i);
             int h = rowHeight(setting);
             if (isOver(mx, my, cx, y, cw, h)) {
                 // The gutter beside a sub option still belongs to its row.
-                int indent = indents[i];
-                drag.indent = indent;
-                click(setting, mx, my, cx + indent, y, cw - indent, button, host, drag);
+                int sx = cx + layout.indent[i];
+                if (layout.parent[i]) {
+                    if (mx < sx + FOLD_ZONE) {
+                        setting.setFolded(!setting.isFolded());
+                        OfflineClient.INSTANCE.getConfigManager().saveSoon();
+                        return true;
+                    }
+                    sx += FOLD_ZONE;
+                }
+                drag.indent = sx - cx;
+                click(setting, mx, my, sx, y, cw - (sx - cx), button, host, drag);
                 return true;
             }
             y += h;

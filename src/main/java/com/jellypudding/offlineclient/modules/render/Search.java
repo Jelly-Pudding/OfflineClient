@@ -98,7 +98,7 @@ public final class Search extends Module {
     // The look of every block that has one. Kept after a block leaves the list.
     private final Map<Block, BlockLook> looks = new LinkedHashMap<>();
 
-    // One saved entry so the rows can be rebuilt after the config has loaded.
+    // One saved entry. The rows are rebuilt from it after the config has loaded.
     private final Setting<Void> store = new Setting<Void>("Block looks",
         "Where the look of each block is kept.", null) {
 
@@ -160,7 +160,7 @@ public final class Search extends Module {
         groupOf.defaultReturnValue(-1);
     }
 
-    // The per block rows are built as blocks are picked so they follow the list.
+    // The per block rows are built as blocks are picked and follow the list.
     @Override
     public List<Setting<?>> getSettings() {
         for (Block block : blocks.resolved()) {

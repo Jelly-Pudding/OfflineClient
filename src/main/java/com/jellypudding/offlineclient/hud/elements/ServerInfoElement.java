@@ -63,7 +63,7 @@ public final class ServerInfoElement extends HudElement {
         return rows;
     }
 
-    // Rows are right aligned so the block hugs the edge of the screen.
+    // Rows are right aligned. The block hugs the edge of the screen.
     @Override
     public void render(GuiGraphicsExtractor context, Font font) {
         int widest = width(font);

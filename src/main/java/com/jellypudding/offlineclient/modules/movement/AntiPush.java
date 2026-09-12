@@ -74,7 +74,7 @@ public final class AntiPush extends Module {
         return isEnabled() && geysers.isOn();
     }
 
-    // Fluid gravity lands after the move each tick so clearing it here leaves no sink at all.
+    // Fluid gravity lands after the move each tick. Clearing it here leaves no sink at all.
     @Subscribe
     private void onPostMotion(PostMotionEvent event) {
         if (!inGame() || !sinking.isOn()) {

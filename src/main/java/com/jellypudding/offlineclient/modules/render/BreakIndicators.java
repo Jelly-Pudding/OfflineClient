@@ -207,7 +207,7 @@ public final class BreakIndicators extends Module {
         }
     }
 
-    // The block's own outline so a slab or a fence gets a box its size.
+    // The block's own outline. A slab or a fence gets a box its size.
     private AABB boxOf(Indicator indicator) {
         VoxelShape shape = mc.level.getBlockState(indicator.pos).getShape(mc.level, indicator.pos);
         AABB full = shape.isEmpty() ? DrawBatch.blockBox(indicator.pos)

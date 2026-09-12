@@ -65,9 +65,8 @@ public final class Flight extends Module {
 
     private final HoverDip dip = new HoverDip();
 
-    // Ticks since the last packet dip and what the next movement packet must carry.
+    // Ticks since the last packet dip and whether the real height still has to go back out.
     private int packetTicks;
-    private volatile boolean dipPending;
     private volatile boolean restorePending;
 
     public Flight() {
@@ -97,7 +96,6 @@ public final class Flight extends Module {
     protected void onEnable() {
         dip.reset();
         packetTicks = 0;
-        dipPending = false;
         restorePending = false;
     }
 
@@ -182,43 +180,46 @@ public final class Flight extends Module {
         mc.player.setDeltaMovement(heading.x * horizontal, vy, heading.z * horizontal);
     }
 
-    // Arms a dip for the next movement packet once the interval is up.
-    // A dip into a block would be refused by the server so it waits for air.
+    // Sends the dip itself once the interval is up. Waiting for the client's own
+    // packet is no good since a still player only sends one every twenty ticks.
+    // A dip into a block would be refused by the server. It waits for air.
     private void packetDipTick() {
+        if (restorePending) {
+            // Nothing carried the real height back last tick.
+            restorePending = false;
+            sendHeight(mc.player.getY());
+            return;
+        }
         packetTicks++;
-        if (packetTicks < antiKickInterval.getInt() || dipPending) {
+        if (packetTicks < antiKickInterval.getInt()) {
             return;
         }
         if (!mc.level.noCollision(mc.player, mc.player.getBoundingBox().move(0, -PACKET_DIP, 0))) {
             return;
         }
         packetTicks = 0;
-        dipPending = true;
+        sendHeight(mc.player.getY() - PACKET_DIP);
+        restorePending = true;
     }
 
-    // The dip packet carries a lowered height and the one after it carries the
-    // real height back. A packet without a position is upgraded to hold one.
+    private void sendHeight(double y) {
+        mc.player.connection.send(new ServerboundMovePlayerPacket.Pos(mc.player.getX(), y,
+            mc.player.getZ(), mc.player.onGround(), mc.player.horizontalCollision));
+    }
+
+    // The client's own packet after a dip carries the real height back.
+    // One without a position is upgraded to hold it.
     @Subscribe
     private void onPacketSend(PacketSendEvent event) {
-        if (!antiKick.is(AntiKick.PACKET) || mc.player == null
+        if (!restorePending || mc.player == null
             || !(event.getPacket() instanceof ServerboundMovePlayerPacket packet)) {
             return;
         }
-        if (dipPending) {
-            dipPending = false;
-            restorePending = true;
-            event.setPacket(withHeight(packet, mc.player.getY() - PACKET_DIP));
-        } else if (restorePending) {
-            restorePending = false;
-            if (!packet.hasPosition()) {
-                event.setPacket(withHeight(packet, mc.player.getY()));
-            }
+        restorePending = false;
+        if (!packet.hasPosition()) {
+            event.setPacket(PacketUtil.withPosition(packet, mc.player, mc.player.getX(),
+                mc.player.getY(), mc.player.getZ(), packet.isOnGround()));
         }
-    }
-
-    private ServerboundMovePlayerPacket withHeight(ServerboundMovePlayerPacket packet, double y) {
-        return PacketUtil.withPosition(packet, mc.player, packet.getX(mc.player.getX()), y,
-            packet.getZ(mc.player.getZ()), packet.isOnGround());
     }
 
     // Fired on the netty thread. The server may not switch the flight off.

@@ -22,6 +22,7 @@ import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
+import com.jellypudding.offlineclient.util.ItemUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.ProjectileUtil;
@@ -45,6 +46,8 @@ import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.item.component.ItemContainerContents;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.ShulkerBoxBlock;
@@ -90,11 +93,14 @@ public final class HighwayBuilder extends Module {
     // Ticks a shulker restock may take before it is written off.
     private static final int RESTOCK_LIMIT = 200;
 
+    // Ticks a grind may run before it is abandoned.
+    private static final int GRIND_LIMIT = 2400;
+
     public enum Movement { AUTO, MANUAL }
 
     public enum Rotation { NONE, MINE, PLACE, BOTH }
 
-    private enum Stage { NONE, TAKE, BREAK }
+    private enum Stage { NONE, TAKE, BREAK, GRIND }
 
     private final NumberSetting width = new NumberSetting("Width",
         "How wide the highway is.", 4, 1, 5, 1, " blocks").min(1).max(9);
@@ -183,6 +189,21 @@ public final class HighwayBuilder extends Module {
         "Ticks between one inventory click and the next.", 3, 0, 20, 1, " ticks").min(0);
     private final BoolSetting searchShulkers = new BoolSetting("Search shulkers",
         "Sets a shulker box down behind you and takes the build blocks out of it.", true);
+    private final BoolSetting searchEnderChest = new BoolSetting("Search ender chest",
+        "Sets your ender chest down behind you and takes the build blocks out once the shulkers are empty. A Silk Touch pickaxe gets the chest back.",
+        false);
+    private final BoolSetting mineEnderChests = new BoolSetting("Mine ender chests",
+        "With obsidian on the list and no blocks left an ender chest goes down behind you and is mined for obsidian.",
+        true);
+    private final NumberSetting saveEnderChests = new NumberSetting("Save ender chests",
+        "Ender chests never used below this count.", 2, 0, 64, 1).min(0)
+        .under(mineEnderChests);
+    private final NumberSetting grindAmount = new NumberSetting("Grind amount",
+        "How much obsidian one grind gathers before building goes on.", 64, 8, 256, 8).min(1)
+        .under(mineEnderChests);
+    private final BoolSetting grindBlockade = new BoolSetting("Grind blockade",
+        "Walls you in with whatever blocks you have whilst the chests are ground.", true)
+        .under(mineEnderChests);
     private final BoolSetting ejectShulkers = new BoolSetting("Eject useless shulkers",
         "Drops any shulker box holding no blocks or pickaxes or food.", true);
     private final NumberSetting emptySlots = new NumberSetting("Minimum empty slots",
@@ -238,6 +259,9 @@ public final class HighwayBuilder extends Module {
 
     private Stage stage = Stage.NONE;
     private BlockPos shulkerPos;
+
+    // How much obsidian the running grind is heading for.
+    private int grindGoal;
     private int stageTicks;
 
     private final Set<Integer> ignoredCrystals = new HashSet<>();
@@ -268,7 +292,8 @@ public final class HighwayBuilder extends Module {
             mineAboveWalls, ceiling, replaceCeiling, fillLiquids, torches, torchSpacing,
             torchHeight, rotation, breakDelay, breaksPerTick, doubleMine, fastBreak,
             savePickaxes, placeRange, placeDelay, placementsPerTick, restock, inventoryDelay,
-            searchShulkers, ejectShulkers, emptySlots, throwTrash, trash,
+            searchShulkers, searchEnderChest, mineEnderChests, saveEnderChests, grindAmount,
+            grindBlockade, ejectShulkers, emptySlots, throwTrash, trash,
             crystalTraps, stopWhenEmpty, disconnectOnStop, outline,
             outlineColor, renderMine);
         addSettings(mineBox.settings());
@@ -808,7 +833,7 @@ public final class HighwayBuilder extends Module {
         return placed;
     }
 
-    // Jumps and paves underfoot after a fall so the line keeps its height.
+    // Jumps and paves underfoot after a fall. The line keeps its height.
     private boolean levelUp() {
         if (!reLevel.isOn()) {
             return false;
@@ -830,6 +855,9 @@ public final class HighwayBuilder extends Module {
 
     // Moves what the build needs up into the hotbar and drops what it does not.
     private boolean tidyInventory() {
+        if (stage == Stage.GRIND) {
+            return enderChestGrind();
+        }
         if (stage != Stage.NONE) {
             return shulkerRestock();
         }
@@ -841,6 +869,12 @@ public final class HighwayBuilder extends Module {
             return true;
         }
         if (searchShulkers.isOn() && shulkerRestock()) {
+            return true;
+        }
+        if (mineEnderChests.isOn() && enderChestGrind()) {
+            return true;
+        }
+        if (searchEnderChest.isOn() && enderChestRestock()) {
             return true;
         }
         if (ejectShulkers.isOn() && dropUselessShulker()) {
@@ -858,9 +892,15 @@ public final class HighwayBuilder extends Module {
             endRestock();
             return false;
         }
-        boolean standing = BlockUtil.state(shulkerPos).getBlock() instanceof ShulkerBoxBlock;
+        BlockState container = BlockUtil.state(shulkerPos);
+        boolean standing = container.getBlock() instanceof ShulkerBoxBlock || container.is(Blocks.ENDER_CHEST);
         if (stage == Stage.BREAK) {
             if (!standing) {
+                endRestock();
+                return false;
+            }
+            // Without Silk Touch an ender chest breaks into obsidian. It is left standing instead.
+            if (container.is(Blocks.ENDER_CHEST) && !holdSilkTouch(container)) {
                 endRestock();
                 return false;
             }
@@ -901,6 +941,131 @@ public final class HighwayBuilder extends Module {
         stage = Stage.TAKE;
         stageTicks = 0;
         return true;
+    }
+
+    // Sets an ender chest down and empties it the way a shulker is emptied.
+    private boolean enderChestRestock() {
+        if (hasBlocksSomewhere() || mc.player.getInventory().getFreeSlot() == -1) {
+            return false;
+        }
+        int slot = InventoryUtil.findSlot(Items.ENDER_CHEST, InventoryUtil.WHOLE_INVENTORY);
+        if (slot == -1) {
+            return false;
+        }
+        if (slot >= InventoryUtil.HOTBAR_SIZE) {
+            return moveToHotbar(slot);
+        }
+        BlockPos spot = restockSpot();
+        if (spot == null) {
+            return false;
+        }
+        slots.select(slot);
+        if (!BlockUtil.placeAny(spot, rotation.isAny(Rotation.PLACE, Rotation.BOTH), true)) {
+            return false;
+        }
+        shulkerPos = spot;
+        stage = Stage.TAKE;
+        stageTicks = 0;
+        return true;
+    }
+
+    // Sets ender chests down behind you and mines them back for obsidian until enough is held.
+    private boolean enderChestGrind() {
+        if (stage == Stage.NONE) {
+            if (hasBlocksSomewhere() || !allowed(Blocks.OBSIDIAN)
+                || enderChests() <= saveEnderChests.getInt()) {
+                return false;
+            }
+            BlockPos spot = restockSpot();
+            if (spot == null) {
+                return false;
+            }
+            shulkerPos = spot;
+            grindGoal = obsidian() + grindAmount.getInt();
+            stage = Stage.GRIND;
+            stageTicks = 0;
+            return true;
+        }
+        BlockState state = BlockUtil.state(shulkerPos);
+        boolean chestDown = state.is(Blocks.ENDER_CHEST);
+        if (++stageTicks > GRIND_LIMIT || obsidian() >= grindGoal
+            || (!chestDown && enderChests() <= saveEnderChests.getInt())) {
+            endRestock();
+            return false;
+        }
+        if (grindBlockade.isOn() && buildBlockade()) {
+            return true;
+        }
+        if (chestDown) {
+            if (!holdPlainPickaxe(state)) {
+                ChatUtil.error("HighwayBuilder needs a pickaxe without Silk Touch to grind ender chests.");
+                endRestock();
+                return false;
+            }
+            BlockMiner.mine(shulkerPos, rotation.isAny(Rotation.MINE, Rotation.BOTH));
+            return true;
+        }
+        BlockMiner.release();
+        if (!BlockUtil.isReplaceable(shulkerPos)) {
+            endRestock();
+            return false;
+        }
+        int slot = InventoryUtil.findSlot(Items.ENDER_CHEST, InventoryUtil.WHOLE_INVENTORY);
+        if (slot >= InventoryUtil.HOTBAR_SIZE) {
+            return moveToHotbar(slot);
+        }
+        slots.select(slot);
+        BlockUtil.placeAny(shulkerPos, rotation.isAny(Rotation.PLACE, Rotation.BOTH), true);
+        return true;
+    }
+
+    // Fills the sides round you at foot and head height apart from the chest spot.
+    // True when a block went down this tick.
+    private boolean buildBlockade() {
+        BlockPos feet = mc.player.blockPosition();
+        for (int up = 0; up < 2; up++) {
+            for (Direction side : Direction.Plane.HORIZONTAL) {
+                BlockPos pos = feet.above(up).relative(side);
+                if (pos.equals(shulkerPos) || !BlockUtil.isReplaceable(pos)) {
+                    continue;
+                }
+                int slot = BlockUtil.findBlockSlot();
+                if (slot == -1) {
+                    return false;
+                }
+                slots.select(slot);
+                return BlockUtil.placeAny(pos, rotation.isAny(Rotation.PLACE, Rotation.BOTH), true);
+            }
+        }
+        return false;
+    }
+
+    // Selects a pickaxe of the given kind for the block. True once one is in hand.
+    private boolean holdPickaxe(BlockState state, boolean silkTouch) {
+        int slot = ItemUtil.bestToolSlot(state, 1,
+            stack -> (ItemUtil.enchantLevel(Enchantments.SILK_TOUCH, stack) > 0) == silkTouch,
+            InventoryUtil.HOTBAR_SIZE);
+        if (slot == -1) {
+            return false;
+        }
+        slots.select(slot);
+        return true;
+    }
+
+    private boolean holdSilkTouch(BlockState state) {
+        return holdPickaxe(state, true);
+    }
+
+    private boolean holdPlainPickaxe(BlockState state) {
+        return holdPickaxe(state, false);
+    }
+
+    private int enderChests() {
+        return InventoryUtil.count(Items.ENDER_CHEST, InventoryUtil.WHOLE_INVENTORY);
+    }
+
+    private int obsidian() {
+        return InventoryUtil.count(Items.OBSIDIAN, InventoryUtil.WHOLE_INVENTORY);
     }
 
     // Quick moves what the build needs and closes once there is nothing left.

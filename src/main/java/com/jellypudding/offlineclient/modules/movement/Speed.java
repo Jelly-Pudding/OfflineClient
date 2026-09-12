@@ -98,7 +98,7 @@ public final class Speed extends Module {
         }
     }
 
-    // Runs after HoleSnap so a hole it has found is not pushed past.
+    // Runs after HoleSnap. A hole it has found is not pushed past.
     @Subscribe(priority = -10)
     private void onTick(TickEvent event) {
         if (!inGame()) {

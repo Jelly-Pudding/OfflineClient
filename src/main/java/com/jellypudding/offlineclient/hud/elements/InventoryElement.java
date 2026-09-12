@@ -13,7 +13,7 @@ import net.minecraft.world.item.ItemStack;
 import java.util.ArrayList;
 import java.util.List;
 
-// Your bag drawn on the screen so you do not have to open it.
+// Your bag drawn on the screen without opening it.
 public final class InventoryElement extends HudElement {
 
     private static final int COLUMNS = 9;

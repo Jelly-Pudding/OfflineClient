@@ -246,7 +246,7 @@ public final class BetterTooltips extends Module {
         return show.is(When.ALWAYS) || previewKey.isHeld();
     }
 
-    // True whilst a preview is up so the vanilla shulker item lines can go.
+    // True whilst a preview is up. The vanilla shulker item lines can then go.
     public boolean skipsContainerLines() {
         return isEnabled() && containers.isOn() && previewing();
     }

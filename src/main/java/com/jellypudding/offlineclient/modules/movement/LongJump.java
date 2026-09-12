@@ -147,7 +147,7 @@ public final class LongJump extends Module {
     }
 
     // Stage 0 sets off at a run. Stage 1 hops and multiplies the speed.
-    // Every stage after lets a sliver go so the server sees a slowing player.
+    // Every stage after lets a sliver go. The server sees a slowing player.
     private void burstTick(boolean moving) {
         if (stage != 0 && !mc.player.onGround() && autoDisable.isOn()) {
             airborne = true;

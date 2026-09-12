@@ -66,7 +66,7 @@ public final class PotionArrows extends Module {
     // Inventory indexes of the arrow stacks still to shoot.
     private final Deque<Integer> arrows = new ArrayDeque<>();
 
-    // Network slots swapped so the next arrow is the one the bow reads first.
+    // Network slots swapped. The next arrow is the one the bow reads first.
     private int movedFrom = -1;
     private int movedTo = -1;
     private boolean drawing;
@@ -169,7 +169,7 @@ public final class PotionArrows extends Module {
         drawing = true;
     }
 
-    // The look packet goes out on its own so the release lands whilst the server
+    // The look packet goes out on its own. The release lands whilst the server
     // still believes the bow points at the sky.
     private void fire() {
         mc.player.connection.send(new ServerboundMovePlayerPacket.Rot(
@@ -292,7 +292,7 @@ public final class PotionArrows extends Module {
     }
 
     // Puts the two swapped stacks back where they were. A shot that used up the
-    // whole stack leaves the front slot empty so the other stack goes home on its own.
+    // whole stack leaves the front slot empty and the other stack goes home on its own.
     private void restoreArrow() {
         if (movedFrom == -1) {
             return;

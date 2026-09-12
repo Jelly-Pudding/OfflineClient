@@ -26,7 +26,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
-// A runner moves about a third of a block a tick so webs are laid along
+// A runner moves about a third of a block a tick. Webs are laid along
 // their predicted path from ahead back to their feet and then around them.
 public final class AutoWeb extends Module {
 

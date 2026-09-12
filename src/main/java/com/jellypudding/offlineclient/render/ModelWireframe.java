@@ -18,7 +18,7 @@ import net.minecraft.world.phys.Vec3;
 import java.util.ArrayList;
 import java.util.List;
 
-// Gathers the quads of an entity's model so a module can draw them as boxes.
+// Gathers the quads of an entity's model for a module to draw as boxes.
 // The renderer runs against a collector and every quad is relative to the feet.
 public final class ModelWireframe {
 

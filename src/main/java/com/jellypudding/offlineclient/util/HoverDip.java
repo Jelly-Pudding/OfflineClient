@@ -21,7 +21,7 @@ public final class HoverDip {
     }
 
     // Runs every tick whilst hovering. Sinks for the dip ticks then climbs back
-    // over as many so the height is unchanged once the dip is over.
+    // over as many. The height is unchanged once the dip is over.
     public void tick(int interval, int dipTicks) {
         if (ticks >= Math.max(interval, dipTicks * 2)) {
             ticks = 0;

@@ -12,7 +12,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-// The server is noted on every join so AutoReconnect knows where to go even
+// The server is noted on every join. AutoReconnect then knows where to go even
 // when it was switched on after the disconnect.
 @Mixin(ConnectScreen.class)
 public abstract class ConnectScreenMixin {

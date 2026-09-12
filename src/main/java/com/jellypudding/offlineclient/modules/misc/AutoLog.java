@@ -18,6 +18,7 @@ import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ClientboundEntityEventPacket;
+import net.minecraft.network.protocol.game.ServerboundAttackPacket;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityEvent;
 import net.minecraft.world.entity.EntityType;
@@ -40,6 +41,15 @@ public final class AutoLog extends Module {
     // How close a player has to be for a one hit kill to count.
     private static final double INSTANT_KILL_RANGE = 8;
 
+    public enum Mode { QUIT, CHARS, SELF_HURT }
+
+    private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
+        "How you leave the server.", Mode.QUIT)
+        .describe(Mode.QUIT, "A plain disconnect.")
+        .describe(Mode.CHARS, "Sends a chat line the server refuses and gets you kicked. Slips past combat log plugins.")
+        .describe(Mode.SELF_HURT, "Attacks yourself which every server kicks you for. Slips past anti cheats too.");
+    private final BoolSetting pauseInCreative = new BoolSetting("Pause in creative",
+        "Does nothing whilst you are in creative mode.", true);
     private final NumberSetting health = new NumberSetting("Health",
         "Disconnect at or below this many hearts.", 3, 0.5, 9.5, 0.5, " hearts");
     private final BoolSetting predict = new BoolSetting("Predict damage",
@@ -83,7 +93,7 @@ public final class AutoLog extends Module {
     private final AtomicInteger pops = new AtomicInteger();
     private final Map<EntityType<?>, Integer> tally = new HashMap<>();
 
-    // Listens whilst the module is off so it can come back once healed.
+    // Listens whilst the module is off to come back once healed.
     private final Object healWatcher = new Object() {
         @Subscribe
         private void onTick(TickEvent event) {
@@ -102,7 +112,7 @@ public final class AutoLog extends Module {
 
     public AutoLog() {
         super("AutoLog", "Logs you out when your health gets low.", Category.MISC);
-        addSettings(health, predict, instantKill, totems, totemPops, onlyTrusted, entities, count,
+        addSettings(mode, pauseInCreative, health, predict, instantKill, totems, totemPops, onlyTrusted, entities, count,
             combinedLimit, eachLimit, entityRange, toggleOff, rearm, stopReconnect);
         searchTags("auto disconnect", "log out");
     }
@@ -129,7 +139,8 @@ public final class AutoLog extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || mc.player.isDeadOrDying()) {
+        if (!inGame() || mc.player.isDeadOrDying()
+            || (pauseInCreative.isOn() && mc.player.isCreative())) {
             return;
         }
         // Absorption hearts from golden apples and totems count as health.
@@ -233,8 +244,13 @@ public final class AutoLog extends Module {
                 OfflineClient.INSTANCE.getEventBus().register(healWatcher);
             }
         }
-        mc.player.connection.getConnection().disconnect(
-            Component.literal("§b[§3Offline§b] §fAutoLog saved you.\n§7" + reason + note));
+        switch (mode.getValue()) {
+            case QUIT -> mc.player.connection.getConnection().disconnect(
+                Component.literal("§b[§3Offline§b] §fAutoLog saved you.\n§7" + reason + note));
+            // The section sign is refused by every server.
+            case CHARS -> mc.player.connection.sendChat("§");
+            case SELF_HURT -> mc.player.connection.send(new ServerboundAttackPacket(mc.player.getId()));
+        }
     }
 
     private void stopWatching() {

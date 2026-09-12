@@ -24,6 +24,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 
 import java.util.List;
+import java.util.concurrent.ThreadLocalRandom;
 
 public final class FastBreak extends Module {
 
@@ -70,6 +71,9 @@ public final class FastBreak extends Module {
         .under(mode, Mode.NORMAL, Mode.DAMAGE);
     private final NumberSetting delay = new NumberSetting("Delay",
         "Ticks between breaking blocks. Vanilla waits 5.", 0, 0, 5, 1, " ticks");
+    private final NumberSetting chance = new NumberSetting("Chance",
+        "Share of blocks that get sped up. Below a hundred the timing looks less mechanical.",
+        100, 1, 100, 1, "%").min(1).max(100);
     private final BoolSetting safeFirstClick = new BoolSetting("Safe first click",
         "A single click on a block that breaks instantly does nothing. Hold to break it.", false);
     private final BoolSetting airPenalty = new BoolSetting("No air penalty",
@@ -81,10 +85,14 @@ public final class FastBreak extends Module {
     // True from a fresh press until the first block it lands on.
     private boolean freshClick;
 
+    // The block the chance was last rolled for and how the roll went.
+    private BlockPos rolledFor;
+    private boolean rolled;
+
     public FastBreak() {
         super("FastBreak", "Breaks blocks faster and without the vanilla wait.", Category.PLAYER);
         addSettings(mode, speed, hasteLevel, instamine, grimBypass, blocks, listMode, delay,
-            safeFirstClick, airPenalty);
+            chance, safeFirstClick, airPenalty);
         searchTags("fast break", "speed mine", "instant mine", "nuker speed", "haste",
             "break delay", "instamine");
     }
@@ -119,10 +127,26 @@ public final class FastBreak extends Module {
         if (airPenalty.isOn() && !mc.player.onGround()) {
             adjusted *= 5;
         }
-        if (!mode.is(Mode.NORMAL) || !allows(state.getBlock())) {
+        if (!mode.is(Mode.NORMAL) || !allows(state.getBlock()) || !lucky(aimedBlock())) {
             return adjusted;
         }
         return capBelowInstant(state, adjusted, adjusted * speed.getFloat());
+    }
+
+    private static BlockPos aimedBlock() {
+        return mc.hitResult instanceof BlockHitResult hit ? hit.getBlockPos() : null;
+    }
+
+    // One roll per block. The same block reads the same way for as long as it is aimed at.
+    private boolean lucky(BlockPos pos) {
+        if (chance.getInt() >= 100 || pos == null) {
+            return true;
+        }
+        if (!pos.equals(rolledFor)) {
+            rolledFor = pos.immutable();
+            rolled = ThreadLocalRandom.current().nextInt(100) < chance.getInt();
+        }
+        return rolled;
     }
 
     // A multiplier that turns a slow block into an instant one on the client would
@@ -147,7 +171,7 @@ public final class FastBreak extends Module {
 
     // Called from the game mode mixin with the progress one tick adds whilst mining.
     public float adjustProgress(BlockState state, float progress, float delta) {
-        if (!isEnabled() || !mode.is(Mode.DAMAGE) || !allows(state.getBlock())) {
+        if (!isEnabled() || !mode.is(Mode.DAMAGE) || !allows(state.getBlock()) || !lucky(aimedBlock())) {
             return delta;
         }
         return progress + delta >= SERVER_ACCEPTS ? 1 : delta;
@@ -157,7 +181,7 @@ public final class FastBreak extends Module {
     // stop pair. Damage mode only.
     public boolean instamines(BlockState state, BlockPos pos) {
         if (!isEnabled() || !inGame() || !mode.is(Mode.DAMAGE) || !instamine.isOn()
-            || mc.player.getAbilities().instabuild || !allows(state.getBlock())) {
+            || mc.player.getAbilities().instabuild || !allows(state.getBlock()) || !lucky(pos)) {
             return false;
         }
         float delta = state.getDestroyProgress(mc.player, mc.level, pos);
@@ -199,7 +223,7 @@ public final class FastBreak extends Module {
         } else {
             removeHaste();
         }
-        // A press is handled before this tick so an unused one is stale.
+        // A press is handled before this tick. An unused one is stale.
         freshClick = false;
         if (guardTicks > 0) {
             guardTicks--;
@@ -208,7 +232,7 @@ public final class FastBreak extends Module {
         mc.gameMode.destroyDelay = Math.min(mc.gameMode.destroyDelay, delay.getInt());
     }
 
-    // The effect is hidden so the status bar and the server side both stay as they were.
+    // The effect is hidden. The status bar and the server side both stay as they were.
     private void addHaste() {
         int amplifier = hasteLevel.getInt() - 1;
         MobEffectInstance haste = mc.player.getEffect(MobEffects.HASTE);

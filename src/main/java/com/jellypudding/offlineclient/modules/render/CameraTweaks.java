@@ -24,7 +24,7 @@ public final class CameraTweaks extends Module {
         "Uses your own third person distance instead of the vanilla four blocks.", true);
     private final NumberSetting distance = new NumberSetting("Distance",
         "How far behind you the third person camera sits.", 10, 1, 64, 0.5, " blocks")
-        .under(customDistance);
+        .max(150).under(customDistance);
     private final BoolSetting scrolling = new BoolSetting("Scrolling",
         "The mouse wheel moves the camera in and out whilst in third person.", true)
         .under(customDistance);

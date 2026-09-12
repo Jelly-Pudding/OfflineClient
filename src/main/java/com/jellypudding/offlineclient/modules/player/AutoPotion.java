@@ -8,11 +8,14 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.FaceMode;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.Modules;
+import com.jellypudding.offlineclient.util.RotationPriority;
 import com.jellypudding.offlineclient.util.UseHold;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
@@ -39,6 +42,8 @@ public final class AutoPotion extends Module {
     private final RegistryListSetting<Item> potions = new RegistryListSetting<>("Potions",
         "Bottles that may be drunk. Click to pick them.", BuiltInRegistries.ITEM,
         List.of(Items.POTION));
+    private final BoolSetting splash = new BoolSetting("Splash potions",
+        "Throws a splash healing potion at your feet when you carry one. Quicker than drinking.", true);
     private final BoolSetting fire = new BoolSetting("Fire resistance",
         "Drink fire resistance whilst you are burning.", true);
     private final BoolSetting topUp = new BoolSetting("Top up",
@@ -55,7 +60,7 @@ public final class AutoPotion extends Module {
     public AutoPotion() {
         super("AutoPotion", "Drinks a potion when you are hurt or burning or running low.",
             Category.PLAYER);
-        addSettings(health, potions, fire, topUp, topUpAt);
+        addSettings(health, potions, splash, fire, topUp, topUpAt);
         searchTags("potion", "auto drink", "strength", "fire resistance");
     }
 
@@ -115,6 +120,13 @@ public final class AutoPotion extends Module {
 
     private int findWanted() {
         if (EntityUtil.healthAtOrBelow(health.getValue())) {
+            if (splash.isOn()) {
+                int thrown = findSplash();
+                if (thrown != -1) {
+                    throwSplash(thrown);
+                    return -1;
+                }
+            }
             int slot = findPotion(effect -> effect == MobEffects.INSTANT_HEALTH.value()
                 || effect == MobEffects.REGENERATION.value());
             if (slot != -1) {
@@ -159,6 +171,34 @@ public final class AutoPotion extends Module {
             }
         }
         return -1;
+    }
+
+    // A splash bottle that heals. Thrown at the feet it lands at once.
+    private int findSplash() {
+        for (int i = 0; i < InventoryUtil.WHOLE_INVENTORY; i++) {
+            ItemStack stack = mc.player.getInventory().getItem(i);
+            if (!stack.is(Items.SPLASH_POTION) || !stack.has(DataComponents.POTION_CONTENTS)) {
+                continue;
+            }
+            for (MobEffectInstance effect : stack.get(DataComponents.POTION_CONTENTS).getAllEffects()) {
+                MobEffect kind = effect.getEffect().value();
+                if (kind == MobEffects.INSTANT_HEALTH.value() || kind == MobEffects.REGENERATION.value()) {
+                    return i;
+                }
+            }
+        }
+        return -1;
+    }
+
+    // The look packet goes out first. The bottle then lands on your own feet.
+    private void throwSplash(int slot) {
+        if (!loan.select(slot)) {
+            return;
+        }
+        FaceMode.SPAM.faceExact(mc.player.getYRot(), 90, RotationPriority.PLACE);
+        mc.gameMode.useItem(mc.player, InteractionHand.MAIN_HAND);
+        loan.giveBack();
+        settle = SETTLE_TICKS;
     }
 
     // Splash and lingering bottles are thrown and not drunk.

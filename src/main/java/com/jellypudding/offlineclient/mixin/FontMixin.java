@@ -14,7 +14,7 @@ public abstract class FontMixin {
     @ModifyExpressionValue(method = "getGlyph(ILnet/minecraft/network/chat/Style;)Lnet/minecraft/client/gui/font/glyphs/BakedGlyph;",
         at = @At(value = "INVOKE", target = "Lnet/minecraft/network/chat/Style;isObfuscated()Z"))
     private boolean onIsObfuscated(boolean obfuscated) {
-        // Asked for every glyph drawn so plain text must not reach the module lookup.
+        // Asked for every glyph drawn. Plain text must not reach the module lookup.
         if (!obfuscated) {
             return false;
         }

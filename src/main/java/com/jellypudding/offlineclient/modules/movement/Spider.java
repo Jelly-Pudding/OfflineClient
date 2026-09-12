@@ -63,7 +63,7 @@ public final class Spider extends Module {
         mc.player.setDeltaMovement(velocity.x, speed.getValue(), velocity.z);
     }
 
-    // Keeps pushing up into a ceiling so the collision holds the player against it.
+    // Keeps pushing up into a ceiling. The collision holds the player against it.
     // The keys then move the player along it at walking pace.
     private boolean hang() {
         if (mc.player.onGround() || mc.player.isShiftKeyDown() || mc.player.isInWater()

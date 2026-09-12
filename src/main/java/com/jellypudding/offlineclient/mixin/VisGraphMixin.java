@@ -9,8 +9,8 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-// A chunk meshed whilst Freecam is on treats every block as see through so
-// the camera can look into rooms the player's side would have culled.
+// A chunk meshed whilst Freecam is on treats every block as see through. The
+// camera can then look into rooms the player's side would have culled.
 @Mixin(VisGraph.class)
 public abstract class VisGraphMixin {
 

@@ -163,7 +163,7 @@ public final class RenderUtil {
     private static final float[] STAR_RING = ring(STAR_FILL, rasteriseStar(STAR_HOLLOW));
 
     // A five point star with soft edges. Chosen is solid and not chosen is a hollow ring.
-    // Each pixel carries the share of its samples inside the shape so edges stay crisp.
+    // Each pixel carries the share of its samples inside the shape. Edges stay crisp.
     public static void star(GuiGraphicsExtractor context, int x, int y, int color, boolean filled) {
         float[] cover = filled ? STAR_FILL : STAR_RING;
         for (int row = 0; row < STAR_SIZE; row++) {

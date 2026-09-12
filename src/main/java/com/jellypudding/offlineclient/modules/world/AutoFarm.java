@@ -170,7 +170,7 @@ public final class AutoFarm extends Module {
 
     private static final List<String> PLANT_NAMES = PLANTS.stream().map(Plant::name).toList();
 
-    // Vines grow fast enough to be a nuisance so they start switched off.
+    // Vines grow fast enough to be a nuisance. They start switched off.
     private static final List<String> PLANTS_ON = PLANT_NAMES.stream()
         .filter(name -> !name.endsWith("vines")).toList();
 

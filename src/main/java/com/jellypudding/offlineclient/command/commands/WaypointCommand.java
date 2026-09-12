@@ -19,7 +19,7 @@ public final class WaypointCommand extends Command {
 
     public WaypointCommand() {
         super("waypoint", "Saves named coordinates and marks them in the world.",
-            "waypoint <add|remove|colour|list|clear> [name] [x y z or hue]", "wp");
+            "waypoint <add|remove|colour|hide|show|list|clear> [name] [x y z or hue]", "wp");
     }
 
     @Override
@@ -32,6 +32,8 @@ public final class WaypointCommand extends Command {
             case "add", "set" -> add(args);
             case "remove", "delete", "del" -> remove(args);
             case "colour", "color" -> colour(args);
+            case "hide" -> hidden(args, true);
+            case "show" -> hidden(args, false);
             case "list" -> list();
             case "clear" -> clear();
             default -> usage();
@@ -108,6 +110,21 @@ public final class WaypointCommand extends Command {
             + (hue < 0 ? "the colour of its name." : "hue §f" + hue + "§7."));
     }
 
+    // A hidden waypoint stays saved and simply stops being drawn.
+    private void hidden(String[] args, boolean hide) {
+        if (args.length < 2) {
+            ChatUtil.error("Usage: waypoint " + (hide ? "hide" : "show") + " <name>");
+            return;
+        }
+        Waypoint waypoint = WaypointStore.get().find(args[1]);
+        if (waypoint == null) {
+            ChatUtil.error("There is no waypoint called " + args[1] + ".");
+            return;
+        }
+        WaypointStore.get().add(waypoint.withHidden(hide));
+        ChatUtil.message("§b" + waypoint.name() + " §7is now " + (hide ? "hidden." : "shown."));
+    }
+
     private void list() {
         List<Waypoint> waypoints = WaypointStore.get().here();
         if (waypoints.isEmpty()) {
@@ -117,7 +134,8 @@ public final class WaypointCommand extends Command {
         ChatUtil.message("§3Waypoints here:");
         for (Waypoint waypoint : waypoints) {
             ChatUtil.message("§b" + waypoint.name() + " §7at §f"
-                + waypoint.x() + " " + waypoint.y() + " " + waypoint.z());
+                + waypoint.x() + " " + waypoint.y() + " " + waypoint.z()
+                + (waypoint.hidden() ? " §8hidden" : ""));
         }
     }
 
@@ -134,7 +152,7 @@ public final class WaypointCommand extends Command {
     public List<String> complete(String[] tokens, int index, String current) {
         if (index == 1) {
             return CommandManager.filter(current,
-                List.of("add", "remove", "colour", "list", "clear"));
+                List.of("add", "remove", "colour", "hide", "show", "list", "clear"));
         }
         if (index == 2 && !tokens[1].equalsIgnoreCase("add")) {
             return CommandManager.filter(current, names());

@@ -24,7 +24,7 @@ public final class ContainerPreview implements ClientTooltipComponent {
         this(items, columns, BACKGROUND);
     }
 
-    // A background of the box's own dye colour so a red shulker previews red.
+    // A background of the box's own dye colour. A red shulker previews red.
     public ContainerPreview(List<ItemStack> items, int columns, int background) {
         this.items = items;
         this.columns = Math.max(1, Math.min(columns, items.size()));

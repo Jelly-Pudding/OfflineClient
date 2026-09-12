@@ -7,10 +7,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 // Works out where each element sits and draws it. The editor screen asks for the
-// same layout so what you drag is exactly what you see whilst playing.
+// same layout. What you drag is exactly what you see whilst playing.
 public final class HudManager {
 
-    // Kept clear of the screen edge so nothing touches the very border.
+    // Kept clear of the screen edge. Nothing touches the very border.
     private static final int MARGIN = 3;
 
     // An element whose anchor falls in the first third of the screen keeps its left

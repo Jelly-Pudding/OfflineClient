@@ -19,7 +19,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
-// The server keeps only one break at a time so the same block is sent over and over
+// The server keeps only one break at a time. The same block is sent over and over
 // to force it through. That is a lot of packets and a strict server will kick you.
 public final class Kaboom extends Module {
 
@@ -105,7 +105,7 @@ public final class Kaboom extends Module {
         }
     }
 
-    // Furthest first so the walls go before the floor and you do not fall out of reach.
+    // Furthest first. The walls go before the floor and you do not fall out of reach.
     private void gather() {
         Vec3 eyes = mc.player.getEyePosition();
         for (BlockPos pos : BlockUtil.positionsAround(mc.player.blockPosition(), (int) RADIUS)) {

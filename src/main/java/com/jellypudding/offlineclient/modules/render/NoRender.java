@@ -79,7 +79,7 @@ public final class NoRender extends Module {
         searchTags("hide", "no armor", "beacon", "glint", "banner", "sign");
     }
 
-    // Culling and rotations are baked into the chunk meshes so they need a rebuild.
+    // Culling and rotations are baked into the chunk meshes. They need a rebuild.
     @Override
     protected void onEnable() {
         rebuildChunks();

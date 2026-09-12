@@ -354,7 +354,7 @@ public final class ChestEsp extends Module {
         return otherColorFor(blockEntity);
     }
 
-    // A dropper is a kind of dispenser so it has to be asked about first.
+    // A dropper is a kind of dispenser. It has to be asked about first.
     private int otherColorFor(BlockEntity blockEntity) {
         if (blockEntity instanceof AbstractFurnaceBlockEntity) {
             return furnaces.isOn() ? furnaceColor.getColor() : 0;

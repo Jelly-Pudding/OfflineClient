@@ -536,7 +536,7 @@ public final class BlockUtil {
     }
 
     // Progress one tick of mining with this tool would make. The tool need not be held.
-    // Follows the vanilla dig speed maths so a packet miner can time a tool it swapped away.
+    // Follows the vanilla dig speed maths. A packet miner can time a tool it swapped away.
     public static float breakDelta(ItemStack tool, BlockPos pos) {
         BlockState state = state(pos);
         float hardness = state.getDestroySpeed(MC.level, pos);

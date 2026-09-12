@@ -4,6 +4,9 @@ import com.jellypudding.offlineclient.OfflineClient;
 import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.blaze3d.platform.Window;
 import net.minecraft.client.KeyMapping;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.network.protocol.game.ServerboundPlayerInputPacket;
+import net.minecraft.world.entity.player.Input;
 import org.lwjgl.glfw.GLFW;
 
 // The real state of input devices. A module forcing a mapping down is ignored here.
@@ -49,5 +52,20 @@ public final class InputUtil {
             case MOUSE -> GLFW.glfwGetMouseButton(window.handle(), key.getValue()) == GLFW.GLFW_PRESS;
             default -> mapping.isDown();
         };
+    }
+
+    // A copy of an input record with only the sneak flag changed.
+    public static Input withShift(Input input, boolean shift) {
+        return new Input(input.forward(), input.backward(), input.left(), input.right(),
+            input.jump(), shift, input.sprint());
+    }
+
+    // Tells the server the sneak flag by hand. Vanilla only resends the input on a change.
+    public static void sendShift(boolean shift) {
+        LocalPlayer player = OfflineClient.MC.player;
+        if (player != null) {
+            player.connection.send(new ServerboundPlayerInputPacket(
+                withShift(player.getLastSentInput(), shift)));
+        }
     }
 }

@@ -18,8 +18,8 @@ public final class AutoReconnect extends Module {
     private final BoolSetting buttons = new BoolSetting("Buttons",
         "Adds a reconnect button and a switch to the disconnected screen.", true);
 
-    // The last server joined. Kept even whilst the module is off so it can be
-    // switched on after a disconnect and still know where to go.
+    // The last server joined. Kept even whilst the module is off. Switched on
+    // after a disconnect it still knows where to go.
     private static ServerData lastServer;
 
     private int countdown = -1;

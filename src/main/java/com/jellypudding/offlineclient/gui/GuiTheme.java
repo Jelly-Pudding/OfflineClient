@@ -99,7 +99,7 @@ public final class GuiTheme {
         return ink(DEFAULT_TEXT_FAINT);
     }
 
-    // The outline and the edge stay solid so a see through panel still has a border.
+    // The outline and the edge stay solid. A see through panel still has a border.
     public static int outline() {
         ClickGuiModule gui = gui();
         return gui == null ? DEFAULT_OUTLINE

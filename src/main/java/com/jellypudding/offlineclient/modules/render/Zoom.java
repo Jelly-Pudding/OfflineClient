@@ -105,7 +105,7 @@ public final class Zoom extends Module {
         mc.options.sensitivity().set(savedSensitivity / divisor);
     }
 
-    // Eases the zoom once per camera update so the world and hand read the same value.
+    // Eases the zoom once per camera update. The world and hand read the same value.
     public void advance() {
         double target = isEnabled() ? factor.getValue() : 1;
         if (!smooth.isOn()) {

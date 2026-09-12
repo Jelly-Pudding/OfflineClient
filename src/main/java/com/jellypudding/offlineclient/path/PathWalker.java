@@ -135,7 +135,7 @@ public final class PathWalker {
         } else {
             InputUtil.release(MC.options.keyJump);
         }
-        // Forward is what climbs a ladder so let go of it on the way down.
+        // Forward is what climbs a ladder. Let go of it on the way down.
         if (climbing && node.getY() < here.getY()) {
             InputUtil.release(MC.options.keyUp);
         }

@@ -200,7 +200,7 @@ public final class Nametags extends Module {
         if (tags.size() > limit.getInt()) {
             tags = tags.subList(0, limit.getInt());
         }
-        // Far tags draw first so near ones sit on top.
+        // Far tags draw first. Near ones sit on top.
         for (int i = tags.size() - 1; i >= 0; i--) {
             drawTag(event.getContext(), tags.get(i));
         }
@@ -232,7 +232,7 @@ public final class Nametags extends Module {
         return !mc.options.getCameraType().isFirstPerson();
     }
 
-    // Items sit low so their tag hugs them. Everything else gets a little headroom.
+    // Items sit low and their tag hugs them. Everything else gets a little headroom.
     private static double tagHeight(Entity entity) {
         boolean item = entity instanceof ItemEntity || entity instanceof ItemFrame;
         return entity.getEyeHeight() + (item ? 0.2 : 0.5);

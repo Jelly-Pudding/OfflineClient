@@ -5,11 +5,13 @@ import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.modules.misc.BetterChat;
 import com.jellypudding.offlineclient.modules.render.Blur;
 import com.jellypudding.offlineclient.event.events.ChatSendEvent;
+import com.jellypudding.offlineclient.gui.ChatScrollBar;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.ChatScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 import org.lwjgl.glfw.GLFW;
 import org.spongepowered.asm.mixin.Mixin;
@@ -42,6 +44,37 @@ public abstract class ChatScreenMixin extends Screen {
     // The text the pick was made for. Typing anything else starts over at the top.
     @Unique
     private String offlineclient$pickedFor = "";
+
+    @Unique
+    private final ChatScrollBar offlineclient$scrollBar = new ChatScrollBar();
+
+    @Unique
+    private static boolean offlineclient$scrollBarOn() {
+        BetterChat betterChat = Modules.get(BetterChat.class);
+        return betterChat != null && betterChat.showsScrollbar();
+    }
+
+    @Inject(method = "mouseClicked(Lnet/minecraft/client/input/MouseButtonEvent;Z)Z",
+        at = @At("HEAD"), cancellable = true)
+    private void onMouseClicked(MouseButtonEvent event, boolean doubleClick,
+                                CallbackInfoReturnable<Boolean> cir) {
+        if (event.button() == 0 && offlineclient$scrollBarOn()
+            && offlineclient$scrollBar.mouseClicked(event.x(), event.y(), height)) {
+            cir.setReturnValue(true);
+        }
+    }
+
+    @Override
+    public boolean mouseDragged(MouseButtonEvent event, double dragX, double dragY) {
+        return offlineclient$scrollBar.mouseDragged(event.y(), height)
+            || super.mouseDragged(event, dragX, dragY);
+    }
+
+    @Override
+    public boolean mouseReleased(MouseButtonEvent event) {
+        offlineclient$scrollBar.mouseReleased();
+        return super.mouseReleased(event);
+    }
 
     // Vanilla completion only knows server commands.
     // Tab takes the picked completion and up or down arrows move the pick through the list.
@@ -95,7 +128,7 @@ public abstract class ChatScreenMixin extends Screen {
         return offlineclient$picked;
     }
 
-    // The chat draws no background of its own so the blur has to be asked for here.
+    // The chat draws no background of its own. The blur has to be asked for here.
     @Inject(method = "extractBackground(Lnet/minecraft/client/gui/GuiGraphicsExtractor;IIF)V",
         at = @At("HEAD"))
     private void onExtractBackground(GuiGraphicsExtractor context, int mouseX, int mouseY,
@@ -110,6 +143,9 @@ public abstract class ChatScreenMixin extends Screen {
         at = @At("TAIL"))
     private void onRender(GuiGraphicsExtractor context, int mouseX, int mouseY,
                           float partialTicks, CallbackInfo ci) {
+        if (offlineclient$scrollBarOn()) {
+            offlineclient$scrollBar.render(context, mouseX, mouseY);
+        }
         String text = input == null ? "" : input.getValue();
         String prefix = OfflineClient.INSTANCE.getCommandManager().getPrefix();
         if (!text.startsWith(prefix) || text.length() <= prefix.length()) {

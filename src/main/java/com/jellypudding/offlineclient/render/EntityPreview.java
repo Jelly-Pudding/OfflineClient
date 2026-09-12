@@ -20,7 +20,7 @@ public final class EntityPreview implements ClientTooltipComponent {
     private static final float SCALE = Math.max(WIDTH, HEIGHT) / 2f * 1.25f;
     private static final float TURN_PER_TICK = 3;
 
-    // Shared so every preview turns together and a fresh tooltip does not reset it.
+    // Shared. Every preview turns together and a fresh tooltip does not reset it.
     private static float spin;
 
     private final LivingEntity entity;

@@ -10,7 +10,7 @@ import org.spongepowered.asm.mixin.injection.ModifyArg;
 @Mixin(StringUtil.class)
 public abstract class StringUtilMixin {
 
-    // The only caller is the chat cut off so raising it here raises nothing else.
+    // The only caller is the chat cut off. Raising it here raises nothing else.
     @ModifyArg(method = "trimChatMessage",
         at = @At(value = "INVOKE",
             target = "Lnet/minecraft/util/StringUtil;truncateStringIfNecessary(Ljava/lang/String;IZ)Ljava/lang/String;"),

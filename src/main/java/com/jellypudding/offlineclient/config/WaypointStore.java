@@ -19,14 +19,28 @@ import java.util.Locale;
 public final class WaypointStore {
 
     // A hue below zero means the colour comes from the name.
-    public record Waypoint(String name, int x, int y, int z, String dimension, String server, int hue) {
+    public record Waypoint(String name, int x, int y, int z, String dimension, String server,
+                           int hue, boolean hidden) {
 
         public static final int AUTO_HUE = -1;
 
+        public Waypoint(String name, int x, int y, int z, String dimension, String server, int hue) {
+            this(name, x, y, z, dimension, server, hue, false);
+        }
+
         public Waypoint withHue(int hue) {
-            return new Waypoint(name, x, y, z, dimension, server, hue);
+            return new Waypoint(name, x, y, z, dimension, server, hue, hidden);
+        }
+
+        public Waypoint withHidden(boolean hidden) {
+            return new Waypoint(name, x, y, z, dimension, server, hue, hidden);
         }
     }
+
+    private static final String OVERWORLD = "minecraft:overworld";
+    private static final String NETHER = "minecraft:the_nether";
+    // Eight overworld blocks to one nether block.
+    private static final int NETHER_SCALE = 8;
 
     private static WaypointStore instance;
 
@@ -60,6 +74,29 @@ public final class WaypointStore {
             if (waypoint.dimension().equals(dimension) && waypoint.server().equals(server)) {
                 matching.add(waypoint);
             }
+        }
+        return matching;
+    }
+
+    // Waypoints from the other side of a nether portal with their coordinates scaled
+    // to this side. Empty anywhere but the overworld and the nether.
+    public List<Waypoint> mirrored() {
+        String dimension = currentDimension();
+        String server = currentServer();
+        String other = dimension.equals(OVERWORLD) ? NETHER : dimension.equals(NETHER) ? OVERWORLD : null;
+        List<Waypoint> matching = new ArrayList<>();
+        if (other == null) {
+            return matching;
+        }
+        boolean shrink = other.equals(OVERWORLD);
+        for (Waypoint waypoint : waypoints) {
+            if (!waypoint.dimension().equals(other) || !waypoint.server().equals(server)) {
+                continue;
+            }
+            int x = shrink ? Math.floorDiv(waypoint.x(), NETHER_SCALE) : waypoint.x() * NETHER_SCALE;
+            int z = shrink ? Math.floorDiv(waypoint.z(), NETHER_SCALE) : waypoint.z() * NETHER_SCALE;
+            matching.add(new Waypoint(waypoint.name(), x, waypoint.y(), z, dimension, server,
+                waypoint.hue(), waypoint.hidden()));
         }
         return matching;
     }
@@ -129,7 +166,8 @@ public final class WaypointStore {
                     o.get("z").getAsInt(),
                     o.get("dimension").getAsString(),
                     o.get("server").getAsString(),
-                    o.has("hue") ? o.get("hue").getAsInt() : Waypoint.AUTO_HUE));
+                    o.has("hue") ? o.get("hue").getAsInt() : Waypoint.AUTO_HUE,
+                    o.has("hidden") && o.get("hidden").getAsBoolean()));
             }
         } catch (Exception e) {
             OfflineClient.LOG.error("Failed to read waypoints", e);
@@ -148,6 +186,9 @@ public final class WaypointStore {
             o.addProperty("server", waypoint.server());
             if (waypoint.hue() >= 0) {
                 o.addProperty("hue", waypoint.hue());
+            }
+            if (waypoint.hidden()) {
+                o.addProperty("hidden", true);
             }
             root.add(o);
         }

@@ -37,7 +37,7 @@ public final class Step extends Module {
     // The most a legit step can climb. Any higher is not a jump the server believes.
     private static final double LEGIT_LIMIT = 1;
 
-    // Clears the ledge top by a hair so the box lands on it rather than in it.
+    // Clears the ledge top by a hair. The box lands on it rather than in it.
     private static final double LEDGE_CLEARANCE = 0.001;
 
     // How far onto the ledge the box is probed. A wall taller than the step fails this.
@@ -117,7 +117,7 @@ public final class Step extends Module {
     }
 
     // True whilst simple mode hands the game a taller step.
-    // EntityMixin reads this so a bouncy block does not read a step up as a huge bounce.
+    // EntityMixin reads this. A bouncy block must not read a step up as a huge bounce.
     public boolean raisesStepHeight() {
         return isEnabled() && mc.player != null && mode.is(Mode.SIMPLE) && allowed()
             && safeHeight > 0;
@@ -248,7 +248,7 @@ public final class Step extends Module {
     }
 
     // Walking into a block edge sends the two positions a jump would pass through.
-    // Then puts the player on top so the server sees a normal jump.
+    // Then puts the player on top. The server sees a normal jump.
     private void stepLegit() {
         if (!mc.player.horizontalCollision || !mc.player.onGround()) {
             return;

@@ -30,7 +30,7 @@ import java.util.Set;
 import java.util.function.Predicate;
 
 // Brews the chosen potion whilst a brewing stand is open using the game's own
-// brewing rules so any potion a server allows can be made.
+// brewing rules. Any potion a server allows can be made.
 public final class AutoBrewer extends Module {
 
     public enum Form { DRINKABLE, SPLASH, LINGERING }

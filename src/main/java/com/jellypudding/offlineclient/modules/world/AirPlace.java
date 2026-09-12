@@ -48,7 +48,7 @@ public final class AirPlace extends Module {
         searchTags("air place", "midair", "build");
     }
 
-    // Read by LocalPlayerMixin so blocks placed in the air can be built onto
+    // Read by LocalPlayerMixin. Blocks placed in the air can be built onto
     // from the same distance.
     public double getRange() {
         return range.getValue();

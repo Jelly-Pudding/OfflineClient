@@ -91,7 +91,7 @@ public final class Fullbright extends Module {
         running = null;
     }
 
-    // Undoes what one mode did so a mode swap whilst on leaves nothing behind.
+    // Undoes what one mode did. A mode swap whilst on leaves nothing behind.
     private void stop(Mode mode) {
         if (mode == null) {
             return;

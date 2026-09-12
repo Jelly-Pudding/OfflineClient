@@ -13,6 +13,8 @@ import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.FaceMode;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.RotationPriority;
+import com.jellypudding.offlineclient.util.SwingMode;
+import com.jellypudding.offlineclient.util.TargetFilter;
 import com.jellypudding.offlineclient.util.TargetPriority;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
@@ -22,7 +24,7 @@ import java.util.List;
 
 public final class TriggerBot extends Module {
 
-    // Hitbox reach is shorter than the centre distance so the scan runs wider.
+    // Hitbox reach is shorter than the centre distance. The scan runs wider.
     private static final double SCAN_MARGIN = 4;
 
     private final NumberSetting range = new NumberSetting("Range",
@@ -36,14 +38,19 @@ public final class TriggerBot extends Module {
         EntityFilter.Pick.ALL, List.of());
     private final BoolSetting onlyOnClick = new BoolSetting("Only on click",
         "Only swing whilst you hold the attack key down.", false);
+    private final BoolSetting whilstBlocking = new BoolSetting("Attack whilst blocking",
+        "Swings even whilst you hold a shield up.", false);
     private final EnumSetting<FaceMode> faceTarget = FaceMode.setting(FaceMode.SPAM);
+    private final EnumSetting<SwingMode> swing = SwingMode.setting(SwingMode.BOTH);
+    private final TargetFilter targets = new TargetFilter();
     private final AttackTimer timer = new AttackTimer();
 
     public TriggerBot() {
         super("TriggerBot", "Swings at whatever your crosshair is on.", Category.COMBAT);
         addSettings(range, fov, priority);
         addSettings(filter.settings());
-        addSettings(onlyOnClick, faceTarget);
+        addSettings(targets.settings());
+        addSettings(onlyOnClick, whilstBlocking, faceTarget, swing);
         addSettings(timer.settings());
         searchTags("click aura", "trigger");
     }
@@ -58,7 +65,8 @@ public final class TriggerBot extends Module {
         if (!inGame() || mc.gui.screen() != null || mc.player.isSpectator()) {
             return;
         }
-        if (mc.player.isUsingItem() || mc.gameMode.isDestroying() || Modules.eating()) {
+        boolean blocking = whilstBlocking.isOn() && mc.player.isBlocking();
+        if ((mc.player.isUsingItem() && !blocking) || mc.gameMode.isDestroying() || Modules.eating()) {
             return;
         }
         if (onlyOnClick.isOn() && !mc.options.keyAttack.isDown()) {
@@ -72,10 +80,10 @@ public final class TriggerBot extends Module {
         if (target == null) {
             return;
         }
-        // The look packet goes out first so the server sees a fair hit.
+        // The look packet goes out first. The server sees a fair hit.
         faceTarget.getValue().face(target.getBoundingBox().getCenter(), RotationPriority.ATTACK);
         mc.gameMode.attack(mc.player, target);
-        mc.player.swing(InteractionHand.MAIN_HAND);
+        swing.getValue().swing(InteractionHand.MAIN_HAND);
         timer.spent();
     }
 
@@ -83,7 +91,7 @@ public final class TriggerBot extends Module {
         if (!(entity instanceof LivingEntity living) || !living.isAlive()) {
             return false;
         }
-        if (EntityUtil.isFriend(entity) || !filter.matches(entity)) {
+        if (EntityUtil.isFriend(entity) || !filter.matches(entity) || !targets.allows(entity)) {
             return false;
         }
         // The crosshair reaches further than the server allows a hit.

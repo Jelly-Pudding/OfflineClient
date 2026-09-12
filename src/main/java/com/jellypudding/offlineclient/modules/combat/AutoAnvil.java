@@ -148,7 +148,7 @@ public final class AutoAnvil extends Module {
     }
 
     // The server opens the repair menu for a click that lands on an anvil already down.
-    // The menu is closed on the server too so the next click is not swallowed.
+    // The menu is closed on the server too. The next click is then not swallowed.
     @Subscribe
     private void onPacketReceive(PacketReceiveEvent event) {
         if (closeMenu.isOn() && event.getPacket() instanceof ClientboundOpenScreenPacket packet

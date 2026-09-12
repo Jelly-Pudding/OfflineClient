@@ -82,7 +82,7 @@ public final class AutoSign extends Module {
             return;
         }
         String[] lines = lines();
-        // Nothing learned yet so the screen is left for you to type into.
+        // Nothing learned yet. The screen is left for you to type into.
         if (lines == null) {
             return;
         }

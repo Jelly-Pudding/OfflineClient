@@ -112,7 +112,7 @@ public abstract class AbstractContainerScreenMixin extends Screen {
             ContainerInput.QUICK_MOVE, OfflineClient.MC.player);
     }
 
-    // Nothing opens whilst an item is on the cursor so a drop still lands.
+    // Nothing opens whilst an item is on the cursor. A drop still lands.
     private boolean openHovered(BetterTooltips tooltips) {
         if (hoveredSlot == null || hoveredSlot.getItem().isEmpty() || !getMenu().getCarried().isEmpty()) {
             return false;

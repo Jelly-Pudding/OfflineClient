@@ -12,7 +12,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 
-// Lines are split on a semicolon so several can go under one name.
+// Lines are split on a semicolon. Several can go under one name.
 public final class MacroCommand extends Command {
 
     private static final String SPLIT = ";";

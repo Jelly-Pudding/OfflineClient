@@ -165,7 +165,7 @@ public final class NewChunks extends Module {
     }
 
     // Called from ClientPacketListenerMixin the moment a chunk lands. Every later
-    // packet is still waiting so no flow update has been written into it yet.
+    // packet is still waiting. No flow update has been written into it yet.
     public void onChunkLoaded(int x, int z) {
         if (!isEnabled() || mc.level == null || !sameWorld()) {
             return;
@@ -250,7 +250,7 @@ public final class NewChunks extends Module {
     }
 
     // The first flowing liquid in the chunk or null. The palette test is only a prefilter
-    // so every hit is confirmed against the real blocks.
+    // and every hit is confirmed against the real blocks.
     private static BlockPos findFlowingLiquid(LevelChunk chunk, int spread) {
         LevelChunkSection[] sections = chunk.getSections();
         int minY = chunk.getMinY();

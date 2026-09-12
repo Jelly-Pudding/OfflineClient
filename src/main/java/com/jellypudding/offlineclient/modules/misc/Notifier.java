@@ -145,7 +145,7 @@ public final class Notifier extends Module {
     private final Map<Integer, Pearl> flying = bounded(MAX_TRACKED);
     // Totem pops per player since their last death.
     private final Map<UUID, Integer> pops = bounded(MAX_TRACKED);
-    // The last totem line printed for a player so the next one can replace it.
+    // The last totem line printed for a player. The next one replaces it.
     private final Map<UUID, String> popLines = bounded(MAX_TRACKED);
     // Names from the tab list. The netty thread must not read the real one.
     private final Map<UUID, String> tabNames = bounded(MAX_TRACKED);
@@ -322,7 +322,7 @@ public final class Notifier extends Module {
         return "§f" + name + (joined ? " §7joined." : " §7left.");
     }
 
-    // The client drops entities without a packet so the level is the only truth.
+    // The client drops entities without a packet. The level is the only truth.
     private void sweepWatched() {
         if (watched.isEmpty()) {
             return;
@@ -381,7 +381,7 @@ public final class Notifier extends Module {
             }
             long travelled = Math.round(pearl.start().distanceTo(pearl.pos()));
             long away = Math.round(mc.player.position().distanceTo(pearl.pos()));
-            say("§b" + pearl.owner() + "§7s pearl landed at " + coords(pearl.pos())
+            say("§b" + pearl.owner() + "§7's pearl landed at " + coords(pearl.pos())
                 + " §7after §b" + travelled + " §7blocks and is §b"
                 + away + " §7blocks away.");
         }

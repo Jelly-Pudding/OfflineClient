@@ -38,6 +38,8 @@ public final class Tunneller extends Module {
         "How tall the tunnel is.", 2, 1, 5, 1, " blocks").min(1).max(9);
     private final NumberSetting length = new NumberSetting("Length",
         "How far to dig before stopping.", 64, 8, 512, 8, " blocks").min(1);
+    private final BoolSetting wallLiquids = new BoolSetting("Wall off liquids",
+        "Covers water and lava the tunnel breaks into with a block from your hotbar.", true);
     private final BoolSetting torches = new BoolSetting("Torches",
         "Puts a torch on the floor as you go. Needs torches in your hotbar.", false);
     private final NumberSetting spacing = new NumberSetting("Torch spacing",
@@ -52,7 +54,7 @@ public final class Tunneller extends Module {
 
     public Tunneller() {
         super("Tunneller", "Digs a straight tunnel the way you face.", Category.WORLD);
-        addSettings(width, height, length, torches, spacing);
+        addSettings(width, height, length, wallLiquids, torches, spacing);
         searchTags("tunnel", "mine", "dig", "strip mine");
     }
 
@@ -120,6 +122,9 @@ public final class Tunneller extends Module {
         }
 
         walker.holdAxis();
+        if (wallLiquids.isOn() && sealLiquid()) {
+            return;
+        }
         current = nextBlock();
 
         if (current != null) {
@@ -163,6 +168,36 @@ public final class Tunneller extends Module {
             return best;
         }
         return null;
+    }
+
+    // A liquid touching the stretch just dug or about to be dug gets a block over it.
+    // True when a block went down this tick.
+    private boolean sealLiquid() {
+        double reach = mc.player.blockInteractionRange();
+        for (int depth = Math.max(1, cleared); depth <= cleared + 1; depth++) {
+            for (int lane = leftLane() - 1; lane <= rightLane() + 1; lane++) {
+                for (int up = -1; up <= height.getInt(); up++) {
+                    boolean inside = lane >= leftLane() && lane <= rightLane()
+                        && up >= 0 && up < height.getInt();
+                    BlockPos pos = walker.blockAt(depth, lane, up);
+                    if (inside || mc.level.getFluidState(pos).isEmpty()
+                        || BlockUtil.distanceTo(pos) > reach) {
+                        continue;
+                    }
+                    int slot = BlockUtil.findBlockSlot();
+                    if (slot == -1) {
+                        return false;
+                    }
+                    slots.select(slot);
+                    boolean placed = BlockUtil.placeAny(pos, true, true);
+                    slots.restoreIfMine();
+                    if (placed) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     private List<BlockPos> slice(int depth) {

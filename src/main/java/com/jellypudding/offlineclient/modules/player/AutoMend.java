@@ -23,8 +23,8 @@ import net.minecraft.world.item.enchantment.Enchantments;
 
 import java.util.List;
 
-// Repairs mending gear. Bottles only reach the pieces that are worn or held
-// so the offhand mode is the way to mend items that sit in the inventory.
+// Repairs mending gear. Bottles only reach the pieces that are worn or held.
+// The offhand mode is the way to mend items that sit in the inventory.
 public final class AutoMend extends Module {
 
     // Straight down. The throw direction rides on the use packet.

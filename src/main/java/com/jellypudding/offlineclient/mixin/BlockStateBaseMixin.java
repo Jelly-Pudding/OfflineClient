@@ -32,8 +32,8 @@ public abstract class BlockStateBaseMixin {
         }
     }
 
-    // GhostHand empties the outline of every block it cannot open so the
-    // crosshair reaches the container behind the wall.
+    // GhostHand empties the outline of every block it cannot open. The
+    // crosshair then reaches the container behind the wall.
     @Inject(
         method = "getShape(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/phys/shapes/CollisionContext;)Lnet/minecraft/world/phys/shapes/VoxelShape;",
         at = @At("HEAD"), cancellable = true)

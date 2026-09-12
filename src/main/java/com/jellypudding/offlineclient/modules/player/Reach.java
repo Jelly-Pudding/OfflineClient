@@ -8,9 +8,11 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 public final class Reach extends Module {
 
     private final NumberSetting blockRange = new NumberSetting("Block range",
-        "How far you can reach a block.", 5, 3, 6, 0.05, " blocks");
+        "How far you can reach a block. Servers refuse anything past six.", 5, 3, 6, 0.05, " blocks")
+        .max(10);
     private final NumberSetting entityRange = new NumberSetting("Entity range",
-        "How far you can reach an entity.", 5, 3, 6, 0.05, " blocks");
+        "How far you can reach an entity. Servers refuse anything past six.", 5, 3, 6, 0.05, " blocks")
+        .max(10);
 
     public Reach() {
         super("Reach", "Reaches blocks and entities from further away.", Category.PLAYER);

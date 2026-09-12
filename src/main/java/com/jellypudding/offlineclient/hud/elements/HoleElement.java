@@ -12,7 +12,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.state.BlockState;
 
-// A small plan of what surrounds your feet so you can see at a glance whether a
+// A small plan of what surrounds your feet. Shows at a glance whether a
 // crystal can reach you.
 public final class HoleElement extends HudElement {
 

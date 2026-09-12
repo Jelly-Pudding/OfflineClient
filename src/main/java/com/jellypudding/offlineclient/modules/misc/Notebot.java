@@ -392,7 +392,7 @@ public final class Notebot extends Module {
         return new Note(instrument, state.getValue(NoteBlock.NOTE));
     }
 
-    // Some servers alter the block state so the block underneath is the truth.
+    // Some servers alter the block state. The block underneath is the truth.
     private NoteBlockInstrument instrumentAt(BlockState state, BlockPos pos) {
         return detect.is(Detect.BELOW_BLOCK)
             ? BlockUtil.state(pos.below()).instrument() : state.getValue(NoteBlock.INSTRUMENT);

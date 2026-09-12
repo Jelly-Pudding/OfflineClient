@@ -12,19 +12,30 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.DamageUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.InventoryUtil;
+import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.ItemUtil;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.item.ItemStack;
 
 public final class AutoWeapon extends Module {
 
-    public enum Prefer { SWORD, AXE }
+    public enum Prefer { SWORD, AXE, SPEED }
 
     private final EnumSetting<Prefer> prefer = new EnumSetting<>("Prefer",
-        "Which kind of weapon wins when both are close in damage.", Prefer.SWORD);
+        "Which weapon wins when both are close in damage.", Prefer.SWORD)
+        .describe(Prefer.SWORD, "The sword unless the axe hits much harder.")
+        .describe(Prefer.AXE, "The axe unless the sword hits much harder.")
+        .describe(Prefer.SPEED, "Whichever swings fastest. More hits a second.");
+    private final BoolSetting hover = new BoolSetting("Swap on hover",
+        "Switches as soon as your crosshair rests on a target. The weapon is in hand before you click.",
+        false);
     private final NumberSetting threshold = new NumberSetting("Threshold",
-        "How much more damage the other kind must deal after their armour to win.", 2, 0, 10, 0.5);
+        "How much more damage the other kind must deal after their armour to win.", 2, 0, 10, 0.5)
+        .under(prefer, Prefer.SWORD, Prefer.AXE);
     private final BoolSetting antiBreak = new BoolSetting("Anti break",
         "Skip weapons that are about to break.", true);
     private final BoolSetting switchBack = new BoolSetting("Switch back",
@@ -38,7 +49,7 @@ public final class AutoWeapon extends Module {
 
     public AutoWeapon() {
         super("AutoWeapon", "Switches to your strongest sword or axe when you attack.", Category.COMBAT);
-        addSettings(prefer, threshold, antiBreak, switchBack, releaseTime);
+        addSettings(prefer, threshold, hover, antiBreak, switchBack, releaseTime);
         searchTags("auto sword", "auto axe", "weapon switch");
     }
 
@@ -76,9 +87,12 @@ public final class AutoWeapon extends Module {
             return;
         }
 
+        arm(target);
+    }
+
+    private void arm(LivingEntity target) {
         int best = bestSlot(target);
-        int selected = InventoryUtil.selectedSlot();
-        if (best != -1 && best != selected) {
+        if (best != -1 && best != InventoryUtil.selectedSlot()) {
             slots.select(best);
         }
         timer = releaseTime.getInt();
@@ -86,7 +100,17 @@ public final class AutoWeapon extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || !slots.isHolding()) {
+        if (!inGame()) {
+            return;
+        }
+        if (hover.isOn() && !mc.player.isDeadOrDying()
+            && mc.hitResult instanceof EntityHitResult hit
+            && hit.getEntity() instanceof LivingEntity target && target.isAlive()
+            && !EntityUtil.isFriend(target)) {
+            arm(target);
+            return;
+        }
+        if (!slots.isHolding()) {
             return;
         }
         if (mc.player.isDeadOrDying()) {
@@ -107,8 +131,29 @@ public final class AutoWeapon extends Module {
     }
 
     private int bestSlot(LivingEntity target) {
-        return bestWeaponSlot(target, prefer.getValue() == Prefer.SWORD,
-            threshold.getValue(), antiBreak.isOn());
+        if (prefer.is(Prefer.SPEED)) {
+            return fastestWeaponSlot(antiBreak.isOn());
+        }
+        return bestWeaponSlot(target, prefer.is(Prefer.SWORD), threshold.getValue(), antiBreak.isOn());
+    }
+
+    // The hotbar slot holding the sword or axe that swings most often or minus one.
+    public static int fastestWeaponSlot(boolean skipBreaking) {
+        int best = -1;
+        double bestSpeed = 0;
+        for (int i = 0; i < InventoryUtil.HOTBAR_SIZE; i++) {
+            ItemStack stack = mc.player.getInventory().getItem(i);
+            if (!stack.is(ItemTags.SWORDS) && !stack.is(ItemTags.AXES)
+                || (skipBreaking && ItemUtil.nearlyBroken(stack))) {
+                continue;
+            }
+            double speed = ItemUtil.attributeValue(stack, Attributes.ATTACK_SPEED, EquipmentSlot.MAINHAND);
+            if (speed > bestSpeed) {
+                bestSpeed = speed;
+                best = i;
+            }
+        }
+        return best;
     }
 
     public static int bestWeaponSlot(LivingEntity target) {

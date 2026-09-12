@@ -17,6 +17,10 @@ public abstract class Setting<T> {
     // The setting this one is a sub option of. Null for a top level row.
     private Setting<?> parent;
 
+    // A folded setting hides its sub options in the GUI behind a chevron.
+    private boolean folded;
+    private boolean foldedByDefault;
+
     protected Setting(String name, String description, T defaultValue) {
         this.name = name;
         this.description = description;
@@ -89,6 +93,31 @@ public abstract class Setting<T> {
 
     public Setting<?> getParent() {
         return parent;
+    }
+
+    // Starts with the sub options tucked away. Only worth it for a big group.
+    @SuppressWarnings("unchecked")
+    public <S extends Setting<T>> S startFolded() {
+        folded = true;
+        foldedByDefault = true;
+        return (S) this;
+    }
+
+    public boolean isFolded() {
+        return folded;
+    }
+
+    public void setFolded(boolean folded) {
+        this.folded = folded;
+    }
+
+    public void resetFold() {
+        folded = foldedByDefault;
+    }
+
+    // Only a fold that differs from the default is worth saving.
+    public boolean foldChanged() {
+        return folded != foldedByDefault;
     }
 
     // How many settings this one sits beneath.

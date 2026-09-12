@@ -93,15 +93,6 @@ public final class ListPickerScreen<T> extends Screen {
                 available.add(entry);
             }
         }
-        if (!query.isEmpty()) {
-            // The registry id is the weaker field. A namespaced search
-            // still finds the entry.
-            List<Entry<T>> matches = SearchRank.rank(available,
-                entry -> SearchRank.best(query, entry.name(), entry.id()));
-            available.clear();
-            available.addAll(matches);
-        }
-
         chosen.clear();
         for (T value : setting.chosen()) {
             Entry<T> entry = byValue.get(value);
@@ -109,9 +100,26 @@ public final class ListPickerScreen<T> extends Screen {
                 chosen.add(entry);
             }
         }
+        // Both columns narrow to the search. The chosen column keeps its pick order.
+        if (!query.isEmpty()) {
+            narrow(available, query, true);
+            narrow(chosen, query, false);
+        }
         int view = listHeight();
         leftBar.setOffset(ScrollBar.clamp(leftBar.getOffset(), available.size() * ROW_HEIGHT, view));
         rightBar.setOffset(ScrollBar.clamp(rightBar.getOffset(), chosen.size() * ROW_HEIGHT, view));
+    }
+
+    // The registry id is the weaker field. A namespaced search still finds the entry.
+    private static <T> void narrow(List<Entry<T>> list, String query, boolean rank) {
+        if (rank) {
+            List<Entry<T>> matches = SearchRank.rank(list,
+                entry -> SearchRank.best(query, entry.name(), entry.id()));
+            list.clear();
+            list.addAll(matches);
+            return;
+        }
+        list.removeIf(entry -> SearchRank.best(query, entry.name(), entry.id()) == SearchRank.NO_MATCH);
     }
 
     private int listHeight() {
@@ -173,7 +181,8 @@ public final class ListPickerScreen<T> extends Screen {
         // Adds what the search left in view. A narrowed list is picked in one go.
         button(context, font, addAllX(), search.isEmpty() ? "add all" : "add shown", overAddAll,
             !available.isEmpty());
-        button(context, font, clearX(), "clear all", overClear, !chosen.isEmpty());
+        button(context, font, clearX(), search.isEmpty() ? "clear all" : "clear shown", overClear,
+            !chosen.isEmpty());
 
         if (tooltip != null && !tooltip.isEmpty()) {
             RenderUtil.tooltip(context, font, List.of(tooltip), mouseX, mouseY, width, height);
@@ -263,7 +272,11 @@ public final class ListPickerScreen<T> extends Screen {
             return true;
         }
         if (overButton(mx, my, clearX())) {
-            setting.clear();
+            if (search.isEmpty()) {
+                setting.clear();
+            } else {
+                chosen.forEach(entry -> setting.remove(entry.value()));
+            }
             OfflineClient.INSTANCE.getConfigManager().saveSoon();
             refresh();
             return true;
@@ -334,8 +347,7 @@ public final class ListPickerScreen<T> extends Screen {
     @Override
     public boolean keyPressed(KeyEvent event) {
         int key = event.key();
-        if (key == GLFW.GLFW_KEY_ESCAPE || key == GLFW.GLFW_KEY_ENTER
-            || key == GLFW.GLFW_KEY_KP_ENTER) {
+        if (key == GLFW.GLFW_KEY_ESCAPE) {
             onClose();
             return true;
         }

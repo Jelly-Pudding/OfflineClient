@@ -99,7 +99,7 @@ public final class GUIMove extends Module {
         }
     }
 
-    // Runs every frame so the turn is smooth however slow the ticks are.
+    // Runs every frame. The turn is smooth however slow the ticks are.
     @Subscribe
     private void onRender3D(Render3DEvent event) {
         if (!arrowKeys.isOn() || !inGame()) {

@@ -189,7 +189,7 @@ public final class AttributeSwap extends Module {
         slots.restore();
     }
 
-    // The click arrives before the game reads the held item so a swap here counts.
+    // The click arrives before the game reads the held item. A swap here counts.
     @Subscribe
     private void onLeftClick(LeftClickEvent event) {
         if (!canSwap() || mc.hitResult == null || mc.hitResult.getType() == HitResult.Type.BLOCK) {

@@ -2,6 +2,7 @@ package com.jellypudding.offlineclient.mixin;
 
 import com.jellypudding.offlineclient.mixinterface.IRenderState;
 import com.jellypudding.offlineclient.modules.misc.FakePlayer;
+import com.jellypudding.offlineclient.modules.misc.NameProtect;
 import com.jellypudding.offlineclient.modules.render.Chams;
 import com.jellypudding.offlineclient.modules.render.Esp;
 import com.jellypudding.offlineclient.modules.render.NoRender;
@@ -67,6 +68,11 @@ public abstract class EntityRendererMixin {
         NoRender noRender = Modules.get(NoRender.class);
         if (noRender != null && noRender.hidesNametags()) {
             state.nameTag = null;
+        }
+        // The vanilla tag over a head carries whatever the server wrote there.
+        NameProtect nameProtect = Modules.get(NameProtect.class);
+        if (nameProtect != null && state.nameTag != null) {
+            state.nameTag = nameProtect.filter(state.nameTag);
         }
     }
 }

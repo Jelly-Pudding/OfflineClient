@@ -25,7 +25,7 @@ public final class AutoGap extends Module {
     // Ticks to wait after a bite whilst the effects land. A laggy server needs a moment.
     private static final int SETTLE_TICKS = 20;
 
-    // Minimum ticks between two apples so a slow server has time to register one.
+    // Minimum ticks between two apples. A slow server has time to register one.
     private static final int MEAL_GAP = 100;
 
     public enum Choice { PLAIN_FIRST, PLAIN_ONLY, ENCHANTED_FIRST, ENCHANTED_ONLY }

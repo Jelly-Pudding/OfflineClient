@@ -19,7 +19,7 @@ import java.util.Locale;
 // Sends a private message to every player the moment they come into view.
 public final class MessageAura extends Module {
 
-    // Names remembered so one player is only messaged once a session.
+    // Names remembered. One player is only messaged once a session.
     private static final int MAX_TRACKED = 512;
 
     private final TextSetting message = new TextSetting("Message",

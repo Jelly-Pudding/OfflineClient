@@ -16,7 +16,7 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 // Open water is a five by five column of water with two air blocks above the bobber.
-// Only open water gives treasure so this scans once a tick rather than every frame.
+// Only open water gives treasure. This scans once a tick rather than every frame.
 public final class OpenWaterEsp extends Module {
 
     private final BoxStyle style = BoxStyle.shapeOnly(BoxStyle.Shape.LINES);
@@ -86,7 +86,7 @@ public final class OpenWaterEsp extends Module {
         }
     }
 
-    // Both diagonals of all six faces so the shallow box reads as barred off.
+    // Both diagonals of all six faces. The shallow box reads as barred off.
     private void drawCross(DrawBatch batch, int color) {
         for (int axis = 0; axis < 3; axis++) {
             for (int side = 0; side < 2; side++) {

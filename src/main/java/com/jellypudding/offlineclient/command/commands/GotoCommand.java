@@ -5,9 +5,8 @@ import com.jellypudding.offlineclient.command.Command;
 import com.jellypudding.offlineclient.command.CommandManager;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.TickEvent;
-import com.jellypudding.offlineclient.path.PathFinder;
-import com.jellypudding.offlineclient.path.PathGoal;
 import com.jellypudding.offlineclient.path.PathWalker;
+import com.jellypudding.offlineclient.path.Trip;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
@@ -21,17 +20,7 @@ import java.util.List;
 // until goto stop is typed.
 public final class GotoCommand extends Command {
 
-    // How many times the search may start again before it gives up.
-    private static final int MAX_SEARCHES = 32;
-
-    // How close the player has to get for the walk to count as finished.
-    private static final double ARRIVED = 1.5;
-
-    private final PathFinder finder = new PathFinder();
-    private final PathWalker walker = new PathWalker();
-
-    private BlockPos goal;
-    private int searches;
+    private final Trip trip = new Trip();
 
     public GotoCommand() {
         super("goto", "Walks to a spot or to the block you are pointing at.",
@@ -45,7 +34,7 @@ public final class GotoCommand extends Command {
             return;
         }
         if (args.length == 1 && args[0].equalsIgnoreCase("stop")) {
-            if (goal == null) {
+            if (!trip.active()) {
                 ChatUtil.error("You are not walking anywhere.");
             } else {
                 stop();
@@ -58,14 +47,13 @@ public final class GotoCommand extends Command {
             return;
         }
         stop();
-        goal = target;
-        searches = 0;
-        OfflineClient.INSTANCE.getEventBus().register(this);
-        if (!search(player)) {
-            stop();
+        trip.walker().turn(PathWalker.Turn.CLIENT);
+        if (!trip.start(target, 0)) {
+            trip.stop();
             ChatUtil.error("Could not start the search.");
             return;
         }
+        OfflineClient.INSTANCE.getEventBus().register(this);
         ChatUtil.message("§bGoto §7walking to §f" + text(target) + "§7.");
     }
 
@@ -106,18 +94,8 @@ public final class GotoCommand extends Command {
         }
     }
 
-    private boolean search(LocalPlayer player) {
-        searches++;
-        return finder.search(PathFinder.standingAt(player), new PathGoal.Spot(goal));
-    }
-
     private void stop() {
-        if (goal == null) {
-            return;
-        }
-        goal = null;
-        finder.cancel();
-        walker.stop();
+        trip.stop();
         OfflineClient.INSTANCE.getEventBus().unregister(this);
     }
 
@@ -128,37 +106,13 @@ public final class GotoCommand extends Command {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        LocalPlayer player = OfflineClient.MC.player;
-        if (player == null || goal == null) {
-            stop();
-            return;
-        }
-        PathFinder.Result result = finder.poll();
-        if (result != null) {
-            if (result.nodes().size() < 2) {
-                finish("cannot find a way there.");
-                return;
+        switch (trip.tick()) {
+            case ARRIVED -> finish("got there.");
+            case FAILED -> finish("could not find a way there.");
+            case IDLE -> stop();
+            case WALKING -> {
             }
-            walker.follow(result.nodes());
         }
-        if (finder.busy()) {
-            return;
-        }
-        if (walker.arrived() || walker.lost()) {
-            if (player.distanceToSqr(goal.getX() + 0.5, goal.getY(), goal.getZ() + 0.5)
-                <= ARRIVED * ARRIVED) {
-                finish("got there.");
-                return;
-            }
-            if (searches >= MAX_SEARCHES) {
-                finish("gave up before it got there.");
-                return;
-            }
-            search(player);
-            return;
-        }
-        walker.turn(PathWalker.Turn.CLIENT);
-        walker.tick(finder.liveRules());
     }
 
     private static String text(BlockPos pos) {

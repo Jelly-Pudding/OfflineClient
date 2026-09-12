@@ -25,7 +25,7 @@ public final class HudEditorScreen extends Screen {
 
     private static final int LABEL_GAP = 11;
 
-    // A dim wash so the world does not fight the boxes.
+    // A dim wash to stop the world fighting the boxes.
     private static final int SHADE = 0x90000000;
 
     private final HudManager manager;
@@ -98,7 +98,7 @@ public final class HudEditorScreen extends Screen {
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
         List<Placement> placed = placements();
-        // Later elements draw on top so they take the click first.
+        // Later elements draw on top and take the click first.
         for (int i = placed.size() - 1; i >= 0; i--) {
             Placement placement = placed.get(i);
             if (inside(event.x(), event.y(), grabBox(placement))) {

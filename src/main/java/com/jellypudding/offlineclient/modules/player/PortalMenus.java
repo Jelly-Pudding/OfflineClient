@@ -4,7 +4,7 @@ import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 
 // The behaviour lives in LocalPlayerMixin which hides the open screen from
-// the portal effect so it is never closed.
+// the portal effect. It is never closed.
 public final class PortalMenus extends Module {
 
     public PortalMenus() {

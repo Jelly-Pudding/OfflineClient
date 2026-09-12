@@ -20,6 +20,7 @@ public final class BetterTab extends Module {
 
     private static final long VANILLA_LIMIT = 80;
     private static final int VANILLA_COLUMN = 20;
+    private static final int PING_ICON = 10;
 
     // Looked up once per row whilst the list is open.
     private static volatile BetterTab instance;
@@ -64,6 +65,11 @@ public final class BetterTab extends Module {
         return isEnabled() && ping.isOn();
     }
 
+    // Vanilla leaves room for a ten pixel icon. A number needs more or it sits on the name.
+    public int pingRoom(int vanilla) {
+        return showsPing() ? vanilla + mc.font.width("9999") - PING_ICON : vanilla;
+    }
+
     public long playerLimit() {
         if (!isEnabled() || !raiseLimit.isOn()) {
             return VANILLA_LIMIT;
@@ -91,7 +97,7 @@ public final class BetterTab extends Module {
         Component name = original;
         int color = highlightColor(info);
         if (color != 0) {
-            // Server colour codes inside the name would fight the highlight so they go.
+            // Server colour codes inside the name would fight the highlight. They go.
             String plain = ChatFormatting.stripFormatting(original.getString());
             name = Component.literal(plain).withStyle(original.getStyle().withColor(color & 0xFFFFFF));
         }

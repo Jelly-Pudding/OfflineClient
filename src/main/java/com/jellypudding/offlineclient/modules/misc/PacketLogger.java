@@ -12,6 +12,9 @@ import com.jellypudding.offlineclient.setting.ChoiceListSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.PacketNames;
+import net.minecraft.ChatFormatting;
+import net.minecraft.network.chat.ClickEvent;
+import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.Packet;
 
 import java.io.IOException;
@@ -56,7 +59,7 @@ public final class PacketLogger extends Module {
     private final BoolSetting toChat = new BoolSetting("Log to chat",
         "Prints each line into your chat.", true);
     private final BoolSetting toFile = new BoolSetting("Log to file",
-        "Writes each line into the packet logs folder.", false);
+        "Writes each line into offlineclient/packet-logs inside your game folder.", false);
     private final NumberSetting flushSeconds = new NumberSetting("Flush interval",
         "Seconds between one write to the file and the next.", 1, 1, 10, 1, "s").min(1).max(60)
         .under(toFile);
@@ -210,6 +213,7 @@ public final class PacketLogger extends Module {
             if (file == null || written > maxFileSize.getInt() * (long) MEGABYTE) {
                 file = nextFile(folder);
                 written = 0;
+                announce(file);
             }
             byte[] bytes = text.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
             Files.write(file, bytes, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
@@ -218,6 +222,15 @@ public final class PacketLogger extends Module {
         } catch (IOException | UncheckedIOException error) {
             OfflineClient.LOG.error("Failed to write the packet log", error);
         }
+    }
+
+    // Says which file is being written. Clicking the line opens the folder.
+    private static void announce(Path file) {
+        Path game = OfflineClient.MC.gameDirectory.toPath();
+        Component where = Component.literal(game.relativize(file).toString().replace('\\', '/'))
+            .withStyle(style -> style.withColor(ChatFormatting.WHITE)
+                .withClickEvent(new ClickEvent.OpenFile(file.getParent())));
+        ChatUtil.component(Component.literal("§bPacketLogger §7is writing to ").append(where));
     }
 
     private static Path folder() {

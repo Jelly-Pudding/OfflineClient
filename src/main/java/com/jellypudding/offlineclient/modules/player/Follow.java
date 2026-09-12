@@ -18,7 +18,7 @@ import net.minecraft.world.entity.player.Player;
 // Walks after another player using the pathfinder.
 public final class Follow extends Module {
 
-    // Ticks between two searches so a moving target does not thrash the worker.
+    // Ticks between two searches. A moving target must not thrash the worker.
     private static final int SEARCH_DELAY = 20;
 
     // How far the target has to move before the path is worked out again.

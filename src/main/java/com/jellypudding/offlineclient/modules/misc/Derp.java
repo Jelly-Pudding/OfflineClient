@@ -18,13 +18,15 @@ import net.minecraft.world.InteractionHand;
 
 import java.util.concurrent.ThreadLocalRandom;
 
-// Sends silly rotations and swings to the server whilst the local view is left alone.
+// Sends silly rotations and swings and crouches to the server whilst the local view is left alone.
 public final class Derp extends Module {
 
     public enum Mode { SPIN, SHAKE, HEADBANG, FLAIL, TWERK, RANDOM }
 
-    // Ticks a full crouch and stand takes at the slowest twerk speed.
+    // Ticks a full crouch and stand takes at the slowest twerk speed. At the
+    // fastest it flips every tick which is as quick as the server will show.
     private static final int TWERK_SLOWEST = 11;
+    private static final int TWERK_FASTEST = 10;
 
     // Ticks between arm swings whilst flailing. A swing takes about six to play out.
     private static final int FLAIL_GAP = 3;
@@ -41,7 +43,8 @@ public final class Derp extends Module {
         "How far the head moves each tick.", 30, 1, 90, 1, " degrees").min(1).max(180)
         .under(mode, Mode.SPIN, Mode.SHAKE, Mode.HEADBANG);
     private final NumberSetting twerkSpeed = new NumberSetting("Twerk speed",
-        "How fast you crouch up and down.", 5, 1, 10, 1).min(1).max(10)
+        "How fast you crouch and stand. Ten flips every tick which is as fast as it gets.",
+        5, 1, TWERK_FASTEST, 1).min(1).max(TWERK_FASTEST)
         .under(mode, Mode.TWERK);
     private final BoolSetting pauseInCombat = new BoolSetting("Pause in combat",
         "Stops whilst your hands are busy or CrystalAura has a target.", true);
@@ -67,10 +70,7 @@ public final class Derp extends Module {
 
     @Override
     protected void onDisable() {
-        if (crouched) {
-            InputUtil.release(mc.options.keyShift);
-            crouched = false;
-        }
+        standUp();
     }
 
     @Override
@@ -93,6 +93,9 @@ public final class Derp extends Module {
         }
         if (flailTimer > 0) {
             flailTimer--;
+        }
+        if (!mode.is(Mode.TWERK)) {
+            standUp();
         }
 
         float step = speed.getFloat();
@@ -138,7 +141,7 @@ public final class Derp extends Module {
         RotationManager.requestExact(yaw, pitch, RotationPriority.IDLE);
     }
 
-    // Holds and releases the sneak key so everyone sees you bob up and down.
+    // Only the server is told about the crouch. Your own view and speed stay as they are.
     private void twerk() {
         if (twerkTimer > 0) {
             twerkTimer--;
@@ -146,15 +149,19 @@ public final class Derp extends Module {
         }
         twerkTimer = TWERK_SLOWEST - twerkSpeed.getInt();
         crouched = !crouched;
-        if (crouched) {
-            InputUtil.hold(mc.options.keyShift);
-        } else {
-            InputUtil.release(mc.options.keyShift);
+        InputUtil.sendShift(crouched);
+    }
+
+    // Puts the server back on the real key state.
+    private void standUp() {
+        if (crouched && mc.player != null) {
+            InputUtil.sendShift(mc.player.getLastSentInput().shift());
         }
+        crouched = false;
     }
 
     // Swings the arms in turn. Only the packet goes out.
-    // The server plays the animation but never echoes it back so the view stays still.
+    // The server plays the animation but never echoes it back. The view stays still.
     private void flail() {
         if (flailTimer > 0) {
             return;

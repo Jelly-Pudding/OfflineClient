@@ -21,6 +21,7 @@ import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.RotationPriority;
 import com.jellypudding.offlineclient.util.SwingMode;
+import com.jellypudding.offlineclient.util.TargetFilter;
 import com.jellypudding.offlineclient.util.TargetPriority;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.Entity;
@@ -46,6 +47,7 @@ public abstract class RespawnBlockAura extends Module {
 
     protected final NumberSetting targetRange;
     protected final EnumSetting<TargetPriority> priority;
+    protected final TargetFilter targets = new TargetFilter();
     protected final EntityFilter filter;
     protected final NumberSetting placeRange;
     protected final NumberSetting placeWallsRange;
@@ -142,6 +144,7 @@ public abstract class RespawnBlockAura extends Module {
             .under(render);
         addSettings(targetRange, priority);
         addSettings(filter.settings());
+        addSettings(targets.settings());
         addSettings(placeRange, placeWallsRange, breakRange, breakWallsRange, lineOfSight,
             doPlace, placeDelay, airPlace, doBreak, breakDelay, minDamage, maxSelfDamage,
             antiSuicide, autoSwitch, swapBack, takeFrom, moveSlot, pauseOnEat, pauseOnDrink,
@@ -230,7 +233,7 @@ public abstract class RespawnBlockAura extends Module {
     private LivingEntity bestTarget() {
         Entity best = EntityUtil.best(targetRange.getValue(), priority.getValue(),
             entity -> entity instanceof LivingEntity && !EntityUtil.isFriend(entity)
-                && filter.matches(entity));
+                && filter.matches(entity) && targets.allows(entity));
         return best instanceof LivingEntity living ? living : null;
     }
 

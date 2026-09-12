@@ -88,7 +88,7 @@ public abstract class EntityMixin {
     }
 
     // Step raising the step height makes a stepped landing look like a big collision.
-    // That would launch the player off slime or a bed so the y component is zeroed here.
+    // That would launch the player off slime or a bed. The y component is zeroed here.
     @ModifyArg(method = "move(Lnet/minecraft/world/entity/MoverType;Lnet/minecraft/world/phys/Vec3;)V",
         at = @At(value = "INVOKE",
             target = "Lnet/minecraft/world/entity/Entity;restituteMovementAfterCollisions(Lnet/minecraft/world/level/block/state/BlockState;ZZLnet/minecraft/world/phys/Vec3;)V"),

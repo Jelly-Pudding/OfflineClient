@@ -28,7 +28,7 @@ public class GuiGraphicsExtractorMixin {
         }
     }
 
-    // Some callers hand in an immutable list so the module builds a fresh one.
+    // Some callers hand in an immutable list. The module builds a fresh one.
     @ModifyVariable(method = "setTooltipForNextFrameInternal", at = @At("HEAD"), index = 2)
     private List<ClientTooltipComponent> addPreview(List<ClientTooltipComponent> lines) {
         BetterTooltips tooltips = Modules.get(BetterTooltips.class);

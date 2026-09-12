@@ -235,7 +235,7 @@ public final class Scaffold extends Module {
         if (support != null) {
             return placeWith(target, support);
         }
-        // Nothing solid touches the target so a supported neighbour is filled first.
+        // Nothing solid touches the target. A supported neighbour is filled first.
         for (Direction side : BRIDGE_SIDES) {
             BlockPos helper = target.relative(side);
             if (!BlockUtil.isReplaceable(helper) || occupied(helper)) {

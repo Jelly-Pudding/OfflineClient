@@ -42,10 +42,10 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
 // An A star walk over block positions run on a worker thread. The caller starts
-// a search and polls for the answer so the game never waits.
+// a search and polls for the answer. The game never waits.
 public final class PathFinder {
 
-    // Costs are measured in blocks so a plain walk of one block costs one.
+    // Costs are measured in blocks. A plain walk of one block costs one.
     private static final double DIAGONAL = 1.4142135;
     private static final double JUMP = 0.6;
     private static final double FALL = 0.5;
@@ -60,7 +60,7 @@ public final class PathFinder {
     private static final int[] STEP_X = {0, 1, 0, -1, 1, 1, -1, -1};
     private static final int[] STEP_Z = {-1, 0, 1, 0, -1, 1, 1, -1};
 
-    // Searching is heavy so one worker handles every module in turn.
+    // Searching is heavy. One worker handles every module in turn.
     private static final ExecutorService POOL = Executors.newSingleThreadExecutor(runnable -> {
         Thread thread = new Thread(runnable, "OfflineClient PathFinder");
         thread.setDaemon(true);
@@ -170,7 +170,7 @@ public final class PathFinder {
         }
     }
 
-    // A read only window on the world. A captured view holds the chunks so the
+    // A read only window on the world. A captured view holds the chunks. The
     // worker never touches the live chunk map.
     public static final class View {
 
@@ -249,7 +249,7 @@ public final class PathFinder {
     }
 
     // What the player may walk into and what it costs. Shared by the search and
-    // by the walker so both agree on where a step may go.
+    // by the walker. Both agree on where a step may go.
     public static final class Rules {
 
         private final View view;
@@ -375,7 +375,7 @@ public final class PathFinder {
         }
 
         // A diagonal is only allowed whilst both of the sides beside it are open
-        // so the player does not clip the corner.
+        // or the player would clip the corner.
         private boolean cornerClear(BlockPos from, int dx, int dz) {
             return fitsAt(from.offset(dx, 0, 0)) && fitsAt(from.offset(0, 0, dz));
         }
@@ -438,7 +438,7 @@ public final class PathFinder {
         return state.getBlock() == Blocks.VOID_AIR;
     }
 
-    // A fence or a wall stands a block and a half high so nothing hops onto it.
+    // A fence or a wall stands a block and a half high. Nothing hops onto it.
     private static boolean solidFloor(BlockState state) {
         if (unknown(state) || harmful(state) || climbable(state)) {
             return false;

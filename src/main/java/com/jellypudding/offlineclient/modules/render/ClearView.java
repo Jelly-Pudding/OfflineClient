@@ -4,6 +4,7 @@ import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
+import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import net.minecraft.core.particles.ParticleType;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -24,6 +25,9 @@ public final class ClearView extends Module {
         "Removes the dark border around the screen edges.", false);
     private final BoolSetting fire = new BoolSetting("Fire",
         "Removes the flames drawn over your view whilst you burn.", true);
+    private final NumberSetting lowerFire = new NumberSetting("Lower fire",
+        "Pushes the flames down out of your view instead of removing them.", 0, 0, 0.6, 0.01, " blocks")
+        .min(0).max(1).unless(fire);
     private final BoolSetting water = new BoolSetting("Water",
         "Removes the blue tint drawn over your view underwater.", false);
     private final BoolSetting blockInFace = new BoolSetting("Block in face",
@@ -63,7 +67,7 @@ public final class ClearView extends Module {
 
     public ClearView() {
         super("ClearView", "Removes screen overlays that hide what you need to see.", Category.RENDER);
-        addSettings(pumpkin, powderSnow, vignette, fire, water, blockInFace, fog, particles,
+        addSettings(pumpkin, powderSnow, vignette, fire, lowerFire, water, blockInFace, fog, particles,
             particleTypes, eatingCrumbs, spyglass, bossBars, scoreboard, titles, itemNames,
             effectIcons, totemPop, crosshair, magicText, signatureBar);
         searchTags("no fog", "no fire", "no overlay", "no particles", "norender");
@@ -83,6 +87,11 @@ public final class ClearView extends Module {
 
     public boolean blocksFire() {
         return fire.isOn();
+    }
+
+    // How far the flames are pushed down when they are kept.
+    public double fireOffset() {
+        return fire.isOn() ? 0 : lowerFire.getValue();
     }
 
     public boolean blocksWater() {

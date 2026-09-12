@@ -160,7 +160,7 @@ public final class ChestSwap extends Module {
     }
 
     // Zero for a piece the choice refuses. The tier choices score a wanted tier
-    // two and a fallback tier one so the first wanted piece wins outright.
+    // two and a fallback tier one. The first wanted piece wins outright.
     private double score(ItemStack stack) {
         boolean diamond = stack.is(Items.DIAMOND_CHESTPLATE);
         boolean netherite = stack.is(Items.NETHERITE_CHESTPLATE);

@@ -51,7 +51,7 @@ public enum FaceMode {
             player.setXRot(pitch);
             return true;
         }
-        // The extra packet lands before the action so the server reads it first.
+        // The extra packet lands before the action. The server reads it first.
         RotationManager.requestExact(yaw, pitch, priority);
         player.connection.send(new ServerboundMovePlayerPacket.Rot(yaw, pitch,
             player.onGround(), player.horizontalCollision));

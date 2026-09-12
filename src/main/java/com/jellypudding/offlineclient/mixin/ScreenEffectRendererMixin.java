@@ -8,6 +8,7 @@ import net.minecraft.client.renderer.ScreenEffectRenderer;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -15,12 +16,32 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(ScreenEffectRenderer.class)
 public class ScreenEffectRendererMixin {
 
+    // True between the push before the flames and the pop after them.
+    @Unique
+    private static boolean offlineclient$loweredFire;
+
     @Inject(method = "submitFire", at = @At("HEAD"), cancellable = true)
     private static void onSubmitFire(PoseStack poseStack, SubmitNodeCollector collector,
                                      TextureAtlasSprite sprite, CallbackInfo ci) {
         ClearView clearView = Modules.active(ClearView.class);
-        if (clearView != null && clearView.blocksFire()) {
+        if (clearView == null) {
+            return;
+        }
+        if (clearView.blocksFire()) {
             ci.cancel();
+        } else if (clearView.fireOffset() > 0) {
+            offlineclient$loweredFire = true;
+            poseStack.pushPose();
+            poseStack.translate(0, -clearView.fireOffset(), 0);
+        }
+    }
+
+    @Inject(method = "submitFire", at = @At("TAIL"))
+    private static void afterSubmitFire(PoseStack poseStack, SubmitNodeCollector collector,
+                                        TextureAtlasSprite sprite, CallbackInfo ci) {
+        if (offlineclient$loweredFire) {
+            offlineclient$loweredFire = false;
+            poseStack.popPose();
         }
     }
 

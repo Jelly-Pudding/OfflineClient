@@ -8,6 +8,7 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
+import com.jellypudding.offlineclient.util.SwingMode;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.InteractionHand;
@@ -39,6 +40,7 @@ public final class BonemealAura extends Module {
         "Feeds every plant in reach in one tick. Fast but obvious to an anti cheat.", false);
     private final BoolSetting lineOfSight = new BoolSetting("Line of sight",
         "Only feeds plants you can see from where you stand.", true);
+    private final EnumSetting<SwingMode> swing = SwingMode.setting(SwingMode.BOTH);
     private final BoolSetting rotate = new BoolSetting("Rotate",
         "Turn towards the plant on the server side.", true);
     private final BoolSetting fastPlace = new BoolSetting("Fast place",
@@ -70,7 +72,7 @@ public final class BonemealAura extends Module {
 
     public BonemealAura() {
         super("BonemealAura", "Feeds bone meal to the plants around you.", Category.WORLD);
-        addSettings(range, multi, lineOfSight, rotate, fastPlace, whileBreaking, whileRiding,
+        addSettings(range, multi, lineOfSight, rotate, swing, fastPlace, whileBreaking, whileRiding,
             takeFrom, saplings, crops, stems, cocoa, seaPickles, other);
         searchTags("bone meal", "fertiliser", "grow");
     }
@@ -96,7 +98,7 @@ public final class BonemealAura extends Module {
             return;
         }
         if (mc.player.isDeadOrDying()) {
-            // Respawn gives a fresh inventory so a borrowed slot could hold anything.
+            // Respawn gives a fresh inventory. A borrowed slot could hold anything.
             loan.forget();
             return;
         }
@@ -128,11 +130,12 @@ public final class BonemealAura extends Module {
                 }
             }
             if (fed > before) {
-                mc.player.swing(InteractionHand.MAIN_HAND);
+                swing.getValue().swing(InteractionHand.MAIN_HAND);
             }
             return;
         }
-        if (BlockUtil.useOn(targets.getFirst(), rotate.isOn(), true)) {
+        if (BlockUtil.useOn(targets.getFirst(), rotate.isOn(), false)) {
+            swing.getValue().swing(InteractionHand.MAIN_HAND);
             fed++;
             mc.rightClickDelay = CLICK_INTERVAL;
         }

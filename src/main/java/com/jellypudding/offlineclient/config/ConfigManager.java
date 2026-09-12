@@ -99,10 +99,17 @@ public final class ConfigManager {
             m.addProperty("enabled", module.savesEnabledState() && module.isEnabled());
             m.add("bind", module.getKeybind().toJson());
             JsonObject settings = new JsonObject();
+            JsonObject folds = new JsonObject();
             for (Setting<?> setting : module.getSettings()) {
                 settings.add(setting.getName(), setting.toJson());
+                if (setting.foldChanged()) {
+                    folds.addProperty(setting.getName(), setting.isFolded());
+                }
             }
             m.add("settings", settings);
+            if (!folds.isEmpty()) {
+                m.add("folds", folds);
+            }
             modules.add(module.getName(), m);
         }
         root.add("modules", modules);
@@ -160,9 +167,13 @@ public final class ConfigManager {
             }
             if (m.has("settings")) {
                 JsonObject settings = m.getAsJsonObject("settings");
+                JsonObject folds = m.has("folds") ? m.getAsJsonObject("folds") : new JsonObject();
                 for (Setting<?> setting : module.getSettings()) {
                     if (settings.has(setting.getName())) {
                         setting.fromJson(settings.get(setting.getName()));
+                    }
+                    if (folds.has(setting.getName())) {
+                        setting.setFolded(folds.get(setting.getName()).getAsBoolean());
                     }
                 }
             }
@@ -182,6 +193,7 @@ public final class ConfigManager {
             module.getKeybind().reset();
             for (Setting<?> setting : module.getSettings()) {
                 setting.reset();
+                setting.resetFold();
             }
         }
         modules.enableDefaults();
@@ -260,7 +272,7 @@ public final class ConfigManager {
         return name.replaceAll("[^a-zA-Z0-9_-]", "_");
     }
 
-    // Written to a temp file first so a crash mid write cannot corrupt the saved file.
+    // Written to a temp file first. A crash mid write cannot corrupt the saved file.
     static void write(Path path, JsonElement root) {
         Path temp = path.resolveSibling(path.getFileName() + ".tmp");
         try {

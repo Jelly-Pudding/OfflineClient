@@ -15,7 +15,7 @@ import java.util.List;
 import java.util.Map;
 
 // Every packet kind the game knows in either direction. Built once from the
-// protocol templates so a list can offer them before one has ever been seen.
+// protocol templates. A list can offer them before one has ever been seen.
 public final class PacketNames {
 
     private static final Map<String, PacketType<?>> OUTGOING = new LinkedHashMap<>();

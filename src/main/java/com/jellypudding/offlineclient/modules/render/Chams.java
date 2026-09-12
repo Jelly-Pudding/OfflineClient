@@ -39,6 +39,8 @@ public final class Chams extends Module {
         "Paint friends blue instead.", true);
     private final BoolSetting playerSkin = new BoolSetting("Player skin",
         "Keep the skin on players. Off paints them as one flat colour.", true);
+    private final BoolSetting mobTexture = new BoolSetting("Mob texture",
+        "Keep the texture on mobs. Off paints them as one flat colour.", true);
     private final NumberSetting playerScale = new NumberSetting("Player scale",
         "Makes player models bigger or smaller.", 1, 0.25, 3, 0.05, "x").min(0.05).max(10);
 
@@ -75,7 +77,7 @@ public final class Chams extends Module {
     public Chams() {
         super("Chams", "Draws player and mob models through walls.", Category.RENDER);
         addSettings(filter.settings());
-        addSettings(self, throughWalls, color, opacity, friendColor, playerSkin, playerScale,
+        addSettings(self, throughWalls, color, opacity, friendColor, playerSkin, mobTexture, playerScale,
             crystals, crystalScale, crystalBounce, crystalSpin, crystalTexture, crystalColor,
             hand, handTexture, handColor, handOpacity);
         searchTags("see through", "models", "wallhack");
@@ -106,9 +108,9 @@ public final class Chams extends Module {
         return throughWalls.isOn();
     }
 
-    // True when a player loses its skin for a flat colour.
+    // True when an entity loses its texture for a flat colour.
     public boolean flat(Entity entity) {
-        return entity instanceof Player && !playerSkin.isOn();
+        return entity instanceof Player ? !playerSkin.isOn() : !mobTexture.isOn();
     }
 
     public int tintFor(Entity entity) {

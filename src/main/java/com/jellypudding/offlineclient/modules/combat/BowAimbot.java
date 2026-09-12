@@ -367,7 +367,7 @@ public final class BowAimbot extends Module {
         return (vertical + terminal) * fallen / (1 - ProjectileUtil.ARROW_DRAG) - terminal * ticks;
     }
 
-    // A word under the crosshair so you know when to let go.
+    // A word under the crosshair that says when to let go.
     @Subscribe
     private void onRender2D(Render2DEvent event) {
         if (!readout.isOn() || target == null || !inGame()) {

@@ -30,7 +30,8 @@ public final class BoxStyle {
     // A switch the whole style sits beneath. Always open until under is called.
     private Supplier<Boolean> gate = () -> true;
 
-    // A prefix such as "Safe" gives "Safe shape" and "Safe line colour" for a module with several styles.
+    // A prefix such as "Safe" gives "Safe shape" and "Safe line colour"
+    // for a module with several styles.
     public BoxStyle(String prefix, Shape defaultShape, float hue) {
         this(prefix, defaultShape, hue, DEFAULT_SATURATION, true);
     }
@@ -150,7 +151,7 @@ public final class BoxStyle {
         }
     }
 
-    // A box with the faces it shares with a neighbour left out so a run of
+    // A box with the faces it shares with a neighbour left out. A run of
     // touching boxes reads as one shape. The mask holds a bit per side.
     public void drawJoined(DrawBatch batch, AABB box, int hidden, boolean throughWalls) {
         drawJoined(batch, box, hidden, lineColor.getColor(), fillColor.getColor(), throughWalls);

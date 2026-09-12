@@ -10,12 +10,10 @@ import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.protocol.game.ServerboundPlayerInputPacket;
-import net.minecraft.world.entity.player.Input;
-
 import java.lang.ref.WeakReference;
 
 // Legit mode holds the sneak key. Packet mode only tells the server.
-// Whilst flying the sneak key is the way down so legit mode tells the server instead.
+// Whilst flying the sneak key is the way down. Legit mode then tells the server instead.
 public final class Sneak extends Module {
 
     public enum Mode { LEGIT, PACKET }
@@ -86,7 +84,7 @@ public final class Sneak extends Module {
     }
 
     // Keeps the server told the flag the mode wants.
-    // A shift flag whilst riding dismounts the player so the caller leaves it off then.
+    // A shift flag whilst riding dismounts the player. The caller leaves it off then.
     private void tellServer(boolean want) {
         LocalPlayer player = mc.player;
         // A respawn or a dimension change wipes what the server was told.
@@ -95,7 +93,7 @@ public final class Sneak extends Module {
         }
         forcing = want;
         told = new WeakReference<>(want ? player : null);
-        sendShift(want);
+        InputUtil.sendShift(want);
     }
 
     @Subscribe
@@ -104,7 +102,7 @@ public final class Sneak extends Module {
             return;
         }
         if (!packet.input().shift()) {
-            event.setPacket(new ServerboundPlayerInputPacket(withShift(packet.input(), true)));
+            event.setPacket(new ServerboundPlayerInputPacket(InputUtil.withShift(packet.input(), true)));
         }
     }
 
@@ -116,22 +114,6 @@ public final class Sneak extends Module {
             setShift(InputUtil.physicallyHeld(mc.options.keyShift));
         }
         tellServer(false);
-    }
-
-    // Forces the server's shift flag since vanilla only corrects it on key change.
-    // The client's own record still holds the real key state regardless.
-    private void sendShift(boolean shift) {
-        LocalPlayer player = mc.player;
-        if (player == null) {
-            return;
-        }
-        Input last = player.getLastSentInput();
-        player.connection.send(new ServerboundPlayerInputPacket(withShift(last, shift)));
-    }
-
-    private static Input withShift(Input input, boolean shift) {
-        return new Input(input.forward(), input.backward(), input.left(), input.right(),
-            input.jump(), shift, input.sprint());
     }
 
     // With toggle sneak turned on the game flips the key on every press.

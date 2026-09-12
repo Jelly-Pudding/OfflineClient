@@ -9,7 +9,7 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import java.util.ArrayList;
 import java.util.List;
 
-// One piece of the overlay. Its settings hang off the HUD module so the config
+// One piece of the overlay. Its settings hang off the HUD module and the config
 // and the ClickGUI need to know nothing about elements.
 public abstract class HudElement {
 
@@ -26,7 +26,8 @@ public abstract class HudElement {
     protected HudElement(String name, String description, boolean on,
                          double startX, double startY) {
         this.name = name;
-        active = new BoolSetting(name, description, on);
+        // Fifteen elements with five or more options each would swamp the HUD panel.
+        active = new BoolSetting(name, description, on).startFolded();
         x = percent(" x", "How far across the screen it sits.", startX);
         y = percent(" y", "How far down the screen it sits.", startY);
         scale = new NumberSetting(name + " scale", "Size of the text.", 1, 0.5, 2, 0.05, "x")
@@ -54,7 +55,7 @@ public abstract class HudElement {
         return name;
     }
 
-    // The switch itself first so the ClickGUI shows the group closed.
+    // The switch itself first. The ClickGUI then shows the group closed.
     public final List<Setting<?>> getSettings() {
         List<Setting<?>> all = new ArrayList<>(settings.size() + 1);
         all.add(active);

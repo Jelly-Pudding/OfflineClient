@@ -1040,7 +1040,7 @@ public final class CrystalAura extends Module {
             List.of(text), List.of(damageColor.getColor()));
     }
 
-    // Sent hotbar swaps restart the switch delay so the hit waits for the server.
+    // Sent hotbar swaps restart the switch delay. The hit waits for the server.
     @Subscribe
     private void onPacketSend(PacketSendEvent event) {
         if (event.getPacket() instanceof ServerboundSetCarriedItemPacket) {

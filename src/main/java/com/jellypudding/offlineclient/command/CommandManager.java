@@ -136,7 +136,7 @@ public final class CommandManager {
         }
 
         // A bare module name like .fastfall toggles the module. Anything after
-        // it reads as a setting so .step height 5 is short for .set step height 5.
+        // it reads as a setting. .step height 5 is short for .set step height 5.
         Module module = OfflineClient.INSTANCE.getModuleManager().get(name);
         if (module != null) {
             if (args.length > 0) {

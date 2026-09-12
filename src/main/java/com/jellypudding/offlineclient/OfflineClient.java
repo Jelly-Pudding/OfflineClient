@@ -23,7 +23,7 @@ public enum OfflineClient {
     INSTANCE;
 
     public static final String NAME = "OfflineClient";
-    public static final String VERSION = "0.6.0";
+    public static final String VERSION = "0.7.0";
     public static final String SERVER_NAME = "minecraftoffline.net";
     public static final String SERVER_ADDRESS = "minecraftoffline.net";
 

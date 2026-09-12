@@ -9,6 +9,7 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.EntityFilter;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.TargetFilter;
 import com.jellypudding.offlineclient.util.RotationManager;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
@@ -18,7 +19,7 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
 
-// Turns the real camera rather than sending silent look packets so the aim
+// Turns the real camera rather than sending silent look packets. The aim
 // looks like your own hand on the mouse.
 public final class AimAssist extends Module {
 
@@ -50,12 +51,15 @@ public final class AimAssist extends Module {
     private final EntityFilter filter = EntityFilter.living("Aim at", "aimed at", true,
         EntityFilter.Pick.NONE, List.of());
 
+    private final TargetFilter targets = new TargetFilter();
+
     private Entity target;
 
     public AimAssist() {
         super("AimAssist", "Nudges your view towards whatever you are fighting.", Category.COMBAT);
         addSettings(range, speed, fov, aimPoint, ignoreMouse, lineOfSight, whileBlocking, ignoreFriends);
         addSettings(filter.settings());
+        addSettings(targets.settings());
         searchTags("aim", "aimbot", "legit", "assist");
     }
 
@@ -96,7 +100,8 @@ public final class AimAssist extends Module {
         Entity best = null;
         double bestAngle = widest;
         for (Entity entity : mc.level.entitiesForRendering()) {
-            if (entity == mc.player || !filter.matches(entity) || mc.player.distanceTo(entity) > reach) {
+            if (entity == mc.player || !filter.matches(entity) || !targets.allows(entity)
+                || mc.player.distanceTo(entity) > reach) {
                 continue;
             }
             if (ignoreFriends.isOn() && EntityUtil.isFriend(entity)) {

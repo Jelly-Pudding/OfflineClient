@@ -14,7 +14,7 @@ public final class ItemPhysics extends Module {
     // A model thinner than this is a flat sprite and lies on its back.
     private static final float FLAT_DEPTH = 0.0625f;
 
-    // A hair off the ground so the drop does not fight the floor for depth.
+    // A hair off the ground. The drop must not fight the floor for depth.
     private static final float LIFT = 0.001f;
 
     // How far a drop can be turned from the one before it.
@@ -36,7 +36,7 @@ public final class ItemPhysics extends Module {
         return (float) (isFlat(box) ? -box.minZ : -box.minY) + LIFT;
     }
 
-    // The turn is applied first so the item still lies flat once it is laid down.
+    // The turn is applied first. The item still lies flat once it is laid down.
     public void lay(PoseStack poseStack, ItemEntityRenderState state) {
         if (randomRotation.isOn()) {
             poseStack.mulPose(Axis.YP.rotationDegrees(Math.floorMod(state.seed, SPREAD)));

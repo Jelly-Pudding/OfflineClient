@@ -124,7 +124,7 @@ public final class InventoryTweaks extends Module {
         return isEnabled() && frameInput.isOn();
     }
 
-    // Your own inventory never really closes so the crafting grid keeps its items.
+    // Your own inventory never really closes. The crafting grid keeps its items.
     @Subscribe
     private void onPacketSend(PacketSendEvent event) {
         if (!craftingCarry.isOn()) {

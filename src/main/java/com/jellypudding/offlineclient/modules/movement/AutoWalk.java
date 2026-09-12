@@ -6,28 +6,43 @@ import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.modules.player.InvWalk;
+import com.jellypudding.offlineclient.path.PathWalker;
+import com.jellypudding.offlineclient.path.Trip;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
 
 public final class AutoWalk extends Module {
 
+    public enum Mode { SIMPLE, SMART }
+
     public enum Direction { FORWARDS, BACKWARDS, LEFT, RIGHT }
 
+    // How far ahead the smart walk aims and how often it aims again.
+    private static final int LOOK_AHEAD = 16;
+    private static final int RETARGET_TICKS = 40;
+    private static final double GOAL_RADIUS = 3;
+
+    private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
+        "How the walking is done.", Mode.SIMPLE)
+        .describe(Mode.SIMPLE, "Holds the key and walks into whatever is in the way.")
+        .describe(Mode.SMART, "Walks the way you face and finds a path round what is in the way.");
     private final EnumSetting<Direction> direction = new EnumSetting<>("Direction",
-        "Which movement key is held down.", Direction.FORWARDS);
+        "Which way you walk.", Direction.FORWARDS);
     private final BoolSetting autoSprint = new BoolSetting("Auto sprint",
         "Sprint instead of walking.", false);
     private final BoolSetting stopOnInput = new BoolSetting("Stop on input",
         "Switches off as soon as you press a movement key yourself.", false);
     private final BoolSetting stopOnHeightChange = new BoolSetting("Stop on height change",
-        "Switches off as soon as you move up or down.", false);
+        "Switches off as soon as you move up or down.", false)
+        .under(mode, Mode.SIMPLE);
     private final BoolSetting stayInLoadedChunks = new BoolSetting("Stay in loaded chunks",
         "Stops walking whilst the chunk ahead has not loaded yet.", true);
 
@@ -35,9 +50,13 @@ public final class AutoWalk extends Module {
     private final boolean[] wasHeld = new boolean[6];
     private KeyMapping held;
 
+    private final Trip trip = new Trip();
+    private int retarget;
+
     public AutoWalk() {
-        super("AutoWalk", "Holds a movement key for you.", Category.MOVEMENT);
-        addSettings(direction, autoSprint, stopOnInput, stopOnHeightChange, stayInLoadedChunks);
+        super("AutoWalk", "Walks for you.", Category.MOVEMENT);
+        addSettings(mode, direction, autoSprint, stopOnInput, stopOnHeightChange, stayInLoadedChunks);
+        searchTags("auto walk", "path", "afk walk");
     }
 
     @Override
@@ -47,6 +66,7 @@ public final class AutoWalk extends Module {
 
     @Override
     protected void onEnable() {
+        retarget = 0;
         if (!inGame()) {
             return;
         }
@@ -60,6 +80,7 @@ public final class AutoWalk extends Module {
     @Override
     protected void onDisable() {
         letGo();
+        trip.stop();
     }
 
     @Subscribe
@@ -67,7 +88,7 @@ public final class AutoWalk extends Module {
         if (!inGame()) {
             return;
         }
-        if (stopOnHeightChange.isOn() && mc.player.yo != mc.player.getY()) {
+        if (mode.is(Mode.SIMPLE) && stopOnHeightChange.isOn() && mc.player.yo != mc.player.getY()) {
             setEnabled(false);
             return;
         }
@@ -76,19 +97,25 @@ public final class AutoWalk extends Module {
             setEnabled(false);
             return;
         }
-        KeyMapping wanted = keyFor(direction.getValue());
-        if (held != wanted) {
-            letGo();
-        }
         if (stayInLoadedChunks.isOn() && chunkAheadMissing()) {
             letGo();
+            trip.stop();
             Vec3 motion = mc.player.getDeltaMovement();
             mc.player.setDeltaMovement(0, motion.y, 0);
             return;
         }
+        if (mode.is(Mode.SMART)) {
+            letGo();
+            smartTick();
+            return;
+        }
+        trip.stop();
+        KeyMapping wanted = keyFor(direction.getValue());
+        if (held != wanted) {
+            letGo();
+        }
         held = wanted;
         held.setDown(true);
-
         if (autoSprint.isOn()) {
             return;
         }
@@ -99,10 +126,32 @@ public final class AutoWalk extends Module {
         }
     }
 
+    // Aims a little way off in the chosen direction and lets the pathfinder get there.
+    // The aim moves on as you turn. A blocked way just gets a new aim.
+    private void smartTick() {
+        if (--retarget <= 0 || !trip.active()) {
+            retarget = RETARGET_TICKS;
+            trip.walker().turn(PathWalker.Turn.NONE).sprint(autoSprint.isOn());
+            trip.start(aheadOf(mc.player.position()), GOAL_RADIUS);
+        }
+        trip.tick();
+    }
+
+    private BlockPos aheadOf(Vec3 from) {
+        float yaw = mc.player.getYRot() + switch (direction.getValue()) {
+            case FORWARDS -> 0;
+            case BACKWARDS -> 180;
+            case LEFT -> -90;
+            case RIGHT -> 90;
+        };
+        Vec3 heading = Vec3.directionFromRotation(0, yaw).scale(LOOK_AHEAD);
+        return BlockPos.containing(from.add(heading));
+    }
+
     // Sprint is set late in the tick. The player tick clears sprint set any earlier.
     @Subscribe
     private void onClientTick(ClientTickEvent event) {
-        if (!inGame() || !autoSprint.isOn()) {
+        if (!inGame() || !autoSprint.isOn() || mode.is(Mode.SMART)) {
             return;
         }
         if (!mc.player.isUsingItem()) {
@@ -149,7 +198,7 @@ public final class AutoWalk extends Module {
             mc.options.keyRight, mc.options.keyShift, mc.options.keyJump);
     }
 
-    // Looks two ticks of travel ahead so the stop comes before the border.
+    // Looks two ticks of travel ahead. The stop comes before the border.
     private boolean chunkAheadMissing() {
         Vec3 motion = mc.player.getDeltaMovement();
         int chunkX = (int) Math.floor((mc.player.getX() + motion.x * 2) / 16);

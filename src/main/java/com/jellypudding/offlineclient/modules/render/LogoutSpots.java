@@ -42,7 +42,7 @@ public final class LogoutSpots extends Module {
     private static final int MAX_TRACKED = 512;
     // Markers kept at once.
     private static final int MAX_SPOTS = 128;
-    // A flat marker still needs a sliver of height so its edges have a direction.
+    // A flat marker still needs a sliver of height. Its edges then have a direction.
     private static final double FLAT_HEIGHT = 0.01;
 
     private final BoolSetting fullHeight = new BoolSetting("Full height",

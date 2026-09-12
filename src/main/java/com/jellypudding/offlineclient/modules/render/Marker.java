@@ -39,7 +39,7 @@ public final class Marker extends Module {
 
     public enum World { OVERWORLD, NETHER, END }
 
-    // A sphere slice is one block tall so its blocks only ever touch sideways.
+    // A sphere slice is one block tall. Its blocks only ever touch sideways.
     private static final Direction[] AROUND = {
         Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST};
 
@@ -60,7 +60,7 @@ public final class Marker extends Module {
 
     private final List<Entry> entries = new ArrayList<>();
 
-    // One saved entry so the rows can be rebuilt after the config has loaded.
+    // One saved entry. The rows are rebuilt from it after the config has loaded.
     private final Setting<Void> store = new Setting<Void>("Markers",
         "Where every marker is kept.", null) {
 
@@ -101,7 +101,7 @@ public final class Marker extends Module {
         searchTags("build", "shape", "sphere", "cuboid");
     }
 
-    // The rows of every marker follow the list so one can be added at any time.
+    // The rows of every marker follow the list. One can be added at any time.
     @Override
     public List<Setting<?>> getSettings() {
         List<Setting<?>> all = new ArrayList<>(super.getSettings());

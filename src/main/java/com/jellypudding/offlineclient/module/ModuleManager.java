@@ -33,6 +33,14 @@ import com.jellypudding.offlineclient.modules.combat.Quiver;
 import com.jellypudding.offlineclient.modules.combat.SelfAnvil;
 import com.jellypudding.offlineclient.modules.combat.SelfTrap;
 import com.jellypudding.offlineclient.modules.combat.SelfWeb;
+import com.jellypudding.offlineclient.modules.combat.TpAura;
+import com.jellypudding.offlineclient.modules.render.RemoteView;
+import com.jellypudding.offlineclient.modules.render.BaseFinder;
+import com.jellypudding.offlineclient.modules.world.AutoBuild;
+import com.jellypudding.offlineclient.modules.world.TemplateTool;
+import com.jellypudding.offlineclient.modules.combat.FightBot;
+import com.jellypudding.offlineclient.modules.combat.Protect;
+import com.jellypudding.offlineclient.modules.combat.ArrowDamage;
 import com.jellypudding.offlineclient.modules.combat.Surround;
 import com.jellypudding.offlineclient.modules.combat.TriggerBot;
 import com.jellypudding.offlineclient.modules.misc.AntiAfk;
@@ -55,6 +63,8 @@ import com.jellypudding.offlineclient.modules.misc.Notifier;
 import com.jellypudding.offlineclient.modules.misc.PacketCanceller;
 import com.jellypudding.offlineclient.modules.misc.PacketLogger;
 import com.jellypudding.offlineclient.modules.misc.Panic;
+import com.jellypudding.offlineclient.modules.misc.MassTpa;
+import com.jellypudding.offlineclient.modules.misc.SkinDerp;
 import com.jellypudding.offlineclient.modules.misc.ServerSpoof;
 import com.jellypudding.offlineclient.modules.misc.SoundBlocker;
 import com.jellypudding.offlineclient.modules.misc.Spam;
@@ -111,6 +121,8 @@ import com.jellypudding.offlineclient.modules.player.FastBreak;
 import com.jellypudding.offlineclient.modules.player.FastPlace;
 import com.jellypudding.offlineclient.modules.player.Follow;
 import com.jellypudding.offlineclient.modules.player.FastUse;
+import com.jellypudding.offlineclient.modules.player.Throw;
+import com.jellypudding.offlineclient.modules.player.AutoSwitch;
 import com.jellypudding.offlineclient.modules.player.GUIMove;
 import com.jellypudding.offlineclient.modules.player.GhostHand;
 import com.jellypudding.offlineclient.modules.player.InvWalk;
@@ -183,6 +195,9 @@ import com.jellypudding.offlineclient.modules.world.AutoLibrarian;
 import com.jellypudding.offlineclient.modules.world.AutoMount;
 import com.jellypudding.offlineclient.modules.world.AutoNametag;
 import com.jellypudding.offlineclient.modules.world.AutoShearer;
+import com.jellypudding.offlineclient.modules.world.BuildRandom;
+import com.jellypudding.offlineclient.modules.world.InstantBunker;
+import com.jellypudding.offlineclient.modules.world.InfinityMiner;
 import com.jellypudding.offlineclient.modules.world.AutoSign;
 import com.jellypudding.offlineclient.modules.world.AutoSmelter;
 import com.jellypudding.offlineclient.modules.world.BonemealAura;
@@ -272,6 +287,10 @@ public final class ModuleManager {
         add(new HoleFiller());
         add(new AutoWeb());
         add(new SelfWeb());
+        add(new TpAura());
+        add(new ArrowDamage());
+        add(new FightBot());
+        add(new Protect());
 
         add(new AutoTrap());
         add(new SelfTrap());
@@ -377,6 +396,8 @@ public final class ModuleManager {
         add(new BlockSelection());
         add(new Blur());
         add(new BossStack());
+        add(new RemoteView());
+        add(new BaseFinder());
     }
 
     private void registerPlayer() {
@@ -391,6 +412,8 @@ public final class ModuleManager {
         add(new FastPlace());
         add(new FastBreak());
         add(new FastUse());
+        add(new Throw());
+        add(new AutoSwitch());
         add(new Reach());
         add(new Rotation());
         add(new NoRotate());
@@ -433,6 +456,11 @@ public final class ModuleManager {
         add(new BonemealAura());
         add(new AutoBreed());
         add(new AutoShearer());
+        add(new BuildRandom());
+        add(new InstantBunker());
+        add(new InfinityMiner());
+        add(new AutoBuild());
+        add(new TemplateTool());
         add(new AutoNametag());
         add(new AutoMount());
         add(new EndermanLook());
@@ -456,6 +484,8 @@ public final class ModuleManager {
         add(new HudModule());
         add(new TabGui());
         add(new Panic());
+        add(new MassTpa());
+        add(new SkinDerp());
         add(new AutoLog());
         add(new AutoReconnect());
         add(new AntiAfk());

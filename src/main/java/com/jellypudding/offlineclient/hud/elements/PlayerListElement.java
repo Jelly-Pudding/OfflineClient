@@ -80,7 +80,7 @@ public final class PlayerListElement extends HudElement {
         return ColorUtil.hsv(share * GREEN_HUE, 0.8f, 1f);
     }
 
-    // Rows are right aligned so the block hugs the edge of the screen.
+    // Rows are right aligned. The block hugs the edge of the screen.
     @Override
     public void render(GuiGraphicsExtractor context, Font font) {
         int widest = width(font);

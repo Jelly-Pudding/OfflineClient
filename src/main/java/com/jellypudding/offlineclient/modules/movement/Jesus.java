@@ -234,7 +234,7 @@ public final class Jesus extends Module {
     }
 
     // Liquid below the feet is solid. Climb on also solidifies liquid at foot level.
-    // The wall must stay up through the jump so the player lands on top.
+    // The wall must stay up through the jump. The player then lands on top.
     private double highestSolidLevel(Entity mover) {
         double feet = mover.getY();
         if (climbOn.isOn() && !mover.isInWater() && !mover.isInLava()) {
@@ -303,7 +303,7 @@ public final class Jesus extends Module {
     }
 
     // Walks at a fixed pace for a few ticks then hops. The sent height creeps
-    // down between hops so the server sees a swimmer and not a hoverer.
+    // down between hops. The server sees a swimmer and not a hoverer.
     private void ncpTick() {
         if (!overWantedLiquid(mc.player, mc.level)) {
             swimmingTicks = 0;

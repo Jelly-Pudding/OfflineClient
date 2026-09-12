@@ -9,8 +9,8 @@ import com.jellypudding.offlineclient.modules.misc.Timer;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.InputUtil;
 import net.minecraft.network.protocol.game.ServerboundPlayerInputPacket;
-import net.minecraft.world.entity.player.Input;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 
@@ -152,14 +152,9 @@ public final class NoSlowdown extends Module {
         }
     }
 
-    // Vanilla only resends the input on a change so the fake sneak goes out by hand.
     private void tellShift(boolean shift) {
         strictTold = shift;
-        if (mc.player == null) {
-            return;
-        }
-        Input last = mc.player.getLastSentInput();
-        mc.player.connection.send(new ServerboundPlayerInputPacket(withShift(last, shift)));
+        InputUtil.sendShift(shift);
     }
 
     @Subscribe
@@ -168,12 +163,7 @@ public final class NoSlowdown extends Module {
             return;
         }
         if (!packet.input().shift()) {
-            event.setPacket(new ServerboundPlayerInputPacket(withShift(packet.input(), true)));
+            event.setPacket(new ServerboundPlayerInputPacket(InputUtil.withShift(packet.input(), true)));
         }
-    }
-
-    private static Input withShift(Input input, boolean shift) {
-        return new Input(input.forward(), input.backward(), input.left(), input.right(),
-            input.jump(), shift, input.sprint());
     }
 }

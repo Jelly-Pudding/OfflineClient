@@ -14,6 +14,7 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EntityTypes;
+import net.minecraft.world.entity.TamableAnimal;
 import net.minecraft.world.entity.animal.Animal;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.EntityHitResult;
@@ -47,6 +48,8 @@ public final class AutoBreed extends Module {
         .describe(Age.ADULTS, "Grown animals. Feeding them breeds them.")
         .describe(Age.BABIES, "Young animals. Feeding them makes them grow faster.")
         .describe(Age.BOTH, "Every animal that will eat.");
+    private final BoolSetting skipUntamed = new BoolSetting("Skip untamed",
+        "Leaves wolves and cats and other pets that nobody owns alone.", false);
     private final BoolSetting repeat = new BoolSetting("Feed again",
         "Feeds the same animal again once its cooldown has passed.", false);
     private final NumberSetting interval = new NumberSetting("Interval",
@@ -64,7 +67,7 @@ public final class AutoBreed extends Module {
 
     public AutoBreed() {
         super("AutoBreed", "Breeds the animals around you with the food you hold.", Category.WORLD);
-        addSettings(animals, range, hand, age, repeat, interval, rotate);
+        addSettings(animals, range, hand, age, skipUntamed, repeat, interval, rotate);
         searchTags("breed", "feed animals", "farm");
     }
 
@@ -113,6 +116,9 @@ public final class AutoBreed extends Module {
 
     private boolean wanted(Animal animal, ItemStack food) {
         if (!animal.isAlive() || !animals.contains(animal.getType()) || fed.containsKey(animal.getId())) {
+            return false;
+        }
+        if (skipUntamed.isOn() && animal instanceof TamableAnimal tamable && !tamable.isTame()) {
             return false;
         }
         boolean baby = animal.isBaby();

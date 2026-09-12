@@ -98,7 +98,7 @@ public final class Trajectories extends Module {
     private static final double MULTISHOT_ANGLE = 10;
     // Half the width of the landing marker.
     private static final double MARKER_HALF = 0.25;
-    // How thick the flat landing marker is so its faces have a direction.
+    // How thick the flat landing marker is. Its faces need a direction.
     private static final double MARKER_DEPTH = 0.005;
     // Other players further off than this get no arc.
     private static final double OTHER_RANGE_SQ = 64 * 64;

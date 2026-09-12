@@ -25,7 +25,7 @@ public abstract class GameRendererMixin {
         }
     }
 
-    // ItemESP holds the view still so its tracers do not wobble.
+    // ItemESP holds the view still to keep its tracers from wobbling.
     @Inject(method = "bobView(Lnet/minecraft/client/renderer/state/level/CameraRenderState;Lcom/mojang/blaze3d/vertex/PoseStack;)V",
         at = @At("HEAD"), cancellable = true)
     private void onBobView(CameraRenderState camera, PoseStack poseStack, CallbackInfo ci) {

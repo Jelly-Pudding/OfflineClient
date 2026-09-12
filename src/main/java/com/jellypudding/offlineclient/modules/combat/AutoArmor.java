@@ -150,7 +150,7 @@ public final class AutoArmor extends Module {
     }
 
     // The inventory slot of the piece that beats the worn one or minus one.
-    // An elytra or a worn out piece scores nothing so anything real replaces it.
+    // An elytra or a worn out piece scores nothing. Anything real replaces it.
     private int bestUpgrade(ItemStack worn, EquipmentSlot slot) {
         int best = -1;
         double bestScore = worn.is(Items.ELYTRA) || wornOut(worn) ? -1 : score(worn, slot);

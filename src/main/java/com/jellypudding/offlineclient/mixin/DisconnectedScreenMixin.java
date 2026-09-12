@@ -12,7 +12,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-// Two rows under the vanilla buttons so a disconnect can be answered by hand.
+// Two rows under the vanilla buttons. A disconnect can be answered by hand.
 @Mixin(DisconnectedScreen.class)
 public abstract class DisconnectedScreenMixin extends Screen {
 
@@ -51,7 +51,7 @@ public abstract class DisconnectedScreenMixin extends Screen {
         return Component.literal("Auto reconnect " + (module.isEnabled() ? "on" : "off"));
     }
 
-    // The countdown reads live so the button says how long is left.
+    // The countdown reads live. The button says how long is left.
     @Override
     public void tick() {
         super.tick();

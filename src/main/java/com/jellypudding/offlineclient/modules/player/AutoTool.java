@@ -81,7 +81,7 @@ public final class AutoTool extends Module {
 
     private boolean wasDestroying;
 
-    // The block being mined and how many ticks it has been so far.
+    // The block being mined and how many ticks it has taken up to now.
     private BlockPos breaking;
     private int breakTicks;
 

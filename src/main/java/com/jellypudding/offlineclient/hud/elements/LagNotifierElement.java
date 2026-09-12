@@ -10,7 +10,7 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 
 import java.util.Locale;
 
-// Says so whilst the server has gone quiet. Handy before you step into a hole.
+// Shows whilst the server has gone quiet. Handy before you step into a hole.
 public final class LagNotifierElement extends HudElement {
 
     private static final double MILLIS_PER_SECOND = 1000;

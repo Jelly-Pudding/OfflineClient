@@ -293,7 +293,7 @@ public final class NoFall extends Module {
     }
 
     // Mirrors what the server will hold after each movement packet.
-    // Runs after every other rewrite so the packet seen here is the one sent.
+    // Runs after every other rewrite. The packet seen here is the one sent.
     @Subscribe(priority = -100)
     private void onPacketSend(PacketSendEvent event) {
         if (!(event.getPacket() instanceof ServerboundMovePlayerPacket packet)) {
@@ -444,7 +444,7 @@ public final class NoFall extends Module {
     }
 
     // Any block from the hotbar goes under the feet once the fall is deep enough.
-    // The fall is paused for the click so the block lands where the feet are.
+    // The fall is paused for the click. The block lands where the feet are.
     private void airPlaceTick() {
         if (!falling() || descent <= airPlaceThreshold()) {
             loan.giveBack();

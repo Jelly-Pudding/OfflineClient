@@ -2,6 +2,7 @@ package com.jellypudding.offlineclient.modules.render;
 
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.ClientTickEvent;
+import com.jellypudding.offlineclient.event.events.LeftClickEvent;
 import com.jellypudding.offlineclient.event.events.MouseScrollEvent;
 import com.jellypudding.offlineclient.event.events.PacketReceiveEvent;
 import com.jellypudding.offlineclient.event.events.Render3DEvent;
@@ -9,6 +10,8 @@ import com.jellypudding.offlineclient.event.events.RightClickEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.path.PathWalker;
+import com.jellypudding.offlineclient.path.Trip;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
@@ -21,6 +24,7 @@ import com.jellypudding.offlineclient.util.RotationPriority;
 import net.minecraft.client.CameraType;
 import net.minecraft.client.player.ClientInput;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.protocol.game.ClientboundPlayerCombatKillPacket;
 import net.minecraft.network.protocol.game.ClientboundRespawnPacket;
 import net.minecraft.util.Mth;
@@ -45,6 +49,9 @@ public final class Freecam extends Module {
     // Share of the speed one wheel notch changes at sensitivity one.
     private static final double NOTCH_SHARE = 0.25;
     private static final double MIN_SPEED = 0.1;
+
+    // Two clicks this close together count as a double click.
+    private static final long DOUBLE_CLICK_MS = 500;
 
     public enum InputTarget { CAMERA, PLAYER }
 
@@ -90,6 +97,11 @@ public final class Freecam extends Module {
         "Snaps back to your body when you die.", false);
     private final BoolSetting disableOnLeave = new BoolSetting("Disable on leave",
         "Turns off when you leave the server.", true);
+    private final BoolSetting clickToWalk = new BoolSetting("Click to walk",
+        "A left click walks your body to the block the camera looks at. Any movement key stops it.",
+        false);
+    private final BoolSetting doubleClick = new BoolSetting("Double click",
+        "Needs two clicks within half a second.", false).under(clickToWalk);
     private final BoolSetting reloadChunks = new BoolSetting("Reload chunks",
         "Redraws the world when the camera leaves and when it comes back so walls stop hiding rooms.", false);
 
@@ -97,6 +109,9 @@ public final class Freecam extends Module {
     private Vec3 prevCamPos = Vec3.ZERO;
     private float camYaw;
     private float camPitch;
+    private final Trip trip = new Trip();
+    private long lastClick;
+
     private ClientInput dummyInput;
     private ClientInput realInput;
     // The player the camera was seeded from. A respawn or a portal hands out a new one.
@@ -256,7 +271,7 @@ public final class Freecam extends Module {
         dummyInput = null;
     }
 
-    // Fires even without a world so leaving the server can be seen.
+    // Fires even without a world. Leaving the server can be seen.
     @Subscribe
     private void onClientTick(ClientTickEvent event) {
         if (disableOnLeave.isOn() && mc.level == null && seededFor != null) {
@@ -293,16 +308,58 @@ public final class Freecam extends Module {
         }
 
         prevCamPos = camPos;
-        if (mc.gui.screen() != null || !movesCamera()) {
+        if (walkTick() || mc.gui.screen() != null || !movesCamera()) {
             return;
         }
         moveCamera();
     }
 
+    // True whilst the body is walking to a clicked spot and the camera must stay put.
+    private boolean walkTick() {
+        if (!trip.active()) {
+            return false;
+        }
+        if (InputUtil.physicallyHeld(mc.options.keyUp) || InputUtil.physicallyHeld(mc.options.keyDown)
+            || InputUtil.physicallyHeld(mc.options.keyLeft) || InputUtil.physicallyHeld(mc.options.keyRight)) {
+            trip.stop();
+            return false;
+        }
+        trip.tick();
+        return true;
+    }
+
+    @Subscribe
+    private void onLeftClick(LeftClickEvent event) {
+        if (!clickToWalk.isOn() || !inGame() || mc.gui.screen() != null) {
+            return;
+        }
+        event.cancel();
+        long now = System.currentTimeMillis();
+        boolean second = now - lastClick <= DOUBLE_CLICK_MS;
+        lastClick = now;
+        if (doubleClick.isOn() && !second) {
+            return;
+        }
+        HitResult hit = pick(mc.player, 1);
+        BlockPos target;
+        if (hit instanceof BlockHitResult block && hit.getType() == HitResult.Type.BLOCK) {
+            target = block.getBlockPos().relative(block.getDirection());
+        } else if (hit instanceof EntityHitResult entity) {
+            target = entity.getEntity().blockPosition();
+        } else {
+            return;
+        }
+        trip.walker().turn(PathWalker.Turn.NONE);
+        if (!trip.start(target, 1)) {
+            ChatUtil.error("Could not start walking there.");
+        }
+    }
+
     // The body only loses its keys whilst they drive the camera. A respawn or
     // dimension change builds a fresh player with real keys and gets a new dummy.
+    // A walk hands the keys back to the body for as long as it lasts.
     private void syncInput() {
-        if (!movesCamera()) {
+        if (!movesCamera() || trip.active()) {
             restoreInput();
             return;
         }
@@ -369,6 +426,7 @@ public final class Freecam extends Module {
 
     @Override
     protected void onDisable() {
+        trip.stop();
         restoreInput();
         giveBackView();
         seededFor = null;

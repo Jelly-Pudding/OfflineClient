@@ -800,8 +800,8 @@ public final class ElytraFly extends Module {
         forcedPitch = forcedPitch + Mth.clamp(wanted - forcedPitch, -step, step);
     }
 
-    // The cruise angle goes on after the entity tick has saved the old one so the
-    // camera eases between the two over one frame instead of jumping the whole step.
+    // The cruise angle goes on after the entity tick has saved the old one. The camera
+    // then eases between the two over one frame instead of jumping the whole step.
     @Subscribe
     private void onPostMotion(PostMotionEvent event) {
         if (!cruising || !inGame()) {

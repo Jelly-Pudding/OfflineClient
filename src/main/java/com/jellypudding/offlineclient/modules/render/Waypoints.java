@@ -51,6 +51,12 @@ public final class Waypoints extends Module {
         "Size of the labels.", 1, 0.5, 3, 0.1).min(0.1);
     private final NumberSetting range = new NumberSetting("Range",
         "Furthest marker to draw or zero for every one.", 0, 0, 2000, 100, " blocks").min(0);
+    private final BoolSetting acrossDimensions = new BoolSetting("Across dimensions",
+        "Shows overworld markers in the nether and the other way round with the coordinates scaled by eight.",
+        true);
+    private final NumberSetting hideWithin = new NumberSetting("Hide within",
+        "Markers this close fade out so they do not fill your screen. Zero keeps them.",
+        0, 0, 32, 1, " blocks").min(0);
     private final BoolSetting autoColor = new BoolSetting("Automatic colours",
         "Each new waypoint takes a colour from its name. Off gives it the colour below.", true);
     private final ColorSetting nextColor = new ColorSetting("Next colour",
@@ -75,7 +81,7 @@ public final class Waypoints extends Module {
     public Waypoints() {
         super("Waypoints", "Marks the coordinates you saved in the world.", Category.RENDER);
         addSettings(beam, beamHeight, box, label, distance, coordinates, scale, range,
-            autoColor, nextColor, markDeaths, deathsKept, deathChat);
+            acrossDimensions, hideWithin, autoColor, nextColor, markDeaths, deathsKept, deathChat);
         searchTags("waypoint", "marker", "coords");
     }
 
@@ -96,10 +102,28 @@ public final class Waypoints extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        shown = inGame() ? WaypointStore.get().here() : List.of();
+        shown = inGame() ? visible() : List.of();
         if (inGame() && mc.player.isDeadOrDying()) {
             markDeath(mc.player.position());
         }
+    }
+
+    private List<WaypointStore.Waypoint> visible() {
+        List<WaypointStore.Waypoint> all = new ArrayList<>(WaypointStore.get().here());
+        if (acrossDimensions.isOn()) {
+            all.addAll(WaypointStore.get().mirrored());
+        }
+        all.removeIf(WaypointStore.Waypoint::hidden);
+        return all;
+    }
+
+    // How solid a marker draws. Close ones fade and do not fill the screen.
+    private float strength(double away) {
+        double limit = hideWithin.getValue();
+        if (limit <= 0) {
+            return 1;
+        }
+        return (float) Math.clamp((away - limit / 2) / (limit / 2), 0, 1);
     }
 
     // Saves a marker on the spot of a death. AutoRespawn calls this before it
@@ -164,7 +188,11 @@ public final class Waypoints extends Module {
             if (limit > 0 && eye.distanceTo(middle) > limit) {
                 continue;
             }
-            int color = colorOf(waypoint);
+            float strength = strength(eye.distanceTo(middle));
+            if (strength <= 0) {
+                continue;
+            }
+            int color = ColorUtil.fade(colorOf(waypoint), strength);
             if (beam.isOn()) {
                 batch.line(middle.subtract(0, reach, 0), middle.add(0, reach, 0), color, true);
             }
@@ -172,7 +200,7 @@ public final class Waypoints extends Module {
                 AABB shape = new AABB(waypoint.x(), waypoint.y(), waypoint.z(),
                     waypoint.x() + 1, waypoint.y() + 1, waypoint.z() + 1);
                 batch.outlineBox(shape, color, true);
-                batch.solidBox(shape, ColorUtil.withAlpha(color, 50), true);
+                batch.solidBox(shape, ColorUtil.withAlpha(color, Math.round(50 * strength)), true);
             }
         }
     }
@@ -199,7 +227,7 @@ public final class Waypoints extends Module {
                 continue;
             }
             Vec3 screen = WorldToScreen.project(middle);
-            if (screen == null) {
+            if (screen == null || strength(away) < 1) {
                 continue;
             }
 

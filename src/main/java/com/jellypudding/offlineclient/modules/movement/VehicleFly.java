@@ -44,7 +44,7 @@ public final class VehicleFly extends Module {
     private static final double RESYNC_DISTANCE = 4;
 
     // The server banks every drop a vehicle packet makes. Only a ground flag wipes it.
-    // A tick with a big drop is sent as several packets so none crosses the hurt line.
+    // A tick with a big drop is sent as several packets. None crosses the hurt line.
     private static final double SAFE_PACKET_DROP = 2.5;
 
     private static final double TICKS_PER_SECOND = 20;
@@ -260,7 +260,7 @@ public final class VehicleFly extends Module {
     }
 
     // Corrects back towards the height the vehicle was left at.
-    // Vehicle physics keep pulling down so a flat zero would sink.
+    // Vehicle physics keep pulling down. A flat zero would sink.
     private double holdHeight(Entity vehicle, double limit) {
         if (!holding || Math.abs(holdY - vehicle.getY()) > RESYNC_DISTANCE) {
             holdY = vehicle.getY();

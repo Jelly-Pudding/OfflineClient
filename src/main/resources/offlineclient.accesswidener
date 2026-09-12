@@ -30,3 +30,8 @@ accessible class net/minecraft/client/gui/screens/inventory/BeaconScreen$BeaconC
 accessible method net/minecraft/client/gui/screens/inventory/BeaconScreen$BeaconConfirmButton <init> (Lnet/minecraft/client/gui/screens/inventory/BeaconScreen;II)V
 accessible class net/minecraft/client/gui/screens/inventory/BeaconScreen$BeaconCancelButton
 accessible method net/minecraft/client/gui/screens/inventory/BeaconScreen$BeaconCancelButton <init> (Lnet/minecraft/client/gui/screens/inventory/BeaconScreen;II)V
+accessible field net/minecraft/client/gui/components/ChatComponent trimmedMessages Ljava/util/List;
+accessible field net/minecraft/client/gui/components/ChatComponent chatScrollbarPos I
+accessible method net/minecraft/client/gui/components/ChatComponent getScale ()D
+accessible method net/minecraft/client/gui/components/ChatComponent getWidth ()I
+accessible method net/minecraft/client/gui/components/ChatComponent getLineHeight ()I

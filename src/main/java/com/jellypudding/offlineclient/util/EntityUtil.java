@@ -4,6 +4,7 @@ import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.modules.misc.NameProtect;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Entity;
@@ -135,6 +136,13 @@ public final class EntityUtil {
         return nameProtect == null || name == null ? name : nameProtect.display(name);
     }
 
+    // The name the server dresses up with a prefix or a team colour. Renames still apply.
+    public static String serverNameOf(Player player) {
+        NameProtect nameProtect = Modules.get(NameProtect.class);
+        Component name = player.getDisplayName();
+        return (nameProtect == null ? name : nameProtect.filter(name)).getString();
+    }
+
     public static boolean isFriend(Entity entity) {
         return entity instanceof Player player
             && OfflineClient.INSTANCE.getFriendManager().isFriend(nameOf(player));
@@ -171,7 +179,7 @@ public final class EntityUtil {
     }
 
     // The narrow families the per species switches work with. A shulker is a golem
-    // to the game so it is picked out first.
+    // to the game and is picked out first.
     public enum Species { WATER, BAT, SLIME, SHULKER, VILLAGER, ZOMBIE_VILLAGER, GOLEM, ALLAY, OTHER }
 
     public static Species speciesOf(Entity entity) {

@@ -42,10 +42,8 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 public final class StashFinder extends Module {
 
@@ -70,6 +68,10 @@ public final class StashFinder extends Module {
     }
 
     private static final int SCANS_PER_TICK = 4;
+
+    // Ticks before a chunk is looked at again. Chests placed after the first
+    // look are picked up on the next.
+    private static final int RESCAN_TICKS = 200;
 
     private static final int MAX_SCANNED = 20_000;
 
@@ -128,8 +130,9 @@ public final class StashFinder extends Module {
     // Kept for the whole session even whilst turned off and saved to disk.
     private final List<Stash> stashes = new ArrayList<>();
 
-    // Chunks already counted in the current dimension. Insertion ordered.
-    private final Set<Long> scanned = new LinkedHashSet<>();
+    // When each chunk in the current dimension was last counted. Oldest first.
+    private final Map<Long, Integer> scanned = new LinkedHashMap<>();
+    private int tick;
 
     private String dimension = "";
     private boolean loaded;
@@ -181,6 +184,7 @@ public final class StashFinder extends Module {
             scanned.clear();
         }
 
+        tick++;
         int radius = mc.options.getEffectiveRenderDistance();
         int centerX = mc.player.chunkPosition().x();
         int centerZ = mc.player.chunkPosition().z();
@@ -191,15 +195,18 @@ public final class StashFinder extends Module {
                 int x = centerX + dx;
                 int z = centerZ + dz;
                 long key = ChunkPos.pack(x, z);
-                if (!scanned.add(key)) {
+                Integer last = scanned.get(key);
+                if (last != null && tick - last < RESCAN_TICKS) {
                     continue;
                 }
                 LevelChunk chunk = mc.level.getChunkSource()
                     .getChunk(x, z, ChunkStatus.FULL, false);
                 if (chunk == null) {
-                    scanned.remove(key);
                     continue;
                 }
+                // Back to the end of the queue. The trim drops the stalest first.
+                scanned.remove(key);
+                scanned.put(key, tick);
                 budget--;
                 check(new ChunkPos(x, z), chunk);
             }
@@ -215,7 +222,7 @@ public final class StashFinder extends Module {
         if (scanned.size() <= MAX_SCANNED) {
             return;
         }
-        Iterator<Long> iterator = scanned.iterator();
+        Iterator<Long> iterator = scanned.keySet().iterator();
         for (int i = 0; i < DROP_PER_TRIM && iterator.hasNext(); i++) {
             iterator.next();
             iterator.remove();

@@ -67,7 +67,7 @@ public final class SpawnProofer extends AreaPlacer {
         return daylit == mode.is(Mode.POTENTIAL);
     }
 
-    // One torch at a time so the next spot is judged with its light already in.
+    // One torch at a time. The next spot is judged with its light already in.
     @Override
     protected int roundSize() {
         return holdingLight() ? 1 : super.roundSize();

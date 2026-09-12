@@ -23,7 +23,7 @@ import java.util.List;
 // Highlights one wide two high corridors. Natural caves almost never make that shape.
 public final class TunnelEsp extends Module {
 
-    // A box is only ankle high so it can only touch the four sideways.
+    // A box is only ankle high. It can only touch the four sideways.
     private static final Direction[] AROUND = {
         Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST};
 

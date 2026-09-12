@@ -59,7 +59,7 @@ public final class TextLines {
             .under(order, () -> rotates && gate.get() && count.getInt() > 1 && order.is(Order.RANDOM));
     }
 
-    // Every row is used at once so the pick order rows are pointless.
+    // Every row is used at once. The pick order rows are pointless.
     public TextLines plain() {
         rotates = false;
         return this;

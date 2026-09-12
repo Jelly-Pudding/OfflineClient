@@ -11,6 +11,7 @@ import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.TextLines;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.ChatComponent;
 import net.minecraft.client.gui.components.PlayerFaceExtractor;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.client.multiplayer.chat.GuiMessage;
@@ -22,7 +23,9 @@ import net.minecraft.world.entity.player.PlayerSkin;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.regex.Matcher;
@@ -39,8 +42,12 @@ public final class BetterChat extends Module {
     private static final String PLAIN = "abcdefghijklmnopqrstuvwxyz";
     private static final String SMALL = "ᴀʙᴄᴅᴇꜰɢʜɪᴊᴋʟᴍɴᴏᴩqʀꜱᴛᴜᴠᴡxyᴢ";
 
-    // How much wider the chat gets so a head fits on the left.
+    // How much wider the chat gets to fit a head on the left.
     private static final int HEAD_ROOM = 10;
+    private static final int HEAD_SIZE = 8;
+
+    // Sender lookups remembered per message. Cleared once it outgrows any history.
+    private static final int HEAD_CACHE = 8192;
 
     // A number of three digits or more then one of two or more read as coordinates.
     private static final Pattern COORDINATES = Pattern.compile("-?\\d{3,}[\\s,;/]+-?\\d{2,}");
@@ -60,7 +67,9 @@ public final class BetterChat extends Module {
         "Timestamps carry seconds as well as hours and minutes.", false)
         .under(timestamps);
     private final BoolSetting playerHeads = new BoolSetting("Player heads",
-        "Draws the face of the sender beside their message.", true);
+        "Draws the face of the sender in front of their message.", true);
+    private final BoolSetting scrollbar = new BoolSetting("Scrollbar",
+        "A bar beside the open chat you can drag or click to scroll.", true);
     private final BoolSetting longerHistory = new BoolSetting("Longer history",
         "Keeps more lines than the hundred vanilla scrolls back through.", true);
     private final NumberSetting historySize = new NumberSetting("History size",
@@ -74,7 +83,8 @@ public final class BetterChat extends Module {
         "Holds back a message that looks like coordinates until you send it a second time.",
         true);
     private final BoolSetting antiClear = new BoolSetting("Anti clear",
-        "Stops a server wiping your chat with a run of blank lines.", true);
+        "Some servers send a wall of blank lines to push your chat off the screen. This cuts it out.",
+        true);
     private final BoolSetting filterRegex = new BoolSetting("Filter regex",
         "Drops any line that matches one of your patterns.", false);
     private final TextLines patterns = new TextLines("Patterns",
@@ -113,20 +123,22 @@ public final class BetterChat extends Module {
     private String compiledFrom = "";
     private String heldBack;
 
+    // The skin found for each message. A miss is remembered as well and never searched twice.
+    private final Map<GuiMessage, Optional<PlayerSkin>> heads = new IdentityHashMap<>();
+
     // The chat line being drawn. Set by the line consumer just before the text goes out.
     private GuiMessage.Line drawing;
-    private boolean startOfEntry;
-    private boolean previousEnded = true;
-    private int lastIndex = -1;
+    private boolean topOfEntry;
 
     public BetterChat() {
         super("BetterChat", "Small improvements to the chat box.", Category.MISC);
-        addSettings(timestamps, showSeconds, playerHeads, longerHistory, historySize,
+        addSettings(timestamps, showSeconds, playerHeads, scrollbar, longerHistory, historySize,
             keepHistory, infiniteBox, guardCoordinates, antiClear, filterRegex);
         addSettings(patterns.settings());
         addSettings(annoy, fancy, prefix, prefixRandom, prefixText, prefixSmall,
             suffix, suffixRandom, suffixText, suffixSmall);
-        searchTags("timestamp", "chat history", "coords", "player heads", "small caps");
+        searchTags("timestamp", "chat history", "coords", "player heads", "small caps",
+            "scrollbar");
     }
 
     // True when a line matches one of the patterns and must never reach the chat.
@@ -175,7 +187,8 @@ public final class BetterChat extends Module {
         String now = LocalTime.now().format(showSeconds.isOn() ? CLOCK_SECONDS : CLOCK);
         MutableComponent stamp = Component.literal("[" + now + "] ")
             .withStyle(ChatFormatting.DARK_GRAY);
-        return stamp.append(message);
+        // Both hang off a blank root or the message would inherit the grey of the stamp.
+        return Component.empty().append(stamp).append(message);
     }
 
     // Rebuilds the line with every run of blank lines cut down to one break.
@@ -205,25 +218,37 @@ public final class BetterChat extends Module {
         return isEnabled() && infiniteBox.isOn();
     }
 
+    public boolean showsScrollbar() {
+        return isEnabled() && scrollbar.isOn();
+    }
+
     // Player heads.
 
     private boolean drawsHeads() {
         return isEnabled() && playerHeads.isOn();
     }
 
+    // The chat background grows to fit a head beside a full width line.
     public int headRoom(int width) {
         return drawsHeads() ? width + HEAD_ROOM : width;
     }
 
-    // The consumer walks the drawn lines from the top down and starts over each frame.
+    // Only a line with a head beside it moves across. The rest stay flush with the edge.
+    public int textStart(int x) {
+        return drawing != null && headOf(drawing.parent()) != null ? x + HEAD_ROOM : x;
+    }
+
+    // The consumer walks the lines from the bottom up. The top line of a message is
+    // the one below a line that ends the message above it.
     public void beginLine(GuiMessage.Line line, int index) {
         if (!drawsHeads()) {
             return;
         }
-        startOfEntry = index >= lastIndex || previousEnded;
-        lastIndex = index;
-        previousEnded = line.endOfEntry();
         drawing = line;
+        ChatComponent chat = mc.gui.hud.getChat();
+        List<GuiMessage.Line> lines = chat.trimmedMessages;
+        int above = index + chat.chatScrollbarPos + 1;
+        topOfEntry = above >= lines.size() || lines.get(above).endOfEntry();
     }
 
     public void endLine() {
@@ -231,27 +256,66 @@ public final class BetterChat extends Module {
     }
 
     public void drawHead(GuiGraphicsExtractor graphics, int y, int colour) {
-        if (!drawsHeads() || drawing == null || !startOfEntry) {
+        if (drawing == null || !topOfEntry) {
             return;
         }
-        PlayerSkin skin = senderSkin(drawing);
+        PlayerSkin skin = headOf(drawing.parent());
         if (skin != null) {
-            PlayerFaceExtractor.extractRenderState(graphics, skin, 0, y, 8, colour);
+            PlayerFaceExtractor.extractRenderState(graphics, skin, 0, y, HEAD_SIZE, colour);
         }
     }
 
-    // The sender is read from the usual <name> opening of a chat line.
-    private static PlayerSkin senderSkin(GuiMessage.Line line) {
+    private PlayerSkin headOf(GuiMessage message) {
+        if (!drawsHeads()) {
+            return null;
+        }
+        if (heads.size() > HEAD_CACHE) {
+            heads.clear();
+        }
+        return heads.computeIfAbsent(message, m -> Optional.ofNullable(senderSkin(m))).orElse(null);
+    }
+
+    // The sender is the name in the usual <name> opening or failing that the first
+    // online player named in the line. That covers servers that dress names up.
+    private static PlayerSkin senderSkin(GuiMessage message) {
         if (mc.getConnection() == null) {
             return null;
         }
-        String text = STAMP.matcher(line.parent().content().getString()).replaceFirst("").trim();
+        String text = STAMP.matcher(message.content().getString()).replaceFirst("").trim();
         Matcher matcher = SENDER.matcher(text);
-        if (!matcher.find()) {
-            return null;
+        if (matcher.find()) {
+            PlayerInfo info = mc.getConnection().getPlayerInfoIgnoreCase(matcher.group(1));
+            return info == null ? null : info.getSkin();
         }
-        PlayerInfo info = mc.getConnection().getPlayerInfoIgnoreCase(matcher.group(1));
-        return info == null ? null : info.getSkin();
+        PlayerInfo first = null;
+        int earliest = Integer.MAX_VALUE;
+        for (PlayerInfo info : mc.getConnection().getOnlinePlayers()) {
+            int at = wordIndex(text, info.getProfile().name());
+            if (at != -1 && at < earliest) {
+                earliest = at;
+                first = info;
+            }
+        }
+        return first == null ? null : first.getSkin();
+    }
+
+    // Where the name sits as a whole word or minus one when it does not.
+    private static int wordIndex(String text, String name) {
+        int at = text.indexOf(name);
+        while (at != -1) {
+            int end = at + name.length();
+            boolean startClear = at == 0 || !isNameChar(text.charAt(at - 1));
+            boolean endClear = end >= text.length() || !isNameChar(text.charAt(end));
+            if (startClear && endClear) {
+                return at;
+            }
+            at = text.indexOf(name, at + 1);
+        }
+        return -1;
+    }
+
+    private static boolean isNameChar(char c) {
+        return Character.isLetterOrDigit(c) || c == '_';
     }
 
     // Sending.
@@ -325,5 +389,6 @@ public final class BetterChat extends Module {
     protected void onDisable() {
         heldBack = null;
         drawing = null;
+        heads.clear();
     }
 }

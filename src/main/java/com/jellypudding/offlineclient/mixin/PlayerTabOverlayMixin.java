@@ -50,6 +50,15 @@ public class PlayerTabOverlayMixin {
         return tab == null ? original : tab.playerLimit();
     }
 
+    // The room each row keeps for the ping icon.
+    @ModifyConstant(
+        method = "extractRenderState(Lnet/minecraft/client/gui/GuiGraphicsExtractor;ILnet/minecraft/world/scores/Scoreboard;Lnet/minecraft/world/scores/Objective;)V",
+        constant = @Constant(intValue = 13))
+    private int onPingRoom(int original) {
+        BetterTab tab = BetterTab.get();
+        return tab == null ? original : tab.pingRoom(original);
+    }
+
     // Vanilla wraps to a new column after twenty rows.
     @ModifyConstant(
         method = "extractRenderState(Lnet/minecraft/client/gui/GuiGraphicsExtractor;ILnet/minecraft/world/scores/Scoreboard;Lnet/minecraft/world/scores/Objective;)V",

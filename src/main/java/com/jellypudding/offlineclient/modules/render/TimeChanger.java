@@ -33,7 +33,7 @@ public final class TimeChanger extends Module {
         return time.getValueString();
     }
 
-    // The phase is the day count so a whole day is added per step.
+    // The phase is the day count. A whole day is added per step.
     public long clockTime() {
         long day = time.getInt() % DAY_LENGTH;
         return changeMoon.isOn() ? moon.getValue().startTick() + day : day;

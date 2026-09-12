@@ -14,7 +14,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.Blocks;
 
-// String has no shape so a bed cannot go where it lies and it fits inside your own hitbox.
+// String has no shape. A bed cannot go where it lies and it fits inside your own hitbox.
 public final class AntiBed extends RespawnBlockBreaker {
 
     private final BoolSetting instantHead = new BoolSetting("Instant head break",

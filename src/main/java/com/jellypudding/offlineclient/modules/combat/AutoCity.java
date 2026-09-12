@@ -150,8 +150,8 @@ public final class AutoCity extends Module {
         }
     }
 
-    // The pair goes out once with the tool in hand. The server counts from there so
-    // the final stop only has to arrive once the client reckons the count is done.
+    // The pair goes out once with the tool in hand. The server counts from there.
+    // The final stop only has to arrive once the client reckons the count is done.
     private void packetMine() {
         BlockState state = BlockUtil.state(current);
         int tool = switchTool.isOn() ? ItemUtil.bestToolSlot(state) : -1;

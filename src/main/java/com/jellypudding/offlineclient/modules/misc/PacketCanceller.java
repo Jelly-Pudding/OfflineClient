@@ -15,7 +15,7 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 
-// Both lists offer every packet kind the game knows so login and configuration
+// Both lists offer every packet kind the game knows. Login and configuration
 // packets can be dropped before a world exists.
 public final class PacketCanceller extends Module {
 

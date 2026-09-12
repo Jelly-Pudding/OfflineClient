@@ -80,7 +80,7 @@ public final class ColorUtil {
     }
 
     // A shade of one colour moved onto another. The result keeps how much lighter or
-    // duller the shade is than the base so a whole palette can be recoloured at once.
+    // duller the shade is than the base. A whole palette can be recoloured at once.
     public static int retint(int shade, int base, int wanted) {
         if ((base & 0xFFFFFF) == (wanted & 0xFFFFFF)) {
             return shade;

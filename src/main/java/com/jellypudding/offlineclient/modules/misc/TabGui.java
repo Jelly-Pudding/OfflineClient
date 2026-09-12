@@ -6,7 +6,6 @@ import com.jellypudding.offlineclient.event.events.KeyPressEvent;
 import com.jellypudding.offlineclient.event.events.Render2DEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
-import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import net.minecraft.client.gui.Font;
@@ -24,11 +23,9 @@ public final class TabGui extends Module {
     private static final int MIN_WIDTH = 60;
 
     private final NumberSetting x = new NumberSetting("Left",
-        "How far in from the left edge it sits.", 4, 0, 400, 1, " px").min(0);
+        "How far in from the left edge it sits.", 0, 0, 400, 1, " px").min(0);
     private final NumberSetting y = new NumberSetting("Top",
-        "How far down from the top edge it sits.", 4, 0, 400, 1, " px").min(0);
-    private final BoolSetting arrows = new BoolSetting("Arrow keys",
-        "Walk the list with the arrow keys.", true);
+        "How far down from the top edge it sits.", 0, 0, 400, 1, " px").min(0);
     private final ColorSetting background = new ColorSetting("Background",
         "Colour of the panel.", 240, 0.35f, 0.09f, false);
     private final ColorSetting text = new ColorSetting("Row colour",
@@ -43,9 +40,9 @@ public final class TabGui extends Module {
     private int row;
 
     public TabGui() {
-        super("TabGUI", "Toggles modules from a small list you walk with the arrow keys.",
+        super("TabGUI", "A module list on screen you steer with the arrow keys. No menu to open.",
             Category.MISC);
-        addSettings(x, y, arrows, background, text, picked, on);
+        addSettings(x, y, background, text, picked, on);
         searchTags("tab gui", "arrow menu", "quick toggle");
     }
 
@@ -74,10 +71,10 @@ public final class TabGui extends Module {
             : OfflineClient.INSTANCE.getModuleManager().getByCategory(open);
     }
 
+    // Up and down move the cursor. Right or enter opens a category or toggles a module. Left goes back.
     @Subscribe
     private void onKeyPress(KeyPressEvent event) {
-        if (!arrows.isOn() || event.getAction() == GLFW.GLFW_RELEASE
-            || OfflineClient.MC.gui.screen() != null) {
+        if (event.getAction() == GLFW.GLFW_RELEASE || OfflineClient.MC.gui.screen() != null) {
             return;
         }
         int count = rows().size();
@@ -94,7 +91,6 @@ public final class TabGui extends Module {
         }
     }
 
-    // Opens a category or toggles the module the cursor rests on.
     private void choose() {
         if (open == null) {
             open = Category.values()[row];

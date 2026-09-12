@@ -337,7 +337,7 @@ public final class AutoEat extends Module {
             finishMeal();
             return;
         }
-        // A screen stops the game reading the use key so the meal is started by hand.
+        // A screen stops the game reading the use key. The meal is started by hand.
         if (busy() && !mc.player.isUsingItem()) {
             mc.gameMode.useItem(mc.player, offhandUsable()
                 ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND);

@@ -46,7 +46,7 @@ public abstract class MinecraftMixin {
         return tweaks != null && tweaks.frameInput();
     }
 
-    // The keys are read once a frame instead so the tick call goes.
+    // The keys are read once a frame instead. The tick call goes.
     @WrapOperation(method = "tick()V",
         at = @At(value = "INVOKE", target = "Lnet/minecraft/client/Minecraft;handleKeybinds()V"))
     private void tickKeybinds(Minecraft instance, Operation<Void> original) {
@@ -97,8 +97,8 @@ public abstract class MinecraftMixin {
 
     @Inject(method = "startAttack()Z", at = @At("HEAD"), cancellable = true)
     private void onStartAttack(CallbackInfoReturnable<Boolean> cir) {
-        if (offlineclient$freecamBlocks()
-            || OfflineClient.INSTANCE.getEventBus().post(new LeftClickEvent()).isCancelled()) {
+        if (OfflineClient.INSTANCE.getEventBus().post(new LeftClickEvent()).isCancelled()
+            || offlineclient$freecamBlocks()) {
             cir.setReturnValue(false);
         }
     }

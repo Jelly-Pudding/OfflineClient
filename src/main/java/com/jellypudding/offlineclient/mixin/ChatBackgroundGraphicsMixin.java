@@ -44,7 +44,7 @@ public abstract class ChatBackgroundGraphicsMixin {
     @ModifyArg(method = "handleMessage", at = @At(value = "INVOKE", target = ACCEPT), index = 1)
     private int shiftText(int x) {
         BetterChat betterChat = Modules.get(BetterChat.class);
-        return betterChat == null ? x : betterChat.headRoom(x);
+        return betterChat == null ? x : betterChat.textStart(x);
     }
 
     @Inject(method = "handleMessage", at = @At("TAIL"))
