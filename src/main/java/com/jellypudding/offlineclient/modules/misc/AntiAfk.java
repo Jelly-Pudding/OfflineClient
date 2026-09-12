@@ -189,7 +189,7 @@ public final class AntiAfk extends Module {
     // Walks to a random spot round the one the module was switched on at.
     // Falling and diving are off. A wander cannot end somewhere nasty.
     private void tickPathWander() {
-        walkTarget = null;
+        stopPlainWalk();
         if (surface()) {
             return;
         }
@@ -243,6 +243,7 @@ public final class AntiAfk extends Module {
     // Turns to a random spot and holds forward until it is reached.
     private void tickPlainWalk() {
         finder.cancel();
+        walker.stop();
         if (turn.is(Turn.SPIN_VIEW)) {
             stopPlainWalk();
             return;

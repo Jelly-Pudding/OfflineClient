@@ -9,7 +9,8 @@ import net.minecraft.world.entity.player.PlayerModelPart;
 
 import java.util.concurrent.ThreadLocalRandom;
 
-// Flicks the skin layers on and off. The server relays the change to everyone.
+// Flicks the skin layers on and off. Vanilla only tells the server about the
+// layers when the options are saved. The change has to be sent by hand.
 public final class SkinDerp extends Module {
 
     private final NumberSetting chance = new NumberSetting("Chance",
@@ -27,6 +28,7 @@ public final class SkinDerp extends Module {
         for (PlayerModelPart part : PlayerModelPart.values()) {
             mc.options.setModelPart(part, true);
         }
+        mc.options.broadcastOptions();
     }
 
     @Subscribe
@@ -37,5 +39,6 @@ public final class SkinDerp extends Module {
         for (PlayerModelPart part : PlayerModelPart.values()) {
             mc.options.setModelPart(part, !mc.options.isModelPartEnabled(part));
         }
+        mc.options.broadcastOptions();
     }
 }
