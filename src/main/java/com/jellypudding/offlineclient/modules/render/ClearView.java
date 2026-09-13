@@ -6,13 +6,17 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
+import net.minecraft.client.gui.components.toasts.AdvancementToast;
+import net.minecraft.client.gui.components.toasts.RecipeToast;
+import net.minecraft.client.gui.components.toasts.Toast;
+import net.minecraft.client.gui.components.toasts.TutorialToast;
 import net.minecraft.core.particles.ParticleType;
 import net.minecraft.core.registries.BuiltInRegistries;
 
 import java.util.List;
 
 // Overlay removal happens in HudMixin and ScreenEffectRendererMixin and
-// FogRendererMixin and ParticleEngineMixin which check these settings.
+// FogRendererMixin and ParticleEngineMixin and ToastManagerMixin which check these settings.
 public final class ClearView extends Module {
 
     public enum Particles { KEEP, HIDE_ALL, HIDE_CHOSEN }
@@ -64,13 +68,21 @@ public final class ClearView extends Module {
         "Scrambled text is drawn as plain letters.", false);
     private final BoolSetting signatureBar = new BoolSetting("Chat signature bar",
         "Hides the coloured bar beside signed chat lines.", false);
+    private final BoolSetting tutorialTips = new BoolSetting("Tutorial tips",
+        "Hides the tips like Open your inventory that pop up in the top right corner.", true);
+    private final BoolSetting recipeToasts = new BoolSetting("Recipe toasts",
+        "Hides the new recipe pop ups in the top right corner.", false);
+    private final BoolSetting advancementToasts = new BoolSetting("Advancement toasts",
+        "Hides the advancement pop ups in the top right corner.", false);
 
     public ClearView() {
         super("ClearView", "Removes screen overlays that hide what you need to see.", Category.RENDER);
         addSettings(pumpkin, powderSnow, vignette, fire, lowerFire, water, blockInFace, fog, particles,
             particleTypes, eatingCrumbs, spyglass, bossBars, scoreboard, titles, itemNames,
-            effectIcons, totemPop, crosshair, magicText, signatureBar);
-        searchTags("no fog", "no fire", "no overlay", "no particles", "norender");
+            effectIcons, totemPop, crosshair, magicText, signatureBar, tutorialTips, recipeToasts,
+            advancementToasts);
+        searchTags("no fog", "no fire", "no overlay", "no particles", "norender", "toasts",
+            "tutorial");
     }
 
     public boolean blocksPumpkin() {
@@ -129,6 +141,13 @@ public final class ClearView extends Module {
 
     public boolean blocksSignatureBar() {
         return signatureBar.isOn();
+    }
+
+    // Read by ToastManagerMixin. The client's own toasts always get through.
+    public boolean blocksToast(Toast toast) {
+        return toast instanceof TutorialToast && tutorialTips.isOn()
+            || toast instanceof RecipeToast && recipeToasts.isOn()
+            || toast instanceof AdvancementToast && advancementToasts.isOn();
     }
 
     public boolean blocksSpyglass() {

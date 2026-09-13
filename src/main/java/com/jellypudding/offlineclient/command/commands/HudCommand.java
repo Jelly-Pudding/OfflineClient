@@ -11,13 +11,13 @@ import net.minecraft.client.gui.screens.Screen;
 
 import java.util.List;
 
-// On its own it switches the overlay like any module. With edit it opens the drag editor.
+// The bare name toggles the overlay like any module. This opens the drag editor.
 public final class HudCommand extends Command {
 
     private static final String EDIT = "edit";
 
     public HudCommand() {
-        super("hud", "Toggles the overlay. Add edit to drag the pieces about.", "hud [edit]",
+        super("hud", "Opens the editor where you drag the overlay pieces about.", "hud edit",
             "hudeditor");
     }
 
@@ -28,12 +28,7 @@ public final class HudCommand extends Command {
             ChatUtil.error("The overlay is not ready yet.");
             return;
         }
-        if (args.length == 0) {
-            hud.toggle();
-            ChatUtil.toggled(hud);
-            return;
-        }
-        if (!args[0].equalsIgnoreCase(EDIT)) {
+        if (args.length > 0 && !args[0].equalsIgnoreCase(EDIT)) {
             usage();
             return;
         }

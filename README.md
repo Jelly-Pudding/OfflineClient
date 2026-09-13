@@ -1,22 +1,24 @@
 # OfflineClient
 A utility client custom designed for the anarchy lifesteal server [minecraftoffline.net](https://www.minecraftoffline.net/). This is a fabric mod for Minecraft 26.2.
 
-## Installation
+## Download
+The latest jar is on the [releases page](https://github.com/Jelly-Pudding/OfflineClient/releases/latest). It is a single file that needs nothing besides Fabric Loader for Minecraft 26.2.
 
 ### Vanilla Launcher
-1. Install [Fabric Loader](https://fabricmc.net/use/installer/) for Minecraft 26.2 and run it.
-2. Check the path to your `.minecraft` directory is correctly set and click `install`.
-3. Drop the OfflineClient jar into your `mods` folder. If necessary create the `mods` folder in `.minecraft` if it doesn't exist.
-4. Launch the game with the Fabric profile.
+1. Download the latest release [here](https://github.com/Jelly-Pudding/OfflineClient/releases/latest).
+2. Install [Fabric Loader](https://fabricmc.net/use/installer/) for Minecraft 26.2 and run it.
+3. Check the path to your `.minecraft` directory is correctly set and click `install`.
+4. Drop the OfflineClient jar into your `mods` folder. Create the `mods` folder inside `.minecraft` if it does not exist.
+5. Launch the game with the Fabric profile.
 
 ### MultiMC
-1. Install [Fabric Loader](https://fabricmc.net/use/installer/) for Minecraft 26.2 and run it.
-2. Check the path to your `.minecraft` directory is correctly set and click `install`.
-3. Downlaod [MultiMC](https://multimc.org/#Download).
-4. Open MultiMC and click `Add Instance`. Choose the version.
-5. Right click on the instance you created and choose `Edit Instance`. On the right-hand side click `Install Fabric`.
-5. Choose your version of Fabric.
-6. Go to `Loader Mods` and click `Add` and find the `OfflineClient` jar you downloaded.
+1. Download the latest release [here](https://github.com/Jelly-Pudding/OfflineClient/releases/latest).
+2. Install [Fabric Loader](https://fabricmc.net/use/installer/) for Minecraft 26.2 and run it.
+3. Check the path to your `.minecraft` directory is correctly set and click `install`.
+4. Download [MultiMC](https://multimc.org/#Download).
+5. Open MultiMC and click `Add Instance`. Choose a name and pick Minecraft 26.2. Click `OK` at the bottom.
+6. Right click the instance and choose `Edit Instance`. On the right hand side click `Install Fabric` and pick a Fabric version.
+7. On the left hand side click `Loader mods` then `Add` and pick the OfflineClient jar you downloaded.
 
 ## Usage
 - **RIGHT SHIFT** opens the ClickGUI. Its Style setting switches between draggable panels and a single window with a sidebar.
@@ -24,7 +26,7 @@ A utility client custom designed for the anarchy lifesteal server [minecraftoffl
 - Press **TAB** whilst typing a command to autocomplete it.
 - Middle click a setting in the ClickGUI to put it back to its default. `.reset <module>` does the whole module.
 - `.macro add <name> <lines>` saves a list of chat lines or commands and `.macro key <name> <key>` puts it on a key.
-- `.hud` toggles the overlay and `.hud edit` opens the editor.
+- `.hud` toggles the overlay and `.hud edit` opens the editor. `.xray <block>` adds a block to XRay and `.xray this` adds the one you point at.
 - Everything is saved to `.minecraft/offlineclient/config.json` automatically.
 - The title screen has a Recovery button that puts settings back to default.
 

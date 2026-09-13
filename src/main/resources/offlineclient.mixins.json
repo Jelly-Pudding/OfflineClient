@@ -107,7 +107,8 @@
     "EndCrystalRendererMixin",
     "EndCrystalModelMixin",
     "AvatarRendererMixin",
-    "VisGraphMixin"
+    "VisGraphMixin",
+    "ToastManagerMixin"
   ],
   "injectors": {
     "defaultRequire": 1

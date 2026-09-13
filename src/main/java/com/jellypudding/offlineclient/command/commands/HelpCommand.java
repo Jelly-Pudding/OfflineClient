@@ -7,8 +7,11 @@ import com.jellypudding.offlineclient.modules.misc.ClickGuiModule;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.HoverEvent;
+import net.minecraft.network.chat.MutableComponent;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 public final class HelpCommand extends Command {
@@ -30,12 +33,18 @@ public final class HelpCommand extends Command {
             return;
         }
 
-        List<String> names = new ArrayList<>();
-        for (Command command : manager.getCommands()) {
-            names.add(command.getName());
+        List<Command> commands = new ArrayList<>(manager.getCommands());
+        commands.sort(Comparator.comparing(Command::getName));
+        MutableComponent line = Component.literal("§3Commands §8» ");
+        for (int i = 0; i < commands.size(); i++) {
+            if (i > 0) {
+                line.append(Component.literal("§8 · "));
+            }
+            line.append(entry(prefix, commands.get(i)));
         }
-        ChatUtil.message("§3Commands §8» §b" + String.join("§8 ", names));
-        ChatUtil.message("§7Type §f" + prefix + "help <command>§7 for what one of them does.");
+        ChatUtil.component(line);
+        ChatUtil.message("§7Hover a name for what it does and click it to type it. §f" + prefix
+            + "help <command>§7 says the same.");
         ChatUtil.message("§7A module name on its own toggles it. §f" + prefix
             + "step§7 toggles Step and §f" + prefix + "step height 2§7 changes a setting.");
 
@@ -47,6 +56,15 @@ public final class HelpCommand extends Command {
                 + "§7. Rebind it with §f" + prefix + "bind clickgui <key>§7 or click here to ")
             .append(link)
             .append(Component.literal("§7.")));
+    }
+
+    // One name in the list. The hover carries the usage and the click types it in.
+    private static Component entry(String prefix, Command command) {
+        Component hover = Component.literal("§b" + prefix + command.getUsage() + "\n§7"
+            + command.getDescription());
+        return Component.literal("§b" + command.getName())
+            .withStyle(style -> style.withHoverEvent(new HoverEvent.ShowText(hover))
+                .withClickEvent(new ClickEvent.SuggestCommand(prefix + command.getName() + " ")));
     }
 
     private static void describe(CommandManager manager, String prefix, String name) {

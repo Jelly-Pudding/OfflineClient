@@ -45,8 +45,10 @@ import com.jellypudding.offlineclient.util.ChatUtil;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 public final class CommandManager {
 
@@ -123,6 +125,15 @@ public final class CommandManager {
         String name = parts[0];
         String[] args = Arrays.copyOfRange(parts, 1, parts.length);
 
+        // A bare module name like .fastfall toggles the module even where a
+        // command shares the name. Anything after it reads as a setting and
+        // .step height 5 is short for .set step height 5.
+        Module module = OfflineClient.INSTANCE.getModuleManager().get(name);
+        if (module != null && args.length == 0 && module.isTogglable()) {
+            module.toggle();
+            ChatUtil.toggled(module);
+            return true;
+        }
         for (Command command : commands) {
             if (command.matches(name)) {
                 try {
@@ -135,18 +146,8 @@ public final class CommandManager {
             }
         }
 
-        // A bare module name like .fastfall toggles the module. Anything after
-        // it reads as a setting. .step height 5 is short for .set step height 5.
-        Module module = OfflineClient.INSTANCE.getModuleManager().get(name);
-        if (module != null) {
-            if (args.length > 0) {
-                return runSet(name, args);
-            }
-            if (module.isTogglable()) {
-                module.toggle();
-                ChatUtil.toggled(module);
-                return true;
-            }
+        if (module != null && args.length > 0) {
+            return runSet(name, args);
         }
 
         ChatUtil.error("Unknown command. Try §f" + prefix + "help");
@@ -193,12 +194,13 @@ public final class CommandManager {
         String current = tokens[index].toLowerCase(Locale.ROOT);
 
         if (index == 0) {
-            List<String> names = new ArrayList<>();
+            // A module that shares a command's name is offered once.
+            Set<String> names = new LinkedHashSet<>();
             for (Command command : commands) {
                 names.add(command.getName());
             }
             names.addAll(moduleIds());
-            return filter(current, names);
+            return filter(current, new ArrayList<>(names));
         }
 
         Command command = find(tokens[0]);
