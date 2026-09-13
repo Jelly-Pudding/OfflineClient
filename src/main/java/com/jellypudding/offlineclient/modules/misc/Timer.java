@@ -46,7 +46,7 @@ public final class Timer extends Module {
     }
 
     // A value of one or less clears that module's boost. The highest active source wins.
-    public void setOverride(String key, float multiplier) {
+    private void setOverride(String key, float multiplier) {
         if (multiplier <= 1f) {
             overrides.remove(key);
         } else {

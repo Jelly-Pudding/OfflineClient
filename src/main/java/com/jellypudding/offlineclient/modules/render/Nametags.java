@@ -13,13 +13,13 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.EntityFilter;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.ItemUtil;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.RenderUtil;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.core.Holder;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.tags.EnchantmentTags;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityTypes;
@@ -39,9 +39,7 @@ import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix3x2fStack;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
-import java.util.stream.Collectors;
 
 // Drawn on the HUD at the projected head position.
 public final class Nametags extends Module {
@@ -131,7 +129,7 @@ public final class Nametags extends Module {
     private final BoolSetting enchantments = new BoolSetting("Enchantments",
         "Write the enchantments of each item by its icon.", false);
     private final ChoiceListSetting shownEnchantments = new ChoiceListSetting("Shown enchantments",
-        "Which enchantments are written. Join a world to fill the list.", Nametags::enchantmentIds,
+        "Which enchantments are written. Join a world to fill the list.", ItemUtil::enchantmentIds,
         DEFAULT_ENCHANTMENTS).under(enchantments);
     private final EnumSetting<EnchantPosition> enchantPosition = new EnumSetting<>("Enchantment position",
         "Where the enchantment text sits.", EnchantPosition.ABOVE)
@@ -161,15 +159,6 @@ public final class Nametags extends Module {
             durability, showCount, enchantments, shownEnchantments, enchantPosition, enchantLetters,
             enchantScale, nameColor, gameModeColor, background, backgroundOpacity);
         searchTags("name tags", "player info");
-    }
-
-    // Every enchantment the world knows. Empty until a world is loaded.
-    private static Collection<String> enchantmentIds() {
-        if (mc.level == null) {
-            return List.of();
-        }
-        return mc.level.registryAccess().lookupOrThrow(Registries.ENCHANTMENT).keySet().stream()
-            .map(Object::toString).sorted().collect(Collectors.toList());
     }
 
     @Subscribe

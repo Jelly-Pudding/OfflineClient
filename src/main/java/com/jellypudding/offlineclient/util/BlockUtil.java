@@ -71,6 +71,12 @@ public final class BlockUtil {
 
     private static final AABB FULL_CUBE = new AABB(0, 0, 0, 1, 1, 1);
 
+    // The vanilla break time formula. Off the ground mines five times slower and
+    // the wrong tool takes over three times as long.
+    private static final float AIR_PENALTY = 5;
+    private static final int RIGHT_TOOL_DIVISOR = 30;
+    private static final int WRONG_TOOL_DIVISOR = 100;
+
     // Top covers the head. Full seals the sides at head height as well.
     public enum TrapMode { TOP, FULL }
 
@@ -102,6 +108,11 @@ public final class BlockUtil {
     public static boolean isBreakable(BlockPos pos) {
         BlockState state = state(pos);
         return !state.isAir() && state.getDestroySpeed(MC.level, pos) >= 0;
+    }
+
+    // The three coordinates with spaces between.
+    public static String text(BlockPos pos) {
+        return pos.getX() + " " + pos.getY() + " " + pos.getZ();
     }
 
     public static double distanceTo(BlockPos pos) {
@@ -252,7 +263,7 @@ public final class BlockUtil {
     }
 
     // Lower wins. Minus one means the block is not on the list.
-    public static int rankOf(Block block, Collection<Identifier> preferred) {
+    private static int rankOf(Block block, Collection<Identifier> preferred) {
         Identifier id = BuiltInRegistries.BLOCK.getKey(block);
         int rank = 0;
         for (Identifier chosen : preferred) {
@@ -299,7 +310,7 @@ public final class BlockUtil {
         return best;
     }
 
-    public static boolean isBlastProof(BlockPos pos) {
+    private static boolean isBlastProof(BlockPos pos) {
         return state(pos).getBlock().getExplosionResistance() >= BLAST_PROOF;
     }
 
@@ -565,10 +576,10 @@ public final class BlockUtil {
             speed *= (float) player.getAttributeValue(Attributes.SUBMERGED_MINING_SPEED);
         }
         if (!player.onGround()) {
-            speed /= 5;
+            speed /= AIR_PENALTY;
         }
         boolean rightTool = !state.requiresCorrectToolForDrops() || tool.isCorrectToolForDrops(state);
-        return speed / hardness / (rightTool ? 30 : 100);
+        return speed / hardness / (rightTool ? RIGHT_TOOL_DIVISOR : WRONG_TOOL_DIVISOR);
     }
 
     public static int breakTicks(BlockPos pos) {

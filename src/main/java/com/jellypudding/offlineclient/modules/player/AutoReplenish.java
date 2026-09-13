@@ -115,7 +115,7 @@ public final class AutoReplenish extends Module {
                 moved = check(only, stackAt(only));
             }
         } else {
-            for (int i = 0; i < 9 && !moved; i++) {
+            for (int i = 0; i < InventoryUtil.HOTBAR_SIZE && !moved; i++) {
                 moved = check(i, mc.player.getInventory().getItem(i));
             }
             if (!moved && offhand.isOn() && !totemBusy) {
@@ -183,7 +183,8 @@ public final class AutoReplenish extends Module {
             return false;
         }
         // Only the held slot and the offhand may take from the hotbar.
-        if (source < 9 && index < 9 && index != InventoryUtil.selectedSlot()) {
+        if (source < InventoryUtil.HOTBAR_SIZE && index < InventoryUtil.HOTBAR_SIZE
+            && index != InventoryUtil.selectedSlot()) {
             return false;
         }
 
@@ -202,7 +203,8 @@ public final class AutoReplenish extends Module {
             if (source == -1 || source == index) {
                 continue;
             }
-            if (source < 9 && index < 9 && index != InventoryUtil.selectedSlot()) {
+            if (source < InventoryUtil.HOTBAR_SIZE && index < InventoryUtil.HOTBAR_SIZE
+                && index != InventoryUtil.selectedSlot()) {
                 continue;
             }
             return move(source, index);
@@ -215,7 +217,7 @@ public final class AutoReplenish extends Module {
         if (!tooWorn(now)) {
             return false;
         }
-        for (int i = 9; i < InventoryUtil.WHOLE_INVENTORY; i++) {
+        for (int i = InventoryUtil.HOTBAR_SIZE; i < InventoryUtil.WHOLE_INVENTORY; i++) {
             ItemStack stack = mc.player.getInventory().getItem(i);
             if (stack.isEmpty() || !stack.isDamageableItem()) {
                 return move(i, index);

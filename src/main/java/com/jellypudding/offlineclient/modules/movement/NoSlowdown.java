@@ -10,7 +10,6 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.InputUtil;
-import net.minecraft.network.protocol.game.ServerboundPlayerInputPacket;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 
@@ -159,11 +158,8 @@ public final class NoSlowdown extends Module {
 
     @Subscribe
     private void onPacketSend(PacketSendEvent event) {
-        if (!strictTold || !(event.getPacket() instanceof ServerboundPlayerInputPacket packet)) {
-            return;
-        }
-        if (!packet.input().shift()) {
-            event.setPacket(new ServerboundPlayerInputPacket(InputUtil.withShift(packet.input(), true)));
+        if (strictTold) {
+            InputUtil.keepShift(event);
         }
     }
 }

@@ -77,7 +77,7 @@ public abstract class Module {
 
     // The name of the setting that best answers the query or an empty string.
     // Searching for a setting you half remember should find the module holding it.
-    public String bestSettingName(String query) {
+    private String bestSettingName(String query) {
         String best = "";
         int bestScore = SearchRank.NO_MATCH;
         for (Setting<?> setting : settings) {
@@ -97,7 +97,7 @@ public abstract class Module {
     // Spaces and case are ignored.
     public Setting<?> getSetting(String settingName) {
         String wanted = settingName.replace(" ", "").toLowerCase(Locale.ROOT);
-        for (Setting<?> setting : settings) {
+        for (Setting<?> setting : getSettings()) {
             if (setting.getName().replace(" ", "").toLowerCase(Locale.ROOT).equals(wanted)) {
                 return setting;
             }

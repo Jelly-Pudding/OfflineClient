@@ -138,7 +138,7 @@ public final class AutoWeapon extends Module {
     }
 
     // The hotbar slot holding the sword or axe that swings most often or minus one.
-    public static int fastestWeaponSlot(boolean skipBreaking) {
+    private static int fastestWeaponSlot(boolean skipBreaking) {
         int best = -1;
         double bestSpeed = 0;
         for (int i = 0; i < InventoryUtil.HOTBAR_SIZE; i++) {
@@ -223,7 +223,7 @@ public final class AutoWeapon extends Module {
     }
 
     // Damage one full strength hit would deal after their armour and your own effects.
-    public static double weaponDamage(ItemStack stack, LivingEntity target) {
+    private static double weaponDamage(ItemStack stack, LivingEntity target) {
         return DamageUtil.attackDamage(mc.player, target, stack);
     }
 }

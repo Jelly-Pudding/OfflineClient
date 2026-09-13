@@ -10,9 +10,9 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.Modules;
+import com.jellypudding.offlineclient.util.SprintPause;
 import net.minecraft.network.protocol.game.ServerboundAttackPacket;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
-import net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket;
 import net.minecraft.network.protocol.game.ServerboundSwingPacket;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
@@ -84,8 +84,8 @@ public final class Criticals extends Module {
         "Drops sprint for the hit and takes it straight back. A sprinting player cannot crit.",
         true);
 
-    // True between dropping sprint for a hit and handing it back.
-    private boolean resumeSprint;
+    // Drops the sprint for a hit and hands it back afterwards.
+    private final SprintPause sprintPause = new SprintPause();
 
     // The hit held back by a jump mode until the fall exists.
     private ServerboundAttackPacket heldAttack;
@@ -118,10 +118,7 @@ public final class Criticals extends Module {
     protected void onDisable() {
         clearHeld();
         // Leaving mid hit would leave the server believing the sprint had ended.
-        if (resumeSprint && inGame() && mc.player.isSprinting()) {
-            sendSprint(ServerboundPlayerCommandPacket.Action.START_SPRINTING);
-        }
-        resumeSprint = false;
+        sprintPause.resume();
     }
 
     @Subscribe
@@ -268,27 +265,15 @@ public final class Criticals extends Module {
     // The server refuses a critical hit to anyone it believes is sprinting.
     // Dropping sprint for the swing keeps the client from stuttering.
     private void dropSprint() {
-        if (!stopSprint.isOn() || resumeSprint || !mc.player.isSprinting()) {
-            return;
+        if (stopSprint.isOn()) {
+            sprintPause.pause();
         }
-        sendSprint(ServerboundPlayerCommandPacket.Action.STOP_SPRINTING);
-        resumeSprint = true;
     }
 
     // The attack packet has gone out by this point.
     @Subscribe
     private void onPostMotion(PostMotionEvent event) {
-        if (!resumeSprint) {
-            return;
-        }
-        resumeSprint = false;
-        if (inGame() && mc.player.isSprinting()) {
-            sendSprint(ServerboundPlayerCommandPacket.Action.START_SPRINTING);
-        }
-    }
-
-    private void sendSprint(ServerboundPlayerCommandPacket.Action action) {
-        mc.player.connection.send(new ServerboundPlayerCommandPacket(mc.player, action));
+        sprintPause.resume();
     }
 
     private void smash() {

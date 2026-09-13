@@ -25,6 +25,26 @@ public final class ChatUtil {
         OfflineClient.INSTANCE.getConfigManager().saveSoon();
     }
 
+    // Where the name next sits as a word of its own or minus one. Sam inside
+    // Samuel is not Sam.
+    public static int wholeWordIndex(String text, String name, int from) {
+        int at = text.indexOf(name, from);
+        while (at != -1) {
+            boolean startClear = at == 0 || !isNameChar(text.charAt(at - 1));
+            int end = at + name.length();
+            boolean endClear = end >= text.length() || !isNameChar(text.charAt(end));
+            if (startClear && endClear) {
+                return at;
+            }
+            at = text.indexOf(name, at + 1);
+        }
+        return -1;
+    }
+
+    private static boolean isNameChar(char c) {
+        return Character.isLetterOrDigit(c) || c == '_';
+    }
+
     public static void component(Component component) {
         if (OfflineClient.MC.player == null) {
             return;

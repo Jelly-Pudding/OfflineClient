@@ -177,7 +177,7 @@ public final class Derp extends Module {
             || mc.options.keyAttack.isDown() || mc.player.isUsingItem()) {
             return true;
         }
-        CrystalAura crystalAura = Modules.get(CrystalAura.class);
-        return crystalAura != null && crystalAura.isEnabled() && crystalAura.hasTarget();
+        CrystalAura crystalAura = Modules.active(CrystalAura.class);
+        return crystalAura != null && crystalAura.hasTarget();
     }
 }

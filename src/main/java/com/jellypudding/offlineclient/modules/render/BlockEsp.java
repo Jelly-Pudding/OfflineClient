@@ -41,7 +41,7 @@ import java.util.Set;
 
 // Every loaded chunk in range is scanned once on a background thread.
 // It is scanned again only when the server sends a change for it.
-public final class Search extends Module {
+public final class BlockEsp extends Module {
 
     private static final Direction[] SIDES = Direction.values();
 
@@ -150,12 +150,12 @@ public final class Search extends Module {
     private final Long2IntOpenHashMap groupOf = new Long2IntOpenHashMap();
     private final List<Vec3> groupCenters = new ArrayList<>();
 
-    public Search() {
-        super("Search", "Highlights chosen blocks through walls.", Category.RENDER);
+    public BlockEsp() {
+        super("BlockESP", "Highlights chosen blocks through walls.", Category.RENDER);
         addSettings(range, limit, blocks, automatic);
         addSettings(defaultStyle.settings());
         addSettings(defaultTracer, defaultTracerColor, store);
-        searchTags("block esp", "ore esp");
+        searchTags("search", "block search", "ore esp");
         blocks.onChange(() -> listChanged = true);
         groupOf.defaultReturnValue(-1);
     }
@@ -171,17 +171,6 @@ public final class Search extends Module {
             look.addTo(all);
         }
         return all;
-    }
-
-    @Override
-    public Setting<?> getSetting(String settingName) {
-        String asked = settingName.replace(" ", "").toLowerCase(Locale.ROOT);
-        for (Setting<?> setting : getSettings()) {
-            if (setting.getName().replace(" ", "").toLowerCase(Locale.ROOT).equals(asked)) {
-                return setting;
-            }
-        }
-        return null;
     }
 
     @Override

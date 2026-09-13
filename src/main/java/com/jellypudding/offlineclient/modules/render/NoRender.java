@@ -5,6 +5,7 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
+import com.jellypudding.offlineclient.util.ChunkRebuild;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
@@ -91,8 +92,8 @@ public final class NoRender extends Module {
     }
 
     private void rebuildChunks() {
-        if ((caveCulling.isOn() || textureRotations.isOn()) && mc.levelExtractor != null) {
-            mc.levelExtractor.allChanged();
+        if (caveCulling.isOn() || textureRotations.isOn()) {
+            ChunkRebuild.now();
         }
     }
 

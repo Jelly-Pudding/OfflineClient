@@ -1,6 +1,7 @@
 package com.jellypudding.offlineclient.util;
 
 import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.event.events.PacketSendEvent;
 import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.blaze3d.platform.Window;
 import net.minecraft.client.KeyMapping;
@@ -58,6 +59,13 @@ public final class InputUtil {
     public static Input withShift(Input input, boolean shift) {
         return new Input(input.forward(), input.backward(), input.left(), input.right(),
             input.jump(), shift, input.sprint());
+    }
+
+    // Turns the sneak flag on in an input packet on its way out.
+    public static void keepShift(PacketSendEvent event) {
+        if (event.getPacket() instanceof ServerboundPlayerInputPacket packet && !packet.input().shift()) {
+            event.setPacket(new ServerboundPlayerInputPacket(withShift(packet.input(), true)));
+        }
     }
 
     // Tells the server the sneak flag by hand. Vanilla only resends the input on a change.

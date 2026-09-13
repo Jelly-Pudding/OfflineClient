@@ -133,7 +133,6 @@ public final class Protect extends Module {
     }
 
     private boolean attackable(Entity entity) {
-        return entity != friend && entity instanceof LivingEntity living && living.isAlive()
-            && !EntityUtil.isFriend(entity) && filter.matches(entity) && targets.allows(entity);
+        return entity != friend && targets.attackable(entity, filter);
     }
 }

@@ -151,7 +151,7 @@ public final class Excavator extends Module {
         if (first == null || second != null) {
             clear();
             first = pos;
-            ChatUtil.message("§bExcavator §7first corner at §f" + text(pos) + "§7.");
+            ChatUtil.message("§bExcavator §7first corner at §f" + BlockUtil.text(pos) + "§7.");
             return;
         }
         second = pos;
@@ -160,7 +160,7 @@ public final class Excavator extends Module {
             return;
         }
         if (logSelection.isOn()) {
-            ChatUtil.message("§bExcavator §7second corner at §f" + text(pos)
+            ChatUtil.message("§bExcavator §7second corner at §f" + BlockUtil.text(pos)
                 + "§7. §f" + remaining.size() + "§7 blocks to dig.");
         }
     }
@@ -312,10 +312,6 @@ public final class Excavator extends Module {
             }
         }
         return null;
-    }
-
-    private static String text(BlockPos pos) {
-        return pos.getX() + " " + pos.getY() + " " + pos.getZ();
     }
 
     @Subscribe

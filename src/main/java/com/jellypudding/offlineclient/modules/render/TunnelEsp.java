@@ -14,7 +14,6 @@ import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChunkScanner;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 
@@ -24,9 +23,6 @@ import java.util.List;
 public final class TunnelEsp extends Module {
 
     // A box is only ankle high. It can only touch the four sideways.
-    private static final Direction[] AROUND = {
-        Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST};
-
     // How open a neighbouring column is.
     private enum Side {
         WALKABLE,
@@ -215,19 +211,7 @@ public final class TunnelEsp extends Module {
         for (Spot spot : spots) {
             AABB box = new AABB(spot.x(), spot.y(), spot.z(),
                 spot.x() + 1, spot.y() + boxHeight, spot.z() + 1);
-            style.drawJoined(batch, box, join ? sharedSides(spot) : 0, true);
+            style.drawJoined(batch, box, join ? DrawBatch.sharedSides(keys, BlockPos.asLong(spot.x(), spot.y(), spot.z())) : 0, true);
         }
-    }
-
-    // A bit for every side that another tunnel box is pressed against.
-    private int sharedSides(Spot spot) {
-        long key = BlockPos.asLong(spot.x(), spot.y(), spot.z());
-        int hidden = 0;
-        for (Direction side : AROUND) {
-            if (keys.contains(BlockPos.offset(key, side))) {
-                hidden |= DrawBatch.sideBit(side);
-            }
-        }
-        return hidden;
     }
 }

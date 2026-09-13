@@ -119,8 +119,6 @@ public final class SelfTrap extends Module {
         if (!render.isOn()) {
             return;
         }
-        for (BlockPos pos : pending) {
-            style.draw(event.getBatch(), pos, false);
-        }
+        style.drawAll(event.getBatch(), pending, false);
     }
 }

@@ -95,7 +95,7 @@ public final class ColorUtil {
     }
 
     // Hue in degrees then saturation then value each from nought to one.
-    public static float[] hsvOf(int color) {
+    private static float[] hsvOf(int color) {
         float red = (color >> 16 & 0xFF) / 255f;
         float green = (color >> 8 & 0xFF) / 255f;
         float blue = (color & 0xFF) / 255f;

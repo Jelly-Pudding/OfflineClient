@@ -6,6 +6,7 @@ import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
+import com.jellypudding.offlineclient.util.ChunkRebuild;
 import net.minecraft.world.level.Level;
 
 // Recolours the world on your screen only. The mixins ask this what to paint.
@@ -110,9 +111,7 @@ public final class Ambience extends Module {
     }
 
     private static void rebuild() {
-        if (mc.levelExtractor != null) {
-            mc.levelExtractor.allChanged();
-        }
+        ChunkRebuild.now();
     }
 
     public boolean drawsEndSky() {

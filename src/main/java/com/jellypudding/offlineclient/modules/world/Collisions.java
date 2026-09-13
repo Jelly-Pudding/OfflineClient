@@ -51,7 +51,7 @@ public final class Collisions extends Module {
 
     // Null leaves the block with the shape the game gave it.
     public VoxelShape forcedShape(BlockState state, BlockPos pos) {
-        if (!state.getFluidState().isEmpty() || mc.player == null || mc.level == null) {
+        if (!state.getFluidState().isEmpty() || !inGame()) {
             return null;
         }
         if (blocks.contains(state.getBlock())) {

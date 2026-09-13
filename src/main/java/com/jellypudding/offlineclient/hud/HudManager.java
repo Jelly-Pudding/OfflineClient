@@ -56,7 +56,7 @@ public final class HudManager {
     }
 
     // Nought pins the near edge and one the far edge and a half the middle.
-    public static double align(double share) {
+    private static double align(double share) {
         if (share < FIRST_THIRD) {
             return 0;
         }

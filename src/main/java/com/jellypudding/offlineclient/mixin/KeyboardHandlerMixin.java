@@ -20,6 +20,6 @@ public class KeyboardHandlerMixin {
             return;
         }
         OfflineClient.INSTANCE.getEventBus()
-            .post(new KeyPressEvent(event.key(), event.scancode(), action, event.modifiers()));
+            .post(new KeyPressEvent(event.key(), action));
     }
 }

@@ -127,8 +127,8 @@ public abstract class MultiPlayerGameModeMixin {
         at = @At("HEAD"), cancellable = true)
     private void onUseItem(Player player, InteractionHand hand,
                            CallbackInfoReturnable<InteractionResult> cir) {
-        ElytraBoost boost = Modules.get(ElytraBoost.class);
-        if (player == minecraft.player && boost != null && boost.isEnabled()
+        ElytraBoost boost = Modules.active(ElytraBoost.class);
+        if (player == minecraft.player && boost != null
             && boost.interceptsUse(player.getItemInHand(hand))) {
             cir.setReturnValue(InteractionResult.PASS);
         }

@@ -18,7 +18,6 @@ import com.jellypudding.offlineclient.util.TargetFilter;
 import com.jellypudding.offlineclient.util.TargetPriority;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.LivingEntity;
 
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
@@ -81,7 +80,6 @@ public final class TpAura extends Module {
     }
 
     private boolean attackable(Entity entity) {
-        return entity instanceof LivingEntity living && living.isAlive()
-            && !EntityUtil.isFriend(entity) && filter.matches(entity) && targets.allows(entity);
+        return targets.attackable(entity, filter);
     }
 }

@@ -8,6 +8,7 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.ChunkRebuild;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.level.LightLayer;
@@ -149,9 +150,7 @@ public final class Fullbright extends Module {
 
     // Every chunk is meshed again with the new light floor.
     private void relight() {
-        if (mc.levelExtractor != null) {
-            mc.levelExtractor.allChanged();
-        }
+        ChunkRebuild.now();
     }
 
     // The floor for one light layer or nought when the layer is left alone.

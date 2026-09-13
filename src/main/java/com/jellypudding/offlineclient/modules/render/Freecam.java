@@ -17,6 +17,7 @@ import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.ChunkRebuild;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.RotationManager;
@@ -198,8 +199,8 @@ public final class Freecam extends Module {
         if (mc.player != null) {
             init();
         }
-        if (reloadChunks.isOn() && mc.levelExtractor != null) {
-            mc.levelExtractor.allChanged();
+        if (reloadChunks.isOn()) {
+            ChunkRebuild.now();
         }
     }
 
@@ -431,8 +432,8 @@ public final class Freecam extends Module {
         giveBackView();
         seededFor = null;
         // The chunks around the body were meshed from the camera's side.
-        if (reloadChunks.isOn() && mc.levelExtractor != null) {
-            mc.levelExtractor.allChanged();
+        if (reloadChunks.isOn()) {
+            ChunkRebuild.now();
         }
     }
 

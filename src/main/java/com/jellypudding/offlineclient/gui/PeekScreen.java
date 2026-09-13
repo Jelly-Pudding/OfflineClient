@@ -2,7 +2,6 @@ package com.jellypudding.offlineclient.gui;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.modules.render.BetterTooltips;
-import com.jellypudding.offlineclient.modules.render.Blur;
 import com.jellypudding.offlineclient.render.ContainerPreview;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.RenderUtil;
@@ -55,11 +54,7 @@ public final class PeekScreen extends Screen {
 
     @Override
     public void extractBackground(GuiGraphicsExtractor context, int mouseX, int mouseY, float deltaTicks) {
-        Blur blur = Modules.get(Blur.class);
-        if (blur != null && blur.wants(this)) {
-            blur.blurHere(context);
-        }
-        context.fillGradient(0, 0, width, height, 0x70101018, 0xA0060610);
+        GuiScreenBase.dimBackground(this, context);
     }
 
     @Override

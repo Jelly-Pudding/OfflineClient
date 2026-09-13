@@ -7,6 +7,7 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
+import com.jellypudding.offlineclient.util.ChunkRebuild;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -35,7 +36,7 @@ public final class WallHack extends Module {
     // Read from worker threads and replaced whole.
     private volatile Set<Block> seeThrough = Set.of();
     private volatile int alpha;
-    private int rebuildCooldown;
+    private final ChunkRebuild rebuild = new ChunkRebuild();
 
     public WallHack() {
         super("WallHack", "Makes the blocks you choose see through.", Category.RENDER);
@@ -57,22 +58,17 @@ public final class WallHack extends Module {
     @Override
     protected void onEnable() {
         snapshot();
-        rebuildChunks();
+        ChunkRebuild.now();
     }
 
     @Override
     protected void onDisable() {
-        rebuildChunks();
+        ChunkRebuild.now();
     }
 
-    // The rebuild fires once the settings sit still for half a second.
     @Subscribe
     private void onTick(TickEvent event) {
-        if (snapshot()) {
-            rebuildCooldown = 10;
-        } else if (rebuildCooldown > 0 && --rebuildCooldown == 0) {
-            rebuildChunks();
-        }
+        rebuild.tick(snapshot());
     }
 
     // True if anything changed.
@@ -85,12 +81,6 @@ public final class WallHack extends Module {
             alpha = nextAlpha;
         }
         return changed;
-    }
-
-    private void rebuildChunks() {
-        if (mc.levelExtractor != null) {
-            mc.levelExtractor.allChanged();
-        }
     }
 
     // Vanilla skips chunk sections that are boxed in by solid ground.

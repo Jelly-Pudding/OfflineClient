@@ -49,6 +49,12 @@ public final class AutoFish extends Module {
 
     // Durability points left that count as about to break.
     private static final int NEARLY_BROKEN = 2;
+    private static final double TICKS_PER_SECOND = 20;
+
+    // What each enchantment level is worth when picking the best rod.
+    private static final int LUCK_WORTH = 9;
+    private static final int LURE_WORTH = 9;
+    private static final int UNBREAKING_WORTH = 2;
 
     // A random shift is cut off at this many standard deviations.
     private static final double SPREAD_CUTOFF = 3;
@@ -332,7 +338,7 @@ public final class AutoFish extends Module {
 
     // How much of a server tick one client tick is worth.
     private static double serverTick() {
-        return TickRate.INSTANCE.tps() / 20.0;
+        return TickRate.INSTANCE.tps() / TICKS_PER_SECOND;
     }
 
     // The delay shifted by a random amount that is usually small and never
@@ -393,9 +399,9 @@ public final class AutoFish extends Module {
             return -1;
         }
         int keeps = ItemUtil.enchantLevel(Enchantments.VANISHING_CURSE, stack) == 0 ? 1 : 0;
-        return ItemUtil.enchantLevel(Enchantments.LUCK_OF_THE_SEA, stack) * 9
-            + ItemUtil.enchantLevel(Enchantments.LURE, stack) * 9
-            + ItemUtil.enchantLevel(Enchantments.UNBREAKING, stack) * 2
+        return ItemUtil.enchantLevel(Enchantments.LUCK_OF_THE_SEA, stack) * LUCK_WORTH
+            + ItemUtil.enchantLevel(Enchantments.LURE, stack) * LURE_WORTH
+            + ItemUtil.enchantLevel(Enchantments.UNBREAKING, stack) * UNBREAKING_WORTH
             + ItemUtil.enchantLevel(Enchantments.MENDING, stack)
             + keeps;
     }

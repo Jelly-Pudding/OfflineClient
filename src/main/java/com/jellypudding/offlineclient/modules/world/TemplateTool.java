@@ -75,10 +75,10 @@ public final class TemplateTool extends Module {
         BlockPos pos = hit.getBlockPos().immutable();
         if (first == null) {
             first = pos;
-            ChatUtil.message("§bTemplateTool §7first corner at §f" + text(pos) + "§7.");
+            ChatUtil.message("§bTemplateTool §7first corner at §f" + BlockUtil.text(pos) + "§7.");
         } else if (second == null) {
             second = pos;
-            ChatUtil.message("§bTemplateTool §7second corner at §f" + text(pos)
+            ChatUtil.message("§bTemplateTool §7second corner at §f" + BlockUtil.text(pos)
                 + "§7. Now press the bind on the block the build grows from.");
         } else {
             save(pos);
@@ -114,10 +114,6 @@ public final class TemplateTool extends Module {
             ChatUtil.error("Could not write the template file.");
         }
         setEnabled(false);
-    }
-
-    private static String text(BlockPos pos) {
-        return pos.getX() + " " + pos.getY() + " " + pos.getZ();
     }
 
     @Subscribe

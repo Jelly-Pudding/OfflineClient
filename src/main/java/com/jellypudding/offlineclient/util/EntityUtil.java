@@ -4,7 +4,6 @@ import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.modules.misc.NameProtect;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.network.chat.Component;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Entity;
@@ -21,7 +20,6 @@ import net.minecraft.world.entity.animal.fish.Pufferfish;
 import net.minecraft.world.entity.animal.fish.WaterAnimal;
 import net.minecraft.world.entity.animal.fox.Fox;
 import net.minecraft.world.entity.animal.golem.AbstractGolem;
-import net.minecraft.world.entity.boss.enderdragon.EndCrystal;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.monster.Enemy;
 import net.minecraft.world.entity.monster.Shulker;
@@ -75,20 +73,6 @@ public final class EntityUtil {
         return totalHealth(player) <= hearts * HEART;
     }
 
-    // True when an end crystal sits within the distance.
-    public static boolean crystalNearby(double distance) {
-        Minecraft mc = OfflineClient.MC;
-        if (mc.level == null || mc.player == null) {
-            return false;
-        }
-        for (Entity entity : mc.level.entitiesForRendering()) {
-            if (entity instanceof EndCrystal && mc.player.distanceTo(entity) <= distance) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     // The holder on EntityType itself is deprecated. The lookup goes via the registry.
     public static boolean typeIs(Entity entity, TagKey<EntityType<?>> tag) {
         return BuiltInRegistries.ENTITY_TYPE.wrapAsHolder(entity.getType()).is(tag);
@@ -134,13 +118,6 @@ public final class EntityUtil {
         String name = nameOf(player);
         NameProtect nameProtect = Modules.get(NameProtect.class);
         return nameProtect == null || name == null ? name : nameProtect.display(name);
-    }
-
-    // The name the server dresses up with a prefix or a team colour. Renames still apply.
-    public static String serverNameOf(Player player) {
-        NameProtect nameProtect = Modules.get(NameProtect.class);
-        Component name = player.getDisplayName();
-        return (nameProtect == null ? name : nameProtect.filter(name)).getString();
     }
 
     public static boolean isFriend(Entity entity) {

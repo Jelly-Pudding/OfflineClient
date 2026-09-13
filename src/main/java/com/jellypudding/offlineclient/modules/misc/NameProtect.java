@@ -6,6 +6,7 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.TextSetting;
+import com.jellypudding.offlineclient.util.ChatUtil;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
@@ -191,7 +192,7 @@ public final class NameProtect extends Module {
             Rename hit = null;
             int at = -1;
             for (Rename rename : renames) {
-                int found = wholeWord(text, rename.from(), from);
+                int found = ChatUtil.wholeWordIndex(text, rename.from(), from);
                 if (found != -1 && (at == -1 || found < at)) {
                     at = found;
                     hit = rename;
@@ -211,24 +212,5 @@ public final class NameProtect extends Module {
         if (from < text.length()) {
             result.append(Component.literal(text.substring(from)).setStyle(style));
         }
-    }
-
-    // Where the name next appears on its own. Sam inside Samuel is not Sam.
-    private static int wholeWord(String text, String name, int from) {
-        int at = text.indexOf(name, from);
-        while (at != -1) {
-            boolean startClear = at == 0 || !isNameChar(text.charAt(at - 1));
-            int end = at + name.length();
-            boolean endClear = end >= text.length() || !isNameChar(text.charAt(end));
-            if (startClear && endClear) {
-                return at;
-            }
-            at = text.indexOf(name, at + 1);
-        }
-        return -1;
-    }
-
-    private static boolean isNameChar(char c) {
-        return Character.isLetterOrDigit(c) || c == '_';
     }
 }

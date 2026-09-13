@@ -124,7 +124,7 @@ A utility client custom designed for the anarchy lifesteal server [minecraftoffl
 | ChestESP | See containers through walls. |
 | ItemESP | See dropped items through walls. |
 | HoleESP | Highlights safe holes to stand in. |
-| Search | Highlights chosen blocks through walls. |
+| BlockESP | Highlights chosen blocks through walls. |
 | XRay | See ores through the ground. |
 | WallHack | Makes the blocks you choose see through. |
 | Fullbright | See in the dark without torches. |

@@ -6,6 +6,7 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.Setting;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.player.Player;
 
@@ -36,6 +37,12 @@ public final class TargetFilter {
 
     public Setting<?>[] settings() {
         return new Setting<?>[] {sleeping, flying, babies, pets, invisible, named, neutral};
+    }
+
+    // A living target that is no friend and passes the kind filter as well.
+    public boolean attackable(Entity entity, EntityFilter filter) {
+        return entity instanceof LivingEntity living && living.isAlive()
+            && !EntityUtil.isFriend(entity) && filter.matches(entity) && allows(entity);
     }
 
     public boolean allows(Entity entity) {

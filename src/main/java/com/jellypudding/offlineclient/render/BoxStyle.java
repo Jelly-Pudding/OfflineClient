@@ -126,6 +126,12 @@ public final class BoxStyle {
         draw(batch, DrawBatch.blockBox(pos), throughWalls);
     }
 
+    public void drawAll(DrawBatch batch, Iterable<BlockPos> positions, boolean throughWalls) {
+        for (BlockPos pos : positions) {
+            draw(batch, pos, throughWalls);
+        }
+    }
+
     // The same shape in a colour worked out per box such as an entity colour.
     public void draw(DrawBatch batch, AABB box, int color, boolean throughWalls) {
         draw(batch, box, color, color, throughWalls);

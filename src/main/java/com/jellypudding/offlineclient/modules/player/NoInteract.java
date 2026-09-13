@@ -179,7 +179,7 @@ public final class NoInteract extends Module {
         return listed(mineBlocks, mineBlocksMode, mc.level.getBlockState(pos).getBlock());
     }
 
-    public boolean blocksHit(Entity entity) {
+    private boolean blocksHit(Entity entity) {
         if (!isEnabled() || entity == null) {
             return false;
         }
@@ -187,7 +187,7 @@ public final class NoInteract extends Module {
             || protects(entity, Protect.HIT);
     }
 
-    public boolean blocksEntityUse(Entity entity) {
+    private boolean blocksEntityUse(Entity entity) {
         if (!isEnabled() || entity == null) {
             return false;
         }

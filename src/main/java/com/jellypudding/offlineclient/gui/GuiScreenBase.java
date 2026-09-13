@@ -30,6 +30,8 @@ public abstract class GuiScreenBase extends Screen implements SettingWidget.Host
     private static final String CLEAR = "×";
     private static final int CLEAR_ZONE = 12;
     private static final String SEARCH_KEY = "search";
+    private static final int DIM_TOP = 0x70101018;
+    private static final int DIM_BOTTOM = 0xA0060610;
 
     protected final TextField searchBox = new TextField();
     protected boolean searchFocused;
@@ -64,12 +66,17 @@ public abstract class GuiScreenBase extends Screen implements SettingWidget.Host
 
     @Override
     public void extractBackground(GuiGraphicsExtractor context, int mouseX, int mouseY, float deltaTicks) {
-        // The vanilla blur washes the panel colours out. Blur adds its own when asked.
+        dimBackground(this, context);
+    }
+
+    // The vanilla blur washes the panel colours out. Blur adds its own when asked
+    // and a dark gradient goes over the world either way.
+    public static void dimBackground(Screen screen, GuiGraphicsExtractor context) {
         Blur blur = Modules.get(Blur.class);
-        if (blur != null && blur.wants(this)) {
+        if (blur != null && blur.wants(screen)) {
             blur.blurHere(context);
         }
-        context.fillGradient(0, 0, width, height, 0x70101018, 0xA0060610);
+        context.fillGradient(0, 0, screen.width, screen.height, DIM_TOP, DIM_BOTTOM);
     }
 
     @Override

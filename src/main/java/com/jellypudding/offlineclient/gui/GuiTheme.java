@@ -122,7 +122,7 @@ public final class GuiTheme {
         return rowY + (rowHeight - TEXT_HEIGHT) / 2;
     }
 
-    public static ColorSetting accentSetting() {
+    private static ColorSetting accentSetting() {
         return Modules.get(ClickGuiModule.class).getAccent();
     }
 

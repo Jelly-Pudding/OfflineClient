@@ -9,7 +9,6 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.client.player.LocalPlayer;
-import net.minecraft.network.protocol.game.ServerboundPlayerInputPacket;
 import java.lang.ref.WeakReference;
 
 // Legit mode holds the sneak key. Packet mode only tells the server.
@@ -98,11 +97,8 @@ public final class Sneak extends Module {
 
     @Subscribe
     private void onPacketSend(PacketSendEvent event) {
-        if (!forcing || !(event.getPacket() instanceof ServerboundPlayerInputPacket packet)) {
-            return;
-        }
-        if (!packet.input().shift()) {
-            event.setPacket(new ServerboundPlayerInputPacket(InputUtil.withShift(packet.input(), true)));
+        if (forcing) {
+            InputUtil.keepShift(event);
         }
     }
 

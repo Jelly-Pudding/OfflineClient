@@ -247,8 +247,6 @@ public final class VeinMiner extends Module {
         if (!render.isOn()) {
             return;
         }
-        for (BlockPos pos : vein) {
-            veinBox.draw(event.getBatch(), pos, false);
-        }
+        veinBox.drawAll(event.getBatch(), vein, false);
     }
 }

@@ -7,6 +7,7 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
+import com.jellypudding.offlineclient.util.ChunkRebuild;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -55,7 +56,7 @@ public final class XRay extends Module {
     private volatile Set<Block> visible = Set.of();
     private volatile boolean exposed;
     private volatile int alpha;
-    private int rebuildCooldown;
+    private final ChunkRebuild rebuild = new ChunkRebuild();
 
     public XRay() {
         super("XRay", "See ores through the ground.", Category.RENDER);
@@ -112,22 +113,17 @@ public final class XRay extends Module {
     @Override
     protected void onEnable() {
         snapshot();
-        rebuildChunks();
+        ChunkRebuild.now();
     }
 
     @Override
     protected void onDisable() {
-        rebuildChunks();
+        ChunkRebuild.now();
     }
 
-    // The rebuild fires once the settings sit still for half a second.
     @Subscribe
     private void onTick(TickEvent event) {
-        if (snapshot()) {
-            rebuildCooldown = 10;
-        } else if (rebuildCooldown > 0 && --rebuildCooldown == 0) {
-            rebuildChunks();
-        }
+        rebuild.tick(snapshot());
     }
 
     // True if anything changed.
@@ -149,12 +145,6 @@ public final class XRay extends Module {
             exposed = nextExposed;
         }
         return changed;
-    }
-
-    private void rebuildChunks() {
-        if (mc.levelExtractor != null) {
-            mc.levelExtractor.allChanged();
-        }
     }
 
     // A null position skips the exposed only check.

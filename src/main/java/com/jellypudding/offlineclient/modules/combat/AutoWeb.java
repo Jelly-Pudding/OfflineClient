@@ -194,9 +194,7 @@ public final class AutoWeb extends Module {
         if (!render.isOn()) {
             return;
         }
-        for (BlockPos spot : pending) {
-            style.draw(event.getBatch(), spot, false);
-        }
+        style.drawAll(event.getBatch(), pending, false);
         int faded = ColorUtil.fade(style.lineColor(), DONE_FADE);
         for (BlockPos spot : done) {
             style.draw(event.getBatch(), spot, faded, false);

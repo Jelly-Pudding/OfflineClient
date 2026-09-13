@@ -11,9 +11,9 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.MovementUtil;
+import com.jellypudding.offlineclient.util.SprintPause;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.protocol.game.ServerboundAttackPacket;
-import net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket;
 import net.minecraft.world.phys.Vec3;
 
 public final class Sprint extends Module {
@@ -40,7 +40,7 @@ public final class Sprint extends Module {
     private final BoolSetting stopOnHit = new BoolSetting("Stop on hit",
         "Tells the server you stopped sprinting for each attack so it can crit and sweep.", false);
 
-    private boolean resumeSprint;
+    private final SprintPause sprintPause = new SprintPause();
 
     public Sprint() {
         super("Sprint", "Automatically sprints whenever you move.", Category.MOVEMENT);
@@ -55,10 +55,7 @@ public final class Sprint extends Module {
 
     @Override
     protected void onDisable() {
-        if (resumeSprint && inGame() && mc.player.isSprinting()) {
-            sendSprint(ServerboundPlayerCommandPacket.Action.START_SPRINTING);
-        }
-        resumeSprint = false;
+        sprintPause.resume();
     }
 
     // Read by ClientInputMixin.
@@ -125,25 +122,15 @@ public final class Sprint extends Module {
     // The server refuses a critical hit to anyone it believes is sprinting.
     @Subscribe(priority = 100)
     private void onPacketSend(PacketSendEvent event) {
-        if (!stopOnHit.isOn() || resumeSprint || !inGame()
-            || !(event.getPacket() instanceof ServerboundAttackPacket)
-            || !mc.player.isSprinting()) {
-            return;
+        if (stopOnHit.isOn() && event.getPacket() instanceof ServerboundAttackPacket) {
+            sprintPause.pause();
         }
-        sendSprint(ServerboundPlayerCommandPacket.Action.STOP_SPRINTING);
-        resumeSprint = true;
     }
 
     // The attack packet has gone out by this point.
     @Subscribe
     private void onPostMotion(PostMotionEvent event) {
-        if (!resumeSprint) {
-            return;
-        }
-        resumeSprint = false;
-        if (inGame() && mc.player.isSprinting()) {
-            sendSprint(ServerboundPlayerCommandPacket.Action.START_SPRINTING);
-        }
+        sprintPause.resume();
     }
 
     // A screen only keeps the sprint whilst InvWalk lets the sprint key through.
@@ -154,9 +141,5 @@ public final class Sprint extends Module {
 
     private static boolean moving(LocalPlayer player) {
         return player.input.getMoveVector().lengthSquared() > 1e-5f;
-    }
-
-    private void sendSprint(ServerboundPlayerCommandPacket.Action action) {
-        mc.player.connection.send(new ServerboundPlayerCommandPacket(mc.player, action));
     }
 }

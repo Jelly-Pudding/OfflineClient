@@ -14,7 +14,6 @@ import com.jellypudding.offlineclient.util.ItemUtil;
 import com.jellypudding.offlineclient.util.MovementUtil;
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import net.minecraft.core.Holder;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.ai.attributes.Attributes;
@@ -25,9 +24,7 @@ import net.minecraft.world.item.enchantment.EnchantmentEffectComponents;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import net.minecraft.world.item.enchantment.Enchantments;
 
-import java.util.Collection;
 import java.util.List;
-import java.util.stream.Collectors;
 
 public final class AutoArmor extends Module {
 
@@ -56,7 +53,7 @@ public final class AutoArmor extends Module {
         "Leggings always prefer Blast Protection whatever is picked above.", true);
     private final ChoiceListSetting avoided = new ChoiceListSetting("Avoided enchantments",
         "Never put on a piece carrying any of these and take one off when something else fits.",
-        AutoArmor::enchantmentIds, List.of("minecraft:binding_curse", "minecraft:frost_walker"));
+        ItemUtil::enchantmentIds, List.of("minecraft:binding_curse", "minecraft:frost_walker"));
     private final BoolSetting keepElytra = new BoolSetting("Keep elytra",
         "Leave a worn elytra alone rather than swapping a chestplate over it.", true);
     private final BoolSetting whileMoving = new BoolSetting("While moving",
@@ -73,15 +70,6 @@ public final class AutoArmor extends Module {
         super("AutoArmor", "Automatically wears the best armour you have.", Category.COMBAT);
         addSettings(delay, prefer, blastLeggings, avoided, keepElytra, whileMoving, antiBreak, durability);
         searchTags("armour", "auto equip");
-    }
-
-    // Every enchantment the world knows. The list is empty until a world is loaded.
-    private static Collection<String> enchantmentIds() {
-        if (mc.level == null) {
-            return List.of();
-        }
-        return mc.level.registryAccess().lookupOrThrow(Registries.ENCHANTMENT).keySet().stream()
-            .map(Object::toString).sorted().collect(Collectors.toList());
     }
 
     @Subscribe

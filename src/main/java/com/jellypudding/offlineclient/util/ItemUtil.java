@@ -17,8 +17,10 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.state.BlockState;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 public final class ItemUtil {
 
@@ -35,6 +37,15 @@ public final class ItemUtil {
     private static final int BREAK_MARGIN = 5;
 
     private ItemUtil() {
+    }
+
+    // Every enchantment the world knows. Empty until a world is loaded.
+    public static Collection<String> enchantmentIds() {
+        if (OfflineClient.MC.level == null) {
+            return List.of();
+        }
+        return OfflineClient.MC.level.registryAccess().lookupOrThrow(Registries.ENCHANTMENT).keySet()
+            .stream().map(Object::toString).sorted().collect(Collectors.toList());
     }
 
     public static boolean nearlyBroken(ItemStack stack) {

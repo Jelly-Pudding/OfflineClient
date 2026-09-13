@@ -66,7 +66,7 @@ public final class DamageUtil {
     }
 
     // The worst crystal or bed or anchor in range.
-    public static float blastThreat(double range) {
+    private static float blastThreat(double range) {
         float[] worst = {0};
         for (Entity entity : MC.level.entitiesForRendering()) {
             if (entity instanceof EndCrystal && entity.distanceTo(MC.player) <= range) {
@@ -96,7 +96,7 @@ public final class DamageUtil {
     }
 
     // The hardest hit any enemy in range could land with what they hold.
-    public static float meleeThreat(double range) {
+    private static float meleeThreat(double range) {
         float worst = 0;
         for (Entity entity : MC.level.entitiesForRendering()) {
             if (!EntityUtil.isEnemy(entity) || entity.distanceTo(MC.player) > range) {
@@ -131,7 +131,7 @@ public final class DamageUtil {
     }
 
     // The flat damage the weapon enchantments add against this target.
-    public static float enchantBonus(ItemStack weapon, Entity target) {
+    private static float enchantBonus(ItemStack weapon, Entity target) {
         float bonus = 0;
         int sharpness = ItemUtil.enchantLevel(Enchantments.SHARPNESS, weapon);
         if (sharpness > 0) {
@@ -158,7 +158,7 @@ public final class DamageUtil {
 
     // Damage the fall the entity is in would deal on landing. The drop still to come is
     // measured down to the first block or water under them. Zero whilst NoFall is on.
-    public static float fallDamage(LivingEntity entity) {
+    private static float fallDamage(LivingEntity entity) {
         if (entity == MC.player && Modules.enabled(NoFall.class)) {
             return 0;
         }

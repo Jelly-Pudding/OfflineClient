@@ -233,8 +233,8 @@ public final class AutoLog extends Module {
     // A low health logout can leave a watcher behind that turns the module back on.
     private void logOut(String reason, boolean lowHealth) {
         String note = "";
-        AutoReconnect autoReconnect = Modules.get(AutoReconnect.class);
-        if (stopReconnect.isOn() && autoReconnect != null && autoReconnect.isEnabled()) {
+        AutoReconnect autoReconnect = Modules.active(AutoReconnect.class);
+        if (stopReconnect.isOn() && autoReconnect != null) {
             autoReconnect.setEnabled(false);
             note = "\n§7AutoReconnect was turned off.";
         }

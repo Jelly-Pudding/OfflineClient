@@ -254,7 +254,7 @@ public final class ElytraBoost extends Module {
 
     // ElytraFly holds its own speed whilst cruising. A rocket only breaks the cycle.
     private boolean cruising() {
-        ElytraFly elytraFly = Modules.get(ElytraFly.class);
-        return elytraFly != null && elytraFly.isEnabled() && elytraFly.inCruiseMode();
+        ElytraFly elytraFly = Modules.active(ElytraFly.class);
+        return elytraFly != null && elytraFly.inCruiseMode();
     }
 }

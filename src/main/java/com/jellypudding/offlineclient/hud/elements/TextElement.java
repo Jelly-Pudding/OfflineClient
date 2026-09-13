@@ -20,6 +20,11 @@ import java.util.Locale;
 public final class TextElement extends HudElement {
 
     private static final double TICKS = 20;
+    // A Minecraft day in ticks and the ticks in one of its hours. Day starts at six.
+    private static final long DAY_TICKS = 24000;
+    private static final long HOUR_TICKS = 1000;
+    private static final long SIX_AM = 6 * HOUR_TICKS;
+    private static final long MINUTES_PER_HOUR = 60;
 
     private final TextSetting text = new TextSetting("Text line",
         "The line to write. Words in braces are swapped for live numbers.",
@@ -95,8 +100,9 @@ public final class TextElement extends HudElement {
 
     // The world clock as a twenty four hour reading. Nought ticks is six in the morning.
     private static String dayTime(LocalPlayer player) {
-        long ticks = Math.floorMod(player.level().getOverworldClockTime() + 6000, 24000L);
-        return String.format(Locale.ROOT, "%02d:%02d", ticks / 1000, ticks % 1000 * 60 / 1000);
+        long ticks = Math.floorMod(player.level().getOverworldClockTime() + SIX_AM, DAY_TICKS);
+        return String.format(Locale.ROOT, "%02d:%02d", ticks / HOUR_TICKS,
+            ticks % HOUR_TICKS * MINUTES_PER_HOUR / HOUR_TICKS);
     }
 
     @Override

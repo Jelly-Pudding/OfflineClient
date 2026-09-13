@@ -81,10 +81,6 @@ public final class RegistryListSetting<T> extends Setting<Set<Identifier>> imple
         return Collections.unmodifiableSet(ids);
     }
 
-    public Registry<T> getRegistry() {
-        return registry;
-    }
-
     // The default entry of a defaulted registry stands for nothing and is left out.
     @Override
     public Collection<T> options() {

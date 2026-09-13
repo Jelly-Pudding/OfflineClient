@@ -13,7 +13,6 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ChunkScanner;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
@@ -27,9 +26,6 @@ public final class VoidEsp extends Module {
     private static final int NETHER_ROOF_Y = 127;
 
     // Holes only ever touch sideways. Every one sits on the same layer.
-    private static final Direction[] AROUND = {
-        Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST};
-
     private record Hole(int x, int y, int z, boolean roof) {
     }
 
@@ -158,19 +154,7 @@ public final class VoidEsp extends Module {
             AABB box = new AABB(hole.x(), hole.y(), hole.z(),
                 hole.x() + 1, hole.y() + 1, hole.z() + 1);
             BoxStyle style = hole.roof() ? roofStyle : floorStyle;
-            style.drawJoined(batch, box, join ? sharedSides(hole) : 0, true);
+            style.drawJoined(batch, box, join ? DrawBatch.sharedSides(keys, BlockPos.asLong(hole.x(), hole.y(), hole.z())) : 0, true);
         }
-    }
-
-    // A bit for every side that another hole is pressed against.
-    private int sharedSides(Hole hole) {
-        long key = BlockPos.asLong(hole.x(), hole.y(), hole.z());
-        int hidden = 0;
-        for (Direction side : AROUND) {
-            if (keys.contains(BlockPos.offset(key, side))) {
-                hidden |= DrawBatch.sideBit(side);
-            }
-        }
-        return hidden;
     }
 }

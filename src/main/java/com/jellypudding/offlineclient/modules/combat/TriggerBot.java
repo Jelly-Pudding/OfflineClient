@@ -18,7 +18,6 @@ import com.jellypudding.offlineclient.util.TargetFilter;
 import com.jellypudding.offlineclient.util.TargetPriority;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.LivingEntity;
 
 import java.util.List;
 
@@ -88,10 +87,7 @@ public final class TriggerBot extends Module {
     }
 
     private boolean attackable(Entity entity) {
-        if (!(entity instanceof LivingEntity living) || !living.isAlive()) {
-            return false;
-        }
-        if (EntityUtil.isFriend(entity) || !filter.matches(entity) || !targets.allows(entity)) {
+        if (!targets.attackable(entity, filter)) {
             return false;
         }
         // The crosshair reaches further than the server allows a hit.

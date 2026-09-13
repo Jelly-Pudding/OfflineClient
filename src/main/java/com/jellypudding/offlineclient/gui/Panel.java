@@ -126,7 +126,7 @@ public final class Panel {
         return Math.min(MIN_VIEW, rowsHeight());
     }
 
-    public int getContentHeight() {
+    private int getContentHeight() {
         if (collapsed) {
             return GuiTheme.HEADER_HEIGHT;
         }

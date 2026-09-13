@@ -7,6 +7,7 @@ import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.path.PathWalker;
 import com.jellypudding.offlineclient.path.Trip;
+import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
@@ -54,7 +55,7 @@ public final class GotoCommand extends Command {
             return;
         }
         OfflineClient.INSTANCE.getEventBus().register(this);
-        ChatUtil.message("§bGoto §7walking to §f" + text(target) + "§7.");
+        ChatUtil.message("§bGoto §7walking to §f" + BlockUtil.text(target) + "§7.");
     }
 
     private BlockPos pointedAt() {
@@ -113,10 +114,6 @@ public final class GotoCommand extends Command {
             case WALKING -> {
             }
         }
-    }
-
-    private static String text(BlockPos pos) {
-        return pos.getX() + " " + pos.getY() + " " + pos.getZ();
     }
 
     @Override

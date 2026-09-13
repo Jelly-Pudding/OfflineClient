@@ -1,6 +1,7 @@
 package com.jellypudding.offlineclient.render;
 
 import com.jellypudding.offlineclient.OfflineClient;
+import it.unimi.dsi.fastutil.longs.LongSet;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
@@ -45,7 +46,7 @@ public final class DrawBatch {
     }
 
     // A point in front of the camera that tracer lines start from.
-    public static Vec3 tracerOrigin() {
+    private static Vec3 tracerOrigin() {
         Camera camera = OfflineClient.MC.gameRenderer.mainCamera();
         if (camera == null) {
             return Vec3.ZERO;
@@ -80,6 +81,17 @@ public final class DrawBatch {
     // A bit per side for the joined box calls.
     public static int sideBit(Direction side) {
         return 1 << side.ordinal();
+    }
+
+    // A bit for every horizontal side on which the set holds a neighbour of the key.
+    public static int sharedSides(LongSet keys, long key) {
+        int hidden = 0;
+        for (Direction side : Direction.Plane.HORIZONTAL) {
+            if (keys.contains(BlockPos.offset(key, side))) {
+                hidden |= sideBit(side);
+            }
+        }
+        return hidden;
     }
 
     // The faces of a box that the mask does not hide.

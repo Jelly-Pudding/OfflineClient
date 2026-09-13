@@ -12,6 +12,7 @@ import com.jellypudding.offlineclient.render.WorldToScreen;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.RenderUtil;
@@ -129,7 +130,7 @@ public final class Waypoints extends Module {
     // Saves a marker on the spot of a death. AutoRespawn calls this before it
     // respawns and the tick above catches a death without it. Once per death.
     public void markDeath(Vec3 position) {
-        if (!markDeaths.isOn() || mc.player == null || mc.level == null || mc.player == marked) {
+        if (!markDeaths.isOn() || !inGame() || mc.player == marked) {
             return;
         }
         marked = mc.player;
@@ -139,7 +140,7 @@ public final class Waypoints extends Module {
             WaypointStore.currentDimension(), WaypointStore.currentServer(), DEATH_HUE));
         dropOldDeaths();
         if (deathChat.isOn()) {
-            ChatUtil.message("§cYou died at §f" + at.getX() + " " + at.getY() + " " + at.getZ() + "§c.");
+            ChatUtil.message("§cYou died at §f" + BlockUtil.text(at) + "§c.");
         }
     }
 

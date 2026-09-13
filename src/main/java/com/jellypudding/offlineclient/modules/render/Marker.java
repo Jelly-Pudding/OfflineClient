@@ -17,6 +17,7 @@ import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.Setting;
 import com.jellypudding.offlineclient.setting.TextSetting;
+import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.core.BlockPos;
@@ -30,7 +31,6 @@ import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 
 // Shapes you place yourself for building. Every one is saved with the module.
 public final class Marker extends Module {
@@ -111,17 +111,6 @@ public final class Marker extends Module {
             }
         }
         return all;
-    }
-
-    @Override
-    public Setting<?> getSetting(String settingName) {
-        String asked = settingName.replace(" ", "").toLowerCase(Locale.ROOT);
-        for (Setting<?> setting : getSettings()) {
-            if (setting.getName().replace(" ", "").toLowerCase(Locale.ROOT).equals(asked)) {
-                return setting;
-            }
-        }
-        return null;
     }
 
     @Override
@@ -239,9 +228,9 @@ public final class Marker extends Module {
             this.world = new EnumSetting<>(label + " dimension",
                 "The world this marker belongs to.", world).under(active);
             first = new TextSetting(label + (sphere ? " centre" : " corner one"),
-                "Three numbers for x and y and z.", text(pos)).under(active);
+                "Three numbers for x and y and z.", BlockUtil.text(pos)).under(active);
             second = sphere ? null : new TextSetting(label + " corner two",
-                "Three numbers for x and y and z.", text(pos)).under(active);
+                "Three numbers for x and y and z.", BlockUtil.text(pos)).under(active);
             radius = sphere ? new NumberSetting(label + " radius",
                 "How wide the ball is.", 20, 1, 64, 1, " blocks").min(1).max(256).under(active) : null;
             layer = sphere ? new NumberSetting(label + " layer",
@@ -420,10 +409,6 @@ public final class Marker extends Module {
                     settings[i].fromJson(rows.get(i));
                 }
             }
-        }
-
-        private static String text(BlockPos pos) {
-            return pos.getX() + " " + pos.getY() + " " + pos.getZ();
         }
 
         // Null when the text is not three whole numbers.

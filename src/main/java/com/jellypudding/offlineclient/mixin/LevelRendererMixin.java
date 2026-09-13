@@ -35,7 +35,7 @@ public class LevelRendererMixin {
         float partialTicks = tickCounter.getGameTimeDeltaPartialTick(false);
         DrawBatch batch = new DrawBatch(poseStack);
         try {
-            OfflineClient.INSTANCE.getEventBus().post(new Render3DEvent(poseStack, batch, partialTicks));
+            OfflineClient.INSTANCE.getEventBus().post(new Render3DEvent(batch, partialTicks));
         } finally {
             // The native buffer is freed even when a handler throws.
             batch.draw();

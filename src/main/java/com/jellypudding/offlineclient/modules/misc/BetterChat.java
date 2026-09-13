@@ -290,32 +290,13 @@ public final class BetterChat extends Module {
         PlayerInfo first = null;
         int earliest = Integer.MAX_VALUE;
         for (PlayerInfo info : mc.getConnection().getOnlinePlayers()) {
-            int at = wordIndex(text, info.getProfile().name());
+            int at = ChatUtil.wholeWordIndex(text, info.getProfile().name(), 0);
             if (at != -1 && at < earliest) {
                 earliest = at;
                 first = info;
             }
         }
         return first == null ? null : first.getSkin();
-    }
-
-    // Where the name sits as a whole word or minus one when it does not.
-    private static int wordIndex(String text, String name) {
-        int at = text.indexOf(name);
-        while (at != -1) {
-            int end = at + name.length();
-            boolean startClear = at == 0 || !isNameChar(text.charAt(at - 1));
-            boolean endClear = end >= text.length() || !isNameChar(text.charAt(end));
-            if (startClear && endClear) {
-                return at;
-            }
-            at = text.indexOf(name, at + 1);
-        }
-        return -1;
-    }
-
-    private static boolean isNameChar(char c) {
-        return Character.isLetterOrDigit(c) || c == '_';
     }
 
     // Sending.

@@ -63,7 +63,7 @@ public final class TextField {
         caret = buffer.length();
     }
 
-    public boolean hasSelection() {
+    private boolean hasSelection() {
         return caret != anchor;
     }
 
@@ -159,7 +159,7 @@ public final class TextField {
         return true;
     }
 
-    public void insert(String value, Filter filter) {
+    private void insert(String value, Filter filter) {
         if (value == null || value.isEmpty()) {
             return;
         }
