@@ -173,6 +173,16 @@ public abstract class MultiPlayerGameModeMixin {
         }
     }
 
+    // The throw key never gives away an item AutoDrop is guarding.
+    @Inject(method = "dropItem(Lnet/minecraft/client/player/LocalPlayer;Z)V",
+        at = @At("HEAD"), cancellable = true)
+    private void onDropItem(LocalPlayer player, boolean whole, CallbackInfo ci) {
+        AutoDrop autoDrop = Modules.get(AutoDrop.class);
+        if (autoDrop != null && autoDrop.guards(player.getMainHandItem())) {
+            ci.cancel();
+        }
+    }
+
     // A guarded item is never thrown from a slot and never posted into a pot.
     @Inject(
         method = "handleContainerInput(IIILnet/minecraft/world/inventory/ContainerInput;Lnet/minecraft/world/entity/player/Player;)V",

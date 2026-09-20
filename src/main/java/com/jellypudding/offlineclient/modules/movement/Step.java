@@ -14,7 +14,6 @@ import com.jellypudding.offlineclient.util.ExplosionUtil;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.MovementUtil;
 import net.minecraft.core.BlockPos;
-import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.boss.enderdragon.EndCrystal;
 import net.minecraft.world.level.block.BedBlock;
@@ -90,6 +89,10 @@ public final class Step extends Module {
     // because the game asks for the step height several times in one move.
     private double safeHeight;
 
+    private int legitStage;
+    private double legitRise;
+    private double legitFoot;
+
     public Step() {
         super("Step", "Step up full blocks without jumping.", Category.MOVEMENT);
         addSettings(mode, height, activeWhen, inWater, safeStep, safeHealth, healthLimit,
@@ -106,6 +109,7 @@ public final class Step extends Module {
     @Override
     protected void onEnable() {
         safeHeight = height.getValue();
+        legitStage = 0;
     }
 
     // Called from LocalPlayerMixin.maxUpStep().
@@ -192,17 +196,19 @@ public final class Step extends Module {
     @Subscribe
     private void onTick(TickEvent event) {
         if (!inGame() || mc.player.isPassenger()) {
+            legitStage = 0;
             return;
         }
         safeHeight = crystalSafeHeight();
-        if (allowed()) {
-            if (mc.player.isInWater()) {
-                if (inWater.isOn()) {
-                    stepFromWater();
-                }
-            } else if (mode.is(Mode.LEGIT)) {
-                stepLegit();
-            }
+        boolean swimming = mc.player.isInWater();
+        boolean climbing = allowed() && !swimming && mode.is(Mode.LEGIT);
+        if (!climbing) {
+            legitStage = 0;
+        }
+        if (climbing) {
+            stepLegit();
+        } else if (allowed() && swimming && inWater.isOn()) {
+            stepFromWater();
         }
         if (stepDown.isOn()) {
             snapDown();
@@ -247,9 +253,12 @@ public final class Step extends Module {
         return fits ? rise : 0;
     }
 
-    // Walking into a block edge sends the two positions a jump would pass through.
-    // Then puts the player on top. The server sees a normal jump.
+    // Walks the two heights a real jump passes through at one a tick.
     private void stepLegit() {
+        if (legitStage > 0) {
+            climbLegit();
+            return;
+        }
         if (!mc.player.horizontalCollision || !mc.player.onGround()) {
             return;
         }
@@ -261,16 +270,26 @@ public final class Step extends Module {
         if (rise <= 0 || rise > LEGIT_LIMIT) {
             return;
         }
-        double x = mc.player.getX();
-        double y = mc.player.getY();
-        double z = mc.player.getZ();
-        boolean onGround = mc.player.onGround();
-        boolean collided = mc.player.horizontalCollision;
-        mc.player.connection.send(new ServerboundMovePlayerPacket.Pos(
-            x, y + FIRST_JUMP_POINT * rise, z, onGround, collided));
-        mc.player.connection.send(new ServerboundMovePlayerPacket.Pos(
-            x, y + SECOND_JUMP_POINT * rise, z, onGround, collided));
-        mc.player.setPos(x, y + rise, z);
+        legitRise = rise;
+        legitFoot = mc.player.getY();
+        legitStage = 1;
+        climbLegit();
+    }
+
+    private void climbLegit() {
+        double point = switch (legitStage) {
+            case 1 -> FIRST_JUMP_POINT;
+            case 2 -> SECOND_JUMP_POINT;
+            default -> 1;
+        };
+        double y = legitFoot + point * legitRise;
+        // Something moved the player away from the ledge part way up.
+        if (mc.player.getY() < legitFoot - LEGIT_LIMIT || mc.player.getY() > y + LEGIT_LIMIT) {
+            legitStage = 0;
+            return;
+        }
+        mc.player.setPos(mc.player.getX(), y, mc.player.getZ());
+        legitStage = legitStage >= 3 ? 0 : legitStage + 1;
     }
 
     // The game only steps whilst the feet are on the ground.

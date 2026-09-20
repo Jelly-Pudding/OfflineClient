@@ -36,9 +36,9 @@ public abstract class GameRendererMixin {
     }
 
     // The menu blur radius comes from the Blur module in place of the video option.
-    @ModifyArg(method = "render(Lnet/minecraft/client/DeltaTracker;Z)V",
+    @ModifyArg(method = "render()V",
         at = @At(value = "INVOKE",
-            target = "Lnet/minecraft/client/renderer/GlobalSettingsUniform;update(IIDJLnet/minecraft/client/DeltaTracker;ILnet/minecraft/world/phys/Vec3;Z)V"),
+            target = "Lnet/minecraft/client/renderer/GlobalSettingsUniform;update(IIDJFILnet/minecraft/world/phys/Vec3;Z)V"),
         index = 5)
     private int onBlurRadius(int radius) {
         Blur blur = Modules.get(Blur.class);

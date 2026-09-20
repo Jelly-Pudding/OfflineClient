@@ -19,10 +19,11 @@ import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.ItemUtil;
 import com.jellypudding.offlineclient.util.RotationManager;
 import com.jellypudding.offlineclient.util.RotationPriority;
+import com.jellypudding.offlineclient.util.SwingMode;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;
-import net.minecraft.network.protocol.game.ServerboundSwingPacket;
+import net.minecraft.network.protocol.game.ServerboundPunchPacket;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.level.block.Block;
@@ -233,7 +234,7 @@ public final class PacketMine extends Module {
         }
         holdTool(state);
         BlockMiner.breakInstantly(target.pos);
-        mc.player.swing(InteractionHand.MAIN_HAND);
+        SwingMode.swingArm(InteractionHand.MAIN_HAND);
         target.block = state.getBlock();
         target.startTick = mc.player.tickCount;
         target.mining = true;
@@ -257,7 +258,7 @@ public final class PacketMine extends Module {
     private void poke(Target target) {
         mc.player.connection.send(new ServerboundPlayerActionPacket(
             ServerboundPlayerActionPacket.Action.STOP_DESTROY_BLOCK, target.pos, Direction.UP));
-        mc.player.connection.send(new ServerboundSwingPacket(InteractionHand.MAIN_HAND));
+        mc.player.connection.send(ServerboundPunchPacket.INSTANCE);
     }
 
     // A client side estimate of how far along the server is.

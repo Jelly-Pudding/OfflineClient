@@ -7,6 +7,7 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.SwingMode;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.InteractionHand;
@@ -93,7 +94,7 @@ public final class InstantBunker extends Module {
                 BlockUtil.placeAny(pos, rotate.isOn(), false);
             }
         }
-        mc.player.swing(InteractionHand.MAIN_HAND);
+        SwingMode.swingArm(InteractionHand.MAIN_HAND);
         if (mc.player.onGround()) {
             setEnabled(false);
         }

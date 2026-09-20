@@ -1,7 +1,6 @@
 package com.jellypudding.offlineclient.mixin;
 
 import com.jellypudding.offlineclient.modules.render.TimeChanger;
-import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.client.ClientClockManager;
 import net.minecraft.core.Holder;
 import net.minecraft.world.clock.WorldClock;
@@ -11,16 +10,18 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
+// The instance carries no sign of which world clock it belongs to. The
+// overworld one is noted here and answered in ClientClockInstanceMixin.
 @Mixin(ClientClockManager.class)
 public abstract class ClientClockManagerMixin {
 
-    // The sky and the moon and every clock item read the day through here.
-    @Inject(method = "getTotalTicks(Lnet/minecraft/core/Holder;)J", at = @At("HEAD"),
-        cancellable = true)
-    private void onGetTotalTicks(Holder<WorldClock> clock, CallbackInfoReturnable<Long> cir) {
-        TimeChanger timeChanger = Modules.active(TimeChanger.class);
-        if (timeChanger != null && clock.is(WorldClocks.OVERWORLD)) {
-            cir.setReturnValue(timeChanger.clockTime());
+    @Inject(method = "getInstance(Lnet/minecraft/core/Holder;)"
+        + "Lnet/minecraft/client/ClientClockManager$ClientClockInstance;",
+        at = @At("RETURN"))
+    private void onGetInstance(Holder<WorldClock> clock,
+                               CallbackInfoReturnable<ClientClockManager.ClientClockInstance> cir) {
+        if (clock.is(WorldClocks.OVERWORLD)) {
+            TimeChanger.noteOverworldClock(cir.getReturnValue());
         }
     }
 }

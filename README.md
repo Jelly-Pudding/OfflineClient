@@ -1,22 +1,22 @@
 # OfflineClient
-A utility client custom designed for the anarchy lifesteal server [minecraftoffline.net](https://www.minecraftoffline.net/). This is a fabric mod for Minecraft 26.2.
+A utility client custom designed for the anarchy lifesteal server [minecraftoffline.net](https://www.minecraftoffline.net/). This is a fabric mod for Minecraft 26.3.
 
 ## Download
-The latest jar is on the [releases page](https://github.com/Jelly-Pudding/OfflineClient/releases/latest). It is a single file that needs nothing besides Fabric Loader for Minecraft 26.2.
+The latest jar is on the [releases page](https://github.com/Jelly-Pudding/OfflineClient/releases/latest). It is a single file that needs nothing besides Fabric Loader for Minecraft 26.3.
 
 ### Vanilla Launcher
 1. Download the latest release [here](https://github.com/Jelly-Pudding/OfflineClient/releases/latest).
-2. Install [Fabric Loader](https://fabricmc.net/use/installer/) for Minecraft 26.2 and run it.
+2. Install [Fabric Loader](https://fabricmc.net/use/installer/) for Minecraft 26.3 and run it.
 3. Check the path to your `.minecraft` directory is correctly set and click `install`.
 4. Drop the OfflineClient jar into your `mods` folder. Create the `mods` folder inside `.minecraft` if it does not exist.
 5. Launch the game with the Fabric profile.
 
 ### MultiMC
 1. Download the latest release [here](https://github.com/Jelly-Pudding/OfflineClient/releases/latest).
-2. Install [Fabric Loader](https://fabricmc.net/use/installer/) for Minecraft 26.2 and run it.
+2. Install [Fabric Loader](https://fabricmc.net/use/installer/) for Minecraft 26.3 and run it.
 3. Check the path to your `.minecraft` directory is correctly set and click `install`.
 4. Download [MultiMC](https://multimc.org/#Download).
-5. Open MultiMC and click `Add Instance`. Choose a name and pick Minecraft 26.2. Click `OK` at the bottom.
+5. Open MultiMC and click `Add Instance`. Choose a name and pick Minecraft 26.3. Click `OK` at the bottom.
 6. Right click the instance and choose `Edit Instance`. On the right hand side click `Install Fabric` and pick a Fabric version.
 7. On the left hand side click `Loader mods` then `Add` and pick the OfflineClient jar you downloaded.
 

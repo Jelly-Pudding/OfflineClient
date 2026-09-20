@@ -3,6 +3,7 @@ package com.jellypudding.offlineclient.modules.combat;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.PacketSendEvent;
 import com.jellypudding.offlineclient.event.events.PostMotionEvent;
+import com.jellypudding.offlineclient.event.events.PreMotionEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
@@ -10,62 +11,44 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.Modules;
+import com.jellypudding.offlineclient.util.MoveGate;
 import com.jellypudding.offlineclient.util.SprintPause;
 import net.minecraft.network.protocol.game.ServerboundAttackPacket;
-import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
-import net.minecraft.network.protocol.game.ServerboundSwingPacket;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
 
-// A critical hit needs the server to believe the player is falling.
-// Packet modes fake that with position packets while the jump modes really jump.
+// A critical hit needs the server to believe the player is falling. The packet
+// modes lower the tick's movement packet and hold the hit back one tick. The
+// jump modes really jump.
 public final class Criticals extends Module {
 
-    // The server rebuilds fall distance from the gap between position packets.
-    // A sixteenth of a block is the smallest drop that banks any fall at all.
-    private static final double CRIT_LIFT = 0.0625;
+    // The smallest drop the server rebuilds any fall distance from.
+    private static final double CRIT_DIP = 0.0625;
 
-    // The packet that settles back down has to stay above zero for the drop to hold.
-    private static final double CRIT_SETTLE = 1.1e-5;
+    private static final double SUBTLE_DIP = 0.0000008;
 
-    // Each of the first five position packets in a tick buys a hundred squared
-    // blocks of allowed movement. Three settling packets bank four hundred for the lift.
-    private static final int MACE_SETTLE_PACKETS = 3;
+    private static final int SMASH_FILLERS = 4;
 
-    // The fourth packet allows four hundred squared blocks which is twenty of travel.
+    // Twenty blocks of fall is the vanilla cap on the smash bonus.
     private static final double MACE_LIFT = 19.9;
 
     private static final double MINI_JUMP_SPEED = 0.25;
     private static final int MINI_JUMP_TICKS = 4;
 
-    public enum Mode {
-        NONE, PACKET, NEW_NCP("New NCP"), OLD_NCP("Old NCP"), MINI_JUMP, FULL_JUMP;
+    private static final int GIVE_UP_TICKS = 10;
 
-        private final String label;
+    private enum Stage { IDLE, DIP, LIFT, RETURN, READY, JUMP }
 
-        Mode() {
-            this.label = null;
-        }
-
-        Mode(String label) {
-            this.label = label;
-        }
-
-        @Override
-        public String toString() {
-            return label == null ? name() : label;
-        }
-    }
+    public enum Mode { NONE, PACKET, SUBTLE, MINI_JUMP, FULL_JUMP }
 
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
         "How to get the fall a critical hit needs.", Mode.PACKET)
         .describe(Mode.NONE, "No critical hits. Mace smash still works.")
-        .describe(Mode.PACKET, "Sends the tiny fall the server checks for without moving you.")
-        .describe(Mode.NEW_NCP, "A fall too small to notice for newer anti cheats.")
-        .describe(Mode.OLD_NCP, "Three small climbs that older anti cheats let through.")
+        .describe(Mode.PACKET, "Drops your reported height a sixteenth of a block and hits a tick later.")
+        .describe(Mode.SUBTLE, "The same with a drop far too small to notice.")
         .describe(Mode.MINI_JUMP, "A small hop and the hit waits four ticks for the fall.")
         .describe(Mode.FULL_JUMP, "A normal jump and the hit waits for the peak.");
 
@@ -87,13 +70,15 @@ public final class Criticals extends Module {
     // Drops the sprint for a hit and hands it back afterwards.
     private final SprintPause sprintPause = new SprintPause();
 
-    // The hit held back by a jump mode until the fall exists.
     private ServerboundAttackPacket heldAttack;
-    private ServerboundSwingPacket heldSwing;
-    private boolean holding;
+    private Stage stage = Stage.IDLE;
     private boolean waitingForPeak;
     private double lastY;
     private int sendTimer;
+
+    // How far the next outgoing packet moves the reported height.
+    private double offset;
+    private int waited;
 
     // Packets sent by release come straight back through the send handler.
     private boolean releasing;
@@ -128,18 +113,18 @@ public final class Criticals extends Module {
         }
         if (event.getPacket() instanceof ServerboundAttackPacket attack) {
             onAttackPacket(event, attack);
-        } else if (event.getPacket() instanceof ServerboundSwingPacket swing
-            && holding && heldSwing == null) {
-            heldSwing = swing;
-            event.cancel();
         }
     }
 
     private void onAttackPacket(PacketSendEvent event, ServerboundAttackPacket attack) {
+        if (stage != Stage.IDLE) {
+            return;
+        }
         if (mace.isOn() && mc.player.getMainHandItem().is(Items.MACE)) {
-            if (!mc.player.isFallFlying() && !mc.player.isInWater() && !mc.player.isInLava()) {
-                dropSprint();
-                smash();
+            if (!mc.player.isFallFlying() && !mc.player.isInWater() && !mc.player.isInLava()
+                && startSmash()) {
+                heldAttack = attack;
+                event.cancel();
             }
             return;
         }
@@ -147,34 +132,35 @@ public final class Criticals extends Module {
             return;
         }
         switch (mode.getValue()) {
-            case PACKET -> {
-                dropSprint();
-                sendFakeY(CRIT_LIFT, true);
-                sendFakeY(0, false);
-                sendFakeY(CRIT_SETTLE, false);
-                sendFakeY(0, false);
-            }
-            case NEW_NCP -> {
-                dropSprint();
-                sendFakeY(0.0000008, false);
-                sendFakeY(0, false);
-            }
-            case OLD_NCP -> {
-                dropSprint();
-                sendFakeY(0.11, false);
-                sendFakeY(0.1100013579, false);
-                sendFakeY(0.0000013579, false);
+            case PACKET, SUBTLE -> {
+                heldAttack = attack;
+                offset = -(mode.is(Mode.PACKET) ? CRIT_DIP : SUBTLE_DIP);
+                stage = Stage.DIP;
+                event.cancel();
             }
             case MINI_JUMP, FULL_JUMP -> {
-                if (holding) {
-                    return;
-                }
-                hold(attack);
+                heldAttack = attack;
+                stage = Stage.JUMP;
+                jump();
                 event.cancel();
             }
             case NONE -> {
             }
         }
+    }
+
+    // A shorter lift is taken where the room above runs out.
+    private boolean startSmash() {
+        double wanted = MACE_LIFT + extraHeight.getValue();
+        for (int i = 0; i < 4; i++) {
+            double lift = wanted * (4 - i) / 4;
+            if (mc.level.noCollision(mc.player, mc.player.getBoundingBox().move(0, lift, 0))) {
+                offset = lift;
+                stage = Stage.LIFT;
+                return true;
+            }
+        }
+        return false;
     }
 
     private boolean wantsCrit(int entityId) {
@@ -203,10 +189,7 @@ public final class Criticals extends Module {
             .anyMatch(state -> state.is(Blocks.COBWEB));
     }
 
-    private void hold(ServerboundAttackPacket attack) {
-        holding = true;
-        heldAttack = attack;
-        heldSwing = null;
+    private void jump() {
         if (mode.is(Mode.FULL_JUMP)) {
             mc.player.jumpFromGround();
             waitingForPeak = true;
@@ -218,9 +201,41 @@ public final class Criticals extends Module {
         }
     }
 
+    // The fall the hit needs rides on the one position packet this tick allows.
+    // A lift has to come back down before the server counts it as a fall.
+    @Subscribe
+    private void onPreMotion(PreMotionEvent event) {
+        if (!inGame()) {
+            clearHeld();
+            return;
+        }
+        if (stage != Stage.DIP && stage != Stage.LIFT && stage != Stage.RETURN) {
+            return;
+        }
+        if (++waited > GIVE_UP_TICKS) {
+            stage = Stage.READY;
+            return;
+        }
+        if (stage != Stage.DIP) {
+            MoveGate.fillers(SMASH_FILLERS);
+        }
+        double height = mc.player.getY() + (stage == Stage.RETURN ? 0 : offset);
+        if (MoveGate.send(mc.player.getX(), height, mc.player.getZ(), false)) {
+            stage = stage == Stage.LIFT ? Stage.RETURN : Stage.READY;
+            waited = 0;
+        }
+    }
+
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!holding || !inGame()) {
+        if (stage == Stage.IDLE || !inGame()) {
+            return;
+        }
+        if (stage == Stage.READY) {
+            release();
+            return;
+        }
+        if (stage != Stage.JUMP) {
             return;
         }
         if (waitingForPeak) {
@@ -240,26 +255,26 @@ public final class Criticals extends Module {
     // Sends the held hit now that the server sees a fall.
     private void release() {
         ServerboundAttackPacket attack = heldAttack;
-        ServerboundSwingPacket swing = heldSwing;
         clearHeld();
+        if (attack == null || mc.player == null) {
+            return;
+        }
         releasing = true;
         try {
             dropSprint();
             mc.player.connection.send(attack);
-            if (swing != null) {
-                mc.player.connection.send(swing);
-            }
         } finally {
             releasing = false;
         }
     }
 
     private void clearHeld() {
-        holding = false;
+        stage = Stage.IDLE;
         waitingForPeak = false;
         heldAttack = null;
-        heldSwing = null;
         sendTimer = 0;
+        offset = 0;
+        waited = 0;
     }
 
     // The server refuses a critical hit to anyone it believes is sprinting.
@@ -274,19 +289,5 @@ public final class Criticals extends Module {
     @Subscribe
     private void onPostMotion(PostMotionEvent event) {
         sprintPause.resume();
-    }
-
-    private void smash() {
-        for (int i = 0; i < MACE_SETTLE_PACKETS; i++) {
-            sendFakeY(0, false);
-        }
-        sendFakeY(MACE_LIFT + extraHeight.getValue(), false);
-        sendFakeY(0, false);
-    }
-
-    private void sendFakeY(double offset, boolean onGround) {
-        mc.player.connection.send(new ServerboundMovePlayerPacket.Pos(
-            mc.player.getX(), mc.player.getY() + offset, mc.player.getZ(),
-            onGround, mc.player.horizontalCollision));
     }
 }

@@ -10,6 +10,7 @@ import com.jellypudding.offlineclient.render.BoxStyle;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
+import com.jellypudding.offlineclient.util.SwingMode;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.InteractionHand;
@@ -98,7 +99,7 @@ public final class AirPlace extends Module {
         BlockHitResult hit = new BlockHitResult(Vec3.atCenterOf(spot), face, spot, false);
         InteractionResult result = mc.gameMode.useItemOn(mc.player, hand, hit);
         if (result.consumesAction()) {
-            mc.player.swing(hand);
+            SwingMode.swingArm(hand);
         }
     }
 

@@ -15,6 +15,7 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ColorUtil;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
@@ -66,7 +67,6 @@ import net.minecraft.world.level.block.entity.BannerPattern;
 import net.minecraft.world.level.block.entity.BannerPatternLayers;
 import net.minecraft.world.level.saveddata.maps.MapId;
 import net.minecraft.world.level.saveddata.maps.MapItemSavedData;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -102,7 +102,7 @@ public final class BetterTooltips extends Module {
         .describe(When.KEY_HELD, "Only whilst the preview key is held.")
         .describe(When.ALWAYS, "On every tooltip.");
     private final KeybindSetting previewKey = new KeybindSetting("Preview key",
-        "The key to hold for a preview.", GLFW.GLFW_KEY_LEFT_ALT)
+        "The key to hold for a preview.", InputConstants.KEY_LALT)
         .under(show, When.KEY_HELD);
     private final BoolSetting containers = new BoolSetting("Containers",
         "Hover a shulker box in any inventory to see what is packed inside it.", true);
@@ -146,7 +146,7 @@ public final class BetterTooltips extends Module {
         .describe(OpenWith.KEY, "The key picked below.")
         .under(openContents);
     private final KeybindSetting openKey = new KeybindSetting("Open key",
-        "The key that opens the window.", GLFW.GLFW_KEY_P)
+        "The key that opens the window.", InputConstants.KEY_P)
         .under(openWith, OpenWith.KEY);
     private final BoolSetting pauseInCreative = new BoolSetting("Pause in creative",
         "Leave the click alone in creative so middle click still clones the item.", true)
@@ -422,7 +422,7 @@ public final class BetterTooltips extends Module {
             return bucketPreview(stack, bucket);
         }
         if (bundles.isOn() && item instanceof BundleItem && hasBundleItems(stack)) {
-            return new ContainerPreview(stack.get(DataComponents.BUNDLE_CONTENTS).itemCopyStream().toList(), COLUMNS);
+            return new ContainerPreview(stack.get(DataComponents.BUNDLE_CONTENTS).itemCopies().toList(), COLUMNS);
         }
         return null;
     }
@@ -515,7 +515,7 @@ public final class BetterTooltips extends Module {
 
     // True for the click or key the player picked to open a window.
     public boolean wantsToOpen(MouseButtonEvent event) {
-        return canOpen() && openWith.is(OpenWith.MIDDLE_CLICK) && event.button() == GLFW.GLFW_MOUSE_BUTTON_MIDDLE;
+        return canOpen() && openWith.is(OpenWith.MIDDLE_CLICK) && event.button() == InputConstants.MOUSE_BUTTON_MIDDLE;
     }
 
     public boolean wantsToOpen(KeyEvent event) {
@@ -537,7 +537,7 @@ public final class BetterTooltips extends Module {
             return true;
         }
         if (item instanceof BundleItem && hasBundleItems(stack)) {
-            open(stack, stack.get(DataComponents.BUNDLE_CONTENTS).itemCopyStream().toList(), tintOf(stack));
+            open(stack, stack.get(DataComponents.BUNDLE_CONTENTS).itemCopies().toList(), tintOf(stack));
             return true;
         }
         if (hasContents(stack)) {

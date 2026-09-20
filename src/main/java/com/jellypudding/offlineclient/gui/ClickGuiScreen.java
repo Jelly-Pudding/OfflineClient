@@ -5,6 +5,7 @@ import com.google.gson.JsonObject;
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.RenderUtil;
 import com.jellypudding.offlineclient.util.SearchRank;
 import net.minecraft.client.gui.Font;
@@ -530,7 +531,7 @@ public final class ClickGuiScreen extends GuiScreenBase {
             }
         }
 
-        if (button == 0 && overSearchEdge(mx, my)) {
+        if (InputUtil.isLeft(button) && overSearchEdge(mx, my)) {
             resizingSearch = true;
             return true;
         }

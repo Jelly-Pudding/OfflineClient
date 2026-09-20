@@ -197,4 +197,13 @@ public abstract class Module {
     protected boolean inGame() {
         return mc.player != null && mc.level != null;
     }
+
+    // Finishes work that has to carry on after the module is switched off.
+    protected static void watch(Object watcher) {
+        OfflineClient.INSTANCE.getEventBus().register(watcher);
+    }
+
+    protected static void unwatch(Object watcher) {
+        OfflineClient.INSTANCE.getEventBus().unregister(watcher);
+    }
 }

@@ -17,7 +17,6 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.alchemy.Potion;
-import net.minecraft.world.item.alchemy.PotionBrewing;
 import net.minecraft.world.item.alchemy.PotionContents;
 import net.minecraft.world.item.alchemy.Potions;
 
@@ -49,6 +48,77 @@ public final class AutoBrewer extends Module {
 
     private enum Stage { TAKE, FILL, BREW }
 
+    // The brewing rules live on the server and never reach the client.
+    // These are the steps the game ships with. A server that changes them
+    // refuses an ingredient and the module reports it.
+    private record Step(Holder<Potion> from, Item reagent, Holder<Potion> to) {
+    }
+
+    private static final List<Step> STEPS = List.of(
+        new Step(Potions.AWKWARD, Items.BLAZE_POWDER, Potions.STRENGTH),
+        new Step(Potions.AWKWARD, Items.BREEZE_ROD, Potions.WIND_CHARGED),
+        new Step(Potions.AWKWARD, Items.COBWEB, Potions.WEAVING),
+        new Step(Potions.AWKWARD, Items.GHAST_TEAR, Potions.REGENERATION),
+        new Step(Potions.AWKWARD, Items.GLISTERING_MELON_SLICE, Potions.HEALING),
+        new Step(Potions.AWKWARD, Items.GOLDEN_CARROT, Potions.NIGHT_VISION),
+        new Step(Potions.AWKWARD, Items.MAGMA_CREAM, Potions.FIRE_RESISTANCE),
+        new Step(Potions.AWKWARD, Items.PHANTOM_MEMBRANE, Potions.SLOW_FALLING),
+        new Step(Potions.AWKWARD, Items.PUFFERFISH, Potions.WATER_BREATHING),
+        new Step(Potions.AWKWARD, Items.RABBIT_FOOT, Potions.LEAPING),
+        new Step(Potions.AWKWARD, Items.SLIME_BLOCK, Potions.OOZING),
+        new Step(Potions.AWKWARD, Items.SPIDER_EYE, Potions.POISON),
+        new Step(Potions.AWKWARD, Items.STONE, Potions.INFESTED),
+        new Step(Potions.AWKWARD, Items.SUGAR, Potions.SWIFTNESS),
+        new Step(Potions.AWKWARD, Items.TURTLE_HELMET, Potions.TURTLE_MASTER),
+        new Step(Potions.FIRE_RESISTANCE, Items.REDSTONE, Potions.LONG_FIRE_RESISTANCE),
+        new Step(Potions.HARMING, Items.GLOWSTONE_DUST, Potions.STRONG_HARMING),
+        new Step(Potions.HEALING, Items.FERMENTED_SPIDER_EYE, Potions.HARMING),
+        new Step(Potions.HEALING, Items.GLOWSTONE_DUST, Potions.STRONG_HEALING),
+        new Step(Potions.INVISIBILITY, Items.REDSTONE, Potions.LONG_INVISIBILITY),
+        new Step(Potions.LEAPING, Items.FERMENTED_SPIDER_EYE, Potions.SLOWNESS),
+        new Step(Potions.LEAPING, Items.GLOWSTONE_DUST, Potions.STRONG_LEAPING),
+        new Step(Potions.LEAPING, Items.REDSTONE, Potions.LONG_LEAPING),
+        new Step(Potions.LONG_LEAPING, Items.FERMENTED_SPIDER_EYE, Potions.LONG_SLOWNESS),
+        new Step(Potions.LONG_NIGHT_VISION, Items.FERMENTED_SPIDER_EYE, Potions.LONG_INVISIBILITY),
+        new Step(Potions.LONG_POISON, Items.FERMENTED_SPIDER_EYE, Potions.HARMING),
+        new Step(Potions.LONG_SWIFTNESS, Items.FERMENTED_SPIDER_EYE, Potions.LONG_SLOWNESS),
+        new Step(Potions.NIGHT_VISION, Items.FERMENTED_SPIDER_EYE, Potions.INVISIBILITY),
+        new Step(Potions.NIGHT_VISION, Items.REDSTONE, Potions.LONG_NIGHT_VISION),
+        new Step(Potions.POISON, Items.FERMENTED_SPIDER_EYE, Potions.HARMING),
+        new Step(Potions.POISON, Items.GLOWSTONE_DUST, Potions.STRONG_POISON),
+        new Step(Potions.POISON, Items.REDSTONE, Potions.LONG_POISON),
+        new Step(Potions.REGENERATION, Items.GLOWSTONE_DUST, Potions.STRONG_REGENERATION),
+        new Step(Potions.REGENERATION, Items.REDSTONE, Potions.LONG_REGENERATION),
+        new Step(Potions.SLOW_FALLING, Items.REDSTONE, Potions.LONG_SLOW_FALLING),
+        new Step(Potions.SLOWNESS, Items.GLOWSTONE_DUST, Potions.STRONG_SLOWNESS),
+        new Step(Potions.SLOWNESS, Items.REDSTONE, Potions.LONG_SLOWNESS),
+        new Step(Potions.STRENGTH, Items.GLOWSTONE_DUST, Potions.STRONG_STRENGTH),
+        new Step(Potions.STRENGTH, Items.REDSTONE, Potions.LONG_STRENGTH),
+        new Step(Potions.STRONG_HEALING, Items.FERMENTED_SPIDER_EYE, Potions.STRONG_HARMING),
+        new Step(Potions.STRONG_POISON, Items.FERMENTED_SPIDER_EYE, Potions.STRONG_HARMING),
+        new Step(Potions.SWIFTNESS, Items.FERMENTED_SPIDER_EYE, Potions.SLOWNESS),
+        new Step(Potions.SWIFTNESS, Items.GLOWSTONE_DUST, Potions.STRONG_SWIFTNESS),
+        new Step(Potions.SWIFTNESS, Items.REDSTONE, Potions.LONG_SWIFTNESS),
+        new Step(Potions.TURTLE_MASTER, Items.GLOWSTONE_DUST, Potions.STRONG_TURTLE_MASTER),
+        new Step(Potions.TURTLE_MASTER, Items.REDSTONE, Potions.LONG_TURTLE_MASTER),
+        new Step(Potions.WATER, Items.BLAZE_POWDER, Potions.MUNDANE),
+        new Step(Potions.WATER, Items.BREEZE_ROD, Potions.MUNDANE),
+        new Step(Potions.WATER, Items.COBWEB, Potions.MUNDANE),
+        new Step(Potions.WATER, Items.FERMENTED_SPIDER_EYE, Potions.WEAKNESS),
+        new Step(Potions.WATER, Items.GHAST_TEAR, Potions.MUNDANE),
+        new Step(Potions.WATER, Items.GLISTERING_MELON_SLICE, Potions.MUNDANE),
+        new Step(Potions.WATER, Items.GLOWSTONE_DUST, Potions.THICK),
+        new Step(Potions.WATER, Items.MAGMA_CREAM, Potions.MUNDANE),
+        new Step(Potions.WATER, Items.NETHER_WART, Potions.AWKWARD),
+        new Step(Potions.WATER, Items.RABBIT_FOOT, Potions.MUNDANE),
+        new Step(Potions.WATER, Items.REDSTONE, Potions.MUNDANE),
+        new Step(Potions.WATER, Items.SLIME_BLOCK, Potions.MUNDANE),
+        new Step(Potions.WATER, Items.SPIDER_EYE, Potions.MUNDANE),
+        new Step(Potions.WATER, Items.STONE, Potions.MUNDANE),
+        new Step(Potions.WATER, Items.SUGAR, Potions.MUNDANE),
+        new Step(Potions.WATER_BREATHING, Items.REDSTONE, Potions.LONG_WATER_BREATHING),
+        new Step(Potions.WEAKNESS, Items.REDSTONE, Potions.LONG_WEAKNESS));
+
     private final RegistryListSetting<Potion> potion = new RegistryListSetting<>("Potion",
         "The potion to brew. Only the first one picked is used.",
         BuiltInRegistries.POTION, List.of(Potions.STRENGTH.value()));
@@ -60,7 +130,7 @@ public final class AutoBrewer extends Module {
 
     private Stage stage;
     private List<Item> plan;
-    private int step;
+    private int planIndex;
     private int settle;
     private int brewed;
 
@@ -91,7 +161,7 @@ public final class AutoBrewer extends Module {
         }
         if (stage == null) {
             stage = Stage.TAKE;
-            step = 0;
+            planIndex = 0;
             settle = 0;
             plan = buildPlan();
             if (plan == null) {
@@ -147,7 +217,7 @@ public final class AutoBrewer extends Module {
             }
             moveOne(stand, slot, i);
         }
-        step = 0;
+        planIndex = 0;
         stage = Stage.BREW;
     }
 
@@ -161,7 +231,7 @@ public final class AutoBrewer extends Module {
             }
             return;
         }
-        if (step >= plan.size()) {
+        if (planIndex >= plan.size()) {
             stage = Stage.TAKE;
             return;
         }
@@ -175,7 +245,7 @@ public final class AutoBrewer extends Module {
             moveOne(stand, fuel, FUEL_SLOT);
             return;
         }
-        Item ingredient = plan.get(step);
+        Item ingredient = plan.get(planIndex);
         int slot = findPlayerSlot(stand, stack -> stack.is(ingredient));
         if (slot == -1) {
             ChatUtil.error("Out of " + ingredient.getName(ingredient.getDefaultInstance()).getString() + ".");
@@ -183,51 +253,38 @@ public final class AutoBrewer extends Module {
             return;
         }
         moveOne(stand, slot, INGREDIENT_SLOT);
-        step++;
+        planIndex++;
     }
 
-    // Breadth first from a water bottle through every ingredient the brewing rules
-    // accept until the wanted potion appears. Null when no chain leads there.
+    // Breadth first from a water bottle. Null when no chain leads to the potion.
     private List<Item> buildPlan() {
         Potion wanted = potion.resolved().stream().findFirst().orElse(null);
         if (wanted == null || mc.level == null) {
             return null;
         }
-        PotionBrewing brewing = mc.level.potionBrewing();
-        List<Item> ingredients = new ArrayList<>();
-        for (Item item : BuiltInRegistries.ITEM) {
-            if (brewing.isPotionIngredient(item.getDefaultInstance())) {
-                ingredients.add(item);
-            }
-        }
+        Holder<Potion> target = BuiltInRegistries.POTION.wrapAsHolder(wanted);
 
-        record Path(ItemStack potion, List<Item> steps) {
+        record Path(Holder<Potion> potion, List<Item> steps) {
         }
         Deque<Path> queue = new ArrayDeque<>();
         Set<Holder<Potion>> seen = new HashSet<>();
-        queue.add(new Path(PotionContents.createItemStack(Items.POTION, Potions.WATER), List.of()));
+        queue.add(new Path(Potions.WATER, List.of()));
         seen.add(Potions.WATER);
         while (!queue.isEmpty()) {
             Path path = queue.poll();
-            if (contentsOf(path.potion()).is(BuiltInRegistries.POTION.wrapAsHolder(wanted))) {
+            if (path.potion().value() == target.value()) {
                 return withForm(path.steps());
             }
             if (path.steps().size() >= MAX_STEPS) {
                 continue;
             }
-            for (Item ingredient : ingredients) {
-                ItemStack stack = ingredient.getDefaultInstance();
-                if (!brewing.hasPotionMix(path.potion(), stack)) {
-                    continue;
-                }
-                ItemStack next = brewing.mix(stack, path.potion());
-                Holder<Potion> result = contentsOf(next).potion().orElse(null);
-                if (result == null || !seen.add(result)) {
+            for (Step step : STEPS) {
+                if (step.from().value() != path.potion().value() || !seen.add(step.to())) {
                     continue;
                 }
                 List<Item> steps = new ArrayList<>(path.steps());
-                steps.add(ingredient);
-                queue.add(new Path(next, steps));
+                steps.add(step.reagent());
+                queue.add(new Path(step.to(), steps));
             }
         }
         return null;

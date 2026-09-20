@@ -23,6 +23,7 @@ import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.ItemUtil;
 import com.jellypudding.offlineclient.util.RotationPriority;
 import com.jellypudding.offlineclient.util.SwingMode;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -33,7 +34,6 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -256,7 +256,7 @@ public final class Nuker extends Module {
 
     @Subscribe
     private void onKeyPress(KeyPressEvent event) {
-        if (event.getAction() != GLFW.GLFW_PRESS || mc.gui.screen() != null) {
+        if (event.getAction() != InputConstants.PRESS || mc.gui.screen() != null) {
             return;
         }
         if (!selectBind.isBound() || event.getKey() != selectBind.getValue()) {

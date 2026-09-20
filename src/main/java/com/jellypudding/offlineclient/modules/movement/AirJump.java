@@ -9,7 +9,7 @@ import com.jellypudding.offlineclient.modules.render.Freecam;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.Modules;
-import org.lwjgl.glfw.GLFW;
+import com.mojang.blaze3d.platform.InputConstants;
 
 public final class AirJump extends Module {
 
@@ -44,7 +44,7 @@ public final class AirJump extends Module {
 
     @Subscribe
     private void onKeyPress(KeyPressEvent event) {
-        if (event.getAction() != GLFW.GLFW_PRESS || !airborne()) {
+        if (event.getAction() != InputConstants.PRESS || !airborne()) {
             return;
         }
         if (InputUtil.isKey(mc.options.keyJump, event.getKey())) {

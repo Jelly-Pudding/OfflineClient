@@ -10,7 +10,7 @@ import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.entity.player.AvatarRenderer;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
-import net.minecraft.client.renderer.texture.TextureAtlasSprite;
+import net.minecraft.client.renderer.texture.UvMapping;
 import net.minecraft.resources.Identifier;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -35,15 +35,15 @@ public abstract class AvatarRendererMixin {
     @WrapOperation(
         method = "renderHand(Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/SubmitNodeCollector;ILnet/minecraft/resources/Identifier;Lnet/minecraft/client/model/geom/ModelPart;Z)V",
         at = @At(value = "INVOKE",
-            target = "Lnet/minecraft/client/renderer/SubmitNodeCollector;submitModelPart(Lnet/minecraft/client/model/geom/ModelPart;Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/rendertype/RenderType;IILnet/minecraft/client/renderer/texture/TextureAtlasSprite;)V"))
+            target = "Lnet/minecraft/client/renderer/SubmitNodeCollector;submitModelPart(Lnet/minecraft/client/model/geom/ModelPart;Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/rendertype/RenderType;IILnet/minecraft/client/renderer/texture/UvMapping;)V"))
     private void onSubmitHand(SubmitNodeCollector collector, ModelPart part, PoseStack poseStack,
-                              RenderType type, int light, int overlay, TextureAtlasSprite sprite,
+                              RenderType type, int light, int overlay, UvMapping uv,
                               Operation<Void> original) {
         Chams chams = Chams.get();
         if (chams == null || !chams.paintsHand()) {
-            original.call(collector, part, poseStack, type, light, overlay, sprite);
+            original.call(collector, part, poseStack, type, light, overlay, uv);
             return;
         }
-        collector.submitModelPart(part, poseStack, type, light, overlay, sprite, chams.handColor(), null);
+        collector.submitModelPart(part, poseStack, type, light, overlay, uv, chams.handColor());
     }
 }

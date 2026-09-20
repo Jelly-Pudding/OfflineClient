@@ -51,8 +51,7 @@ public abstract class BannerRendererMixin {
                 poseStack.pushPose();
                 poseStack.mulPose(state.transformation);
                 collector.submitModel(bannerModel(state.attachmentType), Unit.INSTANCE, poseStack,
-                    state.lightCoords, OverlayTexture.NO_OVERLAY, -1, Sheets.BANNER_BASE, sprites,
-                    0, state.breakProgress);
+                    state.lightCoords, OverlayTexture.NO_OVERLAY, -1, Sheets.BANNER_BASE, sprites, 0);
                 poseStack.popPose();
                 ci.cancel();
             }

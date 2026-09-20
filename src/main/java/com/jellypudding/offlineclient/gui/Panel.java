@@ -2,6 +2,7 @@ package com.jellypudding.offlineclient.gui;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.RenderUtil;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -355,12 +356,12 @@ public final class Panel {
         if (!l && !r && !t && !b) {
             return false;
         }
-        if (button == 0) {
+        if (InputUtil.isLeft(button)) {
             sizeLeft = l;
             sizeRight = r;
             sizeTop = t;
             sizeBottom = b;
-        } else if (button == 1) {
+        } else if (InputUtil.isRight(button)) {
             if (l || r) {
                 width = GuiTheme.PANEL_WIDTH;
             }
@@ -373,9 +374,9 @@ public final class Panel {
     }
 
     private void clickHeader(int mx, int my, int button) {
-        if (button == 1 || (button == 0 && mx >= x + width - MARKER_ZONE)) {
+        if (InputUtil.isRight(button) || (InputUtil.isLeft(button) && mx >= x + width - MARKER_ZONE)) {
             collapsed = !collapsed;
-        } else if (button == 0) {
+        } else if (InputUtil.isLeft(button)) {
             dragging = true;
             dragOffsetX = mx - x;
             dragOffsetY = my - y;

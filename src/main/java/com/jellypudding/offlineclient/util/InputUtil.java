@@ -3,12 +3,10 @@ package com.jellypudding.offlineclient.util;
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.events.PacketSendEvent;
 import com.mojang.blaze3d.platform.InputConstants;
-import com.mojang.blaze3d.platform.Window;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.protocol.game.ServerboundPlayerInputPacket;
 import net.minecraft.world.entity.player.Input;
-import org.lwjgl.glfw.GLFW;
 
 // The real state of input devices. A module forcing a mapping down is ignored here.
 public final class InputUtil {
@@ -19,10 +17,22 @@ public final class InputUtil {
     private InputUtil() {
     }
 
-    // True when the raw GLFW code is the key the mapping is bound to.
+    // 26.3 numbers mouse buttons the SDL way where left is one and right is three.
+    public static boolean isLeft(int button) {
+        return button == InputConstants.MOUSE_BUTTON_LEFT;
+    }
+
+    public static boolean isRight(int button) {
+        return button == InputConstants.MOUSE_BUTTON_RIGHT;
+    }
+
+    public static boolean isMiddle(int button) {
+        return button == InputConstants.MOUSE_BUTTON_MIDDLE;
+    }
+
     public static boolean isKey(KeyMapping mapping, int code) {
         InputConstants.Key key = mapping.key;
-        return key.getType() == InputConstants.Type.KEYSYM && key.getValue() == code;
+        return key.getType() == InputConstants.Type.KEYBOARD && key.getValue() == code;
     }
 
     // Holds a key down on behalf of a module. Use and attack are toggles under
@@ -46,12 +56,19 @@ public final class InputUtil {
     // True only whilst the player really holds the bound key or button.
     public static boolean physicallyHeld(KeyMapping mapping) {
         InputConstants.Key key = mapping.key;
-        Window window = OfflineClient.MC.getWindow();
         return switch (key.getType()) {
-            case KEYSYM -> InputConstants.isKeyDown(window, key.getValue());
+            case KEYBOARD -> InputConstants.isKeyDown(key.getValue());
             // Use and attack are mouse bound by default.
-            case MOUSE -> GLFW.glfwGetMouseButton(window.handle(), key.getValue()) == GLFW.GLFW_PRESS;
-            default -> mapping.isDown();
+            case MOUSE -> buttonHeld(key.getValue());
+        };
+    }
+
+    private static boolean buttonHeld(int button) {
+        return switch (button) {
+            case InputConstants.MOUSE_BUTTON_LEFT -> OfflineClient.MC.mouseHandler.isLeftPressed();
+            case InputConstants.MOUSE_BUTTON_RIGHT -> OfflineClient.MC.mouseHandler.isRightPressed();
+            case InputConstants.MOUSE_BUTTON_MIDDLE -> OfflineClient.MC.mouseHandler.isMiddlePressed();
+            default -> false;
         };
     }
 

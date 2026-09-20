@@ -13,6 +13,7 @@ import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
+import com.jellypudding.offlineclient.util.SwingMode;
 import com.jellypudding.offlineclient.util.TargetPriority;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.InteractionHand;
@@ -104,7 +105,7 @@ public final class AutoNametag extends Module {
         }
         EntityHitResult hit = new EntityHitResult(target, target.getBoundingBox().getCenter());
         if (mc.gameMode.interact(mc.player, target, hit, InteractionHand.MAIN_HAND).consumesAction()) {
-            mc.player.swing(InteractionHand.MAIN_HAND);
+            SwingMode.swingArm(InteractionHand.MAIN_HAND);
             named++;
         }
         tried.put(target.getId(), now + COOLDOWN);

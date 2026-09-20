@@ -53,9 +53,9 @@ public abstract class ClientLevelMixin {
         }
     }
 
-    @Inject(method = "addBreakingBlockEffect(Lnet/minecraft/core/BlockPos;Lnet/minecraft/core/Direction;)V",
+    @Inject(method = "addBreakingBlockEffects(Lnet/minecraft/core/BlockPos;Lnet/minecraft/core/Direction;Z)V",
         at = @At("HEAD"), cancellable = true)
-    private void onBreakingBlockEffect(BlockPos pos, Direction side, CallbackInfo ci) {
+    private void onBreakingBlockEffect(BlockPos pos, Direction side, boolean flag, CallbackInfo ci) {
         if (offlineclient$blocksBlockParticles()) {
             ci.cancel();
         }

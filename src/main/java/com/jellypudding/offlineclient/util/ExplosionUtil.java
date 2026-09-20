@@ -42,7 +42,7 @@ public final class ExplosionUtil {
     // A bed that sets a spawn point never goes off.
     public static boolean bedsExplodeHere() {
         return MC.level.environmentAttributes()
-            .getValue(EnvironmentAttributes.BED_RULE, MC.player.blockPosition()).explodes();
+            .getValue(EnvironmentAttributes.BED_RULE, MC.player.blockPosition()).destroyOnUse();
     }
 
     public static float crystalDamage(LivingEntity target, Vec3 source) {

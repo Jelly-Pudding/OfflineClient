@@ -11,6 +11,7 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
 import java.util.Locale;
 
@@ -79,8 +80,8 @@ public final class HandView extends Module {
         if (!serverRotations.isOn() || mc.player == null) {
             return;
         }
-        pose.mulPose(Axis.XP.rotationDegrees(mc.player.getXRot() - RotationManager.serverPitch()));
-        pose.mulPose(Axis.YP.rotationDegrees(mc.player.getYRot() - RotationManager.serverYaw()));
+        pose.rotate(Axis.XP.rotationDegrees(mc.player.getXRot() - RotationManager.serverPitch()));
+        pose.rotate(Axis.YP.rotationDegrees(mc.player.getYRot() - RotationManager.serverYaw()));
     }
 
     // How far through its swing the hand is drawn. Zero is the resting pose.
@@ -88,8 +89,8 @@ public final class HandView extends Module {
         if (!isEnabled() || mc.player == null) {
             return progress;
         }
-        InteractionHand hand = mc.player.swingingArm == null
-            ? InteractionHand.MAIN_HAND : mc.player.swingingArm;
+        LivingEntity.SwingDescription swing = mc.player.getCurrentSwing();
+        InteractionHand hand = swing == null ? InteractionHand.MAIN_HAND : swing.hand();
         if (hand == InteractionHand.MAIN_HAND) {
             if (swordSlash.isOn() && mainItem.is(ItemTags.SWORDS)) {
                 return 0;
@@ -173,9 +174,9 @@ public final class HandView extends Module {
             if (!enabled.isOn()) {
                 return;
             }
-            pose.mulPose(Axis.XP.rotationDegrees(pitch.getFloat()));
-            pose.mulPose(Axis.YP.rotationDegrees(yaw.getFloat()));
-            pose.mulPose(Axis.ZP.rotationDegrees(roll.getFloat()));
+            pose.rotate(Axis.XP.rotationDegrees(pitch.getFloat()));
+            pose.rotate(Axis.YP.rotationDegrees(yaw.getFloat()));
+            pose.rotate(Axis.ZP.rotationDegrees(roll.getFloat()));
             pose.scale(scaleX.getFloat(), scaleY.getFloat(), scaleZ.getFloat());
             pose.translate(x.getFloat(), y.getFloat(), z.getFloat());
         }

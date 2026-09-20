@@ -8,8 +8,8 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.gui.screens.Screen;
-import org.lwjgl.glfw.GLFW;
 
 public final class ClickGuiModule extends Module {
 
@@ -40,7 +40,7 @@ public final class ClickGuiModule extends Module {
 
     public ClickGuiModule() {
         super("ClickGUI", "Opens the GUI and sets its accent colour.",
-            Category.MISC, GLFW.GLFW_KEY_RIGHT_SHIFT);
+            Category.MISC, InputConstants.KEY_RSHIFT);
         addSettings(style, hoverHelp, accent, background, text, opacity,
             titleColor, versionColor);
     }

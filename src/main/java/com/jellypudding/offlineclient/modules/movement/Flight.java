@@ -14,6 +14,7 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.HoverDip;
+import com.jellypudding.offlineclient.util.MoveGate;
 import com.jellypudding.offlineclient.util.MovementUtil;
 import com.jellypudding.offlineclient.util.PacketUtil;
 import net.minecraft.network.protocol.game.ClientboundPlayerAbilitiesPacket;
@@ -203,8 +204,7 @@ public final class Flight extends Module {
     }
 
     private void sendHeight(double y) {
-        mc.player.connection.send(new ServerboundMovePlayerPacket.Pos(mc.player.getX(), y,
-            mc.player.getZ(), mc.player.onGround(), mc.player.horizontalCollision));
+        MoveGate.send(mc.player.getX(), y, mc.player.getZ(), mc.player.onGround());
     }
 
     // The client's own packet after a dip carries the real height back.
@@ -215,8 +215,13 @@ public final class Flight extends Module {
             || !(event.getPacket() instanceof ServerboundMovePlayerPacket packet)) {
             return;
         }
-        restorePending = false;
-        if (!packet.hasPosition()) {
+        if (packet.hasPosition()) {
+            restorePending = false;
+            return;
+        }
+        // Upgrading spends the tick's one position. The dip waits otherwise.
+        if (MoveGate.free()) {
+            restorePending = false;
             event.setPacket(PacketUtil.withPosition(packet, mc.player, mc.player.getX(),
                 mc.player.getY(), mc.player.getZ(), packet.isOnGround()));
         }

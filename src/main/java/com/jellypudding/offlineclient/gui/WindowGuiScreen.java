@@ -7,6 +7,7 @@ import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.modules.misc.ClickGuiModule;
+import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.RenderUtil;
 import com.jellypudding.offlineclient.util.SearchRank;
 import net.minecraft.client.gui.Font;
@@ -548,17 +549,17 @@ public final class WindowGuiScreen extends GuiScreenBase {
     }
 
     private void clickModule(Module module, double mx, int x, int w, int button) {
-        if (button != 0 && button != 1) {
+        if (!InputUtil.isLeft(button) && !InputUtil.isRight(button)) {
             return;
         }
         String name = module.getName();
-        if (button == 0 && mx < x + FAV_ZONE) {
+        if (InputUtil.isLeft(button) && mx < x + FAV_ZONE) {
             if (!favourites.remove(name)) {
                 favourites.add(name);
             }
             return;
         }
-        if (button == 1 || mx >= x + w - ARROW_ZONE || !module.isTogglable()) {
+        if (InputUtil.isRight(button) || mx >= x + w - ARROW_ZONE || !module.isTogglable()) {
             if (!expanded.remove(name)) {
                 expanded.add(name);
             }

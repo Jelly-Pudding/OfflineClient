@@ -3,7 +3,6 @@ package com.jellypudding.offlineclient.mixin;
 import com.jellypudding.offlineclient.modules.render.ClearView;
 import com.jellypudding.offlineclient.util.Modules;
 import com.mojang.blaze3d.vertex.PoseStack;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.ScreenEffectRenderer;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
@@ -46,8 +45,7 @@ public class ScreenEffectRendererMixin {
     }
 
     @Inject(method = "submitWater", at = @At("HEAD"), cancellable = true)
-    private static void onSubmitWater(Minecraft minecraft, PoseStack poseStack,
-                                      SubmitNodeCollector collector, CallbackInfo ci) {
+    private static void onSubmitWater(CallbackInfo ci) {
         ClearView clearView = Modules.active(ClearView.class);
         if (clearView != null && clearView.blocksWater()) {
             ci.cancel();
@@ -55,9 +53,7 @@ public class ScreenEffectRendererMixin {
     }
 
     @Inject(method = "submitBlockSprite", at = @At("HEAD"), cancellable = true)
-    private static void onSubmitBlockSprite(TextureAtlasSprite sprite, PoseStack poseStack,
-                                            SubmitNodeCollector collector, int light,
-                                            CallbackInfo ci) {
+    private static void onSubmitBlockSprite(CallbackInfo ci) {
         ClearView clearView = Modules.active(ClearView.class);
         if (clearView != null && clearView.blocksBlockInFace()) {
             ci.cancel();
@@ -66,8 +62,7 @@ public class ScreenEffectRendererMixin {
 
     // The totem pop and the trial key animation come through here.
     @Inject(method = "renderItemActivationAnimation", at = @At("HEAD"), cancellable = true)
-    private void onItemActivation(PoseStack poseStack, float partialTick,
-                                  SubmitNodeCollector collector, CallbackInfo ci) {
+    private void onItemActivation(CallbackInfo ci) {
         ClearView clearView = Modules.active(ClearView.class);
         if (clearView != null && clearView.blocksTotemPop()) {
             ci.cancel();

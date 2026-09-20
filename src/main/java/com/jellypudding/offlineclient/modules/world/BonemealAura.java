@@ -14,6 +14,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.BonemealSource;
 import net.minecraft.world.level.block.BonemealableBlock;
 import net.minecraft.world.level.block.CocoaBlock;
 import net.minecraft.world.level.block.CropBlock;
@@ -173,7 +174,7 @@ public final class BonemealAura extends Module {
     private boolean wanted(BlockPos pos) {
         BlockState state = BlockUtil.state(pos);
         Block block = state.getBlock();
-        if (!(block instanceof BonemealableBlock plant) || !plant.isValidBonemealTarget(mc.level, pos, state)) {
+        if (!(block instanceof BonemealableBlock plant) || !plant.isValidBonemealTarget(mc.level, pos, state, BonemealSource.INTERACTION)) {
             return false;
         }
         // Grass only sprouts more grass and flowers. Never worth the meal.

@@ -11,6 +11,7 @@ import com.jellypudding.offlineclient.setting.PickList;
 import com.jellypudding.offlineclient.setting.Setting;
 import com.jellypudding.offlineclient.setting.TextSetting;
 import com.jellypudding.offlineclient.util.ColorUtil;
+import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.RenderUtil;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -506,13 +507,13 @@ public final class SettingWidget {
     public static void click(Setting<?> setting, double mx, double my, int x, int y, int width,
                              int button, Host host, Drag drag) {
         // The middle button puts a setting back to how it started.
-        if (button == 2) {
+        if (InputUtil.isMiddle(button)) {
             setting.reset();
             OfflineClient.INSTANCE.getConfigManager().saveSoon();
             return;
         }
         // Only the left and the right button act on a setting.
-        if (button != 0 && button != 1) {
+        if (!InputUtil.isLeft(button) && !InputUtil.isRight(button)) {
             return;
         }
         switch (setting) {
@@ -522,7 +523,7 @@ public final class SettingWidget {
             }
             case BoolSetting b -> b.toggle();
             case NumberSetting n -> {
-                if (button == 0 && overNumberValue(OfflineClient.MC.font, mx, my, n, x, y, width)) {
+                if (InputUtil.isLeft(button) && overNumberValue(OfflineClient.MC.font, mx, my, n, x, y, width)) {
                     host.startEditing(n);
                     return;
                 }
@@ -530,9 +531,9 @@ public final class SettingWidget {
                 drag.slider = n;
                 n.setFromSlider(fraction(x, width, mx));
             }
-            case EnumSetting<?> e -> e.cycle(button == 0);
+            case EnumSetting<?> e -> e.cycle(InputUtil.isLeft(button));
             case ColorSetting c -> {
-                if (button == 1 || overRainbowChip(OfflineClient.MC.font, mx, my, x, y, width)) {
+                if (InputUtil.isRight(button) || overRainbowChip(OfflineClient.MC.font, mx, my, x, y, width)) {
                     c.setRainbow(!c.isRainbow());
                 } else if (my >= barTop(y, HUE_CHANNEL)) {
                     c.setRainbow(false);

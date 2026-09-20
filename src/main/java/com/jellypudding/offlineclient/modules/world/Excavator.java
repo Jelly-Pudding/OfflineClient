@@ -17,6 +17,7 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockMiner;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.SwingMode;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.InteractionHand;
@@ -291,7 +292,7 @@ public final class Excavator extends Module {
             sent++;
         }
         if (sent > 0) {
-            mc.player.swing(InteractionHand.MAIN_HAND);
+            SwingMode.swingArm(InteractionHand.MAIN_HAND);
         }
         return sent > 0;
     }

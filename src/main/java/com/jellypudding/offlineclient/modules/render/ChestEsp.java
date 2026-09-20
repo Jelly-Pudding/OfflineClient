@@ -15,6 +15,7 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ColorUtil;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.protocol.game.ServerboundUseItemOnPacket;
 import net.minecraft.world.entity.Entity;
@@ -42,7 +43,6 @@ import net.minecraft.world.level.block.state.properties.ChestType;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.phys.AABB;
-import org.lwjgl.glfw.GLFW;
 
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
@@ -206,7 +206,7 @@ public final class ChestEsp extends Module {
     @Subscribe
     private void onPacketSend(PacketSendEvent event) {
         if (event.getPacket() instanceof ServerboundUseItemOnPacket packet && mc.level != null) {
-            noteOpened(packet.getHitResult().getBlockPos());
+            noteOpened(packet.hitResult().getBlockPos());
         }
     }
 
@@ -226,7 +226,7 @@ public final class ChestEsp extends Module {
 
     @Subscribe
     private void onKeyPress(KeyPressEvent event) {
-        if (event.getAction() == GLFW.GLFW_PRESS && mc.gui.screen() == null
+        if (event.getAction() == InputConstants.PRESS && mc.gui.screen() == null
             && forgetKey.isBound() && event.getKey() == forgetKey.getValue()) {
             opened.clear();
         }

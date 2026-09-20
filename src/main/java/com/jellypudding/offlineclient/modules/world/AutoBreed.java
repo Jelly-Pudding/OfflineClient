@@ -9,6 +9,7 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
+import com.jellypudding.offlineclient.util.SwingMode;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
@@ -106,7 +107,7 @@ public final class AutoBreed extends Module {
             }
             EntityHitResult hit = new EntityHitResult(animal, animal.getBoundingBox().getCenter());
             if (mc.gameMode.interact(mc.player, animal, hit, useHand).consumesAction()) {
-                mc.player.swing(useHand);
+                SwingMode.swingArm(useHand);
                 count++;
                 fed.put(animal.getId(), now);
             }

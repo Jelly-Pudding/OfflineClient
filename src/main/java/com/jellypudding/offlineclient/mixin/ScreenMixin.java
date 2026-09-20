@@ -6,6 +6,7 @@ import com.jellypudding.offlineclient.modules.player.InvWalk;
 import com.jellypudding.offlineclient.modules.render.Blur;
 import com.jellypudding.offlineclient.modules.render.NoBackground;
 import com.jellypudding.offlineclient.util.Modules;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
@@ -15,7 +16,6 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
-import org.lwjgl.glfw.GLFW;
 
 @Mixin(Screen.class)
 public abstract class ScreenMixin {
@@ -52,14 +52,14 @@ public abstract class ScreenMixin {
         at = @At("HEAD"), cancellable = true)
     private void onKeyPressed(KeyEvent event, CallbackInfoReturnable<Boolean> cir) {
         int key = event.key();
-        if (key == GLFW.GLFW_KEY_SPACE) {
+        if (key == InputConstants.KEY_SPACE) {
             InvWalk invWalk = Modules.get(InvWalk.class);
             if (invWalk != null && invWalk.takesSpace()) {
                 cir.setReturnValue(true);
             }
             return;
         }
-        if (key >= GLFW.GLFW_KEY_RIGHT && key <= GLFW.GLFW_KEY_UP) {
+        if (key >= InputConstants.KEY_RIGHT && key <= InputConstants.KEY_UP) {
             GUIMove guiMove = Modules.get(GUIMove.class);
             if (guiMove != null && guiMove.takesArrows()) {
                 cir.setReturnValue(true);

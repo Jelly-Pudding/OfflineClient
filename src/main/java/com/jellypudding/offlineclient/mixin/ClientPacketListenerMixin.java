@@ -86,7 +86,7 @@ public abstract class ClientPacketListenerMixin {
     private void onChunkLoaded(ClientboundLevelChunkWithLightPacket packet, CallbackInfo ci) {
         NewChunks newChunks = Modules.get(NewChunks.class);
         if (newChunks != null) {
-            newChunks.onChunkLoaded(packet.getX(), packet.getZ());
+            newChunks.onChunkLoaded(packet.x(), packet.z());
         }
     }
 

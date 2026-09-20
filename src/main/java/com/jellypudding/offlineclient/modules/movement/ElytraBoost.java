@@ -9,6 +9,7 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.Modules;
+import com.jellypudding.offlineclient.util.SwingMode;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
@@ -238,7 +239,7 @@ public final class ElytraBoost extends Module {
 
     private void use(InteractionHand hand) {
         if (mc.gameMode.useItem(mc.player, hand).consumesAction()) {
-            mc.player.swing(hand);
+            SwingMode.swingArm(hand);
             lastFireTick = mc.player.tickCount;
         }
     }

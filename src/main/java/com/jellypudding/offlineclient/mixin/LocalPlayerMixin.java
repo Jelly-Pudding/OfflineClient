@@ -18,7 +18,6 @@ import com.jellypudding.offlineclient.modules.movement.EdgeGuard;
 import com.jellypudding.offlineclient.modules.movement.Sprint;
 import com.jellypudding.offlineclient.modules.movement.Step;
 import com.jellypudding.offlineclient.modules.movement.VehicleFly;
-import com.jellypudding.offlineclient.modules.player.AutoDrop;
 import com.jellypudding.offlineclient.modules.player.AutoEat;
 import com.jellypudding.offlineclient.modules.player.AutoGap;
 import com.jellypudding.offlineclient.modules.player.FastBreak;
@@ -55,15 +54,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(LocalPlayer.class)
 public abstract class LocalPlayerMixin extends AbstractClientPlayer {
 
-    // The throw key never gives away an item AutoDrop is guarding.
-    @Inject(method = "drop(Z)Z", at = @At("HEAD"), cancellable = true)
-    private void onDrop(boolean whole, CallbackInfoReturnable<Boolean> cir) {
-        AutoDrop autoDrop = Modules.get(AutoDrop.class);
-        if (autoDrop != null && autoDrop.guards(OfflineClient.MC.player.getMainHandItem())) {
-            cir.setReturnValue(false);
-        }
-    }
-
     @Shadow
     public float portalEffectIntensity;
 
@@ -83,16 +73,16 @@ public abstract class LocalPlayerMixin extends AbstractClientPlayer {
         OfflineClient.INSTANCE.getEventBus().post(TickEvent.INSTANCE);
     }
 
-    // A mounted player never reaches sendPosition in this method.
-    // Posting here on both sides of that branch keeps an aura working on a horse.
-    @Inject(method = "tick()V",
+    // Before the branch that skips the position packet for a passenger. Posting
+    // on both sides of it keeps an aura working on a horse.
+    @Inject(method = "sendChanges()V",
         at = @At(value = "INVOKE",
             target = "Lnet/minecraft/client/player/LocalPlayer;isPassenger()Z"))
     private void onPreMotion(CallbackInfo ci) {
         OfflineClient.INSTANCE.getEventBus().post(PreMotionEvent.INSTANCE);
     }
 
-    @Inject(method = "tick()V", at = @At("TAIL"))
+    @Inject(method = "sendChanges()V", at = @At("TAIL"))
     private void onPostMotion(CallbackInfo ci) {
         OfflineClient.INSTANCE.getEventBus().post(PostMotionEvent.INSTANCE);
     }

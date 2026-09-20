@@ -1,6 +1,5 @@
 package com.jellypudding.offlineclient.modules.movement;
 
-import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.PacketReceiveEvent;
 import com.jellypudding.offlineclient.event.events.PostMotionEvent;
@@ -384,14 +383,6 @@ public final class ElytraFly extends Module {
         } else if (chestSwap.is(ChestSwapMode.WAIT_FOR_GROUND)) {
             watch(landingWatcher);
         }
-    }
-
-    private static void watch(Object watcher) {
-        OfflineClient.INSTANCE.getEventBus().register(watcher);
-    }
-
-    private static void unwatch(Object watcher) {
-        OfflineClient.INSTANCE.getEventBus().unregister(watcher);
     }
 
     // ChestSwap decides which piece goes on. Taking the elytra off only makes

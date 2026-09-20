@@ -11,7 +11,7 @@ import com.jellypudding.offlineclient.util.RotationPriority;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EquipmentSlot;
-import net.minecraft.world.entity.monster.EnderMan;
+import net.minecraft.world.entity.monster.Enderman;
 import net.minecraft.world.phys.Vec3;
 
 // The server decides you are staring from the angle it last heard from you.
@@ -51,7 +51,7 @@ public final class EndermanLook extends Module {
             return;
         }
         for (Entity entity : mc.level.entitiesForRendering()) {
-            if (!(entity instanceof EnderMan enderman) || !enderman.isAlive()
+            if (!(entity instanceof Enderman enderman) || !enderman.isAlive()
                 || !mc.player.hasLineOfSight(enderman)) {
                 continue;
             }
@@ -73,14 +73,14 @@ public final class EndermanLook extends Module {
         }
     }
 
-    private void stareAt(EnderMan enderman) {
+    private void stareAt(Enderman enderman) {
         Vec3 head = new Vec3(enderman.getX(), enderman.getEyeY(), enderman.getZ());
         RotationManager.requestExact(RotationManager.yawTo(head),
             RotationManager.pitchTo(head), RotationPriority.IDLE);
     }
 
     // The same test the game runs. A distant enderman needs a tighter aim to notice.
-    private boolean staringAt(EnderMan enderman) {
+    private boolean staringAt(Enderman enderman) {
         Vec3 view = mc.player.getViewVector(1f).normalize();
         Vec3 toward = new Vec3(enderman.getX() - mc.player.getX(),
             enderman.getEyeY() - mc.player.getEyeY(), enderman.getZ() - mc.player.getZ());

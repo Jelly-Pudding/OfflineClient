@@ -1,10 +1,10 @@
 package com.jellypudding.offlineclient.util;
 
 import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.util.SwingMode;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
@@ -98,11 +98,11 @@ public final class BlockUtil {
         return !state.isAir() && blocksMotion(state);
     }
 
-    // Deprecated in vanilla with no replacement. Still the only check that treats
-    // cobwebs and bamboo saplings as passable.
+    // Solid with the two exceptions a player can walk into.
     @SuppressWarnings("deprecation")
     public static boolean blocksMotion(BlockState state) {
-        return state.blocksMotion();
+        return state.isSolid()
+            && !state.is(Blocks.COBWEB) && !state.is(Blocks.BAMBOO_SAPLING);
     }
 
     public static boolean isBreakable(BlockPos pos) {
@@ -215,7 +215,7 @@ public final class BlockUtil {
             return false;
         }
         if (swing) {
-            MC.player.swing(InteractionHand.MAIN_HAND);
+            SwingMode.swingArm(InteractionHand.MAIN_HAND);
         }
         return true;
     }
@@ -258,8 +258,7 @@ public final class BlockUtil {
             return;
         }
         MC.player.setPos(x, MC.player.getY(), z);
-        MC.player.connection.send(new ServerboundMovePlayerPacket.Pos(
-            x, MC.player.getY(), z, MC.player.onGround(), MC.player.horizontalCollision));
+        MoveGate.send(x, MC.player.getY(), z, MC.player.onGround());
     }
 
     // Lower wins. Minus one means the block is not on the list.
@@ -414,7 +413,7 @@ public final class BlockUtil {
             MC.player.setShiftKeyDown(true);
         }
         if (used) {
-            MC.player.swing(InteractionHand.MAIN_HAND);
+            SwingMode.swingArm(InteractionHand.MAIN_HAND);
         }
         return used;
     }

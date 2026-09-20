@@ -297,7 +297,7 @@ public final class ChunkScanner<T> {
             return holder[0];
         }
         if (packet instanceof ClientboundLevelChunkWithLightPacket chunk) {
-            return new ChunkPos(chunk.getX(), chunk.getZ());
+            return new ChunkPos(chunk.x(), chunk.z());
         }
         return null;
     }

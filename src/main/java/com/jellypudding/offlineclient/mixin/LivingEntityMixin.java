@@ -26,7 +26,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class LivingEntityMixin {
 
     // The hand a hit swings. Only your own swings are changed.
-    @ModifyVariable(method = "swing(Lnet/minecraft/world/InteractionHand;)V",
+    @ModifyVariable(method = "swing(Lnet/minecraft/world/InteractionHand;Lnet/minecraft/world/item/component/SwingAnimation;Z)Z",
         at = @At("HEAD"), argsOnly = true)
     private InteractionHand onSwingHand(InteractionHand hand) {
         if ((Object) this != OfflineClient.MC.player) {
@@ -105,7 +105,7 @@ public abstract class LivingEntityMixin {
         return sprint == null ? original : sprint.jumpBoost(original, (LocalPlayer) (Object) this);
     }
 
-    @ModifyExpressionValue(method = "getCurrentSwingDuration()I",
+    @ModifyExpressionValue(method = "getModifiedSwingDuration(Lnet/minecraft/world/item/component/SwingAnimation;)I",
         at = @At(value = "INVOKE",
             target = "Lnet/minecraft/world/item/component/SwingAnimation;duration()I"))
     private int onSwingDuration(int original) {

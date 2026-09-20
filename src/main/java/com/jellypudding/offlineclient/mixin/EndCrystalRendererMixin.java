@@ -8,7 +8,6 @@ import net.minecraft.client.model.Model;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.entity.EndCrystalRenderer;
 import net.minecraft.client.renderer.entity.state.EndCrystalRenderState;
-import net.minecraft.client.renderer.feature.ModelFeatureRenderer;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.resources.Identifier;
@@ -36,18 +35,19 @@ public abstract class EndCrystalRendererMixin {
     @WrapOperation(
         method = "submit(Lnet/minecraft/client/renderer/entity/state/EndCrystalRenderState;Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/SubmitNodeCollector;Lnet/minecraft/client/renderer/state/level/CameraRenderState;)V",
         at = @At(value = "INVOKE",
-            target = "Lnet/minecraft/client/renderer/SubmitNodeCollector;submitModel(Lnet/minecraft/client/model/Model;Ljava/lang/Object;Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/resources/Identifier;IIILnet/minecraft/client/renderer/feature/ModelFeatureRenderer$CrumblingOverlay;)V"))
+            target = "Lnet/minecraft/client/renderer/SubmitNodeCollector;submitModel(Lnet/minecraft/client/model/Model;Ljava/lang/Object;Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/resources/Identifier;III)V"))
+    // The short overload fixes the tint at white and takes an outline colour.
+    // Recolouring the crystal means calling the long one.
     private <S> void onSubmitModel(SubmitNodeCollector collector, Model<? super S> model, S state,
                                    PoseStack poseStack, Identifier texture, int light, int overlay,
-                                   int outline, ModelFeatureRenderer.CrumblingOverlay crumbling,
-                                   Operation<Void> original) {
+                                   int outline, Operation<Void> original) {
         Chams chams = Chams.get();
         if (chams == null || !chams.reshapesCrystals()) {
-            original.call(collector, model, state, poseStack, texture, light, overlay, outline, crumbling);
+            original.call(collector, model, state, poseStack, texture, light, overlay, outline);
             return;
         }
         collector.submitModel(model, state, poseStack,
             RenderTypes.entityTranslucent(chams.crystalTexture(texture)),
-            light, overlay, chams.crystalColor(), null, outline, crumbling);
+            light, overlay, chams.crystalColor(), null, outline);
     }
 }

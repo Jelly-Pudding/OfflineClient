@@ -102,7 +102,7 @@ public final class Collisions extends Module {
             return;
         }
         if (event.getPacket() instanceof ServerboundMoveVehiclePacket move) {
-            Vec3 where = move.position();
+            Vec3 where = move.movingTo().position();
             if (loaded(where.x, where.z)) {
                 return;
             }

@@ -83,6 +83,7 @@
     "TridentItemMixin",
     "ClientInputMixin",
     "ClientClockManagerMixin",
+    "ClientClockInstanceMixin",
     "EquipmentLayerRendererMixin",
     "BeaconRendererMixin",
     "FallingBlockRendererMixin",
@@ -90,6 +91,7 @@
     "WorldBorderMixin",
     "ItemEntityRendererMixin",
     "ItemInHandRendererMixin",
+    "FirstPersonHandsAndItemsMixin",
     "AbstractContainerScreenMixin",
     "LivingEntityMixin",
     "ItemFeatureRendererMixin",
@@ -107,7 +109,6 @@
     "EndCrystalRendererMixin",
     "EndCrystalModelMixin",
     "AvatarRendererMixin",
-    "VisGraphMixin",
     "ToastManagerMixin"
   ],
   "injectors": {

@@ -1,11 +1,13 @@
 package com.jellypudding.offlineclient.mixin;
 
 import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.modules.misc.BetterChat;
 import com.jellypudding.offlineclient.modules.render.Blur;
 import com.jellypudding.offlineclient.event.events.ChatSendEvent;
 import com.jellypudding.offlineclient.gui.ChatScrollBar;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.ChatScreen;
@@ -13,7 +15,6 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
-import org.lwjgl.glfw.GLFW;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
@@ -58,7 +59,7 @@ public abstract class ChatScreenMixin extends Screen {
         at = @At("HEAD"), cancellable = true)
     private void onMouseClicked(MouseButtonEvent event, boolean doubleClick,
                                 CallbackInfoReturnable<Boolean> cir) {
-        if (event.button() == 0 && offlineclient$scrollBarOn()
+        if (InputUtil.isLeft(event.button()) && offlineclient$scrollBarOn()
             && offlineclient$scrollBar.mouseClicked(event.x(), event.y(), height)) {
             cir.setReturnValue(true);
         }
@@ -83,7 +84,7 @@ public abstract class ChatScreenMixin extends Screen {
         cancellable = true)
     private void onTabComplete(KeyEvent event, CallbackInfoReturnable<Boolean> cir) {
         int key = event.key();
-        if (key != GLFW.GLFW_KEY_TAB && key != GLFW.GLFW_KEY_UP && key != GLFW.GLFW_KEY_DOWN) {
+        if (key != InputConstants.KEY_TAB && key != InputConstants.KEY_UP && key != InputConstants.KEY_DOWN) {
             return;
         }
         String text = input.getValue();
@@ -93,14 +94,14 @@ public abstract class ChatScreenMixin extends Screen {
         }
         List<String> options = OfflineClient.INSTANCE.getCommandManager().complete(text);
         // With nothing to choose between the arrows keep walking the chat history.
-        if (options.isEmpty() || (key != GLFW.GLFW_KEY_TAB && options.size() < 2)) {
+        if (options.isEmpty() || (key != InputConstants.KEY_TAB && options.size() < 2)) {
             return;
         }
         cir.setReturnValue(true);
         int picked = offlineclient$pickFor(text, options.size());
 
-        if (key == GLFW.GLFW_KEY_UP || key == GLFW.GLFW_KEY_DOWN) {
-            offlineclient$picked = Math.floorMod(picked + (key == GLFW.GLFW_KEY_DOWN ? 1 : -1), options.size());
+        if (key == InputConstants.KEY_UP || key == InputConstants.KEY_DOWN) {
+            offlineclient$picked = Math.floorMod(picked + (key == InputConstants.KEY_DOWN ? 1 : -1), options.size());
             return;
         }
 

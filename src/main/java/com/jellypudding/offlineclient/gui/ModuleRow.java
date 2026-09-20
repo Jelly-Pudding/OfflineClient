@@ -3,6 +3,7 @@ package com.jellypudding.offlineclient.gui;
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.util.ColorUtil;
+import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.RenderUtil;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -119,10 +120,10 @@ public final class ModuleRow {
         int w = width;
 
         if (SettingWidget.isOver(mx, my, x, y, w, GuiTheme.ROW_HEIGHT)) {
-            if (button != 0 && button != 1) {
+            if (!InputUtil.isLeft(button) && !InputUtil.isRight(button)) {
                 return true;
             }
-            if (button == 1 || mx >= x + w - ARROW_ZONE || !module.isTogglable()) {
+            if (InputUtil.isRight(button) || mx >= x + w - ARROW_ZONE || !module.isTogglable()) {
                 expanded = !expanded;
             } else {
                 module.toggle();

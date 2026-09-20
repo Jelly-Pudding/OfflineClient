@@ -13,6 +13,8 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
+import com.jellypudding.offlineclient.util.PacketUtil;
+import com.jellypudding.offlineclient.util.SwingMode;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -31,8 +33,9 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.function.BooleanSupplier;
 
-// The server counts your fall and hurts on the packet that claims ground.
-// Packet mode climbs first and never fakes ground. Place mode softens the landing.
+// The server charges for the fall it holds on the packet that claims ground.
+// Packet mode claims ground every tick of a fall and is charged for one tick at
+// a time. Place mode softens the landing instead.
 public final class NoFall extends Module {
 
     public enum Mode { PACKET, PLACE, AIR_PLACE, BOTH }
@@ -68,22 +71,17 @@ public final class NoFall extends Module {
     // Air place goes down before this much fall would hurt at all.
     private static final float DAMAGE_FALL = 2;
 
-    // How far the wiping packet climbs. Any climb at all does it.
-    private static final double CLIMB = 0.001;
-
-    // A landing pauses this far above the ground for its wipe.
-    private static final double LANDING_STEP = 0.02;
-
     // Ticks to leave the water alone before collecting it and the longest wait.
     private static final int PICKUP_DELAY = 2;
     private static final int PICKUP_TIMEOUT = 20;
 
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
         "How the fall is stopped.", Mode.PACKET)
-        .describe(Mode.PACKET, "Wipes the fall the server has counted with a tiny climb before it can hurt.")
+        .describe(Mode.PACKET, "Tells the server you have landed on every packet whilst you fall."
+            + " A descent faster than gravity may still hurt.")
         .describe(Mode.PLACE, "Drops water or another soft landing under you. Survives a strict server.")
         .describe(Mode.AIR_PLACE, "Puts any block from your hotbar under your feet just before the fall would hurt.")
-        .describe(Mode.BOTH, "Wipes the count and drops the soft landing as well.");
+        .describe(Mode.BOTH, "Claims the landing and drops the soft landing as well.");
     private final EnumSetting<PlacedItem> placedItem = new EnumSetting<>("Placed item",
         "What is dropped under you. A bucket turns into powder snow where water boils away.", PlacedItem.BUCKET)
         .under(mode, Mode.PLACE, Mode.BOTH);
@@ -99,35 +97,18 @@ public final class NoFall extends Module {
         "Centres you on the block first so the landing goes under you and not beside you.", true)
         .under(mode, Mode.PLACE, Mode.AIR_PLACE, Mode.BOTH);
     private final NumberSetting minFall = new NumberSetting("Min fall",
-        "Small drops are left alone until the fall passes this. Anything over three blocks will hurt.",
-        2.5, 0, 10, 0.1, " blocks").min(0).max(10);
+        "Short drops are left alone until the fall passes this. Three blocks is the most"
+            + " that is safe because a longer one already hurts.",
+        2.5, 0, 3, 0.1, " blocks").min(0).max(3);
     private final BoolSetting whilstGliding = new BoolSetting("Whilst gliding",
-        "Keep working whilst you fly with an elytra.", true);
-    private final NumberSetting glideMinFall = new NumberSetting("Glide min fall",
-        "The same minimum applied whilst you glide.", 2.5, 0, 10, 0.1, " blocks")
-        .min(0).max(10)
-        .under(whilstGliding);
+        "Keep the place modes working whilst you fly with an elytra.", true);
     private final BoolSetting antiBounce = new BoolSetting("Anti bounce",
         "Landing on a slime block or a bed never bounces you.", true);
     private final BoolSetting pauseOnMace = new BoolSetting("Pause on mace",
         "Leaves the fall alone whilst you hold a mace. The smash still lands.", true);
 
-    // The count the server holds. Every movement packet that goes out is mirrored here.
-    // Unknown after a teleport until a climb has wiped it.
-    private double bank;
-    private volatile boolean bankKnown;
-
-    // The last position that went out. The climb packet starts from it.
-    private double sentX;
-    private double sentY;
-    private double sentZ;
-    private volatile boolean sentKnown;
-
-    // A module such as Blink is holding the movement packets back.
-    private boolean heldBack;
-
     // The fall as the client sees it. Place modes read this.
-    private double descent;
+    private volatile double descent;
     private double lastY;
     private boolean tracking;
 
@@ -141,7 +122,7 @@ public final class NoFall extends Module {
     public NoFall() {
         super("NoFall", "Stops fall damage.", Category.MOVEMENT);
         addSettings(mode, placedItem, pickUp, airPlaceWhen, anchor, minFall, whilstGliding,
-            glideMinFall, antiBounce, pauseOnMace);
+            antiBounce, pauseOnMace);
         searchTags("fall damage", "water bucket", "clutch", "air place");
     }
 
@@ -158,13 +139,6 @@ public final class NoFall extends Module {
     @Override
     protected void onEnable() {
         reset();
-        if (inGame()) {
-            // The server may already hold a count. The first climb clears it.
-            sentX = mc.player.getX();
-            sentY = mc.player.getY();
-            sentZ = mc.player.getZ();
-            sentKnown = true;
-        }
     }
 
     @Override
@@ -173,10 +147,6 @@ public final class NoFall extends Module {
     }
 
     private void reset() {
-        bank = 0;
-        bankKnown = false;
-        sentKnown = false;
-        heldBack = false;
         descent = 0;
         tracking = false;
         placedAt = null;
@@ -202,65 +172,12 @@ public final class NoFall extends Module {
             return;
         }
         trackDescent();
-        if (!packetMode() || !protecting()) {
-            return;
-        }
-        if (!sentKnown || heldBack || mc.player.isInWater()) {
-            return;
-        }
-        double y = mc.player.getY();
-        double drop = sentY - y;
-        // A climb wipes the count on its own.
-        if (drop < 0) {
-            return;
-        }
-        double counted = bankKnown ? bank + drop : Double.MAX_VALUE;
-        if (counted <= wipeAt()) {
-            return;
-        }
-        // A landing after a real drop pauses just above the ground.
-        // Anything else is one climb.
-        if (landingThisTick() && drop > LANDING_STEP) {
-            sendLanding(mc.player.getX(), y, mc.player.getZ());
-        } else {
-            sendClimb();
-        }
-    }
-
-    // The packet about to go out will carry a ground flag.
-    private boolean landingThisTick() {
-        if (mc.player.onGround()) {
-            return true;
-        }
-        // FastBreak claims ground whilst a block is being mined.
-        return mc.gameMode.isDestroying();
-    }
-
-    // A tiny climb from the last sent spot. The server wipes its count on it.
-    private void sendClimb() {
-        mc.player.connection.send(new ServerboundMovePlayerPacket.Pos(
-            sentX, sentY + CLIMB, sentZ, false, mc.player.horizontalCollision));
-    }
-
-    // The count is wiped and the fall carried on to just above the ground.
-    // The real landing packet that follows only counts that last step.
-    private void sendLanding(double x, double y, double z) {
-        sendClimb();
-        boolean collided = mc.player.horizontalCollision;
-        mc.player.connection.send(new ServerboundMovePlayerPacket.Pos(
-            x, y + LANDING_STEP, z, false, collided));
-        mc.player.connection.send(new ServerboundMovePlayerPacket.Pos(
-            x, y + LANDING_STEP + CLIMB, z, false, collided));
-    }
-
-    // How much fall the server may hold before a climb wipes it.
-    private double wipeAt() {
-        return mc.player.isFallFlying() ? glideMinFall.getValue() : minFall.getValue();
     }
 
     private boolean protecting() {
+        // The packet thread can lose the player mid handler.
         LocalPlayer player = mc.player;
-        if (player.getAbilities().invulnerable || player.isPassenger()) {
+        if (player == null || player.getAbilities().invulnerable || player.isPassenger()) {
             return false;
         }
         if (player.isFallFlying() && !whilstGliding.isOn()) {
@@ -288,53 +205,45 @@ public final class NoFall extends Module {
     }
 
     private boolean holdingMace() {
-        return mc.player.getMainHandItem().is(Items.MACE)
-            || mc.player.getOffhandItem().is(Items.MACE);
+        LocalPlayer player = mc.player;
+        return player != null && (player.getMainHandItem().is(Items.MACE)
+            || player.getOffhandItem().is(Items.MACE));
     }
 
-    // Mirrors what the server will hold after each movement packet.
-    // Runs after every other rewrite. The packet seen here is the one sent.
-    @Subscribe(priority = -100)
+    // Damage is floor(held fall minus three). One tick of gravity never reaches
+    // four blocks and the claim clears what the server holds.
+    @Subscribe(priority = 50)
     private void onPacketSend(PacketSendEvent event) {
-        if (!(event.getPacket() instanceof ServerboundMovePlayerPacket packet)) {
+        if (event.isCancelled() || !packetMode()
+            || !(event.getPacket() instanceof ServerboundMovePlayerPacket packet)
+            || packet.isOnGround() || !packet.hasPosition()) {
             return;
         }
-        if (event.isCancelled()) {
-            heldBack = true;
-            return;
-        }
-        heldBack = false;
         // The packet thread can lose the player mid handler.
         LocalPlayer player = mc.player;
-        if (player == null) {
+        if (player == null || !claimsGround(player)) {
             return;
         }
-        if (packet.hasPosition()) {
-            double y = packet.getY(player.getY());
-            if (sentKnown && y > sentY) {
-                bank = 0;
-                bankKnown = true;
-            } else if (sentKnown && bankKnown) {
-                bank += sentY - y;
-            }
-            sentX = packet.getX(player.getX());
-            sentY = y;
-            sentZ = packet.getZ(player.getZ());
-            sentKnown = true;
-        }
-        // Water and a ground flag both wipe the count on the server.
-        if (packet.isOnGround() || player.isInWater()) {
-            bank = 0;
-            bankKnown = true;
-        }
+        event.setPacket(PacketUtil.withOnGround(packet, player, true));
     }
 
-    // Fired on the netty thread. The server moved the player and the count with it.
+    private boolean claimsGround(LocalPlayer player) {
+        if (player.onGround() || player.isInWater() || !protecting()) {
+            return false;
+        }
+        // Claiming ground whilst gliding tells the server the flight has ended.
+        if (player.isFallFlying()) {
+            return false;
+        }
+        return descent >= minFall.getValue();
+    }
+
+    // The server moved the player and the fall it holds with them.
     @Subscribe
     private void onPacketReceive(PacketReceiveEvent event) {
         if (event.getPacket() instanceof ClientboundPlayerPositionPacket) {
-            bankKnown = false;
-            sentKnown = false;
+            descent = 0;
+            tracking = false;
         }
     }
 
@@ -358,11 +267,12 @@ public final class NoFall extends Module {
         if (!placeMode()) {
             return;
         }
-        if (!falling() || descent <= SAFE_FALL || groundBelow() == null) {
+        BlockPos ground = falling() && descent > SAFE_FALL ? groundBelow() : null;
+        if (ground == null) {
             loan.giveBack();
             return;
         }
-        placeLanding();
+        placeLanding(ground);
     }
 
     // True whilst a fall is running that the module ought to be watching.
@@ -398,11 +308,10 @@ public final class NoFall extends Module {
 
     // A bucket raycasts from the live client rotation and the packet carries it.
     // Pointing down for the call is enough. A block is clicked onto the ground.
-    private void placeLanding() {
+    private void placeLanding(BlockPos ground) {
         PlacedItem kind = chosenItem();
         int slot = InventoryUtil.findSlot(kind.item, InventoryUtil.WHOLE_INVENTORY);
-        BlockPos ground = groundBelow();
-        if (slot == -1 || ground == null || !loan.select(slot)) {
+        if (slot == -1 || !loan.select(slot)) {
             return;
         }
         if (anchor.isOn()) {
@@ -429,7 +338,7 @@ public final class NoFall extends Module {
         if (!mc.gameMode.useItem(mc.player, InteractionHand.MAIN_HAND).consumesAction()) {
             return false;
         }
-        mc.player.swing(InteractionHand.MAIN_HAND);
+        SwingMode.swingArm(InteractionHand.MAIN_HAND);
         return true;
     }
 

@@ -8,7 +8,7 @@ import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.KeyPressEvent;
 import com.jellypudding.offlineclient.setting.KeybindSetting;
-import org.lwjgl.glfw.GLFW;
+import com.mojang.blaze3d.platform.InputConstants;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -96,7 +96,7 @@ public final class MacroStore {
 
     @Subscribe
     private void onKeyPress(KeyPressEvent event) {
-        if (event.getAction() != GLFW.GLFW_PRESS || OfflineClient.MC.gui.screen() != null) {
+        if (event.getAction() != InputConstants.PRESS || OfflineClient.MC.gui.screen() != null) {
             return;
         }
         for (Macro macro : macros) {
@@ -104,6 +104,14 @@ public final class MacroStore {
                 run(macro);
             }
         }
+    }
+
+    public void migrateLegacyKeys() {
+        for (int i = 0; i < macros.size(); i++) {
+            Macro macro = macros.get(i);
+            macros.set(i, macro.withKey(KeybindSetting.fromLegacyKey(macro.key())));
+        }
+        save();
     }
 
     private void load() {

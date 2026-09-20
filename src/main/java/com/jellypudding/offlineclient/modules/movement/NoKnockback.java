@@ -81,6 +81,7 @@ public final class NoKnockback extends Module {
         event.setPacket(new ClientboundExplodePacket(
             packet.center(), packet.radius(), packet.blockCount(),
             Optional.of(new Vec3(push.x * h, push.y * v, push.z * h)),
-            packet.explosionParticle(), packet.explosionSound(), packet.blockParticles()));
+            packet.explosionParticle(), packet.explosionSound(), packet.blockParticles(),
+            packet.playSound()));
     }
 }

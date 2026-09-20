@@ -12,9 +12,8 @@ import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.RotationManager;
 import com.jellypudding.offlineclient.util.RotationPriority;
-import net.minecraft.network.protocol.game.ServerboundSwingPacket;
+import net.minecraft.network.protocol.game.ServerboundPunchPacket;
 import net.minecraft.util.Mth;
-import net.minecraft.world.InteractionHand;
 
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -167,13 +166,12 @@ public final class Derp extends Module {
             return;
         }
         flailTimer = FLAIL_GAP;
-        left = !left;
-        mc.player.connection.send(new ServerboundSwingPacket(
-            left ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND));
+        // The punch packet carries no hand. Only the main arm can flail.
+        mc.player.connection.send(ServerboundPunchPacket.INSTANCE);
     }
 
     private boolean aimingModuleActive() {
-        if (mc.player.swinging && !mode.is(Mode.FLAIL) && !mode.is(Mode.RANDOM)
+        if (mc.player.isSwinging() && !mode.is(Mode.FLAIL) && !mode.is(Mode.RANDOM)
             || mc.options.keyAttack.isDown() || mc.player.isUsingItem()) {
             return true;
         }

@@ -179,8 +179,8 @@ public final class AutoMend extends Module {
         if (!throwing || !(event.getPacket() instanceof ServerboundUseItemPacket packet)) {
             return;
         }
-        event.setPacket(new ServerboundUseItemPacket(packet.getHand(), packet.getSequence(),
-            packet.getYRot(), DOWN_PITCH));
+        event.setPacket(new ServerboundUseItemPacket(packet.hand(), packet.sequence(),
+            packet.yRot(), DOWN_PITCH));
     }
 
     // Keeps one damaged mending item in the offhand until it is whole and

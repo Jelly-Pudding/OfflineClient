@@ -8,7 +8,7 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.item.HoeItem;
+import net.minecraft.tags.ItemTags;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 
@@ -58,7 +58,7 @@ public final class TillAura extends Module {
         if (mc.gameMode.isDestroying() || mc.player.isHandsBusy()) {
             return;
         }
-        if (!(mc.player.getMainHandItem().getItem() instanceof HoeItem)) {
+        if (!mc.player.getMainHandItem().is(ItemTags.HOES)) {
             return;
         }
         if (!multi.isOn() && mc.rightClickDelay > 0) {

@@ -8,9 +8,9 @@ import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -74,7 +74,7 @@ public final class TabGui extends Module {
     // Up and down move the cursor. Right or enter opens a category or toggles a module. Left goes back.
     @Subscribe
     private void onKeyPress(KeyPressEvent event) {
-        if (event.getAction() == GLFW.GLFW_RELEASE || OfflineClient.MC.gui.screen() != null) {
+        if (event.getAction() == InputConstants.RELEASE || OfflineClient.MC.gui.screen() != null) {
             return;
         }
         int count = rows().size();
@@ -82,10 +82,10 @@ public final class TabGui extends Module {
             return;
         }
         switch (event.getKey()) {
-            case GLFW.GLFW_KEY_UP -> row = Math.floorMod(row - 1, count);
-            case GLFW.GLFW_KEY_DOWN -> row = Math.floorMod(row + 1, count);
-            case GLFW.GLFW_KEY_RIGHT, GLFW.GLFW_KEY_ENTER -> choose();
-            case GLFW.GLFW_KEY_LEFT -> back();
+            case InputConstants.KEY_UP -> row = Math.floorMod(row - 1, count);
+            case InputConstants.KEY_DOWN -> row = Math.floorMod(row + 1, count);
+            case InputConstants.KEY_RIGHT, InputConstants.KEY_RETURN -> choose();
+            case InputConstants.KEY_LEFT -> back();
             default -> {
             }
         }

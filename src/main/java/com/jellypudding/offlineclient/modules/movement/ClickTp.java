@@ -5,10 +5,10 @@ import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.MoveGate;
 import net.minecraft.client.Camera;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemUseAnimation;
@@ -23,10 +23,8 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 // movement per packet each tick. A long trip is walked as one hop a tick.
 public final class ClickTp extends Module {
 
-    // Three fillers then the hop itself. The fifth is left for the client's own packet.
+    // Three fillers buy the fourth packet four hundred squared blocks of travel.
     private static final int FILLER_PACKETS = 3;
-
-    // The fourth packet allows four hundred squared blocks which is twenty of travel.
     private static final double MAX_HOP = 19.9;
 
     private final NumberSetting range = new NumberSetting("Range",
@@ -121,10 +119,10 @@ public final class ClickTp extends Module {
             ? destination
             : from.add(destination.subtract(from).scale(MAX_HOP / left));
 
-        for (int i = 0; i < FILLER_PACKETS; i++) {
-            mc.player.connection.send(new ServerboundMovePlayerPacket.StatusOnly(true, true));
+        MoveGate.fillers(FILLER_PACKETS);
+        if (!MoveGate.send(step.x, step.y, step.z, true)) {
+            return;
         }
-        mc.player.connection.send(new ServerboundMovePlayerPacket.Pos(step, true, true));
         mc.player.setPos(step);
         // The rest of the tick still runs the physics. Gravity between hops would
         // otherwise gather into a fall the landing has to pay for.

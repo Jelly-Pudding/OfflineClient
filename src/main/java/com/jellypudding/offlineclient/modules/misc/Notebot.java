@@ -22,6 +22,7 @@ import com.jellypudding.offlineclient.util.ItemUtil;
 import com.jellypudding.offlineclient.util.NoteSong;
 import com.jellypudding.offlineclient.util.NoteSong.Note;
 import com.jellypudding.offlineclient.util.RenderUtil;
+import com.jellypudding.offlineclient.util.SwingMode;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;
@@ -458,7 +459,7 @@ public final class Notebot extends Module {
         }
         tuneWait = tuneDelay.getInt();
         if (swing.isOn()) {
-            mc.player.swing(InteractionHand.MAIN_HAND);
+            SwingMode.swingArm(InteractionHand.MAIN_HAND);
         }
         int clicked = 0;
         Iterator<Map.Entry<BlockPos, Integer>> it = tuning.entrySet().iterator();
@@ -548,7 +549,7 @@ public final class Notebot extends Module {
             struck.add(pos);
         }
         if (swing.isOn() && !struck.isEmpty()) {
-            mc.player.swing(InteractionHand.MAIN_HAND);
+            SwingMode.swingArm(InteractionHand.MAIN_HAND);
         }
     }
 

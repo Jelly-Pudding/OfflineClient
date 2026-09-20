@@ -2,9 +2,11 @@ package com.jellypudding.offlineclient.render;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import it.unimi.dsi.fastutil.longs.LongSet;
+import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
+import com.mojang.renderpearl.api.commands.RenderPass;
 import net.minecraft.client.Camera;
 import net.minecraft.client.renderer.StagedVertexBuffer;
 import net.minecraft.client.renderer.rendertype.RenderType;
@@ -16,6 +18,8 @@ import org.joml.Vector3f;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+import java.util.OptionalDouble;
 
 // Collects lines and boxes from every Render3DEvent handler and draws
 // them in a single upload. All coordinates are world coordinates.
@@ -301,6 +305,7 @@ public final class DrawBatch {
         vc.addVertex(pose, bx, y1, bz).setColor(bottom);
     }
 
+    // Everything collected this frame goes through a single render pass.
     public void draw() {
         if (buffer == null) {
             return;
@@ -309,11 +314,20 @@ public final class DrawBatch {
             if (draws.isEmpty()) {
                 return;
             }
+            for (StagedVertexBuffer.Draw draw : draws) {
+                buffer.requestIndexCount(draw);
+            }
             buffer.upload();
-            for (int i = 0; i < draws.size(); i++) {
-                StagedVertexBuffer.ExecuteInfo info = buffer.getExecuteInfo(draws.get(i));
-                if (info != null) {
-                    types.get(i).prepare().drawFromBuffer(info);
+            RenderTarget target = OfflineClient.MC.gameRenderer.mainRenderTarget();
+            try (RenderPass pass = RenderSystem.getDevice().createCommandEncoder()
+                .createRenderPass(() -> "OfflineClient DrawBatch",
+                    target.getColorTextureView(), Optional.empty(),
+                    target.getDepthTextureView(), OptionalDouble.empty())) {
+                for (int i = 0; i < draws.size(); i++) {
+                    StagedVertexBuffer.ExecuteInfo info = buffer.getExecuteInfo(draws.get(i));
+                    if (info != null) {
+                        types.get(i).prepare().drawFromBuffer(info, pass);
+                    }
                 }
             }
             buffer.endDraw();

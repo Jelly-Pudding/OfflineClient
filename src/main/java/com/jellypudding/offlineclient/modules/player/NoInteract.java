@@ -129,7 +129,7 @@ public final class NoInteract extends Module {
         // Whether a bed or an anchor goes off is an environment attribute of the position.
         if (block instanceof BedBlock) {
             return mc.level.environmentAttributes()
-                .getValue(EnvironmentAttributes.BED_RULE, pos).explodes();
+                .getValue(EnvironmentAttributes.BED_RULE, pos).destroyOnUse();
         }
         return block instanceof RespawnAnchorBlock && anchorDetonates(state, pos);
     }

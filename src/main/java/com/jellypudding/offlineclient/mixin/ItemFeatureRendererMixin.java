@@ -12,7 +12,7 @@ import org.spongepowered.asm.mixin.injection.At;
 public abstract class ItemFeatureRendererMixin {
 
     // Every enchanted item in the world and in hand and in a screen asks here.
-    @ModifyExpressionValue(method = "prepareFoilSubmit",
+    @ModifyExpressionValue(method = "prepareMainSubmit",
         at = @At(value = "INVOKE",
             target = "Lnet/minecraft/client/renderer/feature/ItemFeatureRenderer$Submit;foilType()"
                 + "Lnet/minecraft/client/renderer/item/ItemStackRenderState$FoilType;"))

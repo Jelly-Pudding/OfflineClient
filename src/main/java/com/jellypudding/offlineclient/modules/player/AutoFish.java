@@ -21,6 +21,7 @@ import com.jellypudding.offlineclient.util.ItemUtil;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.RotationManager;
 import com.jellypudding.offlineclient.util.RotationPriority;
+import com.jellypudding.offlineclient.util.SwingMode;
 import com.jellypudding.offlineclient.util.TickRate;
 import net.minecraft.client.multiplayer.MultiPlayerGameMode;
 import net.minecraft.client.player.LocalPlayer;
@@ -332,7 +333,7 @@ public final class AutoFish extends Module {
         if (!gameMode.useItem(mc.player, InteractionHand.MAIN_HAND).consumesAction()) {
             return false;
         }
-        mc.player.swing(InteractionHand.MAIN_HAND);
+        SwingMode.swingArm(InteractionHand.MAIN_HAND);
         return true;
     }
 

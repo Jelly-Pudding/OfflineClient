@@ -14,6 +14,7 @@ import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.MovementUtil;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.protocol.game.ClientboundMoveVehiclePacket;
+import net.minecraft.core.PositionAndRotation;
 import net.minecraft.network.protocol.game.ServerboundMoveVehiclePacket;
 import net.minecraft.network.protocol.game.ServerboundPlayerInputPacket;
 import net.minecraft.world.entity.Entity;
@@ -312,7 +313,7 @@ public final class VehicleFly extends Module {
         if (splitting || !protecting) {
             return;
         }
-        Vec3 pos = packet.position();
+        Vec3 pos = packet.movingTo().position();
         double from = lastSentY;
         lastSentY = pos.y;
         if (packet.onGround()) {
@@ -325,13 +326,15 @@ public final class VehicleFly extends Module {
             try {
                 for (int i = 1; i < steps; i++) {
                     Vec3 between = new Vec3(pos.x, from - drop * i / steps, pos.z);
-                    mc.player.connection.send(new ServerboundMoveVehiclePacket(between,
-                        packet.yRot(), packet.xRot(), true));
+                    mc.player.connection.send(new ServerboundMoveVehiclePacket(
+                        PositionAndRotation.of(between, packet.movingTo().yRot(),
+                            packet.movingTo().xRot()), true));
                 }
             } finally {
                 splitting = false;
             }
         }
-        event.setPacket(new ServerboundMoveVehiclePacket(pos, packet.yRot(), packet.xRot(), true));
+        event.setPacket(new ServerboundMoveVehiclePacket(
+            PositionAndRotation.of(pos, packet.movingTo().yRot(), packet.movingTo().xRot()), true));
     }
 }

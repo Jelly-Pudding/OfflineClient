@@ -12,6 +12,7 @@ import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.ItemUtil;
+import com.jellypudding.offlineclient.util.SwingMode;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -130,7 +131,7 @@ public final class Flamethrower extends Module {
         BlockHitResult hit = new BlockHitResult(
             Vec3.atCenterOf(below).add(0, 0.5, 0), Direction.UP, below, false);
         if (mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND, hit).consumesAction()) {
-            mc.player.swing(InteractionHand.MAIN_HAND);
+            SwingMode.swingArm(InteractionHand.MAIN_HAND);
             burnt++;
         }
         ticks = 0;

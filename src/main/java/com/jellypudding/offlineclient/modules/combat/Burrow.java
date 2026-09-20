@@ -14,21 +14,22 @@ import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
+import com.jellypudding.offlineclient.util.MoveGate;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.core.BlockPos;
+import net.minecraft.util.Mth;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.List;
 
 public final class Burrow extends Module {
 
-    // Rungs of the packet lift. The last one clears the block completely.
-    private static final double[] LIFT = {0.42, 0.75, 1.01, 1.16};
+    // Clears the block completely.
+    private static final double LIFT = 1.16;
 
     private static final int JUMP_TIMEOUT = 20;
 
@@ -73,6 +74,8 @@ public final class Burrow extends Module {
     // True once the burrow has been set off. Manual mode waits for the jump key.
     private boolean armed;
 
+    private boolean pullBack;
+
     public Burrow() {
         super("Burrow", "Places a blast proof block inside your own hitbox.", Category.COMBAT);
         blocks.under(source, Source.LIST);
@@ -91,6 +94,7 @@ public final class Burrow extends Module {
         waited = 0;
         anchor = null;
         armed = false;
+        pullBack = false;
         slots.forget();
         if (!inGame() || mc.player.isSpectator()) {
             setEnabled(false);
@@ -144,7 +148,7 @@ public final class Burrow extends Module {
     // Manual mode goes off the jump key. Vanilla jumps on the same press.
     @Subscribe
     private void onKeyPress(KeyPressEvent event) {
-        if (!inGame() || armed || event.getAction() != GLFW.GLFW_PRESS || mc.gui.screen() != null) {
+        if (!inGame() || armed || event.getAction() != InputConstants.PRESS || mc.gui.screen() != null) {
             return;
         }
         if (InputUtil.isKey(mc.options.keyJump, event.getKey())) {
@@ -156,6 +160,11 @@ public final class Burrow extends Module {
     @Subscribe
     private void onTick(TickEvent event) {
         if (!inGame() || mc.player.isSpectator() || anchor == null) {
+            setEnabled(false);
+            return;
+        }
+        if (pullBack) {
+            sendLift(rubberband.getValue());
             setEnabled(false);
             return;
         }
@@ -174,17 +183,20 @@ public final class Burrow extends Module {
             return;
         }
         burrow();
-        setEnabled(false);
+        // The refused move that puts the player back inside the block needs a
+        // tick of its own.
+        if (!pullBack) {
+            setEnabled(false);
+        }
     }
 
     private void burrow() {
-        if (center.isOn()) {
-            BlockUtil.centerPlayer();
-        }
         if (lift.is(Lift.PACKET)) {
-            for (double step : LIFT) {
-                sendLift(step);
+            if (!sendLift(LIFT)) {
+                return;
             }
+        } else if (center.isOn()) {
+            BlockUtil.centerPlayer();
         }
 
         int slot = findSlot();
@@ -199,16 +211,25 @@ public final class Burrow extends Module {
         slots.restore();
 
         if (lift.is(Lift.PACKET)) {
-            sendLift(rubberband.getValue());
+            pullBack = true;
         } else {
             mc.player.absSnapTo(mc.player.getX(), mc.player.getY() + rubberband.getValue(), mc.player.getZ());
         }
     }
 
-    private void sendLift(double offset) {
-        mc.player.connection.send(new ServerboundMovePlayerPacket.Pos(
-            mc.player.getX(), mc.player.getY() + offset, mc.player.getZ(),
-            false, mc.player.horizontalCollision));
+    // The centre and the lift ride the same packet.
+    private boolean sendLift(double offset) {
+        double x = mc.player.getX();
+        double z = mc.player.getZ();
+        if (center.isOn()) {
+            x = Mth.floor(x) + 0.5;
+            z = Mth.floor(z) + 0.5;
+        }
+        if (!MoveGate.send(x, mc.player.getY() + offset, z, false)) {
+            return false;
+        }
+        mc.player.setPos(x, mc.player.getY(), z);
+        return true;
     }
 
     private static boolean headroom(BlockPos feet) {

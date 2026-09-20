@@ -18,7 +18,6 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.util.Mth;
 
 import java.util.Locale;
-import org.lwjgl.glfw.GLFW;
 
 // Turns the camera whilst a chest or inventory is open. Hold mode leaves the
 // pointer free for clicking. InvWalk covers walking about.
@@ -35,7 +34,7 @@ public final class GUIMove extends Module {
         .describe(Mode.ALWAYS, "Turns the whole time the screen is open.")
         .describe(Mode.ARROWS_ONLY, "The mouse never turns the view. Only the arrow keys do.");
     private final KeybindSetting hold = new KeybindSetting("Hold key",
-        "Keep this key down to look around.", GLFW.GLFW_KEY_LEFT_ALT)
+        "Keep this key down to look around.", InputConstants.KEY_LALT)
         .under(mode, Mode.HOLD_KEY);
     private final BoolSetting arrowKeys = new BoolSetting("Arrow keys",
         "The arrow keys turn the view whilst a screen is open.", true);
@@ -112,16 +111,16 @@ public final class GUIMove extends Module {
         float step = Math.min((float) (turnSpeed.getValue() * mc.getDeltaTracker().getRealtimeDeltaTicks()), MAX_TURN);
         float yaw = 0;
         float pitch = 0;
-        if (arrowDown(GLFW.GLFW_KEY_LEFT)) {
+        if (arrowDown(InputConstants.KEY_LEFT)) {
             yaw -= step;
         }
-        if (arrowDown(GLFW.GLFW_KEY_RIGHT)) {
+        if (arrowDown(InputConstants.KEY_RIGHT)) {
             yaw += step;
         }
-        if (arrowDown(GLFW.GLFW_KEY_UP)) {
+        if (arrowDown(InputConstants.KEY_UP)) {
             pitch -= step;
         }
-        if (arrowDown(GLFW.GLFW_KEY_DOWN)) {
+        if (arrowDown(InputConstants.KEY_DOWN)) {
             pitch += step;
         }
         if (yaw == 0 && pitch == 0) {
@@ -138,7 +137,7 @@ public final class GUIMove extends Module {
     }
 
     private boolean arrowDown(int key) {
-        return InputConstants.isKeyDown(mc.getWindow(), key);
+        return InputConstants.isKeyDown(key);
     }
 
     // The client's own screens need the pointer for clicking.
@@ -155,8 +154,7 @@ public final class GUIMove extends Module {
         savedX = mc.mouseHandler.xpos();
         savedY = mc.mouseHandler.ypos();
         mc.mouseHandler.setIgnoreFirstMove();
-        InputConstants.grabOrReleaseMouse(mc.getWindow(),
-            InputConstants.CURSOR_DISABLED, savedX, savedY);
+        InputConstants.grabMouse(mc.getWindow(), savedX, savedY);
     }
 
     private void stopTurning() {
@@ -169,7 +167,6 @@ public final class GUIMove extends Module {
             return;
         }
         mc.mouseHandler.setIgnoreFirstMove();
-        InputConstants.grabOrReleaseMouse(mc.getWindow(),
-            InputConstants.CURSOR_NORMAL, savedX, savedY);
+        InputConstants.releaseMouse(mc.getWindow(), savedX, savedY);
     }
 }

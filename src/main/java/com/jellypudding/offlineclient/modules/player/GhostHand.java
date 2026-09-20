@@ -6,6 +6,7 @@ import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
+import com.jellypudding.offlineclient.util.SwingMode;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.Direction;
@@ -98,7 +99,7 @@ public final class GhostHand extends Module {
             mc.rightClickDelay = USE_DELAY;
             InteractionResult result = mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND, hit);
             if (result.consumesAction()) {
-                mc.player.swing(InteractionHand.MAIN_HAND);
+                SwingMode.swingArm(InteractionHand.MAIN_HAND);
             }
             event.cancel();
             return;

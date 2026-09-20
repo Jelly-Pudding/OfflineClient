@@ -6,6 +6,7 @@ import com.jellypudding.offlineclient.modules.player.InventoryTweaks;
 import com.jellypudding.offlineclient.modules.render.BetterTooltips;
 import com.jellypudding.offlineclient.modules.render.ItemHighlight;
 import com.jellypudding.offlineclient.util.Modules;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
@@ -16,7 +17,6 @@ import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.network.chat.Component;
-import org.lwjgl.glfw.GLFW;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
@@ -102,7 +102,7 @@ public abstract class AbstractContainerScreenMixin extends Screen {
                                 CallbackInfoReturnable<Boolean> cir) {
         InventoryTweaks tweaks = Modules.get(InventoryTweaks.class);
         if (tweaks == null || !tweaks.dragsStacks()
-            || event.button() != GLFW.GLFW_MOUSE_BUTTON_LEFT || !event.hasShiftDown()) {
+            || event.button() != InputConstants.MOUSE_BUTTON_LEFT || !event.hasShiftDown()) {
             return;
         }
         if (hoveredSlot == null || !hoveredSlot.hasItem() || !getMenu().getCarried().isEmpty()) {

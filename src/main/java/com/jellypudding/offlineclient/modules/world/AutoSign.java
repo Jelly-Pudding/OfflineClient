@@ -69,7 +69,7 @@ public final class AutoSign extends Module {
             return;
         }
         boolean first = learned == null;
-        learned = packet.getLines().clone();
+        learned = packet.lines().toArray(new String[0]);
         if (first && source.is(Source.FIRST_SIGN)) {
             ChatUtil.message("§bAutoSign §7copied that sign.");
         }

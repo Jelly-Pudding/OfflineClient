@@ -9,7 +9,7 @@ import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.entity.ItemEntityRenderer;
 import net.minecraft.client.renderer.entity.state.ItemEntityRenderState;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
-import org.joml.Quaternionfc;
+import com.mojang.math.Axis;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -37,13 +37,13 @@ public abstract class ItemEntityRendererMixin {
     // The spin the drop turns with.
     @WrapOperation(method = SUBMIT,
         at = @At(value = "INVOKE",
-            target = "Lcom/mojang/blaze3d/vertex/PoseStack;mulPose(Lorg/joml/Quaternionfc;)V"))
-    private void onSpin(PoseStack target, Quaternionfc rotation, Operation<Void> original,
+            target = "Lcom/mojang/blaze3d/vertex/PoseStack;rotate(Lcom/mojang/math/Axis;F)V"))
+    private void onSpin(PoseStack target, Axis axis, float angle, Operation<Void> original,
                         ItemEntityRenderState state, PoseStack poseStack,
                         SubmitNodeCollector collector, CameraRenderState camera) {
         ItemPhysics physics = Modules.active(ItemPhysics.class);
         if (physics == null) {
-            original.call(target, rotation);
+            original.call(target, axis, angle);
             return;
         }
         physics.lay(target, state);

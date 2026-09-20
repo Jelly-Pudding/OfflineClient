@@ -10,6 +10,7 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.Modules;
+import com.jellypudding.offlineclient.util.SwingMode;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.LivingEntity;
@@ -145,7 +146,7 @@ public final class AutoClicker extends Module {
         if (target != null && !EntityUtil.isFriend(target)) {
             mc.gameMode.attack(mc.player, target);
         }
-        mc.player.swing(InteractionHand.MAIN_HAND);
+        SwingMode.swingArm(InteractionHand.MAIN_HAND);
     }
 
     private void letGo() {

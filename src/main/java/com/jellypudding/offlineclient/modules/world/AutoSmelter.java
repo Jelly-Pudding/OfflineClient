@@ -9,6 +9,7 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.inventory.AbstractFurnaceMenu;
@@ -109,7 +110,7 @@ public final class AutoSmelter extends Module {
             return;
         }
         int slot = findPlayerSlot(furnace, stack -> fuels.contains(stack.getItem())
-            && mc.level.fuelValues().isFuel(stack));
+            && stack.has(DataComponents.COOKING_FUEL));
         if (slot == -1) {
             giveUp("Out of fuel.");
             return;

@@ -220,7 +220,7 @@ import com.jellypudding.offlineclient.modules.world.Tunneller;
 import com.jellypudding.offlineclient.modules.world.VeinMiner;
 import com.jellypudding.offlineclient.util.ChatUtil;
 
-import org.lwjgl.glfw.GLFW;
+import com.mojang.blaze3d.platform.InputConstants;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -577,7 +577,7 @@ public final class ModuleManager {
 
     @Subscribe
     private void onKeyPress(KeyPressEvent event) {
-        if (event.getAction() != GLFW.GLFW_PRESS) {
+        if (event.getAction() != InputConstants.PRESS) {
             return;
         }
         if (OfflineClient.MC.gui.screen() != null) {

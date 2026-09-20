@@ -33,6 +33,17 @@ public final class TimeChanger extends Module {
         return time.getValueString();
     }
 
+    // Noted by ClientClockManagerMixin.
+    private static volatile Object overworldClock;
+
+    public static void noteOverworldClock(Object instance) {
+        overworldClock = instance;
+    }
+
+    public static boolean isOverworldClock(Object instance) {
+        return instance != null && instance == overworldClock;
+    }
+
     // The phase is the day count. A whole day is added per step.
     public long clockTime() {
         long day = time.getInt() % DAY_LENGTH;

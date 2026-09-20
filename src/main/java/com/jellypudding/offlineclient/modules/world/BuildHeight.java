@@ -48,7 +48,7 @@ public final class BuildHeight extends Module {
         if (!mc.isSameThread() || !inGame()) {
             return;
         }
-        BlockHitResult hit = packet.getHitResult();
+        BlockHitResult hit = packet.hitResult();
         BlockPos pos = hit.getBlockPos();
         Direction swapped = swapFor(hit.getDirection(), pos);
         if (swapped == null) {
@@ -58,8 +58,8 @@ public final class BuildHeight extends Module {
         if (!mc.level.getBlockState(pos).canBeReplaced()) {
             return;
         }
-        event.setPacket(new ServerboundUseItemOnPacket(packet.getHand(),
-            hit.withDirection(swapped), packet.getSequence()));
+        event.setPacket(new ServerboundUseItemOnPacket(packet.hand(),
+            hit.withDirection(swapped), packet.sequence()));
         swaps.incrementAndGet();
     }
 

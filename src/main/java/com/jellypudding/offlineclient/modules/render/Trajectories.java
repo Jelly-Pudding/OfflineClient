@@ -410,7 +410,8 @@ public final class Trajectories extends Module {
             boolean stopped = false;
             for (EntityHitResult entityHit : ProjectileUtil.getManyEntityHitResult(mc.level, shooter, previous, end,
                 new AABB(previous, end).inflate(1),
-                entity -> entity != shooter && !entity.isSpectator() && entity.isAlive() && entity.isPickable(), false)) {
+                entity -> entity != shooter && !entity.isSpectator() && entity.isAlive()
+                    && entity.isPickable(), false, false)) {
                 if (hits.contains(entityHit.getEntity())) {
                     continue;
                 }

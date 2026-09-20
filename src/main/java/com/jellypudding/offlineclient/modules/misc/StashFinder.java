@@ -18,6 +18,7 @@ import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.gui.components.toasts.SystemToast;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.multiplayer.ServerData;
@@ -34,7 +35,6 @@ import net.minecraft.world.level.block.entity.BlockEntityTypes;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.phys.Vec3;
-import org.lwjgl.glfw.GLFW;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -155,7 +155,7 @@ public final class StashFinder extends Module {
 
     @Subscribe
     private void onKeyPress(KeyPressEvent event) {
-        if (event.getAction() != GLFW.GLFW_PRESS || mc.gui.screen() != null
+        if (event.getAction() != InputConstants.PRESS || mc.gui.screen() != null
             || !clearKey.isBound() || event.getKey() != clearKey.getValue()) {
             return;
         }

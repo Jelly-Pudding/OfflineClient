@@ -14,7 +14,6 @@ import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.CameraType;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
-import org.lwjgl.glfw.GLFW;
 
 // CameraMixin swaps the look angles around the camera alignment.
 // MouseHandlerMixin sends the mouse here.
@@ -57,7 +56,7 @@ public final class FreeLook extends Module {
     private boolean primed;
 
     public FreeLook() {
-        super("FreeLook", "Look around without turning your body.", Category.RENDER, GLFW.GLFW_KEY_LEFT_ALT);
+        super("FreeLook", "Look around without turning your body.", Category.RENDER, InputConstants.KEY_LALT);
         addSettings(hold, mode, perspective, sensitivity, arrows, arrowSpeed);
         searchTags("free look", "perspective", "look behind");
     }
@@ -96,7 +95,7 @@ public final class FreeLook extends Module {
 
     @Subscribe
     private void onKeyPress(KeyPressEvent event) {
-        if (hold.isOn() && event.getAction() == GLFW.GLFW_RELEASE
+        if (hold.isOn() && event.getAction() == InputConstants.RELEASE
             && getKeybind().isBound() && event.getKey() == getKeybind().getValue()) {
             setEnabled(false);
         }
@@ -118,8 +117,8 @@ public final class FreeLook extends Module {
         float step = 0;
         float pitchStep = 0;
         for (int i = 0; i < arrowSpeed.getValue() / ARROW_STEP; i++) {
-            step += (held(GLFW.GLFW_KEY_RIGHT) ? ARROW_STEP : 0) - (held(GLFW.GLFW_KEY_LEFT) ? ARROW_STEP : 0);
-            pitchStep += (held(GLFW.GLFW_KEY_DOWN) ? ARROW_STEP : 0) - (held(GLFW.GLFW_KEY_UP) ? ARROW_STEP : 0);
+            step += (held(InputConstants.KEY_RIGHT) ? ARROW_STEP : 0) - (held(InputConstants.KEY_LEFT) ? ARROW_STEP : 0);
+            pitchStep += (held(InputConstants.KEY_DOWN) ? ARROW_STEP : 0) - (held(InputConstants.KEY_UP) ? ARROW_STEP : 0);
         }
         if (step == 0 && pitchStep == 0) {
             return;
@@ -134,7 +133,7 @@ public final class FreeLook extends Module {
     }
 
     private static boolean held(int key) {
-        return InputConstants.isKeyDown(mc.getWindow(), key);
+        return InputConstants.isKeyDown(key);
     }
 
     public boolean isActive() {

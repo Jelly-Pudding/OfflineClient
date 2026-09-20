@@ -10,12 +10,13 @@ import com.jellypudding.offlineclient.modules.misc.FakePlayer;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.MoveGate;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
-import org.lwjgl.glfw.GLFW;
 
 import java.lang.ref.WeakReference;
 import java.util.Queue;
@@ -71,6 +72,8 @@ public final class Blink extends Module {
 
     @Override
     protected void onEnable() {
+        // Drops a walk home that is still under way.
+        unwatch(drain);
         begin();
     }
 
@@ -106,7 +109,7 @@ public final class Blink extends Module {
 
     @Subscribe
     private void onKeyPress(KeyPressEvent event) {
-        if (event.getAction() != GLFW.GLFW_PRESS || mc.gui.screen() != null
+        if (event.getAction() != InputConstants.PRESS || mc.gui.screen() != null
             || !cancelKey.isBound() || event.getKey() != cancelKey.getValue()) {
             return;
         }
@@ -163,27 +166,51 @@ public final class Blink extends Module {
         setEnabled(false);
     }
 
-    // Sends everything held on to the server. Positions of a dead player are dropped.
+    // The walk home goes out a tick at a time and carries on after the module
+    // is switched off.
     private void release() {
         LocalPlayer player = mc.player;
         LocalPlayer captured = owner.get();
         owner = new WeakReference<>(null);
-        boolean replay = player != null && player == captured;
-        releasing = true;
-        try {
-            Packet<?> packet;
-            while ((packet = held.poll()) != null) {
-                if (replay) {
-                    player.connection.send(packet);
-                }
-            }
-        } finally {
-            releasing = false;
+        if (player == null || player != captured) {
+            held.clear();
         }
         lastHeld = null;
         removeCopy();
         timer = 0;
+        if (!held.isEmpty()) {
+            watch(drain);
+        }
     }
+
+    private final Object drain = new Object() {
+        @Subscribe
+        private void onTick(TickEvent event) {
+            LocalPlayer player = mc.player;
+            if (player == null) {
+                held.clear();
+            }
+            releasing = true;
+            try {
+                Packet<?> next;
+                while ((next = held.peek()) != null) {
+                    boolean carriesPosition = next instanceof ServerboundMovePlayerPacket move
+                        && move.hasPosition();
+                    if (carriesPosition && !MoveGate.free()) {
+                        return;
+                    }
+                    held.poll();
+                    player.connection.send(next);
+                    if (carriesPosition) {
+                        return;
+                    }
+                }
+            } finally {
+                releasing = false;
+            }
+            unwatch(this);
+        }
+    };
 
     private void removeCopy() {
         if (copy != null && mc.level != null && copy.level() == mc.level) {

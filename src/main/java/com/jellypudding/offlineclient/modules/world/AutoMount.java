@@ -10,6 +10,7 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.SwingMode;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
@@ -74,7 +75,7 @@ public final class AutoMount extends Module {
         }
         EntityHitResult hit = new EntityHitResult(ride, ride.getBoundingBox().getCenter());
         if (mc.gameMode.interact(mc.player, ride, hit, InteractionHand.MAIN_HAND).consumesAction()) {
-            mc.player.swing(InteractionHand.MAIN_HAND);
+            SwingMode.swingArm(InteractionHand.MAIN_HAND);
         }
     }
 

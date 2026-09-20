@@ -11,7 +11,6 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.ProjectileUtil;
-import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.Projectile;
@@ -192,9 +191,8 @@ public final class ArrowDodge extends Module {
             mc.player.setDeltaMovement(offset.x, motion.y, offset.z);
             return;
         }
+        // The tick's own movement packet carries the step.
         Vec3 landing = mc.player.position().add(offset);
-        mc.player.connection.send(new ServerboundMovePlayerPacket.Pos(landing,
-            mc.player.onGround(), mc.player.horizontalCollision));
         mc.player.setPos(landing);
         mc.player.setDeltaMovement(0, motion.y, 0);
     }

@@ -14,7 +14,7 @@ import org.spongepowered.asm.mixin.injection.At;
 public abstract class EntityFluidInteractionMixin {
 
     // Every current a fluid pulls with is summed from this flow. AntiPush keeps a share of it.
-    @ModifyExpressionValue(method = "update(Lnet/minecraft/world/entity/Entity;Z)V",
+    @ModifyExpressionValue(method = "update(Lnet/minecraft/world/entity/Entity;Z)Z",
         at = @At(value = "INVOKE",
             target = "Lnet/minecraft/world/level/material/FluidState;getFlow(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/phys/Vec3;"))
     private Vec3 onFluidFlow(Vec3 flow, Entity entity, boolean ignoreCurrent) {

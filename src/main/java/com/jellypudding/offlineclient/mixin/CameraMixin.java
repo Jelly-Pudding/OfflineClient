@@ -73,9 +73,10 @@ public abstract class CameraMixin {
     }
 
     // Vanilla skips chunk sections that are boxed in by solid ground.
-    @Inject(method = "extractRenderState(Lnet/minecraft/client/renderer/state/level/CameraRenderState;F)V",
+    @Inject(method = "extractRenderState(Lnet/minecraft/client/renderer/state/level/CameraRenderState;Lnet/minecraft/client/DeltaTracker;)V",
         at = @At("RETURN"))
-    private void onExtractRenderState(CameraRenderState state, float partialTicks, CallbackInfo ci) {
+    private void onExtractRenderState(CameraRenderState state, DeltaTracker deltaTracker,
+                                      CallbackInfo ci) {
         XRay xray = XRay.get();
         WallHack wallHack = Modules.get(WallHack.class);
         NoRender noRender = Modules.get(NoRender.class);

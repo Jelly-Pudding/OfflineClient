@@ -12,13 +12,13 @@ import com.jellypudding.offlineclient.setting.Setting;
 import com.jellypudding.offlineclient.setting.TextSetting;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.RenderUtil;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
-import org.lwjgl.glfw.GLFW;
 
 // Shared by both ClickGUI styles. Owns the search box and the typing and
 // binding state.
@@ -283,9 +283,9 @@ public abstract class GuiScreenBase extends Screen implements SettingWidget.Host
         int key = event.key();
         eatNextChar = false;
         if (editingSetting != null) {
-            if (key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_KP_ENTER) {
+            if (key == InputConstants.KEY_RETURN || key == InputConstants.KEY_NUMPADENTER) {
                 commitEditing();
-            } else if (key == GLFW.GLFW_KEY_ESCAPE) {
+            } else if (key == InputConstants.KEY_ESCAPE) {
                 cancelEditing();
             } else {
                 editField.keyPressed(event, editingSetting instanceof NumberSetting
@@ -295,23 +295,22 @@ public abstract class GuiScreenBase extends Screen implements SettingWidget.Host
         }
 
         if (bindingTarget != null) {
-            if (key == GLFW.GLFW_KEY_DELETE || key == GLFW.GLFW_KEY_BACKSPACE) {
+            if (key == InputConstants.KEY_DELETE || key == InputConstants.KEY_BACKSPACE) {
                 bindingTarget.setValue(KeybindSetting.UNBOUND);
-            } else if (key != GLFW.GLFW_KEY_ESCAPE) {
+            } else if (key != InputConstants.KEY_ESCAPE) {
                 bindingTarget.setValue(key);
             }
             bindingTarget = null;
             OfflineClient.INSTANCE.getConfigManager().saveSoon();
             // Only a key that types a character has one to swallow.
-            eatNextChar = key >= GLFW.GLFW_KEY_SPACE && key <= GLFW.GLFW_KEY_WORLD_2
-                || key >= GLFW.GLFW_KEY_KP_0 && key <= GLFW.GLFW_KEY_KP_EQUAL;
+            eatNextChar = KeybindSetting.typesCharacter(key);
             return true;
         }
 
         if (searchFocused) {
-            if (key == GLFW.GLFW_KEY_ESCAPE || key == GLFW.GLFW_KEY_ENTER
-                || key == GLFW.GLFW_KEY_KP_ENTER) {
-                if (key == GLFW.GLFW_KEY_ESCAPE && !searchBox.isEmpty()) {
+            if (key == InputConstants.KEY_ESCAPE || key == InputConstants.KEY_RETURN
+                || key == InputConstants.KEY_NUMPADENTER) {
+                if (key == InputConstants.KEY_ESCAPE && !searchBox.isEmpty()) {
                     searchBox.clear();
                     onSearchChanged();
                 }

@@ -29,7 +29,7 @@ public final class DropCommand extends Command {
             ChatUtil.error("Your hand is empty.");
             return;
         }
-        player.drop(whole);
+        OfflineClient.MC.gameMode.dropItem(player, whole);
         ChatUtil.message(whole ? "§7Dropped the stack." : "§7Dropped one.");
     }
 

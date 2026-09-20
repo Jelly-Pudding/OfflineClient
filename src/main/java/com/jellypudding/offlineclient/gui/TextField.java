@@ -1,10 +1,10 @@
 package com.jellypudding.offlineclient.gui;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.input.KeyEvent;
-import org.lwjgl.glfw.GLFW;
 
 // One line of editable text with a caret and a selection. Every place the
 // client routes typed input through this for the same editing and clipboard keys.
@@ -101,7 +101,7 @@ public final class TextField {
         boolean shift = event.hasShiftDown();
         boolean word = event.hasControlDown();
         switch (event.key()) {
-            case GLFW.GLFW_KEY_LEFT -> {
+            case InputConstants.KEY_LEFT -> {
                 // An unshifted arrow collapses a selection. The caret
                 // lands on the near end.
                 if (!shift && hasSelection()) {
@@ -110,15 +110,15 @@ public final class TextField {
                     moveTo(word ? wordLeft() : caret - 1, shift);
                 }
             }
-            case GLFW.GLFW_KEY_RIGHT -> {
+            case InputConstants.KEY_RIGHT -> {
                 if (!shift && hasSelection()) {
                     moveTo(selEnd(), false);
                 } else {
                     moveTo(word ? wordRight() : caret + 1, shift);
                 }
             }
-            case GLFW.GLFW_KEY_HOME -> moveTo(0, shift);
-            case GLFW.GLFW_KEY_END -> moveTo(buffer.length(), shift);
+            case InputConstants.KEY_HOME -> moveTo(0, shift);
+            case InputConstants.KEY_END -> moveTo(buffer.length(), shift);
             default -> {
                 return false;
             }
@@ -129,14 +129,14 @@ public final class TextField {
     private boolean erase(KeyEvent event) {
         boolean word = event.hasControlDown();
         switch (event.key()) {
-            case GLFW.GLFW_KEY_BACKSPACE -> {
+            case InputConstants.KEY_BACKSPACE -> {
                 if (!deleteSelection() && caret > 0) {
                     int from = word ? wordLeft() : caret - 1;
                     buffer.delete(from, caret);
                     moveTo(from, false);
                 }
             }
-            case GLFW.GLFW_KEY_DELETE -> {
+            case InputConstants.KEY_DELETE -> {
                 if (!deleteSelection() && caret < buffer.length()) {
                     buffer.delete(caret, word ? wordRight() : caret + 1);
                     anchor = caret;

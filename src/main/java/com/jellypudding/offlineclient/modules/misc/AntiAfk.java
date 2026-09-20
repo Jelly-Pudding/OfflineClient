@@ -16,6 +16,7 @@ import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.RotationManager;
 import com.jellypudding.offlineclient.util.RotationPriority;
+import com.jellypudding.offlineclient.util.SwingMode;
 import com.jellypudding.offlineclient.util.TextLines;
 import net.minecraft.core.BlockPos;
 import net.minecraft.util.Mth;
@@ -165,7 +166,7 @@ public final class AntiAfk extends Module {
             mc.player.jumpFromGround();
         }
         if (swing.isOn() && chance()) {
-            mc.player.swing(InteractionHand.MAIN_HAND);
+            SwingMode.swingArm(InteractionHand.MAIN_HAND);
         }
         tickWander();
         tickSneak();

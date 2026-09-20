@@ -6,6 +6,7 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.ItemUtil;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.protocol.game.ServerboundContainerClosePacket;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -13,7 +14,6 @@ import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.Enchantments;
-import org.lwjgl.glfw.GLFW;
 
 // Swaps the chest slot between an elytra and a chestplate on one key.
 // AutoArmor never takes an elytra off.
@@ -43,7 +43,7 @@ public final class ChestSwap extends Module {
 
     public ChestSwap() {
         super("ChestSwap", "Swaps an elytra and a chestplate on one key.",
-            Category.PLAYER, GLFW.GLFW_KEY_G);
+            Category.PLAYER, InputConstants.KEY_G);
         addSettings(chestplate, countProtection, closeInventory, stayOn);
         searchTags("elytra swap", "chestplate", "wings");
     }

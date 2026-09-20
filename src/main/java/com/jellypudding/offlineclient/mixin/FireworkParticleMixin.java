@@ -9,7 +9,8 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-// The burst is made of sparks and a flash overlay. Both are private classes and both are skipped.
+// The burst is made of sparks and a flash overlay. Neither is reachable by
+// name from here which is why both are named as strings.
 @Mixin(targets = {
     "net.minecraft.client.particle.FireworkParticles$SparkParticle",
     "net.minecraft.client.particle.FireworkParticles$OverlayParticle"

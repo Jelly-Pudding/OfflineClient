@@ -13,8 +13,7 @@ public abstract class SubmitNodeCollectionMixin {
     // The outline colour is the fourth int argument after light and overlay and tint.
     @ModifyVariable(method = "submitModel(Lnet/minecraft/client/model/Model;Ljava/lang/Object;"
         + "Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/rendertype/RenderType;III"
-        + "Lnet/minecraft/client/renderer/texture/TextureAtlasSprite;I"
-        + "Lnet/minecraft/client/renderer/feature/ModelFeatureRenderer$CrumblingOverlay;)V",
+        + "Lnet/minecraft/client/renderer/texture/UvMapping;I)V",
         at = @At("HEAD"), argsOnly = true, ordinal = 3)
     private int onOutlineColor(int outline) {
         int glow = ChestEsp.currentGlow();

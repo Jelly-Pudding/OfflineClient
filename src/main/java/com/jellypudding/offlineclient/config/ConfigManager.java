@@ -5,6 +5,7 @@ import com.jellypudding.offlineclient.command.CommandManager;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.module.ModuleManager;
 import com.jellypudding.offlineclient.modules.misc.HudModule;
+import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.setting.Setting;
 
 import com.google.gson.Gson;
@@ -30,7 +31,7 @@ public final class ConfigManager {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     // Raised when old saved values need a one time migration.
-    private static final int CONFIG_VERSION = 2;
+    private static final int CONFIG_VERSION = 3;
 
     private final Path file;
     private final Path profilesFolder;
@@ -79,9 +80,18 @@ public final class ConfigManager {
 
     public void load() {
         if (Files.exists(file)) {
-            applyRoot(read(file));
+            JsonObject root = read(file);
+            applyRoot(root);
+            // Macros live in their own file and a profile must never touch them.
+            if (root != null && versionOf(root) < 3) {
+                MacroStore.get().migrateLegacyKeys();
+            }
         }
         loaded = true;
+    }
+
+    private static int versionOf(JsonObject root) {
+        return root.has("version") ? root.get("version").getAsInt() : 1;
     }
 
     private JsonObject buildRoot() {
@@ -131,11 +141,12 @@ public final class ConfigManager {
                     OfflineClient.INSTANCE.getFriendManager().add(friend.getAsString());
                 }
             }
+            int version = versionOf(root);
             if (root.has("modules")) {
                 JsonObject modules = root.getAsJsonObject("modules");
                 for (Module module : OfflineClient.INSTANCE.getModuleManager().getAll()) {
                     if (modules.has(module.getName())) {
-                        applyModule(module, modules.get(module.getName()));
+                        applyModule(module, modules.get(module.getName()), version < 3);
                     }
                 }
             }
@@ -144,13 +155,14 @@ public final class ConfigManager {
             }
             greeted = root.has("greeted") && root.get("greeted").getAsBoolean();
 
-            int version = root.has("version") ? root.get("version").getAsInt() : 1;
             if (version < 2) {
                 // Version 1 forced every HUD element on.
                 for (Setting<?> setting : OfflineClient.INSTANCE.getModuleManager()
                     .get(HudModule.class).getSettings()) {
                     setting.reset();
                 }
+            }
+            if (version < CONFIG_VERSION) {
                 saveSoon();
             }
         } catch (Exception e) {
@@ -158,12 +170,16 @@ public final class ConfigManager {
         }
     }
 
-    // One bad entry only loses its own module.
-    private static void applyModule(Module module, JsonElement saved) {
+    // One bad entry only loses its own module. Binds written before 26.3 hold
+    // window library codes and only the ones actually read are moved across.
+    private static void applyModule(Module module, JsonElement saved, boolean legacyKeys) {
         try {
             JsonObject m = saved.getAsJsonObject();
             if (m.has("bind")) {
                 module.getKeybind().fromJson(m.get("bind"));
+                if (legacyKeys) {
+                    module.getKeybind().migrateLegacyKey();
+                }
             }
             if (m.has("settings")) {
                 JsonObject settings = m.getAsJsonObject("settings");
@@ -171,6 +187,9 @@ public final class ConfigManager {
                 for (Setting<?> setting : module.getSettings()) {
                     if (settings.has(setting.getName())) {
                         setting.fromJson(settings.get(setting.getName()));
+                        if (legacyKeys && setting instanceof KeybindSetting bind) {
+                            bind.migrateLegacyKey();
+                        }
                     }
                     if (folds.has(setting.getName())) {
                         setting.setFolded(folds.get(setting.getName()).getAsBoolean());

@@ -19,6 +19,7 @@ import com.jellypudding.offlineclient.setting.Setting;
 import com.jellypudding.offlineclient.setting.TextSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.mojang.blaze3d.platform.InputConstants;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -27,7 +28,6 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -50,11 +50,11 @@ public final class Marker extends Module {
         .describe(Shape.CUBOID, "A box between two corners.")
         .describe(Shape.SPHERE, "One flat slice of a ball of blocks.");
     private final KeybindSetting addKey = new KeybindSetting("Add",
-        "Press to add a marker where you are looking.", GLFW.GLFW_KEY_BACKSLASH);
+        "Press to add a marker where you are looking.", InputConstants.KEY_BACKSLASH);
     private final KeybindSetting nextLayerKey = new KeybindSetting("Next layer",
-        "Press to raise the drawn slice of every sphere marker.", GLFW.GLFW_KEY_RIGHT_BRACKET);
+        "Press to raise the drawn slice of every sphere marker.", InputConstants.KEY_RBRACKET);
     private final KeybindSetting prevLayerKey = new KeybindSetting("Previous layer",
-        "Press to lower the drawn slice of every sphere marker.", GLFW.GLFW_KEY_LEFT_BRACKET);
+        "Press to lower the drawn slice of every sphere marker.", InputConstants.KEY_LBRACKET);
     private final BoolSetting throughWalls = new BoolSetting("Through walls",
         "Show the markers behind blocks.", true);
 
@@ -125,7 +125,7 @@ public final class Marker extends Module {
 
     @Subscribe
     private void onKeyPress(KeyPressEvent event) {
-        if (event.getAction() != GLFW.GLFW_PRESS || mc.gui.screen() != null || !inGame()) {
+        if (event.getAction() != InputConstants.PRESS || mc.gui.screen() != null || !inGame()) {
             return;
         }
         int key = event.getKey();

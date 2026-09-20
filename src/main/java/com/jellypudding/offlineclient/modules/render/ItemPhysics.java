@@ -39,10 +39,10 @@ public final class ItemPhysics extends Module {
     // The turn is applied first. The item still lies flat once it is laid down.
     public void lay(PoseStack poseStack, ItemEntityRenderState state) {
         if (randomRotation.isOn()) {
-            poseStack.mulPose(Axis.YP.rotationDegrees(Math.floorMod(state.seed, SPREAD)));
+            poseStack.rotate(Axis.YP.rotationDegrees(Math.floorMod(state.seed, SPREAD)));
         }
         if (isFlat(state.item.getModelBoundingBox())) {
-            poseStack.mulPose(Axis.XP.rotationDegrees(-90));
+            poseStack.rotate(Axis.XP.rotationDegrees(-90));
         }
     }
 

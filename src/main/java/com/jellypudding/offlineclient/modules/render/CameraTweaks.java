@@ -8,8 +8,8 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.CameraType;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.Locale;
 
@@ -29,7 +29,7 @@ public final class CameraTweaks extends Module {
         "The mouse wheel moves the camera in and out whilst in third person.", true)
         .under(customDistance);
     private final KeybindSetting scrollKey = new KeybindSetting("Scroll key",
-        "A key that must be held for the wheel to move the camera. Unbound means always.", GLFW.GLFW_KEY_LEFT_ALT)
+        "A key that must be held for the wheel to move the camera. Unbound means always.", InputConstants.KEY_LALT)
         .under(scrolling);
     private final NumberSetting sensitivity = new NumberSetting("Sensitivity",
         "How much of the distance one wheel notch adds or takes away.", 1, 0.1, 3, 0.1, "x").min(0.01)
