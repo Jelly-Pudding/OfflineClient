@@ -13,6 +13,9 @@ public final class ModuleRow {
 
     // The chevron hit area on the right of a row.
     private static final int ARROW_ZONE = 14;
+    // The star sits beside it and shows whilst starred or hovered.
+    private static final int STAR_ZONE = 12;
+    private static final int STAR_COLOR = 0xFFF2C744;
 
     private final Module module;
     private final SettingWidget.Host host;
@@ -88,14 +91,24 @@ public final class ModuleRow {
         }
         int textColor = on ? GuiTheme.text() : GuiTheme.textDim();
         // A fixed inset keeps the name still when the accent bar appears.
-        int nameRoom = w - 7 - ARROW_ZONE;
+        int nameRoom = w - 7 - ARROW_ZONE - STAR_ZONE;
         context.text(font, SettingWidget.trimEnd(font, module.getName(), nameRoom), x + 7,
             GuiTheme.textY(y, h), textColor, false);
         RenderUtil.chevron(context, x + w - 11, y + (h - 3) / 2, !expanded,
             hovered ? GuiTheme.text() : GuiTheme.textFaint());
 
+        boolean starred = Favourites.has(module);
+        boolean overStar = hovered && mouseX >= starX() && mouseX < starX() + STAR_ZONE;
+        if (starred || hovered) {
+            RenderUtil.star(context, starX() + 1, y + (h - RenderUtil.STAR_SIZE) / 2,
+                starred ? STAR_COLOR : (overStar ? GuiTheme.text() : GuiTheme.textFaint()),
+                starred);
+        }
+
         if (hovered) {
-            host.setTooltip(module.getDescription());
+            host.setTooltip(overStar
+                ? (starred ? "Take out of your favourites" : "Add to your favourites")
+                : module.getDescription());
         }
 
         if (expanded) {
@@ -103,6 +116,10 @@ public final class ModuleRow {
             SettingWidget.renderBlock(context, font, module, x, y + GuiTheme.ROW_HEIGHT, w,
                 mouseX, mouseY, hoverActive, host);
         }
+    }
+
+    private int starX() {
+        return x + width - ARROW_ZONE - STAR_ZONE;
     }
 
     private void fadeHover(boolean hovered) {
@@ -121,6 +138,10 @@ public final class ModuleRow {
 
         if (SettingWidget.isOver(mx, my, x, y, w, GuiTheme.ROW_HEIGHT)) {
             if (!InputUtil.isLeft(button) && !InputUtil.isRight(button)) {
+                return true;
+            }
+            if (InputUtil.isLeft(button) && mx >= starX() && mx < starX() + STAR_ZONE) {
+                Favourites.toggle(module);
                 return true;
             }
             if (InputUtil.isRight(button) || mx >= x + w - ARROW_ZONE || !module.isTogglable()) {

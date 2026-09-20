@@ -51,7 +51,6 @@ public final class WindowGuiScreen extends GuiScreenBase {
 
     private final List<String> tabs = new ArrayList<>();
     private final int[] tabCounts;
-    private final Set<String> favourites = new LinkedHashSet<>();
     private final Set<String> expanded = new LinkedHashSet<>();
     private final SettingWidget.Drag drag = new SettingWidget.Drag();
     private final ScrollBar scrollBar = new ScrollBar();
@@ -97,7 +96,6 @@ public final class WindowGuiScreen extends GuiScreenBase {
         if (state.has("scroll")) {
             scrollBar.setOffset(state.get("scroll").getAsInt());
         }
-        readNames(state, "favourites", favourites);
         readNames(state, "expanded", expanded);
     }
 
@@ -122,7 +120,6 @@ public final class WindowGuiScreen extends GuiScreenBase {
         JsonObject state = new JsonObject();
         state.addProperty("tab", tab);
         state.addProperty("scroll", scrollBar.getOffset());
-        state.add("favourites", names(favourites));
         state.add("expanded", names(expanded));
         OfflineClient.INSTANCE.getConfigManager().getGuiState().add(STATE_KEY, state);
         saveSearch();
@@ -223,7 +220,7 @@ public final class WindowGuiScreen extends GuiScreenBase {
             boolean wantFavourite = pass == 0;
             for (int i = 0; i < source.size(); i++) {
                 Module module = source.get(i);
-                if (favourites.contains(module.getName()) != wantFavourite) {
+                if (Favourites.has(module) != wantFavourite) {
                     continue;
                 }
                 if (searching || inTab(module, tab)) {
@@ -235,7 +232,7 @@ public final class WindowGuiScreen extends GuiScreenBase {
 
     private boolean inTab(Module module, String name) {
         return switch (name) {
-            case FAVOURITES -> favourites.contains(module.getName());
+            case FAVOURITES -> Favourites.has(module);
             case ENABLED -> module.isEnabled();
             case ALL -> true;
             default -> module.getCategory().getDisplayName().equals(name);
@@ -247,7 +244,7 @@ public final class WindowGuiScreen extends GuiScreenBase {
         int categories = Category.values().length;
         for (Module module : allModules) {
             tabCounts[module.getCategory().ordinal()]++;
-            if (favourites.contains(module.getName())) {
+            if (Favourites.has(module)) {
                 tabCounts[categories]++;
             }
             if (module.isEnabled()) {
@@ -407,7 +404,7 @@ public final class WindowGuiScreen extends GuiScreenBase {
                 GuiTheme.accent());
         }
 
-        boolean favourite = favourites.contains(module.getName());
+        boolean favourite = Favourites.has(module);
         RenderUtil.star(context, x + 8, y + (MODULE_ROW - RenderUtil.STAR_SIZE) / 2,
             favourite ? STAR_COLOR : (hovered ? GuiTheme.textDim() : GuiTheme.textFaint()),
             favourite);
@@ -440,7 +437,7 @@ public final class WindowGuiScreen extends GuiScreenBase {
         }
         if (open) {
             SettingWidget.renderBlock(context, font, module, x, y + MODULE_ROW, w,
-                mouseX, mouseY, hoverAllowed, this);
+                mouseX, mouseY, hoverAllowed, settings);
         }
     }
 
@@ -465,7 +462,7 @@ public final class WindowGuiScreen extends GuiScreenBase {
 
     @Override
     protected boolean clickGui(double mx, double my, int button) {
-        beginClick();
+        settings.beginClick();
         return clickSearchBox(mx, my, windowX() + MARGIN, searchY(), windowWidth() - 2 * MARGIN)
             || clickSidebar(mx, my)
             || clickList(mx, my, button);
@@ -525,7 +522,7 @@ public final class WindowGuiScreen extends GuiScreenBase {
             }
             if (my >= rowY + MODULE_ROW && my < rowY + rowH) {
                 SettingWidget.clickBlock(module, mx, my, x, rowY + MODULE_ROW, rowW,
-                    button, this, drag);
+                    button, settings, drag);
                 return true;
             }
             rowY += rowH;
@@ -539,9 +536,7 @@ public final class WindowGuiScreen extends GuiScreenBase {
         }
         String name = module.getName();
         if (InputUtil.isLeft(button) && mx < x + FAV_ZONE) {
-            if (!favourites.remove(name)) {
-                favourites.add(name);
-            }
+            Favourites.toggle(module);
             return;
         }
         if (InputUtil.isRight(button) || mx >= x + w - ARROW_ZONE || !module.isTogglable()) {

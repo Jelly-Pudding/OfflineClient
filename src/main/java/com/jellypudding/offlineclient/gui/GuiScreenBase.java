@@ -2,14 +2,8 @@ package com.jellypudding.offlineclient.gui;
 
 import com.google.gson.JsonObject;
 import com.jellypudding.offlineclient.OfflineClient;
-import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.modules.misc.ClickGuiModule;
 import com.jellypudding.offlineclient.modules.render.Blur;
-import com.jellypudding.offlineclient.setting.KeybindSetting;
-import com.jellypudding.offlineclient.setting.NumberSetting;
-import com.jellypudding.offlineclient.setting.PickList;
-import com.jellypudding.offlineclient.setting.Setting;
-import com.jellypudding.offlineclient.setting.TextSetting;
 import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.RenderUtil;
@@ -24,7 +18,7 @@ import net.minecraft.network.chat.Component;
 
 // Shared by both ClickGUI styles. Owns the search box and the typing and
 // binding state.
-public abstract class GuiScreenBase extends Screen implements SettingWidget.Host {
+public abstract class GuiScreenBase extends Screen {
 
     public static final int SEARCH_HEIGHT = 14;
     private static final int SEARCH_INDENT = GuiTheme.PAD;
@@ -39,6 +33,7 @@ public abstract class GuiScreenBase extends Screen implements SettingWidget.Host
     protected boolean searchFocused;
 
     private final TextInput textInput = new TextInput(this);
+    protected final SettingHost settings = new SettingHost(this, this::setTooltip);
 
     private float scaleNow = guiScale();
     private boolean pointerDown;
@@ -47,16 +42,11 @@ public abstract class GuiScreenBase extends Screen implements SettingWidget.Host
     private int searchTextX;
     private int searchRoom;
 
-    private KeybindSetting bindingTarget;
-    private Setting<?> editingSetting;
-    private final TextField editField = new TextField();
-    // The character of the key just bound arrives right after the key
-    // event and must be eaten.
-    private boolean eatNextChar;
-
     protected GuiScreenBase() {
         super(Component.literal("ClickGUI"));
     }
+
+    protected abstract void setTooltip(String text);
 
     protected abstract void saveState();
 
@@ -124,7 +114,7 @@ public abstract class GuiScreenBase extends Screen implements SettingWidget.Host
     // Asked for whenever a field is taking characters. Clicking one is the
     // only way in and the frame before the first keystroke covers the rest.
     private void syncTextInput() {
-        textInput.set(searchFocused || editingSetting != null || extraTyping());
+        textInput.set(searchFocused || settings.isEditing() || extraTyping());
     }
 
     // A screen may own another field that takes characters.
@@ -186,8 +176,7 @@ public abstract class GuiScreenBase extends Screen implements SettingWidget.Host
 
     @Override
     public void onClose() {
-        commitEditing();
-        bindingTarget = null;
+        settings.beginClick();
         releaseDrags();
         saveState();
         super.onClose();
@@ -199,7 +188,7 @@ public abstract class GuiScreenBase extends Screen implements SettingWidget.Host
         if (window == isWindowStyle()) {
             return;
         }
-        commitEditing();
+        settings.commitEditing();
         releaseDrags();
         saveState();
         OfflineClient.MC.gui.setScreen(window ? new WindowGuiScreen() : new ClickGuiScreen());
@@ -303,78 +292,6 @@ public abstract class GuiScreenBase extends Screen implements SettingWidget.Host
     }
 
     @Override
-    public boolean isBinding(KeybindSetting setting) {
-        return bindingTarget == setting;
-    }
-
-    @Override
-    public void startListening(KeybindSetting setting) {
-        bindingTarget = setting;
-    }
-
-    @Override
-    public void openPicker(PickList<?> setting) {
-        commitEditing();
-        openPickerTyped(setting);
-    }
-
-    private <T> void openPickerTyped(PickList<T> setting) {
-        OfflineClient.MC.gui.setScreen(new ListPickerScreen<>(this, setting));
-    }
-
-    @Override
-    public void startEditing(NumberSetting setting) {
-        commitEditing();
-        editingSetting = setting;
-        editField.set(setting.getValueString().replaceAll("[^0-9.-]", ""));
-        editField.selectAll();
-    }
-
-    @Override
-    public void startEditing(TextSetting setting) {
-        commitEditing();
-        editingSetting = setting;
-        editField.set(setting.getValue());
-    }
-
-    @Override
-    public boolean isEditing(Setting<?> setting) {
-        return editingSetting == setting;
-    }
-
-    @Override
-    public TextField getEditField() {
-        return editField;
-    }
-
-    protected final void commitEditing() {
-        if (editingSetting instanceof NumberSetting number) {
-            if (!editField.isEmpty()) {
-                try {
-                    number.setValue(Double.parseDouble(editField.get()));
-                    OfflineClient.INSTANCE.getConfigManager().saveSoon();
-                } catch (NumberFormatException e) {
-                    ChatUtil.error(editField.get() + " is not a number.");
-                }
-            }
-        } else if (editingSetting instanceof TextSetting text) {
-            text.setValue(editField.get().trim());
-            OfflineClient.INSTANCE.getConfigManager().saveSoon();
-        }
-        cancelEditing();
-    }
-
-    private void cancelEditing() {
-        editingSetting = null;
-        editField.clear();
-    }
-
-    protected final void beginClick() {
-        commitEditing();
-        bindingTarget = null;
-    }
-
-    @Override
     public boolean keyPressed(KeyEvent event) {
         return handleCommonKey(event) || super.keyPressed(event);
     }
@@ -386,29 +303,7 @@ public abstract class GuiScreenBase extends Screen implements SettingWidget.Host
 
     protected final boolean handleCommonKey(KeyEvent event) {
         int key = event.key();
-        eatNextChar = false;
-        if (editingSetting != null) {
-            if (key == InputConstants.KEY_RETURN || key == InputConstants.KEY_NUMPADENTER) {
-                commitEditing();
-            } else if (key == InputConstants.KEY_ESCAPE) {
-                cancelEditing();
-            } else {
-                editField.keyPressed(event, editingSetting instanceof NumberSetting
-                    ? TextField.NUMBER : TextField.ANY);
-            }
-            return true;
-        }
-
-        if (bindingTarget != null) {
-            if (key == InputConstants.KEY_DELETE || key == InputConstants.KEY_BACKSPACE) {
-                bindingTarget.setValue(KeybindSetting.UNBOUND);
-            } else if (key != InputConstants.KEY_ESCAPE) {
-                bindingTarget.setValue(key);
-            }
-            bindingTarget = null;
-            OfflineClient.INSTANCE.getConfigManager().saveSoon();
-            // Only a key that types a character has one to swallow.
-            eatNextChar = KeybindSetting.typesCharacter(key);
+        if (settings.keyPressed(event)) {
             return true;
         }
 
@@ -442,20 +337,11 @@ public abstract class GuiScreenBase extends Screen implements SettingWidget.Host
 
     // True whilst a key press would type or bind rather than reach the game.
     public boolean isTyping() {
-        return searchFocused || editingSetting != null || bindingTarget != null || extraTyping();
+        return searchFocused || settings.isEditing() || settings.isListening() || extraTyping();
     }
 
     protected final boolean handleCommonChar(char c) {
-        if (eatNextChar) {
-            eatNextChar = false;
-            return true;
-        }
-        if (bindingTarget != null) {
-            return true;
-        }
-        if (editingSetting != null) {
-            editField.charTyped(c, editingSetting instanceof NumberSetting
-                ? TextField.NUMBER : TextField.ANY);
+        if (settings.charTyped(c)) {
             return true;
         }
         if (searchFocused && searchBox.charTyped(c, TextField.ANY)) {

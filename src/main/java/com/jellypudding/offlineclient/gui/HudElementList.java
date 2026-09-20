@@ -1,5 +1,6 @@
 package com.jellypudding.offlineclient.gui;
 
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.hud.HudElement;
@@ -8,32 +9,31 @@ import com.jellypudding.offlineclient.util.RenderUtil;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 // The panel in the HUD editor. Every piece of the overlay with a switch
-// beside it and the hints that belong here rather than over the overlay.
+// beside it and its own settings underneath.
 public final class HudElementList extends PanelFrame {
 
-    private static final int START_WIDTH = 108;
-    private static final int ROW = 11;
     private static final int PILL_WIDTH = 16;
     private static final int PILL_HEIGHT = 7;
+    private static final int ARROW_ZONE = 12;
     private static final int PAD = 5;
-    private static final int LINE = 9;
     private static final String STATE_KEY = "hudList";
 
-    private static final String[] HINTS = {
-        "drag to move",
-        "corner to resize",
-        "shift skips snapping",
-    };
-
     private final List<HudElement> elements;
+    private final Set<String> expanded = new HashSet<>();
+    private final SettingWidget.Host host;
+    private final SettingWidget.Drag drag = new SettingWidget.Drag();
+
     private HudElement hovered;
 
-    public HudElementList(List<HudElement> elements) {
-        super("Overlay", 6, 6, START_WIDTH);
+    public HudElementList(List<HudElement> elements, SettingWidget.Host host) {
+        super("Overlay", 6, 6, GuiTheme.PANEL_WIDTH);
         this.elements = elements;
+        this.host = host;
         restore();
     }
 
@@ -55,6 +55,11 @@ public final class HudElementList extends PanelFrame {
         if (state.has("collapsed")) {
             setCollapsed(state.get("collapsed").getAsBoolean());
         }
+        if (state.has("open")) {
+            for (var name : state.getAsJsonArray("open")) {
+                expanded.add(name.getAsString());
+            }
+        }
     }
 
     public void save() {
@@ -64,38 +69,31 @@ public final class HudElementList extends PanelFrame {
         state.addProperty("width", getWidth());
         state.addProperty("height", getViewHeight());
         state.addProperty("collapsed", isCollapsed());
+        JsonArray open = new JsonArray();
+        expanded.forEach(open::add);
+        state.add("open", open);
         OfflineClient.INSTANCE.getConfigManager().getGuiState().add(STATE_KEY, state);
     }
 
-    // The element the pointer is over in the list. Null whenever it is not.
+    // The element the pointer is over. Null whenever it is over none.
     public HudElement getHovered() {
         return hovered;
     }
 
-    @Override
-    protected boolean opaque() {
-        return true;
+    private int rowHeight(HudElement element) {
+        if (!expanded.contains(element.getName())) {
+            return GuiTheme.ROW_HEIGHT;
+        }
+        return GuiTheme.ROW_HEIGHT + SettingWidget.blockHeight(element.getOptions(), null);
     }
 
     @Override
     protected int contentHeight() {
-        return elements.size() * ROW;
-    }
-
-    @Override
-    protected int footerHeight() {
-        return HINTS.length * LINE + PAD;
-    }
-
-    @Override
-    protected void renderFooter(GuiGraphicsExtractor context, int top, int rowWidth) {
-        Font font = OfflineClient.MC.font;
-        int y = top + 1;
-        for (String hint : HINTS) {
-            context.text(font, SettingWidget.trimEnd(font, hint, rowWidth - PAD * 2),
-                getX() + PAD, y, GuiTheme.textFaint(), false);
-            y += LINE;
+        int height = 0;
+        for (HudElement element : elements) {
+            height += rowHeight(element);
         }
+        return height;
     }
 
     @Override
@@ -105,53 +103,87 @@ public final class HudElementList extends PanelFrame {
         hovered = null;
         boolean inView = mouseX >= getX() && mouseX < getX() + rowWidth
             && mouseY >= viewTop && mouseY < viewTop + view;
+        drag.follow(SettingWidget.blockContentX(getX()),
+            SettingWidget.blockContentWidth(rowWidth), mouseX);
         int y = viewTop - getScrollOffset();
         for (HudElement element : elements) {
-            if (y + ROW > viewTop && y < viewTop + view) {
+            int h = rowHeight(element);
+            if (y + h > viewTop && y < viewTop + view) {
                 renderRow(context, font, element, y, rowWidth, mouseX, mouseY, inView);
             }
-            y += ROW;
+            y += h;
         }
     }
 
     private void renderRow(GuiGraphicsExtractor context, Font font, HudElement element, int y,
                            int rowWidth, int mouseX, int mouseY, boolean inView) {
-        boolean over = inView && SettingWidget.isOver(mouseX, mouseY, getX(), y, rowWidth, ROW);
+        int h = GuiTheme.ROW_HEIGHT - 1;
+        boolean over = inView
+            && SettingWidget.isOver(mouseX, mouseY, getX(), y, rowWidth, GuiTheme.ROW_HEIGHT);
         boolean on = element.isActive();
+        context.fill(getX(), y, getX() + rowWidth, y + h,
+            on ? GuiTheme.accentOn(GuiTheme.bgRow(), over ? 0.46f : 0.26f)
+                : (over ? GuiTheme.bgRowHover() : GuiTheme.bgRow()));
+        context.fill(getX(), y + h, getX() + rowWidth, y + GuiTheme.ROW_HEIGHT, GuiTheme.RULE);
+        context.guiRenderState.up();
         if (over) {
-            context.fill(getX(), y, getX() + rowWidth, y + ROW, GuiTheme.bgRowHover());
-            context.guiRenderState.up();
             hovered = element;
         }
-        int room = rowWidth - PAD * 2 - PILL_WIDTH - 4;
+
+        int room = rowWidth - PAD * 2 - PILL_WIDTH - ARROW_ZONE;
         context.text(font, SettingWidget.trimEnd(font, element.getName(), room),
-            getX() + PAD, GuiTheme.textY(y, ROW),
+            getX() + PAD, GuiTheme.textY(y, h),
             on ? GuiTheme.text() : GuiTheme.textFaint(), false);
-        RenderUtil.toggle(context, getX() + rowWidth - PAD - PILL_WIDTH,
-            y + (ROW - PILL_HEIGHT) / 2, PILL_WIDTH, PILL_HEIGHT, on,
+        RenderUtil.toggle(context, getX() + rowWidth - ARROW_ZONE - PILL_WIDTH,
+            y + (h - PILL_HEIGHT) / 2, PILL_WIDTH, PILL_HEIGHT, on,
             GuiTheme.accent(), GuiTheme.bgSetting(),
             on ? GuiTheme.contrastText(GuiTheme.accent()) : GuiTheme.textDim());
+        RenderUtil.chevron(context, getX() + rowWidth - 10, y + (h - 3) / 2,
+            !expanded.contains(element.getName()),
+            over ? GuiTheme.text() : GuiTheme.textFaint());
+
+        if (expanded.contains(element.getName())) {
+            SettingWidget.renderBlock(context, font, element.getOptions(), null, getX(),
+                y + GuiTheme.ROW_HEIGHT, rowWidth, mouseX, mouseY, inView, host);
+        }
     }
 
     @Override
     protected boolean clickContent(double mx, double my, int button, int viewTop,
                                    int view, int rowWidth) {
-        if (!InputUtil.isLeft(button)) {
-            return false;
-        }
         int y = viewTop - getScrollOffset();
         for (HudElement element : elements) {
-            if (SettingWidget.isOver(mx, my, getX(), y, rowWidth, ROW)) {
-                element.setActive(!element.isActive());
-                OfflineClient.INSTANCE.getConfigManager().saveSoon();
+            int h = rowHeight(element);
+            if (SettingWidget.isOver(mx, my, getX(), y, rowWidth, GuiTheme.ROW_HEIGHT)) {
+                clickRow(element, mx, button, rowWidth);
                 return true;
             }
-            y += ROW;
+            if (my >= y + GuiTheme.ROW_HEIGHT && my < y + h) {
+                return SettingWidget.clickBlock(element.getOptions(), null, mx, my, getX(),
+                    y + GuiTheme.ROW_HEIGHT, rowWidth, button, host, drag);
+            }
+            y += h;
         }
         return false;
     }
 
+    private void clickRow(HudElement element, double mx, int button, int rowWidth) {
+        boolean onSwitch = mx >= getX() + rowWidth - ARROW_ZONE - PILL_WIDTH
+            && mx < getX() + rowWidth - ARROW_ZONE;
+        if (InputUtil.isLeft(button) && onSwitch) {
+            element.setActive(!element.isActive());
+            OfflineClient.INSTANCE.getConfigManager().saveSoon();
+            return;
+        }
+        if (InputUtil.isLeft(button) || InputUtil.isRight(button)) {
+            if (!expanded.remove(element.getName())) {
+                expanded.add(element.getName());
+            }
+        }
+    }
+
     @Override
     protected void releaseContent() {
+        drag.release();
     }
 }

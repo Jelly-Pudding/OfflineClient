@@ -86,8 +86,15 @@ public final class TabStrip {
         }
     }
 
-    public boolean isEmpty() {
-        return slots.isEmpty();
+    // The rectangle the whole row covers.
+    public int[] bounds(int screenWidth) {
+        layout(screenWidth);
+        if (slots.isEmpty()) {
+            return new int[] {0, 0, 0, 0};
+        }
+        Slot last = slots.getLast();
+        return new int[] {slots.getFirst().x(), TOP, last.x() + last.width(),
+            TOP + HEIGHT + UNDERLINE};
     }
 
     public void render(GuiGraphicsExtractor context, int screenWidth, int mouseX, int mouseY,

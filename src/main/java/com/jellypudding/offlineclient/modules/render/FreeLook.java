@@ -56,7 +56,7 @@ public final class FreeLook extends Module {
     private boolean primed;
 
     public FreeLook() {
-        super("FreeLook", "Look around without turning your body.", Category.RENDER, InputConstants.KEY_LALT);
+        super("FreeLook", "Look around without turning your body.", Category.RENDER);
         addSettings(hold, mode, perspective, sensitivity, arrows, arrowSpeed);
         searchTags("free look", "perspective", "look behind");
     }

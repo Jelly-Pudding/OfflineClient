@@ -7,7 +7,6 @@ import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
-import com.mojang.blaze3d.platform.InputConstants;
 
 // CameraMixin applies the FOV change at read time.
 // Saved video settings are never touched.
@@ -44,7 +43,7 @@ public final class Zoom extends Module {
     private boolean hidHud;
 
     public Zoom() {
-        super("Zoom", "Zooms your view.", Category.RENDER, InputConstants.KEY_C);
+        super("Zoom", "Zooms your view.", Category.RENDER);
         addSettings(factor, scrollSensitivity, smooth, cinematic, hideHud, showHands);
     }
 

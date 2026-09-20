@@ -26,16 +26,17 @@ public final class TextElement extends HudElement {
     private static final long SIX_AM = 6 * HOUR_TICKS;
     private static final long MINUTES_PER_HOUR = 60;
 
-    private final TextSetting text = new TextSetting("Text line",
-        "The line to write. Words in braces are swapped for live numbers.",
+    private final TextSetting text = new TextSetting("Line",
+        "The writing. Words in braces are swapped for live numbers.",
         "{x} {y} {z} in {dimension}");
-    private final ColorSetting color = new ColorSetting("Text colour",
-        "Colour of the line.", 190, false);
-    private final BoolSetting shadow = new BoolSetting("Text shadow",
+    private final ColorSetting color = new ColorSetting("Line colour",
+        "Colour of the writing.", 190, false);
+    private final BoolSetting shadow = new BoolSetting("Line shadow",
         "Draw a shadow behind it.", true);
 
     public TextElement() {
-        super("Text", "A line of your own with live numbers swapped in.", false, 50, 4);
+        super("Custom line", "Writing of your own with live numbers swapped in.",
+            false, 50, 4);
         add(text, color, shadow);
     }
 

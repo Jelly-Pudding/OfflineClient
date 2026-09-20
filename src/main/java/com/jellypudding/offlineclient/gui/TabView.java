@@ -26,7 +26,8 @@ public final class TabView {
 
     // What the box is looking at. The client owns the data and this reads it.
     public interface Source {
-        List<Entry> entries();
+        // The field text narrows the rows and can offer more of them.
+        List<Entry> entries(String query);
 
         // Shown when there is nothing to list.
         String emptyText();
@@ -48,6 +49,10 @@ public final class TabView {
         }
 
         default void drop(String name) {
+        }
+
+        default String dropHint(String name) {
+            return "Remove " + name;
         }
 
         // True when clicking the detail listens for a key to put there.
@@ -92,6 +97,7 @@ public final class TabView {
     private String binding;
 
     private List<Entry> entries = List.of();
+    private String asked = "";
     private long read;
 
     // Where the box landed this frame. The width and height above are what
@@ -124,12 +130,14 @@ public final class TabView {
     }
 
     private void refresh() {
-        entries = source.entries();
+        asked = adder.get().trim();
+        entries = source.entries(asked);
         read = System.currentTimeMillis();
     }
 
     private List<Entry> entries() {
-        if (System.currentTimeMillis() - read > REFRESH_MS) {
+        if (!adder.get().trim().equals(asked)
+            || System.currentTimeMillis() - read > REFRESH_MS) {
             refresh();
         }
         return entries;
@@ -175,6 +183,14 @@ public final class TabView {
 
     public boolean isTyping() {
         return typing || binding != null;
+    }
+
+    // Where the box will land before it draws.
+    public int[] bounds(int viewW, int viewH, int under) {
+        int w = drawWidth(viewW);
+        int h = drawHeight(viewH, under);
+        int at = (viewW - w) / 2;
+        return new int[] {at, under, at + w, under + h};
     }
 
     public boolean isOver(double mx, double my) {
@@ -247,6 +263,7 @@ public final class TabView {
 
         int full = contentHeight();
         int view = viewHeight();
+        scrollBar.setOffset(ScrollBar.clamp(scrollBar.getOffset(), full, view));
         scrollBar.update(mouseY, full, view);
 
         RenderUtil.roundedBorderedRect(context, left, top, left + wide, top + drawn,
@@ -330,7 +347,7 @@ public final class TabView {
                 : GuiTheme.textFaint(), false);
 
         if (hovered) {
-            host.setTooltip(overDrop ? "Remove " + entry.name() : entry.tip());
+            host.setTooltip(overDrop ? source.dropHint(entry.name()) : entry.tip());
         }
     }
 

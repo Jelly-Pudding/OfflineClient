@@ -339,8 +339,11 @@ public final class SettingWidget {
     }
 
     public static int blockHeight(Module module) {
-        int height = GuiTheme.SETTING_HEIGHT + 4;
-        List<Setting<?>> settings = module.getSettings();
+        return blockHeight(module.getSettings(), module.getKeybind());
+    }
+
+    public static int blockHeight(List<Setting<?>> settings, Setting<?> trailer) {
+        int height = trailer == null ? 4 : GuiTheme.SETTING_HEIGHT + 4;
         Layout layout = layout(settings);
         for (int i = 0; i < settings.size(); i++) {
             if (layout.shown[i]) {
@@ -415,9 +418,17 @@ public final class SettingWidget {
     public static void renderBlock(GuiGraphicsExtractor context, Font font, Module module,
                                    int rowX, int rowY, int rowW, int mouseX, int mouseY,
                                    boolean hoverAllowed, Host host) {
+        renderBlock(context, font, module.getSettings(), module.getKeybind(), rowX, rowY, rowW,
+            mouseX, mouseY, hoverAllowed, host);
+    }
+
+    public static void renderBlock(GuiGraphicsExtractor context, Font font,
+                                   List<Setting<?>> settings, Setting<?> trailer,
+                                   int rowX, int rowY, int rowW, int mouseX, int mouseY,
+                                   boolean hoverAllowed, Host host) {
         int x = rowX + INDENT;
         int right = rowX + rowW - 2;
-        int bottom = rowY + blockHeight(module) - 2;
+        int bottom = rowY + blockHeight(settings, trailer) - 2;
         RenderUtil.roundedRect(context, x, rowY, right, bottom, GuiTheme.CORNER,
             GuiTheme.bgSetting(), false, true);
         context.fill(x, rowY, x + 1, bottom, GuiTheme.accentOn(GuiTheme.bgSetting(), 0.55f));
@@ -426,7 +437,6 @@ public final class SettingWidget {
         int cx = blockContentX(rowX);
         int cw = blockContentWidth(rowW);
         int y = rowY + 2;
-        List<Setting<?>> settings = module.getSettings();
         Layout layout = layout(settings);
         for (int i = 0; i < settings.size(); i++) {
             if (!layout.shown[i]) {
@@ -448,16 +458,23 @@ public final class SettingWidget {
             render(context, font, setting, sx, y, sw, mouseX, mouseY, hoverAllowed, host);
             y += h;
         }
-        // The bind of the module itself closes the block.
-        render(context, font, module.getKeybind(), cx, y, cw, mouseX, mouseY, hoverAllowed, host);
+        if (trailer != null) {
+            render(context, font, trailer, cx, y, cw, mouseX, mouseY, hoverAllowed, host);
+        }
     }
 
     public static boolean clickBlock(Module module, double mx, double my, int rowX, int rowY,
                                      int rowW, int button, Host host, Drag drag) {
+        return clickBlock(module.getSettings(), module.getKeybind(), mx, my, rowX, rowY, rowW,
+            button, host, drag);
+    }
+
+    public static boolean clickBlock(List<Setting<?>> settings, Setting<?> trailer,
+                                     double mx, double my, int rowX, int rowY,
+                                     int rowW, int button, Host host, Drag drag) {
         int cx = blockContentX(rowX);
         int cw = blockContentWidth(rowW);
         int y = rowY + 2;
-        List<Setting<?>> settings = module.getSettings();
         Layout layout = layout(settings);
         for (int i = 0; i < settings.size(); i++) {
             if (!layout.shown[i]) {
@@ -482,8 +499,8 @@ public final class SettingWidget {
             }
             y += h;
         }
-        if (isOver(mx, my, cx, y, cw, GuiTheme.SETTING_HEIGHT)) {
-            click(module.getKeybind(), mx, my, cx, y, cw, button, host, drag);
+        if (trailer != null && isOver(mx, my, cx, y, cw, GuiTheme.SETTING_HEIGHT)) {
+            click(trailer, mx, my, cx, y, cw, button, host, drag);
             return true;
         }
         return false;

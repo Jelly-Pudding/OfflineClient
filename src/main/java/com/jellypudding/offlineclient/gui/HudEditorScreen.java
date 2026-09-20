@@ -10,6 +10,8 @@ import com.jellypudding.offlineclient.util.RenderUtil;
 import com.jellypudding.offlineclient.modules.misc.HudModule;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.CharacterEvent;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
@@ -30,6 +32,7 @@ public final class HudEditorScreen extends Screen {
 
     // The corner square that resizes an element.
     private static final int GRIP = 5;
+    private static final int TIP_WIDTH = 170;
 
     private static final double SCALE_STEP = 0.05;
 
@@ -41,7 +44,10 @@ public final class HudEditorScreen extends Screen {
     private static final int SHADE = 0x90000000;
 
     private final HudManager manager;
+    private final SettingHost settings = new SettingHost(this, this::setTooltip);
     private final HudElementList list;
+
+    private String tooltip;
 
     private HudElement dragged;
     private HudElement resized;
@@ -59,7 +65,7 @@ public final class HudEditorScreen extends Screen {
     public HudEditorScreen(HudManager manager) {
         super(Component.literal("HUD editor"));
         this.manager = manager;
-        this.list = new HudElementList(manager.all());
+        this.list = new HudElementList(manager.all(), settings);
     }
 
     // Null whilst the HUD module has not been built yet.
@@ -73,8 +79,13 @@ public final class HudEditorScreen extends Screen {
         return false;
     }
 
+    private void setTooltip(String text) {
+        tooltip = text;
+    }
+
     @Override
     public void onClose() {
+        settings.commitEditing();
         list.save();
         OfflineClient.INSTANCE.getConfigManager().saveSoon();
         super.onClose();
@@ -103,8 +114,10 @@ public final class HudEditorScreen extends Screen {
         context.guiRenderState.up();
 
         HudElement picked = list.getHovered();
+        List<int[]> boxes = new ArrayList<>(placed.size());
         for (Placement placement : placed) {
             int[] box = grabBox(placement);
+            boxes.add(new int[] {box[0] - 2, box[1] - 2, box[0] + box[2] + 2, box[1] + box[3] + 2});
             HudElement element = placement.element();
             boolean live = element == dragged || element == resized;
             boolean over = live || element == picked || inside(mouseX, mouseY, box);
@@ -121,8 +134,18 @@ public final class HudEditorScreen extends Screen {
                     labelY(box), GuiTheme.textDim(), true);
             }
         }
+        tooltip = null;
         list.update(mouseX, mouseY, width, height, 0);
+        RenderUtil.cover(context, list.bounds(), boxes, GuiTheme.bgSolid());
         list.render(context, mouseX, mouseY);
+        HudElement under = list.isCollapsed() ? null : list.getHovered();
+        if (tooltip == null && under != null) {
+            tooltip = under.getDescription();
+        }
+        if (tooltip != null && !tooltip.isEmpty()) {
+            RenderUtil.tooltip(context, font, RenderUtil.wrap(font, tooltip, TIP_WIDTH),
+                mouseX, mouseY, width, height, GuiTheme.bgTooltip(), GuiTheme.text());
+        }
     }
 
     // An element pinned against the top edge has no room above it. Its name
@@ -158,6 +181,7 @@ public final class HudEditorScreen extends Screen {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        settings.beginClick();
         if (list.mouseClicked(event.x(), event.y(), event.button())) {
             return true;
         }
@@ -194,6 +218,16 @@ public final class HudEditorScreen extends Screen {
         startScale = element.scale();
         spanX = Math.max(1, mx - originX);
         spanY = Math.max(1, my - originY);
+    }
+
+    @Override
+    public boolean keyPressed(KeyEvent event) {
+        return settings.keyPressed(event) || super.keyPressed(event);
+    }
+
+    @Override
+    public boolean charTyped(CharacterEvent event) {
+        return settings.charTyped((char) event.codepoint()) || super.charTyped(event);
     }
 
     @Override

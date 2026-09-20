@@ -6,7 +6,6 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.ItemUtil;
-import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.protocol.game.ServerboundContainerClosePacket;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -43,7 +42,7 @@ public final class ChestSwap extends Module {
 
     public ChestSwap() {
         super("ChestSwap", "Swaps an elytra and a chestplate on one key.",
-            Category.PLAYER, InputConstants.KEY_G);
+            Category.PLAYER);
         addSettings(chestplate, countProtection, closeInventory, stayOn);
         searchTags("elytra swap", "chestplate", "wings");
     }

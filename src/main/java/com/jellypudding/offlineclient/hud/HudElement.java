@@ -14,6 +14,7 @@ import java.util.List;
 public abstract class HudElement {
 
     private final String name;
+    private final String description;
     private final List<Setting<?>> settings = new ArrayList<>();
 
     protected final BoolSetting active;
@@ -38,6 +39,7 @@ public abstract class HudElement {
     protected HudElement(String name, String description, boolean on,
                          double startX, double startY, double startScale) {
         this.name = name;
+        this.description = description;
         // Fifteen elements with five or more options each would swamp the HUD panel.
         active = new BoolSetting(name, description, on).startFolded();
         x = percent(" x", "How far across the screen it sits.", startX);
@@ -65,6 +67,15 @@ public abstract class HudElement {
 
     public final String getName() {
         return name;
+    }
+
+    public final String getDescription() {
+        return description;
+    }
+
+    // Everything but the switch. The list draws that as a toggle instead.
+    public final List<Setting<?>> getOptions() {
+        return List.copyOf(settings);
     }
 
     // The switch itself first. The ClickGUI then shows the group closed.

@@ -5,18 +5,36 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 // A draggable column of module rows under a category header.
 public final class Panel extends PanelFrame {
 
     private final List<ModuleRow> rows = new ArrayList<>();
     private final List<ModuleRow> rowsView = Collections.unmodifiableList(rows);
+    private final SettingWidget.Host host;
 
     public Panel(String title, List<Module> modules, SettingWidget.Host host, int x, int y) {
         super(title, x, y, GuiTheme.PANEL_WIDTH);
+        this.host = host;
+        refresh(modules);
+    }
+
+    // Rebuilds the rows and leaves open the ones that were open.
+    public void refresh(List<Module> modules) {
+        Set<String> open = new HashSet<>();
+        for (ModuleRow row : rows) {
+            if (row.isExpanded()) {
+                open.add(row.getModule().getName());
+            }
+        }
+        rows.clear();
         for (Module module : modules) {
-            rows.add(new ModuleRow(module, host));
+            ModuleRow row = new ModuleRow(module, host);
+            row.setExpanded(open.contains(module.getName()));
+            rows.add(row);
         }
     }
 

@@ -69,11 +69,6 @@ public abstract class PanelFrame {
     protected void renderFooter(GuiGraphicsExtractor context, int top, int rowWidth) {
     }
 
-    // True for a box that has to hide whatever it covers.
-    protected boolean opaque() {
-        return false;
-    }
-
     public String getTitle() {
         return title;
     }
@@ -219,7 +214,10 @@ public abstract class PanelFrame {
                 Math.max(ceiling, viewH - GuiTheme.HEADER_HEIGHT));
         }
         applyResize(mouseX, mouseY);
-        scrollBar.update(mouseY, contentHeight(), viewportHeight());
+        int full = contentHeight();
+        int view = viewportHeight();
+        scrollBar.setOffset(ScrollBar.clamp(scrollBar.getOffset(), full, view));
+        scrollBar.update(mouseY, full, view);
     }
 
     public final void render(GuiGraphicsExtractor context, int mouseX, int mouseY) {
@@ -258,7 +256,7 @@ public abstract class PanelFrame {
         Font font = OfflineClient.MC.font;
         int h = GuiTheme.HEADER_HEIGHT;
         RenderUtil.roundedRect(context, x, y, x + width, y + h, GuiTheme.CORNER,
-            opaque() ? GuiTheme.bgHeaderSolid() : GuiTheme.bgHeader(), true, collapsed);
+            GuiTheme.bgHeader(), true, collapsed);
         context.guiRenderState.up();
         // A collapsed box keeps the underline clear of the rounded corners.
         int underlineTop = y + h - (collapsed ? 4 : 2);
@@ -285,7 +283,7 @@ public abstract class PanelFrame {
         int rowW = ScrollBar.rowWidth(width, full, view);
 
         RenderUtil.roundedRect(context, x, viewTop, x + width, viewTop + view + 2 + footerHeight(),
-            GuiTheme.CORNER, opaque() ? GuiTheme.bgSolid() : GuiTheme.bgPanel(), false, true);
+            GuiTheme.CORNER, GuiTheme.bgPanel(), false, true);
         context.guiRenderState.up();
         if (view <= 0) {
             return;

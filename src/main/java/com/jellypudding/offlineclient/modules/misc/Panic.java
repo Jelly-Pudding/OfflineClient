@@ -7,7 +7,6 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.module.ModuleManager;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.util.ChatUtil;
-import com.mojang.blaze3d.platform.InputConstants;
 
 public final class Panic extends Module {
 
@@ -16,7 +15,7 @@ public final class Panic extends Module {
 
     public Panic() {
         super("Panic", "Turns every enabled module off at once.",
-            Category.MISC, InputConstants.KEY_END);
+            Category.MISC);
         addSettings(announce);
         searchTags("panic button", "disable all", "kill switch");
     }

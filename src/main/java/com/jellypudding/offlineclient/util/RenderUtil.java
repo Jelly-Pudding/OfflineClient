@@ -4,6 +4,7 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import org.joml.Matrix3x2fStack;
 
+import java.util.ArrayList;
 import java.util.List;
 
 // 2D drawing helpers on top of GuiGraphicsExtractor.
@@ -332,6 +333,46 @@ public final class RenderUtil {
     }
 
     // Sits beside the cursor and stays inside the screen.
+    // Paints where a box laps over anything already drawn. Writing under a
+    // see through box would otherwise read through it.
+    public static void cover(GuiGraphicsExtractor context, int[] over, List<int[]> under,
+                             int color) {
+        boolean painted = false;
+        for (int[] below : under) {
+            int x = Math.max(over[0], below[0]);
+            int y = Math.max(over[1], below[1]);
+            int x2 = Math.min(over[2], below[2]);
+            int y2 = Math.min(over[3], below[3]);
+            if (x2 > x && y2 > y) {
+                context.fill(x, y, x2, y2, color);
+                painted = true;
+            }
+        }
+        if (painted) {
+            context.guiRenderState.up();
+        }
+    }
+
+    // Broken on spaces at the given width. A word longer than that keeps
+    // its own line and overflows.
+    public static List<String> wrap(Font font, String text, int room) {
+        List<String> lines = new ArrayList<>();
+        StringBuilder line = new StringBuilder();
+        for (String word : text.split(" ")) {
+            String candidate = line.isEmpty() ? word : line + " " + word;
+            if (font.width(candidate) > room && !line.isEmpty()) {
+                lines.add(line.toString());
+                line = new StringBuilder(word);
+            } else {
+                line = new StringBuilder(candidate);
+            }
+        }
+        if (!line.isEmpty()) {
+            lines.add(line.toString());
+        }
+        return lines;
+    }
+
     public static void tooltip(GuiGraphicsExtractor context, Font font, List<String> lines,
                                int mouseX, int mouseY, int screenWidth, int screenHeight,
                                int fill, int ink) {
