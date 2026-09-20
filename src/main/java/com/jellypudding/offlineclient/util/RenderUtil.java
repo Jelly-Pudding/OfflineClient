@@ -12,6 +12,8 @@ public final class RenderUtil {
     // Grey for text that should sit back from the main line.
     public static final int MUTED_TEXT = 0xFFB0B0C0;
 
+    private static final int SHADOW = 0x30000000;
+
     private RenderUtil() {
     }
 
@@ -103,16 +105,14 @@ public final class RenderUtil {
     // Each end can keep square corners.
     public static void roundedRect(GuiGraphicsExtractor context, int x, int y, int x2, int y2,
                                    int radius, int color, boolean roundTop, boolean roundBottom) {
-        int r = Math.min(radius, Math.min((x2 - x) / 2, (y2 - y) / 2));
+        int r = radiusFor(x, y, x2, y2, radius);
         if (r <= 0) {
             context.fill(x, y, x2, y2, color);
             return;
         }
         context.fill(x, y + (roundTop ? r : 0), x2, y2 - (roundBottom ? r : 0), color);
         for (int i = 0; i < r; i++) {
-            // Corner inset taken from a circle of the same radius.
-            double dy = r - i - 0.5;
-            int inset = (int) Math.ceil(r - Math.sqrt(r * r - dy * dy));
+            int inset = cornerInset(r, i);
             if (roundTop) {
                 context.fill(x + inset, y + i, x2 - inset, y + i + 1, color);
             }
@@ -122,15 +122,61 @@ public final class RenderUtil {
         }
     }
 
-    public static void roundedBorderedRect(GuiGraphicsExtractor context, int x, int y, int x2, int y2,
-                                           int radius, int fillColor, int borderColor) {
-        roundedRect(context, x, y, x2, y2, radius, borderColor);
-        roundedRect(context, x + 1, y + 1, x2 - 1, y2 - 1, radius - 1, fillColor);
+    // A hairline following the same rounded shape. The middle is left alone.
+    // That is what lets a see through panel stay see through.
+    public static void roundedOutline(GuiGraphicsExtractor context, int x, int y, int x2, int y2,
+                                      int radius, int color) {
+        int r = radiusFor(x, y, x2, y2, radius);
+        if (r <= 0) {
+            context.fill(x, y, x2, y + 1, color);
+            context.fill(x, y2 - 1, x2, y2, color);
+            context.fill(x, y + 1, x + 1, y2 - 1, color);
+            context.fill(x2 - 1, y + 1, x2, y2 - 1, color);
+            return;
+        }
+        context.fill(x, y + r, x + 1, y2 - r, color);
+        context.fill(x2 - 1, y + r, x2, y2 - r, color);
+        for (int i = 0; i < r; i++) {
+            int inset = cornerInset(r, i);
+            if (i == 0) {
+                context.fill(x + inset, y, x2 - inset, y + 1, color);
+                context.fill(x + inset, y2 - 1, x2 - inset, y2, color);
+                continue;
+            }
+            int step = Math.max(cornerInset(r, i - 1), inset + 1);
+            context.fill(x + inset, y + i, x + step, y + i + 1, color);
+            context.fill(x2 - step, y + i, x2 - inset, y + i + 1, color);
+            context.fill(x + inset, y2 - i - 1, x + step, y2 - i, color);
+            context.fill(x2 - step, y2 - i - 1, x2 - inset, y2 - i, color);
+        }
     }
 
+    private static int radiusFor(int x, int y, int x2, int y2, int radius) {
+        return Math.min(radius, Math.min((x2 - x) / 2, (y2 - y) / 2));
+    }
+
+    // Corner inset taken from a circle of the same radius.
+    private static int cornerInset(int r, int row) {
+        double dy = r - row - 0.5;
+        return (int) Math.ceil(r - Math.sqrt(r * r - dy * dy));
+    }
+
+    // The border goes over the fill rather than under it. Painting the border
+    // colour across the whole rectangle first would hide whatever is behind.
+    public static void roundedBorderedRect(GuiGraphicsExtractor context, int x, int y, int x2, int y2,
+                                           int radius, int fillColor, int borderColor) {
+        roundedRect(context, x, y, x2, y2, radius, fillColor);
+        roundedOutline(context, x, y, x2, y2, radius, borderColor);
+    }
+
+    // Only the ring outside the rectangle is darkened. Filling the middle as
+    // well would put three coats of black under anything see through.
     public static void shadow(GuiGraphicsExtractor context, int x, int y, int x2, int y2, int spread) {
         for (int i = spread; i >= 1; i--) {
-            context.fill(x - i, y - i, x2 + i, y2 + i, 0x30000000);
+            context.fill(x - i, y - i, x2 + i, y - i + 1, SHADOW);
+            context.fill(x - i, y2 + i - 1, x2 + i, y2 + i, SHADOW);
+            context.fill(x - i, y - i + 1, x - i + 1, y2 + i - 1, SHADOW);
+            context.fill(x2 + i - 1, y - i + 1, x2 + i, y2 + i - 1, SHADOW);
         }
     }
 
@@ -266,9 +312,7 @@ public final class RenderUtil {
     // Behind a world label. Text over bright terrain is unreadable without it.
     public static final int LABEL_BACKGROUND = 0x90000000;
 
-    private static final int TOOLTIP_FILL = 0xF00E0E14;
     private static final int TOOLTIP_BORDER = 0x50FFFFFF;
-    private static final int TOOLTIP_TEXT = 0xFFD8D8E4;
 
     // A scaled label centred on a screen point. Each part carries its own
     // colour and they run left to right on one line.
@@ -302,7 +346,8 @@ public final class RenderUtil {
 
     // Sits beside the cursor and stays inside the screen.
     public static void tooltip(GuiGraphicsExtractor context, Font font, List<String> lines,
-                               int mouseX, int mouseY, int screenWidth, int screenHeight) {
+                               int mouseX, int mouseY, int screenWidth, int screenHeight,
+                               int fill, int ink) {
         if (lines.isEmpty()) {
             return;
         }
@@ -322,10 +367,10 @@ public final class RenderUtil {
         }
         context.guiRenderState.up();
         roundedBorderedRect(context, x - 4, y - 3, x + width + 4, y + height + 2,
-            3, TOOLTIP_FILL, TOOLTIP_BORDER);
+            3, fill, TOOLTIP_BORDER);
         context.guiRenderState.up();
         for (int i = 0; i < lines.size(); i++) {
-            context.text(font, lines.get(i), x, y + i * lineHeight, TOOLTIP_TEXT, false);
+            context.text(font, lines.get(i), x, y + i * lineHeight, ink, false);
         }
     }
 

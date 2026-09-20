@@ -10,6 +10,7 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.PickList;
 import com.jellypudding.offlineclient.setting.Setting;
 import com.jellypudding.offlineclient.setting.TextSetting;
+import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.RenderUtil;
 import com.mojang.blaze3d.platform.InputConstants;
@@ -18,6 +19,7 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
 // Shared by both ClickGUI styles. Owns the search box and the typing and
@@ -35,6 +37,11 @@ public abstract class GuiScreenBase extends Screen implements SettingWidget.Host
 
     protected final TextField searchBox = new TextField();
     protected boolean searchFocused;
+
+    private final TextInput textInput = new TextInput(this);
+
+    private float scaleNow = guiScale();
+    private boolean pointerDown;
 
     // Where the search text last drew. Lets a click land the caret exactly.
     private int searchTextX;
@@ -59,6 +66,95 @@ public abstract class GuiScreenBase extends Screen implements SettingWidget.Host
 
     protected abstract boolean isWindowStyle();
 
+    protected abstract void renderGui(GuiGraphicsExtractor context, int mouseX, int mouseY,
+                                      float partialTicks);
+
+    protected abstract boolean clickGui(double mx, double my, int button);
+
+    protected abstract boolean releaseGui(double mx, double my, int button);
+
+    protected abstract boolean scrollGui(double mx, double my, double amount);
+
+    // Everything in the GUI is drawn through this and every pointer position
+    // is divided by it to match. The font is a bitmap and goes soft between
+    // whole pixels. The chosen size therefore lands on the nearest step the
+    // game's own scale allows.
+    public static float guiScale() {
+        ClickGuiModule gui = Modules.get(ClickGuiModule.class);
+        float wanted = gui == null ? 1f : gui.scale();
+        int vanilla = OfflineClient.MC.getWindow().getGuiScale();
+        if (vanilla <= 0) {
+            return wanted;
+        }
+        return Math.max(1, Math.round(vanilla * wanted)) / (float) vanilla;
+    }
+
+    // What the last frame drew at. Held still whilst the pointer is down
+    // because dragging the scale slider would otherwise move the slider out
+    // from under the pointer that is dragging it.
+    protected final float scale() {
+        return scaleNow;
+    }
+
+    protected final int viewWidth() {
+        return (int) (width / scaleNow);
+    }
+
+    protected final int viewHeight() {
+        return (int) (height / scaleNow);
+    }
+
+    protected final double toView(double screen) {
+        return screen / scaleNow;
+    }
+
+    @Override
+    public final void extractRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY,
+                                         float partialTicks) {
+        syncTextInput();
+        if (!pointerDown) {
+            scaleNow = guiScale();
+        }
+        context.pose().pushMatrix();
+        context.pose().scale(scaleNow, scaleNow);
+        renderGui(context, (int) toView(mouseX), (int) toView(mouseY), partialTicks);
+        context.pose().popMatrix();
+    }
+
+    // Asked for whenever a field is taking characters. Clicking one is the
+    // only way in and the frame before the first keystroke covers the rest.
+    private void syncTextInput() {
+        textInput.set(searchFocused || editingSetting != null);
+    }
+
+    @Override
+    public void removed() {
+        textInput.set(false);
+        super.removed();
+    }
+
+    @Override
+    public final boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        pointerDown = true;
+        boolean handled = clickGui(toView(event.x()), toView(event.y()), event.button());
+        syncTextInput();
+        return handled || super.mouseClicked(event, doubleClick);
+    }
+
+    @Override
+    public final boolean mouseReleased(MouseButtonEvent event) {
+        boolean handled = releaseGui(toView(event.x()), toView(event.y()), event.button());
+        pointerDown = false;
+        checkStyle();
+        return handled || super.mouseReleased(event);
+    }
+
+    @Override
+    public final boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        return scrollGui(toView(mouseX), toView(mouseY), scrollY)
+            || super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
+    }
+
     @Override
     public boolean isPauseScreen() {
         return false;
@@ -69,14 +165,18 @@ public abstract class GuiScreenBase extends Screen implements SettingWidget.Host
         dimBackground(this, context);
     }
 
-    // The vanilla blur washes the panel colours out. Blur adds its own when asked
-    // and a dark gradient goes over the world either way.
+    // The vanilla blur washes the panel colours out. Blur adds its own when
+    // asked. The wash over the world follows the opacity setting because a
+    // see through panel is worth nothing over a blacked out world.
     public static void dimBackground(Screen screen, GuiGraphicsExtractor context) {
         Blur blur = Modules.get(Blur.class);
         if (blur != null && blur.wants(screen)) {
             blur.blurHere(context);
         }
-        context.fillGradient(0, 0, screen.width, screen.height, DIM_TOP, DIM_BOTTOM);
+        ClickGuiModule gui = Modules.get(ClickGuiModule.class);
+        float share = gui == null ? 1f : gui.opacity();
+        context.fillGradient(0, 0, screen.width, screen.height,
+            ColorUtil.fade(DIM_TOP, share), ColorUtil.fade(DIM_BOTTOM, share));
     }
 
     @Override
@@ -105,17 +205,17 @@ public abstract class GuiScreenBase extends Screen implements SettingWidget.Host
         return OfflineClient.INSTANCE.getModuleManager().get(ClickGuiModule.class).showsHoverHelp();
     }
 
-    protected final String search() {
+    public final String search() {
         return searchBox.get();
     }
 
-    protected final boolean isSearching() {
+    public final boolean isSearching() {
         return !searchBox.isEmpty();
     }
 
     // A match count below zero leaves the tally off.
-    protected final void renderSearchBox(GuiGraphicsExtractor context, Font font, int x, int y,
-                                         int w, int mouseX, int mouseY, int matches) {
+    public final void renderSearchBox(GuiGraphicsExtractor context, Font font, int x, int y,
+                                      int w, int mouseX, int mouseY, int matches) {
         boolean active = searchFocused || isSearching();
         boolean hovered = SettingWidget.isOver(mouseX, mouseY, x, y, w, SEARCH_HEIGHT);
         String tally = matches >= 0 && isSearching()
@@ -164,7 +264,7 @@ public abstract class GuiScreenBase extends Screen implements SettingWidget.Host
             x + w - GuiTheme.PAD - CLEAR_ZONE, y, CLEAR_ZONE, SEARCH_HEIGHT);
     }
 
-    protected final boolean clickSearchBox(double mx, double my, int x, int y, int w) {
+    public final boolean clickSearchBox(double mx, double my, int x, int y, int w) {
         if (!SettingWidget.isOver(mx, my, x, y, w, SEARCH_HEIGHT)) {
             searchFocused = false;
             return false;

@@ -67,6 +67,11 @@ public abstract class HudElement {
         return scale.getFloat();
     }
 
+    // Clamped to the setting's own limits.
+    public final void setScale(double value) {
+        scale.setValue(value);
+    }
+
     public final double xPercent() {
         return x.getValue();
     }

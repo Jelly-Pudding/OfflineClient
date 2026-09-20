@@ -53,6 +53,7 @@ public final class ListPickerScreen<T> extends Screen {
     private final ScrollBar rightBar = new ScrollBar();
 
     private final TextField search = new TextField();
+    private final TextInput textInput = new TextInput(this);
     private String tooltip;
 
     public ListPickerScreen(Screen parent, PickList<T> setting) {
@@ -158,7 +159,7 @@ public final class ListPickerScreen<T> extends Screen {
 
     @Override
     public void extractBackground(GuiGraphicsExtractor context, int mouseX, int mouseY, float deltaTicks) {
-        context.fillGradient(0, 0, width, height, 0x70101018, 0xA0060610);
+        GuiScreenBase.dimBackground(this, context);
     }
 
     @Override
@@ -185,7 +186,8 @@ public final class ListPickerScreen<T> extends Screen {
             !chosen.isEmpty());
 
         if (tooltip != null && !tooltip.isEmpty()) {
-            RenderUtil.tooltip(context, font, List.of(tooltip), mouseX, mouseY, width, height);
+            RenderUtil.tooltip(context, font, List.of(tooltip), mouseX, mouseY, width, height,
+                GuiTheme.bgTooltip(), GuiTheme.text());
         }
     }
 
@@ -368,6 +370,19 @@ public final class ListPickerScreen<T> extends Screen {
             return true;
         }
         return super.charTyped(event);
+    }
+
+    // The search here is always live and takes every character typed.
+    @Override
+    public void added() {
+        super.added();
+        textInput.set(true);
+    }
+
+    @Override
+    public void removed() {
+        textInput.set(false);
+        super.removed();
     }
 
     // The same ClickGUI instance is kept with its panel positions.

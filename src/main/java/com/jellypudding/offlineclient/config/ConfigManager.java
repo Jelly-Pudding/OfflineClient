@@ -273,6 +273,16 @@ public final class ConfigManager {
         return true;
     }
 
+    // False when there was no profile of that name to remove.
+    public boolean deleteProfile(String name) {
+        try {
+            return Files.deleteIfExists(profilesFolder.resolve(sanitize(name) + ".json"));
+        } catch (IOException e) {
+            OfflineClient.LOG.error("Failed to delete the profile {}", name, e);
+            return false;
+        }
+    }
+
     public List<String> listProfiles() {
         List<String> names = new ArrayList<>();
         try (Stream<Path> stream = Files.list(profilesFolder)) {

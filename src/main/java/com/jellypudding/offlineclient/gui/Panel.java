@@ -180,13 +180,12 @@ public final class Panel {
         return !collapsed && rowsHeight() > viewportHeight();
     }
 
-    public void render(GuiGraphicsExtractor context, int mouseX, int mouseY) {
-        screenHeight = context.guiHeight();
+    public void render(GuiGraphicsExtractor context, int mouseX, int mouseY, int viewW, int viewH) {
+        screenHeight = viewH;
 
         if (dragging) {
-            x = Math.clamp(mouseX - dragOffsetX, 0, Math.max(0, context.guiWidth() - width));
-            y = Math.clamp(mouseY - dragOffsetY, 0,
-                Math.max(0, context.guiHeight() - GuiTheme.HEADER_HEIGHT));
+            x = Math.clamp(mouseX - dragOffsetX, 0, Math.max(0, viewW - width));
+            y = Math.clamp(mouseY - dragOffsetY, 0, Math.max(0, viewH - GuiTheme.HEADER_HEIGHT));
         }
         applyResize(mouseX, mouseY);
         scrollBar.update(mouseY, rowsHeight(), viewportHeight());
@@ -194,7 +193,7 @@ public final class Panel {
         int contentH = getContentHeight();
         RenderUtil.shadow(context, x - 1, y - 1, x + width + 1, y + contentH + 1, 3);
         context.guiRenderState.up();
-        RenderUtil.roundedRect(context, x - 1, y - 1, x + width + 1, y + contentH + 1,
+        RenderUtil.roundedOutline(context, x - 1, y - 1, x + width + 1, y + contentH + 1,
             GuiTheme.CORNER + 1, GuiTheme.outline());
         context.guiRenderState.up();
         renderGrabBands(context, mouseX, mouseY, contentH);

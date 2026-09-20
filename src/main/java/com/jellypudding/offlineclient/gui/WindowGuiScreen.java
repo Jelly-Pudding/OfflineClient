@@ -12,7 +12,6 @@ import com.jellypudding.offlineclient.util.RenderUtil;
 import com.jellypudding.offlineclient.util.SearchRank;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.input.MouseButtonEvent;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -147,19 +146,19 @@ public final class WindowGuiScreen extends GuiScreenBase {
     }
 
     private int windowWidth() {
-        return Math.clamp(width - 20, MIN_WIDTH, MAX_WIDTH);
+        return Math.clamp(viewWidth() - 20, MIN_WIDTH, MAX_WIDTH);
     }
 
     private int windowHeight() {
-        return Math.clamp(height - 20, MIN_HEIGHT, MAX_HEIGHT);
+        return Math.clamp(viewHeight() - 20, MIN_HEIGHT, MAX_HEIGHT);
     }
 
     private int windowX() {
-        return (width - windowWidth()) / 2;
+        return (viewWidth() - windowWidth()) / 2;
     }
 
     private int windowY() {
-        return (height - windowHeight()) / 2;
+        return (viewHeight() - windowHeight()) / 2;
     }
 
     private int searchY() {
@@ -274,7 +273,7 @@ public final class WindowGuiScreen extends GuiScreenBase {
     }
 
     @Override
-    public void extractRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float partialTicks) {
+    protected void renderGui(GuiGraphicsExtractor context, int mouseX, int mouseY, float partialTicks) {
         description = null;
         Font font = OfflineClient.MC.font;
         int wx = windowX();
@@ -467,23 +466,11 @@ public final class WindowGuiScreen extends GuiScreenBase {
     }
 
     @Override
-    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-        double mx = event.x();
-        double my = event.y();
-        int button = event.button();
-
+    protected boolean clickGui(double mx, double my, int button) {
         beginClick();
-
-        if (clickSearchBox(mx, my, windowX() + MARGIN, searchY(), windowWidth() - 2 * MARGIN)) {
-            return true;
-        }
-        if (clickSidebar(mx, my)) {
-            return true;
-        }
-        if (clickList(mx, my, button)) {
-            return true;
-        }
-        return super.mouseClicked(event, doubleClick);
+        return clickSearchBox(mx, my, windowX() + MARGIN, searchY(), windowWidth() - 2 * MARGIN)
+            || clickSidebar(mx, my)
+            || clickList(mx, my, button);
     }
 
     private boolean clickSidebar(double mx, double my) {
@@ -570,22 +557,21 @@ public final class WindowGuiScreen extends GuiScreenBase {
     }
 
     @Override
-    public boolean mouseReleased(MouseButtonEvent event) {
+    protected boolean releaseGui(double mx, double my, int button) {
         scrollBar.release();
         drag.release();
-        checkStyle();
-        return super.mouseReleased(event);
+        return false;
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+    protected boolean scrollGui(double mx, double my, double amount) {
         int top = contentTop();
         int h = contentHeight();
-        if (SettingWidget.isOver(mouseX, mouseY, listX(), top, listWidth(), h)) {
+        if (SettingWidget.isOver(mx, my, listX(), top, listWidth(), h)) {
             refreshListed();
-            scrollBar.scroll(ScrollBar.wheelDelta(scrollY, totalHeight(), h), totalHeight(), h);
+            scrollBar.scroll(ScrollBar.wheelDelta(amount, totalHeight(), h), totalHeight(), h);
             return true;
         }
-        return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
+        return false;
     }
 }

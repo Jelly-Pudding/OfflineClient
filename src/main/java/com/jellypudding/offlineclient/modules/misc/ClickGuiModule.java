@@ -1,6 +1,7 @@
 package com.jellypudding.offlineclient.modules.misc;
 
 import com.jellypudding.offlineclient.gui.ClickGuiScreen;
+import com.jellypudding.offlineclient.gui.TabStrip;
 import com.jellypudding.offlineclient.gui.WindowGuiScreen;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
@@ -20,6 +21,10 @@ public final class ClickGuiModule extends Module {
         .describe(Style.PANELS, "A draggable panel for each category.")
         .describe(Style.WINDOW, "One window with a category sidebar.");
 
+    private final NumberSetting scale = new NumberSetting("Scale",
+        "Size everything in the GUI is drawn at. Smaller fits more on screen. The size lands on whole pixels to stay sharp.",
+        50, 40, 150, 5, "%").min(30).max(200);
+
     private final BoolSetting hoverHelp = new BoolSetting("Hover help",
         "Explains a module or setting whilst you hover over it.", true);
     private final ColorSetting accent = new ColorSetting("Accent",
@@ -29,7 +34,8 @@ public final class ClickGuiModule extends Module {
     private final ColorSetting text = new ColorSetting("Text",
         "Colour the writing is shaded from.", 240, 0.0327869f, 0.9568627f, false);
     private final NumberSetting opacity = new NumberSetting("Opacity",
-        "How solid the panels are.", 100, 15, 100, 1, "%").min(5).max(100);
+        "How solid the GUI is. Lower lets the world show through.",
+        70, 10, 100, 1, "%").min(0).max(100);
     // Nearly white and a faint grey. The same shades the theme text uses.
     private final ColorSetting titleColor = new ColorSetting("Title colour",
         "Colour of the client name at the top of the window.", 240, 0.03f, 0.96f, false)
@@ -38,11 +44,26 @@ public final class ClickGuiModule extends Module {
         "Colour of the version number next to it.", 232, 0.2f, 0.55f, false)
         .under(style, Style.WINDOW);
 
+    private final BoolSetting tabs = new BoolSetting("Tabs",
+        "The row of tabs across the top of the GUI.", true);
+
     public ClickGuiModule() {
         super("ClickGUI", "Opens the GUI and sets its accent colour.",
             Category.MISC, InputConstants.KEY_RSHIFT);
-        addSettings(style, hoverHelp, accent, background, text, opacity,
-            titleColor, versionColor);
+        addSettings(style, scale, hoverHelp, accent, background, text, opacity, tabs);
+        for (TabStrip.Tab tab : TabStrip.Tab.values()) {
+            addSettings(tab.getSetting().under(tabs));
+        }
+        addSettings(titleColor, versionColor);
+    }
+
+    // A share of the normal size. Every GUI screen draws through it.
+    public float scale() {
+        return scale.getFloat() / 100f;
+    }
+
+    public boolean showsTabs() {
+        return tabs.isOn();
     }
 
     public int titleColor() {

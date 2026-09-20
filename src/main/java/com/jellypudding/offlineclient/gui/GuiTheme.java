@@ -28,6 +28,7 @@ public final class GuiTheme {
     private static final int DEFAULT_ROW = 0xF01A1A26;
     private static final int DEFAULT_ROW_HOVER = 0xF0272736;
     private static final int DEFAULT_SETTING = 0xF00E0E17;
+    private static final int DEFAULT_TOOLTIP = 0xF00E0E14;
     private static final int DEFAULT_TEXT = 0xFFECECF4;
     private static final int DEFAULT_TEXT_DIM = 0xFFA6A8BA;
     private static final int DEFAULT_TEXT_FAINT = 0xFF70738C;
@@ -87,6 +88,10 @@ public final class GuiTheme {
         return bg(DEFAULT_SETTING);
     }
 
+    public static int bgTooltip() {
+        return bg(DEFAULT_TOOLTIP);
+    }
+
     public static int text() {
         return ink(DEFAULT_TEXT);
     }
@@ -140,8 +145,10 @@ public final class GuiTheme {
         return ColorUtil.lerp(accent(), 0xFFFFFFFF, 0.3f);
     }
 
+    // The tint keeps the background's own alpha. An accent is solid and would
+    // otherwise make a tinted row heavier than the panel it sits in.
     public static int accentOn(int background, float amount) {
-        return ColorUtil.lerp(background, accent(), amount);
+        return ColorUtil.withAlpha(ColorUtil.lerp(background, accent(), amount), background >>> 24);
     }
 
     public static int contrastText(int background) {
