@@ -1,6 +1,7 @@
 package com.jellypudding.offlineclient.gui;
 
 import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.RenderUtil;
@@ -11,19 +12,27 @@ import net.minecraft.client.input.KeyEvent;
 
 import java.util.List;
 
-// What a tab opens. A box under the tabs holding one row per entry. Drag an
-// edge to resize it.
+// What a tab opens. A box under the tabs holding one row per entry with a
+// field to add another. Drag an edge to resize it.
 public final class TabView {
+
+    // One row. The detail sits on the right and the tip explains the row.
+    public record Entry(String name, String detail, String tip) {
+
+        public Entry(String name) {
+            this(name, "", "");
+        }
+    }
 
     // What the box is looking at. The client owns the data and this reads it.
     public interface Source {
-        List<String> entries();
+        List<Entry> entries();
 
         // Shown when there is nothing to list.
         String emptyText();
 
-        // What a left click does. Empty means a click does nothing.
-        default String actionName() {
+        // A line along the bottom saying what the rows do.
+        default String footer() {
             return "";
         }
 
@@ -35,23 +44,33 @@ public final class TabView {
         default void add(String text) {
         }
 
-        default void activate(String entry) {
+        default void activate(String name) {
         }
 
-        default void drop(String entry) {
+        default void drop(String name) {
+        }
+
+        // True when clicking the detail listens for a key to put there.
+        default boolean bindable() {
+            return false;
+        }
+
+        default void bind(String name, int key) {
         }
     }
 
     // A multiplication sign. The closest thing to a cross the font has.
     private static final String DROP = "×";
+    private static final String LISTENING = "press a key";
     private static final int DROP_ZONE = 14;
     private static final int EMPTY_HEIGHT = 18;
+    private static final int LINE = 10;
     private static final int GRAB = 4;
     private static final int PAD = 2;
-    private static final int MIN_WIDTH = 120;
+    private static final int MIN_WIDTH = 140;
     private static final int MAX_WIDTH = 460;
     private static final int MIN_HEIGHT = 40;
-    private static final int DEFAULT_WIDTH = 200;
+    private static final int DEFAULT_WIDTH = 220;
     private static final int DEFAULT_HEIGHT = 150;
 
     // A listing can reach the disk. Often enough to feel live is plenty.
@@ -62,8 +81,6 @@ public final class TabView {
     private final ScrollBar scrollBar = new ScrollBar();
     private final TextField adder = new TextField();
 
-    private boolean typing;
-
     private int width = DEFAULT_WIDTH;
     private int height = DEFAULT_HEIGHT;
 
@@ -71,7 +88,10 @@ public final class TabView {
     private boolean sizeRight;
     private boolean sizeBottom;
 
-    private List<String> entries = List.of();
+    private boolean typing;
+    private String binding;
+
+    private List<Entry> entries = List.of();
     private long read;
 
     // Where the box landed this frame. The width and height above are what
@@ -108,7 +128,7 @@ public final class TabView {
         read = System.currentTimeMillis();
     }
 
-    private List<String> entries() {
+    private List<Entry> entries() {
         if (System.currentTimeMillis() - read > REFRESH_MS) {
             refresh();
         }
@@ -118,6 +138,15 @@ public final class TabView {
     private int contentHeight() {
         int count = entries().size();
         return count == 0 ? EMPTY_HEIGHT : count * GuiTheme.ROW_HEIGHT;
+    }
+
+    // The strip the field sits in. Zero when this list cannot be added to.
+    private int fieldHeight() {
+        return source.addHint().isEmpty() ? 0 : GuiScreenBase.SEARCH_HEIGHT + PAD;
+    }
+
+    private int footerHeight() {
+        return source.footer().isEmpty() ? 0 : LINE;
     }
 
     // What the box is allowed to draw at right now. The size the user chose
@@ -130,21 +159,20 @@ public final class TabView {
         return Math.clamp(width, MIN_WIDTH, Math.max(MIN_WIDTH, viewW - 8));
     }
 
-    // The strip the field sits in. Zero when this list cannot be added to.
-    private int fieldHeight() {
-        return source.addHint().isEmpty() ? 0 : GuiScreenBase.SEARCH_HEIGHT + PAD;
-    }
-
     private int viewHeight() {
-        return Math.max(0, drawn - PAD * 2 - fieldHeight());
-    }
-
-    public boolean isTyping() {
-        return typing;
+        return Math.max(0, drawn - PAD * 2 - fieldHeight() - footerHeight());
     }
 
     private int rowRoom() {
         return wide - PAD * 2;
+    }
+
+    private int rowsTop() {
+        return top + PAD + fieldHeight();
+    }
+
+    public boolean isTyping() {
+        return typing || binding != null;
     }
 
     public boolean isOver(double mx, double my) {
@@ -165,12 +193,22 @@ public final class TabView {
         scrollBar.release();
     }
 
-    // True when the key belonged to the field.
+    // True when the key belonged to this box.
     public boolean keyPressed(KeyEvent event) {
+        int key = event.key();
+        if (binding != null) {
+            if (key == InputConstants.KEY_DELETE || key == InputConstants.KEY_BACKSPACE) {
+                source.bind(binding, KeybindSetting.UNBOUND);
+            } else if (key != InputConstants.KEY_ESCAPE) {
+                source.bind(binding, key);
+            }
+            binding = null;
+            refresh();
+            return true;
+        }
         if (!typing) {
             return false;
         }
-        int key = event.key();
         if (key == InputConstants.KEY_ESCAPE) {
             adder.clear();
             typing = false;
@@ -216,17 +254,19 @@ public final class TabView {
         context.guiRenderState.up();
         renderGrabBands(context, mouseX, mouseY);
 
-        int rowW = ScrollBar.rowWidth(rowRoom(), full, view);
+        Font font = OfflineClient.MC.font;
         int rowX = left + PAD;
-        int viewTop = top + PAD + fieldHeight();
         if (fieldHeight() > 0) {
             boolean hovered = SettingWidget.isOver(mouseX, mouseY, rowX, top + PAD,
                 rowRoom(), GuiScreenBase.SEARCH_HEIGHT);
-            GuiScreenBase.searchField(context, OfflineClient.MC.font, rowX, top + PAD,
-                rowRoom(), adder, source.addHint(), typing, hovered, typing, null);
+            GuiScreenBase.searchField(context, font, rowX, top + PAD, rowRoom(), adder,
+                source.addHint(), typing, hovered, typing, null);
         }
+
+        int rowW = ScrollBar.rowWidth(rowRoom(), full, view);
+        int viewTop = rowsTop();
         context.enableScissor(rowX, viewTop, rowX + rowW, viewTop + view);
-        renderRows(context, rowX, viewTop, view, rowW, mouseX, mouseY);
+        renderRows(context, font, rowX, viewTop, view, rowW, mouseX, mouseY);
         context.disableScissor();
 
         if (full > view) {
@@ -234,12 +274,16 @@ public final class TabView {
             scrollBar.render(context, trackX, viewTop, view, full,
                 ScrollBar.isOverTrack(mouseX, mouseY, trackX, viewTop, view));
         }
+        if (footerHeight() > 0) {
+            context.text(font, SettingWidget.trimEnd(font, source.footer(), rowRoom()),
+                rowX + GuiTheme.PAD - 2, GuiTheme.textY(viewTop + view, LINE),
+                GuiTheme.textFaint(), false);
+        }
     }
 
-    private void renderRows(GuiGraphicsExtractor context, int rowX, int viewTop, int view,
-                            int rowW, int mouseX, int mouseY) {
-        Font font = OfflineClient.MC.font;
-        List<String> rows = entries();
+    private void renderRows(GuiGraphicsExtractor context, Font font, int rowX, int viewTop,
+                            int view, int rowW, int mouseX, int mouseY) {
+        List<Entry> rows = entries();
         if (rows.isEmpty()) {
             context.text(font, source.emptyText(), rowX + GuiTheme.PAD,
                 GuiTheme.textY(viewTop, EMPTY_HEIGHT), GuiTheme.textFaint(), false);
@@ -248,37 +292,46 @@ public final class TabView {
         boolean inView = mouseX >= rowX && mouseX < rowX + rowW
             && mouseY >= viewTop && mouseY < viewTop + view;
         int rowY = viewTop - scrollBar.getOffset();
-        for (String entry : rows) {
+        for (Entry entry : rows) {
             int h = GuiTheme.ROW_HEIGHT;
             if (rowY + h > viewTop && rowY < viewTop + view) {
-                boolean hovered = inView && SettingWidget.isOver(mouseX, mouseY, rowX, rowY, rowW, h);
-                context.fill(rowX, rowY, rowX + rowW, rowY + h - 1,
-                    hovered ? GuiTheme.bgRowHover() : GuiTheme.bgRow());
-                context.fill(rowX, rowY + h - 1, rowX + rowW, rowY + h, GuiTheme.RULE);
-                context.guiRenderState.up();
-
-                int room = rowW - GuiTheme.PAD - DROP_ZONE;
-                context.text(font, SettingWidget.trimEnd(font, entry, room),
-                    rowX + GuiTheme.PAD, GuiTheme.textY(rowY, h - 1),
-                    hovered ? GuiTheme.text() : GuiTheme.textDim(), false);
-
-                boolean overDrop = hovered && mouseX >= rowX + rowW - DROP_ZONE;
-                context.text(font, DROP, rowX + rowW - DROP_ZONE
-                        + (DROP_ZONE - font.width(DROP)) / 2, GuiTheme.textY(rowY, h - 1),
-                    overDrop ? ColorUtil.lerp(GuiTheme.text(), 0xFFFF6B6B, 0.7f)
-                        : GuiTheme.textFaint(), false);
-
-                if (hovered) {
-                    host.setTooltip(overDrop ? "Remove " + entry : hoverHelp(entry));
-                }
+                renderRow(context, font, entry, rowX, rowY, rowW, mouseX, mouseY, inView);
             }
             rowY += h;
         }
     }
 
-    private String hoverHelp(String entry) {
-        String action = source.actionName();
-        return action.isEmpty() ? entry : action + " " + entry;
+    private void renderRow(GuiGraphicsExtractor context, Font font, Entry entry, int rowX,
+                           int rowY, int rowW, int mouseX, int mouseY, boolean inView) {
+        int h = GuiTheme.ROW_HEIGHT;
+        boolean hovered = inView && SettingWidget.isOver(mouseX, mouseY, rowX, rowY, rowW, h);
+        context.fill(rowX, rowY, rowX + rowW, rowY + h - 1,
+            hovered ? GuiTheme.bgRowHover() : GuiTheme.bgRow());
+        context.fill(rowX, rowY + h - 1, rowX + rowW, rowY + h, GuiTheme.RULE);
+        context.guiRenderState.up();
+
+        int textY = GuiTheme.textY(rowY, h - 1);
+        String detail = entry.name().equals(binding) ? LISTENING : entry.detail();
+        int detailWidth = detail.isEmpty() ? 0 : font.width(detail) + 6;
+        int detailX = rowX + rowW - DROP_ZONE - detailWidth;
+        if (!detail.isEmpty()) {
+            boolean overDetail = hovered && mouseX >= detailX && mouseX < detailX + detailWidth;
+            int colour = entry.name().equals(binding) ? GuiTheme.accentText()
+                : (overDetail && source.bindable() ? GuiTheme.text() : GuiTheme.textFaint());
+            context.text(font, detail, detailX + 3, textY, colour, false);
+        }
+
+        context.text(font, SettingWidget.trimEnd(font, entry.name(), detailX - rowX - GuiTheme.PAD),
+            rowX + GuiTheme.PAD, textY, hovered ? GuiTheme.text() : GuiTheme.textDim(), false);
+
+        boolean overDrop = hovered && mouseX >= rowX + rowW - DROP_ZONE;
+        context.text(font, DROP, rowX + rowW - DROP_ZONE + (DROP_ZONE - font.width(DROP)) / 2,
+            textY, overDrop ? ColorUtil.lerp(GuiTheme.text(), 0xFFFF6B6B, 0.7f)
+                : GuiTheme.textFaint(), false);
+
+        if (hovered) {
+            host.setTooltip(overDrop ? "Remove " + entry.name() : entry.tip());
+        }
     }
 
     private void renderGrabBands(GuiGraphicsExtractor context, int mouseX, int mouseY) {
@@ -344,22 +397,25 @@ public final class TabView {
         }
         if (mx < left || mx >= left + wide || my < top || my >= top + drawn) {
             typing = false;
+            binding = null;
             return false;
         }
 
-        int full = contentHeight();
-        int view = viewHeight();
         int rowX = left + PAD;
-        int viewTop = top + PAD + fieldHeight();
         if (fieldHeight() > 0 && SettingWidget.isOver(mx, my, rowX, top + PAD,
             rowRoom(), GuiScreenBase.SEARCH_HEIGHT)) {
             typing = true;
+            binding = null;
             if (GuiScreenBase.overClear(adder, mx, my, rowX, top + PAD, rowRoom())) {
                 adder.clear();
             }
             return true;
         }
         typing = false;
+
+        int full = contentHeight();
+        int view = viewHeight();
+        int viewTop = rowsTop();
         int trackX = ScrollBar.trackX(rowX, rowRoom());
         if (full > view && ScrollBar.isOverTrack(mx, my, trackX, viewTop, view)) {
             scrollBar.beginDrag((int) my);
@@ -369,22 +425,31 @@ public final class TabView {
         if (my < viewTop || my >= viewTop + view || !InputUtil.isLeft(button)) {
             return true;
         }
+        clickRow(mx, my, rowX, viewTop, ScrollBar.rowWidth(rowRoom(), full, view));
+        return true;
+    }
 
-        int rowW = ScrollBar.rowWidth(rowRoom(), full, view);
+    private void clickRow(double mx, double my, int rowX, int viewTop, int rowW) {
+        Font font = OfflineClient.MC.font;
         int rowY = viewTop - scrollBar.getOffset();
-        for (String entry : entries()) {
+        for (Entry entry : entries()) {
             int h = GuiTheme.ROW_HEIGHT;
             if (SettingWidget.isOver(mx, my, rowX, rowY, rowW, h)) {
+                int detailWidth = entry.detail().isEmpty() ? 0 : font.width(entry.detail()) + 6;
+                int detailX = rowX + rowW - DROP_ZONE - detailWidth;
                 if (mx >= rowX + rowW - DROP_ZONE) {
-                    source.drop(entry);
-                } else if (!source.actionName().isEmpty()) {
-                    source.activate(entry);
+                    source.drop(entry.name());
+                } else if (source.bindable() && detailWidth > 0 && mx >= detailX) {
+                    binding = entry.name();
+                    return;
+                } else {
+                    source.activate(entry.name());
                 }
+                binding = null;
                 refresh();
-                return true;
+                return;
             }
             rowY += h;
         }
-        return true;
     }
 }

@@ -31,7 +31,7 @@ public final class ConfigManager {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     // Raised when old saved values need a one time migration.
-    private static final int CONFIG_VERSION = 4;
+    private static final int CONFIG_VERSION = 3;
 
     private final Path file;
     private final Path profilesFolder;
@@ -162,25 +162,11 @@ public final class ConfigManager {
                     setting.reset();
                 }
             }
-            if (version < 4) {
-                // Version 3 drew the wordiest three at full size.
-                resetSmaller("Watermark scale", "Module list scale", "Info bar scale");
-            }
             if (version < CONFIG_VERSION) {
                 saveSoon();
             }
         } catch (Exception e) {
             OfflineClient.LOG.error("Failed to apply config", e);
-        }
-    }
-
-    private static void resetSmaller(String... names) {
-        HudModule hud = OfflineClient.INSTANCE.getModuleManager().get(HudModule.class);
-        for (String name : names) {
-            Setting<?> setting = hud.getSetting(name);
-            if (setting != null) {
-                setting.reset();
-            }
         }
     }
 

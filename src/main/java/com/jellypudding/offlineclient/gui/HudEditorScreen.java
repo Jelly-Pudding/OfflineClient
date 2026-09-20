@@ -75,6 +75,7 @@ public final class HudEditorScreen extends Screen {
 
     @Override
     public void onClose() {
+        list.save();
         OfflineClient.INSTANCE.getConfigManager().saveSoon();
         super.onClose();
     }
@@ -120,7 +121,7 @@ public final class HudEditorScreen extends Screen {
                     labelY(box), GuiTheme.textDim(), true);
             }
         }
-        list.render(context, height, mouseX, mouseY);
+        list.render(context, width, height, mouseX, mouseY);
     }
 
     // An element pinned against the top edge has no room above it. Its name

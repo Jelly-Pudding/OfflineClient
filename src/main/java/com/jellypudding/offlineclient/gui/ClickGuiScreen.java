@@ -84,8 +84,10 @@ public final class ClickGuiScreen extends GuiScreenBase {
     private int grabX;
     private int grabY;
 
-    // The scale the layout was last checked against.
+    // The scale and the view the layout was last worked out against.
     private float drawnAt;
+    private int laidOutW;
+    private int laidOutH;
 
     public ClickGuiScreen() {
         JsonObject gui = OfflineClient.INSTANCE.getConfigManager().getGuiState();
@@ -269,12 +271,16 @@ public final class ClickGuiScreen extends GuiScreenBase {
     // never moved are laid out again to fit the window. Anything they placed
     // themselves is only pulled back inside the edges.
     private void layout() {
+        int wasW = laidOutW > 0 ? laidOutW : viewWidth();
+        int wasH = laidOutH > 0 ? laidOutH : viewHeight();
         drawnAt = scale();
-        placeSearch();
+        laidOutW = viewWidth();
+        laidOutH = viewHeight();
+        placeSearch(wasW, wasH);
         List<Panel> loose = new ArrayList<>();
         for (Panel panel : panels) {
             if (panel.isPlaced()) {
-                clampInside(panel);
+                keepPlace(panel, wasW, wasH);
             } else {
                 loose.add(panel);
             }
@@ -282,7 +288,26 @@ public final class ClickGuiScreen extends GuiScreenBase {
         tile(loose);
     }
 
-    private void placeSearch() {
+    // A panel the user put somewhere keeps the same share of the window
+    // rather than being shoved against whichever edge came closest.
+    private void keepPlace(Panel panel, int wasW, int wasH) {
+        int top = searchFloor();
+        int across = travel(panel.getX(), wasW - panel.getWidth(),
+            viewWidth() - panel.getWidth());
+        int down = travel(panel.getY() - top, wasH - top - GuiTheme.HEADER_HEIGHT,
+            viewHeight() - top - GuiTheme.HEADER_HEIGHT);
+        panel.setPosition(across, top + down);
+    }
+
+    private static int travel(int at, int wasRoom, int room) {
+        int limit = Math.max(0, room);
+        if (wasRoom <= 0) {
+            return Math.clamp(at, 0, limit);
+        }
+        return Math.clamp(Math.round(at * (float) limit / wasRoom), 0, limit);
+    }
+
+    private void placeSearch(int wasW, int wasH) {
         searchWidth = Math.clamp(searchWidth, SEARCH_WIDTH_MIN,
             Math.max(SEARCH_WIDTH_MIN, Math.min(SEARCH_WIDTH_MAX, viewWidth())));
         int floor = searchFloor();
@@ -291,15 +316,9 @@ public final class ClickGuiScreen extends GuiScreenBase {
             searchY = floor + RESULTS_GAP;
             return;
         }
-        searchX = Math.clamp(searchX, 0, Math.max(0, viewWidth() - searchWidth));
-        searchY = Math.clamp(searchY, floor, Math.max(floor, viewHeight() - SEARCH_HEIGHT));
-    }
-
-    private void clampInside(Panel panel) {
-        int top = searchFloor();
-        panel.setPosition(Math.clamp(panel.getX(), 0, Math.max(0, viewWidth() - panel.getWidth())),
-            Math.clamp(panel.getY(), top,
-                Math.max(top, viewHeight() - GuiTheme.HEADER_HEIGHT)));
+        searchX = travel(searchX, wasW - searchWidth, viewWidth() - searchWidth);
+        searchY = floor + travel(searchY - floor, wasH - floor - SEARCH_HEIGHT,
+            viewHeight() - floor - SEARCH_HEIGHT);
     }
 
     // Centred rows under the search bar. Starting hard against the left edge
