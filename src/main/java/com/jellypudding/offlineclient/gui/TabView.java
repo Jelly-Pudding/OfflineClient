@@ -71,7 +71,6 @@ public final class TabView {
     private static final int MAX_WIDTH = 460;
     private static final int MIN_HEIGHT = 40;
     private static final int DEFAULT_WIDTH = 220;
-    private static final int DEFAULT_HEIGHT = 150;
 
     // A listing can reach the disk. Often enough to feel live is plenty.
     private static final long REFRESH_MS = 500;
@@ -82,7 +81,8 @@ public final class TabView {
     private final TextField adder = new TextField();
 
     private int width = DEFAULT_WIDTH;
-    private int height = DEFAULT_HEIGHT;
+    // Zero leaves the box as tall as its rows need.
+    private int height;
 
     private boolean sizeLeft;
     private boolean sizeRight;
@@ -120,7 +120,7 @@ public final class TabView {
     }
 
     public void setHeight(int value) {
-        height = Math.max(MIN_HEIGHT, value);
+        height = value <= 0 ? 0 : Math.max(MIN_HEIGHT, value);
     }
 
     private void refresh() {
@@ -152,7 +152,9 @@ public final class TabView {
     // What the box is allowed to draw at right now. The size the user chose
     // is kept whole even when the window is too small to show it.
     private int drawHeight(int viewH, int under) {
-        return Math.clamp(height, MIN_HEIGHT, Math.max(MIN_HEIGHT, viewH - under - 6));
+        int wanted = height > 0 ? height
+            : PAD * 2 + fieldHeight() + footerHeight() + contentHeight();
+        return Math.clamp(wanted, MIN_HEIGHT, Math.max(MIN_HEIGHT, viewH - under - 6));
     }
 
     private int drawWidth(int viewW) {
@@ -389,7 +391,7 @@ public final class TabView {
                 sizeBottom = bottom;
             } else if (InputUtil.isRight(button)) {
                 width = DEFAULT_WIDTH;
-                height = DEFAULT_HEIGHT;
+                height = 0;
             }
             return true;
         }

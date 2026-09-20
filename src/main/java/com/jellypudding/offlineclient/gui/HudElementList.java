@@ -10,27 +10,18 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 
 import java.util.List;
 
-// The panel down the side of the HUD editor. Every piece of the overlay with
-// a switch beside it and the handful of hints that belong here rather than
-// over the top of the overlay itself.
-public final class HudElementList {
+// The panel in the HUD editor. Every piece of the overlay with a switch
+// beside it and the hints that belong here rather than over the overlay.
+public final class HudElementList extends PanelFrame {
 
-    private static final int DEFAULT_WIDTH = 106;
-    private static final int MIN_WIDTH = 78;
-    private static final int MAX_WIDTH = 220;
-    private static final int GRAB = 4;
-    private static final int MARGIN = 6;
-    private static final int HEADER = 13;
-    // The right end of the header collapses the panel rather than moving it.
-    private static final int MARKER_ZONE = 14;
-    private static final String STATE_KEY = "hudList";
+    private static final int START_WIDTH = 108;
     private static final int ROW = 11;
     private static final int PILL_WIDTH = 16;
     private static final int PILL_HEIGHT = 7;
     private static final int PAD = 5;
-    private static final int BOTTOM_GAP = 6;
+    private static final int LINE = 9;
+    private static final String STATE_KEY = "hudList";
 
-    private static final String TITLE = "Overlay";
     private static final String[] HINTS = {
         "drag to move",
         "corner to resize",
@@ -38,25 +29,10 @@ public final class HudElementList {
     };
 
     private final List<HudElement> elements;
-    private final ScrollBar scrollBar = new ScrollBar();
-
-    private int left = MARGIN;
-    private int top = MARGIN;
-    private int wide = DEFAULT_WIDTH;
-    // Zero leaves the list as tall as the elements need.
-    private int wish;
-
-    private int listTop;
-    private int listHeight;
-    private boolean collapsed;
-    private boolean dragging;
-    private boolean sizing;
-    private boolean sizingTall;
-    private int grabX;
-    private int grabY;
     private HudElement hovered;
 
     public HudElementList(List<HudElement> elements) {
+        super("Overlay", 6, 6, START_WIDTH);
         this.elements = elements;
         restore();
     }
@@ -68,27 +44,26 @@ public final class HudElementList {
         }
         JsonObject state = gui.getAsJsonObject(STATE_KEY);
         if (state.has("x") && state.has("y")) {
-            left = state.get("x").getAsInt();
-            top = state.get("y").getAsInt();
-        }
-        if (state.has("collapsed")) {
-            collapsed = state.get("collapsed").getAsBoolean();
+            setPosition(state.get("x").getAsInt(), state.get("y").getAsInt());
         }
         if (state.has("width")) {
-            wide = Math.clamp(state.get("width").getAsInt(), MIN_WIDTH, MAX_WIDTH);
+            setWidth(state.get("width").getAsInt());
         }
-        if (state.has("rows")) {
-            wish = Math.max(0, state.get("rows").getAsInt());
+        if (state.has("height")) {
+            setViewHeight(state.get("height").getAsInt());
+        }
+        if (state.has("collapsed")) {
+            setCollapsed(state.get("collapsed").getAsBoolean());
         }
     }
 
     public void save() {
         JsonObject state = new JsonObject();
-        state.addProperty("x", left);
-        state.addProperty("y", top);
-        state.addProperty("collapsed", collapsed);
-        state.addProperty("width", wide);
-        state.addProperty("rows", wish);
+        state.addProperty("x", getX());
+        state.addProperty("y", getY());
+        state.addProperty("width", getWidth());
+        state.addProperty("height", getViewHeight());
+        state.addProperty("collapsed", isCollapsed());
         OfflineClient.INSTANCE.getConfigManager().getGuiState().add(STATE_KEY, state);
     }
 
@@ -97,189 +72,86 @@ public final class HudElementList {
         return hovered;
     }
 
-    private int hintHeight() {
-        return HINTS.length * 9 + PAD;
+    @Override
+    protected boolean opaque() {
+        return true;
     }
 
-    private int contentHeight() {
+    @Override
+    protected int contentHeight() {
         return elements.size() * ROW;
     }
 
-    public void render(GuiGraphicsExtractor context, int screenWidth, int screenHeight,
-                       int mouseX, int mouseY) {
+    @Override
+    protected int footerHeight() {
+        return HINTS.length * LINE + PAD;
+    }
+
+    @Override
+    protected void renderFooter(GuiGraphicsExtractor context, int top, int rowWidth) {
+        Font font = OfflineClient.MC.font;
+        int y = top + 1;
+        for (String hint : HINTS) {
+            context.text(font, SettingWidget.trimEnd(font, hint, rowWidth - PAD * 2),
+                getX() + PAD, y, GuiTheme.textFaint(), false);
+            y += LINE;
+        }
+    }
+
+    @Override
+    protected void renderContent(GuiGraphicsExtractor context, int viewTop, int view,
+                                 int rowWidth, int mouseX, int mouseY) {
         Font font = OfflineClient.MC.font;
         hovered = null;
-        if (dragging) {
-            left = Math.clamp(mouseX - grabX, 0, Math.max(0, screenWidth - wide));
-            top = Math.clamp(mouseY - grabY, 0, Math.max(0, screenHeight - HEADER));
-        }
-        if (sizing) {
-            wide = Math.clamp(mouseX - left, MIN_WIDTH, Math.min(MAX_WIDTH, screenWidth - left));
-        }
-        listTop = top + HEADER;
-        int room = Math.max(ROW, screenHeight - listTop - hintHeight() - BOTTOM_GAP);
-        if (sizingTall) {
-            wish = Math.clamp(mouseY - listTop, ROW, room);
-        }
-        int wanted = wish > 0 ? wish : contentHeight();
-        listHeight = collapsed ? 0 : Math.clamp(wanted, ROW, room);
-        int boxBottom = bottom();
-
-        RenderUtil.roundedBorderedRect(context, left, top, left + wide, boxBottom,
-            GuiTheme.CORNER + 1, GuiTheme.bgSolid(), GuiTheme.outline());
-        context.guiRenderState.up();
-
-        RenderUtil.roundedRect(context, left, top, left + wide, top + HEADER,
-            GuiTheme.CORNER + 1, GuiTheme.bgHeader(), true, collapsed);
-        if (!collapsed) {
-            context.fill(left, top + HEADER - 1, left + wide, top + HEADER, GuiTheme.accent());
-        }
-        context.guiRenderState.up();
-        context.text(font, TITLE, left + PAD, GuiTheme.textY(top, HEADER - 1),
-            GuiTheme.accentText(), false);
-        RenderUtil.chevron(context, left + wide - 12, top + (HEADER - 5) / 2, collapsed,
-            GuiTheme.textDim());
-        if (collapsed) {
-            return;
-        }
-
-        scrollBar.update(mouseY, contentHeight(), listHeight);
-        int rowW = ScrollBar.rowWidth(wide, contentHeight(), listHeight);
-        context.enableScissor(left, listTop, left + rowW, listTop + listHeight);
-        renderRows(context, font, rowW, mouseX, mouseY);
-        context.disableScissor();
-
-        if (contentHeight() > listHeight) {
-            int trackX = ScrollBar.trackX(left, wide);
-            scrollBar.render(context, trackX, listTop, listHeight, contentHeight(),
-                ScrollBar.isOverTrack(mouseX, mouseY, trackX, listTop, listHeight));
-        }
-
-        int hintY = listTop + listHeight + PAD - 1;
-        for (String hint : HINTS) {
-            context.text(font, SettingWidget.trimEnd(font, hint, wide - PAD * 2),
-                left + PAD, hintY, GuiTheme.textFaint(), false);
-            hintY += 9;
-        }
-        renderGrabBands(context, mouseX, mouseY, boxBottom);
-    }
-
-    // The bands sit outside the box to keep clear of the rows.
-    private void renderGrabBands(GuiGraphicsExtractor context, int mouseX, int mouseY, int foot) {
-        int hot = GuiTheme.accent();
-        if (sizing || nearSide(mouseX, mouseY, foot)) {
-            context.fill(left + wide, top, left + wide + 1, foot, hot);
-        }
-        if (sizingTall || nearFoot(mouseX, mouseY)) {
-            context.fill(left, listTop + listHeight, left + wide,
-                listTop + listHeight + 1, hot);
-        }
-        context.guiRenderState.up();
-    }
-
-    private boolean nearSide(double mx, double my, int foot) {
-        return my >= top && my <= foot
-            && mx >= left + wide - 1 && mx <= left + wide + GRAB;
-    }
-
-    private boolean nearFoot(double mx, double my) {
-        return !collapsed && mx >= left && mx <= left + wide
-            && Math.abs(my - (listTop + listHeight)) <= GRAB;
-    }
-
-    private void renderRows(GuiGraphicsExtractor context, Font font, int rowW,
-                            int mouseX, int mouseY) {
-        boolean inView = mouseX >= left && mouseX < left + rowW
-            && mouseY >= listTop && mouseY < listTop + listHeight;
-        int y = listTop - scrollBar.getOffset();
+        boolean inView = mouseX >= getX() && mouseX < getX() + rowWidth
+            && mouseY >= viewTop && mouseY < viewTop + view;
+        int y = viewTop - getScrollOffset();
         for (HudElement element : elements) {
-            if (y + ROW > listTop && y < listTop + listHeight) {
-                boolean over = inView && SettingWidget.isOver(mouseX, mouseY, left, y, rowW, ROW);
-                boolean on = element.isActive();
-                if (over) {
-                    context.fill(left, y, left + rowW, y + ROW, GuiTheme.bgRowHover());
-                    context.guiRenderState.up();
-                    hovered = element;
-                }
-                int room = rowW - PAD * 2 - PILL_WIDTH - 4;
-                context.text(font, SettingWidget.trimEnd(font, element.getName(), room),
-                    left + PAD, GuiTheme.textY(y, ROW),
-                    on ? GuiTheme.text() : GuiTheme.textFaint(), false);
-                RenderUtil.toggle(context, left + rowW - PAD - PILL_WIDTH,
-                    y + (ROW - PILL_HEIGHT) / 2, PILL_WIDTH, PILL_HEIGHT, on,
-                    GuiTheme.accent(), GuiTheme.bgSetting(),
-                    on ? GuiTheme.contrastText(GuiTheme.accent()) : GuiTheme.textDim());
+            if (y + ROW > viewTop && y < viewTop + view) {
+                renderRow(context, font, element, y, rowWidth, mouseX, mouseY, inView);
             }
             y += ROW;
         }
     }
 
-    private int bottom() {
-        return collapsed ? top + HEADER : listTop + listHeight + hintHeight();
+    private void renderRow(GuiGraphicsExtractor context, Font font, HudElement element, int y,
+                           int rowWidth, int mouseX, int mouseY, boolean inView) {
+        boolean over = inView && SettingWidget.isOver(mouseX, mouseY, getX(), y, rowWidth, ROW);
+        boolean on = element.isActive();
+        if (over) {
+            context.fill(getX(), y, getX() + rowWidth, y + ROW, GuiTheme.bgRowHover());
+            context.guiRenderState.up();
+            hovered = element;
+        }
+        int room = rowWidth - PAD * 2 - PILL_WIDTH - 4;
+        context.text(font, SettingWidget.trimEnd(font, element.getName(), room),
+            getX() + PAD, GuiTheme.textY(y, ROW),
+            on ? GuiTheme.text() : GuiTheme.textFaint(), false);
+        RenderUtil.toggle(context, getX() + rowWidth - PAD - PILL_WIDTH,
+            y + (ROW - PILL_HEIGHT) / 2, PILL_WIDTH, PILL_HEIGHT, on,
+            GuiTheme.accent(), GuiTheme.bgSetting(),
+            on ? GuiTheme.contrastText(GuiTheme.accent()) : GuiTheme.textDim());
     }
 
-    public boolean isOver(double mx, double my) {
-        return mx >= left - GRAB && mx < left + wide + GRAB
-            && my >= top && my < bottom() + GRAB;
-    }
-
-    public void wheel(double amount) {
-        scrollBar.scroll(ScrollBar.wheelDelta(amount, contentHeight(), listHeight),
-            contentHeight(), listHeight);
-    }
-
-    public void release() {
-        dragging = false;
-        sizing = false;
-        sizingTall = false;
-        scrollBar.release();
-    }
-
-    // True when the click belonged to the panel.
-    public boolean mouseClicked(double mx, double my, int button) {
-        if (!isOver(mx, my)) {
+    @Override
+    protected boolean clickContent(double mx, double my, int button, int viewTop,
+                                   int view, int rowWidth) {
+        if (!InputUtil.isLeft(button)) {
             return false;
         }
-        if (nearSide(mx, my, bottom()) || nearFoot(mx, my)) {
-            if (InputUtil.isLeft(button)) {
-                sizing = nearSide(mx, my, bottom());
-                sizingTall = nearFoot(mx, my);
-            } else if (InputUtil.isRight(button)) {
-                wide = DEFAULT_WIDTH;
-                wish = 0;
-            }
-            return true;
-        }
-        if (my < top + HEADER) {
-            boolean marker = mx >= left + wide - MARKER_ZONE;
-            if (InputUtil.isRight(button) || (InputUtil.isLeft(button) && marker)) {
-                collapsed = !collapsed;
-            } else if (InputUtil.isLeft(button)) {
-                dragging = true;
-                grabX = (int) mx - left;
-                grabY = (int) my - top;
-            }
-            return true;
-        }
-        int rowW = ScrollBar.rowWidth(wide, contentHeight(), listHeight);
-        int trackX = ScrollBar.trackX(left, wide);
-        if (contentHeight() > listHeight
-            && ScrollBar.isOverTrack(mx, my, trackX, listTop, listHeight)) {
-            scrollBar.beginDrag((int) my);
-            return true;
-        }
-        if (my < listTop || my >= listTop + listHeight || !InputUtil.isLeft(button)) {
-            return true;
-        }
-        int y = listTop - scrollBar.getOffset();
+        int y = viewTop - getScrollOffset();
         for (HudElement element : elements) {
-            if (SettingWidget.isOver(mx, my, left, y, rowW, ROW)) {
+            if (SettingWidget.isOver(mx, my, getX(), y, rowWidth, ROW)) {
                 element.setActive(!element.isActive());
                 OfflineClient.INSTANCE.getConfigManager().saveSoon();
                 return true;
             }
             y += ROW;
         }
-        return true;
+        return false;
+    }
+
+    @Override
+    protected void releaseContent() {
     }
 }

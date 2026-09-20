@@ -121,7 +121,8 @@ public final class HudEditorScreen extends Screen {
                     labelY(box), GuiTheme.textDim(), true);
             }
         }
-        list.render(context, width, height, mouseX, mouseY);
+        list.update(mouseX, mouseY, width, height, 0);
+        list.render(context, mouseX, mouseY);
     }
 
     // An element pinned against the top edge has no room above it. Its name
@@ -206,7 +207,7 @@ public final class HudEditorScreen extends Screen {
 
     @Override
     public boolean mouseReleased(MouseButtonEvent event) {
-        list.release();
+        list.mouseReleased();
         if (dragged != null || resized != null) {
             dragged = null;
             resized = null;

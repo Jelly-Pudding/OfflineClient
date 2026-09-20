@@ -80,7 +80,7 @@ public final class GuiSources {
 
             @Override
             public String footer() {
-                return "click a name to run it. click its key to change it.";
+                return "click to run. click the key to rebind.";
             }
 
             @Override
@@ -153,7 +153,7 @@ public final class GuiSources {
 
             @Override
             public String footer() {
-                return "click a name to load that setup.";
+                return "click a name to load it.";
             }
 
             @Override

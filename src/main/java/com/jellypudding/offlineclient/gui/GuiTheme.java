@@ -94,6 +94,10 @@ public final class GuiTheme {
         return solid(DEFAULT_PANEL);
     }
 
+    public static int bgHeaderSolid() {
+        return solid(DEFAULT_HEADER);
+    }
+
     public static int bgTooltip() {
         return solid(DEFAULT_TOOLTIP);
     }

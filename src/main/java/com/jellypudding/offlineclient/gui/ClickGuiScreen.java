@@ -75,6 +75,9 @@ public final class ClickGuiScreen extends GuiScreenBase {
     private int searchX = -1;
     private int searchY = -1;
     private boolean searchPlaced;
+    // True whilst the search was touched more recently than any panel.
+    private boolean searchFront = true;
+    private final List<int[]> covered = new ArrayList<>();
     private boolean resizingLeft;
     private boolean resizingRight;
     private boolean movingSearch;
@@ -138,8 +141,9 @@ public final class ClickGuiScreen extends GuiScreenBase {
             if (box.has("width")) {
                 entry.getValue().setWidth(box.get("width").getAsInt());
             }
-            if (box.has("height")) {
-                entry.getValue().setHeight(box.get("height").getAsInt());
+            // Zero is the box asking to be as tall as its rows.
+            if (box.has("rows")) {
+                entry.getValue().setHeight(box.get("rows").getAsInt());
             }
         }
     }
@@ -226,7 +230,7 @@ public final class ClickGuiScreen extends GuiScreenBase {
         for (var entry : views.entrySet()) {
             JsonObject box = new JsonObject();
             box.addProperty("width", entry.getValue().getWidth());
-            box.addProperty("height", entry.getValue().getHeight());
+            box.addProperty("rows", entry.getValue().getHeight());
             boxes.add(entry.getKey().name(), box);
         }
         gui.add(TAB_STATE, boxes);
@@ -457,12 +461,14 @@ public final class ClickGuiScreen extends GuiScreenBase {
             for (Panel panel : panels) {
                 panel.update(mouseX, mouseY, viewWidth(), viewHeight(), searchFloor());
             }
-            for (int i = 0; i < panels.size(); i++) {
-                Panel panel = panels.get(i);
-                blank(context, panel.bounds(), i);
-                panel.render(context, mouseX, mouseY);
+            covered.clear();
+            if (searchFront) {
+                renderPanels(context, mouseX, mouseY);
+                renderSearch(context, font, mouseX, mouseY);
+            } else {
+                renderSearch(context, font, mouseX, mouseY);
+                renderPanels(context, mouseX, mouseY);
             }
-            renderSearch(context, font, mouseX, mouseY);
         } else {
             views.get(openTab).render(context, viewWidth(), viewHeight(),
                 TabStrip.bottom() + TAB_GAP, mouseX, mouseY);
@@ -478,24 +484,32 @@ public final class ClickGuiScreen extends GuiScreenBase {
         }
     }
 
-    // A see through panel would otherwise show the writing of whatever it
-    // covers. Where two overlap the upper one gets a solid backing.
-    private void blank(GuiGraphicsExtractor context, int[] over, int above) {
-        boolean drawn = false;
-        for (int i = 0; i < above; i++) {
-            int[] under = panels.get(i).bounds();
+    private void renderPanels(GuiGraphicsExtractor context, int mouseX, int mouseY) {
+        for (Panel panel : panels) {
+            cover(context, panel.bounds());
+            panel.render(context, mouseX, mouseY);
+        }
+    }
+
+    // A see through box would otherwise show the writing of whatever it
+    // covers. Where it laps over something already drawn it gets a solid
+    // backing first and then joins the pile itself.
+    private void cover(GuiGraphicsExtractor context, int[] over) {
+        boolean painted = false;
+        for (int[] under : covered) {
             int x = Math.max(over[0], under[0]);
             int y = Math.max(over[1], under[1]);
             int x2 = Math.min(over[2], under[2]);
             int y2 = Math.min(over[3], under[3]);
             if (x2 > x && y2 > y) {
                 context.fill(x, y, x2, y2, GuiTheme.bgSolid());
-                drawn = true;
+                painted = true;
             }
         }
-        if (drawn) {
+        if (painted) {
             context.guiRenderState.up();
         }
+        covered.add(over);
     }
 
     private static boolean showsTabs() {
@@ -521,15 +535,13 @@ public final class ClickGuiScreen extends GuiScreenBase {
             searchX = wanted;
             searchWidth = right - wanted;
         }
-        blank(context, new int[] {searchX, searchY, searchX + searchWidth,
-            searchY + SEARCH_HEIGHT}, panels.size());
-        if (isSearching()) {
-            blank(context, new int[] {searchX, resultsTop(), searchX + searchWidth,
-                resultsTop() + resultsBoxHeight()}, panels.size());
-        }
+        cover(context, new int[] {searchX, searchY, searchX + searchWidth,
+            searchY + SEARCH_HEIGHT});
         renderSearchBox(context, font, searchX, searchY, searchWidth, mouseX, mouseY,
             searchRows.size());
         if (isSearching()) {
+            cover(context, new int[] {searchX, resultsTop(), searchX + searchWidth,
+                resultsTop() + resultsBoxHeight()});
             renderSearchResults(context, font, mouseX, mouseY);
         }
     }
@@ -635,8 +647,16 @@ public final class ClickGuiScreen extends GuiScreenBase {
             return views.get(openTab).mouseClicked(mx, my, button);
         }
 
-        // The search sits over the panels. It takes the click first.
+        // Whatever was touched last is in front and hears the click first.
+        if (searchFront) {
+            return clickSearch(mx, my, button) || clickPanels(mx, my, button);
+        }
+        return clickPanels(mx, my, button) || clickSearch(mx, my, button);
+    }
+
+    private boolean clickSearch(double mx, double my, int button) {
         if (isSearching() && clickResults(mx, my, button)) {
+            searchFront = true;
             return true;
         }
         if (InputUtil.isLeft(button)
@@ -644,6 +664,7 @@ public final class ClickGuiScreen extends GuiScreenBase {
             resizingLeft = overSearchEdge(mx, my, true);
             resizingRight = !resizingLeft;
             searchPlaced = true;
+            searchFront = true;
             return true;
         }
         if (clickSearchBox(mx, my, searchX, searchY, searchWidth)) {
@@ -652,16 +673,21 @@ public final class ClickGuiScreen extends GuiScreenBase {
             pressedY = (int) my;
             grabX = (int) mx - searchX;
             grabY = (int) my - searchY;
+            searchFront = true;
             return true;
         }
+        return false;
+    }
 
-        // The panel drawn on top gets the click first.
+    // The panel drawn on top gets the click first and comes to the front.
+    private boolean clickPanels(double mx, double my, int button) {
         for (int i = panels.size() - 1; i >= 0; i--) {
             Panel panel = panels.get(i);
             if (panel.mouseClicked(mx, my, button)) {
                 panels.remove(i);
                 panels.add(panel);
                 searchFocused = false;
+                searchFront = false;
                 return true;
             }
         }
@@ -764,13 +790,24 @@ public final class ClickGuiScreen extends GuiScreenBase {
             }
             return true;
         }
-        if (isSearching() && SettingWidget.isOver(mx, my, searchX, resultsTop(),
-            searchWidth, resultsBoxHeight())) {
-            int total = resultsContentHeight();
-            int view = resultsViewHeight();
-            resultsScroll.scroll(ScrollBar.wheelDelta(amount, total, view), total, view);
-            return true;
+        if (searchFront) {
+            return scrollSearch(mx, my, amount) || scrollPanels(mx, my, amount);
         }
+        return scrollPanels(mx, my, amount) || scrollSearch(mx, my, amount);
+    }
+
+    private boolean scrollSearch(double mx, double my, double amount) {
+        if (!isSearching() || !SettingWidget.isOver(mx, my, searchX, resultsTop(),
+            searchWidth, resultsBoxHeight())) {
+            return false;
+        }
+        int total = resultsContentHeight();
+        int view = resultsViewHeight();
+        resultsScroll.scroll(ScrollBar.wheelDelta(amount, total, view), total, view);
+        return true;
+    }
+
+    private boolean scrollPanels(double mx, double my, double amount) {
         for (int i = panels.size() - 1; i >= 0; i--) {
             Panel panel = panels.get(i);
             if (panel.isOver(mx, my)) {
