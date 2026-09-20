@@ -30,6 +30,9 @@ public final class Panel {
     private int width = GuiTheme.PANEL_WIDTH;
     private boolean collapsed;
 
+    // The lowest y the panel may be put at. The tabs own everything above it.
+    private int topLimit;
+    private boolean placed;
     private boolean dragging;
     private int dragOffsetX;
     private int dragOffsetY;
@@ -172,6 +175,21 @@ public final class Panel {
             && mx >= x - GRAB && mx < x + width + GRAB;
     }
 
+    // True once the user has put this panel somewhere themselves. Until
+    // then a resize of the window lays it out again.
+    public boolean isPlaced() {
+        return placed;
+    }
+
+    public void setPlaced(boolean placed) {
+        this.placed = placed;
+    }
+
+    // The rectangle the panel covers including its outline.
+    public int[] bounds() {
+        return new int[] {x - 1, y - 1, x + width + 1, y + getContentHeight() + 1};
+    }
+
     public boolean isDragging() {
         return dragging;
     }
@@ -180,16 +198,22 @@ public final class Panel {
         return !collapsed && rowsHeight() > viewportHeight();
     }
 
-    public void render(GuiGraphicsExtractor context, int mouseX, int mouseY, int viewW, int viewH) {
+    // Moving and resizing happen before anything draws. A panel that draws
+    // over this one needs to know where it ended up.
+    public void update(int mouseX, int mouseY, int viewW, int viewH, int ceiling) {
         screenHeight = viewH;
+        topLimit = ceiling;
 
         if (dragging) {
             x = Math.clamp(mouseX - dragOffsetX, 0, Math.max(0, viewW - width));
-            y = Math.clamp(mouseY - dragOffsetY, 0, Math.max(0, viewH - GuiTheme.HEADER_HEIGHT));
+            y = Math.clamp(mouseY - dragOffsetY, ceiling,
+                Math.max(ceiling, viewH - GuiTheme.HEADER_HEIGHT));
         }
         applyResize(mouseX, mouseY);
         scrollBar.update(mouseY, rowsHeight(), viewportHeight());
+    }
 
+    public void render(GuiGraphicsExtractor context, int mouseX, int mouseY) {
         int contentH = getContentHeight();
         RenderUtil.shadow(context, x - 1, y - 1, x + width + 1, y + contentH + 1, 3);
         context.guiRenderState.up();
@@ -303,7 +327,7 @@ public final class Panel {
             int bottom = y + GuiTheme.HEADER_HEIGHT + viewportHeight() + 2;
             int base = bottom - GuiTheme.HEADER_HEIGHT - 2;
             int maxY = base - minView();
-            int minY = Math.clamp(base - full, 0, Math.max(0, maxY));
+            int minY = Math.clamp(base - full, topLimit, Math.max(topLimit, maxY));
             int newY = Math.clamp(mouseY, minY, Math.max(minY, maxY));
             viewHeight = base - newY;
             y = newY;
@@ -360,7 +384,9 @@ public final class Panel {
             sizeRight = r;
             sizeTop = t;
             sizeBottom = b;
+            placed = true;
         } else if (InputUtil.isRight(button)) {
+            placed = true;
             if (l || r) {
                 width = GuiTheme.PANEL_WIDTH;
             }
@@ -377,6 +403,7 @@ public final class Panel {
             collapsed = !collapsed;
         } else if (InputUtil.isLeft(button)) {
             dragging = true;
+            placed = true;
             dragOffsetX = mx - x;
             dragOffsetY = my - y;
         }

@@ -36,7 +36,7 @@ public final class ModuleListElement extends HudElement {
         "Colour of that panel.", 240, 0.3f, 0.1f, false);
 
     public ModuleListElement() {
-        super("Module list", "Enabled modules listed one to a line.", false, 100, 0);
+        super("Module list", "Enabled modules listed one to a line.", false, 100, 0, 0.5);
         backgroundColor.under(background);
         add(sort, color, suffixColor, bracketColor, background, backgroundColor);
     }

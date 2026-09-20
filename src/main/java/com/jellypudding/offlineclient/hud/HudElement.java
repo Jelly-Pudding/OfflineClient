@@ -25,13 +25,20 @@ public abstract class HudElement {
     @SuppressWarnings("this-escape")
     protected HudElement(String name, String description, boolean on,
                          double startX, double startY) {
+        this(name, description, on, startX, startY, 1);
+    }
+
+    // A few elements are wordy enough to ship smaller than the rest.
+    @SuppressWarnings("this-escape")
+    protected HudElement(String name, String description, boolean on,
+                         double startX, double startY, double startScale) {
         this.name = name;
         // Fifteen elements with five or more options each would swamp the HUD panel.
         active = new BoolSetting(name, description, on).startFolded();
         x = percent(" x", "How far across the screen it sits.", startX);
         y = percent(" y", "How far down the screen it sits.", startY);
-        scale = new NumberSetting(name + " scale", "Size of the text.", 1, 0.5, 2, 0.05, "x")
-            .min(0.25).max(4).under(active);
+        scale = new NumberSetting(name + " scale", "Size of the text.",
+            startScale, 0.25, 2, 0.05, "x").min(0.25).max(4).under(active);
         add(x, y, scale);
     }
 
@@ -72,6 +79,11 @@ public abstract class HudElement {
         scale.setValue(value);
     }
 
+    // Back to the size this element ships at.
+    public final void resetScale() {
+        scale.reset();
+    }
+
     public final double xPercent() {
         return x.getValue();
     }
@@ -88,6 +100,10 @@ public abstract class HudElement {
     // True whilst the element is switched on even if it has nothing to say.
     public final boolean isActive() {
         return active.isOn();
+    }
+
+    public final void setActive(boolean on) {
+        active.setValue(on);
     }
 
     // False for an element with nothing to say right now.

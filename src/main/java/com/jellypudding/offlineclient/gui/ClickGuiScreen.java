@@ -12,6 +12,7 @@ import com.jellypudding.offlineclient.util.SearchRank;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 
@@ -48,6 +49,7 @@ public final class ClickGuiScreen extends GuiScreenBase {
     private static final String SEARCH_X = "searchX";
     private static final String SEARCH_Y = "searchY";
     private static final String SEARCH_W = "searchWidth";
+    private static final String SEARCH_PLACED = "searchPlaced";
     private static final String TAB_STATE = "tabs";
 
     private final List<Panel> panels = new ArrayList<>();
@@ -72,6 +74,7 @@ public final class ClickGuiScreen extends GuiScreenBase {
     private int searchWidth = SEARCH_WIDTH;
     private int searchX = -1;
     private int searchY = -1;
+    private boolean searchPlaced;
     private boolean resizingLeft;
     private boolean resizingRight;
     private boolean movingSearch;
@@ -93,6 +96,7 @@ public final class ClickGuiScreen extends GuiScreenBase {
         if (gui.has(SEARCH_X) && gui.has(SEARCH_Y)) {
             searchX = gui.get(SEARCH_X).getAsInt();
             searchY = gui.get(SEARCH_Y).getAsInt();
+            searchPlaced = gui.has(SEARCH_PLACED) && gui.get(SEARCH_PLACED).getAsBoolean();
         }
         int startX = TILE_MARGIN;
         for (Category category : Category.values()) {
@@ -172,6 +176,9 @@ public final class ClickGuiScreen extends GuiScreenBase {
         if (state.has("layer")) {
             layers.put(panel, state.get("layer").getAsInt());
         }
+        if (state.has("placed")) {
+            panel.setPlaced(state.get("placed").getAsBoolean());
+        }
         if (state.has("expanded")) {
             JsonArray expanded = state.getAsJsonArray("expanded");
             for (ModuleRow row : panel.getRows()) {
@@ -198,6 +205,7 @@ public final class ClickGuiScreen extends GuiScreenBase {
             state.addProperty("height", panel.getViewHeight());
             state.addProperty("width", panel.getWidth());
             state.addProperty("scroll", panel.getScrollOffset());
+            state.addProperty("placed", panel.isPlaced());
             JsonArray expanded = new JsonArray();
             for (ModuleRow row : panel.getRows()) {
                 if (row.isExpanded()) {
@@ -210,6 +218,7 @@ public final class ClickGuiScreen extends GuiScreenBase {
         gui.addProperty(SEARCH_W, searchWidth);
         gui.addProperty(SEARCH_X, searchX);
         gui.addProperty(SEARCH_Y, searchY);
+        gui.addProperty(SEARCH_PLACED, searchPlaced);
 
         JsonObject boxes = new JsonObject();
         for (var entry : views.entrySet()) {
@@ -249,70 +258,79 @@ public final class ClickGuiScreen extends GuiScreenBase {
     @Override
     protected void init() {
         super.init();
-        tilePanels();
-        rescuePanels();
+        for (Panel panel : freshPanels) {
+            panel.setCollapsed(true);
+        }
+        freshPanels.clear();
+        layout();
     }
 
-    // Panels saved on a bigger screen can end up outside the window. Every
-    // resize and every change of scale gives them a place to come back to.
-    private void rescuePanels() {
+    // Runs on every resize and on every change of scale. Panels the user has
+    // never moved are laid out again to fit the window. Anything they placed
+    // themselves is only pulled back inside the edges.
+    private void layout() {
         drawnAt = scale();
-        int rescued = 0;
+        placeSearch();
+        List<Panel> loose = new ArrayList<>();
         for (Panel panel : panels) {
-            boolean offscreen = panel.getX() > viewWidth() - 24
-                || panel.getX() < 24 - panel.getWidth()
-                || panel.getY() > viewHeight() - 12
-                || panel.getY() < 0;
-            if (offscreen) {
-                panel.setPosition(TILE_MARGIN + (rescued % 3) * (GuiTheme.PANEL_WIDTH + 12),
-                    TabStrip.bottom() + TILE_GAP + (rescued / 3) * 60);
-                rescued++;
+            if (panel.isPlaced()) {
+                clampInside(panel);
+            } else {
+                loose.add(panel);
             }
         }
+        tile(loose);
+    }
+
+    private void placeSearch() {
         searchWidth = Math.clamp(searchWidth, SEARCH_WIDTH_MIN,
             Math.max(SEARCH_WIDTH_MIN, Math.min(SEARCH_WIDTH_MAX, viewWidth())));
         int floor = searchFloor();
+        if (!searchPlaced) {
+            searchX = (viewWidth() - searchWidth) / 2;
+            searchY = floor + RESULTS_GAP;
+            return;
+        }
         searchX = Math.clamp(searchX, 0, Math.max(0, viewWidth() - searchWidth));
         searchY = Math.clamp(searchY, floor, Math.max(floor, viewHeight() - SEARCH_HEIGHT));
     }
 
-    // Lays untouched panels out in centred rows. Starting hard against the
-    // left edge leaves slack on one side and looks lopsided on a first run.
-    private void tilePanels() {
-        if (searchX < 0 || searchY < 0) {
-            searchX = (viewWidth() - searchWidth) / 2;
-            searchY = TabStrip.bottom() + RESULTS_GAP;
-        }
-        if (freshPanels.isEmpty()) {
+    private void clampInside(Panel panel) {
+        int top = searchFloor();
+        panel.setPosition(Math.clamp(panel.getX(), 0, Math.max(0, viewWidth() - panel.getWidth())),
+            Math.clamp(panel.getY(), top,
+                Math.max(top, viewHeight() - GuiTheme.HEADER_HEIGHT)));
+    }
+
+    // Centred rows under the search bar. Starting hard against the left edge
+    // leaves slack on one side and looks lopsided.
+    private void tile(List<Panel> loose) {
+        if (loose.isEmpty()) {
             return;
-        }
-        for (Panel panel : freshPanels) {
-            panel.setCollapsed(true);
         }
         int usable = Math.max(GuiTheme.PANEL_WIDTH, viewWidth() - TILE_MARGIN * 2);
         int y = searchY + SEARCH_HEIGHT + RESULTS_GAP;
         int index = 0;
-        while (index < freshPanels.size()) {
-            int count = rowCount(index, usable);
-            int x = (viewWidth() - rowWidth(index, count)) / 2;
+        while (index < loose.size()) {
+            int count = rowCount(loose, index, usable);
+            int x = (viewWidth() - rowWidth(loose, index, count)) / 2;
             for (int i = 0; i < count; i++) {
-                Panel panel = freshPanels.get(index + i);
+                Panel panel = loose.get(index + i);
                 panel.setPosition(x, y);
                 x += panel.getWidth() + TILE_GAP;
             }
             index += count;
             y += GuiTheme.HEADER_HEIGHT + TILE_GAP;
         }
-        freshPanels.clear();
     }
 
     // How many panels from this one onwards fit a single row.
-    private int rowCount(int from, int usable) {
+    private static int rowCount(List<Panel> loose, int from, int usable) {
         int count = 0;
         int used = 0;
-        for (int i = from; i < freshPanels.size(); i++) {
-            int next = used == 0 ? freshPanels.get(i).getWidth()
-                : used + TILE_GAP + freshPanels.get(i).getWidth();
+        for (int i = from; i < loose.size(); i++) {
+            int next = used == 0 ? loose.get(i).getWidth()
+                : used + TILE_GAP + loose.get(i).getWidth();
             if (count > 0 && next > usable) {
                 break;
             }
@@ -322,10 +340,10 @@ public final class ClickGuiScreen extends GuiScreenBase {
         return count;
     }
 
-    private int rowWidth(int from, int count) {
+    private static int rowWidth(List<Panel> loose, int from, int count) {
         int total = 0;
         for (int i = from; i < from + count; i++) {
-            total += freshPanels.get(i).getWidth();
+            total += loose.get(i).getWidth();
             if (i > from) {
                 total += TILE_GAP;
             }
@@ -410,7 +428,7 @@ public final class ClickGuiScreen extends GuiScreenBase {
         tooltip = null;
         Font font = OfflineClient.MC.font;
         if (drawnAt != scale()) {
-            rescuePanels();
+            layout();
         }
 
         if (openTab != null && (!showsTabs() || !openTab.isShown())) {
@@ -418,7 +436,12 @@ public final class ClickGuiScreen extends GuiScreenBase {
         }
         if (openTab == null) {
             for (Panel panel : panels) {
-                panel.render(context, mouseX, mouseY, viewWidth(), viewHeight());
+                panel.update(mouseX, mouseY, viewWidth(), viewHeight(), searchFloor());
+            }
+            for (int i = 0; i < panels.size(); i++) {
+                Panel panel = panels.get(i);
+                blank(context, panel.bounds(), i);
+                panel.render(context, mouseX, mouseY);
             }
             renderSearch(context, font, mouseX, mouseY);
         } else {
@@ -433,6 +456,26 @@ public final class ClickGuiScreen extends GuiScreenBase {
         if (tooltip != null && !tooltip.isEmpty() && hoverHelp()) {
             RenderUtil.tooltip(context, font, wrap(tooltip), mouseX, mouseY,
                 viewWidth(), viewHeight(), GuiTheme.bgTooltip(), GuiTheme.text());
+        }
+    }
+
+    // A see through panel would otherwise show the writing of whatever it
+    // covers. Where two overlap the upper one gets a solid backing.
+    private void blank(GuiGraphicsExtractor context, int[] over, int above) {
+        boolean drawn = false;
+        for (int i = 0; i < above; i++) {
+            int[] under = panels.get(i).bounds();
+            int x = Math.max(over[0], under[0]);
+            int y = Math.max(over[1], under[1]);
+            int x2 = Math.min(over[2], under[2]);
+            int y2 = Math.min(over[3], under[3]);
+            if (x2 > x && y2 > y) {
+                context.fill(x, y, x2, y2, GuiTheme.bgSolid());
+                drawn = true;
+            }
+        }
+        if (drawn) {
+            context.guiRenderState.up();
         }
     }
 
@@ -458,6 +501,12 @@ public final class ClickGuiScreen extends GuiScreenBase {
                 right - SEARCH_WIDTH_MIN);
             searchX = wanted;
             searchWidth = right - wanted;
+        }
+        blank(context, new int[] {searchX, searchY, searchX + searchWidth,
+            searchY + SEARCH_HEIGHT}, panels.size());
+        if (isSearching()) {
+            blank(context, new int[] {searchX, resultsTop(), searchX + searchWidth,
+                resultsTop() + resultsBoxHeight()}, panels.size());
         }
         RenderUtil.shadow(context, searchX, searchY, searchX + searchWidth,
             searchY + SEARCH_HEIGHT, 2);
@@ -580,6 +629,7 @@ public final class ClickGuiScreen extends GuiScreenBase {
             && (overSearchEdge(mx, my, true) || overSearchEdge(mx, my, false))) {
             resizingLeft = overSearchEdge(mx, my, true);
             resizingRight = !resizingLeft;
+            searchPlaced = true;
             return true;
         }
         if (clickSearchBox(mx, my, searchX, searchY, searchWidth)) {
@@ -613,6 +663,9 @@ public final class ClickGuiScreen extends GuiScreenBase {
                 OfflineClient.MC.gui.setScreen(editor);
             }
             return;
+        }
+        if (openTab != null) {
+            views.get(openTab).release();
         }
         openTab = openTab == tab ? null : tab;
         searchFocused = false;
@@ -682,6 +735,7 @@ public final class ClickGuiScreen extends GuiScreenBase {
             double my = toView(event.y());
             if (Math.abs(mx - pressedX) > DRAG_SLACK || Math.abs(my - pressedY) > DRAG_SLACK) {
                 movingSearch = true;
+                searchPlaced = true;
             }
         }
         return super.mouseDragged(event, dragX, dragY);
@@ -713,14 +767,30 @@ public final class ClickGuiScreen extends GuiScreenBase {
         return false;
     }
 
+    @Override
+    protected boolean extraTyping() {
+        return openTab != null && views.get(openTab).isTyping();
+    }
+
     // Escape steps back to the modules before it closes the GUI.
     @Override
     public boolean keyPressed(KeyEvent event) {
+        if (openTab != null && views.get(openTab).keyPressed(event)) {
+            return true;
+        }
         if (event.key() == InputConstants.KEY_ESCAPE && openTab != null && !isTyping()) {
             openTab = null;
             return true;
         }
         return super.keyPressed(event);
+    }
+
+    @Override
+    public boolean charTyped(CharacterEvent event) {
+        if (openTab != null && views.get(openTab).charTyped((char) event.codepoint())) {
+            return true;
+        }
+        return super.charTyped(event);
     }
 
     @Override

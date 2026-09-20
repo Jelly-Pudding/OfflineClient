@@ -21,7 +21,7 @@ public final class WatermarkElement extends HudElement {
         "Colour of the version number.", 240, 0.08f, 0.75f, false);
 
     public WatermarkElement() {
-        super("Watermark", "Client name and version.", false, 0, 0);
+        super("Watermark", "Client name and version.", false, 0, 0, 0.5);
         versionColor.under(showVersion);
         add(color, showVersion, versionColor);
     }

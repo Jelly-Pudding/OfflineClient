@@ -4,6 +4,7 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 // Works out where each element sits and draws it. The editor screen asks for the
@@ -25,6 +26,10 @@ public final class HudManager {
 
     public void add(HudElement element) {
         elements.add(element);
+    }
+
+    public List<HudElement> all() {
+        return Collections.unmodifiableList(elements);
     }
 
     // Where each visible element lands on a screen of the given size.

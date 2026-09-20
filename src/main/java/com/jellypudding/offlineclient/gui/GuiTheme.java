@@ -88,8 +88,20 @@ public final class GuiTheme {
         return bg(DEFAULT_SETTING);
     }
 
+    // The panel shade with the opacity left out. Used where a surface has
+    // to hide whatever it covers.
+    public static int bgSolid() {
+        return solid(DEFAULT_PANEL);
+    }
+
     public static int bgTooltip() {
-        return bg(DEFAULT_TOOLTIP);
+        return solid(DEFAULT_TOOLTIP);
+    }
+
+    private static int solid(int shade) {
+        ClickGuiModule gui = gui();
+        return gui == null ? shade
+            : ColorUtil.withAlpha(ColorUtil.retint(shade, DEFAULT_PANEL, gui.background()), 255);
     }
 
     public static int text() {

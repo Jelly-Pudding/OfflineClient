@@ -31,7 +31,7 @@ public final class InfoBarElement extends HudElement {
         "Takes the bar away whilst the chat box is open.", true);
 
     public InfoBarElement() {
-        super("Info bar", "Coordinates and direction and speed and frames.", false, 0, 100);
+        super("Info bar", "Coordinates and direction and speed and frames.", false, 0, 100, 0.5);
         add(coords, direction, speed, fps, hideInChat);
     }
 

@@ -35,7 +35,7 @@ public final class ClickGuiModule extends Module {
         "Colour the writing is shaded from.", 240, 0.0327869f, 0.9568627f, false);
     private final NumberSetting opacity = new NumberSetting("Opacity",
         "How solid the GUI is. Lower lets the world show through.",
-        70, 10, 100, 1, "%").min(0).max(100);
+        50, 10, 100, 1, "%").min(0).max(100);
     // Nearly white and a faint grey. The same shades the theme text uses.
     private final ColorSetting titleColor = new ColorSetting("Title colour",
         "Colour of the client name at the top of the window.", 240, 0.03f, 0.96f, false)

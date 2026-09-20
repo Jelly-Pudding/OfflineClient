@@ -67,6 +67,9 @@ public final class HoleElement extends HudElement {
 
     private String verdict() {
         LocalPlayer player = OfflineClient.MC.player;
+        if (player == null) {
+            return "Out in the open";
+        }
         BlockPos feet = player.blockPosition();
         boolean safe = true;
         for (Direction side : Direction.Plane.HORIZONTAL) {

@@ -4,8 +4,10 @@ import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.RenderUtil;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.input.KeyEvent;
 
 import java.util.List;
 
@@ -23,6 +25,14 @@ public final class TabView {
         // What a left click does. Empty means a click does nothing.
         default String actionName() {
             return "";
+        }
+
+        // What the field at the top asks for. Empty hides the field.
+        default String addHint() {
+            return "";
+        }
+
+        default void add(String text) {
         }
 
         default void activate(String entry) {
@@ -50,6 +60,9 @@ public final class TabView {
     private final Source source;
     private final SettingWidget.Host host;
     private final ScrollBar scrollBar = new ScrollBar();
+    private final TextField adder = new TextField();
+
+    private boolean typing;
 
     private int width = DEFAULT_WIDTH;
     private int height = DEFAULT_HEIGHT;
@@ -117,8 +130,17 @@ public final class TabView {
         return Math.clamp(width, MIN_WIDTH, Math.max(MIN_WIDTH, viewW - 8));
     }
 
+    // The strip the field sits in. Zero when this list cannot be added to.
+    private int fieldHeight() {
+        return source.addHint().isEmpty() ? 0 : GuiScreenBase.SEARCH_HEIGHT + PAD;
+    }
+
     private int viewHeight() {
-        return Math.max(0, drawn - PAD * 2);
+        return Math.max(0, drawn - PAD * 2 - fieldHeight());
+    }
+
+    public boolean isTyping() {
+        return typing;
     }
 
     private int rowRoom() {
@@ -143,6 +165,38 @@ public final class TabView {
         scrollBar.release();
     }
 
+    // True when the key belonged to the field.
+    public boolean keyPressed(KeyEvent event) {
+        if (!typing) {
+            return false;
+        }
+        int key = event.key();
+        if (key == InputConstants.KEY_ESCAPE) {
+            adder.clear();
+            typing = false;
+            return true;
+        }
+        if (key == InputConstants.KEY_RETURN || key == InputConstants.KEY_NUMPADENTER) {
+            commit();
+            return true;
+        }
+        adder.keyPressed(event, TextField.ANY);
+        return true;
+    }
+
+    public boolean charTyped(char typed) {
+        return typing && adder.charTyped(typed, TextField.ANY);
+    }
+
+    private void commit() {
+        String text = adder.get().trim();
+        if (!text.isEmpty()) {
+            source.add(text);
+            refresh();
+        }
+        adder.clear();
+    }
+
     public void render(GuiGraphicsExtractor context, int viewW, int viewH, int under,
                        int mouseX, int mouseY) {
         applyResize(viewW, viewH, under, mouseX, mouseY);
@@ -164,7 +218,13 @@ public final class TabView {
 
         int rowW = ScrollBar.rowWidth(rowRoom(), full, view);
         int rowX = left + PAD;
-        int viewTop = top + PAD;
+        int viewTop = top + PAD + fieldHeight();
+        if (fieldHeight() > 0) {
+            boolean hovered = SettingWidget.isOver(mouseX, mouseY, rowX, top + PAD,
+                rowRoom(), GuiScreenBase.SEARCH_HEIGHT);
+            GuiScreenBase.searchField(context, OfflineClient.MC.font, rowX, top + PAD,
+                rowRoom(), adder, source.addHint(), typing, hovered, typing, null);
+        }
         context.enableScissor(rowX, viewTop, rowX + rowW, viewTop + view);
         renderRows(context, rowX, viewTop, view, rowW, mouseX, mouseY);
         context.disableScissor();
@@ -283,13 +343,23 @@ public final class TabView {
             return true;
         }
         if (mx < left || mx >= left + wide || my < top || my >= top + drawn) {
+            typing = false;
             return false;
         }
 
         int full = contentHeight();
         int view = viewHeight();
         int rowX = left + PAD;
-        int viewTop = top + PAD;
+        int viewTop = top + PAD + fieldHeight();
+        if (fieldHeight() > 0 && SettingWidget.isOver(mx, my, rowX, top + PAD,
+            rowRoom(), GuiScreenBase.SEARCH_HEIGHT)) {
+            typing = true;
+            if (GuiScreenBase.overClear(adder, mx, my, rowX, top + PAD, rowRoom())) {
+                adder.clear();
+            }
+            return true;
+        }
+        typing = false;
         int trackX = ScrollBar.trackX(rowX, rowRoom());
         if (full > view && ScrollBar.isOverTrack(mx, my, trackX, viewTop, view)) {
             scrollBar.beginDrag((int) my);

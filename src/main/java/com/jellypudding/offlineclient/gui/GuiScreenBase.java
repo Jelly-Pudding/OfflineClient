@@ -124,7 +124,12 @@ public abstract class GuiScreenBase extends Screen implements SettingWidget.Host
     // Asked for whenever a field is taking characters. Clicking one is the
     // only way in and the frame before the first keystroke covers the rest.
     private void syncTextInput() {
-        textInput.set(searchFocused || editingSetting != null);
+        textInput.set(searchFocused || editingSetting != null || extraTyping());
+    }
+
+    // A screen may own another field that takes characters.
+    protected boolean extraTyping() {
+        return false;
     }
 
     @Override
@@ -437,7 +442,7 @@ public abstract class GuiScreenBase extends Screen implements SettingWidget.Host
 
     // True whilst a key press would type or bind rather than reach the game.
     public boolean isTyping() {
-        return searchFocused || editingSetting != null || bindingTarget != null;
+        return searchFocused || editingSetting != null || bindingTarget != null || extraTyping();
     }
 
     protected final boolean handleCommonChar(char c) {

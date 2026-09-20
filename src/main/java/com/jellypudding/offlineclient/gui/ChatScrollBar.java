@@ -1,6 +1,8 @@
 package com.jellypudding.offlineclient.gui;
 
 import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.modules.misc.BetterChat;
+import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.ChatComponent;
 import net.minecraft.util.Mth;
@@ -47,7 +49,11 @@ public final class ChatScrollBar {
         }
         double scale = chat.getScale();
         int lineHeight = chat.getLineHeight();
-        int chatWidth = Mth.ceil(chat.getWidth() / scale);
+        // Player heads widen the lines and vanilla measures its own sliver
+        // against the widened figure.
+        BetterChat betterChat = Modules.get(BetterChat.class);
+        int raw = Mth.ceil(chat.getWidth() / scale);
+        int chatWidth = betterChat == null ? raw : betterChat.headRoom(raw);
         int bottomScaled = Mth.floor((screenHeight - CHAT_BOTTOM_MARGIN) / scale);
         int pageHeight = page * lineHeight;
 

@@ -7,6 +7,7 @@ import com.jellypudding.offlineclient.util.ChatUtil;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 // What the list panels read and write. The client owns all of it already.
 public final class GuiSources {
@@ -26,7 +27,24 @@ public final class GuiSources {
 
             @Override
             public String emptyText() {
-                return "nobody yet. add one with .friend add";
+                return "nobody on the list yet";
+            }
+
+            @Override
+            public String addHint() {
+                return "type a name and press enter";
+            }
+
+            @Override
+            public void add(String text) {
+                String name = text.split("\\s+")[0];
+                if (isSelf(name)) {
+                    ChatUtil.error("You cannot add yourself as a friend.");
+                    return;
+                }
+                if (OfflineClient.INSTANCE.getFriendManager().add(name)) {
+                    OfflineClient.INSTANCE.getConfigManager().saveSoon();
+                }
             }
 
             @Override
@@ -51,7 +69,28 @@ public final class GuiSources {
 
             @Override
             public String emptyText() {
-                return "nothing yet. add one with .macro add";
+                return "no macros yet";
+            }
+
+            @Override
+            public String addHint() {
+                return "name then the line to run";
+            }
+
+            // Everything after the first word is the line the macro sends.
+            @Override
+            public void add(String text) {
+                int gap = text.indexOf(' ');
+                if (gap < 1) {
+                    return;
+                }
+                String name = text.substring(0, gap);
+                String line = text.substring(gap + 1).trim();
+                if (line.isEmpty()) {
+                    return;
+                }
+                MacroStore.get().add(new MacroStore.Macro(name, KeybindSetting.UNBOUND,
+                    List.of(line)));
             }
 
             @Override
@@ -83,7 +122,19 @@ public final class GuiSources {
 
             @Override
             public String emptyText() {
-                return "nothing yet. save one with .profile save";
+                return "no saved setups yet";
+            }
+
+            @Override
+            public String addHint() {
+                return "save this setup as";
+            }
+
+            @Override
+            public void add(String text) {
+                String name = text.trim().toLowerCase(Locale.ROOT).replace(' ', '_');
+                OfflineClient.INSTANCE.getConfigManager().saveProfile(name);
+                ChatUtil.message("§7Saved the profile §b" + name + "§7.");
             }
 
             @Override
@@ -105,6 +156,11 @@ public final class GuiSources {
                 }
             }
         };
+    }
+
+    private static boolean isSelf(String name) {
+        return OfflineClient.MC.player != null
+            && name.equalsIgnoreCase(OfflineClient.MC.player.getGameProfile().name());
     }
 
     // A listed macro carries its key after the name.

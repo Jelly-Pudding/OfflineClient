@@ -40,12 +40,8 @@ public final class HudEditorScreen extends Screen {
     // A dim wash to stop the world fighting the boxes.
     private static final int SHADE = 0x90000000;
 
-    private static final String HINT =
-        "Drag to move. A corner resizes. Shift skips snapping. Escape finishes.";
-    private static final int HINT_PAD = 4;
-    private static final int HINT_MARGIN = 6;
-
     private final HudManager manager;
+    private final HudElementList list;
 
     private HudElement dragged;
     private HudElement resized;
@@ -63,6 +59,7 @@ public final class HudEditorScreen extends Screen {
     public HudEditorScreen(HudManager manager) {
         super(Component.literal("HUD editor"));
         this.manager = manager;
+        this.list = new HudElementList(manager.all());
     }
 
     // Null whilst the HUD module has not been built yet.
@@ -104,13 +101,12 @@ public final class HudEditorScreen extends Screen {
         }
         context.guiRenderState.up();
 
-        List<int[]> boxes = new ArrayList<>(placed.size());
+        HudElement picked = list.getHovered();
         for (Placement placement : placed) {
             int[] box = grabBox(placement);
-            boxes.add(box);
             HudElement element = placement.element();
             boolean live = element == dragged || element == resized;
-            boolean over = live || inside(mouseX, mouseY, box);
+            boolean over = live || element == picked || inside(mouseX, mouseY, box);
             int edge = over ? GuiTheme.accentText() : GuiTheme.edge();
             context.outline(box[0] - 2, box[1] - 2, box[2] + 4, box[3] + 4, edge);
             context.text(font, element.getName(), box[0] - 2, labelY(box),
@@ -124,7 +120,7 @@ public final class HudEditorScreen extends Screen {
                     labelY(box), GuiTheme.textDim(), true);
             }
         }
-        renderHint(context, boxes);
+        list.render(context, height, mouseX, mouseY);
     }
 
     // An element pinned against the top edge has no room above it. Its name
@@ -147,45 +143,6 @@ public final class HudEditorScreen extends Screen {
             hot ? GuiTheme.accent() : GuiTheme.accentText());
     }
 
-    // Dropped into the first strip of screen no element is sitting in.
-    private void renderHint(GuiGraphicsExtractor context, List<int[]> boxes) {
-        int w = font.width(HINT) + HINT_PAD * 2;
-        int h = font.lineHeight + HINT_PAD;
-        int x = Math.clamp((width - w) / 2, 0, Math.max(0, width - w));
-        int[] rows = {height - h - HINT_MARGIN, HINT_MARGIN,
-            height / 2 - h / 2, height - h * 3 - HINT_MARGIN};
-        int y = rows[0];
-        int clearest = Integer.MAX_VALUE;
-        for (int row : rows) {
-            int overlap = overlapWith(boxes, x, row, w, h);
-            if (overlap == 0) {
-                y = row;
-                clearest = 0;
-                break;
-            }
-            if (overlap < clearest) {
-                clearest = overlap;
-                y = row;
-            }
-        }
-        RenderUtil.roundedRect(context, x, y, x + w, y + h, GuiTheme.CORNER,
-            GuiTheme.bgHeader());
-        context.guiRenderState.up();
-        context.text(font, HINT, x + HINT_PAD, GuiTheme.textY(y, h), GuiTheme.textDim(), false);
-    }
-
-    private static int overlapWith(List<int[]> boxes, int x, int y, int w, int h) {
-        int total = 0;
-        for (int[] box : boxes) {
-            int across = Math.min(x + w, box[0] + box[2] + 4) - Math.max(x, box[0] - 2);
-            int down = Math.min(y + h, box[1] + box[3] + 2) - Math.max(y, box[1] - LABEL_GAP - 2);
-            if (across > 0 && down > 0) {
-                total += across * down;
-            }
-        }
-        return total;
-    }
-
     private static boolean inside(double mouseX, double mouseY, int[] box) {
         return mouseX >= box[0] - 2 && mouseX <= box[0] + box[2] + 2
             && mouseY >= box[1] - 2 && mouseY <= box[1] + box[3] + 2;
@@ -199,6 +156,9 @@ public final class HudEditorScreen extends Screen {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        if (list.mouseClicked(event.x(), event.y(), event.button())) {
+            return true;
+        }
         List<Placement> placed = placements();
         // Later elements draw on top and take the click first.
         for (int i = placed.size() - 1; i >= 0; i--) {
@@ -209,7 +169,7 @@ public final class HudEditorScreen extends Screen {
             }
             HudElement element = placement.element();
             if (InputUtil.isRight(event.button())) {
-                element.setScale(1);
+                element.resetScale();
                 OfflineClient.INSTANCE.getConfigManager().saveSoon();
                 return true;
             }
@@ -235,7 +195,17 @@ public final class HudEditorScreen extends Screen {
     }
 
     @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        if (list.isOver(mouseX, mouseY)) {
+            list.wheel(scrollY);
+            return true;
+        }
+        return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
+    }
+
+    @Override
     public boolean mouseReleased(MouseButtonEvent event) {
+        list.release();
         if (dragged != null || resized != null) {
             dragged = null;
             resized = null;
