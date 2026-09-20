@@ -21,6 +21,11 @@ public abstract class HudElement {
     private final NumberSetting x;
     private final NumberSetting y;
 
+    private int boxLeft;
+    private int boxTop;
+    private int boxWidth;
+    private int boxHeight;
+
     // addSettings is final and files the settings away without handing out the element.
     @SuppressWarnings("this-escape")
     protected HudElement(String name, String description, boolean on,
@@ -72,6 +77,31 @@ public abstract class HudElement {
 
     public final float scale() {
         return scale.getFloat();
+    }
+
+    // Where this element landed on screen. A picture in picture draw such as
+    // a player model never sees the pose and has to be told.
+    final void place(int left, int top, int width, int height) {
+        boxLeft = left;
+        boxTop = top;
+        boxWidth = width;
+        boxHeight = height;
+    }
+
+    protected final int boxLeft() {
+        return boxLeft;
+    }
+
+    protected final int boxTop() {
+        return boxTop;
+    }
+
+    protected final int boxWidth() {
+        return boxWidth;
+    }
+
+    protected final int boxHeight() {
+        return boxHeight;
     }
 
     // Clamped to the setting's own limits.

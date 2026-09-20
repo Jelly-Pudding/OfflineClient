@@ -247,8 +247,6 @@ public final class TabView {
         int view = viewHeight();
         scrollBar.update(mouseY, full, view);
 
-        RenderUtil.shadow(context, left, top, left + wide, top + drawn, 3);
-        context.guiRenderState.up();
         RenderUtil.roundedBorderedRect(context, left, top, left + wide, top + drawn,
             GuiTheme.CORNER + 1, GuiTheme.bgPanel(), GuiTheme.outline());
         context.guiRenderState.up();

@@ -12,8 +12,6 @@ public final class RenderUtil {
     // Grey for text that should sit back from the main line.
     public static final int MUTED_TEXT = 0xFFB0B0C0;
 
-    private static final int SHADOW = 0x30000000;
-
     private RenderUtil() {
     }
 
@@ -167,17 +165,6 @@ public final class RenderUtil {
                                            int radius, int fillColor, int borderColor) {
         roundedRect(context, x, y, x2, y2, radius, fillColor);
         roundedOutline(context, x, y, x2, y2, radius, borderColor);
-    }
-
-    // Only the ring outside the rectangle is darkened. Filling the middle as
-    // well would put three coats of black under anything see through.
-    public static void shadow(GuiGraphicsExtractor context, int x, int y, int x2, int y2, int spread) {
-        for (int i = spread; i >= 1; i--) {
-            context.fill(x - i, y - i, x2 + i, y - i + 1, SHADOW);
-            context.fill(x - i, y2 + i - 1, x2 + i, y2 + i, SHADOW);
-            context.fill(x - i, y - i + 1, x - i + 1, y2 + i - 1, SHADOW);
-            context.fill(x2 + i - 1, y - i + 1, x2 + i, y2 + i - 1, SHADOW);
-        }
     }
 
     public static void toggle(GuiGraphicsExtractor context, int x, int y, int w, int h,

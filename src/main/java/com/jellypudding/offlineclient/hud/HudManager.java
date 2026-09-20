@@ -87,6 +87,8 @@ public final class HudManager {
 
     public void draw(GuiGraphicsExtractor context, Font font, Placement placement) {
         float scale = placement.element().scale();
+        placement.element().place(placement.left(), placement.top(),
+            placement.width(), placement.height());
         context.pose().pushMatrix();
         context.pose().translate(placement.left(), placement.top());
         if (scale != 1f) {

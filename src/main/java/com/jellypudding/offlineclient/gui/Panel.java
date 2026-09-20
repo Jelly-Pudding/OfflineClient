@@ -215,8 +215,6 @@ public final class Panel {
 
     public void render(GuiGraphicsExtractor context, int mouseX, int mouseY) {
         int contentH = getContentHeight();
-        RenderUtil.shadow(context, x - 1, y - 1, x + width + 1, y + contentH + 1, 3);
-        context.guiRenderState.up();
         RenderUtil.roundedOutline(context, x - 1, y - 1, x + width + 1, y + contentH + 1,
             GuiTheme.CORNER + 1, GuiTheme.outline());
         context.guiRenderState.up();

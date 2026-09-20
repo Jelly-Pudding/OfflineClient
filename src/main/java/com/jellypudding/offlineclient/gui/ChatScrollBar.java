@@ -13,7 +13,7 @@ public final class ChatScrollBar {
 
     // Where the chat sits on screen. The same numbers ChatComponent lays itself out with.
     private static final int CHAT_LEFT = 4;
-    private static final int CHAT_BOTTOM_MARGIN = 40;
+    private static final int VANILLA_BOTTOM = 40;
     // Vanilla puts its sliver four scaled pixels past the chat width.
     private static final int TRACK_GAP = 4;
 
@@ -54,10 +54,12 @@ public final class ChatScrollBar {
         BetterChat betterChat = Modules.get(BetterChat.class);
         int raw = Mth.ceil(chat.getWidth() / scale);
         int chatWidth = betterChat == null ? raw : betterChat.headRoom(raw);
-        int bottomScaled = Mth.floor((screenHeight - CHAT_BOTTOM_MARGIN) / scale);
+        int lift = betterChat == null ? VANILLA_BOTTOM : betterChat.chatLift(VANILLA_BOTTOM);
+        int bottomScaled = Mth.floor((screenHeight - lift) / scale);
         int pageHeight = page * lineHeight;
 
-        int x = (int) Math.round((CHAT_LEFT + chatWidth + TRACK_GAP) * scale);
+        float indent = betterChat == null ? CHAT_LEFT : betterChat.chatIndent(CHAT_LEFT);
+        int x = (int) Math.round((indent + chatWidth + TRACK_GAP) * scale);
         int bottom = (int) Math.round(bottomScaled * scale);
         int top = (int) Math.round((bottomScaled - pageHeight) * scale);
         int thumbHeight = Math.max(MIN_THUMB, (int) Math.round(pageHeight * pageHeight * scale

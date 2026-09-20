@@ -15,8 +15,10 @@ import java.util.List;
 // over the top of the overlay itself.
 public final class HudElementList {
 
-    public static final int WIDTH = 106;
-
+    private static final int DEFAULT_WIDTH = 106;
+    private static final int MIN_WIDTH = 78;
+    private static final int MAX_WIDTH = 220;
+    private static final int GRAB = 4;
     private static final int MARGIN = 6;
     private static final int HEADER = 13;
     // The right end of the header collapses the panel rather than moving it.
@@ -40,10 +42,16 @@ public final class HudElementList {
 
     private int left = MARGIN;
     private int top = MARGIN;
+    private int wide = DEFAULT_WIDTH;
+    // Zero leaves the list as tall as the elements need.
+    private int wish;
+
     private int listTop;
     private int listHeight;
     private boolean collapsed;
     private boolean dragging;
+    private boolean sizing;
+    private boolean sizingTall;
     private int grabX;
     private int grabY;
     private HudElement hovered;
@@ -66,6 +74,12 @@ public final class HudElementList {
         if (state.has("collapsed")) {
             collapsed = state.get("collapsed").getAsBoolean();
         }
+        if (state.has("width")) {
+            wide = Math.clamp(state.get("width").getAsInt(), MIN_WIDTH, MAX_WIDTH);
+        }
+        if (state.has("rows")) {
+            wish = Math.max(0, state.get("rows").getAsInt());
+        }
     }
 
     public void save() {
@@ -73,6 +87,8 @@ public final class HudElementList {
         state.addProperty("x", left);
         state.addProperty("y", top);
         state.addProperty("collapsed", collapsed);
+        state.addProperty("width", wide);
+        state.addProperty("rows", wish);
         OfflineClient.INSTANCE.getConfigManager().getGuiState().add(STATE_KEY, state);
     }
 
@@ -94,51 +110,81 @@ public final class HudElementList {
         Font font = OfflineClient.MC.font;
         hovered = null;
         if (dragging) {
-            left = Math.clamp(mouseX - grabX, 0, Math.max(0, screenWidth - WIDTH));
+            left = Math.clamp(mouseX - grabX, 0, Math.max(0, screenWidth - wide));
             top = Math.clamp(mouseY - grabY, 0, Math.max(0, screenHeight - HEADER));
         }
+        if (sizing) {
+            wide = Math.clamp(mouseX - left, MIN_WIDTH, Math.min(MAX_WIDTH, screenWidth - left));
+        }
         listTop = top + HEADER;
-        int room = screenHeight - listTop - hintHeight() - BOTTOM_GAP;
-        listHeight = collapsed ? 0 : Math.max(ROW, Math.min(contentHeight(), room));
+        int room = Math.max(ROW, screenHeight - listTop - hintHeight() - BOTTOM_GAP);
+        if (sizingTall) {
+            wish = Math.clamp(mouseY - listTop, ROW, room);
+        }
+        int wanted = wish > 0 ? wish : contentHeight();
+        listHeight = collapsed ? 0 : Math.clamp(wanted, ROW, room);
         int boxBottom = bottom();
 
-        RenderUtil.shadow(context, left, top, left + WIDTH, boxBottom, 3);
-        context.guiRenderState.up();
-        RenderUtil.roundedBorderedRect(context, left, top, left + WIDTH, boxBottom,
+        RenderUtil.roundedBorderedRect(context, left, top, left + wide, boxBottom,
             GuiTheme.CORNER + 1, GuiTheme.bgSolid(), GuiTheme.outline());
         context.guiRenderState.up();
 
-        RenderUtil.roundedRect(context, left, top, left + WIDTH, top + HEADER,
+        RenderUtil.roundedRect(context, left, top, left + wide, top + HEADER,
             GuiTheme.CORNER + 1, GuiTheme.bgHeader(), true, collapsed);
         if (!collapsed) {
-            context.fill(left, top + HEADER - 1, left + WIDTH, top + HEADER, GuiTheme.accent());
+            context.fill(left, top + HEADER - 1, left + wide, top + HEADER, GuiTheme.accent());
         }
         context.guiRenderState.up();
         context.text(font, TITLE, left + PAD, GuiTheme.textY(top, HEADER - 1),
             GuiTheme.accentText(), false);
-        RenderUtil.chevron(context, left + WIDTH - 12, top + (HEADER - 5) / 2, collapsed,
+        RenderUtil.chevron(context, left + wide - 12, top + (HEADER - 5) / 2, collapsed,
             GuiTheme.textDim());
         if (collapsed) {
             return;
         }
 
         scrollBar.update(mouseY, contentHeight(), listHeight);
-        int rowW = ScrollBar.rowWidth(WIDTH, contentHeight(), listHeight);
+        int rowW = ScrollBar.rowWidth(wide, contentHeight(), listHeight);
         context.enableScissor(left, listTop, left + rowW, listTop + listHeight);
         renderRows(context, font, rowW, mouseX, mouseY);
         context.disableScissor();
 
         if (contentHeight() > listHeight) {
-            int trackX = ScrollBar.trackX(left, WIDTH);
+            int trackX = ScrollBar.trackX(left, wide);
             scrollBar.render(context, trackX, listTop, listHeight, contentHeight(),
                 ScrollBar.isOverTrack(mouseX, mouseY, trackX, listTop, listHeight));
         }
 
         int hintY = listTop + listHeight + PAD - 1;
         for (String hint : HINTS) {
-            context.text(font, hint, left + PAD, hintY, GuiTheme.textFaint(), false);
+            context.text(font, SettingWidget.trimEnd(font, hint, wide - PAD * 2),
+                left + PAD, hintY, GuiTheme.textFaint(), false);
             hintY += 9;
         }
+        renderGrabBands(context, mouseX, mouseY, boxBottom);
+    }
+
+    // The bands sit outside the box to keep clear of the rows.
+    private void renderGrabBands(GuiGraphicsExtractor context, int mouseX, int mouseY, int foot) {
+        int hot = GuiTheme.accent();
+        if (sizing || nearSide(mouseX, mouseY, foot)) {
+            context.fill(left + wide, top, left + wide + 1, foot, hot);
+        }
+        if (sizingTall || nearFoot(mouseX, mouseY)) {
+            context.fill(left, listTop + listHeight, left + wide,
+                listTop + listHeight + 1, hot);
+        }
+        context.guiRenderState.up();
+    }
+
+    private boolean nearSide(double mx, double my, int foot) {
+        return my >= top && my <= foot
+            && mx >= left + wide - 1 && mx <= left + wide + GRAB;
+    }
+
+    private boolean nearFoot(double mx, double my) {
+        return !collapsed && mx >= left && mx <= left + wide
+            && Math.abs(my - (listTop + listHeight)) <= GRAB;
     }
 
     private void renderRows(GuiGraphicsExtractor context, Font font, int rowW,
@@ -173,7 +219,8 @@ public final class HudElementList {
     }
 
     public boolean isOver(double mx, double my) {
-        return mx >= left && mx < left + WIDTH && my >= top && my < bottom();
+        return mx >= left - GRAB && mx < left + wide + GRAB
+            && my >= top && my < bottom() + GRAB;
     }
 
     public void wheel(double amount) {
@@ -183,6 +230,8 @@ public final class HudElementList {
 
     public void release() {
         dragging = false;
+        sizing = false;
+        sizingTall = false;
         scrollBar.release();
     }
 
@@ -191,8 +240,18 @@ public final class HudElementList {
         if (!isOver(mx, my)) {
             return false;
         }
+        if (nearSide(mx, my, bottom()) || nearFoot(mx, my)) {
+            if (InputUtil.isLeft(button)) {
+                sizing = nearSide(mx, my, bottom());
+                sizingTall = nearFoot(mx, my);
+            } else if (InputUtil.isRight(button)) {
+                wide = DEFAULT_WIDTH;
+                wish = 0;
+            }
+            return true;
+        }
         if (my < top + HEADER) {
-            boolean marker = mx >= left + WIDTH - MARKER_ZONE;
+            boolean marker = mx >= left + wide - MARKER_ZONE;
             if (InputUtil.isRight(button) || (InputUtil.isLeft(button) && marker)) {
                 collapsed = !collapsed;
             } else if (InputUtil.isLeft(button)) {
@@ -202,8 +261,8 @@ public final class HudElementList {
             }
             return true;
         }
-        int rowW = ScrollBar.rowWidth(WIDTH, contentHeight(), listHeight);
-        int trackX = ScrollBar.trackX(left, WIDTH);
+        int rowW = ScrollBar.rowWidth(wide, contentHeight(), listHeight);
+        int trackX = ScrollBar.trackX(left, wide);
         if (contentHeight() > listHeight
             && ScrollBar.isOverTrack(mx, my, trackX, listTop, listHeight)) {
             scrollBar.beginDrag((int) my);

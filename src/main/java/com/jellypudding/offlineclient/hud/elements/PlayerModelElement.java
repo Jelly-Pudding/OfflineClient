@@ -18,8 +18,12 @@ public final class PlayerModelElement extends HudElement {
 
     private static final int FULL_LIGHT = 0xF000F0;
 
-    // How much of the box one unit of size fills.
-    private static final float FILL = 0.62f;
+    // The inventory screen fits a body of thirty into a box seventy tall.
+    private static final float FIT = 30f / 70f;
+    // The same box is narrower than it is tall.
+    private static final float NARROW = 49f / 70f;
+    // Lifts the feet clear of the bottom edge the way the inventory does.
+    private static final float FOOTING = 0.0625f;
 
     private final NumberSetting size = new NumberSetting("Model size",
         "How big the box round your body is.", 60, 30, 160, 5, " px").min(20);
@@ -49,9 +53,8 @@ public final class PlayerModelElement extends HudElement {
         if (player == null) {
             return;
         }
-        int box = size.getInt();
         if (background.isOn()) {
-            context.fill(0, 0, box, box, backgroundColor.getColor());
+            context.fill(0, 0, width(font), height(font), backgroundColor.getColor());
         }
         EntityRenderState raw = OfflineClient.MC.getEntityRenderDispatcher()
             .getRenderer(player).createRenderState(player, 1f);
@@ -64,13 +67,23 @@ public final class PlayerModelElement extends HudElement {
         state.bodyRot = follow.isOn() ? player.getYRot() + 180 : angle.getFloat();
         state.yRot = state.bodyRot;
         state.xRot = follow.isOn() ? player.getXRot() : 0;
-        context.entity(state, box * FILL, new Vector3f(0, 0.1f, 0),
-            new Quaternionf().rotateZ((float) Math.PI), null, 0, 0, box, box);
+        // A body scaled by a potion has to be measured at its normal size.
+        state.boundingBoxWidth /= state.scale;
+        state.boundingBoxHeight /= state.scale;
+        state.scale = 1;
+
+        // The box is given in screen pixels because this draw ignores the pose.
+        int left = boxLeft();
+        int top = boxTop();
+        context.entity(state, boxHeight() * FIT,
+            new Vector3f(0, state.boundingBoxHeight / 2 + FOOTING, 0),
+            new Quaternionf().rotateZ((float) Math.PI), null,
+            left, top, left + boxWidth(), top + boxHeight());
     }
 
     @Override
     public int width(Font font) {
-        return size.getInt();
+        return Math.round(size.getInt() * NARROW);
     }
 
     @Override

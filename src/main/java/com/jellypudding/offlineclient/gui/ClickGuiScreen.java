@@ -527,9 +527,6 @@ public final class ClickGuiScreen extends GuiScreenBase {
             blank(context, new int[] {searchX, resultsTop(), searchX + searchWidth,
                 resultsTop() + resultsBoxHeight()}, panels.size());
         }
-        RenderUtil.shadow(context, searchX, searchY, searchX + searchWidth,
-            searchY + SEARCH_HEIGHT, 2);
-        context.guiRenderState.up();
         renderSearchBox(context, font, searchX, searchY, searchWidth, mouseX, mouseY,
             searchRows.size());
         if (isSearching()) {
@@ -558,8 +555,6 @@ public final class ClickGuiScreen extends GuiScreenBase {
         int x = searchX;
         int y = resultsTop();
         int box = resultsBoxHeight();
-        RenderUtil.shadow(context, x, y, x + searchWidth, y + box, 3);
-        context.guiRenderState.up();
         RenderUtil.roundedBorderedRect(context, x, y, x + searchWidth, y + box,
             GuiTheme.CORNER + 1, GuiTheme.bgWindow(), GuiTheme.accent());
         context.guiRenderState.up();

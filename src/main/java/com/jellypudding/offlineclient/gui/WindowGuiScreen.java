@@ -284,8 +284,6 @@ public final class WindowGuiScreen extends GuiScreenBase {
         refreshListed();
         refreshCounts();
 
-        RenderUtil.shadow(context, wx, wy, wx + ww, wy + wh, 4);
-        context.guiRenderState.up();
         RenderUtil.roundedBorderedRect(context, wx, wy, wx + ww, wy + wh,
             GuiTheme.CORNER + 2, GuiTheme.bgWindow(), GuiTheme.edge());
         context.guiRenderState.up();

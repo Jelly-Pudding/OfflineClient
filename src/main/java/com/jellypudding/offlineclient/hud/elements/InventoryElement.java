@@ -19,6 +19,8 @@ public final class InventoryElement extends HudElement {
     private static final int COLUMNS = 9;
     private static final int SLOT = 16;
     private static final int PAD = 2;
+    // A faint cell under every slot. An empty bag still reads as a bag.
+    private static final int CELL = 0x30000000;
 
     private final BoolSetting hotbar = new BoolSetting("Show hotbar",
         "Include the row you carry in hand.", false);
@@ -61,6 +63,12 @@ public final class InventoryElement extends HudElement {
         if (background.isOn()) {
             context.fill(0, 0, width(font), height(font), backgroundColor.getColor());
         }
+        for (int i = 0; i < items.size(); i++) {
+            int x = PAD + i % COLUMNS * SLOT;
+            int y = PAD + i / COLUMNS * SLOT;
+            context.fill(x, y, x + SLOT - 1, y + SLOT - 1, CELL);
+        }
+        context.guiRenderState.up();
         for (int i = 0; i < items.size(); i++) {
             ItemStack stack = items.get(i);
             if (stack.isEmpty()) {

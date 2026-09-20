@@ -103,8 +103,6 @@ public final class TabStrip {
         int right = last.x() + last.width();
         int base = TOP + HEIGHT;
 
-        RenderUtil.shadow(context, left, TOP, right, base + UNDERLINE, 2);
-        context.guiRenderState.up();
         RenderUtil.roundedRect(context, left, TOP, right, base, GuiTheme.CORNER,
             GuiTheme.bgHeader(), true, false);
         context.fill(left, base, right, base + UNDERLINE, GuiTheme.edge());

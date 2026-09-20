@@ -70,6 +70,11 @@ public final class BetterChat extends Module {
         "Draws the face of the sender in front of their message.", true);
     private final BoolSetting scrollbar = new BoolSetting("Scrollbar",
         "A bar beside the open chat you can drag or click to scroll.", true);
+    private final NumberSetting lift = new NumberSetting("Chat lift",
+        "How far the chat sits above the bottom of the screen. Vanilla uses forty.",
+        22, 0, 80, 1, " px").min(0).max(200);
+    private final NumberSetting indent = new NumberSetting("Chat indent",
+        "How far the chat sits in from the left edge.", 4, 0, 80, 1, " px").min(0).max(400);
     private final BoolSetting longerHistory = new BoolSetting("Longer history",
         "Keeps more lines than the hundred vanilla scrolls back through.", true);
     private final NumberSetting historySize = new NumberSetting("History size",
@@ -132,7 +137,8 @@ public final class BetterChat extends Module {
 
     public BetterChat() {
         super("BetterChat", "Small improvements to the chat box.", Category.MISC);
-        addSettings(timestamps, showSeconds, playerHeads, scrollbar, longerHistory, historySize,
+        addSettings(timestamps, showSeconds, playerHeads, scrollbar, lift, indent,
+            longerHistory, historySize,
             keepHistory, infiniteBox, guardCoordinates, antiClear, filterRegex);
         addSettings(patterns.settings());
         addSettings(annoy, fancy, prefix, prefixRandom, prefixText, prefixSmall,
@@ -220,6 +226,15 @@ public final class BetterChat extends Module {
 
     public boolean showsScrollbar() {
         return isEnabled() && scrollbar.isOn();
+    }
+
+    // Vanilla keeps forty pixels clear for the hotbar and the health row.
+    public int chatLift(int vanilla) {
+        return isEnabled() ? lift.getInt() : vanilla;
+    }
+
+    public float chatIndent(float vanilla) {
+        return isEnabled() ? indent.getFloat() : vanilla;
     }
 
     // Player heads.
