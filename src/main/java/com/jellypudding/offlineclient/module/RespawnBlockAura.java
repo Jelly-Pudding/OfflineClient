@@ -127,13 +127,13 @@ public abstract class RespawnBlockAura extends Module {
             .describe(TakeFrom.HOTBAR, "Only what is already in your hotbar.")
             .describe(TakeFrom.INVENTORY, "Pulls them up from your backpack as well.");
         moveSlot = new NumberSetting("Move slot",
-            "The hotbar slot they are moved into.", 9, 1, 9, 1)
+            "The hotbar slot they are moved into.", 9, 1, 9, 1).max(9)
             .under(takeFrom, TakeFrom.INVENTORY);
         pauseOnEat = new BoolSetting("Pause on eat", "Holds off whilst you eat.", true);
         pauseOnDrink = new BoolSetting("Pause on drink", "Holds off whilst you drink.", true);
         pauseOnMine = new BoolSetting("Pause on mine", "Holds off whilst you mine a block.", true);
         pauseOnSneak = new BoolSetting("Pause on sneak",
-            "Holds off whilst you sneak so you can walk past your own blocks.", true);
+            "Holds off whilst you sneak.", true);
         pauseOnCrystals = new BoolSetting("Pause on crystals",
             "Stands aside whilst CrystalAura places or breaks.", true);
         faceTarget = FaceMode.setting(FaceMode.SERVER);

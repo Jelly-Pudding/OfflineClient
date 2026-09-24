@@ -24,7 +24,7 @@ public final class ModulesCommand extends Command {
         if (args.length == 1) {
             only = categoryNamed(args[0]);
             if (only == null) {
-                ChatUtil.error("Unknown category: " + args[0]);
+                ChatUtil.error("There is no category called " + args[0] + ".");
                 return;
             }
         } else if (args.length > 1) {

@@ -30,7 +30,7 @@ public final class TriggerBot extends Module {
         "Maximum reach in blocks.", 4.2, 1, 10, 0.05).max(10);
     private final NumberSetting fov = new NumberSetting("FOV",
         "Only hit what sits within this angle of your view. Small values act as a crosshair check.",
-        30, 30, 360, 10, " degrees").max(360);
+        30, 30, 360, 10, " degrees").min(1).max(360);
     private final EnumSetting<TargetPriority> priority =
         TargetPriority.setting("Attacks", TargetPriority.CLOSEST_ANGLE);
     private final EntityFilter filter = EntityFilter.living("Swing at", "hit", true,

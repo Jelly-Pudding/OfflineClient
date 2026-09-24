@@ -18,9 +18,10 @@ import net.minecraft.sounds.SoundEvents;
 // state when a saved setting makes the game unplayable.
 public final class RecoveryScreen extends Screen {
 
-    // Destructive marks an action that needs a second click to go through.
+    // Confirm marks an action that throws away something you built up. It needs a
+    // second click to go through.
     private record Action(String label, String description, Runnable task, String doneMessage,
-                          boolean destructive) {
+                          boolean confirm) {
     }
 
     private static final int BUTTON_WIDTH = 190;
@@ -32,22 +33,23 @@ public final class RecoveryScreen extends Screen {
     private static final float TITLE_SCALE = 2f;
     private static final String SUBTITLE = "Puts the client back into a known good state.";
 
-    // Room above the buttons for the title and below them for the status lines.
+    // Room above the buttons for the title and below them for the description.
     private static final int TITLE_ROOM = 70;
-    private static final int FOOT_ROOM = 34;
+    private static final int FOOT_ROOM = 24;
 
-    private static final long FLASH_MS = 900;
-    private static final long STATUS_MS = 4000;
+    // A finished button holds its message this long and eases back over the last part.
+    private static final long DONE_MS = 2500;
+    private static final long FADE_MS = 400;
     private static final long ARM_MS = 3000;
+
+    private static final int TICK_SIZE = 5;
+    private static final int TICK_GAP = 4;
 
     private final Screen parent;
     private final Action[] actions;
 
-    private String status = "";
-    private long statusUntil;
-
-    private int flashed = -1;
-    private long flashUntil;
+    private int done = -1;
+    private long doneUntil;
 
     private int armed = -1;
     private long armedUntil;
@@ -59,16 +61,16 @@ public final class RecoveryScreen extends Screen {
         actions = new Action[] {
             new Action("Reset module settings",
                 "Every module off with default settings and binds.",
-                config::resetModules, "Module settings reset.", false),
+                config::resetModules, "Module settings reset", true),
             new Action("Reset GUI layout",
                 "Panels back to their starting spots and sizes.",
-                config::resetGuiLayout, "GUI layout reset.", false),
+                config::resetGuiLayout, "GUI layout reset", false),
             new Action("Clear friends",
                 "Empties the friends list.",
-                config::clearFriends, "Friends cleared.", false),
+                config::clearFriends, "Friends list cleared", true),
             new Action("Reset everything",
                 "Back to a completely fresh client.",
-                config::resetEverything, "Everything reset.", true),
+                config::resetEverything, "Everything reset", true),
         };
     }
 
@@ -108,48 +110,43 @@ public final class RecoveryScreen extends Screen {
         renderTitle(context, font);
 
         String hovering = null;
+        boolean hoveringArmed = false;
         int y = topY();
         for (int i = 0; i < actions.length; i++) {
             Action action = actions[i];
             boolean hovered = overButton(mouseX, mouseY, y);
-            boolean flashing = flashed == i;
             boolean waiting = armed == i;
+            // Full strength until the last moments and then eased back to normal.
+            float success = done == i ? Math.clamp((doneUntil - now) / (float) FADE_MS, 0f, 1f) : 0f;
 
-            // The flash fades out. A repeated click still reads as a new one.
-            float flash = flashing ? Math.clamp((flashUntil - now) / (float) FLASH_MS, 0f, 1f) : 0f;
-            int fill = flashing
-                ? ColorUtil.lerp(GuiTheme.bgPanel(), GuiTheme.GREEN, flash * 0.55f)
-                : hovered ? GuiTheme.bgRowHover() : GuiTheme.bgPanel();
-            int edge = flashing ? GuiTheme.GREEN
-                : waiting ? 0xFFE05050
-                : hovered ? GuiTheme.accent() : GuiTheme.edge();
-
+            int fill = ColorUtil.lerp(hovered ? GuiTheme.bgRowHover() : GuiTheme.bgPanel(),
+                GuiTheme.GREEN, success * 0.2f);
+            int edge = waiting ? GuiTheme.RED
+                : ColorUtil.lerp(hovered ? GuiTheme.accent() : GuiTheme.edge(), GuiTheme.GREEN, success);
             RenderUtil.roundedBorderedRect(context, buttonX(), y,
                 buttonX() + BUTTON_WIDTH, y + BUTTON_HEIGHT, GuiTheme.CORNER, fill, edge);
             context.guiRenderState.up();
 
-            String label = waiting ? "click again to confirm" : action.label();
-            int labelColor = flashing ? GuiTheme.text()
-                : waiting ? 0xFFFF9090
-                : hovered ? GuiTheme.accentText() : GuiTheme.text();
-            context.centeredText(font, label, width / 2, GuiTheme.textY(y, BUTTON_HEIGHT), labelColor);
-
-            if (flashing) {
-                RenderUtil.tick(context, buttonX() + 8, y + BUTTON_HEIGHT / 2 - 2, GuiTheme.GREEN);
+            int textY = GuiTheme.textY(y, BUTTON_HEIGHT);
+            if (success > 0) {
+                renderDone(context, font, action.doneMessage(), textY, success);
+            } else {
+                String label = waiting ? "Click again to confirm" : action.label();
+                int labelColor = waiting ? GuiTheme.RED_TEXT
+                    : hovered ? GuiTheme.accentText() : GuiTheme.text();
+                context.centeredText(font, label, width / 2, textY, labelColor);
             }
             if (hovered) {
                 hovering = action.description();
+                hoveringArmed = waiting;
             }
             y += BUTTON_HEIGHT + GAP;
         }
 
-        int footY = topY() + listHeight() + 8;
+        // What the hovered button does. Red whilst it waits for the second click.
         if (hovering != null) {
-            context.centeredText(font, hovering, width / 2, footY, GuiTheme.textDim());
-        }
-        // The status keeps its own line. Hovering a button never hides it.
-        if (!status.isEmpty()) {
-            context.centeredText(font, status, width / 2, footY + 12, GuiTheme.GREEN);
+            context.centeredText(font, hovering, width / 2, topY() + listHeight() + 8,
+                hoveringArmed ? GuiTheme.RED_TEXT : GuiTheme.textDim());
         }
 
         boolean overBack = overBack(mouseX, mouseY);
@@ -160,6 +157,16 @@ public final class RecoveryScreen extends Screen {
         context.guiRenderState.up();
         context.centeredText(font, "back", width / 2, GuiTheme.textY(backY(), BACK_HEIGHT),
             overBack ? GuiTheme.accentText() : GuiTheme.text());
+    }
+
+    // The message a finished action leaves on its own button. The tick leads it
+    // and the pair stays centred.
+    private void renderDone(GuiGraphicsExtractor context, Font font, String message, int textY,
+                            float strength) {
+        int left = width / 2 - (TICK_SIZE + TICK_GAP + font.width(message)) / 2;
+        RenderUtil.tick(context, left, textY + 1, ColorUtil.fade(GuiTheme.GREEN, strength));
+        context.text(font, message, left + TICK_SIZE + TICK_GAP, textY,
+            ColorUtil.lerp(GuiTheme.text(), GuiTheme.GREEN, strength));
     }
 
     // The title in the accent at twice size with a rule and small print below.
@@ -191,14 +198,11 @@ public final class RecoveryScreen extends Screen {
     }
 
     private void expire(long now) {
-        if (flashed != -1 && now > flashUntil) {
-            flashed = -1;
+        if (done != -1 && now > doneUntil) {
+            done = -1;
         }
         if (armed != -1 && now > armedUntil) {
             armed = -1;
-        }
-        if (!status.isEmpty() && now > statusUntil) {
-            status = "";
         }
     }
 
@@ -236,20 +240,18 @@ public final class RecoveryScreen extends Screen {
         Action action = actions[index];
         click();
 
-        // A wipe asks twice. Everything else goes through on the first click.
-        if (action.destructive() && armed != index) {
+        // Anything that throws work away asks twice. The rest goes through at once.
+        if (action.confirm() && armed != index) {
             armed = index;
             armedUntil = now + ARM_MS;
-            status = "";
+            done = -1;
             return;
         }
 
         armed = -1;
         action.task().run();
-        flashed = index;
-        flashUntil = now + FLASH_MS;
-        status = action.doneMessage();
-        statusUntil = now + STATUS_MS;
+        done = index;
+        doneUntil = now + DONE_MS;
     }
 
     private static void click() {

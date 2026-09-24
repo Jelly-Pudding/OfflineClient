@@ -7,6 +7,7 @@ import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.TextLines;
 import net.minecraft.client.gui.screens.DisconnectedScreen;
 
@@ -118,8 +119,9 @@ public final class Spam extends Module {
         if (text == null) {
             return;
         }
+        // A command goes out as it is. Only chat is varied and split.
         if (text.startsWith("/")) {
-            mc.getConnection().sendCommand(text.substring(1));
+            ChatUtil.say(text);
             return;
         }
         if (vary.isOn()) {

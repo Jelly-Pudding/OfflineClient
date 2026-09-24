@@ -213,7 +213,7 @@ public final class CrystalAura extends Module {
     private final BoolSetting pauseOnLag = new BoolSetting("Pause on lag",
         "Holds off whilst the server has stopped ticking.", true);
     private final NumberSetting lagLimit = new NumberSetting("Lag limit",
-        "How long the server may go quiet before that counts as lag.", 1000, 250, 5000, 250, " ms")
+        "How long the server may go quiet before that counts as lag.", 1000, 250, 5000, 250, " ms").min(50)
         .under(pauseOnLag);
     private final ChoiceListSetting pauseModules = new ChoiceListSetting("Pause modules",
         "Holds off whilst any of these modules is on.", CrystalAura::moduleNames);

@@ -141,7 +141,7 @@ public final class HighwayBuilder extends Module {
         "Digs out wall blocks that are not on the list and rebuilds them.", false)
         .under(walls);
     private final BoolSetting mineAboveWalls = new BoolSetting("Mine above walls",
-        "Clears the rest of the column over each wall so the sides stay open.", true)
+        "Clears the blocks above each wall.", true)
         .under(walls);
     private final BoolSetting ceiling = new BoolSetting("Ceiling",
         "Roofs the highway over.", false);
@@ -209,7 +209,7 @@ public final class HighwayBuilder extends Module {
     private final NumberSetting emptySlots = new NumberSetting("Minimum empty slots",
         "Free slots to keep clear after a restock.", 3, 0, 9, 1).min(0);
     private final BoolSetting throwTrash = new BoolSetting("Throw out trash",
-        "Turns round and drops the listed items so the inventory keeps room.", false);
+        "Turns round and drops the listed items to keep room free.", false);
     private final RegistryListSetting<Item> trash = new RegistryListSetting<>("Trash",
         "The items thrown out. Click to pick them.", BuiltInRegistries.ITEM,
         List.of(Items.NETHERRACK, Items.QUARTZ, Items.GOLD_NUGGET, Items.GOLDEN_SWORD,

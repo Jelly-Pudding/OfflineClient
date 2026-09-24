@@ -21,15 +21,14 @@ public final class BindCommand extends Command {
             usage();
             return;
         }
-        Module module = OfflineClient.INSTANCE.getModuleManager().get(args[0]);
+        Module module = module(args[0]);
         if (module == null) {
-            ChatUtil.error("Unknown module: " + args[0]);
             return;
         }
 
         int key = KeybindSetting.keyFromName(args[1]);
         if (key == KeybindSetting.UNKNOWN) {
-            ChatUtil.error("Can't parse key '" + args[1] + "'. Use the ClickGUI for special keys.");
+            ChatUtil.error("There is no key called " + args[1] + ". Use the ClickGUI for special keys.");
             return;
         }
         module.getKeybind().setValue(key);

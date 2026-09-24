@@ -59,7 +59,7 @@ public final class VeinMiner extends Module {
         .describe(ListMode.BLACKLIST, "Everything but the listed blocks starts a vein.")
         .under(targets, Targets.LIST);
     private final BoolSetting flat = new BoolSetting("Flat",
-        "Never mines a vein block below your feet so the floor stays under you.", false);
+        "Never mines below your feet.", false);
     private final BoolSetting lineOfSight = new BoolSetting("Line of sight",
         "Skips vein blocks your eyes cannot see.", false);
     private final BoolSetting rotate = new BoolSetting("Rotate",

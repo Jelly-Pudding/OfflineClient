@@ -51,7 +51,17 @@ public final class EntityUtil {
     // Blocks at which a player reads as far away. Closer fades towards red.
     private static final float FADE_DISTANCE = 20;
 
+    // The server counts entity ids up from one. Ours count down from the top
+    // of the range and the two never meet.
+    private static int nextLocalId = Integer.MAX_VALUE;
+
     private EntityUtil() {
+    }
+
+    // An id for an entity that exists on this client alone. A new entity has
+    // none and its hashCode and equals throw until it gets one.
+    public static int nextLocalId() {
+        return nextLocalId--;
     }
 
     // Health plus the absorption hearts on top of it.

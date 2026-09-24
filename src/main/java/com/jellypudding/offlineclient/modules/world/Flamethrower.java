@@ -48,7 +48,7 @@ public final class Flamethrower extends Module {
     private final BoolSetting antiBreak = new BoolSetting("Anti break",
         "Leaves a flint and steel that is about to snap alone.", false);
     private final BoolSetting saveDrops = new BoolSetting("Save drops",
-        "Puts the fire out once the animal is nearly dead so the meat survives.", true);
+        "Puts the fire out on a nearly dead animal to save its drops.", true);
     private final BoolSetting rotate = new BoolSetting("Rotate",
         "Turn towards the animal on the server side.", true);
 
@@ -57,7 +57,7 @@ public final class Flamethrower extends Module {
     private int burnt;
 
     public Flamethrower() {
-        super("Flamethrower", "Sets fire to the animals around you so they drop cooked meat.", Category.WORLD);
+        super("Flamethrower", "Sets fire to nearby animals for cooked meat.", Category.WORLD);
         addSettings(entities, range, interval, babies, antiBreak, saveDrops, rotate);
         searchTags("cook", "flint and steel", "burn", "roast");
     }

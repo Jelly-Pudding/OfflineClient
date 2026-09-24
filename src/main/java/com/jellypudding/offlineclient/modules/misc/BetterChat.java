@@ -174,7 +174,7 @@ public final class BetterChat extends Module {
             try {
                 compiled.add(Pattern.compile(row));
             } catch (PatternSyntaxException error) {
-                ChatUtil.error("That is not a pattern: " + row);
+                ChatUtil.error("§f" + row + "§c is not a valid pattern.");
             }
         }
         return compiled;

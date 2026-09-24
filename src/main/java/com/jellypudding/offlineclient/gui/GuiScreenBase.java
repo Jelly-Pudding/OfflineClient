@@ -42,6 +42,9 @@ public abstract class GuiScreenBase extends Screen {
     private int searchTextX;
     private int searchRoom;
 
+    // The text input and the setting host only keep the reference. Neither calls
+    // back into the subclass before it has finished building.
+    @SuppressWarnings("this-escape")
     protected GuiScreenBase() {
         super(Component.literal("ClickGUI"));
     }

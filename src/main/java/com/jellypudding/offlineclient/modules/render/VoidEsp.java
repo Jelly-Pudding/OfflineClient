@@ -38,7 +38,7 @@ public final class VoidEsp extends Module {
     private final BoolSetting netherRoof = new BoolSetting("Nether roof",
         "Also search the roof whilst you are in the nether.", true);
     private final BoolSetting connected = new BoolSetting("Connected",
-        "Holes that touch leave out the faces they share so a wide hole draws as one box.", true);
+        "Draws touching holes as one shape without the faces they share.", true);
     private final BoxStyle floorStyle = new BoxStyle("Floor", BoxStyle.Shape.BOTH, 351);
     private final BoxStyle roofStyle = new BoxStyle("Roof", BoxStyle.Shape.BOTH, 300)
         .under(netherRoof);

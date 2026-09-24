@@ -141,7 +141,8 @@ public final class NoteSong {
         }
     }
 
-    // A plain list of tick:note lines with an optional instrument number on the end.
+    // A plain list of lines. Each holds a tick and a note with an optional instrument
+    // number on the end.
     private static NoteSong readText(Path file) throws IOException {
         String fileName = file.getFileName().toString();
         String title = fileName.substring(0, fileName.length() - 4);

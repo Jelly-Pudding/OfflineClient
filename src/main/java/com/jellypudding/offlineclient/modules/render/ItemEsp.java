@@ -35,14 +35,14 @@ public final class ItemEsp extends Module {
     private final EnumSetting<Size> size = new EnumSetting<>("Box size",
         "How big the box around an item is.", Size.FANCY)
         .describe(Size.ACCURATE, "The hitbox of the item itself.")
-        .describe(Size.FANCY, "A little larger and lifted off the floor so it is easier to see.")
+        .describe(Size.FANCY, "A little larger and raised off the floor.")
         .under(boxes);
     private final BoolSetting tracers = new BoolSetting("Tracers",
         "Draw a line to every item.", false);
     private final ColorSetting tracerColor = new ColorSetting("Tracer colour",
         "Colour of the lines.", 48, false).under(tracers);
     private final BoolSetting steadyView = new BoolSetting("Steady view",
-        "Stops the view bobbing whilst the tracers are on so the lines do not wobble.", true)
+        "Stops view bobbing whilst tracers are on to keep the lines steady.", true)
         .under(tracers);
     private final BoolSetting limitRange = new BoolSetting("Limit range",
         "Only shows items within a set distance.", false);

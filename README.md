@@ -81,7 +81,7 @@ The latest jar is on the [releases page](https://github.com/Jelly-Pudding/Offlin
 
 | Module | What it does |
 | --- | --- |
-| Sprint | Automatically sprints whenever you move. |
+| Sprint | Sprints for you whenever you move. |
 | Speed | Move faster on the ground. |
 | Flight | Lets you fly like in creative mode. |
 | ElytraFly | Full elytra control without firework rockets. |
@@ -245,7 +245,7 @@ The latest jar is on the [releases page](https://github.com/Jelly-Pudding/Offlin
 | AutoNametag | Names every chosen mob near you with the tag you carry. |
 | AutoMount | Climbs onto the nearest rideable mob or vehicle. |
 | EndermanLook | Keeps your gaze off endermen or puts it right on them. |
-| Flamethrower | Sets fire to the animals around you so they drop cooked meat. |
+| Flamethrower | Sets fire to nearby animals for cooked meat. |
 | Kaboom | Blows a hole around you in one go. |
 | LiquidFiller | Fills the water and lava around you with solid blocks. |
 | SpawnProofer | Lights up or fills the spots mobs would spawn in. |

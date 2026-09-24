@@ -30,7 +30,7 @@ public final class AutoReplenish extends Module {
         .describe(Refills.HELD_SLOT, "Only the slot you are holding.")
         .describe(Refills.ONE_SLOT, "Only the slot picked below.");
     private final NumberSetting slot = new NumberSetting("Slot",
-        "The hotbar slot to keep filled. Ten is your offhand.", 1, 1, 10, 1)
+        "The hotbar slot to keep filled. Ten is your offhand.", 1, 1, 10, 1).max(10)
         .under(refills, Refills.ONE_SLOT);
     private final RegistryListSetting<Item> pinned = new RegistryListSetting<>("Pinned items",
         "Items the chosen slot is filled with even whilst it holds something else. Leave it empty to keep whatever the slot had.",
@@ -52,7 +52,7 @@ public final class AutoReplenish extends Module {
     private final RegistryListSetting<Item> excluded = new RegistryListSetting<>("Excluded",
         "Items that are never refilled. Click to pick them.", BuiltInRegistries.ITEM, List.of());
     private final NumberSetting repairAt = new NumberSetting("Swap worn tools",
-        "Move a tool into your inventory once it has this many uses left so it can be mended. Zero leaves it in place.",
+        "Swaps a worn tool out of your hotbar once it has this many uses left. Zero leaves it in place.",
         0, 0, 100, 1, " uses").max(2000);
 
     // What each hotbar slot and the offhand held last tick.

@@ -42,7 +42,7 @@ public final class TunnelEsp extends Module {
     private final NumberSetting height = new NumberSetting("Box height",
         "How tall the drawn box is.", 0.15, 0.05, 1, 0.05).min(0.01);
     private final BoolSetting connected = new BoolSetting("Connected",
-        "Boxes that touch leave out the faces they share so a corridor draws as one strip.", true);
+        "Draws touching boxes as one shape without the faces they share.", true);
     private final BoxStyle style = new BoxStyle(BoxStyle.Shape.BOTH, 39);
 
     private final ChunkScanner<Spot> scanner = new ChunkScanner<>();

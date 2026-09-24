@@ -39,7 +39,7 @@ public final class MacroCommand extends Command {
         }
     }
 
-    private static void list(MacroStore store) {
+    private void list(MacroStore store) {
         List<Macro> macros = store.all();
         if (macros.isEmpty()) {
             ChatUtil.message("§7You have no macros.");
@@ -53,9 +53,9 @@ public final class MacroCommand extends Command {
         }
     }
 
-    private static void add(MacroStore store, String[] args) {
+    private void add(MacroStore store, String[] args) {
         if (args.length < 3) {
-            ChatUtil.error("Usage: macro add <name> <lines>");
+            usage("macro add <name> <lines>");
             return;
         }
         String text = String.join(" ", Arrays.copyOfRange(args, 2, args.length));
@@ -75,9 +75,9 @@ public final class MacroCommand extends Command {
         ChatUtil.message("§b" + args[1] + " §7saved with §b" + lines.size() + " §7lines.");
     }
 
-    private static void remove(MacroStore store, String[] args) {
+    private void remove(MacroStore store, String[] args) {
         if (args.length != 2) {
-            ChatUtil.error("Usage: macro remove <name>");
+            usage("macro remove <name>");
             return;
         }
         if (store.remove(args[1])) {
@@ -87,9 +87,9 @@ public final class MacroCommand extends Command {
         }
     }
 
-    private static void run(MacroStore store, String[] args) {
+    private void run(MacroStore store, String[] args) {
         if (args.length != 2) {
-            ChatUtil.error("Usage: macro run <name>");
+            usage("macro run <name>");
             return;
         }
         Macro macro = store.find(args[1]);
@@ -100,9 +100,9 @@ public final class MacroCommand extends Command {
         store.run(macro);
     }
 
-    private static void key(MacroStore store, String[] args) {
+    private void key(MacroStore store, String[] args) {
         if (args.length != 3) {
-            ChatUtil.error("Usage: macro key <name> <key|none>");
+            usage("macro key <name> <key|none>");
             return;
         }
         Macro macro = store.find(args[1]);

@@ -89,7 +89,7 @@ public abstract class ConnectionMixin extends SimpleChannelInboundHandler<Packet
         if (module.logsErrors()) {
             // Fired on the netty thread. Chat is only safe on the client thread.
             OfflineClient.MC.schedule(() ->
-                ChatUtil.error("Dropped a packet the client could not read: " + cause));
+                ChatUtil.error("Dropped a packet the client could not read. " + cause));
         }
         ci.cancel();
     }

@@ -72,7 +72,7 @@ public final class KillAura extends Module {
         "Also swing at targets you cannot see.", true);
     private final NumberSetting fov = new NumberSetting("FOV",
         "Only hit targets within this angle of your view.", 360, 30, 360, 5, " degrees")
-        .max(360);
+        .min(1).max(360);
     private final BoolSetting onlyOnLook = new BoolSetting("Only on look",
         "Only hits whatever your crosshair is already on.", false);
 
@@ -103,7 +103,7 @@ public final class KillAura extends Module {
         "Swing at shulkers.", true)
         .under(hostile);
     private final BoolSetting zombieVillagers = new BoolSetting("Zombie villagers",
-        "Swing at zombie villagers so a cure is still possible.", true)
+        "Swing at zombie villagers. Turn off to keep one for curing.", true)
         .under(hostile);
     private final BoolSetting passive = new BoolSetting("Passive mobs",
         "Swing at animals and villagers and other harmless mobs.", false);

@@ -45,14 +45,14 @@ public final class FriendCommand extends Command {
                     return;
                 }
                 if (friends.add(name)) {
-                    ChatUtil.message("§aAdded friend: §b" + name);
+                    ChatUtil.message("§7Added §b" + name + "§7 to your friends.");
                 } else {
                     ChatUtil.error(name + " is already a friend.");
                 }
             }
             case "remove" -> {
                 if (friends.remove(name)) {
-                    ChatUtil.message("§cRemoved friend: §b" + name);
+                    ChatUtil.message("§7Removed §b" + name + "§7 from your friends.");
                 } else {
                     ChatUtil.error(name + " is not on your friends list.");
                 }

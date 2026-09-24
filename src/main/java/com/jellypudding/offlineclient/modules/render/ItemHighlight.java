@@ -24,7 +24,7 @@ public final class ItemHighlight extends Module {
     private final ColorSetting color = new ColorSetting("Colour",
         "Colour painted behind a matching item.", 130, false);
     private final NumberSetting strength = new NumberSetting("Strength",
-        "How solid the paint is.", 50, 10, 100, 5, "%").max(100);
+        "How solid the paint is.", 50, 10, 100, 5, "%").min(0).max(100);
     private final BoolSetting hotbar = new BoolSetting("Hotbar",
         "Also paints the hotbar whilst you play with no inventory open.", true);
 

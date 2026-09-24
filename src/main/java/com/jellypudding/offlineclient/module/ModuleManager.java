@@ -535,7 +535,7 @@ public final class ModuleManager {
             module = findByType(clazz);
         }
         if (module == null) {
-            throw new IllegalStateException("Module not registered: " + clazz.getSimpleName());
+            throw new IllegalStateException("No module is registered for " + clazz.getSimpleName());
         }
         return clazz.cast(module);
     }

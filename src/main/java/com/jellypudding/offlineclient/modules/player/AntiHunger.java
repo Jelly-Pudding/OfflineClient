@@ -19,7 +19,7 @@ public final class AntiHunger extends Module {
         "Never tells the server you are sprinting. A sprint jump then costs the same as a walking jump.",
         true);
     private final BoolSetting onGround = new BoolSetting("On ground",
-        "Tells the server you are in the air whilst you walk so walking costs no hunger.", true);
+        "Stops walking from costing hunger by telling the server you are in the air.", true);
 
     public AntiHunger() {
         super("AntiHunger", "Slows down how fast you get hungry.", Category.PLAYER);

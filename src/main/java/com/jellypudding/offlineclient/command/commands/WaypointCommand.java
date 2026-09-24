@@ -42,7 +42,7 @@ public final class WaypointCommand extends Command {
 
     private void add(String[] args) {
         if (args.length < 2) {
-            ChatUtil.error("Usage: waypoint add <name> [x y z]");
+            usage("waypoint add <name> [x y z]");
             return;
         }
         if (OfflineClient.MC.player == null) {
@@ -73,7 +73,7 @@ public final class WaypointCommand extends Command {
 
     private void remove(String[] args) {
         if (args.length < 2) {
-            ChatUtil.error("Usage: waypoint remove <name>");
+            usage("waypoint remove <name>");
             return;
         }
         if (WaypointStore.get().remove(args[1])) {
@@ -86,7 +86,7 @@ public final class WaypointCommand extends Command {
     // A hue from 0 to 360 or the word auto to go back to the colour of the name.
     private void colour(String[] args) {
         if (args.length < 3) {
-            ChatUtil.error("Usage: waypoint colour <name> <hue 0 to 360 or auto>");
+            usage("waypoint colour <name> <hue 0 to 360 or auto>");
             return;
         }
         Waypoint waypoint = WaypointStore.get().find(args[1]);
@@ -131,7 +131,7 @@ public final class WaypointCommand extends Command {
             ChatUtil.message("§7No waypoints in this world yet.");
             return;
         }
-        ChatUtil.message("§3Waypoints here:");
+        ChatUtil.message("§3Waypoints in this world");
         for (Waypoint waypoint : waypoints) {
             ChatUtil.message("§b" + waypoint.name() + " §7at §f"
                 + waypoint.x() + " " + waypoint.y() + " " + waypoint.z()

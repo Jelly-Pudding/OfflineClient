@@ -9,6 +9,7 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.TextSetting;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.EntityUtil;
 import com.mojang.authlib.GameProfile;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.multiplayer.PlayerInfo;
@@ -23,7 +24,6 @@ import net.minecraft.world.phys.Vec3;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Supplier;
 
 // A client side copy of the player. The server never knows it exists.
@@ -101,9 +101,6 @@ public final class FakePlayer extends Module {
     // The level refuses two entities with the same UUID. Every body gets a fresh one.
     public static final class Body extends RemotePlayer {
 
-        // Far above any entity id the server hands out.
-        private static final int ID_BASE = Integer.MAX_VALUE - 100_000;
-
         // Read live. A skin that finishes downloading later still shows up.
         private final Supplier<PlayerSkin> skin;
         private final UUID infoOwner;
@@ -122,7 +119,7 @@ public final class FakePlayer extends Module {
             super(level, new GameProfile(UUID.randomUUID(),
                 name.isEmpty() ? source.getGameProfile().name() : name));
             this.ghost = ghost;
-            setId(ID_BASE + ThreadLocalRandom.current().nextInt(100_000));
+            setId(EntityUtil.nextLocalId());
 
             PlayerInfo other = name.isEmpty() || OfflineClient.MC.getConnection() == null ? null
                 : OfflineClient.MC.getConnection().getPlayerInfoIgnoreCase(name);

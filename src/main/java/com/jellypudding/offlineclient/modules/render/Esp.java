@@ -51,7 +51,7 @@ public final class Esp extends Module {
     private final EnumSetting<Size> size = new EnumSetting<>("Box size",
         "How big the box around an entity is.", Size.FANCY)
         .describe(Size.ACCURATE, "The hitbox itself.")
-        .describe(Size.FANCY, "A little larger and lifted so it sits clear of the model.")
+        .describe(Size.FANCY, "A little larger and raised clear of the model.")
         .under(style, Style.BOXES, Style.WIREFRAME, Style.FLAT);
     private final BoolSetting alsoGlow = new BoolSetting("Also glow",
         "Add the vanilla glow on top of the boxes.", false)
@@ -78,7 +78,7 @@ public final class Esp extends Module {
     private final NumberSetting range = new NumberSetting("Range",
         "Furthest an entity can be and still show.", 128, 16, 256, 8, " blocks").min(1);
     private final NumberSetting nearFade = new NumberSetting("Near fade",
-        "Entities closer than this to the camera fade out so a box does not fill your screen.",
+        "Entities closer than this to the camera fade out.",
         3, 0, 12, 0.5, " blocks").min(0).max(32);
     private final BoolSetting highlightTarget = new BoolSetting("Highlight target",
         "The entity under your crosshair gets its own colour even if its kind is not picked.", false);

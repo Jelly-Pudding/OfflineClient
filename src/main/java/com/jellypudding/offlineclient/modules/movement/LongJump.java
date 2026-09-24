@@ -79,7 +79,7 @@ public final class LongJump extends Module {
         "Scales every speed of the glide curve.", 1, 0, 5, 0.1, "x").min(0)
         .under(mode, Mode.GLIDE);
     private final NumberSetting timer = new NumberSetting("Timer",
-        "Also speeds up the game whilst you move. 1 does nothing.", 1, 1, 3, 0.1, "x").min(1);
+        "Speeds up the game whilst you move. 1 is normal.", 1, 1, 3, 0.1, "x").min(1);
     private final BoolSetting autoDisable = new BoolSetting("Auto disable",
         "Turns the module off once you land after the jump.", true)
         .under(mode, Mode.BURST, Mode.GLIDE);

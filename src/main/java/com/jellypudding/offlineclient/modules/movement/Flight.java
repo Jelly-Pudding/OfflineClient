@@ -46,12 +46,9 @@ public final class Flight extends Module {
     private final BoolSetting scrollSpeed = new BoolSetting("Scroll to change speed",
         "The mouse wheel changes the horizontal speed whilst you fly.", false);
     private final NumberSetting timer = new NumberSetting("Timer",
-        "Also speeds up the game whilst you fly. 1 does nothing.", 1, 1, 3, 0.1, "x").min(1);
-    private final BoolSetting throughFluids = new BoolSetting("Through fluids",
-        "Water and lava neither slow you down nor put you in the swimming pose.", true);
-    private final BoolSetting holdAbilities = new BoolSetting("Hold abilities",
-        "Stops a server ability update from flicking the flight off for a tick.", true)
-        .under(mode, Mode.CREATIVE);
+        "Speeds up the game whilst you fly. 1 is normal.", 1, 1, 3, 0.1, "x").min(1);
+    private final BoolSetting keepFlightOn = new BoolSetting("Keep flight on",
+        "Ignores the server when it switches your flight off.", true);
     private final EnumSetting<AntiKick> antiKick = new EnumSetting<>("AntiKick",
         "How the vanilla flight kick is dodged.", AntiKick.DIP)
         .describe(AntiKick.DIP, "Drifts down a little now and then and climbs straight back.")
@@ -72,8 +69,8 @@ public final class Flight extends Module {
 
     public Flight() {
         super("Flight", "Lets you fly like in creative mode.", Category.MOVEMENT);
-        addSettings(mode, horizontalSpeed, verticalSpeed, scrollSpeed, timer, throughFluids,
-            holdAbilities, antiKick, antiKickInterval, dipTicks);
+        addSettings(mode, horizontalSpeed, verticalSpeed, scrollSpeed, timer, keepFlightOn,
+            antiKick, antiKickInterval, dipTicks);
         searchTags("fly");
     }
 
@@ -86,11 +83,6 @@ public final class Flight extends Module {
     // The horizontal setting must not leak into it.
     public float verticalFlySpeed() {
         return (float) (MovementUtil.VANILLA_FLY_SPEED * verticalSpeed.getValue());
-    }
-
-    // Read by EntityMixin. Fluids stop counting as fluids for the local player.
-    public boolean throughFluids() {
-        return throughFluids.isOn();
     }
 
     @Override
@@ -231,7 +223,7 @@ public final class Flight extends Module {
     // The rest of what the packet carries still lands.
     @Subscribe
     private void onPacketReceive(PacketReceiveEvent event) {
-        if (!holdAbilities.isOn() || !mode.is(Mode.CREATIVE) || mc.player == null
+        if (!keepFlightOn.isOn() || mc.player == null
             || !(event.getPacket() instanceof ClientboundPlayerAbilitiesPacket packet)) {
             return;
         }

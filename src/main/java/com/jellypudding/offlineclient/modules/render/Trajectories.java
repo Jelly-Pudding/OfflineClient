@@ -119,7 +119,7 @@ public final class Trajectories extends Module {
     private final BoolSetting ignoreWitherSkulls = new BoolSetting("Ignore wither skulls",
         "Wither skulls get no arc.", false).under(firedProjectiles);
     private final NumberSetting skipFirstTicks = new NumberSetting("Skip first ticks",
-        "Leaves out the first points of your own arc so the line does not start in your face.",
+        "Starts your own arc a few ticks out instead of in your face.",
         3, 0, 20, 1, " ticks").min(0);
     private final NumberSetting steps = new NumberSetting("Steps",
         "How many ticks of flight to predict.", 200, 20, 500, 10).min(1).max(2000);

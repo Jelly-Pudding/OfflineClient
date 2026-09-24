@@ -23,9 +23,8 @@ public final class ResetCommand extends Command {
             usage();
             return;
         }
-        Module module = OfflineClient.INSTANCE.getModuleManager().get(args[0]);
+        Module module = module(args[0]);
         if (module == null) {
-            ChatUtil.error("Unknown module: " + args[0]);
             return;
         }
         if (args.length == 1) {
@@ -36,7 +35,7 @@ public final class ResetCommand extends Command {
         } else {
             Setting<?> setting = module.getSetting(args[1]);
             if (setting == null) {
-                ChatUtil.error("Unknown setting: " + args[1]);
+                ChatUtil.error(module.getName() + " has no setting called " + args[1] + ".");
                 return;
             }
             setting.reset();

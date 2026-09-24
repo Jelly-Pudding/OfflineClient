@@ -30,9 +30,8 @@ public final class SetCommand extends Command {
             usage();
             return;
         }
-        Module module = OfflineClient.INSTANCE.getModuleManager().get(args[0]);
+        Module module = module(args[0]);
         if (module == null) {
-            ChatUtil.error("Unknown module: §f" + args[0]);
             return;
         }
 
@@ -137,7 +136,7 @@ public final class SetCommand extends Command {
             }
             case EnumSetting<?> e -> {
                 if (!trySetEnum(e, value)) {
-                    ChatUtil.error("§f" + value + "§c is not an option here. Options: §f" + enumOptions(e));
+                    ChatUtil.error("§f" + value + "§c is not an option here. Pick one of §f" + enumOptions(e));
                     return;
                 }
             }

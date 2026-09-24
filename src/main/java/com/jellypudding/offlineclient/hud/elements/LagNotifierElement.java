@@ -4,6 +4,7 @@ import com.jellypudding.offlineclient.hud.HudElement;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.ServerInfo;
 import com.jellypudding.offlineclient.util.TickRate;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -42,7 +43,7 @@ public final class LagNotifierElement extends HudElement {
                 TickRate.INSTANCE.millisSinceLastTick() / MILLIS_PER_SECOND));
         }
         if (showTps.isOn()) {
-            text.append(String.format(Locale.ROOT, " at %.1f tps", TickRate.INSTANCE.tps()));
+            text.append(" at ").append(ServerInfo.tps()).append(" tps");
         }
         return text.toString();
     }

@@ -24,27 +24,30 @@ public final class Sprint extends Module {
     }
 
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
-        "How far past the normal sprint rules to go.", Mode.STRICT)
-        .describe(Mode.STRICT, "Sprints whenever the game would let you sprint.")
-        .describe(Mode.RAGE, "Sprints through walls and shallow water and item use in any direction.");
+        "Which sprint rules to keep.", Mode.STRICT)
+        .describe(Mode.STRICT, "Sprints only when the game allows it.")
+        .describe(Mode.RAGE, "Ignores the sprint rules and sprints any way you move.");
     private final BoolSetting anyDirection = new BoolSetting("Any direction",
         "Also sprints sideways and backwards.", false).under(mode, Mode.STRICT);
     private final BoolSetting whilstHungry = new BoolSetting("Whilst hungry",
-        "Sprints even when the hunger bar is too low for it.", false).under(mode, Mode.STRICT);
+        "Sprints even with low hunger.", false).under(mode, Mode.STRICT);
     private final BoolSetting whilstStill = new BoolSetting("Whilst still",
         "Keeps the sprint on whilst you stand still.", false).under(mode, Mode.RAGE);
     private final BoolSetting stopInWater = new BoolSetting("Stop in water",
-        "Drops the sprint whilst you are in water.", true).under(mode, Mode.RAGE);
+        "Stops sprinting in water.", true).under(mode, Mode.RAGE);
+    private final BoolSetting whilstUsing = new BoolSetting("Whilst using items",
+        "Keeps your sprint and speed whilst you eat or drink or block.", false);
     private final BoolSetting keepSprint = new BoolSetting("Keep sprint",
-        "Keeps your speed and sprint after a hit lands instead of the normal slowdown.", false);
+        "Keeps your sprint and speed after you hit something.", false);
     private final BoolSetting stopOnHit = new BoolSetting("Stop on hit",
-        "Tells the server you stopped sprinting for each attack so it can crit and sweep.", false);
+        "Drops the sprint for each hit to allow crits and sweeps.", false);
 
     private final SprintPause sprintPause = new SprintPause();
 
     public Sprint() {
-        super("Sprint", "Automatically sprints whenever you move.", Category.MOVEMENT);
-        addSettings(mode, anyDirection, whilstHungry, whilstStill, stopInWater, keepSprint, stopOnHit);
+        super("Sprint", "Sprints for you whenever you move.", Category.MOVEMENT);
+        addSettings(mode, anyDirection, whilstHungry, whilstStill, stopInWater, whilstUsing,
+            keepSprint, stopOnHit);
         searchTags("auto sprint", "omnidirectional");
     }
 
@@ -81,6 +84,11 @@ public final class Sprint extends Module {
         return whilstStill.isOn() || moving(player);
     }
 
+    // Read by LocalPlayerMixin. An item in use does not slow you.
+    public boolean keepsSpeedWhilstUsing() {
+        return isEnabled() && whilstUsing.isOn();
+    }
+
     // Read by PlayerMixin. True whilst a landed hit must not halve the speed.
     public boolean keepsSprintOnHit() {
         return isEnabled() && keepSprint.isOn();
@@ -114,7 +122,8 @@ public final class Sprint extends Module {
             mc.player.setSprinting(rageWantsSprint(mc.player));
             return;
         }
-        if (mc.player.input.hasForwardImpulse() && !mc.player.isUsingItem()) {
+        if (mc.player.input.hasForwardImpulse()
+            && (!mc.player.isUsingItem() || whilstUsing.isOn())) {
             mc.player.setSprinting(true);
         }
     }

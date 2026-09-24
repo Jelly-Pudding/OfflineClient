@@ -6,6 +6,7 @@ import com.jellypudding.offlineclient.command.CommandManager;
 import com.jellypudding.offlineclient.util.ChatUtil;
 
 import java.util.List;
+import java.util.OptionalInt;
 
 // The vanilla slider stops at a hundred and ten. This does not.
 public final class FovCommand extends Command {
@@ -31,15 +32,12 @@ public final class FovCommand extends Command {
             ChatUtil.message("§7Field of view back to §b" + DEFAULT_FOV);
             return;
         }
-        int value;
-        try {
-            value = Integer.parseInt(args[0]);
-        } catch (NumberFormatException e) {
-            ChatUtil.error("That is not a whole number.");
+        OptionalInt value = wholeNumber(args[0]);
+        if (value.isEmpty()) {
             return;
         }
-        OfflineClient.MC.options.fov().set(value);
-        ChatUtil.message("§7Field of view is now §b" + value);
+        OfflineClient.MC.options.fov().set(value.getAsInt());
+        ChatUtil.message("§7Field of view is now §b" + value.getAsInt());
     }
 
     @Override

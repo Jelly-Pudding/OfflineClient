@@ -64,7 +64,7 @@ public final class Surround extends Module {
         BuiltInRegistries.BLOCK,
         List.of(Blocks.OBSIDIAN, Blocks.CRYING_OBSIDIAN));
     private final EnumSetting<Centre> centre = new EnumSetting<>("Centre",
-        "When to snap to the middle of your block so every side lines up.", Centre.INCOMPLETE)
+        "When to move you to the middle of your block.", Centre.INCOMPLETE)
         .describe(Centre.NEVER, "Never moves you.")
         .describe(Centre.ON_ENABLE, "Once when the module turns on.")
         .describe(Centre.INCOMPLETE, "Whilst any side is still open.")

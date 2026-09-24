@@ -36,7 +36,7 @@ public final class BowSpam extends Module {
         "How far away enemies are considered.", 40, 5, 100, 1, " blocks")
         .under(onlyWithTarget);
     private final NumberSetting viewAngle = new NumberSetting("View angle",
-        "How far off the crosshair a target still counts.", 30, 5, 90, 1, " degrees")
+        "How far off the crosshair a target still counts.", 30, 5, 90, 1, " degrees").min(1)
         .under(onlyWithTarget);
     private final BoolSetting crossbows = new BoolSetting("Crossbows",
         "Fire every loaded crossbow in your hotbar as well. Each one is picked up and fired and put back.", true);

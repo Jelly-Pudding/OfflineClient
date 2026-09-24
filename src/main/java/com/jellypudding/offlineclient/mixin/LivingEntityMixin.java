@@ -2,6 +2,7 @@ package com.jellypudding.offlineclient.mixin;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.modules.movement.AutoWasp;
+import com.jellypudding.offlineclient.modules.movement.ElytraFly;
 import com.jellypudding.offlineclient.modules.movement.NoSlowdown;
 import com.jellypudding.offlineclient.modules.movement.Slippy;
 import com.jellypudding.offlineclient.modules.movement.Sprint;
@@ -64,6 +65,19 @@ public abstract class LivingEntityMixin {
         }
         Slippy slippy = Modules.get(Slippy.class);
         return slippy == null ? friction : slippy.groundFriction(below, friction);
+    }
+
+    // Packet ElytraFly holds a glide open on the server whilst you fly like creative.
+    // The glide physics must not run against that flight.
+    @ModifyExpressionValue(method = "travel(Lnet/minecraft/world/phys/Vec3;)V",
+        at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/world/entity/LivingEntity;isFallFlying()Z"))
+    private boolean onTravelGliding(boolean original) {
+        if (!original || (Object) this != OfflineClient.MC.player) {
+            return original;
+        }
+        ElytraFly elytraFly = Modules.get(ElytraFly.class);
+        return elytraFly == null || !elytraFly.flyingInGlide();
     }
 
     // AutoWasp steers the glide straight at its target instead of along the look.

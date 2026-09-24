@@ -7,7 +7,8 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
 
-// The server pulls you back unless the distance is small. Use it in short hops.
+import java.util.OptionalDouble;
+
 public final class TpCommand extends Command {
 
     public TpCommand() {
@@ -28,31 +29,30 @@ public final class TpCommand extends Command {
             usage();
             return;
         }
-        try {
-            player.setPos(coordinate(args[0], player.getX()),
-                coordinate(args[1], player.getY()),
-                coordinate(args[2], player.getZ()));
-        } catch (NumberFormatException e) {
-            ChatUtil.error("Those are not numbers.");
-            return;
+        OptionalDouble x = coordinate(args[0], player.getX());
+        OptionalDouble y = x.isPresent() ? coordinate(args[1], player.getY()) : OptionalDouble.empty();
+        OptionalDouble z = y.isPresent() ? coordinate(args[2], player.getZ()) : OptionalDouble.empty();
+        if (z.isPresent()) {
+            hopTo(new Vec3(x.getAsDouble(), y.getAsDouble(), z.getAsDouble()), "§7Moved you there.");
         }
-        ChatUtil.message("§7Moved you there.");
     }
 
     // A tilde means the spot you are already at on that axis.
-    private static double coordinate(String text, double here) {
-        if (text.startsWith("~")) {
-            return text.length() == 1 ? here : here + Double.parseDouble(text.substring(1));
+    private static OptionalDouble coordinate(String text, double here) {
+        if (!text.startsWith("~")) {
+            return number(text);
         }
-        return Double.parseDouble(text);
+        if (text.length() == 1) {
+            return OptionalDouble.of(here);
+        }
+        OptionalDouble offset = number(text.substring(1));
+        return offset.isPresent() ? OptionalDouble.of(here + offset.getAsDouble()) : offset;
     }
 
     private static void toPlayer(LocalPlayer self, String name) {
         for (Player other : OfflineClient.MC.level.players()) {
             if (other != self && other.getGameProfile().name().equalsIgnoreCase(name)) {
-                Vec3 spot = other.position();
-                self.setPos(spot.x, spot.y, spot.z);
-                ChatUtil.message("§7Moved you to §b" + name);
+                hopTo(other.position(), "§7Moved you to §b" + name);
                 return;
             }
         }

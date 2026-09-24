@@ -40,7 +40,7 @@ public final class Modules {
         } catch (IllegalStateException e) {
             // A mixin asking for an unregistered module must not take the game down.
             MISSING.add(type);
-            OfflineClient.LOG.error("Module not registered: {}", type.getSimpleName());
+            OfflineClient.LOG.error("No module is registered for {}", type.getSimpleName());
             return null;
         }
         CACHE.put(type, module);

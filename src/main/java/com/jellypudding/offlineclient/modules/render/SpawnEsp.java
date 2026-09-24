@@ -27,7 +27,7 @@ public final class SpawnEsp extends Module {
     private static final double LIFT = 0.02;
 
     private final NumberSetting horizontal = new NumberSetting("Horizontal range",
-        "How far sideways to look.", 16, 4, 48, 2, " blocks").max(64);
+        "How far sideways to look.", 16, 4, 48, 2, " blocks").min(1).max(64);
     private final NumberSetting vertical = new NumberSetting("Vertical range",
         "How far up and down to look.", 6, 1, 24, 1, " blocks").max(64);
     private final NumberSetting light = new NumberSetting("Light",
@@ -41,7 +41,7 @@ public final class SpawnEsp extends Module {
     private final ColorSetting nowColor = new ColorSetting("Colour",
         "Colour of spots where a mob can appear right now.", 0, 0.89f, 0.88f, false);
     private final ColorSetting nightColor = new ColorSetting("Night colour",
-        "Colour of spots that only the sky lights so mobs appear there at night.", 60, 0.89f, 0.88f, false);
+        "Colour of spots where mobs can appear at night.", 60, 0.89f, 0.88f, false);
     private final NumberSetting opacity = new NumberSetting("Opacity",
         "How solid the markers are drawn.", 50, 5, 100, 5, "%").min(1).max(100);
     private final BoolSetting hitbox = new BoolSetting("Hitbox check",

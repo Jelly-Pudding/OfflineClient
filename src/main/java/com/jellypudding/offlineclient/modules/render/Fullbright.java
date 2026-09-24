@@ -29,7 +29,7 @@ public final class Fullbright extends Module {
         "How the dark is lit.", Mode.GAMMA)
         .describe(Mode.GAMMA, "Pushes the brightness slider past its cap.")
         .describe(Mode.POTION, "Gives you night vision on your own screen.")
-        .describe(Mode.LUMINANCE, "Raises the light level of every block so the world is relit rather than washed out.");
+        .describe(Mode.LUMINANCE, "Raises the light level of every block without washing the colours out.");
     private final NumberSetting brightness = new NumberSetting("Brightness",
         "Gamma level above the vanilla cap of 1.", 16, 1, 16, 0.5)
         .under(mode, Mode.GAMMA);

@@ -57,10 +57,10 @@ public final class AttributeSwap extends Module {
         .describe(Mode.SIMPLE, "Always the one hotbar slot you pick.")
         .describe(Mode.SMART, "Whatever scores best against the target you hit.");
     private final NumberSetting targetSlot = new NumberSetting("Target slot",
-        "The hotbar slot to swap to.", 1, 1, 9, 1)
+        "The hotbar slot to swap to.", 1, 1, 9, 1).max(9)
         .under(mode, Mode.SIMPLE);
     private final BoolSetting swapOnMiss = new BoolSetting("Swap on miss",
-        "Also swap on a swing that hits nothing so a spear can lunge.", false)
+        "Also swaps when a swing misses. Lets a spear lunge.", false)
         .under(mode, Mode.SIMPLE);
     private final NumberSetting minGain = new NumberSetting("Min gain",
         "The other item must beat what you hold by this many points.", 0.5, 0, 10, 0.5)
@@ -122,7 +122,7 @@ public final class AttributeSwap extends Module {
         "Swap to a spear for reach or for a lunge.", true)
         .under(mode, Mode.SMART);
     private final BoolSetting lunge = new BoolSetting("Lunge",
-        "Swap to a Lunge spear on a swing that hits nothing so you travel.", true)
+        "Swaps to a Lunge spear when a swing misses to carry you forward.", true)
         .under(spears);
     private final BoolSetting reach = new BoolSetting("Reach",
         "Swap to a spear when what you swing at is past normal reach.", true)

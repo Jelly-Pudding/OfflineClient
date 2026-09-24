@@ -39,7 +39,7 @@ public final class AutoWasp extends Module {
     private final NumberSetting verticalSpeed = new NumberSetting("Vertical speed",
         "Blocks a tick up or down.", 3, 0.1, 10, 0.1, " blocks").min(0);
     private final BoolSetting avoidLanding = new BoolSetting("Avoid landing",
-        "Hovers just above a target that stands on the ground so you keep gliding.", true);
+        "Hovers above a target on the ground to keep your glide going.", true);
     private final BoolSetting predictMovement = new BoolSetting("Predict movement",
         "Aims where the target is heading rather than where they are.", true);
     private final BoolSetting onlyFriends = new BoolSetting("Only friends",

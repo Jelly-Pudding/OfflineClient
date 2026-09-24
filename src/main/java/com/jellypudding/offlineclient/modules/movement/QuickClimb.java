@@ -25,7 +25,7 @@ public final class QuickClimb extends Module {
         "How fast you climb in blocks a tick. Vanilla is 0.2.", 0.3, 0.15, 2, 0.05, " blocks")
         .under(mode, Mode.VELOCITY);
     private final NumberSetting timer = new NumberSetting("Timer",
-        "Game speed whilst climbing. 1 does nothing.", 1.44, 1, 3, 0.01, "x")
+        "Game speed whilst climbing. 1 is normal.", 1.44, 1, 3, 0.01, "x")
         .min(1).under(mode, Mode.TIMER);
 
     public QuickClimb() {

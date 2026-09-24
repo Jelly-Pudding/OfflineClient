@@ -47,7 +47,7 @@ public final class Tracers extends Module {
     private final NumberSetting arrowDistance = new NumberSetting("Arrow distance",
         "Radius in pixels of the ring the arrows sit on.", 200, 0, 500, 10, " px").under(style, Style.OFFSCREEN);
     private final NumberSetting arrowSize = new NumberSetting("Arrow size",
-        "Size of each arrow in pixels.", 10, 2, 50, 1, " px").under(style, Style.OFFSCREEN);
+        "Size of each arrow in pixels.", 10, 2, 50, 1, " px").min(1).under(style, Style.OFFSCREEN);
     private final BoolSetting blink = new BoolSetting("Blink",
         "Arrows pulse in and out.", true).under(style, Style.OFFSCREEN);
     private final NumberSetting blinkSpeed = new NumberSetting("Blink speed",

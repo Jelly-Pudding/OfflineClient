@@ -3,12 +3,14 @@ package com.jellypudding.offlineclient.command;
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.command.commands.BindCommand;
 import com.jellypudding.offlineclient.command.commands.BindsCommand;
+import com.jellypudding.offlineclient.command.commands.ChunkDistanceCommand;
 import com.jellypudding.offlineclient.command.commands.ClearCommand;
 import com.jellypudding.offlineclient.command.commands.DamageCommand;
 import com.jellypudding.offlineclient.command.commands.DisconnectCommand;
 import com.jellypudding.offlineclient.command.commands.DismountCommand;
 import com.jellypudding.offlineclient.command.commands.DropCommand;
 import com.jellypudding.offlineclient.command.commands.EnderChestCommand;
+import com.jellypudding.offlineclient.command.commands.FloorCommand;
 import com.jellypudding.offlineclient.command.commands.FovCommand;
 import com.jellypudding.offlineclient.command.commands.FriendCommand;
 import com.jellypudding.offlineclient.command.commands.GetPosCommand;
@@ -17,7 +19,6 @@ import com.jellypudding.offlineclient.command.commands.GuiCommand;
 import com.jellypudding.offlineclient.command.commands.HClipCommand;
 import com.jellypudding.offlineclient.command.commands.AuthorCommand;
 import com.jellypudding.offlineclient.command.commands.JumpCommand;
-import com.jellypudding.offlineclient.command.commands.SimulationDistanceCommand;
 import com.jellypudding.offlineclient.command.commands.TpCommand;
 import com.jellypudding.offlineclient.command.commands.HelpCommand;
 import com.jellypudding.offlineclient.command.commands.HudCommand;
@@ -27,7 +28,6 @@ import com.jellypudding.offlineclient.command.commands.NbtCommand;
 import com.jellypudding.offlineclient.command.commands.PeekCommand;
 import com.jellypudding.offlineclient.command.commands.PrefixCommand;
 import com.jellypudding.offlineclient.command.commands.ProfileCommand;
-import com.jellypudding.offlineclient.command.commands.RenderDistanceCommand;
 import com.jellypudding.offlineclient.command.commands.ResetCommand;
 import com.jellypudding.offlineclient.command.commands.RotationCommand;
 import com.jellypudding.offlineclient.command.commands.SayCommand;
@@ -70,6 +70,8 @@ public final class CommandManager {
         new GetPosCommand(),
         new GotoCommand(),
         new VClipCommand(),
+        FloorCommand.up(),
+        FloorCommand.down(),
         new HClipCommand(),
         new DropCommand(),
         new DismountCommand(),
@@ -79,14 +81,14 @@ public final class CommandManager {
         new PeekCommand(),
         new NbtCommand(),
         new XRayCommand(),
-        new RenderDistanceCommand(),
+        ChunkDistanceCommand.render(),
         new RotationCommand(),
         new DamageCommand(),
         new EnderChestCommand(),
         new MacroCommand(),
         new HudCommand(),
         new TpCommand(),
-        new SimulationDistanceCommand(),
+        ChunkDistanceCommand.simulation(),
         new JumpCommand(),
         new AuthorCommand()
     );

@@ -19,9 +19,8 @@ public final class ToggleCommand extends Command {
             usage();
             return;
         }
-        Module module = OfflineClient.INSTANCE.getModuleManager().get(args[0]);
+        Module module = module(args[0]);
         if (module == null) {
-            ChatUtil.error("Unknown module: " + args[0]);
             return;
         }
         if (!module.isTogglable()) {

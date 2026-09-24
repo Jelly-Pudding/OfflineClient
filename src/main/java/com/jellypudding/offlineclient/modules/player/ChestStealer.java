@@ -51,7 +51,7 @@ public final class ChestStealer extends Module {
     private final BoolSetting throwOut = new BoolSetting("Throw out",
         "Throws each item on the ground instead of into your inventory.", false);
     private final BoolSetting backwards = new BoolSetting("Throw backwards",
-        "Turns you around whilst throwing so the pile lands behind you.", false)
+        "Throws the pile behind you.", false)
         .under(throwOut);
     private final BoolSetting buttons = new BoolSetting("Buttons",
         "Draws Steal and Dump buttons above every container screen.", true);

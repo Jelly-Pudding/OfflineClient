@@ -51,7 +51,7 @@ public final class PacketMine extends Module {
     private final BoolSetting rotate = new BoolSetting("Rotate",
         "Turn towards the block on the server side.", true);
     private final BoolSetting obscure = new BoolSetting("Obscure progress",
-        "Sends an abort every tick so others do not see the cracks.", false);
+        "Sends an abort every tick to hide the cracks from others.", false);
     private final BoolSetting render = new BoolSetting("Render",
         "Draws a box on each block in the queue.", true);
     private final BoxStyle miningBox = new BoxStyle("Mining", BoxStyle.Shape.BOTH, 0)

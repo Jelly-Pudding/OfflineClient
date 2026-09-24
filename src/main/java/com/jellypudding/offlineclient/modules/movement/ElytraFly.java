@@ -32,7 +32,7 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
 // Control nudges the vanilla glide and Cruise flies a dive and climb cycle on its own.
-// Packet fakes the glide with packets and Bounce hops along the ground with wings open.
+// Packet flies like creative inside an open glide and Bounce hops along the ground.
 public final class ElytraFly extends Module {
 
     public enum Mode { CONTROL, CRUISE, PACKET, BOUNCE }
@@ -97,14 +97,14 @@ public final class ElytraFly extends Module {
         "Who does the flying.", Mode.CONTROL)
         .describe(Mode.CONTROL, "You steer. The keys push you along and up and down.")
         .describe(Mode.CRUISE, "Flies a dive and climb cycle on its own for long trips.")
-        .describe(Mode.PACKET, "Fakes a glide with packets whilst you fly like creative. Works on some servers.")
+        .describe(Mode.PACKET, "Flies like creative mode whilst the server sees a glide.")
         .describe(Mode.BOUNCE, "Hops along the ground with the wings open. Fast on the nether roof.");
     private final NumberSetting speed = new NumberSetting("Horizontal speed",
         "How hard the movement keys push you along.", 1, 0.2, 5, 0.1, "x")
-        .min(0.1).max(20).under(mode, Mode.CONTROL, Mode.PACKET);
+        .min(0.1).under(mode, Mode.CONTROL, Mode.PACKET);
     private final NumberSetting climbSpeed = new NumberSetting("Vertical speed",
         "How hard jump and sneak push you up and down.", 1, 0.2, 5, 0.1, "x")
-        .min(0.1).max(20).under(mode, Mode.CONTROL, Mode.PACKET);
+        .min(0.1).under(mode, Mode.CONTROL, Mode.PACKET);
     private final BoolSetting holdHeight = new BoolSetting("Hold height",
         "Holds you at your current height whilst neither jump nor sneak is held.", true)
         .under(mode, Mode.CONTROL);
@@ -128,11 +128,11 @@ public final class ElytraFly extends Module {
         "Builds the horizontal speed up over time instead of applying it at once.", false)
         .under(mode, Mode.CONTROL, Mode.PACKET);
     private final NumberSetting accelerationStart = new NumberSetting("Acceleration start",
-        "The speed the ramp begins from.", 0, 0, 5, 0.1, "x").min(0).max(20)
+        "The speed the ramp begins from.", 0, 0, 5, 0.1, "x").min(0)
         .under(acceleration);
     private final NumberSetting accelerationStep = new NumberSetting("Acceleration step",
         "How quickly the ramp climbs towards the horizontal speed.", 1, 0.1, 5, 0.1, "")
-        .min(0.1).max(5)
+        .min(0.1)
         .under(acceleration);
     private final BoolSetting autoPilot = new BoolSetting("Auto pilot",
         "Holds forward for you whilst you glide above the minimum height.", false)
@@ -220,7 +220,7 @@ public final class ElytraFly extends Module {
     private final BoolSetting chunkGuard = new BoolSetting("Chunk guard",
         "Slows you down before you fly into ground the client has not loaded.", true);
     private final NumberSetting chunkLookahead = new NumberSetting("Look ahead",
-        "How far in front to check for loaded ground.", 24, 8, 64, 1, " blocks")
+        "How far in front to check for loaded ground.", 24, 8, 64, 1, " blocks").min(1)
         .under(chunkGuard);
     private final BoolSetting noCrash = new BoolSetting("No crash",
         "Brakes before you fly into a wall or the ground. The faster you go the further ahead it looks.", false);
@@ -366,14 +366,9 @@ public final class ElytraFly extends Module {
     @Override
     protected void onDisable() {
         cruising = false;
-        releaseBounceKeys();
-        releasePilot();
-        restoreFovScale();
+        letGo();
         if (mc.player == null) {
             return;
-        }
-        if (applied == Mode.PACKET) {
-            endPacketFlight();
         }
         if (instantDrop.isOn() && applied != Mode.BOUNCE && mc.player.isFallFlying()) {
             watch(dropWatcher);
@@ -405,12 +400,7 @@ public final class ElytraFly extends Module {
         }
         // A mode change lets go of whatever the old mode was holding.
         if (applied != mode.getValue()) {
-            releaseBounceKeys();
-            releasePilot();
-            restoreFovScale();
-            if (applied == Mode.PACKET) {
-                endPacketFlight();
-            }
+            letGo();
             applied = mode.getValue();
         }
         if (restartCooldown > 0) {
@@ -423,8 +413,7 @@ public final class ElytraFly extends Module {
             cruising = false;
             wasGliding = false;
             ramp = 0;
-            releaseBounceKeys();
-            releasePilot();
+            letGo();
             return;
         }
         if (replaceElytra.isOn()) {
@@ -436,8 +425,7 @@ public final class ElytraFly extends Module {
         if (durabilityGuard.isOn() && checkDurability()) {
             cruising = false;
             wasGliding = mc.player.isFallFlying();
-            releaseBounceKeys();
-            releasePilot();
+            letGo();
             return;
         }
         if (dropped && !mc.player.input.keyPresses.shift()) {
@@ -818,8 +806,9 @@ public final class ElytraFly extends Module {
         rocketTimer = (int) Math.round(rocketDelay.getValue() * TICKS_PER_SECOND);
     }
 
-    // Creative style flight with an elytra on.
-    // The server hears a glide start and a ground flag each tick. Some take it as real.
+    // Creative style flight inside a glide the server holds open. A glide is never
+    // kicked for flying and it never banks fall distance. LivingEntityMixin keeps the
+    // glide physics off the flight.
     private void packetTick() {
         if (!mc.player.getItemBySlot(EquipmentSlot.CHEST).is(Items.ELYTRA)) {
             endPacketFlight();
@@ -842,17 +831,42 @@ public final class ElytraFly extends Module {
         double horizontal = MovementUtil.FLY_HORIZONTAL * rampedSpeed(heading != Vec3.ZERO);
         mc.player.setDeltaMovement(heading.x * horizontal, vy, heading.z * horizontal);
 
-        sendStartGlide();
-        mc.player.connection.send(new ServerboundMovePlayerPacket.StatusOnly(true,
-            mc.player.horizontalCollision));
+        // A second start would close the glide. It opens once and is set here straight
+        // away as vanilla does. The server clears it again if it refuses.
+        if (!mc.player.isFallFlying() && !mc.player.onGround() && restartCooldown == 0) {
+            mc.player.startFallFlying();
+            openGlide();
+        }
     }
 
+    // Read by LivingEntityMixin. The glide stays open for the server whilst the
+    // client flies like creative.
+    public boolean flyingInGlide() {
+        return isEnabled() && applied == Mode.PACKET && mc.player != null
+            && mc.player.getAbilities().flying;
+    }
+
+    // Lets go of whatever the mode holds whilst it changes or stands aside.
+    // A packet flight left on with no fly speed would strand you midair.
+    private void letGo() {
+        releaseBounceKeys();
+        releasePilot();
+        restoreFovScale();
+        if (applied == Mode.PACKET) {
+            endPacketFlight();
+        }
+    }
+
+    // Creative players keep their flight but get the vanilla speed back.
     private void endPacketFlight() {
-        if (mc.player.isCreative() || mc.player.isSpectator()) {
+        if (mc.player == null) {
             return;
         }
-        mc.player.getAbilities().flying = false;
-        mc.player.getAbilities().setFlyingSpeed(MovementUtil.VANILLA_FLY_SPEED);
+        Abilities abilities = mc.player.getAbilities();
+        abilities.setFlyingSpeed(MovementUtil.VANILLA_FLY_SPEED);
+        if (!mc.player.isCreative() && !mc.player.isSpectator()) {
+            abilities.flying = false;
+        }
     }
 
     // Holds forward and jump and reopens the wings every hop.

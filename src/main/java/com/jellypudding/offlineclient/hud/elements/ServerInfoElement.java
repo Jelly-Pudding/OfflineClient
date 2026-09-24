@@ -4,16 +4,12 @@ import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.hud.HudElement;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
-import com.jellypudding.offlineclient.util.TickRate;
+import com.jellypudding.offlineclient.util.ServerInfo;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.multiplayer.PlayerInfo;
-import net.minecraft.client.multiplayer.ServerData;
-import net.minecraft.client.player.LocalPlayer;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 
 public final class ServerInfoElement extends HudElement {
 
@@ -41,24 +37,22 @@ public final class ServerInfoElement extends HudElement {
     }
 
     private List<String> rows() {
-        LocalPlayer player = OfflineClient.MC.player;
         List<String> rows = new ArrayList<>(4);
-        if (player == null) {
+        if (OfflineClient.MC.player == null) {
             return rows;
         }
         if (address.isOn()) {
-            ServerData data = OfflineClient.MC.getCurrentServer();
-            rows.add(data == null ? "Single player" : data.ip);
+            String ip = ServerInfo.address();
+            rows.add(ip == null ? "Single player" : ip);
         }
         if (players.isOn()) {
-            rows.add(player.connection.getOnlinePlayers().size() + " online");
+            rows.add(ServerInfo.online() + " online");
         }
         if (tps.isOn()) {
-            rows.add(String.format(Locale.ROOT, "%.1f tps", TickRate.INSTANCE.tps()));
+            rows.add(ServerInfo.tps() + " tps");
         }
         if (ping.isOn()) {
-            PlayerInfo info = player.connection.getPlayerInfo(player.getUUID());
-            rows.add((info == null ? 0 : info.getLatency()) + " ms");
+            rows.add(ServerInfo.ping() + " ms");
         }
         return rows;
     }

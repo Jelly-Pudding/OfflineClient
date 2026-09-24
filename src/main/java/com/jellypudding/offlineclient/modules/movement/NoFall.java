@@ -68,6 +68,9 @@ public final class NoFall extends Module {
     // Blocks of fall the game forgives before it hurts.
     private static final float SAFE_FALL = 3;
 
+    // A held fall of one block past the safe distance hurts. The claim keeps clear of it.
+    private static final double HURTING_FALL = SAFE_FALL + 0.9;
+
     // Air place goes down before this much fall would hurt at all.
     private static final float DAMAGE_FALL = 2;
 
@@ -78,7 +81,7 @@ public final class NoFall extends Module {
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
         "How the fall is stopped.", Mode.PACKET)
         .describe(Mode.PACKET, "Tells the server you have landed on every packet whilst you fall."
-            + " A descent faster than gravity may still hurt.")
+            + " Only a drop of four blocks within one tick can still hurt.")
         .describe(Mode.PLACE, "Drops water or another soft landing under you. Survives a strict server.")
         .describe(Mode.AIR_PLACE, "Puts any block from your hotbar under your feet just before the fall would hurt.")
         .describe(Mode.BOTH, "Claims the landing and drops the soft landing as well.");
@@ -94,7 +97,7 @@ public final class NoFall extends Module {
         .describe(AirPlaceWhen.BEFORE_DEATH, "Only once the fall would kill you.")
         .under(mode, Mode.AIR_PLACE);
     private final BoolSetting anchor = new BoolSetting("Anchor",
-        "Centres you on the block first so the landing goes under you and not beside you.", true)
+        "Centres you first to put the landing block right under you.", true)
         .under(mode, Mode.PLACE, Mode.AIR_PLACE, Mode.BOTH);
     private final NumberSetting minFall = new NumberSetting("Min fall",
         "Short drops are left alone until the fall passes this. Three blocks is the most"
@@ -235,7 +238,10 @@ public final class NoFall extends Module {
         if (player.isFallFlying()) {
             return false;
         }
-        return descent >= minFall.getValue();
+        // A descent faster than gravity can carry the held fall past the damage line in a
+        // single tick. The claim then goes out a tick early.
+        double nextDrop = Math.max(0, -player.getDeltaMovement().y);
+        return descent >= minFall.getValue() || descent + nextDrop >= HURTING_FALL;
     }
 
     // The server moved the player and the fall it holds with them.

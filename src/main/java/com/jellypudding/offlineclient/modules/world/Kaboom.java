@@ -29,7 +29,7 @@ public final class Kaboom extends Module {
     private final NumberSetting power = new NumberSetting("Power",
         "How many times each block is hit.", 128, 32, 512, 32).min(1);
     private final NumberSetting rate = new NumberSetting("Packets a tick",
-        "Spread over ticks so the server has a chance to keep up.", 600, 100, 4000, 100).min(1);
+        "How many packets go out each tick. Fewer gives the server time to keep up.", 600, 100, 4000, 100).min(1);
     private final BoolSetting sound = new BoolSetting("Sound",
         "Play an explosion for yourself.", true);
     private final BoolSetting particles = new BoolSetting("Particles",

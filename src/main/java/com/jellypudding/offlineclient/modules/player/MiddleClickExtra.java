@@ -76,7 +76,7 @@ public final class MiddleClickExtra extends Module {
         "Says in chat when the item cannot be found.", true)
         .under(mode, () -> !mode.is(Mode.ADD_FRIEND));
     private final BoolSetting skipCreative = new BoolSetting("Skip in creative",
-        "Does nothing in creative so pick block works as normal.", true);
+        "Leaves pick block alone in creative.", true);
 
     private final HotbarLoan loan = new HotbarLoan();
     private final UseHold hold = new UseHold();
@@ -134,17 +134,10 @@ public final class MiddleClickExtra extends Module {
                 ? " §7is now a friend." : " §7is no longer a friend."));
         }
         if (added && sendMessage.isOn() && !message.isBlank()) {
-            send(message.getValue().replace(NAME_TOKEN, name));
+            ChatUtil.say(message.getValue().replace(NAME_TOKEN, name));
         }
     }
 
-    private void send(String text) {
-        if (text.startsWith("/")) {
-            mc.getConnection().sendCommand(text.substring(1));
-        } else {
-            mc.getConnection().sendChat(text);
-        }
-    }
 
     private void useItem(Mode chosen) {
         int limit = quickSwap.isOn() ? InventoryUtil.WHOLE_INVENTORY : InventoryUtil.HOTBAR_SIZE;

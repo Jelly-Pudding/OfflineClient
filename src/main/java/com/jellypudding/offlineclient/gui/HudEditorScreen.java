@@ -19,7 +19,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 // Drag the overlay about and pull a corner to resize it. What you see here is
-// what you get whilst playing.
+// what you get whilst playing. The overlay keeps its true size and the panel
+// listing it follows the ClickGUI scale like every other panel.
 public final class HudEditorScreen extends Screen {
 
     // How close an edge has to be before it sticks.
@@ -29,6 +30,8 @@ public final class HudEditorScreen extends Screen {
     private static final int MIN_GRAB = 40;
 
     private static final int LABEL_GAP = 11;
+    // Between an element's name and its size.
+    private static final int LABEL_SPACE = 4;
 
     // The corner square that resizes an element.
     private static final int GRIP = 5;
@@ -48,6 +51,10 @@ public final class HudEditorScreen extends Screen {
     private final HudElementList list;
 
     private String tooltip;
+
+    // Held still whilst the pointer is down as the ClickGUI holds its own.
+    private float panelScale = GuiScreenBase.guiScale();
+    private boolean pointerDown;
 
     private HudElement dragged;
     private HudElement resized;
@@ -123,29 +130,77 @@ public final class HudEditorScreen extends Screen {
             boolean over = live || element == picked || inside(mouseX, mouseY, box);
             int edge = over ? GuiTheme.accentText() : GuiTheme.edge();
             context.outline(box[0] - 2, box[1] - 2, box[2] + 4, box[3] + 4, edge);
-            context.text(font, element.getName(), box[0] - 2, labelY(box),
-                over ? GuiTheme.accentText() : GuiTheme.textDim(), true);
+            renderLabel(context, box, element, over);
             if (over) {
                 renderGrip(context, box, element == resized
                     || overGrip(mouseX, mouseY, box));
-                String size = Math.round(element.scale() * 100) + "%";
-                context.text(font, size,
-                    Math.min(box[0] + box[2] + 4, width) - font.width(size),
-                    labelY(box), GuiTheme.textDim(), true);
             }
         }
+        renderPanel(context, mouseX, mouseY, boxes);
+    }
+
+    // The name above the box and its size after it whilst hovered. The size keeps to
+    // the right edge of the box when there is room and never runs into the name.
+    private void renderLabel(GuiGraphicsExtractor context, int[] box, HudElement element,
+                             boolean over) {
+        String name = element.getName();
+        String size = over ? Math.round(element.scale() * 100) + "%" : null;
+        int nameWidth = font.width(name);
+        int sizeWidth = size == null ? 0 : font.width(size);
+        int total = size == null ? nameWidth : nameWidth + LABEL_SPACE + sizeWidth;
+        int x = Math.clamp(box[0] - 2, 0, Math.max(0, width - total));
+        int y = labelY(box);
+        context.text(font, name, x, y, over ? GuiTheme.accentText() : GuiTheme.textDim(), true);
+        if (size != null) {
+            int flush = Math.min(box[0] + box[2] + 4, width) - sizeWidth;
+            context.text(font, size, Math.max(x + nameWidth + LABEL_SPACE, flush), y,
+                GuiTheme.textDim(), true);
+        }
+    }
+
+    // The panel and its tooltip draw at the ClickGUI scale. The overlay boxes it
+    // covers are moved into the same scale first.
+    private void renderPanel(GuiGraphicsExtractor context, int mouseX, int mouseY,
+                             List<int[]> boxes) {
+        if (!pointerDown) {
+            panelScale = GuiScreenBase.guiScale();
+        }
+        int panelX = toPanel(mouseX);
+        int panelY = toPanel(mouseY);
+        int panelW = toPanel(width);
+        int panelH = toPanel(height);
         tooltip = null;
-        list.update(mouseX, mouseY, width, height, 0);
-        RenderUtil.cover(context, list.bounds(), boxes, GuiTheme.bgSolid());
-        list.render(context, mouseX, mouseY);
-        HudElement under = list.isCollapsed() ? null : list.getHovered();
-        if (tooltip == null && under != null) {
-            tooltip = under.getDescription();
+        list.update(panelX, panelY, panelW, panelH, 0);
+        if (!pointerDown) {
+            keepInReach(panelW, panelH);
         }
-        if (tooltip != null && !tooltip.isEmpty()) {
+        List<int[]> under = new ArrayList<>(boxes.size());
+        for (int[] box : boxes) {
+            under.add(RenderUtil.scaled(box[0], box[1], box[2], box[3], panelScale));
+        }
+        context.pose().pushMatrix();
+        context.pose().scale(panelScale, panelScale);
+        RenderUtil.cover(context, list.bounds(), under, GuiTheme.bgSolid());
+        list.render(context, panelX, panelY);
+        HudElement hovered = list.isCollapsed() ? null : list.getHovered();
+        if (tooltip == null && hovered != null) {
+            tooltip = hovered.getDescription();
+        }
+        if (tooltip != null && !tooltip.isEmpty() && GuiScreenBase.hoverHelp()) {
             RenderUtil.tooltip(context, font, RenderUtil.wrap(font, tooltip, TIP_WIDTH),
-                mouseX, mouseY, width, height, GuiTheme.bgTooltip(), GuiTheme.text());
+                panelX, panelY, panelW, panelH, GuiTheme.bgTooltip(), GuiTheme.text());
         }
+        context.pose().popMatrix();
+    }
+
+    private int toPanel(double screen) {
+        return (int) (screen / panelScale);
+    }
+
+    // A new scale or a smaller window must never leave the panel out of reach.
+    private void keepInReach(int panelW, int panelH) {
+        list.setPosition(Math.clamp(list.getX(), 0, Math.max(0, panelW - list.getWidth())),
+            Math.clamp(list.getY(), 0, Math.max(0, panelH - GuiTheme.HEADER_HEIGHT)));
     }
 
     // An element pinned against the top edge has no room above it. Its name
@@ -181,8 +236,9 @@ public final class HudEditorScreen extends Screen {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        pointerDown = true;
         settings.beginClick();
-        if (list.mouseClicked(event.x(), event.y(), event.button())) {
+        if (list.mouseClicked(toPanel(event.x()), toPanel(event.y()), event.button())) {
             return true;
         }
         List<Placement> placed = placements();
@@ -232,7 +288,7 @@ public final class HudEditorScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
-        if (list.isOver(mouseX, mouseY)) {
+        if (list.isOver(toPanel(mouseX), toPanel(mouseY))) {
             list.wheel(scrollY);
             return true;
         }
@@ -241,6 +297,7 @@ public final class HudEditorScreen extends Screen {
 
     @Override
     public boolean mouseReleased(MouseButtonEvent event) {
+        pointerDown = false;
         list.mouseReleased();
         if (dragged != null || resized != null) {
             dragged = null;

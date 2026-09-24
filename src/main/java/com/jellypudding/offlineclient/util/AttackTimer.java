@@ -20,7 +20,7 @@ public final class AttackTimer {
     private final NumberSetting randomise = new NumberSetting("Randomise",
         "Extra random ticks added to the wait.", 2, 0, 10, 1, " ticks").min(0);
     private final BoolSetting tpsSync = new BoolSetting("TPS sync",
-        "Stretches the wait whilst the server ticks slowly so no hit is wasted.", true);
+        "Waits longer whilst the server lags to avoid wasted hits.", true);
 
     private final Random random = new Random();
 

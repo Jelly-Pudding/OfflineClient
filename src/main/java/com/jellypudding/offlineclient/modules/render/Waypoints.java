@@ -56,7 +56,7 @@ public final class Waypoints extends Module {
         "Shows overworld markers in the nether and the other way round with the coordinates scaled by eight.",
         true);
     private final NumberSetting hideWithin = new NumberSetting("Hide within",
-        "Markers this close fade out so they do not fill your screen. Zero keeps them.",
+        "Markers this close fade out. Zero keeps them.",
         0, 0, 32, 1, " blocks").min(0);
     private final BoolSetting autoColor = new BoolSetting("Automatic colours",
         "Each new waypoint takes a colour from its name. Off gives it the colour below.", true);
@@ -64,7 +64,7 @@ public final class Waypoints extends Module {
         "Colour of the next waypoint you add. Recolour an old one with the waypoint colour command.", 200, false)
         .unless(autoColor);
     private final BoolSetting markDeaths = new BoolSetting("Mark deaths",
-        "Saves a red waypoint where you die so you can find your things again.", false);
+        "Saves a red waypoint where you die.", false);
     private final NumberSetting deathsKept = new NumberSetting("Deaths kept",
         "How many death markers are kept in each world. The oldest goes when a new one is saved.",
         5, 1, 20, 1).min(1)

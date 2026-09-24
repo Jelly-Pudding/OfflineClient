@@ -2,6 +2,7 @@ package com.jellypudding.offlineclient.util;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.module.Module;
+import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.network.chat.Component;
 
 public final class ChatUtil {
@@ -17,6 +18,20 @@ public final class ChatUtil {
 
     public static void error(String message) {
         message("§c" + message);
+    }
+
+    // Sends a line as the player. A line starting with a slash runs as a server
+    // command the way the chat screen runs it. Chat would show it as text.
+    public static void say(String text) {
+        ClientPacketListener connection = OfflineClient.MC.getConnection();
+        if (connection == null || text.isBlank()) {
+            return;
+        }
+        if (text.startsWith("/")) {
+            connection.sendCommand(text.substring(1));
+        } else {
+            connection.sendChat(text);
+        }
     }
 
     public static void toggled(Module module) {

@@ -332,7 +332,6 @@ public final class RenderUtil {
         pose.popMatrix();
     }
 
-    // Sits beside the cursor and stays inside the screen.
     // Paints where a box laps over anything already drawn. Writing under a
     // see through box would otherwise read through it.
     public static void cover(GuiGraphicsExtractor context, int[] over, List<int[]> under,
@@ -373,6 +372,14 @@ public final class RenderUtil {
         return lines;
     }
 
+    // A rectangle in screen pixels moved into a view drawn at the given scale.
+    // Rounded outwards to still cover every pixel it did.
+    public static int[] scaled(int left, int top, int right, int bottom, float scale) {
+        return new int[] {(int) (left / scale), (int) (top / scale),
+            (int) Math.ceil(right / scale), (int) Math.ceil(bottom / scale)};
+    }
+
+    // Sits beside the cursor and stays inside the screen.
     public static void tooltip(GuiGraphicsExtractor context, Font font, List<String> lines,
                                int mouseX, int mouseY, int screenWidth, int screenHeight,
                                int fill, int ink) {

@@ -8,6 +8,8 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 
 // A titled box that drags by its header and resizes by any edge. Every
 // draggable box in the client is one of these with its own rows inside.
+// Each starts at the same width and height and a right click on an edge
+// puts that side back.
 public abstract class PanelFrame {
 
     protected static final int MIN_VIEW = 16;
@@ -38,7 +40,7 @@ public abstract class PanelFrame {
     private boolean sizeTop;
     private boolean sizeBottom;
 
-    private int viewHeight;
+    private int viewHeight = GuiTheme.PANEL_VIEW_HEIGHT;
     private int screenHeight;
 
     protected PanelFrame(String title, int x, int y, int width) {
@@ -120,8 +122,9 @@ public abstract class PanelFrame {
         this.collapsed = collapsed;
     }
 
+    // Nought or less means the box was never sized and gets the start height.
     public void setViewHeight(int viewHeight) {
-        this.viewHeight = Math.max(0, viewHeight);
+        this.viewHeight = viewHeight > 0 ? viewHeight : GuiTheme.PANEL_VIEW_HEIGHT;
     }
 
     public void setScrollOffset(int offset) {
@@ -379,7 +382,7 @@ public abstract class PanelFrame {
                 width = startWidth;
             }
             if (t || b) {
-                viewHeight = 0;
+                viewHeight = GuiTheme.PANEL_VIEW_HEIGHT;
                 scrollBar.setOffset(0);
             }
         }

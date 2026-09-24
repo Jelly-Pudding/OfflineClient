@@ -110,9 +110,9 @@ public final class AutoFish extends Module {
     private final BoolSetting stopWhenFull = new BoolSetting("Stop when full",
         "Switch the module off once your inventory has no free slot.", false);
     private final BoolSetting shallowWarning = new BoolSetting("Shallow water warning",
-        "Warn in chat when the bobber is not in open water so no treasure can be caught.", true);
+        "Warns in chat when the bobber is not in open water. Treasure needs open water.", true);
     private final BoolSetting mcmmoMode = new BoolSetting("mcMMO mode",
-        "Cycle between two fishing spots so the mcMMO overfishing penalty never starts.", false);
+        "Swaps between two fishing spots to avoid the mcMMO overfishing penalty.", false);
     private final NumberSetting mcmmoRange = new NumberSetting("mcMMO range",
         "The MoveRange value of the plugin. The least distance between the two spots.",
         3, 1, 50, 1, " blocks").min(1)
@@ -483,7 +483,7 @@ public final class AutoFish extends Module {
         if (nextSpot == null) {
             if (!askedForSpot) {
                 ChatUtil.message("mcMMO mode needs a second fishing spot.");
-                ChatUtil.message("Aim so the bobber lands outside the box then cast by hand.");
+                ChatUtil.message("Aim at a spot outside the box and cast by hand.");
                 askedForSpot = true;
                 toldReady = false;
             }

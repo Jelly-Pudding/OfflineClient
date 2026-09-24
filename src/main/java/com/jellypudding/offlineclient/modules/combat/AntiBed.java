@@ -18,7 +18,7 @@ import net.minecraft.world.level.block.Blocks;
 public final class AntiBed extends RespawnBlockBreaker {
 
     private final BoolSetting instantHead = new BoolSetting("Instant head break",
-        "Sends the whole break for a bed at your head in one go so the server finishes it alone.", true);
+        "Breaks a bed at your head with a single packet.", true);
     private final BoolSetting stringAbove = new BoolSetting("String above",
         "Places string in the block above your head.", false);
     private final BoolSetting stringHead = new BoolSetting("String at head",

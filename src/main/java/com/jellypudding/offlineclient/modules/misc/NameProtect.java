@@ -82,7 +82,7 @@ public final class NameProtect extends Module {
         0, 0, SLOTS, 1).min(0).max(SLOTS);
     private final Slot[] slots = new Slot[SLOTS];
     private final BoolSetting renameAll = new BoolSetting("Rename everyone",
-        "Renames every other player on your screen to Player1 and Player2 and so on.", false);
+        "Gives every other player on your screen a numbered name like Player1.", false);
 
     // The number handed to each player the blanket rename has met.
     private final Map<String, String> numbered = new HashMap<>();

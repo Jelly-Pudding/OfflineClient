@@ -149,7 +149,7 @@ public final class BetterTooltips extends Module {
         "The key that opens the window.", InputConstants.KEY_P)
         .under(openWith, OpenWith.KEY);
     private final BoolSetting pauseInCreative = new BoolSetting("Pause in creative",
-        "Leave the click alone in creative so middle click still clones the item.", true)
+        "Leaves middle click alone in creative where it clones the item.", true)
         .under(openContents);
 
     // What the ender chest held the last time it was open this session.

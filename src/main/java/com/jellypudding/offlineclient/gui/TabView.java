@@ -2,7 +2,6 @@ package com.jellypudding.offlineclient.gui;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.setting.KeybindSetting;
-import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.RenderUtil;
 import com.mojang.blaze3d.platform.InputConstants;
@@ -10,6 +9,7 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.input.KeyEvent;
 
+import java.util.ArrayList;
 import java.util.List;
 
 // What a tab opens. A box under the tabs holding one row per entry with a
@@ -24,13 +24,19 @@ public final class TabView {
         }
     }
 
+    // A short how to under the rows. Each example types itself into the field
+    // when clicked.
+    public record Hint(String title, String how, List<String> examples) {
+    }
+
     // What the box is looking at. The client owns the data and this reads it.
     public interface Source {
         // The field text narrows the rows and can offer more of them.
         List<Entry> entries(String query);
 
-        // Shown when there is nothing to list.
-        String emptyText();
+        // Shown when there is nothing to list. With text in the field it says what
+        // enter would do with it.
+        String emptyText(String query);
 
         // A line along the bottom saying what the rows do.
         default String footer() {
@@ -60,6 +66,11 @@ public final class TabView {
             return false;
         }
 
+        // Shown under the rows to teach a first time player. Empty hides it.
+        default List<Hint> hints(String query) {
+            return List.of();
+        }
+
         default void bind(String name, int key) {
         }
     }
@@ -76,6 +87,11 @@ public final class TabView {
     private static final int MAX_WIDTH = 460;
     private static final int MIN_HEIGHT = 40;
     private static final int DEFAULT_WIDTH = 220;
+    private static final int HINT_GAP = 6;
+    private static final int CHIP_HEIGHT = 11;
+    private static final int CHIP_STEP = CHIP_HEIGHT + 2;
+    private static final int CHIP_PAD = 3;
+    private static final String CHIP_TIP = "Click to use this example";
 
     // A listing can reach the disk. Often enough to feel live is plenty.
     private static final long REFRESH_MS = 500;
@@ -97,8 +113,15 @@ public final class TabView {
     private String binding;
 
     private List<Entry> entries = List.of();
+    private List<Hint> hints = List.of();
     private String asked = "";
     private long read;
+
+    // Where each example landed this frame.
+    private record Chip(int x, int y, int w, String text) {
+    }
+
+    private final List<Chip> chips = new ArrayList<>();
 
     // Where the box landed this frame. The width and height above are what
     // the user asked for and these are what the window had room for.
@@ -132,6 +155,7 @@ public final class TabView {
     private void refresh() {
         asked = adder.get().trim();
         entries = source.entries(asked);
+        hints = source.hints(asked);
         read = System.currentTimeMillis();
     }
 
@@ -143,9 +167,31 @@ public final class TabView {
         return entries;
     }
 
-    private int contentHeight() {
+    private int rowsHeight() {
         int count = entries().size();
         return count == 0 ? EMPTY_HEIGHT : count * GuiTheme.ROW_HEIGHT;
+    }
+
+    private int contentHeight() {
+        return rowsHeight() + hintsHeight();
+    }
+
+    // Kept clear of a scrollbar that may appear beside the rows.
+    private int hintRoom() {
+        return rowRoom() - GuiTheme.SCROLL_GUTTER - GuiTheme.PAD * 2;
+    }
+
+    private int hintsHeight() {
+        if (hints.isEmpty()) {
+            return 0;
+        }
+        Font font = OfflineClient.MC.font;
+        int height = HINT_GAP;
+        for (Hint hint : hints) {
+            height += HINT_GAP + LINE + RenderUtil.wrap(font, hint.how(), hintRoom()).size() * LINE
+                + hint.examples().size() * CHIP_STEP;
+        }
+        return height;
     }
 
     // The strip the field sits in. Zero when this list cannot be added to.
@@ -301,14 +347,15 @@ public final class TabView {
     private void renderRows(GuiGraphicsExtractor context, Font font, int rowX, int viewTop,
                             int view, int rowW, int mouseX, int mouseY) {
         List<Entry> rows = entries();
-        if (rows.isEmpty()) {
-            context.text(font, source.emptyText(), rowX + GuiTheme.PAD,
-                GuiTheme.textY(viewTop, EMPTY_HEIGHT), GuiTheme.textFaint(), false);
-            return;
-        }
         boolean inView = mouseX >= rowX && mouseX < rowX + rowW
             && mouseY >= viewTop && mouseY < viewTop + view;
-        int rowY = viewTop - scrollBar.getOffset();
+        int contentTop = viewTop - scrollBar.getOffset();
+        if (rows.isEmpty()) {
+            context.text(font, SettingWidget.trimEnd(font, source.emptyText(asked), rowW - GuiTheme.PAD),
+                rowX + GuiTheme.PAD,
+                GuiTheme.textY(contentTop, EMPTY_HEIGHT), GuiTheme.textFaint(), false);
+        }
+        int rowY = contentTop;
         for (Entry entry : rows) {
             int h = GuiTheme.ROW_HEIGHT;
             if (rowY + h > viewTop && rowY < viewTop + view) {
@@ -316,6 +363,51 @@ public final class TabView {
             }
             rowY += h;
         }
+        renderHints(context, font, rowX + GuiTheme.PAD, contentTop + rowsHeight(),
+            mouseX, mouseY, inView);
+    }
+
+    private void renderHints(GuiGraphicsExtractor context, Font font, int x, int y,
+                             int mouseX, int mouseY, boolean inView) {
+        chips.clear();
+        y += HINT_GAP;
+        for (Hint hint : hints) {
+            y += HINT_GAP;
+            context.text(font, hint.title(), x, GuiTheme.textY(y, LINE), GuiTheme.text(), false);
+            y += LINE;
+            for (String line : RenderUtil.wrap(font, hint.how(), hintRoom())) {
+                context.text(font, line, x, GuiTheme.textY(y, LINE), GuiTheme.textFaint(), false);
+                y += LINE;
+            }
+            for (String example : hint.examples()) {
+                int w = font.width(example) + CHIP_PAD * 2;
+                boolean over = inView && SettingWidget.isOver(mouseX, mouseY, x, y, w, CHIP_HEIGHT);
+                RenderUtil.roundedRect(context, x, y, x + w, y + CHIP_HEIGHT, GuiTheme.CORNER - 1,
+                    over ? GuiTheme.bgRowHover() : GuiTheme.bgSetting());
+                context.guiRenderState.up();
+                context.text(font, example, x + CHIP_PAD, GuiTheme.textY(y, CHIP_HEIGHT),
+                    over ? GuiTheme.text() : GuiTheme.accentText(), false);
+                if (over) {
+                    host.setTooltip(CHIP_TIP);
+                }
+                chips.add(new Chip(x, y, w, example));
+                y += CHIP_STEP;
+            }
+        }
+    }
+
+    // The example goes into the field ready to be finished or sent with enter.
+    private boolean clickChip(double mx, double my) {
+        for (Chip chip : chips) {
+            if (SettingWidget.isOver(mx, my, chip.x(), chip.y(), chip.w(), CHIP_HEIGHT)) {
+                adder.set(chip.text());
+                typing = true;
+                binding = null;
+                refresh();
+                return true;
+            }
+        }
+        return false;
     }
 
     private void renderRow(GuiGraphicsExtractor context, Font font, Entry entry, int rowX,
@@ -343,8 +435,7 @@ public final class TabView {
 
         boolean overDrop = hovered && mouseX >= rowX + rowW - DROP_ZONE;
         context.text(font, DROP, rowX + rowW - DROP_ZONE + (DROP_ZONE - font.width(DROP)) / 2,
-            textY, overDrop ? ColorUtil.lerp(GuiTheme.text(), 0xFFFF6B6B, 0.7f)
-                : GuiTheme.textFaint(), false);
+            textY, overDrop ? GuiTheme.RED_TEXT : GuiTheme.textFaint(), false);
 
         if (hovered) {
             host.setTooltip(overDrop ? source.dropHint(entry.name()) : entry.tip());
@@ -442,7 +533,9 @@ public final class TabView {
         if (my < viewTop || my >= viewTop + view || !InputUtil.isLeft(button)) {
             return true;
         }
-        clickRow(mx, my, rowX, viewTop, ScrollBar.rowWidth(rowRoom(), full, view));
+        if (!clickChip(mx, my)) {
+            clickRow(mx, my, rowX, viewTop, ScrollBar.rowWidth(rowRoom(), full, view));
+        }
         return true;
     }
 

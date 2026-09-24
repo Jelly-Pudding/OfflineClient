@@ -70,8 +70,8 @@ public final class AutoLibrarian extends Module {
     }
 
     private final TextSetting wanted = new TextSetting("Wanted books",
-        "Enchantments separated by spaces. A colon and a number sets the lowest level and a"
-            + " second one sets the most emeralds. Example: mending unbreaking:3:20",
+        "Enchantments separated by spaces. Add a colon and a number for the lowest level and"
+            + " another for the most emeralds like unbreaking:3:20",
         "mending unbreaking:3 sharpness:5 protection:4 efficiency:5 fortune:3 looting:3 silk_touch");
     private final NumberSetting maxPrice = new NumberSetting("Max price",
         "The most emeralds a book may cost when its own entry names no price.",
@@ -79,8 +79,8 @@ public final class AutoLibrarian extends Module {
     private final EnumSetting<Update> updateBooks = new EnumSetting<>("Update books",
         "What to do with a book on the list once a villager has learnt it.", Update.OFF)
         .describe(Update.OFF, "Leave the list alone.")
-        .describe(Update.REMOVE, "Strike it off so the next villager learns something else.")
-        .describe(Update.PRICE, "Lower its price so the next villager has to beat this one.");
+        .describe(Update.REMOVE, "Strikes it off the list.")
+        .describe(Update.PRICE, "Lowers its price to this deal. The next villager has to beat it.");
     private final BoolSetting lockIn = new BoolSetting("Lock in",
         "Buys the book once and the villager keeps the trade. Needs emeralds and paper or a book.", false);
     private final NumberSetting range = new NumberSetting("Range",

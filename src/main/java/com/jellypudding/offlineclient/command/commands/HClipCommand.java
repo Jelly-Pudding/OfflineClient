@@ -2,9 +2,10 @@ package com.jellypudding.offlineclient.command.commands;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.command.Command;
-import com.jellypudding.offlineclient.util.ChatUtil;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.phys.Vec3;
+
+import java.util.OptionalDouble;
 
 public final class HClipCommand extends Command {
 
@@ -20,15 +21,10 @@ public final class HClipCommand extends Command {
             usage();
             return;
         }
-        double blocks;
-        try {
-            blocks = Double.parseDouble(args[0]);
-        } catch (NumberFormatException e) {
-            ChatUtil.error("That is not a number.");
-            return;
+        OptionalDouble blocks = number(args[0]);
+        if (blocks.isPresent()) {
+            Vec3 look = Vec3.directionFromRotation(0, player.getYRot()).scale(blocks.getAsDouble());
+            hopTo(player.position().add(look.x, 0, look.z), "§7Moved §b" + args[0] + " §7blocks.");
         }
-        Vec3 look = Vec3.directionFromRotation(0, player.getYRot()).scale(blocks);
-        player.setPos(player.getX() + look.x, player.getY(), player.getZ() + look.z);
-        ChatUtil.message("§7Moved §b" + blocks + " §7blocks.");
     }
 }

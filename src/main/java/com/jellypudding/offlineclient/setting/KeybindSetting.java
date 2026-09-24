@@ -137,8 +137,8 @@ public final class KeybindSetting extends Setting<Integer> {
         return name.isBlank() ? "KEY" + key : name.toUpperCase(Locale.ROOT);
     }
 
-    // Saved binds from 26.2 and earlier hold window library codes. 26.3 reads
-    // the keyboard by scancode and the numbers differ.
+    // Binds saved before 26.3 hold window library codes. Keys are read by
+    // scancode and the numbers differ.
     public static int fromLegacyKey(int legacy) {
         if (legacy <= 0) {
             return UNBOUND;

@@ -9,6 +9,8 @@ import com.jellypudding.offlineclient.util.Modules;
 public final class GuiTheme {
 
     public static final int PANEL_WIDTH = 112;
+    // How tall a panel grows before it scrolls. The bottom edge drags to change it.
+    public static final int PANEL_VIEW_HEIGHT = 190;
     public static final int HEADER_HEIGHT = 18;
     public static final int ROW_HEIGHT = 16;
     public static final int SETTING_HEIGHT = 14;
@@ -37,6 +39,9 @@ public final class GuiTheme {
     private static final int DEFAULT_THUMB = 0xFF454862;
 
     public static final int GREEN = 0xFF3FD07E;
+    // Anything that throws work away. The lighter one is for writing.
+    public static final int RED = 0xFFE05050;
+    public static final int RED_TEXT = 0xFFFF9090;
     // Hairline between rows in a list.
     public static final int RULE = 0x40000000;
     public static final int SCROLL_TRACK = 0x50000000;

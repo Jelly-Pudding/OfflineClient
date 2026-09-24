@@ -27,7 +27,7 @@ public final class Collisions extends Module {
     private final RegistryListSetting<Block> blocks = new RegistryListSetting<>("Blocks",
         "Blocks that become solid to you. Click to pick them.", BuiltInRegistries.BLOCK, List.of());
     private final BoolSetting magma = new BoolSetting("Magma",
-        "Makes the air over a magma block solid so you cannot step on it.", false);
+        "Makes the air over magma solid to keep you off it.", false);
     private final BoolSetting unloadedChunks = new BoolSetting("Unloaded chunks",
         "Stops you walking or riding into a chunk that has not loaded.", false);
     private final BoolSetting ignoreBorder = new BoolSetting("Ignore border",

@@ -88,12 +88,15 @@ public final class AutoEat extends Module {
         .describe(TakeFrom.HANDS, "Only eats what is already in your hands.")
         .describe(TakeFrom.HOTBAR, "Picks food from the hotbar only.")
         .describe(TakeFrom.INVENTORY, "Borrows food from anywhere in the inventory.");
+    private final BoolSetting swapBack = new BoolSetting("Swap back",
+        "Returns to the slot you were holding once the meal is over.", true)
+        .under(takeFrom, TakeFrom.HOTBAR, TakeFrom.INVENTORY);
     private final BoolSetting saveGapples = new BoolSetting("Save golden apples",
         "Never eats a golden apple for hunger alone. They are kept for the Health check.", false);
     private final BoolSetting preferSoup = new BoolSetting("Prefer soup",
         "Reaches for stew and soup before other food whilst healing.", false);
     private final BoolSetting tidyBowls = new BoolSetting("Tidy bowls",
-        "Gathers empty bowls into the first backpack slot so they are easy to refill.", false);
+        "Gathers empty bowls into your first backpack slot.", false);
     private final BoolSetting avoidClicks = new BoolSetting("Avoid clicks",
         "Never eat whilst your crosshair is on something a right click would open.", true);
     private final BoolSetting offhand = new BoolSetting("Use offhand",
@@ -118,7 +121,7 @@ public final class AutoEat extends Module {
     public AutoEat() {
         super("AutoEat", "Eats for you when you get hungry or hurt.", Category.PLAYER);
         addSettings(trigger, hunger, injuredHunger, injuryThreshold, targetHunger, health,
-            priority, avoid, takeFrom, saveGapples, preferSoup, tidyBowls, avoidClicks,
+            priority, avoid, takeFrom, swapBack, saveGapples, preferSoup, tidyBowls, avoidClicks,
             offhand, whileMoving, pauseCombat, whileBusy, noSlowdown, pauseOnFire);
         searchTags("food", "golden apple", "gapple");
     }
@@ -371,7 +374,7 @@ public final class AutoEat extends Module {
             use.release();
         }
         // A loan whose return was refused earlier gets another go.
-        loan.giveBack();
+        loan.giveBack(swapBack.isOn());
     }
 
     // The plain apple wins over the enchanted one.

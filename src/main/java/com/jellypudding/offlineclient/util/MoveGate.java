@@ -37,12 +37,20 @@ public enum MoveGate {
     // Buys the next position packet a longer reach of sqrt(100 * count + 100) blocks.
     public static void fillers(int count) {
         LocalPlayer player = OfflineClient.MC.player;
+        if (player != null) {
+            fillers(count, player.onGround());
+        }
+    }
+
+    // A filler that claims ground makes the server charge any fall it holds.
+    public static void fillers(int count, boolean onGround) {
+        LocalPlayer player = OfflineClient.MC.player;
         if (player == null) {
             return;
         }
         for (int i = Math.min(count, MAX_FILLERS); i > 0; i--) {
             player.connection.send(new ServerboundMovePlayerPacket.StatusOnly(
-                player.onGround(), player.horizontalCollision));
+                onGround, player.horizontalCollision));
         }
     }
 

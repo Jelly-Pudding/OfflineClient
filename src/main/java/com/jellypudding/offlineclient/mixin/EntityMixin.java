@@ -3,7 +3,6 @@ package com.jellypudding.offlineclient.mixin;
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.modules.combat.Hitboxes;
 import com.jellypudding.offlineclient.modules.movement.AntiPush;
-import com.jellypudding.offlineclient.modules.movement.Flight;
 import com.jellypudding.offlineclient.modules.movement.NoSlowdown;
 import com.jellypudding.offlineclient.modules.movement.NoFall;
 import com.jellypudding.offlineclient.modules.movement.Step;
@@ -48,18 +47,16 @@ public abstract class EntityMixin {
         }
     }
 
-    // Flight through fluids and NoSlowdown fluid drag. The local player is never in
-    // water or lava as far as the physics and the swimming pose are concerned.
+    // NoSlowdown fluid drag. The local player is never in water or lava as far as
+    // the physics and the swimming pose are concerned.
     @Inject(method = {"isInWater()Z", "isInLava()Z", "isUnderWater()Z"},
         at = @At("HEAD"), cancellable = true)
     private void onFluidCheck(CallbackInfoReturnable<Boolean> cir) {
         if ((Object) this != OfflineClient.MC.player) {
             return;
         }
-        Flight flight = Modules.active(Flight.class);
         NoSlowdown noSlowdown = Modules.get(NoSlowdown.class);
-        if ((flight != null && flight.throughFluids())
-            || (noSlowdown != null && noSlowdown.skipsFluidDrag())) {
+        if (noSlowdown != null && noSlowdown.skipsFluidDrag()) {
             cir.setReturnValue(false);
         }
     }

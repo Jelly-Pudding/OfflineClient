@@ -37,7 +37,7 @@ public final class GhostHand extends Module {
         .unless(everything);
 
     private final BoolSetting seeThrough = new BoolSetting("See through walls",
-        "Empties the outline of every other block so the crosshair itself lands on the container. Nothing else can be clicked whilst this is on.",
+        "Lets the crosshair pass through blocks to reach containers. Nothing else can be clicked whilst this is on.",
         false);
 
     public GhostHand() {

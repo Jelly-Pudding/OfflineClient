@@ -3,6 +3,7 @@ package com.jellypudding.offlineclient.gui;
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.config.MacroStore;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.modules.misc.ClickGuiModule;
 import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.SearchRank;
@@ -36,8 +37,9 @@ public final class GuiSources {
             }
 
             @Override
-            public String emptyText() {
-                return "nobody on the list yet";
+            public String emptyText(String query) {
+                return query.isEmpty() ? "nobody on the list yet"
+                    : "press enter to add " + firstWord(query);
             }
 
             @Override
@@ -47,7 +49,7 @@ public final class GuiSources {
 
             @Override
             public void add(String text) {
-                String name = text.split("\\s+")[0];
+                String name = firstWord(text);
                 if (isSelf(name)) {
                     ChatUtil.error("You cannot add yourself as a friend.");
                     return;
@@ -101,8 +103,13 @@ public final class GuiSources {
             }
 
             @Override
-            public String emptyText() {
-                return "nothing on a key yet";
+            public String emptyText(String query) {
+                if (query.isEmpty()) {
+                    return "nothing on a key yet";
+                }
+                return query.indexOf(' ') > 0
+                    ? "press enter to save the macro " + firstWord(query)
+                    : "no module or macro called " + query;
             }
 
             @Override
@@ -113,6 +120,22 @@ public final class GuiSources {
             @Override
             public String addHint() {
                 return "find a module or add a macro";
+            }
+
+            // Only a fresh setup gets the guide.
+            @Override
+            public List<TabView.Hint> hints(String query) {
+                if (!query.isEmpty() || !MacroStore.get().all().isEmpty() || hasOwnBinds()) {
+                    return List.of();
+                }
+                String prefix = OfflineClient.INSTANCE.getCommandManager().getPrefix();
+                return List.of(
+                    new TabView.Hint("Bind a module",
+                        "Type its name then click no key and press any key.",
+                        List.of("killaura")),
+                    new TabView.Hint("Add a macro",
+                        "Type a name then what it sends and press enter. Chat and commands both work.",
+                        List.of("home /home", "fly " + prefix + "toggle flight")));
             }
 
             // A name on its own is a search. A name and a line is a macro.
@@ -202,8 +225,9 @@ public final class GuiSources {
             }
 
             @Override
-            public String emptyText() {
-                return "no saved setups yet";
+            public String emptyText(String query) {
+                return query.isEmpty() ? "no saved setups yet"
+                    : "press enter to save as " + profileName(query);
             }
 
             @Override
@@ -218,7 +242,7 @@ public final class GuiSources {
 
             @Override
             public void add(String text) {
-                String name = text.trim().toLowerCase(Locale.ROOT).replace(' ', '_');
+                String name = profileName(text);
                 beforeSave.run();
                 OfflineClient.INSTANCE.getConfigManager().saveProfile(name);
                 ChatUtil.message("§7Saved the profile §b" + name + "§7.");
@@ -239,6 +263,26 @@ public final class GuiSources {
                 }
             }
         };
+    }
+
+    private static String firstWord(String text) {
+        return text.trim().split("\\s+")[0];
+    }
+
+    // Profiles are saved as files. The name is kept to one plain word.
+    private static String profileName(String text) {
+        return text.trim().toLowerCase(Locale.ROOT).replace(' ', '_');
+    }
+
+    // The ClickGUI starts on a key and does not count.
+    private static boolean hasOwnBinds() {
+        for (Module module : OfflineClient.INSTANCE.getModuleManager().getAll()) {
+            if (!(module instanceof ClickGuiModule)
+                && module.getKeybind().getValue() != KeybindSetting.UNBOUND) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static String keyName(int key) {

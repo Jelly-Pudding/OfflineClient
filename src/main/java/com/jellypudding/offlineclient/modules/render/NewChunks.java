@@ -76,7 +76,7 @@ public final class NewChunks extends Module {
     private final NumberSetting opacity = new NumberSetting("Opacity",
         "How solid the squares are drawn.", 75, 10, 100, 5, "%").min(1).max(100);
     private final BoolSetting logChunks = new BoolSetting("Log chunks",
-        "Writes every verdict to the game log so you can read them back later.", false);
+        "Writes every verdict to the game log.", false);
     private final BoolSetting notice = new BoolSetting("Notice",
         "Explains the limits in chat when you switch this on.", true);
 

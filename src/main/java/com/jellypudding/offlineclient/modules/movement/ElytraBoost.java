@@ -7,6 +7,7 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.SwingMode;
@@ -36,7 +37,7 @@ public final class ElytraBoost extends Module {
     private static final float LAUNCH_VOLUME = 3;
 
     private final BoolSetting antiConsume = new BoolSetting("Anti consume",
-        "Boosts with a client side rocket so none of yours is spent. Works with no rockets at all.", true);
+        "Boosts with a rocket that exists only on your screen. Needs no rockets at all.", true);
     private final NumberSetting flightDuration = new NumberSetting("Flight duration",
         "The flight duration of the client side rocket. Zero is the shortest boost.",
         0, 0, 255, 1, "").min(0).max(255).under(antiConsume);
@@ -211,6 +212,7 @@ public final class ElytraBoost extends Module {
         ItemStack stack = Items.FIREWORK_ROCKET.getDefaultInstance();
         stack.set(DataComponents.FIREWORKS, new Fireworks(flightDuration.getInt(), List.of()));
         FireworkRocketEntity rocket = new FireworkRocketEntity(mc.level, stack, mc.player);
+        rocket.setId(EntityUtil.nextLocalId());
         fakes.add(rocket);
         if (playSound.isOn()) {
             mc.level.playSound(mc.player, rocket, SoundEvents.FIREWORK_ROCKET_LAUNCH,

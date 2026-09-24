@@ -2,6 +2,7 @@ package com.jellypudding.offlineclient.modules.movement;
 
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.PacketSendEvent;
+import com.jellypudding.offlineclient.event.events.PreMotionEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
@@ -15,6 +16,7 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import net.minecraft.tags.FluidTags;
+import net.minecraft.util.Mth;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
@@ -50,8 +52,8 @@ public final class Jesus extends Module {
     // Fire Resistance with less than this left is not worth swimming on.
     private static final int SHORT_RESISTANCE_TICKS = 15 * 20;
 
-    // The old NoCheatPlus trick. Ticks of a plain walk between hops and the
-    // hop itself and how the sent height creeps down each tick.
+    // A NoCheatPlus bypass. Ticks of a plain walk between hops and the hop
+    // itself and how the sent height creeps down each tick.
     private static final int NCP_HOP_EVERY = 15;
     private static final double NCP_WALK_SPEED = 0.2873;
     private static final double NCP_HOP = 0.08;
@@ -67,7 +69,7 @@ public final class Jesus extends Module {
         "Walk on water.", true)
         .under(mode, Mode.SOLID);
     private final BoolSetting dipIfBurning = new BoolSetting("Dip when burning",
-        "Water stops holding you whilst you are on fire so you drop in and put it out.", true)
+        "Lets you drop into water whilst you are on fire to put it out.", true)
         .under(water);
     private final BoolSetting sneakToDip = new BoolSetting("Sneak to dip",
         "Hold sneak to sink into the water.", true)
@@ -80,7 +82,7 @@ public final class Jesus extends Module {
         "Also walk on lava.", false)
         .under(mode, Mode.SOLID);
     private final BoolSetting dipIfResistant = new BoolSetting("Dip when resistant",
-        "Lava stops holding you whilst Fire Resistance has over 15 seconds left so you can swim through.", true)
+        "Lets you sink into lava whilst Fire Resistance has over 15 seconds left.", true)
         .under(lava);
     private final BoolSetting lavaSneakToDip = new BoolSetting("Lava sneak to dip",
         "Hold sneak to sink into the lava.", true)
@@ -90,7 +92,7 @@ public final class Jesus extends Module {
         0, 0, 20, 0.5, " blocks")
         .under(lava);
     private final BoolSetting climbOn = new BoolSetting("Climb on",
-        "Liquid level with your feet counts as solid. You step or jump onto it instead of wading in.", true)
+        "Liquid level with your feet holds you as well. Walking into it lifts you on top.", true)
         .under(mode, Mode.SOLID);
     private final BoolSetting riseToSurface = new BoolSetting("Rise to surface",
         "Pushes you up out of the liquid when you are in it. Off lets you swim about as normal.", true)
@@ -113,6 +115,11 @@ public final class Jesus extends Module {
     private int ticksSinceExit = SETTLED;
     private int swimmingTicks;
 
+    // Set on a tick that lifts the player onto held liquid.
+    private boolean lifting;
+    private double liftX;
+    private double liftZ;
+
     public Jesus() {
         super("Jesus", "Walk on water and lava.", Category.MOVEMENT);
         addSettings(mode, water, dipIfBurning, sneakToDip, dipFall, lava, dipIfResistant,
@@ -130,6 +137,12 @@ public final class Jesus extends Module {
     protected void onEnable() {
         ticksSinceExit = SETTLED;
         swimmingTicks = 0;
+        lifting = false;
+    }
+
+    // Read by Step. Nothing else may move the player on the tick of a lift.
+    public boolean lifting() {
+        return isEnabled() && lifting;
     }
 
     private boolean active() {
@@ -243,9 +256,64 @@ public final class Jesus extends Module {
         return feet - 1;
     }
 
+    // A jump or a step clears the edge on a slant. The sweep of your feet then
+    // passes through the liquid inside the block and lava sets you alight. The
+    // lift goes straight up and the move across waits for the next tick.
+    @Subscribe(priority = 10)
+    private void onClimbTick(TickEvent event) {
+        lifting = false;
+        if (!mode.is(Mode.SOLID) || !climbOn.isOn() || !active()) {
+            return;
+        }
+        LocalPlayer player = mc.player;
+        if (player.isPassenger() || !player.onGround() || !player.horizontalCollision
+            || player.isInWater() || player.isInLava()) {
+            return;
+        }
+        Vec3 heading = MovementUtil.inputDirection();
+        if (heading.lengthSqr() == 0) {
+            return;
+        }
+        double rise = MovementUtil.ledgeRise(player, heading);
+        if (rise <= 0 || rise > 1 + MovementUtil.LEDGE_CLEARANCE || !heldLiquidAhead(player, heading)) {
+            return;
+        }
+        liftX = player.getX();
+        liftZ = player.getZ();
+        player.setPos(liftX, player.getY() + rise + MovementUtil.LEDGE_CLEARANCE, liftZ);
+        player.setDeltaMovement(Vec3.ZERO);
+        lifting = true;
+    }
+
+    // The server sweeps from the last packet to this one. Anything this tick
+    // carried sideways is undone before the packet goes out.
+    @Subscribe
+    private void onPreMotion(PreMotionEvent event) {
+        if (!lifting || !inGame()) {
+            return;
+        }
+        lifting = false;
+        mc.player.setPos(liftX, mc.player.getY(), liftZ);
+        mc.player.setDeltaMovement(Vec3.ZERO);
+    }
+
+    // True when the ledge ahead is liquid this module holds.
+    private boolean heldLiquidAhead(LocalPlayer player, Vec3 heading) {
+        AABB probe = MovementUtil.ledgeProbe(player, heading);
+        int feet = Mth.floor(player.getY());
+        for (BlockPos pos : BlockPos.betweenClosed(Mth.floor(probe.minX), feet, Mth.floor(probe.minZ),
+            Mth.floor(probe.maxX), feet, Mth.floor(probe.maxZ))) {
+            FluidState fluid = mc.level.getFluidState(pos);
+            if ((fluid.is(FluidTags.WATER) && waterWanted()) || (fluid.is(FluidTags.LAVA) && lavaWanted())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!active()) {
+        if (!active() || lifting) {
             return;
         }
         if (mode.is(Mode.DOLPHIN)) {

@@ -57,7 +57,7 @@ public final class Excavator extends Module {
     private final BoolSetting walkTo = new BoolSetting("Walk to blocks",
         "Walks to the next block whilst it is out of reach.", false);
     private final BoolSetting keepActive = new BoolSetting("Keep active",
-        "Stays on after the box is done so you can mark another one.", false);
+        "Stays on after the box is done ready for another.", false);
     private final BoolSetting logSelection = new BoolSetting("Log selection",
         "Prints each corner you mark to chat.", true);
     private final BoxStyle boxStyle = BoxStyle.white(BoxStyle.Shape.BOTH);

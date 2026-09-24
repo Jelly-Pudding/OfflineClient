@@ -10,6 +10,7 @@ import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.ClientTickEvent;
 import com.jellypudding.offlineclient.friend.FriendManager;
 import com.jellypudding.offlineclient.module.ModuleManager;
+import com.jellypudding.offlineclient.util.Hop;
 import com.jellypudding.offlineclient.util.MoveGate;
 import com.jellypudding.offlineclient.util.RotationManager;
 import com.jellypudding.offlineclient.util.TickRate;
@@ -24,7 +25,7 @@ public enum OfflineClient {
     INSTANCE;
 
     public static final String NAME = "OfflineClient";
-    public static final String VERSION = "0.8.0";
+    public static final String VERSION = "0.9.0";
     public static final String SERVER_NAME = "minecraftoffline.net";
     public static final String SERVER_ADDRESS = "minecraftoffline.net";
 
@@ -61,6 +62,7 @@ public enum OfflineClient {
         eventBus.register(this);
         eventBus.register(RotationManager.INSTANCE);
         eventBus.register(MoveGate.INSTANCE);
+        eventBus.register(Hop.INSTANCE);
         eventBus.register(TickRate.INSTANCE);
         // Reading them now puts the macro key handler on the bus.
         MacroStore.get();

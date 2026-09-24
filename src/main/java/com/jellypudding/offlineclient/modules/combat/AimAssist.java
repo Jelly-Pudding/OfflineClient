@@ -33,7 +33,7 @@ public final class AimAssist extends Module {
     private final NumberSetting speed = new NumberSetting("Turn speed",
         "Degrees a second the view turns at.", 600, 10, 3600, 10, " degrees a second").min(10);
     private final NumberSetting fov = new NumberSetting("Field of view",
-        "Only targets inside this cone in front of you are picked.", 120, 30, 360, 10, " degrees");
+        "Only targets inside this cone in front of you are picked.", 120, 30, 360, 10, " degrees").min(1).max(360);
     private final EnumSetting<AimPoint> aimPoint = new EnumSetting<>("Aim at",
         "The part of the target the view settles on.", AimPoint.AUTO)
         .describe(AimPoint.AUTO, "The nearest point of the hitbox to your eyes.")

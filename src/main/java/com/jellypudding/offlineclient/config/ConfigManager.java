@@ -30,7 +30,7 @@ public final class ConfigManager {
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
-    // Raised when old saved values need a one time migration.
+    // Raised whenever saved values need a one time conversion on load.
     private static final int CONFIG_VERSION = 3;
 
     private final Path file;

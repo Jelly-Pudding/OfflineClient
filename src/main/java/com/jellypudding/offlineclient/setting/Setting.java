@@ -87,8 +87,9 @@ public abstract class Setting<T> {
         return under(parent, () -> allowed.contains(parent.getValue()));
     }
 
+    // A sub option only shows whilst its parent does.
     public boolean isVisible() {
-        return visibility.get();
+        return visibility.get() && (parent == null || parent.isVisible());
     }
 
     public Setting<?> getParent() {

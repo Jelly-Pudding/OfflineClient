@@ -39,33 +39,33 @@ public final class Speed extends Module {
 
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
         "How the speed is gained.", Mode.STRAFE)
-        .describe(Mode.STRAFE, "Pushes you along the ground at the set speed.")
+        .describe(Mode.STRAFE, "Holds you at a set multiple of your normal speed.")
         .describe(Mode.BHOP, "Bunnyhops and multiplies your speed on every landing.");
     private final NumberSetting multiplier = new NumberSetting("Multiplier",
-        "How many times your normal ground speed to move at.", 1.6, 1, 10, 0.1, "x").min(0)
+        "Your speed as a multiple of normal.", 1.6, 1, 10, 0.1, "x").min(0)
         .visibleWhen(() -> mode.is(Mode.STRAFE));
     private final NumberSetting hopBoost = new NumberSetting("Hop boost",
         "Multiplies your speed on every hop. Much past 1.6 the server pulls you back.",
         1.3, 1, 2, 0.05, "x").min(1).max(20)
         .visibleWhen(() -> mode.is(Mode.BHOP));
     private final BoolSetting capSpeed = new BoolSetting("Speed cap",
-        "Puts a ceiling on how fast you get pushed.", true);
+        "Limits your top speed.", false);
     private final NumberSetting cap = new NumberSetting("Cap",
-        "Never move faster than this many blocks a second. Holds under a timer as well.",
+        "Top speed in blocks a second. Still holds under a timer.",
         12, 4, 30, 0.5, " bps").min(1)
         .under(capSpeed);
     private final BoolSetting keepInAir = new BoolSetting("Keep in air",
         "Keeps your speed whilst airborne.", true)
         .visibleWhen(() -> mode.is(Mode.STRAFE));
     private final BoolSetting forceSprint = new BoolSetting("Force sprint",
-        "Holds sprint on whilst you move to keep the jump boost.", true);
+        "Sprints whilst you move for longer jumps.", true);
     private final BoolSetting inLiquids = new BoolSetting("In liquids",
-        "Keep pushing whilst you are in water or lava.", false)
+        "Keeps the speed in water and lava.", false)
         .visibleWhen(() -> mode.is(Mode.STRAFE));
     private final BoolSetting whilstSneaking = new BoolSetting("Whilst sneaking",
-        "Keeps pushing whilst you sneak and is very easy to spot.", false);
+        "Keeps the speed whilst you sneak.", false);
     private final NumberSetting timer = new NumberSetting("Timer",
-        "Also speeds up the game whilst you move. 1 does nothing.", 1, 1, 3, 0.1, "x").min(1);
+        "Speeds up the game whilst you move. 1 is normal.", 1, 1, 3, 0.1, "x").min(1);
 
     public Speed() {
         super("Speed", "Move faster on the ground.", Category.MOVEMENT);

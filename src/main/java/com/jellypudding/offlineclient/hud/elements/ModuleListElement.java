@@ -22,7 +22,7 @@ public final class ModuleListElement extends HudElement {
 
     private final EnumSetting<Sort> sort = new EnumSetting<>("List order",
         "How the rows are ordered.", Sort.LENGTH)
-        .describe(Sort.LENGTH, "Longest row first so the block reads as a wedge.")
+        .describe(Sort.LENGTH, "Longest row first.")
         .describe(Sort.ALPHABETICAL, "By name from A to Z.");
     private final ColorSetting color = new ColorSetting("List colour",
         "Colour of the module names.", 200, false);

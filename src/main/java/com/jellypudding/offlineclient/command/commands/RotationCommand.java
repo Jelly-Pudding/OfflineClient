@@ -6,6 +6,8 @@ import com.jellypudding.offlineclient.util.ChatUtil;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.util.Mth;
 
+import java.util.OptionalDouble;
+
 public final class RotationCommand extends Command {
 
     public RotationCommand() {
@@ -28,17 +30,13 @@ public final class RotationCommand extends Command {
             usage();
             return;
         }
-        float yaw;
-        float pitch;
-        try {
-            yaw = Float.parseFloat(args[0]);
-            pitch = Float.parseFloat(args[1]);
-        } catch (NumberFormatException e) {
-            ChatUtil.error("Those are not numbers.");
+        OptionalDouble yaw = number(args[0]);
+        OptionalDouble pitch = yaw.isPresent() ? number(args[1]) : OptionalDouble.empty();
+        if (pitch.isEmpty()) {
             return;
         }
-        player.setYRot(Mth.wrapDegrees(yaw));
-        player.setXRot(Mth.clamp(pitch, -90f, 90f));
+        player.setYRot(Mth.wrapDegrees((float) yaw.getAsDouble()));
+        player.setXRot(Mth.clamp((float) pitch.getAsDouble(), -90f, 90f));
         ChatUtil.message("§7Looking at yaw §b" + round(player.getYRot())
             + " §7pitch §b" + round(player.getXRot()));
     }

@@ -87,7 +87,7 @@ public final class AutoLog extends Module {
         "After a low health disconnect turn back on once you are above the health line again.", false)
         .under(toggleOff);
     private final BoolSetting stopReconnect = new BoolSetting("Stop AutoReconnect",
-        "Turn AutoReconnect off as you leave so you do not rejoin into the danger.", true);
+        "Turns AutoReconnect off as you leave to stop you rejoining the danger.", true);
 
     // Counted on the network thread and read on the game thread.
     private final AtomicInteger pops = new AtomicInteger();

@@ -126,6 +126,10 @@ public abstract class LocalPlayerMixin extends AbstractClientPlayer {
         if (noSlowdown != null && noSlowdown.skipsItems()) {
             return true;
         }
+        Sprint sprint = Modules.get(Sprint.class);
+        if (sprint != null && sprint.keepsSpeedWhilstUsing()) {
+            return true;
+        }
         BowAimbot bowAimbot = Modules.get(BowAimbot.class);
         if (bowAimbot != null && bowAimbot.suppressesSlowdown()) {
             return true;

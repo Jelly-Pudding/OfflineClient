@@ -5,7 +5,7 @@ import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.NumberSetting;
-import com.jellypudding.offlineclient.util.MoveGate;
+import com.jellypudding.offlineclient.util.Hop;
 import net.minecraft.client.Camera;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -19,16 +19,11 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
-// Teleports you onto the block you right click. The server only grants a little
-// movement per packet each tick. A long trip is walked as one hop a tick.
+// Teleports you onto the block you right click. A long trip is walked as one hop a tick.
 public final class ClickTp extends Module {
 
-    // Three fillers buy the fourth packet four hundred squared blocks of travel.
-    private static final int FILLER_PACKETS = 3;
-    private static final double MAX_HOP = 19.9;
-
     private final NumberSetting range = new NumberSetting("Range",
-        "How far away the clicked block may be.", 100, 10, 200, 10, " blocks");
+        "How far away the clicked block may be.", 100, 1, 200, 1, " blocks");
 
     // Where the current trip ends. Null whilst there is no trip.
     private Vec3 destination;
@@ -110,27 +105,22 @@ public final class ClickTp extends Module {
             ClipContext.Fluid.NONE, mc.player));
     }
 
-    // Moves as far along the trip as one tick of packets is allowed to carry.
+    // Moves as far along the trip as one hop can carry. A step into a block ends it.
     private void hop() {
         Vec3 from = mc.player.position();
         double left = from.distanceTo(destination);
-        boolean arriving = left <= MAX_HOP;
+        boolean arriving = left <= Hop.REACH;
         Vec3 step = arriving
             ? destination
-            : from.add(destination.subtract(from).scale(MAX_HOP / left));
-
-        MoveGate.fillers(FILLER_PACKETS);
-        if (!MoveGate.send(step.x, step.y, step.z, true)) {
-            return;
-        }
-        mc.player.setPos(step);
-        // The rest of the tick still runs the physics. Gravity between hops would
-        // otherwise gather into a fall the landing has to pay for.
-        mc.player.setDeltaMovement(Vec3.ZERO);
-        mc.player.fallDistance = 0;
-
-        if (arriving) {
-            destination = null;
+            : from.add(destination.subtract(from).scale(Hop.REACH / left));
+        switch (Hop.to(step)) {
+            case MOVED -> {
+                if (arriving) {
+                    destination = null;
+                }
+            }
+            case BUSY -> { }
+            case TOO_FAR, BLOCKED -> destination = null;
         }
     }
 }

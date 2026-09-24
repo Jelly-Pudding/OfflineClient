@@ -60,7 +60,7 @@ public final class NoRender extends Module {
     private final RegistryListSetting<EntityType<?>> entities = new RegistryListSetting<>("Entities",
         "Kinds of entity that are not drawn at all.", BuiltInRegistries.ENTITY_TYPE, List.of());
     private final BoolSetting dropSpawnPackets = new BoolSetting("Drop spawn packets",
-        "The chosen entities are thrown away as they arrive so they never exist on your side.", false);
+        "Throws the chosen entities away as they arrive. They never exist on your side.", false);
     private final BoolSetting glowing = new BoolSetting("Glowing",
         "The glowing outline effect is removed.", false);
     private final BoolSetting spawnerMobs = new BoolSetting("Spawner mobs",

@@ -104,7 +104,7 @@ public final class Freecam extends Module {
     private final BoolSetting doubleClick = new BoolSetting("Double click",
         "Needs two clicks within half a second.", false).under(clickToWalk);
     private final BoolSetting reloadChunks = new BoolSetting("Reload chunks",
-        "Redraws the world when the camera leaves and when it comes back so walls stop hiding rooms.", false);
+        "Redraws the world whenever the camera leaves or returns. Walls stop hiding rooms.", false);
 
     private Vec3 camPos = Vec3.ZERO;
     private Vec3 prevCamPos = Vec3.ZERO;

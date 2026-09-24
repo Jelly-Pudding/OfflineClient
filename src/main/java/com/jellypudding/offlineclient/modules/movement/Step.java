@@ -1,6 +1,7 @@
 package com.jellypudding.offlineclient.modules.movement;
 
 import com.jellypudding.offlineclient.event.Subscribe;
+import com.jellypudding.offlineclient.event.events.PostMotionEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.event.events.VehicleTickEvent;
 import com.jellypudding.offlineclient.module.Category;
@@ -36,14 +37,12 @@ public final class Step extends Module {
     // The most a legit step can climb. Any higher is not a jump the server believes.
     private static final double LEGIT_LIMIT = 1;
 
-    // Clears the ledge top by a hair. The box lands on it rather than in it.
-    private static final double LEDGE_CLEARANCE = 0.001;
-
-    // How far onto the ledge the box is probed. A wall taller than the step fails this.
-    private static final double LEDGE_PROBE = 0.1;
-
     // A stride onto the ledge. A crystal hidden behind the edge counts from there.
     private static final double LEDGE_STRIDE = 1.2;
+
+    // The server charges every packet for its own drop. Four blocks in one tick hurts.
+    private static final double SAFE_SNAP = 3.9;
+
 
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
         "How the step is done.", Mode.SIMPLE)
@@ -60,15 +59,15 @@ public final class Step extends Module {
     private final BoolSetting inWater = new BoolSetting("Whilst swimming",
         "Lifts you onto a bank you swim into. Reaches as high as the step does on land.", true);
     private final BoolSetting safeStep = new BoolSetting("Safe step",
-        "Stays in a hole whilst leaving it would be dangerous.", false);
+        "Stops stepping up when your health is low or an end crystal could hurt you.", false);
     private final BoolSetting safeHealth = new BoolSetting("Low health",
-        "Stays down whilst your health is low.", true)
+        "Stops stepping whilst your health is at or below the limit.", true)
         .under(safeStep);
     private final NumberSetting healthLimit = new NumberSetting("Health limit",
         "Hearts at or below which the step stays off.", 5, 0.5, 10, 0.5, " hearts")
         .under(safeHealth);
     private final BoolSetting safeCrystals = new BoolSetting("Crystals",
-        "Only steps as high as an end crystal nearby could not hurt you past the health limit.", true)
+        "Never steps up to where a nearby crystal could take you below the health limit.", true)
         .under(safeStep);
     private final BoolSetting stepDown = new BoolSetting("Step down",
         "Snaps you down small drops instead of letting you fall.", false);
@@ -76,7 +75,8 @@ public final class Step extends Module {
         "Longest drop that is snapped.", 3, 0.5, 10, 0.5, " blocks")
         .under(stepDown);
     private final NumberSetting downSpeed = new NumberSetting("Down speed",
-        "How hard the snap pulls down.", 3, 0.5, 10, 0.5, "x")
+        "Blocks a tick the snap pulls you down. Stays under four as a faster drop hurts.",
+        3, 0.5, SAFE_SNAP, 0.1, " blocks").max(SAFE_SNAP)
         .under(stepDown);
     private final BoolSetting edgeGuardWins = new BoolSetting("EdgeGuard wins",
         "An edge EdgeGuard is holding you on is never snapped down from.", true)
@@ -92,6 +92,9 @@ public final class Step extends Module {
     private int legitStage;
     private double legitRise;
     private double legitFoot;
+
+    // Set on the tick a swimmer is lifted onto a bank.
+    private boolean lifted;
 
     public Step() {
         super("Step", "Step up full blocks without jumping.", Category.MOVEMENT);
@@ -195,7 +198,7 @@ public final class Step extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || mc.player.isPassenger()) {
+        if (!inGame() || mc.player.isPassenger() || jesusLifting()) {
             legitStage = 0;
             return;
         }
@@ -229,28 +232,32 @@ public final class Step extends Module {
         vehicle.setDeltaMovement(velocity.x, -downSpeed.getValue(), velocity.z);
     }
 
+    // The lift leaves its upward speed behind once the swimmer is out of the water.
+    // Kept it would carry them on up like a high jump.
+    @Subscribe
+    private void onPostMotion(PostMotionEvent event) {
+        if (!lifted || !inGame()) {
+            return;
+        }
+        lifted = false;
+        Vec3 velocity = mc.player.getDeltaMovement();
+        mc.player.setDeltaMovement(velocity.x, Math.min(velocity.y, 0), velocity.z);
+    }
+
+    // Jesus lifts the player onto held liquid on its own. Nothing else may move
+    // them on that tick.
+    private static boolean jesusLifting() {
+        Jesus jesus = Modules.get(Jesus.class);
+        return jesus != null && jesus.lifting();
+    }
+
     // True whilst the keys push the player somewhere.
     private static boolean pushing() {
         return mc.player.input.getMoveVector().lengthSquared() >= 1.0E-6f;
     }
 
-    // How far up the ledge under the player sits. Zero when there is no ledge to climb.
-    // The move check tells a ledge from a wall that carries on upward.
-    private double ledgeRise() {
-        AABB box = mc.player.getBoundingBox();
-        AABB probe = box.move(0, 0.05, 0).inflate(0.05);
-        double top = Double.NEGATIVE_INFINITY;
-        for (VoxelShape shape : mc.level.getBlockCollisions(mc.player, probe)) {
-            top = Math.max(top, shape.bounds().maxY);
-        }
-        double rise = top - mc.player.getY();
-        if (rise <= 0) {
-            return 0;
-        }
-        Vec3 ahead = MovementUtil.inputDirection().scale(LEDGE_PROBE);
-        boolean fits = mc.level.noCollision(mc.player, box.move(0, rise + LEDGE_CLEARANCE, 0))
-            && mc.level.noCollision(mc.player, box.move(ahead.x, rise + LEDGE_CLEARANCE, ahead.z));
-        return fits ? rise : 0;
+    private static double ledgeRise() {
+        return MovementUtil.ledgeRise(mc.player, MovementUtil.inputDirection());
     }
 
     // Walks the two heights a real jump passes through at one a tick.
@@ -304,7 +311,8 @@ public final class Step extends Module {
             return;
         }
         Vec3 velocity = mc.player.getDeltaMovement();
-        mc.player.setDeltaMovement(velocity.x, rise + LEDGE_CLEARANCE, velocity.z);
+        mc.player.setDeltaMovement(velocity.x, rise + MovementUtil.LEDGE_CLEARANCE, velocity.z);
+        lifted = true;
     }
 
     private void snapDown() {

@@ -19,7 +19,7 @@ public abstract class FirstPersonHandsAndItemsMixin {
         return original || (handView != null && handView.skipsSwap());
     }
 
-    // The swap scale is cubed for the modern ease. One cubed is the old snap.
+    // A swap scale of one skips the ease and gives the instant swap of old animations.
     @ModifyExpressionValue(method = "tick(Lnet/minecraft/client/player/LocalPlayer;)V",
         at = @At(value = "INVOKE",
             target = "Lnet/minecraft/client/player/LocalPlayer;getItemSwapScale(F)F"))

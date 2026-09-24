@@ -7,7 +7,9 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.MovementUtil;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.VoxelShape;
 
 // A wall the player pushes into is climbed and a risen ceiling can be hung from.
 // Both keep a block within reach to dodge the vanilla flight kick.
@@ -19,13 +21,28 @@ public final class Spider extends Module {
     // Pace along a ceiling in blocks a tick. About walking speed.
     private static final double CEILING_PACE = 0.2;
 
+    // How far past the box a ceiling edge can still be held.
+    private static final double GRIP_REACH = 0.3;
+
+    // How hard a held edge pulls the player in against it.
+    private static final double GRIP_PULL = 0.1;
+
+    // The most upward speed kept once nothing is held. It lifts you over the top of a
+    // wall and no further.
+    private static final double RELEASE_SPEED = 0.2;
+
     private final NumberSetting speed = new NumberSetting("Speed",
         "How fast you go up the wall in blocks a tick.",
-        0.2, 0.1, 0.5, 0.05, " blocks").max(1);
+        0.2, 0.1, 0.5, 0.05, " blocks").min(0.01);
     private final BoolSetting ceilings = new BoolSetting("Ceilings",
-        "Hang from a ceiling you climb or jump into and walk along it. Sneak to drop.", false);
+        "Hang from a ceiling and walk along it. At an edge you climb round and up. Sneak to drop.",
+        false);
 
     private boolean hanging;
+    // Something held the player up last tick.
+    private boolean clinging;
+    // Climbing round the edge of a ceiling just hung from.
+    private boolean rounding;
 
     public Spider() {
         super("Spider", "Climb up any wall like a spider.", Category.MOVEMENT);
@@ -41,23 +58,43 @@ public final class Spider extends Module {
     @Override
     protected void onDisable() {
         hanging = false;
+        clinging = false;
+        rounding = false;
     }
 
     @Subscribe
     private void onTick(TickEvent event) {
+        boolean held = clinging;
+        boolean hung = hanging;
         hanging = false;
+        clinging = false;
         if (!inGame() || mc.player.isPassenger()) {
+            rounding = false;
             return;
         }
         if (ceilings.isOn() && hang()) {
+            rounding = false;
+            clinging = true;
             return;
         }
-        if (!mc.player.horizontalCollision) {
+        if (ceilings.isOn() && (hung || rounding) && roundEdge()) {
+            rounding = true;
+            clinging = true;
             return;
         }
+        rounding = false;
+        if (mc.player.horizontalCollision) {
+            climb();
+            clinging = true;
+        } else if (held) {
+            release();
+        }
+    }
+
+    private void climb() {
         Vec3 velocity = mc.player.getDeltaMovement();
         // Faster upward motion from jumps and boosts is left alone.
-        if (velocity.y >= 0.2) {
+        if (velocity.y >= speed.getValue()) {
             return;
         }
         mc.player.setDeltaMovement(velocity.x, speed.getValue(), velocity.z);
@@ -66,14 +103,66 @@ public final class Spider extends Module {
     // Keeps pushing up into a ceiling. The collision holds the player against it.
     // The keys then move the player along it at walking pace.
     private boolean hang() {
-        if (mc.player.onGround() || mc.player.isShiftKeyDown() || mc.player.isInWater()
-            || mc.player.isInLava() || !ceilingAbove()) {
+        if (!canCling() || !ceilingAbove()) {
             return false;
         }
         hanging = true;
         Vec3 heading = MovementUtil.inputDirection();
         mc.player.setDeltaMovement(heading.x * CEILING_PACE, speed.getValue(), heading.z * CEILING_PACE);
         return true;
+    }
+
+    // Past the edge of a ceiling the block just left is held from the side. The
+    // player climbs its face and either lands on top of it or meets a higher ceiling.
+    private boolean roundEdge() {
+        if (!canCling()) {
+            return false;
+        }
+        Vec3 pull = pullTowardsEdge();
+        if (pull == null) {
+            return false;
+        }
+        mc.player.setDeltaMovement(pull.x * GRIP_PULL, speed.getValue(), pull.z * GRIP_PULL);
+        return true;
+    }
+
+    // The flat direction to the nearest block within reach. Null when none is close.
+    private Vec3 pullTowardsEdge() {
+        AABB box = mc.player.getBoundingBox();
+        AABB reach = box.inflate(GRIP_REACH, 0, GRIP_REACH).expandTowards(0, GRIP_REACH, 0);
+        Vec3 centre = box.getCenter();
+        Vec3 nearest = null;
+        double best = Double.MAX_VALUE;
+        for (VoxelShape shape : mc.level.getBlockCollisions(mc.player, reach)) {
+            AABB block = shape.bounds();
+            Vec3 point = new Vec3(Math.clamp(centre.x, block.minX, block.maxX), centre.y,
+                Math.clamp(centre.z, block.minZ, block.maxZ));
+            double distance = point.distanceToSqr(centre);
+            if (distance < best) {
+                best = distance;
+                nearest = point;
+            }
+        }
+        if (nearest == null) {
+            return null;
+        }
+        Vec3 flat = nearest.subtract(centre).multiply(1, 0, 1);
+        return flat.lengthSqr() < 1.0E-6 ? Vec3.ZERO : flat.normalize();
+    }
+
+    // The climb leaves its upward speed behind. Kept whole a fast climb would throw
+    // the player high over the top of the wall.
+    private void release() {
+        Vec3 velocity = mc.player.getDeltaMovement();
+        if (velocity.y > RELEASE_SPEED) {
+            mc.player.setDeltaMovement(velocity.x, RELEASE_SPEED, velocity.z);
+        }
+    }
+
+    // Hanging and rounding an edge happen in the air. Sneak lets go.
+    private boolean canCling() {
+        return !mc.player.onGround() && !mc.player.isShiftKeyDown() && !mc.player.isInWater()
+            && !mc.player.isInLava();
     }
 
     private boolean ceilingAbove() {

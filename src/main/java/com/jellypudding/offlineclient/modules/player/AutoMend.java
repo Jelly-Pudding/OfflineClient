@@ -44,8 +44,7 @@ public final class AutoMend extends Module {
             "Throws every experience bottle in the hotbar whatever state your gear is in. "
                 + "Good for levels or for gear kept in the inventory.")
         .describe(Mode.OFFHAND,
-            "Moves damaged mending items from your inventory into the offhand one at a time "
-                + "so any experience you pick up repairs them.");
+            "Moves damaged mending items into your offhand one at a time to soak up experience.");
     private final NumberSetting threshold = new NumberSetting("Threshold",
         "Start throwing once a piece drops below this much durability.", 99, 1, 100, 1, "%")
         .min(1).max(100)

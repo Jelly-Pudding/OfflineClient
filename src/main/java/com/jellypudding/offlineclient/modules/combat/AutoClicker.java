@@ -126,8 +126,8 @@ public final class AutoClicker extends Module {
         }
     }
 
-    // The old helper. Swings on every full cooldown whilst the button is held
-    // and lands the hit only on a living target that is not a friend.
+    // Swings on every full cooldown whilst the button is held and lands the hit
+    // only on a living target that is not a friend.
     private void hitCrosshair() {
         if (!mc.options.keyAttack.isDown()) {
             return;

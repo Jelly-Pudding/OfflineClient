@@ -136,7 +136,7 @@ public final class ChestEsp extends Module {
     private final BoolSetting tracers = new BoolSetting("Tracers",
         "Draw a line from you to each container.", false);
     private final NumberSetting fadeDistance = new NumberSetting("Fade distance",
-        "Containers closer than this fade out so they do not fill your view.", 6, 0, 12, 0.5, " blocks");
+        "Containers closer than this fade out.", 6, 0, 12, 0.5, " blocks");
     private final BoolSetting hideOpened = new BoolSetting("Hide opened",
         "Containers you have opened are no longer drawn.", false);
     private final BoolSetting recolourOpened = new BoolSetting("Recolour opened",

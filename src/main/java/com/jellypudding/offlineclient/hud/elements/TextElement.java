@@ -6,15 +6,14 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.TextSetting;
 import com.jellypudding.offlineclient.util.EntityUtil;
-import com.jellypudding.offlineclient.util.TickRate;
+import com.jellypudding.offlineclient.util.ServerInfo;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.multiplayer.PlayerInfo;
-import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.Locale;
+import java.util.Objects;
 
 // A line of your own with a handful of words swapped in for live numbers.
 public final class TextElement extends HudElement {
@@ -72,8 +71,8 @@ public final class TextElement extends HudElement {
         Vec3 pos = player.position();
         return switch (key) {
             case "fps" -> String.valueOf(OfflineClient.MC.getFps());
-            case "tps" -> String.format(Locale.ROOT, "%.1f", TickRate.INSTANCE.tps());
-            case "ping" -> String.valueOf(ping(player));
+            case "tps" -> ServerInfo.tps();
+            case "ping" -> String.valueOf(ServerInfo.ping());
             case "x" -> String.valueOf(Math.round(pos.x));
             case "y" -> String.valueOf(Math.round(pos.y));
             case "z" -> String.valueOf(Math.round(pos.z));
@@ -82,21 +81,11 @@ public final class TextElement extends HudElement {
             case "speed" -> String.format(Locale.ROOT, "%.1f",
                 player.getDeltaMovement().horizontalDistance() * TICKS);
             case "health" -> String.valueOf(Math.round(EntityUtil.totalHealth(player)));
-            case "server" -> serverAddress();
+            case "server" -> Objects.requireNonNullElse(ServerInfo.address(), "singleplayer");
             case "time" -> dayTime(player);
             case "username" -> player.getGameProfile().name();
             default -> "";
         };
-    }
-
-    private static int ping(LocalPlayer player) {
-        PlayerInfo info = player.connection.getPlayerInfo(player.getUUID());
-        return info == null ? 0 : info.getLatency();
-    }
-
-    private static String serverAddress() {
-        ServerData data = OfflineClient.MC.getCurrentServer();
-        return data == null ? "singleplayer" : data.ip;
     }
 
     // The world clock as a twenty four hour reading. Nought ticks is six in the morning.

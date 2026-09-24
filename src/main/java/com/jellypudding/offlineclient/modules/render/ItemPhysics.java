@@ -21,7 +21,7 @@ public final class ItemPhysics extends Module {
     private static final int SPREAD = 90;
 
     private final BoolSetting randomRotation = new BoolSetting("Random rotation",
-        "Turn each drop by its own angle so a pile does not all face one way.", true);
+        "Turns each drop by its own angle.", true);
 
     public ItemPhysics() {
         super("ItemPhysics", "Dropped items lie on the ground instead of hovering and spinning.",

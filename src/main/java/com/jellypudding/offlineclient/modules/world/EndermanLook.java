@@ -31,7 +31,7 @@ public final class EndermanLook extends Module {
         .describe(Mode.AWAY, "Looks at the floor whenever you would stare at one.")
         .describe(Mode.AT, "Stares at every calm enderman to wind it up.");
     private final BoolSetting stun = new BoolSetting("Stun angry ones",
-        "Stares at an angry enderman so it freezes instead of closing in.", true)
+        "Stares at an angry enderman to freeze it in place.", true)
         .under(mode, Mode.AWAY);
 
     public EndermanLook() {

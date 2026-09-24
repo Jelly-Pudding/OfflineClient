@@ -86,7 +86,7 @@ public final class BowAimbot extends Module {
     private final BoolSetting readout = new BoolSetting("Charge readout",
         "Write how far the bow is drawn under your crosshair.", true);
     private final BoolSetting trajectory = new BoolSetting("Trajectory",
-        "Draw the arc the arrow will fly. The Trajectories module draws the same arc so it takes over whilst it is on.", true);
+        "Draws the arc the arrow will fly. Trajectories draws it instead whilst that module is on.", true);
     private final BoolSetting noSlow = new BoolSetting("No slowdown",
         "Move at full speed whilst drawing.", true);
 

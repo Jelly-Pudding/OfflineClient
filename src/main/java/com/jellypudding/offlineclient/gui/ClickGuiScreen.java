@@ -69,7 +69,7 @@ public final class ClickGuiScreen extends GuiScreenBase {
 
     private String tooltip;
     private String wrappedFor;
-    private final List<String> wrappedLines = new ArrayList<>();
+    private List<String> wrappedLines = List.of();
 
     // Panels with no saved layout. Tiled once the screen size is known.
     private final List<Panel> freshPanels = new ArrayList<>();
@@ -115,8 +115,6 @@ public final class ClickGuiScreen extends GuiScreenBase {
             Panel panel = new Panel(category.getDisplayName(),
                 OfflineClient.INSTANCE.getModuleManager().getByCategory(category),
                 settings, startX, TabStrip.bottom() + TILE_GAP);
-            // Saved layouts override the default height cap right after.
-            panel.setViewHeight(190);
             if (!restorePanelStateSafely(panel)) {
                 freshPanels.add(panel);
             }
@@ -532,12 +530,10 @@ public final class ClickGuiScreen extends GuiScreenBase {
         if (hud == null || !hud.isEnabled() || OfflineClient.MC.player == null) {
             return;
         }
-        float s = scale();
         for (Placement placed : hud.getManager().layout(OfflineClient.MC.font,
             width, height, false)) {
-            covered.add(new int[] {(int) (placed.left() / s), (int) (placed.top() / s),
-                (int) Math.ceil((placed.left() + placed.width()) / s),
-                (int) Math.ceil((placed.top() + placed.height()) / s)});
+            covered.add(RenderUtil.scaled(placed.left(), placed.top(),
+                placed.left() + placed.width(), placed.top() + placed.height(), scale()));
         }
     }
 
@@ -651,24 +647,9 @@ public final class ClickGuiScreen extends GuiScreenBase {
     }
 
     private List<String> wrap(String text) {
-        if (text.equals(wrappedFor)) {
-            return wrappedLines;
-        }
-        Font font = OfflineClient.MC.font;
-        wrappedFor = text;
-        wrappedLines.clear();
-        StringBuilder current = new StringBuilder();
-        for (String word : text.split(" ")) {
-            String candidate = current.isEmpty() ? word : current + " " + word;
-            if (font.width(candidate) > TOOLTIP_WIDTH && !current.isEmpty()) {
-                wrappedLines.add(current.toString());
-                current = new StringBuilder(word);
-            } else {
-                current = new StringBuilder(candidate);
-            }
-        }
-        if (!current.isEmpty()) {
-            wrappedLines.add(current.toString());
+        if (!text.equals(wrappedFor)) {
+            wrappedFor = text;
+            wrappedLines = RenderUtil.wrap(OfflineClient.MC.font, text, TOOLTIP_WIDTH);
         }
         return wrappedLines;
     }

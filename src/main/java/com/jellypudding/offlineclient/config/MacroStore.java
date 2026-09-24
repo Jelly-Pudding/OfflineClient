@@ -8,6 +8,7 @@ import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.KeyPressEvent;
 import com.jellypudding.offlineclient.setting.KeybindSetting;
+import com.jellypudding.offlineclient.util.ChatUtil;
 import com.mojang.blaze3d.platform.InputConstants;
 
 import java.io.IOException;
@@ -89,7 +90,7 @@ public final class MacroStore {
                 continue;
             }
             if (!OfflineClient.INSTANCE.getCommandManager().run(line)) {
-                OfflineClient.MC.player.connection.sendChat(line);
+                ChatUtil.say(line);
             }
         }
     }

@@ -138,7 +138,7 @@ public final class AntiAfk extends Module {
             creativeFlight = mc.player.getAbilities().flying;
         }
         if (sendMessages.isOn() && lines.isEmpty()) {
-            ChatUtil.error("No message lines are filled in so messages are switched off.");
+            ChatUtil.error("Messages are off because no message lines are filled in.");
             sendMessages.setValue(false);
         }
     }
@@ -392,11 +392,7 @@ public final class AntiAfk extends Module {
         if (text == null) {
             return;
         }
-        if (text.startsWith("/")) {
-            mc.getConnection().sendCommand(text.substring(1));
-        } else {
-            mc.getConnection().sendChat(text);
-        }
+        ChatUtil.say(text);
     }
 
     // Fires once every interval on average.

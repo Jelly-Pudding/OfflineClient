@@ -122,7 +122,7 @@ public final class BuildTemplate {
         }
     }
 
-    // The old form is a bare list of three numbers.
+    // An entry can also be a bare list of three numbers.
     private static Entry plainEntry(JsonArray at) {
         return new Entry(at.get(0).getAsInt(), at.get(1).getAsInt(), at.get(2).getAsInt(), null);
     }
