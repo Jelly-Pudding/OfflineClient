@@ -13,19 +13,18 @@ import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.AttackTimer;
 import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.RotationManager;
 import com.jellypudding.offlineclient.util.RotationPriority;
 import com.jellypudding.offlineclient.util.SwingMode;
+import com.jellypudding.offlineclient.util.TargetFilter;
 import com.jellypudding.offlineclient.util.TargetPriority;
 import com.jellypudding.offlineclient.util.TickRate;
-import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
-import net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen;
-import net.minecraft.client.gui.screens.inventory.InventoryScreen;
+import com.jellypudding.offlineclient.util.WeaponUtil;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.protocol.game.ServerboundSetCarriedItemPacket;
-import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
@@ -49,8 +48,6 @@ public final class KillAura extends Module {
     public enum Shields { NONE, BREAK, IGNORE }
 
     public enum Ages { ADULTS, BABIES, BOTH }
-
-    public enum Neutral { ALWAYS, WHEN_ANGRY, NEVER }
 
     public enum Holding { ANYTHING, WEAPONS }
 
@@ -78,16 +75,6 @@ public final class KillAura extends Module {
 
     private final BoolSetting players = new BoolSetting("Players",
         "Swing at other players.", true);
-    private final BoolSetting ignoreCreative = new BoolSetting("Ignore creative",
-        "Skip players in creative mode.", true)
-        .under(players);
-    private final BoolSetting ignoreSleeping = new BoolSetting("Ignore sleeping",
-        "Skip players lying in a bed.", false)
-        .under(players);
-    private final NumberSetting ignoreFlying = new NumberSetting("Ignore flying",
-        "Skip players with nothing under them for this many blocks. Zero hits them anyway.",
-        0, 0, 2, 0.05, " blocks")
-        .under(players);
     private final BoolSetting hostile = new BoolSetting("Hostile mobs",
         "Swing at anything that hunts you.", false);
     private final EnumSetting<Ages> hostileAges = new EnumSetting<>("Hostile ages",
@@ -128,24 +115,12 @@ public final class KillAura extends Module {
     private final BoolSetting allays = new BoolSetting("Allays",
         "Swing at allays.", true)
         .under(passive);
-    private final EnumSetting<Neutral> neutral = new EnumSetting<>("Neutral mobs",
-        "Endermen and piglins and wolves and the like.", Neutral.WHEN_ANGRY)
-        .describe(Neutral.ALWAYS, "Hit them like any other mob.")
-        .describe(Neutral.WHEN_ANGRY, "Only hit them once they are angry.")
-        .describe(Neutral.NEVER, "Leave them alone.")
-        .under(hostile, () -> hostile.isOn() || passive.isOn());
+    private final TargetFilter filter = new TargetFilter().withoutAges()
+        .nest(players, hostile, () -> hostile.isOn() || passive.isOn());
     private final RegistryListSetting<EntityType<?>> extraMobs = new RegistryListSetting<>("Also hit",
         "Kinds of entity to hit whatever the switches above say.", BuiltInRegistries.ENTITY_TYPE, List.of());
     private final RegistryListSetting<EntityType<?>> ignoredMobs = new RegistryListSetting<>("Never hit",
         "Kinds of entity to leave alone whatever the switches above say.", BuiltInRegistries.ENTITY_TYPE, List.of());
-    private final BoolSetting ignoreNamed = new BoolSetting("Ignore named",
-        "Skip mobs wearing a name tag.", true)
-        .under(hostile, () -> hostile.isOn() || passive.isOn());
-    private final BoolSetting ignorePets = new BoolSetting("Ignore pets",
-        "Skip tamed and saddled and trusting animals.", true)
-        .under(hostile, () -> hostile.isOn() || passive.isOn());
-    private final BoolSetting ignoreInvisible = new BoolSetting("Ignore invisible",
-        "Skip anything you cannot see because it is invisible.", false);
     private final EnumSetting<TargetPriority> priority = TargetPriority.setting("Attacks", TargetPriority.NEAREST);
     private final NumberSetting maxTargets = new NumberSetting("Max targets",
         "How many entities to swing at in one go.", 1, 1, 8, 1);
@@ -162,9 +137,9 @@ public final class KillAura extends Module {
         .under(rotate, Rotate.ON_HIT, Rotate.ALWAYS, Rotate.CAMERA);
 
     private final BoolSetting autoWeapon = new BoolSetting("Auto weapon",
-        "Switches to your best weapon before each hit.", false);
+        "Holds your best weapon whilst there is something to hit.", false);
     private final BoolSetting weaponSwapBack = new BoolSetting("Swap back",
-        "Returns to the slot you had once the hit has gone out.", false)
+        "Returns to the slot you had once nothing is left to hit.", false)
         .under(autoWeapon);
     private final EnumSetting<Shields> shields = new EnumSetting<>("Shields",
         "What to do about a raised shield.", Shields.BREAK)
@@ -204,11 +179,13 @@ public final class KillAura extends Module {
 
     public KillAura() {
         super("KillAura", "Automatically swings at nearby mobs and players.", Category.COMBAT);
-        addSettings(range, wallsRange, walls, fov, onlyOnLook,
-            players, ignoreCreative, ignoreSleeping, ignoreFlying, hostile, hostileAges,
-            slimes, shulkers, zombieVillagers, passive, passiveAges, waterMobs, bats,
-            villagers, golems, allays, neutral, extraMobs, ignoredMobs, ignoreNamed, ignorePets,
-            ignoreInvisible, priority, maxTargets, rotate, rotateSpeed);
+        addSettings(range, wallsRange, walls, fov, onlyOnLook, players);
+        addSettings(filter.playerRows());
+        addSettings(hostile, hostileAges, slimes, shulkers, zombieVillagers, passive, passiveAges,
+            waterMobs, bats, villagers, golems, allays);
+        addSettings(filter.mobRows());
+        addSettings(extraMobs, ignoredMobs, filter.invisibleRow(), priority, maxTargets, rotate,
+            rotateSpeed);
         addSettings(timer.settings());
         addSettings(autoWeapon, weaponSwapBack, shields, holding, weapons, onlyOnClick,
             ignoreCooldown, switchDelay, swing, pauseOnUse, pauseOnContainers, pauseOnCrystals,
@@ -237,6 +214,7 @@ public final class KillAura extends Module {
     @Override
     protected void onDisable() {
         targets.clear();
+        putWeaponAway();
     }
 
     @Subscribe
@@ -250,18 +228,25 @@ public final class KillAura extends Module {
         }
         targets.addAll(pickTargets());
         if (targets.isEmpty()) {
+            putWeaponAway();
             return;
         }
         LivingEntity primary = targets.getFirst();
+        boolean armed = armWeapon(primary);
         if (rotate.is(Rotate.CAMERA)) {
             turnCamera(primary);
         } else if (rotate.is(Rotate.ALWAYS)) {
             RotationManager.look(aimPoint(primary), RotationPriority.ATTACK,
                 RotationManager.ENTITY_TOLERANCE, rotateSpeed.getFloat());
         }
-        if (timer.ready() && switchTimer == 0) {
+        if (armed && charged() && timer.ready() && switchTimer == 0) {
             strike();
         }
+    }
+
+    // Hits before the attack cooldown ends deal reduced damage.
+    private boolean charged() {
+        return ignoreCooldown.isOn() || mc.player.getAttackStrengthScale(0.5f) >= 1;
     }
 
     // Every reason the aura sits this tick out.
@@ -269,19 +254,13 @@ public final class KillAura extends Module {
         if (pauseOnUse.isOn() && (mc.player.isUsingItem() || mc.gameMode.isDestroying())) {
             return true;
         }
-        if (pauseOnContainers.isOn() && mc.gui.screen() instanceof AbstractContainerScreen
-            && !(mc.gui.screen() instanceof InventoryScreen)
-            && !(mc.gui.screen() instanceof CreativeModeInventoryScreen)) {
+        if (pauseOnContainers.isOn() && InventoryUtil.containerOpen()) {
             return true;
         }
         if (onlyOnClick.isOn() && !mc.options.keyAttack.isDown()) {
             return true;
         }
         if (holding.is(Holding.WEAPONS) && !weapons.contains(mc.player.getMainHandItem().getItem())) {
-            return true;
-        }
-        // Hits before the attack cooldown ends deal reduced damage.
-        if (!ignoreCooldown.isOn() && mc.player.getAttackStrengthScale(0.5f) < 1) {
             return true;
         }
         if (pauseOnLag.isOn() && TickRate.INSTANCE.lagging(LAG_MILLIS)) {
@@ -312,19 +291,11 @@ public final class KillAura extends Module {
             RotationManager.look(aimPoint(primary), RotationPriority.ATTACK,
                 RotationManager.ENTITY_TOLERANCE, RotationManager.NO_STEP);
         }
-        if (!selectWeapon(primary)) {
-            return;
-        }
         // One swing animation covers every entity hit on the tick.
         for (LivingEntity target : targets) {
             mc.gameMode.attack(mc.player, target);
         }
         swing.getValue().swing(InteractionHand.MAIN_HAND);
-        if (weaponSwapBack.isOn()) {
-            slots.restore();
-        } else {
-            slots.forget();
-        }
         timer.spent();
     }
 
@@ -334,16 +305,7 @@ public final class KillAura extends Module {
 
     // Moves the real view towards the target by at most the turn speed.
     private void turnCamera(LivingEntity target) {
-        Vec3 eye = mc.player.getEyePosition();
-        Vec3 to = aimPoint(target).subtract(eye);
-        double flat = Math.sqrt(to.x * to.x + to.z * to.z);
-        float wantYaw = (float) Math.toDegrees(Math.atan2(to.z, to.x)) - 90f;
-        float wantPitch = (float) -Math.toDegrees(Math.atan2(to.y, flat));
-        float step = rotateSpeed.getFloat();
-        float yaw = mc.player.getYRot() + Mth.clamp(Mth.wrapDegrees(wantYaw - mc.player.getYRot()), -step, step);
-        float pitch = mc.player.getXRot() + Mth.clamp(wantPitch - mc.player.getXRot(), -step, step);
-        mc.player.setYRot(yaw);
-        mc.player.setXRot(Mth.clamp(pitch, -90f, 90f));
+        RotationManager.turnCamera(aimPoint(target), rotateSpeed.getFloat());
     }
 
     // True once the real crosshair rests on the target's box within reach.
@@ -354,9 +316,10 @@ public final class KillAura extends Module {
         return target.getBoundingBox().clip(eye, end).isPresent();
     }
 
-    // Holds the best weapon for the target until the hit has landed.
-    // False when a shield is up and the settings say to leave it be.
-    private boolean selectWeapon(LivingEntity target) {
+    // Takes up the best weapon for the target. The server judges a hit by the item held
+    // at the end of the last tick. A hit in the tick of a swap waits for the next one.
+    // False whilst it waits or when a raised shield is left alone.
+    private boolean armWeapon(LivingEntity target) {
         boolean blocking = target.isBlocking();
         if (blocking && shields.is(Shields.IGNORE)) {
             return false;
@@ -364,22 +327,31 @@ public final class KillAura extends Module {
         if (!autoWeapon.isOn()) {
             return true;
         }
-        // AutoWeapon and AttributeSwap keep the slot themselves.
-        if (Modules.enabled(AutoWeapon.class) || Modules.enabled(AttributeSwap.class)) {
-            return true;
-        }
         // An axe staggers a raised shield whilst a sword bounces off it.
         int best = -1;
         if (blocking && shields.is(Shields.BREAK)) {
-            best = AutoWeapon.bestAxeSlot(target, true);
+            best = WeaponUtil.bestAxeSlot(target, true);
         }
         if (best == -1) {
-            best = AutoWeapon.bestWeaponSlot(target);
+            AutoWeapon chooser = Modules.active(AutoWeapon.class);
+            best = chooser != null ? chooser.bestSlot(target) : WeaponUtil.bestWeaponSlot(target);
         }
-        if (best != -1) {
-            slots.select(best);
+        if (best == -1 || best == InventoryUtil.selectedSlot()) {
+            return true;
         }
-        return true;
+        slots.select(best);
+        if (!weaponSwapBack.isOn()) {
+            slots.forget();
+        }
+        return false;
+    }
+
+    private void putWeaponAway() {
+        if (weaponSwapBack.isOn() && inGame()) {
+            slots.restoreIfMine();
+        } else {
+            slots.forget();
+        }
     }
 
     private List<LivingEntity> pickTargets() {
@@ -402,10 +374,8 @@ public final class KillAura extends Module {
     }
 
     private boolean wanted(LivingEntity living) {
-        if (living == mc.player || !living.isAlive() || living.isSpectator()) {
-            return false;
-        }
-        if (ignoredMobs.contains(living.getType()) || (ignoreInvisible.isOn() && living.isInvisible())) {
+        if (living == mc.player || !living.isAlive() || living.isSpectator()
+            || EntityUtil.isFriend(living) || ignoredMobs.contains(living.getType())) {
             return false;
         }
         double furthest = walls.isOn() ? Math.max(range.getValue(), wallsRange.getValue()) : range.getValue();
@@ -413,16 +383,7 @@ public final class KillAura extends Module {
         if (distance > furthest || !inFov(living)) {
             return false;
         }
-        boolean chosen = extraMobs.contains(living.getType());
-        if (living instanceof Player player) {
-            if (!chosen && !wantedPlayer(player)) {
-                return false;
-            }
-        } else if (living instanceof Mob mob) {
-            if (!chosen && !wantedMob(mob)) {
-                return false;
-            }
-        } else if (!chosen) {
+        if (!extraMobs.contains(living.getType()) && !kindWanted(living) || !filter.allows(living)) {
             return false;
         }
         // The line of sight raycast costs the most.
@@ -433,41 +394,15 @@ public final class KillAura extends Module {
         return distance <= (visible ? range.getValue() : wallsRange.getValue());
     }
 
-    private boolean wantedPlayer(Player player) {
-        if (!players.isOn() || EntityUtil.isFriend(player)) {
+    // Whether the switches above pick out this kind of entity.
+    private boolean kindWanted(LivingEntity living) {
+        if (living instanceof Player) {
+            return players.isOn();
+        }
+        if (!(living instanceof Mob mob) || !speciesAllowed(mob)) {
             return false;
         }
-        if (ignoreCreative.isOn() && player.isCreative()) {
-            return false;
-        }
-        if (ignoreSleeping.isOn() && player.isSleeping()) {
-            return false;
-        }
-        return ignoreFlying.getValue() <= 0 || !floating(player);
-    }
-
-    private boolean floating(Player player) {
-        AABB box = player.getBoundingBox();
-        return mc.level.noCollision(player, box.expandTowards(0, -ignoreFlying.getValue(), 0));
-    }
-
-    private boolean wantedMob(Mob mob) {
-        if (ignoreNamed.isOn() && mob.hasCustomName()) {
-            return false;
-        }
-        if (ignorePets.isOn() && EntityUtil.isPet(mob)) {
-            return false;
-        }
-        if (!speciesAllowed(mob)) {
-            return false;
-        }
-        if (EntityUtil.isNeutral(mob)) {
-            if (neutral.is(Neutral.NEVER) || (neutral.is(Neutral.WHEN_ANGRY) && EntityUtil.isCalm(mob))) {
-                return false;
-            }
-        }
-        boolean hostileKind = EntityUtil.kindOf(mob) == EntityUtil.Kind.HOSTILE;
-        if (hostileKind) {
+        if (EntityUtil.kindOf(mob) == EntityUtil.Kind.HOSTILE) {
             return hostile.isOn() && allowedAge(mob, hostileAges.getValue());
         }
         return passive.isOn() && allowedAge(mob, passiveAges.getValue());
@@ -526,12 +461,12 @@ public final class KillAura extends Module {
             return;
         }
         for (LivingEntity target : targets) {
-            float share = Math.clamp(EntityUtil.totalHealth(target) / EntityUtil.totalMaxHealth(target), 0f, 1f);
+            float share = EntityUtil.healthShare(target);
             AABB box = EntityUtil.lerpedBox(target, event.getPartialTicks());
             Vec3 centre = box.getCenter();
             AABB inner = new AABB(centre, centre).inflate(box.getXsize() / 2 * share,
                 box.getYsize() / 2 * share, box.getZsize() / 2 * share);
-            int color = ColorUtil.hsv(share * 120, 0.85f, 1f);
+            int color = ColorUtil.redToGreen(share);
             event.getBatch().outlineBox(inner, color, true);
             event.getBatch().solidBox(inner, ColorUtil.withAlpha(color, 60), true);
         }

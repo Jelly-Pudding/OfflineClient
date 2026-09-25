@@ -1,6 +1,7 @@
 package com.jellypudding.offlineclient.hud.elements;
 
 import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.gui.GuiTheme;
 import com.jellypudding.offlineclient.hud.HudElement;
 import com.jellypudding.offlineclient.modules.combat.KillAura;
 import com.jellypudding.offlineclient.setting.BoolSetting;
@@ -22,9 +23,6 @@ public final class CombatElement extends HudElement {
     private static final int BAR_WIDTH = 80;
     private static final int BAR_HEIGHT = 4;
     private static final int GAP = 2;
-
-    // Hue zero is red and hue one hundred and twenty is green.
-    private static final float GREEN_HUE = 120;
 
     private final NumberSetting range = new NumberSetting("Combat range",
         "How far away someone still counts as a target.", 16, 4, 64, 1, " blocks").min(1);
@@ -77,20 +75,15 @@ public final class CombatElement extends HudElement {
         if (target == null) {
             return;
         }
-        context.text(font, label(target), 0, 0, 0xFFECECF4, true);
+        context.text(font, label(target), 0, 0, GuiTheme.HUD_TEXT, true);
         if (!bar.isOn()) {
             return;
         }
-        float share = share(target);
+        float share = EntityUtil.healthShare(target);
         int top = font.lineHeight + GAP;
-        context.fill(0, top, barWidth(font), top + BAR_HEIGHT, 0xC0202020);
+        context.fill(0, top, barWidth(font), top + BAR_HEIGHT, GuiTheme.BAR_TRACK);
         context.fill(0, top, Math.round(barWidth(font) * share), top + BAR_HEIGHT,
-            ColorUtil.hsv(share * GREEN_HUE, 0.9f, 1f));
-    }
-
-    private static float share(LivingEntity target) {
-        float max = EntityUtil.totalMaxHealth(target);
-        return max <= 0 ? 0 : Math.clamp(EntityUtil.totalHealth(target) / max, 0f, 1f);
+            ColorUtil.redToGreen(share));
     }
 
     private int barWidth(Font font) {

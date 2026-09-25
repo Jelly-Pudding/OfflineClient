@@ -160,11 +160,11 @@ public final class ArrowDodge extends Module {
         for (int i = 0; i < limit; i++) {
             Vec3 previous = pos;
             pos = pos.add(velocity);
-            velocity = velocity.scale(ProjectileUtil.ARROW_DRAG).subtract(0, gravity, 0);
+            velocity = velocity.scale(ProjectileUtil.AIR_DRAG).subtract(0, gravity, 0);
             if (pos.y < minY) {
                 break;
             }
-            // A projectile that buries itself in a wall is no longer a threat.
+            // A projectile that buries itself in a wall stops there.
             HitResult wall = mc.level.clip(new ClipContext(previous, pos,
                 ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, projectile));
             if (wall.getType() != HitResult.Type.MISS) {

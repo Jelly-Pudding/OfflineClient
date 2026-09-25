@@ -1,10 +1,13 @@
 package com.jellypudding.offlineclient.hud.elements;
 
 import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.gui.GuiTheme;
 import com.jellypudding.offlineclient.hud.HudElement;
+import com.jellypudding.offlineclient.hud.HudLayout;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.util.ColorUtil;
+import com.jellypudding.offlineclient.util.ItemUtil;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -12,11 +15,10 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 public final class ArmourElement extends HudElement {
-
-    public enum Layout { ACROSS, DOWN }
 
     public enum Wear { NONE, NUMBER, PERCENT, BAR }
 
@@ -24,17 +26,12 @@ public final class ArmourElement extends HudElement {
     private static final int GAP = 2;
     private static final int BAR_HEIGHT = 2;
 
-    // Hue zero is red and hue one hundred and twenty is green.
-    private static final float GREEN_HUE = 120;
-
     private static final EquipmentSlot[] WORN = {
         EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET
     };
 
-    private final EnumSetting<Layout> layout = new EnumSetting<>("Armour layout",
-        "Which way the pieces are laid out.", Layout.ACROSS)
-        .describe(Layout.ACROSS, "In a row.")
-        .describe(Layout.DOWN, "In a column.");
+    private final EnumSetting<HudLayout> layout = HudLayout.setting("Armour layout",
+        "Which way the pieces are laid out.");
     private final EnumSetting<Wear> wear = new EnumSetting<>("Wear",
         "How the life left in each piece is shown.", Wear.NUMBER)
         .describe(Wear.NONE, "Not at all.")
@@ -77,7 +74,7 @@ public final class ArmourElement extends HudElement {
             }
         }
         if (flip.isOn()) {
-            java.util.Collections.reverse(stacks);
+            Collections.reverse(stacks);
         }
         return stacks;
     }
@@ -94,10 +91,10 @@ public final class ArmourElement extends HudElement {
     @Override
     public void render(GuiGraphicsExtractor context, Font font) {
         List<ItemStack> stacks = pieces();
-        int step = SLOT + GAP + (layout.is(Layout.DOWN) ? labelHeight(font) : 0);
+        int step = SLOT + GAP + (layout.is(HudLayout.DOWN) ? labelHeight(font) : 0);
         for (int i = 0; i < stacks.size(); i++) {
-            int x = layout.is(Layout.ACROSS) ? i * (SLOT + GAP) : 0;
-            int y = layout.is(Layout.ACROSS) ? 0 : i * step;
+            int x = layout.is(HudLayout.ACROSS) ? i * (SLOT + GAP) : 0;
+            int y = layout.is(HudLayout.ACROSS) ? 0 : i * step;
             ItemStack stack = stacks.get(i);
             context.item(stack, x, y);
             context.itemDecorations(font, stack, x, y);
@@ -110,10 +107,10 @@ public final class ArmourElement extends HudElement {
             return;
         }
         int left = stack.getMaxDamage() - stack.getDamageValue();
-        float share = Math.clamp((float) left / stack.getMaxDamage(), 0f, 1f);
-        int tint = ColorUtil.hsv(share * GREEN_HUE, 0.9f, 1f);
+        float share = (float) ItemUtil.durabilityPercent(stack) / 100f;
+        int tint = ColorUtil.redToGreen(share);
         if (wear.is(Wear.BAR)) {
-            context.fill(x, y + SLOT, x + SLOT, y + SLOT + BAR_HEIGHT, 0xC0202020);
+            context.fill(x, y + SLOT, x + SLOT, y + SLOT + BAR_HEIGHT, GuiTheme.BAR_TRACK);
             context.fill(x, y + SLOT, x + Math.round(SLOT * share), y + SLOT + BAR_HEIGHT, tint);
             return;
         }
@@ -125,14 +122,14 @@ public final class ArmourElement extends HudElement {
     @Override
     public int width(Font font) {
         int count = Math.max(1, pieces().size());
-        return layout.is(Layout.ACROSS) ? count * (SLOT + GAP) - GAP : SLOT;
+        return layout.is(HudLayout.ACROSS) ? count * (SLOT + GAP) - GAP : SLOT;
     }
 
     @Override
     public int height(Font font) {
         int count = Math.max(1, pieces().size());
         int label = labelHeight(font);
-        return layout.is(Layout.ACROSS)
+        return layout.is(HudLayout.ACROSS)
             ? SLOT + label : count * (SLOT + GAP + label) - GAP;
     }
 }

@@ -1,9 +1,11 @@
 package com.jellypudding.offlineclient.hud.elements;
 
 import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.gui.GuiTheme;
 import com.jellypudding.offlineclient.hud.HudElement;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
+import net.minecraft.SharedConstants;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.world.effect.MobEffectInstance;
@@ -19,7 +21,6 @@ public final class PotionTimersElement extends HudElement {
     public enum Order { TIME, ALPHABETICAL }
 
     private static final int LINE = 10;
-    private static final int TICKS_PER_SECOND = 20;
     private static final int SECONDS_PER_MINUTE = 60;
 
     // Roman numerals for the levels a potion can reach.
@@ -28,8 +29,7 @@ public final class PotionTimersElement extends HudElement {
     private final EnumSetting<Order> order = new EnumSetting<>("Potion order",
         "How the effects are ordered.", Order.TIME)
         .describe(Order.TIME, "The one running out soonest at the top.")
-        .describe(Order.ALPHABETICAL, "By name from A to Z.")
-        ;
+        .describe(Order.ALPHABETICAL, "By name from A to Z.");
     private final BoolSetting hideAmbient = new BoolSetting("Hide ambient",
         "Leave out the effects a beacon gives.", false);
     private final BoolSetting ownColours = new BoolSetting("Potion colours",
@@ -76,7 +76,7 @@ public final class PotionTimersElement extends HudElement {
         if (effect.isInfiniteDuration()) {
             return "";
         }
-        int seconds = effect.getDuration() / TICKS_PER_SECOND;
+        int seconds = effect.getDuration() / SharedConstants.TICKS_PER_SECOND;
         return String.format(Locale.ROOT, " %d:%02d",
             seconds / SECONDS_PER_MINUTE, seconds % SECONDS_PER_MINUTE);
     }
@@ -90,7 +90,7 @@ public final class PotionTimersElement extends HudElement {
         int y = 0;
         for (MobEffectInstance effect : effects()) {
             int tint = ownColours.isOn()
-                ? 0xFF000000 | effect.getEffect().value().getColor() : 0xFFECECF4;
+                ? 0xFF000000 | effect.getEffect().value().getColor() : GuiTheme.HUD_TEXT;
             context.text(font, rowOf(effect), 0, y, tint, true);
             y += LINE;
         }

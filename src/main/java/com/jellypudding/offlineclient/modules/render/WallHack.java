@@ -1,13 +1,8 @@
 package com.jellypudding.offlineclient.modules.render;
 
-import com.jellypudding.offlineclient.event.Subscribe;
-import com.jellypudding.offlineclient.event.events.TickEvent;
-import com.jellypudding.offlineclient.module.Category;
-import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.module.MeshFilterModule;
 import com.jellypudding.offlineclient.setting.BoolSetting;
-import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
-import com.jellypudding.offlineclient.util.ChunkRebuild;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -18,36 +13,21 @@ import java.util.Set;
 
 // The mirror of XRay. The listed blocks go see through and the rest stay solid.
 // XRay owns the meshing path and asks this module what the chosen blocks need.
-public final class WallHack extends Module {
-
-    // The chunk mesher reads this once per block.
-    private static volatile WallHack instance;
+public final class WallHack extends MeshFilterModule {
 
     private final RegistryListSetting<Block> blocks = new RegistryListSetting<>("Blocks",
         "The blocks that go see through.", BuiltInRegistries.BLOCK,
         List.of(Blocks.STONE, Blocks.DEEPSLATE, Blocks.TUFF, Blocks.ANDESITE,
             Blocks.DIORITE, Blocks.GRANITE, Blocks.DIRT, Blocks.GRASS_BLOCK,
             Blocks.NETHERRACK, Blocks.END_STONE));
-    private final NumberSetting opacity = new NumberSetting("Opacity",
-        "How visible the listed blocks stay.", 0, 0, 100, 5, "%").max(100);
     private final BoolSetting skipHidden = new BoolSetting("Skip hidden chunks",
         "Let the game leave out chunks it thinks are out of sight.", false);
 
-    // Read from worker threads and replaced whole.
-    private volatile Set<Block> seeThrough = Set.of();
-    private volatile int alpha;
-    private final ChunkRebuild rebuild = new ChunkRebuild();
-
     public WallHack() {
-        super("WallHack", "Makes the blocks you choose see through.", Category.RENDER);
+        super("WallHack", "Makes the blocks you choose see through.",
+            "How visible the listed blocks stay.");
         addSettings(blocks, opacity, skipHidden);
         searchTags("xray", "see through", "walls");
-        instance = this;
-    }
-
-    // Null before the client has started.
-    public static WallHack get() {
-        return instance;
     }
 
     @Override
@@ -56,31 +36,8 @@ public final class WallHack extends Module {
     }
 
     @Override
-    protected void onEnable() {
-        snapshot();
-        ChunkRebuild.now();
-    }
-
-    @Override
-    protected void onDisable() {
-        ChunkRebuild.now();
-    }
-
-    @Subscribe
-    private void onTick(TickEvent event) {
-        rebuild.tick(snapshot());
-    }
-
-    // True if anything changed.
-    private boolean snapshot() {
-        Set<Block> next = new HashSet<>(blocks.resolved());
-        int nextAlpha = (int) Math.round(opacity.getValue() / 100.0 * 255.0);
-        boolean changed = !next.equals(seeThrough) || nextAlpha != alpha;
-        if (changed) {
-            seeThrough = Set.copyOf(next);
-            alpha = nextAlpha;
-        }
-        return changed;
+    protected Set<Block> chosenBlocks() {
+        return new HashSet<>(blocks.resolved());
     }
 
     // Vanilla skips chunk sections that are boxed in by solid ground.
@@ -88,13 +45,7 @@ public final class WallHack extends Module {
         return isEnabled() && !skipHidden.isOn();
     }
 
-    // Minus one leaves the block alone and zero skips it. Anything else is the
-    // alpha for a see through version.
     public int alphaFor(Block block) {
-        if (!isEnabled() || !seeThrough.contains(block)) {
-            return -1;
-        }
-        int a = alpha;
-        return a >= 255 ? -1 : a;
+        return isEnabled() && listed(block) ? hiddenAlpha() : -1;
     }
 }

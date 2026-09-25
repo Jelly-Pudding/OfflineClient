@@ -9,16 +9,12 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.DamageUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
-import com.jellypudding.offlineclient.util.InventoryUtil.Swap;
 import net.minecraft.world.item.Items;
 
 public final class AutoTotem extends Module {
 
     // Gliding into a wall kills outright. A totem is always worth holding.
     private static final double ELYTRA_TRIGGER_SPEED = 0.5;
-
-    // Health points in one heart.
-    private static final float HEART = 2;
 
     private final NumberSetting health = new NumberSetting("Health",
         "Puts a totem in your offhand once you drop to this many hearts. Zero keeps one there at all times.",
@@ -101,22 +97,14 @@ public final class AutoTotem extends Module {
             return;
         }
 
-        if (!InventoryUtil.canClick()) {
+        if (!InventoryUtil.cursorFree()) {
             return;
         }
-        if (!InventoryUtil.carried().isEmpty()) {
-            return;
-        }
-
         if (timer > 0) {
             timer--;
             return;
         }
-
-        if (InventoryUtil.swap(totemSlot, InventoryUtil.OFFHAND_SLOT) == Swap.STRANDED) {
-            // The item the totem replaced had nowhere to go.
-            cursor.hold(totemSlot);
-        }
+        cursor.swap(totemSlot, InventoryUtil.OFFHAND_SLOT);
     }
 
     // True when the health line is already crossed or something already in the world
@@ -126,9 +114,8 @@ public final class AutoTotem extends Module {
             && mc.player.getDeltaMovement().length() > ELYTRA_TRIGGER_SPEED) {
             return true;
         }
-        float incoming = DamageUtil.possibleIncoming(blastRange.getValue(),
-            explosions.isOn(), melee.isOn(), fall.isOn());
-        return EntityUtil.totalHealth(mc.player) - incoming <= minHealth * HEART;
+        return DamageUtil.healthAfterIncoming(blastRange.getValue(), explosions.isOn(), melee.isOn(),
+            fall.isOn()) <= minHealth * EntityUtil.HEART;
     }
 
     // Every totem the player owns. The one already equipped counts.

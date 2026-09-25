@@ -204,14 +204,7 @@ public final class AutoCity extends Module {
         if (BlockUtil.distanceTo(below) > placeRange.getValue()) {
             return false;
         }
-        int slot = BlockUtil.findBlockSlot();
-        if (slot == -1) {
-            return false;
-        }
-        slots.select(slot);
-        boolean placed = BlockUtil.placeAny(below, rotate.isOn(), true);
-        slots.restore();
-        return placed;
+        return BlockUtil.placeFrom(slots, BlockUtil.findBlockSlot(), below, rotate.isOn());
     }
 
     private BlockPos cityBlock(Player target) {
@@ -227,7 +220,7 @@ public final class AutoCity extends Module {
             BlockPos pos = feet.relative(side);
             BlockState state = BlockUtil.state(pos);
             if (state.isAir() || !BlockUtil.isBreakable(pos)
-                || state.getBlock().getExplosionResistance() < BlockUtil.BLAST_PROOF) {
+                || !BlockUtil.isBlastProof(state)) {
                 continue;
             }
             double distance = BlockUtil.distanceTo(pos);

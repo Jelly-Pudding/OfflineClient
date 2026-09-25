@@ -25,6 +25,12 @@ public final class ServerInfo {
         return data == null ? null : data.ip;
     }
 
+    // A stable name for where you are playing. Saved data is filed under it.
+    public static String key() {
+        String address = address();
+        return address == null ? "singleplayer" : address.toLowerCase(Locale.ROOT);
+    }
+
     // The label the server has in your own server list. Null until you name it.
     public static String savedName() {
         ServerData data = OfflineClient.MC.getCurrentServer();

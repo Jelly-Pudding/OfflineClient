@@ -13,6 +13,9 @@ public final class AxisWalker {
 
     private static final Minecraft MC = OfflineClient.MC;
 
+    // Standing further than this above or below the floor counts as having left it.
+    private static final double OFF_FLOOR = 1.5;
+
     // How hard a tick pushes the player back onto the middle line.
     private static final double CENTRE_PULL = 0.2;
     private static final double MAX_CENTRE_PUSH = 0.1;
@@ -73,6 +76,19 @@ public final class AxisWalker {
 
     public int floorY() {
         return floorY;
+    }
+
+    public boolean offFloor() {
+        return Math.abs(MC.player.getY() - floorY) > OFF_FLOOR;
+    }
+
+    // Lanes run from left to right with lane zero on the line. An even width leans right.
+    public static int leftLane(int width) {
+        return -((width - 1) / 2);
+    }
+
+    public static int rightLane(int width) {
+        return width - 1 + leftLane(width);
     }
 
     // Keeps the view and the footing on the line the work started on.
@@ -146,7 +162,7 @@ public final class AxisWalker {
             origin.getZ() + (int) Math.round(alongZ * depth + rightZ * lane));
     }
 
-    // Where the line is at a depth. For the outline of a diagonal.
+    // A point at a depth along the line. The outline of a diagonal is drawn from these.
     public Vec3 pointAt(double depth, double lane, double up) {
         return new Vec3(origin.getX() + 0.5 + alongX * depth + rightX * lane,
             floorY + up,

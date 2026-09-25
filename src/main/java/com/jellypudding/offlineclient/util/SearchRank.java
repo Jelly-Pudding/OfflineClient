@@ -67,6 +67,20 @@ public final class SearchRank {
         return best;
     }
 
+    // The candidate that answers the query best or an empty string when none does.
+    public static String strongest(String query, Iterable<String> candidates) {
+        String best = "";
+        int bestScore = NO_MATCH;
+        for (String candidate : candidates) {
+            int score = score(candidate, query);
+            if (score > bestScore) {
+                bestScore = score;
+                best = candidate;
+            }
+        }
+        return best;
+    }
+
     private record Scored<T>(T candidate, int score) {
     }
 

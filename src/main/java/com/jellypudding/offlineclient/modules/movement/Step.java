@@ -20,7 +20,6 @@ import net.minecraft.world.entity.boss.enderdragon.EndCrystal;
 import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
-import net.minecraft.world.phys.shapes.VoxelShape;
 
 // Simple mode raises the step height. Legit mode sends the packets of a real jump.
 // A step under a low ceiling fails because the server refuses to move through a block.
@@ -39,10 +38,6 @@ public final class Step extends Module {
 
     // A stride onto the ledge. A crystal hidden behind the edge counts from there.
     private static final double LEDGE_STRIDE = 1.2;
-
-    // The server charges every packet for its own drop. Four blocks in one tick hurts.
-    private static final double SAFE_SNAP = 3.9;
-
 
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
         "How the step is done.", Mode.SIMPLE)
@@ -75,8 +70,7 @@ public final class Step extends Module {
         "Longest drop that is snapped.", 3, 0.5, 10, 0.5, " blocks")
         .under(stepDown);
     private final NumberSetting downSpeed = new NumberSetting("Down speed",
-        "Blocks a tick the snap pulls you down. Stays under four as a faster drop hurts.",
-        3, 0.5, SAFE_SNAP, 0.1, " blocks").max(SAFE_SNAP)
+        "Blocks a tick the snap pulls you down.", 3, 0.5, 10, 0.1, " blocks").min(0.1)
         .under(stepDown);
     private final BoolSetting edgeGuardWins = new BoolSetting("EdgeGuard wins",
         "An edge EdgeGuard is holding you on is never snapped down from.", true)
@@ -95,6 +89,11 @@ public final class Step extends Module {
 
     // Set on the tick a swimmer is lifted onto a bank.
     private boolean lifted;
+
+    // Whether the player and the ridden vehicle stood on something last tick. A snap
+    // only follows a walk off a ledge and never a jump.
+    private boolean wasOnGround;
+    private boolean vehicleWasOnGround;
 
     public Step() {
         super("Step", "Step up full blocks without jumping.", Category.MOVEMENT);
@@ -148,7 +147,7 @@ public final class Step extends Module {
 
     // Hearts left once the damage has landed.
     private float healthAfter(double damage) {
-        return (float) ((EntityUtil.totalHealth(mc.player) - damage) / 2);
+        return (float) ((EntityUtil.totalHealth(mc.player) - damage) / EntityUtil.HEART);
     }
 
     // The worst a crystal around could do with the player's box moved by the offset.
@@ -222,10 +221,12 @@ public final class Step extends Module {
     @Subscribe
     private void onVehicleTick(VehicleTickEvent event) {
         Entity vehicle = event.getVehicle();
+        boolean walkedOff = vehicleWasOnGround && !vehicle.onGround();
+        vehicleWasOnGround = vehicle.onGround();
         if (!stepDown.isOn() || !downVehicles.isOn() || !inGame()
-            || !vehicle.isLocalInstanceAuthoritative() || !vehicle.onGround()
+            || !vehicle.isLocalInstanceAuthoritative() || !walkedOff || vehicle.getDeltaMovement().y > 0
             || vehicle.isInWater() || vehicle.isInLava() || vehicle.noPhysics
-            || mc.options.keyJump.isDown() || !dropAhead(vehicle)) {
+            || mc.options.keyJump.isDown() || !groundWithinReach(vehicle)) {
             return;
         }
         Vec3 velocity = vehicle.getDeltaMovement();
@@ -233,7 +234,7 @@ public final class Step extends Module {
     }
 
     // The lift leaves its upward speed behind once the swimmer is out of the water.
-    // Kept it would carry them on up like a high jump.
+    // Left alone it would carry them on up like a high jump.
     @Subscribe
     private void onPostMotion(PostMotionEvent event) {
         if (!lifted || !inGame()) {
@@ -316,12 +317,14 @@ public final class Step extends Module {
     }
 
     private void snapDown() {
-        if (!mc.player.onGround() || mc.player.isInWater() || mc.player.isInLava()
-            || mc.player.noPhysics || mc.options.keyJump.isDown()
+        boolean walkedOff = wasOnGround && !mc.player.onGround();
+        wasOnGround = mc.player.onGround();
+        if (!walkedOff || mc.player.getDeltaMovement().y > 0 || mc.player.isInWater()
+            || mc.player.isInLava() || mc.player.noPhysics || mc.options.keyJump.isDown()
             || mc.player.isShiftKeyDown()) {
             return;
         }
-        if (MovementUtil.inputDirection().lengthSqr() == 0) {
+        if (!MovementUtil.hasInput()) {
             return;
         }
         if (edgeGuardWins.isOn()) {
@@ -336,16 +339,16 @@ public final class Step extends Module {
             || BlockUtil.state(feet.below()).getBlock() instanceof BedBlock) {
             return;
         }
-        if (!dropAhead(mc.player)) {
+        if (!groundWithinReach(mc.player)) {
             return;
         }
         Vec3 velocity = mc.player.getDeltaMovement();
         mc.player.setDeltaMovement(velocity.x, -downSpeed.getValue(), velocity.z);
     }
 
-    // True when ground sits within the down distance below the entity.
-    private boolean dropAhead(Entity entity) {
+    // True when ground sits within the down distance under an entity already off its ledge.
+    private boolean groundWithinReach(Entity entity) {
         double drop = downDistance.getValue() + 0.01;
-        return !mc.level.noCollision(entity, entity.getBoundingBox().move(0, -drop, 0));
+        return !mc.level.noCollision(entity, entity.getBoundingBox().expandTowards(0, -drop, 0));
     }
 }

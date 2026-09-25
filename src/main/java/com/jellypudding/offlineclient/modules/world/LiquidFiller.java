@@ -3,13 +3,13 @@ package com.jellypudding.offlineclient.modules.world;
 import com.jellypudding.offlineclient.module.AreaPlacer;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
+import com.jellypudding.offlineclient.setting.ListMode;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import net.minecraft.core.BlockPos;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.material.FluidState;
-import net.minecraft.world.phys.shapes.CollisionContext;
 
 import java.util.Comparator;
 import java.util.List;
@@ -19,8 +19,6 @@ public final class LiquidFiller extends AreaPlacer {
     private static final int TARGET_COLOR = 0xFF60D0FF;
 
     public enum Shape { SPHERE, UNIFORM_CUBE }
-
-    public enum ListMode { WHITELIST, BLACKLIST }
 
     public enum Order { CLOSEST, FURTHEST, TOP_DOWN, BOTTOM_UP }
 
@@ -34,10 +32,8 @@ public final class LiquidFiller extends AreaPlacer {
         "The region searched for liquid.", Shape.SPHERE)
         .describe(Shape.SPHERE, "A ball of the given radius around you.")
         .describe(Shape.UNIFORM_CUBE, "A cube of the rounded down range on every side.");
-    private final EnumSetting<ListMode> listMode = new EnumSetting<>("List mode",
-        "What the block list means.", ListMode.WHITELIST)
-        .describe(ListMode.WHITELIST, "Only the listed blocks are used as filler.")
-        .describe(ListMode.BLACKLIST, "Any block but the listed ones is used as filler.");
+    private final EnumSetting<ListMode> listMode = ListMode.setting("List mode", ListMode.WHITELIST,
+        "Only the listed blocks are used as filler.", "Any block but the listed ones is used as filler.");
     private final EnumSetting<Order> order = new EnumSetting<>("Order",
         "Which block gets filled first.", Order.CLOSEST)
         .describe(Order.CLOSEST, "The nearest liquid first.")
@@ -62,7 +58,7 @@ public final class LiquidFiller extends AreaPlacer {
             if (!isWanted(pos) || BlockUtil.intersectsPlayer(pos)) {
                 continue;
             }
-            if (!mc.level.isUnobstructed(Blocks.STONE.defaultBlockState(), pos, CollisionContext.empty())) {
+            if (!BlockUtil.unobstructed(pos)) {
                 continue;
             }
             if (!inReach(pos)) {
@@ -78,9 +74,7 @@ public final class LiquidFiller extends AreaPlacer {
         if (shape.is(Shape.SPHERE)) {
             return BlockUtil.positionsWithin(range.getValue());
         }
-        int r = (int) Math.floor(range.getValue());
-        BlockPos centre = mc.player.blockPosition();
-        return BlockPos.betweenClosed(centre.offset(-r, -r, -r), centre.offset(r, r, r));
+        return BlockUtil.positionsAround(mc.player.blockPosition(), (int) Math.floor(range.getValue()));
     }
 
     // A cube is measured by the largest step on any axis from the block you stand in.
@@ -97,7 +91,7 @@ public final class LiquidFiller extends AreaPlacer {
 
     @Override
     protected boolean allowed(Block block) {
-        return blocks.contains(block) == listMode.is(ListMode.WHITELIST);
+        return listMode.getValue().admits(blocks.contains(block));
     }
 
     @Override

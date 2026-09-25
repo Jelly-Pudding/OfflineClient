@@ -149,14 +149,8 @@ public final class RecoveryScreen extends Screen {
                 hoveringArmed ? GuiTheme.RED_TEXT : GuiTheme.textDim());
         }
 
-        boolean overBack = overBack(mouseX, mouseY);
-        RenderUtil.roundedBorderedRect(context, backX(), backY(), backX() + BACK_WIDTH,
-            backY() + BACK_HEIGHT, GuiTheme.CORNER,
-            overBack ? GuiTheme.bgRowHover() : GuiTheme.bgPanel(),
-            overBack ? GuiTheme.accent() : GuiTheme.edge());
-        context.guiRenderState.up();
-        context.centeredText(font, "back", width / 2, GuiTheme.textY(backY(), BACK_HEIGHT),
-            overBack ? GuiTheme.accentText() : GuiTheme.text());
+        GuiTheme.button(context, font, backX(), backY(), BACK_WIDTH, BACK_HEIGHT, "back",
+            overBack(mouseX, mouseY), true);
     }
 
     // The message a finished action leaves on its own button. The tick leads it

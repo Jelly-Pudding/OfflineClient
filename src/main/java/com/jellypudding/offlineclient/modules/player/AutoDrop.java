@@ -20,10 +20,6 @@ import java.util.List;
 
 public final class AutoDrop extends Module {
 
-    // Where the main grid and the hotbar start in network slot order.
-    private static final int MAIN_START = 9;
-    private static final int HOTBAR_START = 36;
-
     private final RegistryListSetting<Item> items = new RegistryListSetting<>("Items",
         "The items to throw away. Click to pick them.", BuiltInRegistries.ITEM, ItemUtil.JUNK);
     private final BoolSetting hotbar = new BoolSetting("Hotbar too",
@@ -72,7 +68,7 @@ public final class AutoDrop extends Module {
         if (!inGame() || mc.player.isSpectator()) {
             return;
         }
-        if (!InventoryUtil.canClick() || !InventoryUtil.carried().isEmpty()) {
+        if (!InventoryUtil.cursorFree()) {
             return;
         }
         if (timer > 0) {
@@ -99,15 +95,14 @@ public final class AutoDrop extends Module {
         }
     }
 
-    // Network slots nine to thirty five are the main grid and the rest are named.
     private boolean scans(int netSlot) {
-        if (netSlot >= MAIN_START && netSlot < HOTBAR_START) {
+        if (netSlot >= InventoryUtil.MAIN_START && netSlot < InventoryUtil.HOTBAR_START) {
             return true;
         }
-        if (netSlot >= HOTBAR_START && netSlot < InventoryUtil.OFFHAND_SLOT) {
+        if (netSlot >= InventoryUtil.HOTBAR_START && netSlot < InventoryUtil.OFFHAND_SLOT) {
             return hotbar.isOn();
         }
-        boolean armour = netSlot >= InventoryUtil.ARMOR_START && netSlot < MAIN_START;
+        boolean armour = netSlot >= InventoryUtil.ARMOR_START && netSlot < InventoryUtil.MAIN_START;
         return worn.isOn() && (armour || netSlot == InventoryUtil.OFFHAND_SLOT);
     }
 }

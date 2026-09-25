@@ -10,6 +10,7 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.InventoryUtil;
+import com.jellypudding.offlineclient.util.ItemUtil;
 import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.item.Item;
@@ -182,9 +183,7 @@ public final class AutoReplenish extends Module {
         if (source == -1) {
             return false;
         }
-        // Only the held slot and the offhand may take from the hotbar.
-        if (source < InventoryUtil.HOTBAR_SIZE && index < InventoryUtil.HOTBAR_SIZE
-            && index != InventoryUtil.selectedSlot()) {
+        if (hotbarLocked(source, index)) {
             return false;
         }
 
@@ -203,8 +202,7 @@ public final class AutoReplenish extends Module {
             if (source == -1 || source == index) {
                 continue;
             }
-            if (source < InventoryUtil.HOTBAR_SIZE && index < InventoryUtil.HOTBAR_SIZE
-                && index != InventoryUtil.selectedSlot()) {
+            if (hotbarLocked(source, index)) {
                 continue;
             }
             return move(source, index);
@@ -226,10 +224,15 @@ public final class AutoReplenish extends Module {
         return false;
     }
 
+    // Only the held slot and the offhand may take from the hotbar.
+    private static boolean hotbarLocked(int source, int index) {
+        return source < InventoryUtil.HOTBAR_SIZE && index < InventoryUtil.HOTBAR_SIZE
+            && index != InventoryUtil.selectedSlot();
+    }
+
     private boolean tooWorn(ItemStack stack) {
         int limit = repairAt.getInt();
-        return limit > 0 && !stack.isEmpty() && stack.isDamageableItem()
-            && stack.getMaxDamage() - stack.getDamageValue() <= limit;
+        return limit > 0 && ItemUtil.nearlyBroken(stack, limit);
     }
 
     private boolean move(int source, int index) {
@@ -245,9 +248,9 @@ public final class AutoReplenish extends Module {
                            boolean matchEnchants) {
         int best = -1;
         int bestCount = 0;
-        int lowest = fromHotbar.isOn() ? 0 : 9;
+        int lowest = fromHotbar.isOn() ? 0 : InventoryUtil.MAIN_START;
         int selected = InventoryUtil.selectedSlot();
-        for (int i = 35; i >= lowest; i--) {
+        for (int i = InventoryUtil.WHOLE_INVENTORY - 1; i >= lowest; i--) {
             if (i == excludedIndex || i == selected) {
                 continue;
             }

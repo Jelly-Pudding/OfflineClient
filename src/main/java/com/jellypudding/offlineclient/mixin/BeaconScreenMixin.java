@@ -26,9 +26,13 @@ import java.util.List;
 @Mixin(BeaconScreen.class)
 public abstract class BeaconScreenMixin extends AbstractContainerScreen<BeaconMenu> {
 
+    @Unique
     private static final int BUTTON_SIZE = 24;
+    @Unique
     private static final int COLUMNS = 3;
+    @Unique
     private static final int PRIMARY_TIER = 0;
+    @Unique
     private static final int SECONDARY_TIER = 3;
 
     private BeaconScreenMixin(BeaconMenu menu, Inventory inventory, Component title) {

@@ -15,6 +15,7 @@ import org.spongepowered.asm.mixin.injection.At;
 @Mixin(BundleMouseActions.class)
 public abstract class BundleMouseActionsMixin {
 
+    @Unique
     private static final String SHOWN =
         "Lnet/minecraft/world/item/BundleItem;getNumberOfItemsToShow(Lnet/minecraft/world/item/ItemStack;)I";
 

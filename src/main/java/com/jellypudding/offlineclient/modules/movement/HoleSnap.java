@@ -11,7 +11,6 @@ import com.jellypudding.offlineclient.util.BlockUtil;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.util.Mth;
-import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
 // Stops you dead over a hole and drops you in. Meant for getting into a hole under fire.
@@ -27,6 +26,8 @@ public final class HoleSnap extends Module {
         "Which holes count.", Holes.BLAST_PROOF)
         .describe(Holes.BLAST_PROOF, "Only holes walled with obsidian or bedrock. The ones a crystal cannot open.")
         .describe(Holes.ANY, "Any one block hole with solid walls and a floor.");
+    private final NumberSetting minHeight = new NumberSetting("Min height",
+        "How far below you a hole has to be. One takes a hole you walk over.", 1, 1, 20, 1, " blocks");
     private final NumberSetting maxHeight = new NumberSetting("Max height",
         "How far below you a hole is still snapped to.", 10, 1, 20, 1, " blocks");
     private final NumberSetting minPitch = new NumberSetting("Min pitch",
@@ -34,7 +35,7 @@ public final class HoleSnap extends Module {
     private final BoolSetting pull = new BoolSetting("Pull down",
         "Also pulls you down into the hole.", false);
     private final NumberSetting pullSpeed = new NumberSetting("Pull speed",
-        "Blocks a tick the pull adds.", 0.3, 0.1, 5, 0.1, " blocks")
+        "How much downward speed the pull adds each tick.", 0.3, 0.1, 5, 0.1, " blocks")
         .under(pull);
     private final BoolSetting cancelJump = new BoolSetting("Cancel jump",
         "Jumping is ignored whilst a hole is under you.", false);
@@ -45,7 +46,7 @@ public final class HoleSnap extends Module {
     public HoleSnap() {
         super("HoleSnap", "Stops your movement over a hole and drops you straight in.",
             Category.MOVEMENT);
-        addSettings(holes, maxHeight, minPitch, pull, pullSpeed, cancelJump);
+        addSettings(holes, minHeight, maxHeight, minPitch, pull, pullSpeed, cancelJump);
         searchTags("anchor", "hole", "crystal pvp");
     }
 
@@ -106,12 +107,12 @@ public final class HoleSnap extends Module {
     // The first hole straight down through open air or null.
     private BlockPos holeBelow(BlockPos feet) {
         BlockPos pos = feet;
-        for (int i = 0; i < maxHeight.getInt(); i++) {
+        for (int depth = 1; depth <= maxHeight.getInt(); depth++) {
             pos = pos.below();
             if (pos.getY() <= mc.level.getMinY() || BlockUtil.blocksMotion(BlockUtil.state(pos))) {
                 return null;
             }
-            if (isHole(pos)) {
+            if (depth >= minHeight.getInt() && isHole(pos)) {
                 return pos;
             }
         }
@@ -131,10 +132,7 @@ public final class HoleSnap extends Module {
     }
 
     private boolean wall(BlockPos pos) {
-        BlockState state = BlockUtil.state(pos);
-        if (holes.is(Holes.ANY)) {
-            return BlockUtil.blocksMotion(state);
-        }
-        return state.getBlock().getExplosionResistance() >= BlockUtil.BLAST_PROOF;
+        BlockUtil.Wall wall = BlockUtil.wallOf(BlockUtil.state(pos));
+        return holes.is(Holes.ANY) ? wall != BlockUtil.Wall.OPEN : wall.holds();
     }
 }

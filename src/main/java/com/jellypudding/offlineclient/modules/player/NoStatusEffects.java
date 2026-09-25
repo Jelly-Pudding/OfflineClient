@@ -56,7 +56,7 @@ public final class NoStatusEffects extends Module {
     @Override
     public String getSuffix() {
         int count = blocked.get();
-        return count == 0 ? null : count + " blocked";
+        return count(count, "blocked");
     }
 
     @Override

@@ -37,8 +37,8 @@ public final class Sprint extends Module {
         "Stops sprinting in water.", true).under(mode, Mode.RAGE);
     private final BoolSetting whilstUsing = new BoolSetting("Whilst using items",
         "Keeps your sprint and speed whilst you eat or drink or block.", false);
-    private final BoolSetting keepSprint = new BoolSetting("Keep sprint",
-        "Keeps your sprint and speed after you hit something.", false);
+    private final BoolSetting sprintThroughHits = new BoolSetting("Sprint through hits",
+        "Hitting something no longer stops your sprint or slows you down.", false);
     private final BoolSetting stopOnHit = new BoolSetting("Stop on hit",
         "Drops the sprint for each hit to allow crits and sweeps.", false);
 
@@ -47,7 +47,7 @@ public final class Sprint extends Module {
     public Sprint() {
         super("Sprint", "Sprints for you whenever you move.", Category.MOVEMENT);
         addSettings(mode, anyDirection, whilstHungry, whilstStill, stopInWater, whilstUsing,
-            keepSprint, stopOnHit);
+            sprintThroughHits, stopOnHit);
         searchTags("auto sprint", "omnidirectional");
     }
 
@@ -91,7 +91,7 @@ public final class Sprint extends Module {
 
     // Read by PlayerMixin. True whilst a landed hit must not halve the speed.
     public boolean keepsSprintOnHit() {
-        return isEnabled() && keepSprint.isOn();
+        return isEnabled() && sprintThroughHits.isOn();
     }
 
     // Read by LivingEntityMixin. The sprint jump push follows the keys rather than the camera.

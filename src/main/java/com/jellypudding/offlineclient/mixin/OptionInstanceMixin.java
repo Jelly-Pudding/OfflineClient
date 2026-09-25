@@ -21,6 +21,7 @@ public class OptionInstanceMixin<T> implements ISimpleOption<T> {
 
     @Override
     public void offlineclient$forceSetValue(T newValue) {
+        // The options file loads before the game runs and nothing listens yet.
         if (!Minecraft.getInstance().isRunning()) {
             value = newValue;
             return;

@@ -77,10 +77,10 @@ public final class HudManager {
         return Math.clamp((edge + align(middle) * size) / room, 0, 1);
     }
 
-    public void render(GuiGraphicsExtractor context, Font font, boolean editing) {
+    public void render(GuiGraphicsExtractor context, Font font) {
         int screenWidth = context.guiWidth();
         int screenHeight = context.guiHeight();
-        for (Placement placement : layout(font, screenWidth, screenHeight, editing)) {
+        for (Placement placement : layout(font, screenWidth, screenHeight, false)) {
             draw(context, font, placement);
         }
     }

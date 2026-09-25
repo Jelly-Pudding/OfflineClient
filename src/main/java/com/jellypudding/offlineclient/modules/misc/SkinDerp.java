@@ -7,6 +7,8 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import net.minecraft.world.entity.player.PlayerModelPart;
 
+import java.util.EnumSet;
+import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 
 // Flicks the skin layers on and off. Vanilla only tells the server about the
@@ -16,6 +18,9 @@ public final class SkinDerp extends Module {
     private final NumberSetting chance = new NumberSetting("Chance",
         "How likely each tick is to flip the layers.", 25, 1, 100, 1, "%").min(1).max(100);
 
+    // The layers you had on before the blinking started. Options save them to disk.
+    private final Set<PlayerModelPart> shown = EnumSet.noneOf(PlayerModelPart.class);
+
     public SkinDerp() {
         super("SkinDerp", "Makes your skin layers blink on and off for everyone to see.",
             Category.MISC);
@@ -24,9 +29,19 @@ public final class SkinDerp extends Module {
     }
 
     @Override
+    protected void onEnable() {
+        shown.clear();
+        for (PlayerModelPart part : PlayerModelPart.values()) {
+            if (mc.options.isModelPartEnabled(part)) {
+                shown.add(part);
+            }
+        }
+    }
+
+    @Override
     protected void onDisable() {
         for (PlayerModelPart part : PlayerModelPart.values()) {
-            mc.options.setModelPart(part, true);
+            mc.options.setModelPart(part, shown.contains(part));
         }
         mc.options.broadcastOptions();
     }

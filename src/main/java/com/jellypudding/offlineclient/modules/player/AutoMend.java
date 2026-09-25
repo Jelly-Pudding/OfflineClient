@@ -246,7 +246,7 @@ public final class AutoMend extends Module {
     }
 
     private static int percentLeft(ItemStack stack) {
-        return (int) (100 - stack.getDamageValue() * 100.0 / stack.getMaxDamage());
+        return (int) ItemUtil.durabilityPercent(stack);
     }
 
     // The tool stays in the slot the bottle swap came from.

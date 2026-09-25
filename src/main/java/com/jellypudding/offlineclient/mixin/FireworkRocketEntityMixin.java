@@ -3,8 +3,6 @@ package com.jellypudding.offlineclient.mixin;
 import com.jellypudding.offlineclient.modules.movement.ElytraBoost;
 import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.world.entity.projectile.FireworkRocketEntity;
-import net.minecraft.world.phys.BlockHitResult;
-import net.minecraft.world.phys.EntityHitResult;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
@@ -32,13 +30,13 @@ public abstract class FireworkRocketEntityMixin {
 
     @Inject(method = "onHitEntity(Lnet/minecraft/world/phys/EntityHitResult;)V",
         at = @At("HEAD"), cancellable = true)
-    private void onHitEntity(EntityHitResult hit, CallbackInfo ci) {
+    private void onHitEntity(CallbackInfo ci) {
         offlineclient$discardFake(ci);
     }
 
     @Inject(method = "onHitBlock(Lnet/minecraft/world/phys/BlockHitResult;)V",
         at = @At("HEAD"), cancellable = true)
-    private void onHitBlock(BlockHitResult hit, CallbackInfo ci) {
+    private void onHitBlock(CallbackInfo ci) {
         offlineclient$discardFake(ci);
     }
 

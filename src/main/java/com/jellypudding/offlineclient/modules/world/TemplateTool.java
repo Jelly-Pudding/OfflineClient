@@ -10,14 +10,12 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.TextSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.CornerPicker;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
-import net.minecraft.world.phys.HitResult;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -26,14 +24,15 @@ import java.util.List;
 // becomes the front of the template.
 public final class TemplateTool extends Module {
 
+    private static final String DEFAULT_NAME = "My build";
+
     private final TextSetting name = new TextSetting("Name",
-        "The file the template is saved as. Click to type it.", "My build");
+        "The file the template is saved as. Click to type it.", DEFAULT_NAME);
     private final BoolSetting saveBlocks = new BoolSetting("Save block types",
         "Remembers which block sits where. Off saves the shape alone.", true);
     private final BoxStyle boxStyle = new BoxStyle(BoxStyle.Shape.LINES, 200);
 
-    private BlockPos first;
-    private BlockPos second;
+    private final CornerPicker corners = new CornerPicker();
 
     public TemplateTool() {
         super("TemplateTool", "Saves a build as a shape AutoBuild can put up again.", Category.WORLD);
@@ -49,16 +48,13 @@ public final class TemplateTool extends Module {
 
     @Override
     public String getSuffix() {
-        if (first == null) {
-            return "pick a corner";
-        }
-        return second == null ? "pick the other corner" : "pick the origin";
+        String prompt = corners.prompt();
+        return prompt != null ? prompt : "pick the origin";
     }
 
     @Override
     protected void onEnable() {
-        first = null;
-        second = null;
+        corners.clear();
     }
 
     // Each press marks the next spot. A press on nothing switches the tool off.
@@ -68,20 +64,22 @@ public final class TemplateTool extends Module {
             toggle();
             return;
         }
-        if (!(mc.hitResult instanceof BlockHitResult hit) || hit.getType() != HitResult.Type.BLOCK) {
+        BlockHitResult hit = BlockUtil.aimedBlock();
+        if (hit == null) {
             toggle();
             return;
         }
         BlockPos pos = hit.getBlockPos().immutable();
-        if (first == null) {
-            first = pos;
-            ChatUtil.message("§bTemplateTool §7first corner at §f" + BlockUtil.text(pos) + "§7.");
-        } else if (second == null) {
-            second = pos;
+        if (corners.done()) {
+            save(pos);
+            return;
+        }
+        corners.mark(pos);
+        if (corners.done()) {
             ChatUtil.message("§bTemplateTool §7second corner at §f" + BlockUtil.text(pos)
                 + "§7. Now press the bind on the block the build grows from.");
         } else {
-            save(pos);
+            ChatUtil.message("§bTemplateTool §7first corner at §f" + BlockUtil.text(pos) + "§7.");
         }
     }
 
@@ -89,7 +87,7 @@ public final class TemplateTool extends Module {
         Direction front = mc.player.getDirection();
         Direction left = front.getCounterClockWise();
         List<BuildTemplate.Entry> entries = new ArrayList<>();
-        for (BlockPos pos : BlockPos.betweenClosed(first, second)) {
+        for (BlockPos pos : BlockPos.betweenClosed(corners.first(), corners.second())) {
             BlockState state = BlockUtil.state(pos);
             if (state.isAir() || !state.getFluidState().isEmpty()) {
                 continue;
@@ -101,16 +99,13 @@ public final class TemplateTool extends Module {
                 saveBlocks.isOn() ? state.getBlock() : null));
         }
         if (entries.isEmpty()) {
-            ChatUtil.error("There are no blocks between the corners.");
-            setEnabled(false);
+            disable("There are no blocks between the corners.");
             return;
         }
-        try {
-            BuildTemplate.save(name.getValue().trim().isEmpty() ? "My build" : name.getValue().trim(),
-                entries);
-            ChatUtil.message("§bTemplateTool §7saved §f" + entries.size() + "§7 blocks as §f"
-                + name.getValue().trim() + "§7.");
-        } catch (IOException error) {
+        String file = name.getValue().isBlank() ? DEFAULT_NAME : name.getValue().trim();
+        if (BuildTemplate.save(file, entries)) {
+            ChatUtil.message("§bTemplateTool §7saved §f" + entries.size() + "§7 blocks as §f" + file + "§7.");
+        } else {
             ChatUtil.error("Could not write the template file.");
         }
         setEnabled(false);
@@ -118,11 +113,8 @@ public final class TemplateTool extends Module {
 
     @Subscribe
     private void onRender3D(Render3DEvent event) {
-        if (first == null) {
-            return;
+        if (corners.started()) {
+            boxStyle.draw(event.getBatch(), corners.box().inflate(0.005), true);
         }
-        AABB box = second == null ? new AABB(first)
-            : AABB.encapsulatingFullBlocks(first, second);
-        boxStyle.draw(event.getBatch(), box.inflate(0.005), true);
     }
 }

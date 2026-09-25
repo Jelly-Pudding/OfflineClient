@@ -14,11 +14,11 @@ import com.jellypudding.offlineclient.setting.ChoiceListSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
-import com.jellypudding.offlineclient.util.BlockMiner;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.FaceMode;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
+import com.jellypudding.offlineclient.util.PacketBreaker;
 import com.jellypudding.offlineclient.util.RotationPriority;
 import com.jellypudding.offlineclient.util.SwingMode;
 import net.minecraft.core.BlockPos;
@@ -174,12 +174,6 @@ public final class AutoFarm extends Module {
     private static final List<String> PLANTS_ON = PLANT_NAMES.stream()
         .filter(name -> !name.endsWith("vines")).toList();
 
-    // Ticks before the same block is sent again.
-    private static final int RETRY_TICKS = 10;
-
-    // Ticks a slower block gets on top of its break time before it is given up on.
-    private static final int SLOW_GRACE_TICKS = 20;
-
     // Ticks a cut spot waits for its seed.
     private static final int PLANT_TICKS = 60;
 
@@ -225,7 +219,7 @@ public final class AutoFarm extends Module {
         "Colour of the spots waiting for a seed.", 0, 0.79f, 0.88f, false)
         .under(drawReplant);
 
-    private final Map<BlockPos, Integer> attempted = new HashMap<>();
+    private final PacketBreaker breaker = new PacketBreaker();
     private final Map<BlockPos, Plant> spots = new HashMap<>();
     private final Map<BlockPos, Integer> spotExpiry = new HashMap<>();
 
@@ -233,10 +227,7 @@ public final class AutoFarm extends Module {
     private List<BlockPos> shownReplant = List.of();
     private BlockPos mining;
 
-    private BlockPos slowPending;
-    private int slowDeadline;
     private int lastUse;
-    private int lastTick;
 
     private final InventoryUtil.HotbarLoan loan = new InventoryUtil.HotbarLoan();
 
@@ -271,15 +262,13 @@ public final class AutoFarm extends Module {
     }
 
     private void reset() {
-        attempted.clear();
+        breaker.reset();
         spots.clear();
         spotExpiry.clear();
         shownHarvest = List.of();
         shownReplant = List.of();
         mining = null;
-        slowPending = null;
         lastUse = 0;
-        lastTick = 0;
     }
 
     @Subscribe
@@ -295,13 +284,10 @@ public final class AutoFarm extends Module {
             return;
         }
 
-        int now = mc.player.tickCount;
-        // The tick count restarts on a respawn.
-        if (now < lastTick) {
+        if (breaker.tick(this::readyToMine)) {
             reset();
         }
-        lastTick = now;
-        attempted.values().removeIf(expiry -> expiry <= now);
+        int now = mc.player.tickCount;
         spotExpiry.entrySet().removeIf(entry -> {
             boolean gone = entry.getValue() <= now;
             if (gone) {
@@ -309,9 +295,6 @@ public final class AutoFarm extends Module {
             }
             return gone;
         });
-        if (slowPending != null && (now >= slowDeadline || !readyToMine(slowPending))) {
-            slowPending = null;
-        }
 
         List<BlockPos> scan = BlockUtil.positionsWithin(range.getValue());
         for (BlockPos pos : scan) {
@@ -334,7 +317,7 @@ public final class AutoFarm extends Module {
             acted = pickByHand(toInteract, now);
         }
         if (!acted && harvest.isOn()) {
-            mineTick(toMine, now);
+            mineTick(toMine);
         } else {
             mining = null;
         }
@@ -376,7 +359,7 @@ public final class AutoFarm extends Module {
 
     // Creative with no turning can spam every crop at once. Anything else goes
     // block by block because only one angle rides the packet each tick.
-    private void mineTick(List<BlockPos> toMine, int now) {
+    private void mineTick(List<BlockPos> toMine) {
         boolean spam = mc.player.getAbilities().instabuild && faceTarget.is(FaceMode.OFF);
         int limit = spam ? toMine.size() : perTick.getInt();
         int sent = 0;
@@ -385,11 +368,7 @@ public final class AutoFarm extends Module {
             if (sent >= limit) {
                 break;
             }
-            if (attempted.containsKey(pos)) {
-                continue;
-            }
-            boolean instant = BlockUtil.canInstantBreak(pos);
-            if (!instant && slowPending != null) {
+            if (!breaker.canSend(pos)) {
                 continue;
             }
             if (sent == 0) {
@@ -397,14 +376,7 @@ public final class AutoFarm extends Module {
                 faceTarget.getValue().face(BlockUtil.hitPoint(pos, BlockUtil.facingSide(pos)),
                     RotationPriority.MINE);
             }
-            BlockMiner.breakInstantly(pos);
-            if (instant) {
-                attempted.put(pos, now + RETRY_TICKS);
-            } else {
-                slowPending = pos;
-                slowDeadline = now + BlockUtil.breakTicks(pos) + SLOW_GRACE_TICKS;
-                attempted.put(pos, slowDeadline);
-            }
+            breaker.send(pos);
             sent++;
         }
         if (sent > 0) {

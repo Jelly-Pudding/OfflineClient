@@ -11,7 +11,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 // The instance carries no sign of which world clock it belongs to. The
-// overworld one is noted here and answered in ClientClockInstanceMixin.
+// overworld one is recorded here and answered in ClientClockInstanceMixin.
 @Mixin(ClientClockManager.class)
 public abstract class ClientClockManagerMixin {
 

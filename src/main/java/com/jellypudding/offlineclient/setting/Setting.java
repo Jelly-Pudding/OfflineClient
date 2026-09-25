@@ -3,6 +3,7 @@ package com.jellypudding.offlineclient.setting;
 import com.google.gson.JsonElement;
 
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Set;
 import java.util.function.Supplier;
 
@@ -30,6 +31,15 @@ public abstract class Setting<T> {
 
     public String getName() {
         return name;
+    }
+
+    // How commands type a name. Lower case with the spaces taken out.
+    public static String idFor(String name) {
+        return name.replace(" ", "").toLowerCase(Locale.ROOT);
+    }
+
+    public String id() {
+        return idFor(name);
     }
 
     public String getDescription() {
@@ -119,15 +129,6 @@ public abstract class Setting<T> {
     // Only a fold that differs from the default is worth saving.
     public boolean foldChanged() {
         return folded != foldedByDefault;
-    }
-
-    // How many settings this one sits beneath.
-    public int depth() {
-        int depth = 0;
-        for (Setting<?> above = parent; above != null; above = above.parent) {
-            depth++;
-        }
-        return depth;
     }
 
     public abstract JsonElement toJson();

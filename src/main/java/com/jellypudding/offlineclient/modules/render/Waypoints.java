@@ -16,6 +16,7 @@ import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.RenderUtil;
+import com.jellypudding.offlineclient.util.ServerInfo;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.player.LocalPlayer;
@@ -137,7 +138,7 @@ public final class Waypoints extends Module {
         BlockPos at = BlockPos.containing(position);
         String name = DEATH_PREFIX + LocalTime.now().format(DEATH_TIME);
         WaypointStore.get().add(new WaypointStore.Waypoint(name, at.getX(), at.getY(), at.getZ(),
-            WaypointStore.currentDimension(), WaypointStore.currentServer(), DEATH_HUE));
+            WaypointStore.currentDimension(), ServerInfo.key(), DEATH_HUE));
         dropOldDeaths();
         if (deathChat.isOn()) {
             ChatUtil.message("§cYou died at §f" + BlockUtil.text(at) + "§c.");

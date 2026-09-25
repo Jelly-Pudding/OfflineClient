@@ -55,7 +55,7 @@ public final class BetterChat extends Module {
     // A run of blank lines is what a server sends to push chat off the screen.
     private static final Pattern BLANK_RUN = Pattern.compile("\\n(\\n|\\s)+\\n");
 
-    // Our own clock stamp on the front of a stored line.
+    // Our own clock stamp on the front of a stored line. Some servers add the same.
     private static final Pattern STAMP = Pattern.compile("^\\[\\d{2}:\\d{2}(?::\\d{2})?] ");
 
     // The usual server layout for a chat line.
@@ -134,6 +134,11 @@ public final class BetterChat extends Module {
     // The chat line being drawn. Set by the line consumer just before the text goes out.
     private GuiMessage.Line drawing;
     private boolean topOfEntry;
+
+    // A stored line with any clock stamp taken off its front.
+    public static String withoutStamp(String line) {
+        return STAMP.matcher(line).replaceFirst("");
+    }
 
     public BetterChat() {
         super("BetterChat", "Small improvements to the chat box.", Category.MISC);
@@ -237,8 +242,6 @@ public final class BetterChat extends Module {
         return isEnabled() ? indent.getFloat() : vanilla;
     }
 
-    // Player heads.
-
     private boolean drawsHeads() {
         return isEnabled() && playerHeads.isOn();
     }
@@ -296,7 +299,7 @@ public final class BetterChat extends Module {
         if (mc.getConnection() == null) {
             return null;
         }
-        String text = STAMP.matcher(message.content().getString()).replaceFirst("").trim();
+        String text = withoutStamp(message.content().getString()).trim();
         Matcher matcher = SENDER.matcher(text);
         if (matcher.find()) {
             PlayerInfo info = mc.getConnection().getPlayerInfoIgnoreCase(matcher.group(1));
@@ -313,8 +316,6 @@ public final class BetterChat extends Module {
         }
         return first == null ? null : first.getSkin();
     }
-
-    // Sending.
 
     // The text to send in place of what was typed. Commands are left alone.
     public String rewrite(String message) {
@@ -371,7 +372,7 @@ public final class BetterChat extends Module {
         if (message.startsWith("/") || !COORDINATES.matcher(message).find()) {
             return;
         }
-        // The same text sent twice goes through. That is the second look asked for.
+        // Sending the same text again confirms it and lets it through.
         if (message.equals(heldBack)) {
             heldBack = null;
             return;

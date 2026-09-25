@@ -1,10 +1,10 @@
 package com.jellypudding.offlineclient.mixin;
 
 import com.jellypudding.offlineclient.modules.render.XRay;
+import com.jellypudding.offlineclient.util.Modules;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.renderpearl.api.textures.GpuTexture;
 import net.minecraft.client.renderer.Lightmap;
-import net.minecraft.client.renderer.state.LightmapRenderState;
 import org.joml.Vector4f;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -25,8 +25,8 @@ public abstract class LightmapMixin {
         method = "render(Lnet/minecraft/client/renderer/state/LightmapRenderState;)V",
         at = @At("HEAD"),
         cancellable = true)
-    private void onRender(LightmapRenderState state, CallbackInfo ci) {
-        XRay xray = XRay.get();
+    private void onRender(CallbackInfo ci) {
+        XRay xray = Modules.get(XRay.class);
         if (xray == null || !xray.isEnabled()) {
             return;
         }

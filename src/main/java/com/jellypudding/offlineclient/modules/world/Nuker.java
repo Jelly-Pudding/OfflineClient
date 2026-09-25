@@ -8,6 +8,7 @@ import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.ExclusivityGroup;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.setting.ListMode;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.render.BoxStyle;
 import com.jellypudding.offlineclient.render.DrawBatch;
@@ -21,6 +22,7 @@ import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.ItemUtil;
+import com.jellypudding.offlineclient.util.PacketBreaker;
 import com.jellypudding.offlineclient.util.RotationPriority;
 import com.jellypudding.offlineclient.util.SwingMode;
 import com.mojang.blaze3d.platform.InputConstants;
@@ -32,7 +34,6 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
-import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
@@ -52,14 +53,9 @@ public final class Nuker extends Module {
 
     public enum Mode { ALL, SELECTED, LIST }
 
-    public enum ListMode { WHITELIST, BLACKLIST }
-
     public enum Speed { LEGIT, INSTANT }
 
     public enum Order { NEAREST, FURTHEST, FASTEST, TOP_DOWN }
-
-    private static final int RETRY_TICKS = 10;
-    private static final int SLOW_GRACE_TICKS = 20;
 
     private static final int MAX_HIGHLIGHTS = 64;
 
@@ -69,7 +65,7 @@ public final class Nuker extends Module {
     private final EnumSetting<Shape> shape = new EnumSetting<>("Shape",
         "The region searched for blocks.", Shape.SPHERE)
         .describe(Shape.SPHERE, "A ball of the given radius around you.")
-        .describe(Shape.UNIFORM_CUBE, "A cube of the rounded range on every side.")
+        .describe(Shape.UNIFORM_CUBE, "A cube of the rounded down range on every side.")
         .describe(Shape.CUBE, "A box with its own reach on each of the six sides.");
     private final NumberSetting range = new NumberSetting("Range",
         "How far from your eyes to break blocks.",
@@ -95,10 +91,8 @@ public final class Nuker extends Module {
             Blocks.CHEST, Blocks.TRAPPED_CHEST, Blocks.ENDER_CHEST,
             Blocks.BARREL, Blocks.SHULKER_BOX))
         .under(mode, Mode.LIST);
-    private final EnumSetting<ListMode> listMode = new EnumSetting<>("List mode",
-        "What the list means.", ListMode.BLACKLIST)
-        .describe(ListMode.WHITELIST, "The list is what gets broken.")
-        .describe(ListMode.BLACKLIST, "The list is what gets left alone.")
+    private final EnumSetting<ListMode> listMode = ListMode.setting("List mode", ListMode.BLACKLIST,
+        "The list is what gets broken.", "The list is what gets left alone.")
         .under(mode, Mode.LIST);
     private final KeybindSetting selectBind = new KeybindSetting("Select block bind",
         "Adds or removes the block under your crosshair from the list.", KeybindSetting.UNBOUND)
@@ -147,11 +141,8 @@ public final class Nuker extends Module {
 
     private Block selected;
     private BlockPos current;
-    private final Map<BlockPos, Integer> attempted = new HashMap<>();
+    private final PacketBreaker breaker = new PacketBreaker();
     private final Set<BlockPos> interacted = new HashSet<>();
-    private BlockPos slowPending;
-    private int slowDeadline;
-    private int lastTick;
     private BlockPos lastChosen;
     private int waitTicks;
 
@@ -215,19 +206,18 @@ public final class Nuker extends Module {
 
     private void reset() {
         current = null;
-        attempted.clear();
+        breaker.reset();
         interacted.clear();
         candidates.clear();
         sightCache.clear();
-        slowPending = null;
         lastChosen = null;
         waitTicks = 0;
-        lastTick = 0;
         region = null;
     }
 
     private void selectLookedAtBlock() {
-        if (mc.hitResult instanceof BlockHitResult hit && hit.getType() == HitResult.Type.BLOCK) {
+        BlockHitResult hit = BlockUtil.aimedBlock();
+        if (hit != null) {
             select(hit.getBlockPos());
         }
     }
@@ -265,7 +255,8 @@ public final class Nuker extends Module {
         if (!inGame() || !mode.is(Mode.LIST)) {
             return;
         }
-        if (!(mc.hitResult instanceof BlockHitResult hit) || hit.getType() != HitResult.Type.BLOCK) {
+        BlockHitResult hit = BlockUtil.aimedBlock();
+        if (hit == null) {
             return;
         }
         Block block = BlockUtil.state(hit.getBlockPos()).getBlock();
@@ -344,9 +335,9 @@ public final class Nuker extends Module {
         }
         BlockPos centre = mc.player.blockPosition();
         if (shape.is(Shape.UNIFORM_CUBE)) {
-            int r = Math.max(0, (int) Math.round(range.getValue()) - 1);
+            int r = (int) Math.floor(range.getValue());
             region = new AABB(centre.offset(-r, -r, -r)).minmax(new AABB(centre.offset(r, r, r)));
-            for (BlockPos pos : BlockPos.betweenClosed(centre.offset(-r, -r, -r), centre.offset(r, r, r))) {
+            for (BlockPos pos : BlockUtil.positionsAround(centre, r)) {
                 BlockPos fixed = pos.immutable();
                 if (wanted(fixed)) {
                     candidates.add(fixed);
@@ -405,20 +396,11 @@ public final class Nuker extends Module {
     // One hit blocks get their packets right away. A slower block is only queued
     // when the previous one is gone or its break time has run out.
     private void mineInstant() {
-        int now = mc.player.tickCount;
-        // The tick count restarts on a respawn.
-        if (now < lastTick) {
-            attempted.clear();
-            slowPending = null;
-        }
-        lastTick = now;
-        attempted.values().removeIf(expiry -> expiry <= now);
-        if (slowPending != null && (!candidates.contains(slowPending) || now >= slowDeadline)) {
-            slowPending = null;
-        }
+        breaker.tick(candidates::contains);
         if (autoTool.isOn()) {
             // The tool has to be in hand before anything is judged a one hit block.
-            holdTool(slowPending != null ? slowPending : candidates.getFirst());
+            BlockPos slow = breaker.slowBlock();
+            holdTool(slow != null ? slow : candidates.getFirst());
         }
 
         int sent = 0;
@@ -426,23 +408,14 @@ public final class Nuker extends Module {
             if (sent >= perTick.getInt()) {
                 break;
             }
-            if (attempted.containsKey(pos)) {
+            if (!breaker.canSend(pos)) {
                 continue;
             }
             if (rotate.isOn()) {
                 BlockUtil.faceVector(Vec3.atCenterOf(pos), RotationPriority.MINE);
             }
-            if (BlockUtil.canInstantBreak(pos)) {
-                BlockMiner.breakInstantly(pos);
-                attempted.put(pos, now + RETRY_TICKS);
-                sent++;
-            } else if (slowPending == null) {
-                BlockMiner.breakInstantly(pos);
-                slowPending = pos;
-                slowDeadline = now + BlockUtil.breakTicks(pos) + SLOW_GRACE_TICKS;
-                attempted.put(pos, slowDeadline);
-                sent++;
-            }
+            breaker.send(pos);
+            sent++;
         }
         if (sent > 0) {
             swing.getValue().swing();
@@ -456,12 +429,7 @@ public final class Nuker extends Module {
             slots.restoreIfMine();
             return;
         }
-        // A slot the player picked themselves is left alone.
-        if (slots.isHolding() && !slots.stillMine()) {
-            slots.forget();
-            return;
-        }
-        ItemUtil.selectBestTool(BlockUtil.state(pos), slots);
+        ItemUtil.holdBestTool(BlockUtil.state(pos), slots);
     }
 
     private boolean wanted(BlockPos pos) {
@@ -478,8 +446,7 @@ public final class Nuker extends Module {
         if (mode.is(Mode.SELECTED) && state.getBlock() != selected) {
             return false;
         }
-        if (mode.is(Mode.LIST)
-            && blocks.contains(state.getBlock()) != listMode.is(ListMode.WHITELIST)) {
+        if (mode.is(Mode.LIST) && !listMode.getValue().admits(blocks.contains(state.getBlock()))) {
             return false;
         }
         if (smash.isOn() && state.getDestroySpeed(mc.level, pos) != 0) {
@@ -538,7 +505,7 @@ public final class Nuker extends Module {
                 blockStyle.drawFading(event.getBatch(), DrawBatch.blockBox(candidate), strength, false);
             }
         }
-        BlockPos pos = speed.is(Speed.LEGIT) ? current : slowPending;
+        BlockPos pos = speed.is(Speed.LEGIT) ? current : breaker.slowBlock();
         if (pos == null || interact.isOn() || !inGame() || BlockUtil.state(pos).isAir()) {
             return;
         }

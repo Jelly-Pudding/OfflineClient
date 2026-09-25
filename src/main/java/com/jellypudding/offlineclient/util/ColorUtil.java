@@ -63,6 +63,15 @@ public final class ColorUtil {
     // Above this share it reads amber. Below it reads red.
     private static final float HURT = 0.3f;
 
+    // Hue nought is red and hue a hundred and twenty is green.
+    private static final float GREEN_HUE = 120;
+    private static final float RAMP_SATURATION = 0.85f;
+
+    // A smooth red to green ramp for a share from nought to one.
+    public static int redToGreen(float share) {
+        return hsv(Math.clamp(share, 0f, 1f) * GREEN_HUE, RAMP_SATURATION, 1f);
+    }
+
     // A green to amber to red ramp for a health fraction from 0 to 1.
     public static int health(float fraction) {
         if (fraction > HEALTHY) {

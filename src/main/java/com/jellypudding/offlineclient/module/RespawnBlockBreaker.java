@@ -27,7 +27,7 @@ public abstract class RespawnBlockBreaker extends Module {
     private final SlotSwap slots = new SlotSwap();
     private BlockPos current;
 
-    // addSettings is final and files the settings away without handing out the module.
+    // The escape is safe because addSettings is final and never hands the module out.
     @SuppressWarnings("this-escape")
     protected RespawnBlockBreaker(String name, String description, String noun) {
         super(name, description, Category.COMBAT);

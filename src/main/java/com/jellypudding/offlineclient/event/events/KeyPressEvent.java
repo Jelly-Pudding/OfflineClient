@@ -2,7 +2,7 @@ package com.jellypudding.offlineclient.event.events;
 
 import com.jellypudding.offlineclient.event.Event;
 
-// Key and action are raw GLFW values.
+// The key is a scancode and the action one of the InputConstants actions.
 public final class KeyPressEvent extends Event {
 
     private final int key;

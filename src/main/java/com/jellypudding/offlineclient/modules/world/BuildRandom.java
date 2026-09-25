@@ -11,6 +11,7 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.FaceMode;
+import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.RotationPriority;
 import com.jellypudding.offlineclient.util.SwingMode;
 import net.minecraft.core.BlockPos;
@@ -24,9 +25,6 @@ import java.util.concurrent.ThreadLocalRandom;
 // Scatters whatever you hold over the ground around you. Fire and lava and spawn
 // eggs work as well as blocks once the held item check is off.
 public final class BuildRandom extends Module {
-
-    // The vanilla wait between two placements.
-    private static final int PLACE_DELAY = 4;
 
     private final NumberSetting range = new NumberSetting("Range",
         "How far from your eyes a block may go.", 5, 1, 6, 0.05).min(1).max(6);
@@ -113,7 +111,7 @@ public final class BuildRandom extends Module {
             return false;
         }
         swing.getValue().swing(InteractionHand.MAIN_HAND);
-        mc.rightClickDelay = PLACE_DELAY;
+        mc.rightClickDelay = InputUtil.USE_DELAY;
         lastPlaced = pos;
         return true;
     }

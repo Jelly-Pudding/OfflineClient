@@ -8,7 +8,6 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockMiner;
 import com.jellypudding.offlineclient.util.BlockUtil;
-import com.jellypudding.offlineclient.util.ChatUtil;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.sounds.SoundEvents;
@@ -16,7 +15,6 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 
 // The server keeps only one break at a time. The same block is sent over and over
@@ -52,7 +50,7 @@ public final class Kaboom extends Module {
 
     @Override
     public String getSuffix() {
-        return roundsLeft == 0 ? null : roundsLeft + " left";
+        return count(roundsLeft, "left");
     }
 
     @Override
@@ -65,14 +63,12 @@ public final class Kaboom extends Module {
             return;
         }
         if (!mc.player.onGround() && !mc.player.isCreative()) {
-            ChatUtil.error("Stand on something first.");
-            setEnabled(false);
+            disable("Stand on something first.");
             return;
         }
         gather();
         if (targets.isEmpty()) {
-            ChatUtil.error("There is nothing to break here.");
-            setEnabled(false);
+            disable("There is nothing to break here.");
             return;
         }
         show();
@@ -107,17 +103,11 @@ public final class Kaboom extends Module {
 
     // Furthest first. The walls go before the floor and you do not fall out of reach.
     private void gather() {
-        Vec3 eyes = mc.player.getEyePosition();
-        for (BlockPos pos : BlockUtil.positionsAround(mc.player.blockPosition(), (int) RADIUS)) {
-            if (BlockUtil.state(pos).isAir()) {
-                continue;
-            }
-            if (eyes.distanceToSqr(Vec3.atCenterOf(pos)) <= RADIUS * RADIUS) {
-                targets.add(pos.immutable());
+        for (BlockPos pos : BlockUtil.positionsWithin(RADIUS).reversed()) {
+            if (!BlockUtil.state(pos).isAir()) {
+                targets.add(pos);
             }
         }
-        targets.sort(Comparator.comparingDouble(
-            (BlockPos pos) -> eyes.distanceToSqr(Vec3.atCenterOf(pos))).reversed());
     }
 
     private void show() {

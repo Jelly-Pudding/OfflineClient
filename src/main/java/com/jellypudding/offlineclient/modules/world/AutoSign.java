@@ -51,7 +51,7 @@ public final class AutoSign extends Module {
         if (source.is(Source.FIRST_SIGN) && learned == null) {
             return "waiting for a sign";
         }
-        return written == 0 ? null : written + " signed";
+        return count(written, "signed");
     }
 
     @Override

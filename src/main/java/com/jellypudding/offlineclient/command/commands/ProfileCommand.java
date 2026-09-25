@@ -26,7 +26,7 @@ public final class ProfileCommand extends Command {
             if (profiles.isEmpty()) {
                 ChatUtil.message("§7You have no saved profiles.");
             } else {
-                ChatUtil.message("§3Profiles: §b" + String.join("§7 §b", profiles));
+                ChatUtil.message("§3Profiles §b" + String.join("§7 §b", profiles));
             }
             return;
         }

@@ -16,6 +16,7 @@ import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.ItemUtil;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.RenderUtil;
+import net.minecraft.SharedConstants;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.multiplayer.PlayerInfo;
@@ -34,12 +35,12 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import net.minecraft.world.item.enchantment.ItemEnchantments;
-import net.minecraft.world.level.GameType;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix3x2fStack;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 // Drawn on the HUD at the projected head position.
 public final class Nametags extends Module {
@@ -53,9 +54,7 @@ public final class Nametags extends Module {
     private static final int ITEM_SIZE = 16;
     private static final int GOLD = 0xFFE8B923;
     private static final int RED = 0xFFFF4040;
-    private static final int TICKS_PER_SECOND = 20;
-    private static final int TICKS_PER_MINUTE = TICKS_PER_SECOND * 60;
-    private static final int TICKS_PER_HOUR = TICKS_PER_MINUTE * 60;
+    private static final int TICKS_PER_HOUR = SharedConstants.TICKS_PER_MINUTE * 60;
 
     // The order the six item slots are drawn in.
     private static final EquipmentSlot[] SLOTS = {
@@ -212,13 +211,7 @@ public final class Nametags extends Module {
     }
 
     private boolean showSelf() {
-        if (!self.isOn()) {
-            return false;
-        }
-        if (Modules.enabled(Freecam.class)) {
-            return true;
-        }
-        return !mc.options.getCameraType().isFirstPerson();
+        return self.isOn() && Freecam.ownBodyVisible();
     }
 
     // Items sit low and their tag hugs them. Everything else gets a little headroom.
@@ -263,7 +256,7 @@ public final class Nametags extends Module {
             }
         }
         if (distance.isOn() && (player != mc.player || Modules.enabled(Freecam.class))) {
-            parts.add(String.format(" %.1fm", tag.distance()));
+            parts.add(String.format(Locale.ROOT, " %.1fm", tag.distance()));
             colors.add(distanceColor.is(DistanceColor.FLAT)
                 ? flatDistanceColor.getColor() : EntityUtil.distanceColor(player));
         }
@@ -308,9 +301,8 @@ public final class Nametags extends Module {
 
     private static void addHealth(List<String> parts, List<Integer> colors, LivingEntity living) {
         float hp = EntityUtil.totalHealth(living);
-        float max = EntityUtil.totalMaxHealth(living);
-        parts.add(String.format(" %.0f", hp));
-        colors.add(ColorUtil.health(max <= 0 ? 0 : hp / max));
+        parts.add(String.format(Locale.ROOT, " %.0f", hp));
+        colors.add(ColorUtil.health(EntityUtil.healthShare(living)));
     }
 
     private String nameText(Player player) {
@@ -332,13 +324,7 @@ public final class Nametags extends Module {
         if (info == null) {
             return "BOT";
         }
-        GameType mode = info.getGameMode();
-        return switch (mode) {
-            case SURVIVAL -> "S";
-            case CREATIVE -> "C";
-            case ADVENTURE -> "A";
-            case SPECTATOR -> "Sp";
-        };
+        return EntityUtil.gameModeLetter(info.getGameMode());
     }
 
     private static String typeName(Entity entity) {
@@ -350,10 +336,10 @@ public final class Nametags extends Module {
         if (ticks > TICKS_PER_HOUR) {
             return ticks / TICKS_PER_HOUR + " h";
         }
-        if (ticks > TICKS_PER_MINUTE) {
-            return ticks / TICKS_PER_MINUTE + " m";
+        if (ticks > SharedConstants.TICKS_PER_MINUTE) {
+            return ticks / SharedConstants.TICKS_PER_MINUTE + " m";
         }
-        return ticks / TICKS_PER_SECOND + "." + (ticks % TICKS_PER_SECOND) / 2 + " s";
+        return ticks / SharedConstants.TICKS_PER_SECOND + "." + (ticks % SharedConstants.TICKS_PER_SECOND) / 2 + " s";
     }
 
     private void drawGear(GuiGraphicsExtractor context, Tag tag, Player player, float factor) {

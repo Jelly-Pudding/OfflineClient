@@ -17,7 +17,7 @@ import net.minecraft.world.level.block.AnvilBlock;
 import net.minecraft.world.phys.AABB;
 
 // A dropped anvil is a falling entity until it lands.
-// AntiAnvil places a block overhead while it is still falling.
+// AntiAnvil places a block overhead whilst it is still falling.
 public final class AntiAnvil extends Module {
 
     // How far above the head an anvil is worth catching. Higher ones take a while yet.

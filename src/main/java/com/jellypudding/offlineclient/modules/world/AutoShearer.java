@@ -6,17 +6,14 @@ import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
-import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.ItemUtil;
-import com.jellypudding.offlineclient.util.SwingMode;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Shearable;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.phys.EntityHitResult;
 
 // Sheep and anything else that takes shears is clipped as it wanders past.
 public final class AutoShearer extends Module {
@@ -39,7 +36,7 @@ public final class AutoShearer extends Module {
 
     @Override
     public String getSuffix() {
-        return sheared == 0 ? null : sheared + " sheared";
+        return count(sheared, "sheared");
     }
 
     @Override
@@ -68,12 +65,7 @@ public final class AutoShearer extends Module {
             return;
         }
         slots.select(slot);
-        if (rotate.isOn()) {
-            BlockUtil.faceVector(target.getBoundingBox().getCenter());
-        }
-        EntityHitResult hit = new EntityHitResult(target, target.getBoundingBox().getCenter());
-        if (mc.gameMode.interact(mc.player, target, hit, InteractionHand.MAIN_HAND).consumesAction()) {
-            SwingMode.swingArm(InteractionHand.MAIN_HAND);
+        if (EntityUtil.interact(target, InteractionHand.MAIN_HAND, rotate.isOn())) {
             sheared++;
         }
         slots.restoreIfMine();

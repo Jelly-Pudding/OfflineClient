@@ -131,18 +131,16 @@ public final class SettingHost implements SettingWidget.Host {
             } else if (key == InputConstants.KEY_ESCAPE) {
                 cancelEditing();
             } else {
-                editField.keyPressed(event, editingSetting instanceof NumberSetting
-                    ? TextField.NUMBER : TextField.ANY);
+                editField.keyPressed(event, filter());
             }
             return true;
         }
         if (bindingTarget == null) {
             return false;
         }
-        if (key == InputConstants.KEY_DELETE || key == InputConstants.KEY_BACKSPACE) {
-            bindingTarget.setValue(KeybindSetting.UNBOUND);
-        } else if (key != InputConstants.KEY_ESCAPE) {
-            bindingTarget.setValue(key);
+        int bind = KeybindSetting.fromPress(key);
+        if (bind != KeybindSetting.UNKNOWN) {
+            bindingTarget.setValue(bind);
         }
         bindingTarget = null;
         OfflineClient.INSTANCE.getConfigManager().saveSoon();
@@ -162,8 +160,11 @@ public final class SettingHost implements SettingWidget.Host {
         if (editingSetting == null) {
             return false;
         }
-        editField.charTyped(typed, editingSetting instanceof NumberSetting
-            ? TextField.NUMBER : TextField.ANY);
+        editField.charTyped(typed, filter());
         return true;
+    }
+
+    private TextField.Filter filter() {
+        return editingSetting instanceof NumberSetting ? TextField.NUMBER : TextField.ANY;
     }
 }

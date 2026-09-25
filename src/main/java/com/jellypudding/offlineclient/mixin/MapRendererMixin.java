@@ -2,9 +2,7 @@ package com.jellypudding.offlineclient.mixin;
 
 import com.jellypudding.offlineclient.modules.render.NoRender;
 import com.jellypudding.offlineclient.util.Modules;
-import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.renderer.MapRenderer;
-import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.state.MapRenderState;
 import net.minecraft.world.level.saveddata.maps.MapId;
 import net.minecraft.world.level.saveddata.maps.MapItemSavedData;
@@ -18,8 +16,7 @@ public abstract class MapRendererMixin {
 
     @Inject(method = "render(Lnet/minecraft/client/renderer/state/MapRenderState;Lcom/mojang/blaze3d/vertex/PoseStack;"
         + "Lnet/minecraft/client/renderer/SubmitNodeCollector;ZI)V", at = @At("HEAD"), cancellable = true)
-    private void onRender(MapRenderState state, PoseStack poseStack, SubmitNodeCollector collector,
-                          boolean flat, int light, CallbackInfo ci) {
+    private void onRender(CallbackInfo ci) {
         NoRender noRender = Modules.get(NoRender.class);
         if (noRender != null && noRender.hidesMapContents()) {
             ci.cancel();

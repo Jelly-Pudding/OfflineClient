@@ -22,12 +22,10 @@ import com.jellypudding.offlineclient.util.ChatUtil;
 import com.mojang.blaze3d.platform.InputConstants;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
-import net.minecraft.world.phys.HitResult;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -38,10 +36,6 @@ public final class Marker extends Module {
     public enum Shape { CUBOID, SPHERE }
 
     public enum World { OVERWORLD, NETHER, END }
-
-    // A sphere slice is one block tall. Its blocks only ever touch sideways.
-    private static final Direction[] AROUND = {
-        Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST};
 
     private final TextSetting newName = new TextSetting("New name",
         "Name for the next marker you add.", "Marker");
@@ -141,7 +135,8 @@ public final class Marker extends Module {
     // The block you are looking at or the one you stand on.
     private void add() {
         BlockPos pos = mc.player.blockPosition();
-        if (mc.hitResult instanceof BlockHitResult hit && hit.getType() == HitResult.Type.BLOCK) {
+        BlockHitResult hit = BlockUtil.aimedBlock();
+        if (hit != null) {
             pos = hit.getBlockPos();
         }
         String label = freeName(newName.getValue().trim());
@@ -303,12 +298,8 @@ public final class Marker extends Module {
             }
             rebuildRing(centre);
             for (BlockPos pos : ring) {
-                int hidden = 0;
-                for (Direction side : AROUND) {
-                    if (ringKeys.contains(BlockPos.offset(pos.asLong(), side))) {
-                        hidden |= DrawBatch.sideBit(side);
-                    }
-                }
+                // A sphere slice is one block tall. Its blocks only ever touch sideways.
+                int hidden = DrawBatch.sharedSides(ringKeys, pos.asLong());
                 style.drawJoined(batch, new AABB(pos.getX(), pos.getY(), pos.getZ(),
                     pos.getX() + 1, pos.getY() + 1, pos.getZ() + 1), hidden, through);
             }
@@ -355,11 +346,7 @@ public final class Marker extends Module {
                 out.add("radius", radius.toJson());
                 out.add("layer", layer.toJson());
             }
-            JsonArray rows = new JsonArray();
-            for (Setting<?> setting : style.settings()) {
-                rows.add(setting.toJson());
-            }
-            out.add("style", rows);
+            out.add("style", style.toJson());
             return out;
         }
 
@@ -402,12 +389,8 @@ public final class Marker extends Module {
             if (layer != null && o.has("layer")) {
                 layer.fromJson(o.get("layer"));
             }
-            if (o.has("style") && o.get("style").isJsonArray()) {
-                JsonArray rows = o.getAsJsonArray("style");
-                Setting<?>[] settings = style.settings();
-                for (int i = 0; i < settings.length && i < rows.size(); i++) {
-                    settings[i].fromJson(rows.get(i));
-                }
+            if (o.has("style")) {
+                style.fromJson(o.get("style"));
             }
         }
 

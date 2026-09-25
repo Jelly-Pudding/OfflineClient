@@ -1,6 +1,7 @@
 package com.jellypudding.offlineclient.mixin;
 
 import com.jellypudding.offlineclient.modules.render.Chams;
+import com.jellypudding.offlineclient.util.Modules;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
@@ -25,7 +26,7 @@ public abstract class AvatarRendererMixin {
             target = "Lnet/minecraft/client/renderer/rendertype/RenderTypes;entityTranslucent(Lnet/minecraft/resources/Identifier;)Lnet/minecraft/client/renderer/rendertype/RenderType;"))
     private RenderType onHandType(RenderType original, PoseStack poseStack, SubmitNodeCollector collector,
                                   int light, Identifier skin, ModelPart arm, boolean sleeve) {
-        Chams chams = Chams.get();
+        Chams chams = Modules.get(Chams.class);
         if (chams == null || !chams.paintsHand()) {
             return original;
         }
@@ -39,7 +40,7 @@ public abstract class AvatarRendererMixin {
     private void onSubmitHand(SubmitNodeCollector collector, ModelPart part, PoseStack poseStack,
                               RenderType type, int light, int overlay, UvMapping uv,
                               Operation<Void> original) {
-        Chams chams = Chams.get();
+        Chams chams = Modules.get(Chams.class);
         if (chams == null || !chams.paintsHand()) {
             original.call(collector, part, poseStack, type, light, overlay, uv);
             return;

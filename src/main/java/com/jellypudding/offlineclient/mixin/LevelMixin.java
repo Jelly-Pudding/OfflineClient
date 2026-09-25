@@ -12,7 +12,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public class LevelMixin {
 
     @Inject(method = "getRainLevel(F)F", at = @At("HEAD"), cancellable = true)
-    private void onGetRainLevel(float delta, CallbackInfoReturnable<Float> cir) {
+    private void onGetRainLevel(CallbackInfoReturnable<Float> cir) {
         Weather weather = Modules.active(Weather.class);
         if (weather != null) {
             cir.setReturnValue(weather.rainLevel());
@@ -20,7 +20,7 @@ public class LevelMixin {
     }
 
     @Inject(method = "getThunderLevel(F)F", at = @At("HEAD"), cancellable = true)
-    private void onGetThunderLevel(float delta, CallbackInfoReturnable<Float> cir) {
+    private void onGetThunderLevel(CallbackInfoReturnable<Float> cir) {
         Weather weather = Modules.active(Weather.class);
         if (weather != null) {
             cir.setReturnValue(weather.thunderLevel());

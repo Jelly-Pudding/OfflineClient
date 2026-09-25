@@ -10,7 +10,6 @@ import net.minecraft.network.protocol.game.ClientboundSectionBlocksUpdatePacket;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
@@ -53,28 +52,14 @@ public final class ChunkScanner<T> {
     }
 
     // A chunk and its eight neighbours captured on the main thread.
-    // Reads outside the captured area come back as void air.
     public static final class View {
 
-        private static final BlockState OUTSIDE = Blocks.VOID_AIR.defaultBlockState();
-
         private final LevelChunk centre;
-        private final LevelChunk[] around = new LevelChunk[9];
-        private final int minY;
-        private final int maxY;
+        private final ChunkWindow window;
 
-        private View(LevelChunk centre, Minecraft mc) {
+        private View(LevelChunk centre) {
             this.centre = centre;
-            this.minY = centre.getMinY();
-            this.maxY = centre.getMaxY();
-            int cx = centre.getPos().x();
-            int cz = centre.getPos().z();
-            for (int dx = -1; dx <= 1; dx++) {
-                for (int dz = -1; dz <= 1; dz++) {
-                    around[(dx + 1) * 3 + dz + 1] = mc.level.getChunkSource()
-                        .getChunk(cx + dx, cz + dz, ChunkStatus.FULL, false);
-                }
-            }
+            this.window = ChunkWindow.capture(centre.getPos().x(), centre.getPos().z(), 1);
         }
 
         public ChunkPos pos() {
@@ -82,35 +67,19 @@ public final class ChunkScanner<T> {
         }
 
         public int minY() {
-            return minY;
+            return window.minY();
         }
 
         public int maxY() {
-            return maxY;
+            return window.maxY();
         }
 
         public BlockState get(int x, int y, int z) {
-            if (y < minY || y > maxY) {
-                return OUTSIDE;
-            }
-            int dx = (x >> 4) - centre.getPos().x();
-            int dz = (z >> 4) - centre.getPos().z();
-            if (dx < -1 || dx > 1 || dz < -1 || dz > 1) {
-                return OUTSIDE;
-            }
-            LevelChunk chunk = around[(dx + 1) * 3 + dz + 1];
-            if (chunk == null) {
-                return OUTSIDE;
-            }
-            LevelChunkSection section = chunk.getSections()[chunk.getSectionIndex(y)];
-            if (section == null || section.hasOnlyAir()) {
-                return Blocks.AIR.defaultBlockState();
-            }
-            return section.getBlockState(x & 15, y & 15, z & 15);
+            return window.get(x, y, z);
         }
 
         public BlockState get(BlockPos pos) {
-            return get(pos.getX(), pos.getY(), pos.getZ());
+            return window.get(pos);
         }
 
         // Every block of the centre chunk the test accepts.
@@ -124,7 +93,7 @@ public final class ChunkScanner<T> {
                 if (section == null || section.hasOnlyAir() || !section.maybeHas(wanted)) {
                     continue;
                 }
-                int baseY = minY + (index << 4);
+                int baseY = centre.getMinY() + (index << 4);
                 for (int y = 0; y < 16; y++) {
                     for (int x = 0; x < 16; x++) {
                         for (int z = 0; z < 16; z++) {
@@ -219,7 +188,7 @@ public final class ChunkScanner<T> {
                     }
                 }
                 if (!results.containsKey(pos) && !pending.containsKey(pos)) {
-                    View view = new View(chunk, mc);
+                    View view = new View(chunk);
                     pending.put(pos, POOL.submit(() -> {
                         List<T> found = new ArrayList<>();
                         scan.run(view, found);

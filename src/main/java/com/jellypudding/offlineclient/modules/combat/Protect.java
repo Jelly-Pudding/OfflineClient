@@ -84,8 +84,7 @@ public final class Protect extends Module {
         enemy = null;
         friend = inGame() ? pickFriend() : null;
         if (friend == null) {
-            ChatUtil.error("Nobody to guard was found.");
-            setEnabled(false);
+            disable("Nobody to guard was found.");
         }
     }
 
@@ -115,7 +114,7 @@ public final class Protect extends Module {
             setEnabled(false);
             return;
         }
-        if (pauseInContainers.isOn() && InventoryUtil.isStorage(mc.gui.screen())) {
+        if (pauseInContainers.isOn() && InventoryUtil.containerOpen()) {
             chase.stop();
             return;
         }

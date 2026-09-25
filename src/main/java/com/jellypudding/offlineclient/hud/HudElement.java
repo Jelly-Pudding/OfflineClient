@@ -44,7 +44,7 @@ public abstract class HudElement {
         active = new BoolSetting(name, description, on).startFolded();
         x = percent(" x", "How far across the screen it sits.", startX);
         y = percent(" y", "How far down the screen it sits.", startY);
-        scale = new NumberSetting(name + " scale", "Size of the text.",
+        scale = new NumberSetting(name + " scale", "How big it is drawn.",
             startScale, 0.25, 2, 0.05, "x").min(0.25).max(4).under(active);
         add(x, y, scale);
     }

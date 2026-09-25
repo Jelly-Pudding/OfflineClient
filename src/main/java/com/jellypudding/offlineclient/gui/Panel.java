@@ -44,28 +44,13 @@ public final class Panel extends PanelFrame {
 
     @Override
     protected int contentHeight() {
-        int height = 0;
-        for (ModuleRow row : rows) {
-            height += row.getHeight();
-        }
-        return height;
+        return ModuleRow.totalHeight(rows);
     }
 
     @Override
     protected void renderContent(GuiGraphicsExtractor context, int viewTop, int view,
                                  int rowWidth, int mouseX, int mouseY) {
-        // A slider being dragged still gets the real pointer position.
-        boolean inView = mouseX >= getX() && mouseX < getX() + rowWidth
-            && mouseY >= viewTop && mouseY < viewTop + view;
-        int rowY = viewTop - getScrollOffset();
-        for (ModuleRow row : rows) {
-            int rowH = row.getHeight();
-            row.place(getX(), rowY, rowWidth, mouseX, mouseY, inView);
-            if (rowY + rowH > viewTop && rowY < viewTop + view) {
-                row.render(context, mouseX, mouseY);
-            }
-            rowY += rowH;
-        }
+        ModuleRow.renderAll(context, rows, getX(), viewTop, view, rowWidth, getScrollOffset(), mouseX, mouseY);
     }
 
     @Override

@@ -1,7 +1,9 @@
 package com.jellypudding.offlineclient.hud.elements;
 
 import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.gui.GuiTheme;
 import com.jellypudding.offlineclient.hud.HudElement;
+import com.jellypudding.offlineclient.hud.HudLayout;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
@@ -19,8 +21,6 @@ import java.util.List;
 
 public final class ItemCounterElement extends HudElement {
 
-    public enum Layout { ACROSS, DOWN }
-
     private static final int SLOT = 16;
     private static final int GAP = 3;
     private static final int LINE = 10;
@@ -32,10 +32,8 @@ public final class ItemCounterElement extends HudElement {
         "The items whose totals are shown.", BuiltInRegistries.ITEM,
         List.of(Items.TOTEM_OF_UNDYING, Items.ENCHANTED_GOLDEN_APPLE, Items.END_CRYSTAL,
             Items.OBSIDIAN, Items.ENDER_PEARL));
-    private final EnumSetting<Layout> layout = new EnumSetting<>("Counter layout",
-        "Which way the totals are laid out.", Layout.ACROSS)
-        .describe(Layout.ACROSS, "In a row.")
-        .describe(Layout.DOWN, "In a column.");
+    private final EnumSetting<HudLayout> layout = HudLayout.setting("Counter layout",
+        "Which way the totals are laid out.");
     private final BoolSetting icons = new BoolSetting("Counter icons",
         "Draw the item next to its total.", true);
     private final BoolSetting hideEmpty = new BoolSetting("Hide empty counts",
@@ -71,7 +69,7 @@ public final class ItemCounterElement extends HudElement {
     @Override
     public void render(GuiGraphicsExtractor context, Font font) {
         List<Tally> found = tallies();
-        boolean across = layout.is(Layout.ACROSS);
+        boolean across = layout.is(HudLayout.ACROSS);
         int step = across ? cellWidth(font) + GAP : cellHeight(font) + GAP;
         for (int i = 0; i < found.size(); i++) {
             Tally tally = found.get(i);
@@ -79,16 +77,16 @@ public final class ItemCounterElement extends HudElement {
             int y = across ? 0 : i * step;
             String label = String.valueOf(tally.count());
             if (!icons.isOn()) {
-                context.text(font, label, x, y, 0xFFECECF4, true);
+                context.text(font, label, x, y, GuiTheme.HUD_TEXT, true);
                 continue;
             }
             context.item(tally.stack(), x, y);
             if (across) {
                 context.text(font, label, x + (SLOT - font.width(label)) / 2, y + SLOT,
-                    0xFFECECF4, true);
+                    GuiTheme.HUD_TEXT, true);
             } else {
                 context.text(font, label, x + SLOT + GAP, y + (SLOT - font.lineHeight) / 2 + 1,
-                    0xFFECECF4, true);
+                    GuiTheme.HUD_TEXT, true);
             }
         }
     }
@@ -97,14 +95,14 @@ public final class ItemCounterElement extends HudElement {
         if (!icons.isOn()) {
             return widestLabel(font);
         }
-        return layout.is(Layout.ACROSS) ? SLOT : SLOT + GAP + widestLabel(font);
+        return layout.is(HudLayout.ACROSS) ? SLOT : SLOT + GAP + widestLabel(font);
     }
 
     private int cellHeight(Font font) {
         if (!icons.isOn()) {
             return LINE;
         }
-        return layout.is(Layout.ACROSS) ? SLOT + font.lineHeight : SLOT;
+        return layout.is(HudLayout.ACROSS) ? SLOT + font.lineHeight : SLOT;
     }
 
     private int widestLabel(Font font) {
@@ -118,14 +116,14 @@ public final class ItemCounterElement extends HudElement {
     @Override
     public int width(Font font) {
         int count = Math.max(1, tallies().size());
-        return layout.is(Layout.ACROSS)
+        return layout.is(HudLayout.ACROSS)
             ? count * (cellWidth(font) + GAP) - GAP : cellWidth(font);
     }
 
     @Override
     public int height(Font font) {
         int count = Math.max(1, tallies().size());
-        return layout.is(Layout.ACROSS)
+        return layout.is(HudLayout.ACROSS)
             ? cellHeight(font) : count * (cellHeight(font) + GAP) - GAP;
     }
 }

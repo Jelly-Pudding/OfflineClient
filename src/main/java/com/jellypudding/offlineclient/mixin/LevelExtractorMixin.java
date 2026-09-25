@@ -37,8 +37,7 @@ public class LevelExtractorMixin {
     // The cloud colour is worked out here and read by the cloud renderer after.
     @Inject(method = "extract(Lnet/minecraft/client/DeltaTracker;Lnet/minecraft/client/Camera;F)V",
         at = @At("TAIL"))
-    private void onExtract(DeltaTracker deltaTracker, Camera camera, float partialTicks,
-                           CallbackInfo ci) {
+    private void onExtract(CallbackInfo ci) {
         Ambience ambience = Modules.get(Ambience.class);
         if (ambience != null && ambience.paintsClouds()) {
             levelRenderState.cloudColor = ambience.cloudColor();
@@ -48,7 +47,7 @@ public class LevelExtractorMixin {
     @Inject(
         method = "extractBlockDestroyAnimation(Lnet/minecraft/client/Camera;Lnet/minecraft/client/renderer/state/level/LevelRenderState;)V",
         at = @At("HEAD"), cancellable = true)
-    private void onExtractBlockDestroyAnimation(Camera camera, LevelRenderState level, CallbackInfo ci) {
+    private void onExtractBlockDestroyAnimation(CallbackInfo ci) {
         NoRender noRender = Modules.get(NoRender.class);
         if (noRender != null && noRender.hidesBlockCracks()) {
             ci.cancel();

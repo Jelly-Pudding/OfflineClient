@@ -8,6 +8,7 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
+import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.SwingMode;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import net.minecraft.core.BlockPos;
@@ -31,9 +32,6 @@ import java.util.List;
 public final class BonemealAura extends Module {
 
     public enum TakeFrom { HANDS, HOTBAR, INVENTORY }
-
-    // Vanilla repeats a held right click at this rate.
-    private static final int CLICK_INTERVAL = 4;
 
     private final NumberSetting range = new NumberSetting("Range",
         "How far from your eyes to reach.", 5, 1, 6, 0.1).max(6);
@@ -80,7 +78,7 @@ public final class BonemealAura extends Module {
 
     @Override
     public String getSuffix() {
-        return fed == 0 ? null : fed + " fed";
+        return count(fed, "fed");
     }
 
     @Override
@@ -138,7 +136,7 @@ public final class BonemealAura extends Module {
         if (BlockUtil.useOn(targets.getFirst(), rotate.isOn(), false)) {
             swing.getValue().swing(InteractionHand.MAIN_HAND);
             fed++;
-            mc.rightClickDelay = CLICK_INTERVAL;
+            mc.rightClickDelay = InputUtil.USE_DELAY;
         }
     }
 
@@ -152,12 +150,8 @@ public final class BonemealAura extends Module {
             case HOTBAR -> InventoryUtil.HOTBAR_SIZE;
             case INVENTORY -> InventoryUtil.WHOLE_INVENTORY;
         };
-        for (int i = 0; i < limit; i++) {
-            if (mc.player.getInventory().getItem(i).is(Items.BONE_MEAL)) {
-                return loan.select(i);
-            }
-        }
-        return false;
+        int slot = InventoryUtil.findSlot(Items.BONE_MEAL, limit);
+        return slot != -1 && loan.select(slot);
     }
 
     // Nearest first.

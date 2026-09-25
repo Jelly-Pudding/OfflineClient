@@ -124,6 +124,13 @@ public final class RotationManager {
         return Math.clamp((float) -Math.toDegrees(Math.atan2(point.y - eye.y, horizontal)), -90f, 90f);
     }
 
+    // Turns the real view towards the point by at most the step on each axis.
+    public static void turnCamera(Vec3 point, float step) {
+        LocalPlayer player = MC.player;
+        player.setYRot(Mth.approachDegrees(player.getYRot(), yawTo(point), step));
+        player.setXRot(Mth.clamp(Mth.approach(player.getXRot(), pitchTo(point), step), -90f, 90f));
+    }
+
     // Ties go to the first caller.
     private void take(float yaw, float pitch, RotationPriority asked, float step) {
         if (MC.player == null || (priority != null && !asked.beats(priority))) {

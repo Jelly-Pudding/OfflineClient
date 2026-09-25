@@ -11,6 +11,7 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.ItemUtil;
+import com.jellypudding.offlineclient.util.ProjectileUtil;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.component.DataComponents;
@@ -19,7 +20,6 @@ import net.minecraft.tags.FluidTags;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.Projectile;
-import net.minecraft.world.entity.projectile.ProjectileUtil;
 import net.minecraft.world.entity.projectile.arrow.AbstractArrow;
 import net.minecraft.world.entity.projectile.arrow.ThrownTrident;
 import net.minecraft.world.entity.projectile.hurtingprojectile.AbstractHurtingProjectile;
@@ -81,13 +81,19 @@ public final class Trajectories extends Module {
         }
     }
 
-    private static final Launch ARROW = new Launch(3, 0.05, 0.99, 0.6, 0, Motion.ARROW, false);
-    private static final Launch CROSSBOW_ARROW = new Launch(3.15, 0.05, 0.99, 0.6, 0, Motion.ARROW, false);
+    private static final Launch ARROW = new Launch(3, ProjectileUtil.ARROW_GRAVITY, ProjectileUtil.AIR_DRAG,
+        0.6, 0, Motion.ARROW, false);
+    private static final Launch CROSSBOW_ARROW = new Launch(3.15, ProjectileUtil.ARROW_GRAVITY, ProjectileUtil.AIR_DRAG,
+        0.6, 0, Motion.ARROW, false);
     private static final Launch FIREWORK = new Launch(1.6, 0, 1, 1, 0, Motion.ARROW, false);
-    private static final Launch TRIDENT = new Launch(2.5, 0.05, 0.99, 0.99, 0, Motion.ARROW, false);
-    private static final Launch THROWABLE = new Launch(1.5, 0.03, 0.99, 0.8, 0, Motion.THROWN, false);
-    private static final Launch POTION = new Launch(0.5, 0.05, 0.99, 0.8, -20, Motion.THROWN, false);
-    private static final Launch XP_BOTTLE = new Launch(0.7, 0.07, 0.99, 0.8, -20, Motion.THROWN, false);
+    private static final Launch TRIDENT = new Launch(2.5, ProjectileUtil.ARROW_GRAVITY, ProjectileUtil.AIR_DRAG,
+        0.99, 0, Motion.ARROW, false);
+    private static final Launch THROWABLE = new Launch(1.5, ProjectileUtil.THROWN_GRAVITY, ProjectileUtil.AIR_DRAG,
+        0.8, 0, Motion.THROWN, false);
+    private static final Launch POTION = new Launch(0.5, 0.05, ProjectileUtil.AIR_DRAG,
+        0.8, -20, Motion.THROWN, false);
+    private static final Launch XP_BOTTLE = new Launch(0.7, 0.07, ProjectileUtil.AIR_DRAG,
+        0.8, -20, Motion.THROWN, false);
     private static final Launch WIND_CHARGE = new Launch(1.5, 0, 1, 1, 0, Motion.HURTING, false);
     private static final Launch EXPLOSIVE = new Launch(0, 0, 0.95, 0.8, 0, Motion.HURTING, false);
     private static final Launch BOBBER = new Launch(0, 0.03, 0.92, 0, 0, Motion.BOBBER, true);
@@ -408,7 +414,8 @@ public final class Trajectories extends Module {
             Vec3 end = blockHit.getType() == HitResult.Type.MISS ? pos : blockHit.getLocation();
 
             boolean stopped = false;
-            for (EntityHitResult entityHit : ProjectileUtil.getManyEntityHitResult(mc.level, shooter, previous, end,
+            for (EntityHitResult entityHit : net.minecraft.world.entity.projectile.ProjectileUtil
+                .getManyEntityHitResult(mc.level, shooter, previous, end,
                 new AABB(previous, end).inflate(1),
                 entity -> entity != shooter && !entity.isSpectator() && entity.isAlive()
                     && entity.isPickable(), false, false)) {

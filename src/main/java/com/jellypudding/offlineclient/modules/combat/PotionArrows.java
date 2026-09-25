@@ -13,19 +13,17 @@ import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.Swap;
+import com.jellypudding.offlineclient.util.ItemUtil;
 import com.jellypudding.offlineclient.util.RotationManager;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.effect.MobEffect;
-import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.item.BowItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.item.alchemy.PotionContents;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -35,8 +33,6 @@ import java.util.Set;
 
 // Draws the bow straight up just far enough for the arrow to fall back on your head.
 public final class PotionArrows extends Module {
-
-    private static final double HEART = 2;
 
     // The weakest draw that still fires. The arrow barely leaves the bow.
     private static final float RELEASE_POWER = 0.12f;
@@ -188,7 +184,7 @@ public final class PotionArrows extends Module {
         if (!headroom()) {
             return stop("No room above your head for the arrow.");
         }
-        if (EntityUtil.totalHealth(mc.player) < minHealth.getValue() * HEART) {
+        if (EntityUtil.totalHealth(mc.player) < minHealth.getValue() * EntityUtil.HEART) {
             return stop("Health is too low.");
         }
         if (onlyOnGround.isOn() && !mc.player.onGround()) {
@@ -232,40 +228,18 @@ public final class PotionArrows extends Module {
                 continue;
             }
             MobEffect effect = BuiltInRegistries.MOB_EFFECT.getValue(id);
-            if (skipActive.isOn() && hasEffect(effect)) {
+            if (skipActive.isOn() && mc.player.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect))) {
                 continue;
             }
             for (int i = 0; i < InventoryUtil.WHOLE_INVENTORY; i++) {
                 ItemStack stack = mc.player.getInventory().getItem(i);
-                if (!taken.contains(i) && stack.is(Items.TIPPED_ARROW) && carries(stack, effect)) {
+                if (!taken.contains(i) && stack.is(Items.TIPPED_ARROW) && ItemUtil.carriesEffect(stack, effect)) {
                     taken.add(i);
                     arrows.addLast(i);
                     break;
                 }
             }
         }
-    }
-
-    private boolean hasEffect(MobEffect effect) {
-        for (MobEffectInstance active : mc.player.getActiveEffects()) {
-            if (active.getEffect().value() == effect) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static boolean carries(ItemStack stack, MobEffect effect) {
-        PotionContents contents = stack.get(DataComponents.POTION_CONTENTS);
-        if (contents == null) {
-            return false;
-        }
-        for (MobEffectInstance instance : contents.getAllEffects()) {
-            if (instance.getEffect().value() == effect) {
-                return true;
-            }
-        }
-        return false;
     }
 
     // Swaps the arrow into the slot the bow reads first. False whilst the click cannot land.
@@ -275,12 +249,12 @@ public final class PotionArrows extends Module {
             arrows.pollFirst();
             return false;
         }
-        int first = firstArrowSlot();
+        int first = InventoryUtil.firstArrowSlot();
         int wanted = InventoryUtil.networkSlot(index);
         if (first == -1 || first == wanted) {
             return true;
         }
-        if (!InventoryUtil.canClick() || !InventoryUtil.carried().isEmpty()) {
+        if (!InventoryUtil.cursorFree()) {
             return false;
         }
         if (InventoryUtil.swap(wanted, first) != Swap.DONE) {
@@ -297,25 +271,10 @@ public final class PotionArrows extends Module {
         if (movedFrom == -1) {
             return;
         }
-        if (InventoryUtil.canClick() && InventoryUtil.carried().isEmpty()
-            && InventoryUtil.swap(movedTo, movedFrom) == Swap.REFUSED) {
+        if (InventoryUtil.cursorFree() && InventoryUtil.swap(movedTo, movedFrom) == Swap.REFUSED) {
             InventoryUtil.swap(movedFrom, movedTo);
         }
         movedFrom = -1;
         movedTo = -1;
-    }
-
-    // The network slot of the arrow the bow would fire. The offhand beats everything.
-    private int firstArrowSlot() {
-        if (isArrow(mc.player.getOffhandItem())) {
-            return InventoryUtil.OFFHAND_SLOT;
-        }
-        int slot = InventoryUtil.findSlot(PotionArrows::isArrow, InventoryUtil.WHOLE_INVENTORY);
-        return slot == -1 ? -1 : InventoryUtil.networkSlot(slot);
-    }
-
-    private static boolean isArrow(ItemStack stack) {
-        return stack.is(Items.ARROW) || stack.is(Items.TIPPED_ARROW)
-            || stack.is(Items.SPECTRAL_ARROW);
     }
 }

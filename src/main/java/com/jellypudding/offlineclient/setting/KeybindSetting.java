@@ -5,6 +5,8 @@ import com.google.gson.JsonPrimitive;
 import com.mojang.blaze3d.platform.InputConstants;
 
 import java.util.Locale;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 public final class KeybindSetting extends Setting<Integer> {
 
@@ -17,6 +19,35 @@ public final class KeybindSetting extends Setting<Integer> {
     private static final int KEYPAD_DIVIDE = 84;
     private static final int KEYPAD_MINUS = 86;
     private static final int KEYPAD_PERIOD = 99;
+
+    // Keys with a short name of their own. Printing and typing both read this table.
+    private static final Map<String, Integer> NAMED_KEYS = Map.ofEntries(
+        Map.entry("SPACE", InputConstants.KEY_SPACE),
+        Map.entry("TAB", InputConstants.KEY_TAB),
+        Map.entry("ENTER", InputConstants.KEY_RETURN),
+        Map.entry("BACK", InputConstants.KEY_BACKSPACE),
+        Map.entry("CAPS", InputConstants.KEY_CAPSLOCK),
+        Map.entry("LSHIFT", InputConstants.KEY_LSHIFT),
+        Map.entry("RSHIFT", InputConstants.KEY_RSHIFT),
+        Map.entry("LCTRL", InputConstants.KEY_LCONTROL),
+        Map.entry("RCTRL", InputConstants.KEY_RCONTROL),
+        Map.entry("LALT", InputConstants.KEY_LALT),
+        Map.entry("RALT", InputConstants.KEY_RALT),
+        Map.entry("UP", InputConstants.KEY_UP),
+        Map.entry("DOWN", InputConstants.KEY_DOWN),
+        Map.entry("LEFT", InputConstants.KEY_LEFT),
+        Map.entry("RIGHT", InputConstants.KEY_RIGHT),
+        Map.entry("HOME", InputConstants.KEY_HOME),
+        Map.entry("END", InputConstants.KEY_END),
+        Map.entry("PGUP", InputConstants.KEY_PAGEUP),
+        Map.entry("PGDN", InputConstants.KEY_PAGEDOWN),
+        Map.entry("INSERT", InputConstants.KEY_INSERT),
+        Map.entry("DELETE", InputConstants.KEY_DELETE));
+    private static final Map<Integer, String> KEY_NAMES = NAMED_KEYS.entrySet().stream()
+        .collect(Collectors.toUnmodifiableMap(Map.Entry::getValue, Map.Entry::getKey));
+
+    // A key with no name anywhere prints as this followed by its code.
+    private static final String RAW_PREFIX = "KEY";
 
     public KeybindSetting(String name, String description, int defaultKey) {
         super(name, description, defaultKey);
@@ -74,28 +105,26 @@ public final class KeybindSetting extends Setting<Integer> {
             }
             return UNKNOWN;
         }
-        return switch (name) {
-            case "SPACE" -> InputConstants.KEY_SPACE;
-            case "TAB" -> InputConstants.KEY_TAB;
-            case "ENTER" -> InputConstants.KEY_RETURN;
-            case "LSHIFT" -> InputConstants.KEY_LSHIFT;
-            case "RSHIFT" -> InputConstants.KEY_RSHIFT;
-            case "LCTRL" -> InputConstants.KEY_LCONTROL;
-            case "RCTRL" -> InputConstants.KEY_RCONTROL;
-            case "LALT" -> InputConstants.KEY_LALT;
-            case "RALT" -> InputConstants.KEY_RALT;
-            case "UP" -> InputConstants.KEY_UP;
-            case "DOWN" -> InputConstants.KEY_DOWN;
-            case "LEFT" -> InputConstants.KEY_LEFT;
-            case "RIGHT" -> InputConstants.KEY_RIGHT;
-            case "HOME" -> InputConstants.KEY_HOME;
-            case "END" -> InputConstants.KEY_END;
-            case "PGUP" -> InputConstants.KEY_PAGEUP;
-            case "PGDN" -> InputConstants.KEY_PAGEDOWN;
-            case "INSERT" -> InputConstants.KEY_INSERT;
-            case "DELETE" -> InputConstants.KEY_DELETE;
-            default -> UNKNOWN;
-        };
+        Integer named = NAMED_KEYS.get(name);
+        if (named != null) {
+            return named;
+        }
+        if (name.startsWith(RAW_PREFIX)) {
+            try {
+                return Integer.parseInt(name.substring(RAW_PREFIX.length()));
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        return UNKNOWN;
+    }
+
+    // The bind a key press asks for. Delete and backspace clear it. Escape asks for
+    // no change and comes back as UNKNOWN.
+    public static int fromPress(int key) {
+        if (key == InputConstants.KEY_DELETE || key == InputConstants.KEY_BACKSPACE) {
+            return UNBOUND;
+        }
+        return key == InputConstants.KEY_ESCAPE ? UNKNOWN : key;
     }
 
     public String getKeyName() {
@@ -106,38 +135,15 @@ public final class KeybindSetting extends Setting<Integer> {
         if (key == UNBOUND) {
             return "None";
         }
-        String special = switch (key) {
-            case InputConstants.KEY_LSHIFT -> "LSHIFT";
-            case InputConstants.KEY_RSHIFT -> "RSHIFT";
-            case InputConstants.KEY_LCONTROL -> "LCTRL";
-            case InputConstants.KEY_RCONTROL -> "RCTRL";
-            case InputConstants.KEY_LALT -> "LALT";
-            case InputConstants.KEY_RALT -> "RALT";
-            case InputConstants.KEY_SPACE -> "SPACE";
-            case InputConstants.KEY_TAB -> "TAB";
-            case InputConstants.KEY_RETURN -> "ENTER";
-            case InputConstants.KEY_BACKSPACE -> "BACK";
-            case InputConstants.KEY_CAPSLOCK -> "CAPS";
-            case InputConstants.KEY_UP -> "UP";
-            case InputConstants.KEY_DOWN -> "DOWN";
-            case InputConstants.KEY_LEFT -> "LEFT";
-            case InputConstants.KEY_RIGHT -> "RIGHT";
-            case InputConstants.KEY_HOME -> "HOME";
-            case InputConstants.KEY_END -> "END";
-            case InputConstants.KEY_PAGEUP -> "PGUP";
-            case InputConstants.KEY_PAGEDOWN -> "PGDN";
-            case InputConstants.KEY_INSERT -> "INSERT";
-            case InputConstants.KEY_DELETE -> "DELETE";
-            default -> null;
-        };
-        if (special != null) {
-            return special;
+        String named = KEY_NAMES.get(key);
+        if (named != null) {
+            return named;
         }
         String name = InputConstants.Type.KEYBOARD.getOrCreate(key).getDisplayName().getString();
-        return name.isBlank() ? "KEY" + key : name.toUpperCase(Locale.ROOT);
+        return name.isBlank() ? RAW_PREFIX + key : name.toUpperCase(Locale.ROOT);
     }
 
-    // Binds saved before 26.3 hold window library codes. Keys are read by
+    // A legacy config holds binds as window library codes. Keys are read by
     // scancode and the numbers differ.
     public static int fromLegacyKey(int legacy) {
         if (legacy <= 0) {

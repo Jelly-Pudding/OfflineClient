@@ -59,7 +59,7 @@ public final class TpAura extends Module {
         if (!inGame() || mc.player.isSpectator() || !timer.ready()) {
             return;
         }
-        if (pauseInContainers.isOn() && InventoryUtil.isStorage(mc.gui.screen())) {
+        if (pauseInContainers.isOn() && InventoryUtil.containerOpen()) {
             return;
         }
         Entity target = EntityUtil.best(range.getValue(), priority.getValue(), this::attackable);

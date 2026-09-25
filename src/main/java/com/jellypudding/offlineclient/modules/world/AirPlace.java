@@ -10,6 +10,7 @@ import com.jellypudding.offlineclient.render.BoxStyle;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
+import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.SwingMode;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -89,8 +90,7 @@ public final class AirPlace extends Module {
         if (spot == null) {
             return;
         }
-        // The game sets this delay itself on a normal click.
-        mc.rightClickDelay = 4;
+        mc.rightClickDelay = InputUtil.USE_DELAY;
         event.cancel();
 
         // The click lands on the empty spot itself. The server treats a

@@ -14,8 +14,25 @@ import java.util.concurrent.ConcurrentHashMap;
 // Registering the same listener twice does nothing.
 public final class EventBus {
 
-    private record Handler(Object listener, Method method, int priority) {
+    private static final class Handler {
+
+        private final Object listener;
+        private final Method method;
+        private final int priority;
+        // A post already under way holds its own copy of the list. A handler taken
+        // out partway through must not run for it.
+        private volatile boolean removed;
+
+        Handler(Object listener, Method method, int priority) {
+            this.listener = listener;
+            this.method = method;
+            this.priority = priority;
+        }
+
         void invoke(Event event) {
+            if (removed) {
+                return;
+            }
             try {
                 method.invoke(listener, event);
             } catch (InvocationTargetException e) {
@@ -50,10 +67,18 @@ public final class EventBus {
 
     public synchronized void unregister(Object listener) {
         for (Map.Entry<Class<?>, List<Handler>> entry : handlers.entrySet()) {
-            if (entry.getValue().stream().anyMatch(h -> h.listener == listener)) {
-                entry.setValue(entry.getValue().stream()
-                    .filter(h -> h.listener != listener).toList());
+            if (entry.getValue().stream().noneMatch(h -> h.listener == listener)) {
+                continue;
             }
+            List<Handler> kept = new ArrayList<>();
+            for (Handler handler : entry.getValue()) {
+                if (handler.listener == listener) {
+                    handler.removed = true;
+                } else {
+                    kept.add(handler);
+                }
+            }
+            entry.setValue(List.copyOf(kept));
         }
     }
 

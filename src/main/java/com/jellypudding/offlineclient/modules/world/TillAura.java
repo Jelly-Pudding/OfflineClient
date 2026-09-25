@@ -7,6 +7,7 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
+import com.jellypudding.offlineclient.util.InputUtil;
 import net.minecraft.core.BlockPos;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.level.block.Block;
@@ -19,9 +20,6 @@ public final class TillAura extends Module {
 
     private static final Set<Block> TILLABLE = Set.of(
         Blocks.GRASS_BLOCK, Blocks.DIRT_PATH, Blocks.DIRT, Blocks.COARSE_DIRT, Blocks.ROOTED_DIRT);
-
-    // Vanilla repeats a held right click at this rate.
-    private static final int CLICK_INTERVAL = 4;
 
     private final NumberSetting range = new NumberSetting("Range",
         "How far from your eyes to till.", 5, 1, 6, 0.1).max(6);
@@ -42,7 +40,7 @@ public final class TillAura extends Module {
 
     @Override
     public String getSuffix() {
-        return tilled == 0 ? null : tilled + " tilled";
+        return count(tilled, "tilled");
     }
 
     @Override
@@ -71,7 +69,7 @@ public final class TillAura extends Module {
             if (BlockUtil.useOn(pos, rotate.isOn(), !multi.isOn())) {
                 tilled++;
                 if (!multi.isOn()) {
-                    mc.rightClickDelay = CLICK_INTERVAL;
+                    mc.rightClickDelay = InputUtil.USE_DELAY;
                     return;
                 }
             }

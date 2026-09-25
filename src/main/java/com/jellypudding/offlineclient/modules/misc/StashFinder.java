@@ -3,8 +3,7 @@ package com.jellypudding.offlineclient.modules.misc;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
-import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.config.DataFiles;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.KeyPressEvent;
 import com.jellypudding.offlineclient.event.events.Render3DEvent;
@@ -18,10 +17,10 @@ import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.ServerInfo;
+import com.jellypudding.offlineclient.util.WorldWatch;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.gui.components.toasts.SystemToast;
-import net.minecraft.client.multiplayer.ClientLevel;
-import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
@@ -36,8 +35,6 @@ import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.phys.Vec3;
 
-import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -138,8 +135,7 @@ public final class StashFinder extends Module {
     private boolean loaded;
     private boolean dirty;
 
-    // A new world object means a new server or a new dimension.
-    private ClientLevel lastLevel;
+    private final WorldWatch world = new WorldWatch();
 
     public StashFinder() {
         super("StashFinder", "Points out chunks packed with containers as you travel.", Category.MISC);
@@ -177,9 +173,8 @@ public final class StashFinder extends Module {
             loaded = true;
             load();
         }
-        if (mc.level != lastLevel) {
+        if (world.changed()) {
             // Chunk coordinates mean something different in every world.
-            lastLevel = mc.level;
             dimension = mc.level.dimension().identifier().toString();
             scanned.clear();
         }
@@ -252,7 +247,7 @@ public final class StashFinder extends Module {
             return;
         }
 
-        String server = serverName();
+        String server = ServerInfo.key();
         Stash fresh = new Stash(server, dimension, middleX, middleZ, counts, true);
         for (int i = 0; i < stashes.size(); i++) {
             Stash old = stashes.get(i);
@@ -283,11 +278,6 @@ public final class StashFinder extends Module {
         }
         BlockPos below = blockEntity.getBlockPos().below();
         return !ignoredSupports.contains(mc.level.getBlockState(below).getBlock());
-    }
-
-    private String serverName() {
-        ServerData server = mc.getCurrentServer();
-        return server == null ? "" : server.ip;
     }
 
     private void report(Stash stash) {
@@ -329,7 +319,7 @@ public final class StashFinder extends Module {
         if (!inGame() || (!tracers.isOn() && !columns.isOn())) {
             return;
         }
-        String server = serverName();
+        String server = ServerInfo.key();
         double eye = mc.player.getEyeY();
         for (Stash stash : stashes) {
             if (!stash.tracer() || !stash.server().equals(server)
@@ -362,34 +352,26 @@ public final class StashFinder extends Module {
     }
 
     private static Path file() {
-        return OfflineClient.MC.gameDirectory.toPath().resolve("offlineclient")
-            .resolve("stashes.json");
+        return DataFiles.path("stashes.json");
     }
 
     private void load() {
-        Path path = file();
-        if (!Files.exists(path)) {
-            return;
-        }
-        try {
-            JsonElement root = JsonParser.parseString(Files.readString(path));
-            if (!root.isJsonArray()) {
-                return;
+        DataFiles.readJson(file(), StashFinder::decode).ifPresent(stashes::addAll);
+    }
+
+    private static List<Stash> decode(JsonElement root) {
+        List<Stash> decoded = new ArrayList<>();
+        for (JsonElement element : root.getAsJsonArray()) {
+            JsonObject object = element.getAsJsonObject();
+            Map<String, Integer> counts = new LinkedHashMap<>();
+            for (Map.Entry<String, JsonElement> entry : object.getAsJsonObject("counts").entrySet()) {
+                counts.put(entry.getKey(), entry.getValue().getAsInt());
             }
-            for (JsonElement element : root.getAsJsonArray()) {
-                JsonObject object = element.getAsJsonObject();
-                Map<String, Integer> counts = new LinkedHashMap<>();
-                for (Map.Entry<String, JsonElement> entry
-                    : object.getAsJsonObject("counts").entrySet()) {
-                    counts.put(entry.getKey(), entry.getValue().getAsInt());
-                }
-                stashes.add(new Stash(object.get("server").getAsString(),
-                    object.get("dimension").getAsString(), object.get("x").getAsInt(),
-                    object.get("z").getAsInt(), counts, object.get("tracer").getAsBoolean()));
-            }
-        } catch (Exception error) {
-            OfflineClient.LOG.error("Failed to read the stash list", error);
+            decoded.add(new Stash(object.get("server").getAsString(),
+                object.get("dimension").getAsString(), object.get("x").getAsInt(),
+                object.get("z").getAsInt(), counts, object.get("tracer").getAsBoolean()));
         }
+        return decoded;
     }
 
     private void save() {
@@ -408,12 +390,6 @@ public final class StashFinder extends Module {
             object.add("counts", counts);
             array.add(object);
         }
-        try {
-            Path path = file();
-            Files.createDirectories(path.getParent());
-            Files.writeString(path, array.toString());
-        } catch (IOException error) {
-            OfflineClient.LOG.error("Failed to write the stash list", error);
-        }
+        DataFiles.writeJson(file(), array);
     }
 }

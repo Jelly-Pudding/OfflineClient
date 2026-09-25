@@ -9,10 +9,11 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.FaceMode;
+import com.jellypudding.offlineclient.util.Feeding;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.RotationPriority;
-import com.jellypudding.offlineclient.util.UseHold;
+import net.minecraft.SharedConstants;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.InteractionHand;
@@ -34,8 +35,6 @@ public final class AutoPotion extends Module {
     // Ticks to wait after a drink whilst the effect and the health land.
     private static final int SETTLE_TICKS = 10;
 
-    private static final int SECOND = 20;
-
     private final NumberSetting health = new NumberSetting("Health",
         "Drink a healing potion at or below this many hearts. Zero turns it off.",
         7, 0, 10, 0.5, " hearts").min(0).max(20);
@@ -52,10 +51,7 @@ public final class AutoPotion extends Module {
         "Seconds of effect left before topping up.", 10, 1, 60, 1, "s")
         .min(1).under(topUp);
 
-    private boolean drinking;
-    private final UseHold use = new UseHold();
-    private int settle;
-    private final InventoryUtil.HotbarLoan loan = new InventoryUtil.HotbarLoan();
+    private final Feeding feeding = new Feeding();
 
     public AutoPotion() {
         super("AutoPotion", "Drinks a potion when you are hurt or burning or running low.",
@@ -64,39 +60,30 @@ public final class AutoPotion extends Module {
         searchTags("potion", "auto drink", "strength", "fire resistance");
     }
 
-    public boolean isDrinking() {
-        return isEnabled() && drinking;
+    public boolean isBusy() {
+        return isEnabled() && feeding.isActive();
     }
 
     @Override
     public String getSuffix() {
-        return drinking ? "drinking" : null;
+        return feeding.isActive() ? "drinking" : null;
     }
 
     @Override
     protected void onDisable() {
-        stopDrinking();
+        feeding.stop();
     }
 
     @Subscribe
     private void onTick(TickEvent event) {
         if (!inGame() || mc.player.isSpectator()) {
-            stopDrinking();
+            feeding.stop();
             return;
         }
-        if (mc.player.isDeadOrDying()) {
-            // Respawn rebuilds the inventory.
-            loan.forget();
-            stopDrinking();
-            settle = 0;
+        if (feeding.waiting()) {
             return;
         }
-        if (settle > 0) {
-            settle--;
-            return;
-        }
-
-        if (drinking) {
+        if (feeding.isActive()) {
             continueDrinking();
             return;
         }
@@ -108,10 +95,9 @@ public final class AutoPotion extends Module {
         }
 
         int slot = findWanted();
-        if (slot == -1) {
-            return;
+        if (slot != -1) {
+            feeding.begin(slot);
         }
-        beginDrinking(slot);
     }
 
     private boolean handBusy() {
@@ -143,7 +129,7 @@ public final class AutoPotion extends Module {
         if (!topUp.isOn()) {
             return -1;
         }
-        int threshold = topUpAt.getInt() * SECOND;
+        int threshold = topUpAt.getInt() * SharedConstants.TICKS_PER_SECOND;
         for (MobEffectInstance active : mc.player.getActiveEffects()) {
             if (!active.endsWithin(threshold)) {
                 continue;
@@ -192,13 +178,13 @@ public final class AutoPotion extends Module {
 
     // The look packet goes out first. The bottle then lands on your own feet.
     private void throwSplash(int slot) {
-        if (!loan.select(slot)) {
+        if (!feeding.loan().select(slot)) {
             return;
         }
         FaceMode.SPAM.faceExact(mc.player.getYRot(), 90, RotationPriority.PLACE);
         mc.gameMode.useItem(mc.player, InteractionHand.MAIN_HAND);
-        loan.giveBack();
-        settle = SETTLE_TICKS;
+        feeding.loan().giveBack();
+        feeding.pause(SETTLE_TICKS);
     }
 
     // Splash and lingering bottles are thrown and not drunk.
@@ -208,36 +194,14 @@ public final class AutoPotion extends Module {
             && stack.has(DataComponents.CONSUMABLE);
     }
 
-    private void beginDrinking(int slot) {
-        if (!loan.select(slot)) {
-            return;
-        }
-        drinking = true;
-        use.begin();
-    }
-
     private void continueDrinking() {
         // A screen swallows the use key.
         if (mc.gui.screen() != null || !isPotion(mc.player.getInventory().getSelectedItem())) {
-            stopDrinking();
+            feeding.stop();
             return;
         }
-        if (!use.tick()) {
-            finishDrink();
+        if (!feeding.tick()) {
+            feeding.finish(SETTLE_TICKS, false);
         }
-    }
-
-    private void finishDrink() {
-        stopDrinking();
-        settle = SETTLE_TICKS;
-    }
-
-    private void stopDrinking() {
-        if (drinking) {
-            drinking = false;
-            use.release();
-        }
-        // A loan whose return was refused earlier gets another go.
-        loan.giveBack();
     }
 }

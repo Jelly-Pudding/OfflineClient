@@ -15,7 +15,7 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.FaceMode;
-import com.jellypudding.offlineclient.util.InventoryUtil;
+import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.RotationPriority;
 import com.jellypudding.offlineclient.util.SwingMode;
@@ -25,7 +25,6 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.phys.BlockHitResult;
-import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.Iterator;
@@ -35,7 +34,6 @@ import java.util.Map;
 // Right click a block and the picked template goes up from there the way you face.
 public final class AutoBuild extends Module {
 
-    private static final int PLACE_DELAY = 4;
     // How many boxes are drawn at most whilst a big shape goes up.
     private static final int MAX_DRAWN = 1024;
 
@@ -118,7 +116,8 @@ public final class AutoBuild extends Module {
         if (!inGame() || !remaining.isEmpty()) {
             return;
         }
-        if (!(mc.hitResult instanceof BlockHitResult hit) || hit.getType() != HitResult.Type.BLOCK) {
+        BlockHitResult hit = BlockUtil.aimedBlock();
+        if (hit == null) {
             return;
         }
         if (!loadChosen()) {
@@ -180,7 +179,7 @@ public final class AutoBuild extends Module {
             return false;
         }
         swing.getValue().swing(InteractionHand.MAIN_HAND);
-        mc.rightClickDelay = PLACE_DELAY;
+        mc.rightClickDelay = InputUtil.USE_DELAY;
         return true;
     }
 

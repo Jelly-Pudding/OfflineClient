@@ -14,6 +14,9 @@ public final class InputUtil {
     // Degrees of turn per unit of mouse movement. The same factor the game uses.
     public static final double MOUSE_TURN = 0.15;
 
+    // Vanilla repeats a held right click this many ticks apart.
+    public static final int USE_DELAY = 4;
+
     private InputUtil() {
     }
 
@@ -73,7 +76,7 @@ public final class InputUtil {
     }
 
     // A copy of an input record with only the sneak flag changed.
-    public static Input withShift(Input input, boolean shift) {
+    private static Input withShift(Input input, boolean shift) {
         return new Input(input.forward(), input.backward(), input.left(), input.right(),
             input.jump(), shift, input.sprint());
     }

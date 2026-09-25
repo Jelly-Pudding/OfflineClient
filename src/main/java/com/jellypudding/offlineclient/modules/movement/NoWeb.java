@@ -7,7 +7,7 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.modules.misc.Timer;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
-import net.minecraft.world.level.block.Blocks;
+import com.jellypudding.offlineclient.util.BlockUtil;
 
 // The full speed mode lives in WebBlockMixin.
 public final class NoWeb extends Module {
@@ -19,7 +19,7 @@ public final class NoWeb extends Module {
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
         "How a cobweb is beaten.", Mode.FULL_SPEED)
         .describe(Mode.FULL_SPEED, "The cobweb never slows you at all.")
-        .describe(Mode.TIMER, "Speeds the game up whilst you hang in a cobweb off the ground.");
+        .describe(Mode.TIMER, "Speeds the game up whilst you are caught in a cobweb.");
     private final NumberSetting timerSpeed = new NumberSetting("Timer speed",
         "Game speed whilst in a cobweb.", 10, 1, 20, 0.5, "x")
         .min(1).under(mode, Mode.TIMER);
@@ -44,8 +44,7 @@ public final class NoWeb extends Module {
         if (!inGame()) {
             return;
         }
-        boolean hanging = mode.is(Mode.TIMER) && !mc.player.onGround()
-            && mc.player.getInBlockState().is(Blocks.COBWEB);
-        Timer.override(TIMER_KEY, hanging ? timerSpeed.getFloat() : 1f);
+        boolean caught = mode.is(Mode.TIMER) && BlockUtil.inCobweb(mc.player);
+        Timer.override(TIMER_KEY, caught ? timerSpeed.getFloat() : 1f);
     }
 }

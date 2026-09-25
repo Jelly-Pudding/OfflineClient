@@ -28,7 +28,7 @@ import java.util.List;
 
 public final class Burrow extends Module {
 
-    // Clears the block completely.
+    // A lift a little over one block clears the block completely.
     private static final double LIFT = 1.16;
 
     private static final int JUMP_TIMEOUT = 20;
@@ -102,24 +102,20 @@ public final class Burrow extends Module {
         }
         BlockPos feet = mc.player.blockPosition();
         if (!BlockUtil.isReplaceable(feet)) {
-            ChatUtil.error("Already inside a block.");
-            setEnabled(false);
+            disable("Already inside a block.");
             return;
         }
         if (!headroom(feet)) {
-            ChatUtil.error("Not enough room above to burrow.");
-            setEnabled(false);
+            disable("Not enough room above to burrow.");
             return;
         }
         if (onlyInHoles.isOn() && !BlockUtil.playerInHole()) {
-            ChatUtil.error("Not in a hole.");
-            setEnabled(false);
+            disable("Not in a hole.");
             return;
         }
         if (findSlot() == -1) {
-            ChatUtil.error(source.is(Source.HELD)
+            disable(source.is(Source.HELD)
                 ? "No block in your main hand." : "No burrow block in your hotbar.");
-            setEnabled(false);
             return;
         }
         anchor = feet;
@@ -177,8 +173,7 @@ public final class Burrow extends Module {
         }
         if (lift.is(Lift.JUMP) && mc.player.getY() < anchor.getY() + triggerHeight.getValue()) {
             if (++waited > JUMP_TIMEOUT) {
-                ChatUtil.error("Could not get high enough to burrow.");
-                setEnabled(false);
+                disable("Could not get high enough to burrow.");
             }
             return;
         }

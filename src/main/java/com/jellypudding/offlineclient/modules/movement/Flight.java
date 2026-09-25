@@ -17,6 +17,7 @@ import com.jellypudding.offlineclient.util.HoverDip;
 import com.jellypudding.offlineclient.util.MoveGate;
 import com.jellypudding.offlineclient.util.MovementUtil;
 import com.jellypudding.offlineclient.util.PacketUtil;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.protocol.game.ClientboundPlayerAbilitiesPacket;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import net.minecraft.world.entity.player.Abilities;
@@ -131,7 +132,7 @@ public final class Flight extends Module {
         if (!inGame()) {
             return;
         }
-        boolean moving = MovementUtil.inputDirection().lengthSqr() > 0
+        boolean moving = MovementUtil.hasInput()
             || mc.options.keyJump.isDown() || mc.options.keyShift.isDown();
         Timer.override(TIMER_KEY, moving ? timer.getFloat() : 1f);
 
@@ -219,18 +220,23 @@ public final class Flight extends Module {
         }
     }
 
-    // Fired on the netty thread. The server may not switch the flight off.
-    // The rest of what the packet carries still lands.
+    // Fired on the netty thread. The server may not switch the flight off. The packet
+    // is rewritten and vanilla lands the rest of it on the game thread.
     @Subscribe
     private void onPacketReceive(PacketReceiveEvent event) {
-        if (!keepFlightOn.isOn() || mc.player == null
+        LocalPlayer player = mc.player;
+        if (!keepFlightOn.isOn() || player == null
             || !(event.getPacket() instanceof ClientboundPlayerAbilitiesPacket packet)) {
             return;
         }
-        event.cancel();
-        Abilities abilities = mc.player.getAbilities();
-        abilities.invulnerable = packet.isInvulnerable();
-        abilities.instabuild = packet.canInstabuild();
-        abilities.setWalkingSpeed(packet.getWalkingSpeed());
+        Abilities current = player.getAbilities();
+        Abilities kept = new Abilities();
+        kept.invulnerable = packet.isInvulnerable();
+        kept.instabuild = packet.canInstabuild();
+        kept.setWalkingSpeed(packet.getWalkingSpeed());
+        kept.flying = current.flying;
+        kept.mayfly = current.mayfly;
+        kept.setFlyingSpeed(current.getFlyingSpeed());
+        event.setPacket(new ClientboundPlayerAbilitiesPacket(kept));
     }
 }

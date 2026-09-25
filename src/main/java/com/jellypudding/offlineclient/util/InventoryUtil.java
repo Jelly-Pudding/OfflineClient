@@ -5,10 +5,12 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.ContainerScreen;
+import net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen;
 import net.minecraft.client.gui.screens.inventory.DispenserScreen;
 import net.minecraft.client.gui.screens.inventory.HopperScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.client.gui.screens.inventory.ShulkerBoxScreen;
+import net.minecraft.tags.ItemTags;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -19,23 +21,23 @@ public final class InventoryUtil {
 
     private static final Minecraft MC = OfflineClient.MC;
 
-    // A hotbar slot maps to this network slot plus its index.
-    private static final int HOTBAR_START = 36;
-
     public static final int HOTBAR_SIZE = 9;
+
+    // The main grid starts here in inventory index and network slot order alike.
+    public static final int MAIN_START = HOTBAR_SIZE;
 
     // Every slot of the survival inventory.
     public static final int WHOLE_INVENTORY = 36;
 
+    // Network slots of the survival inventory. The hotbar sits after the main grid
+    // and a hotbar index maps to its start plus that index. Armour runs helmet first.
+    public static final int HOTBAR_START = 36;
+    public static final int ARMOR_START = 5;
+    public static final int CHEST_SLOT = ARMOR_START + 1;
     public static final int OFFHAND_SLOT = 45;
 
     private InventoryUtil() {
     }
-
-    // The hotbar sits after the rest in network slot order.
-    // Container slots of the worn armour in the survival inventory. Helmet first.
-    public static final int ARMOR_START = 5;
-    public static final int CHEST_SLOT = ARMOR_START + 1;
 
     public static int networkSlot(int inventoryIndex) {
         return inventoryIndex < HOTBAR_SIZE ? HOTBAR_START + inventoryIndex : inventoryIndex;
@@ -68,6 +70,14 @@ public final class InventoryUtil {
             && carried().isEmpty();
     }
 
+    // True whilst a chest or furnace or any other container is open. Your own inventory
+    // and the creative screen do not count.
+    public static boolean containerOpen() {
+        Screen screen = MC.gui.screen();
+        return screen instanceof AbstractContainerScreen && !(screen instanceof InventoryScreen)
+            && !(screen instanceof CreativeModeInventoryScreen);
+    }
+
     // Plain storage only. Crafting and anvil and trade and mount screens put
     // their own slots first and refuse a click into them.
     public static boolean isStorage(Screen screen) {
@@ -79,6 +89,11 @@ public final class InventoryUtil {
 
     public static ItemStack carried() {
         return MC.player.containerMenu.getCarried();
+    }
+
+    // Clicks are allowed and nothing sits on the cursor.
+    public static boolean cursorFree() {
+        return canClick() && carried().isEmpty();
     }
 
     // Moves one slot into another with the three clicks a player makes.
@@ -147,6 +162,15 @@ public final class InventoryUtil {
         return -1;
     }
 
+    // The network slot of the arrow a bow fires first or minus one. The offhand beats everything.
+    public static int firstArrowSlot() {
+        if (MC.player.getOffhandItem().is(ItemTags.ARROWS)) {
+            return OFFHAND_SLOT;
+        }
+        int slot = findSlot(stack -> stack.is(ItemTags.ARROWS), WHOLE_INVENTORY);
+        return slot == -1 ? -1 : networkSlot(slot);
+    }
+
     // An empty hotbar slot or minus one when every one is taken.
     public static int freeHotbarSlot() {
         return freeHotbarSlot(-1);
@@ -184,7 +208,7 @@ public final class InventoryUtil {
                     // Already borrowed. A second swap would send it home again.
                     slot = lentTo;
                 } else {
-                    if (!canClick() || !carried().isEmpty()) {
+                    if (!cursorFree()) {
                         return false;
                     }
                     // Only one stack can be away from home at a time.
@@ -236,7 +260,7 @@ public final class InventoryUtil {
             if (lentFrom == -1) {
                 return true;
             }
-            if (!canClick() || !carried().isEmpty()) {
+            if (!cursorFree()) {
                 return false;
             }
             MC.gameMode.handleContainerInput(0, lentFrom, lentTo, ContainerInput.SWAP, MC.player);
@@ -335,6 +359,15 @@ public final class InventoryUtil {
         // Records where a stack left on the cursor belongs.
         public void hold(int networkSlot) {
             slot = networkSlot;
+        }
+
+        // A swap that remembers the displaced stack when it had nowhere to go.
+        public Swap swap(int fromNetworkSlot, int toNetworkSlot) {
+            Swap result = InventoryUtil.swap(fromNetworkSlot, toNetworkSlot);
+            if (result == Swap.STRANDED) {
+                hold(fromNetworkSlot);
+            }
+            return result;
         }
 
         // True once the cursor is clear. Tries again on every call until it is.

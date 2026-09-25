@@ -67,8 +67,7 @@ public final class MassTpa extends Module {
         }
         Collections.shuffle(players);
         if (players.isEmpty()) {
-            ChatUtil.error("Nobody else is online.");
-            setEnabled(false);
+            disable("Nobody else is online.");
         }
     }
 

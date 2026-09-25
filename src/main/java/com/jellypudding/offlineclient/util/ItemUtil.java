@@ -5,9 +5,12 @@ import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.effect.MobEffect;
+import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.ai.attributes.Attribute;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.alchemy.PotionContents;
 import net.minecraft.world.item.component.ItemAttributeModifiers;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
@@ -57,6 +60,25 @@ public final class ItemUtil {
         return stack.isDamageableItem() && stack.getMaxDamage() - stack.getDamageValue() <= margin;
     }
 
+    // True when a potion or a tipped arrow carries the effect.
+    public static boolean carriesEffect(ItemStack stack, MobEffect effect) {
+        PotionContents contents = stack.get(DataComponents.POTION_CONTENTS);
+        if (contents == null) {
+            return false;
+        }
+        for (MobEffectInstance instance : contents.getAllEffects()) {
+            if (instance.getEffect().value() == effect) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // How much of the durability is left out of a hundred.
+    public static double durabilityPercent(ItemStack stack) {
+        return 100.0 * (stack.getMaxDamage() - stack.getDamageValue()) / stack.getMaxDamage();
+    }
+
     // True when the remaining durability is at or under this share of the whole.
     public static boolean wornBelow(ItemStack stack, double share) {
         if (!stack.isDamageableItem()) {
@@ -95,8 +117,8 @@ public final class ItemUtil {
         return bestToolSlot(state, 1, stack -> true, InventoryUtil.HOTBAR_SIZE);
     }
 
-    // The inventory slot that mines the block fastest. Only the first slots up to the
-    // limit are searched. Only stacks the filter accepts and speeds above one count.
+    // The slot among the first few up to the limit that mines the block fastest. A stack
+    // counts only when the filter accepts it and it beats the floor speed.
     public static int bestToolSlot(BlockState state, float floor, Predicate<ItemStack> allowed,
                                    int slots) {
         int bestSlot = -1;
@@ -113,6 +135,15 @@ public final class ItemUtil {
             }
         }
         return bestSlot;
+    }
+
+    // As selectBestTool but a slot the player picked themselves is left alone.
+    public static void holdBestTool(BlockState state, InventoryUtil.SlotSwap slots) {
+        if (slots.isHolding() && !slots.stillMine()) {
+            slots.forget();
+            return;
+        }
+        selectBestTool(state, slots);
     }
 
     public static void selectBestTool(BlockState state, InventoryUtil.SlotSwap slots) {

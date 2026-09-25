@@ -48,7 +48,7 @@ public final class AutoJump extends Module {
             || mc.player.getAbilities().flying || mc.player.isPassenger()) {
             return;
         }
-        boolean moving = MovementUtil.inputDirection().lengthSqr() > 0;
+        boolean moving = MovementUtil.hasInput();
         boolean go = switch (when.getValue()) {
             case SPRINTING -> moving && mc.player.isSprinting();
             case MOVING -> moving;

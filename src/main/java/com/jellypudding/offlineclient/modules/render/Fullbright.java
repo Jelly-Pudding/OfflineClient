@@ -23,8 +23,6 @@ public final class Fullbright extends Module {
     // Night vision only flickers in its last few seconds.
     private static final int POTION_TICKS = 420;
 
-    private static volatile Fullbright instance;
-
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
         "How the dark is lit.", Mode.GAMMA)
         .describe(Mode.GAMMA, "Pushes the brightness slider past its cap.")
@@ -54,6 +52,8 @@ public final class Fullbright extends Module {
     // Where the fade has reached. Jumps straight to the target whilst fade is off.
     private double shown = 1;
     private Mode running;
+    // A dragged slider settles before every chunk is meshed again.
+    private final ChunkRebuild rebuild = new ChunkRebuild();
     private int lastMinimum;
     private Layer lastLayer;
 
@@ -62,11 +62,6 @@ public final class Fullbright extends Module {
         addSettings(mode, brightness, layer, minimumLight, fade, fadeStep,
             restoreBrightness);
         searchTags("night vision", "brightness");
-        instance = this;
-    }
-
-    public static Fullbright get() {
-        return instance;
     }
 
     @Override
@@ -121,11 +116,9 @@ public final class Fullbright extends Module {
             case GAMMA -> setGamma(stepTowards(brightness.getValue()));
             case POTION -> topUpNightVision();
             case LUMINANCE -> {
-                if (lastMinimum != minimumLight.getInt() || lastLayer != layer.getValue()) {
-                    lastMinimum = minimumLight.getInt();
-                    lastLayer = layer.getValue();
-                    relight();
-                }
+                rebuild.tick(lastMinimum != minimumLight.getInt() || lastLayer != layer.getValue());
+                lastMinimum = minimumLight.getInt();
+                lastLayer = layer.getValue();
             }
         }
     }
@@ -162,8 +155,7 @@ public final class Fullbright extends Module {
         return wanted ? minimumLight.getInt() : 0;
     }
 
-    @SuppressWarnings("unchecked")
     private void setGamma(double gamma) {
-        ((ISimpleOption<Double>) (Object) mc.options.gamma()).offlineclient$forceSetValue(gamma);
+        ISimpleOption.force(mc.options.gamma(), gamma);
     }
 }

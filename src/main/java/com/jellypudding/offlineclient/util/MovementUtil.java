@@ -2,7 +2,11 @@ package com.jellypudding.offlineclient.util;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec2;
@@ -10,6 +14,12 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
 public final class MovementUtil {
+
+    // A worn elytra short of breaking or any other chest item that glides.
+    public static boolean wearsGlider() {
+        LocalPlayer player = OfflineClient.MC.player;
+        return LivingEntity.canGlideUsing(player.getItemBySlot(EquipmentSlot.CHEST), EquipmentSlot.CHEST);
+    }
 
     private MovementUtil() {
     }
@@ -27,6 +37,42 @@ public final class MovementUtil {
     // floor underfoot to leave it out.
     private static final double LEDGE_REACH = 0.1;
     private static final double FLOOR_GAP = 0.05;
+
+    // Vanilla player gravity a tick.
+    public static final double GRAVITY = 0.08;
+
+    // The pace of a plain sprint on flat ground.
+    public static final double WALK_SPEED = 0.2873;
+
+    // Each level of Speed adds a fifth and each level of Slowness takes off
+    // just under a sixth.
+    public static final double SPEED_PER_LEVEL = 0.2;
+    public static final double SLOWNESS_PER_LEVEL = 0.15;
+
+    // A pace scaled by Speed and Slowness the way the walk speed attribute is.
+    public static double withSpeedEffects(LocalPlayer player, double pace) {
+        MobEffectInstance speed = player.getEffect(MobEffects.SPEED);
+        if (speed != null) {
+            pace *= 1 + SPEED_PER_LEVEL * (speed.getAmplifier() + 1);
+        }
+        MobEffectInstance slowness = player.getEffect(MobEffects.SLOWNESS);
+        if (slowness != null) {
+            pace *= Math.max(0, 1 - SLOWNESS_PER_LEVEL * (slowness.getAmplifier() + 1));
+        }
+        return pace;
+    }
+
+    // True whilst any movement key is held.
+    public static boolean hasInput() {
+        return inputDirection() != Vec3.ZERO;
+    }
+
+    // True whilst nothing but gravity is acting on the player.
+    public static boolean inPlainAir(LocalPlayer player) {
+        return !player.isSpectator() && !player.isPassenger()
+            && !player.getAbilities().flying && !player.isFallFlying()
+            && !player.isInWater() && !player.isInLava() && !player.onClimbable();
+    }
 
     // The way the movement keys point in world space.
     // Vec3.ZERO whilst none of them is held.

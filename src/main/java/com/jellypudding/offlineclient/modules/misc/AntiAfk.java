@@ -18,11 +18,13 @@ import com.jellypudding.offlineclient.util.RotationManager;
 import com.jellypudding.offlineclient.util.RotationPriority;
 import com.jellypudding.offlineclient.util.SwingMode;
 import com.jellypudding.offlineclient.util.TextLines;
+import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.phys.Vec3;
 
+import java.util.Locale;
 import java.util.concurrent.ThreadLocalRandom;
 
 public final class AntiAfk extends Module {
@@ -32,8 +34,6 @@ public final class AntiAfk extends Module {
 
     // How close a plain walk gets before it counts as there.
     private static final double WALK_ARRIVED = 0.5;
-
-    private static final int TICKS_PER_SECOND = 20;
 
     public enum Turn { NONE, NUDGE, SPIN, SPIN_VIEW }
 
@@ -119,7 +119,7 @@ public final class AntiAfk extends Module {
         if (!showWait.isOn() || wandering() || waitTicks <= 0) {
             return null;
         }
-        return String.format("%.1fs", waitTicks / (double) TICKS_PER_SECOND);
+        return String.format(Locale.ROOT, "%.1fs", waitTicks / (double) SharedConstants.TICKS_PER_SECOND);
     }
 
     @Override
@@ -127,7 +127,7 @@ public final class AntiAfk extends Module {
         sneakTimer = 0;
         strafeTimer = 0;
         strafeLeft = false;
-        messageTimer = messageDelay.getInt() * TICKS_PER_SECOND;
+        messageTimer = messageDelay.getInt() * SharedConstants.TICKS_PER_SECOND;
         waitTicks = nextWait();
         home = null;
         walkTarget = null;
@@ -299,7 +299,7 @@ public final class AntiAfk extends Module {
         double spread = waitSpread.getValue();
         double seconds = waitTime.getValue()
             + (spread > 0 ? ThreadLocalRandom.current().nextDouble(-spread, spread) : 0);
-        return (int) Math.round(Math.max(0, seconds) * TICKS_PER_SECOND);
+        return (int) Math.round(Math.max(0, seconds) * SharedConstants.TICKS_PER_SECOND);
     }
 
     // True whilst a walk of either kind is driving the movement keys.
@@ -387,7 +387,7 @@ public final class AntiAfk extends Module {
         if (messageTimer-- > 0) {
             return;
         }
-        messageTimer = messageDelay.getInt() * TICKS_PER_SECOND;
+        messageTimer = messageDelay.getInt() * SharedConstants.TICKS_PER_SECOND;
         String text = lines.pick();
         if (text == null) {
             return;
@@ -397,6 +397,6 @@ public final class AntiAfk extends Module {
 
     // Fires once every interval on average.
     private boolean chance() {
-        return ThreadLocalRandom.current().nextInt(interval.getInt() * TICKS_PER_SECOND) == 0;
+        return ThreadLocalRandom.current().nextInt(interval.getInt() * SharedConstants.TICKS_PER_SECOND) == 0;
     }
 }

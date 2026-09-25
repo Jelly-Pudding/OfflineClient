@@ -75,13 +75,10 @@ public final class TabView {
         }
     }
 
-    // A multiplication sign. The closest thing to a cross the font has.
-    private static final String DROP = "×";
     private static final String LISTENING = "press a key";
     private static final int DROP_ZONE = 14;
     private static final int EMPTY_HEIGHT = 18;
     private static final int LINE = 10;
-    private static final int GRAB = 4;
     private static final int PAD = 2;
     private static final int MIN_WIDTH = 140;
     private static final int MAX_WIDTH = 460;
@@ -99,7 +96,7 @@ public final class TabView {
     private final Source source;
     private final SettingWidget.Host host;
     private final ScrollBar scrollBar = new ScrollBar();
-    private final TextField adder = new TextField();
+    private final SearchField adder;
 
     private int width = DEFAULT_WIDTH;
     // Zero leaves the box as tall as its rows need.
@@ -109,7 +106,6 @@ public final class TabView {
     private boolean sizeRight;
     private boolean sizeBottom;
 
-    private boolean typing;
     private String binding;
 
     private List<Entry> entries = List.of();
@@ -133,6 +129,7 @@ public final class TabView {
     public TabView(Source source, SettingWidget.Host host) {
         this.source = source;
         this.host = host;
+        adder = new SearchField(source.addHint(), this::refresh);
         refresh();
     }
 
@@ -160,8 +157,7 @@ public final class TabView {
     }
 
     private List<Entry> entries() {
-        if (!adder.get().trim().equals(asked)
-            || System.currentTimeMillis() - read > REFRESH_MS) {
+        if (System.currentTimeMillis() - read > REFRESH_MS) {
             refresh();
         }
         return entries;
@@ -196,7 +192,7 @@ public final class TabView {
 
     // The strip the field sits in. Zero when this list cannot be added to.
     private int fieldHeight() {
-        return source.addHint().isEmpty() ? 0 : GuiScreenBase.SEARCH_HEIGHT + PAD;
+        return source.addHint().isEmpty() ? 0 : SearchField.HEIGHT + PAD;
     }
 
     private int footerHeight() {
@@ -228,7 +224,7 @@ public final class TabView {
     }
 
     public boolean isTyping() {
-        return typing || binding != null;
+        return adder.isFocused() || binding != null;
     }
 
     // Where the box will land before it draws.
@@ -240,8 +236,8 @@ public final class TabView {
     }
 
     public boolean isOver(double mx, double my) {
-        return mx >= left - GRAB && mx < left + wide + GRAB
-            && my >= top - GRAB && my < top + drawn + GRAB;
+        return mx >= left - GuiTheme.GRAB && mx < left + wide + GuiTheme.GRAB
+            && my >= top - GuiTheme.GRAB && my < top + drawn + GuiTheme.GRAB;
     }
 
     public void wheel(double amount) {
@@ -255,46 +251,49 @@ public final class TabView {
         sizeRight = false;
         sizeBottom = false;
         scrollBar.release();
+        adder.release();
+    }
+
+    public void drag(double mx) {
+        adder.drag(mx);
     }
 
     // True when the key belonged to this box.
     public boolean keyPressed(KeyEvent event) {
         int key = event.key();
         if (binding != null) {
-            if (key == InputConstants.KEY_DELETE || key == InputConstants.KEY_BACKSPACE) {
-                source.bind(binding, KeybindSetting.UNBOUND);
-            } else if (key != InputConstants.KEY_ESCAPE) {
-                source.bind(binding, key);
+            int bind = KeybindSetting.fromPress(key);
+            if (bind != KeybindSetting.UNKNOWN) {
+                source.bind(binding, bind);
             }
             binding = null;
             refresh();
             return true;
         }
-        if (!typing) {
+        if (!adder.isFocused()) {
             return false;
         }
         if (key == InputConstants.KEY_ESCAPE) {
             adder.clear();
-            typing = false;
+            adder.setFocused(false);
             return true;
         }
         if (key == InputConstants.KEY_RETURN || key == InputConstants.KEY_NUMPADENTER) {
             commit();
             return true;
         }
-        adder.keyPressed(event, TextField.ANY);
+        adder.keyPressed(event);
         return true;
     }
 
     public boolean charTyped(char typed) {
-        return typing && adder.charTyped(typed, TextField.ANY);
+        return adder.charTyped(typed);
     }
 
     private void commit() {
         String text = adder.get().trim();
         if (!text.isEmpty()) {
             source.add(text);
-            refresh();
         }
         adder.clear();
     }
@@ -320,10 +319,7 @@ public final class TabView {
         Font font = OfflineClient.MC.font;
         int rowX = left + PAD;
         if (fieldHeight() > 0) {
-            boolean hovered = SettingWidget.isOver(mouseX, mouseY, rowX, top + PAD,
-                rowRoom(), GuiScreenBase.SEARCH_HEIGHT);
-            GuiScreenBase.searchField(context, font, rowX, top + PAD, rowRoom(), adder,
-                source.addHint(), typing, hovered, typing, null);
+            adder.render(context, font, rowX, top + PAD, rowRoom(), mouseX, mouseY, null);
         }
 
         int rowW = ScrollBar.rowWidth(rowRoom(), full, view);
@@ -401,9 +397,8 @@ public final class TabView {
         for (Chip chip : chips) {
             if (SettingWidget.isOver(mx, my, chip.x(), chip.y(), chip.w(), CHIP_HEIGHT)) {
                 adder.set(chip.text());
-                typing = true;
+                adder.setFocused(true);
                 binding = null;
-                refresh();
                 return true;
             }
         }
@@ -434,7 +429,7 @@ public final class TabView {
             rowX + GuiTheme.PAD, textY, hovered ? GuiTheme.text() : GuiTheme.textDim(), false);
 
         boolean overDrop = hovered && mouseX >= rowX + rowW - DROP_ZONE;
-        context.text(font, DROP, rowX + rowW - DROP_ZONE + (DROP_ZONE - font.width(DROP)) / 2,
+        context.text(font, GuiTheme.CROSS, rowX + rowW - DROP_ZONE + (DROP_ZONE - font.width(GuiTheme.CROSS)) / 2,
             textY, overDrop ? GuiTheme.RED_TEXT : GuiTheme.textFaint(), false);
 
         if (hovered) {
@@ -457,11 +452,11 @@ public final class TabView {
     // The bands sit outside the box. Reaching inwards would cover the
     // scrollbar and the first pixels of every row.
     private boolean nearLeft(double mx, double my) {
-        return inRow(my) && mx >= left - GRAB && mx <= left + 1;
+        return inRow(my) && mx >= left - GuiTheme.GRAB && mx <= left + 1;
     }
 
     private boolean nearRight(double mx, double my) {
-        return inRow(my) && mx >= left + wide - 1 && mx <= left + wide + GRAB;
+        return inRow(my) && mx >= left + wide - 1 && mx <= left + wide + GuiTheme.GRAB;
     }
 
     private boolean inRow(double my) {
@@ -469,8 +464,8 @@ public final class TabView {
     }
 
     private boolean nearBottom(double mx, double my) {
-        return mx >= left - GRAB && mx <= left + wide + GRAB
-            && Math.abs(my - (top + drawn)) <= GRAB;
+        return mx >= left - GuiTheme.GRAB && mx <= left + wide + GuiTheme.GRAB
+            && Math.abs(my - (top + drawn)) <= GuiTheme.GRAB;
     }
 
     // The box stays centred. The grabbed side widens it both ways at once
@@ -504,22 +499,17 @@ public final class TabView {
             return true;
         }
         if (mx < left || mx >= left + wide || my < top || my >= top + drawn) {
-            typing = false;
+            adder.setFocused(false);
             binding = null;
             return false;
         }
-
-        int rowX = left + PAD;
-        if (fieldHeight() > 0 && SettingWidget.isOver(mx, my, rowX, top + PAD,
-            rowRoom(), GuiScreenBase.SEARCH_HEIGHT)) {
-            typing = true;
+        if (fieldHeight() > 0 && adder.click(mx, my) != SearchField.Click.MISSED) {
             binding = null;
-            if (GuiScreenBase.overClear(adder, mx, my, rowX, top + PAD, rowRoom())) {
-                adder.clear();
-            }
             return true;
         }
-        typing = false;
+        adder.setFocused(false);
+
+        int rowX = left + PAD;
 
         int full = contentHeight();
         int view = viewHeight();

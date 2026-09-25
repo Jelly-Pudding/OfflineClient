@@ -37,7 +37,7 @@ public final class JumpCarry {
             return;
         }
         LocalPlayer player = OfflineClient.MC.player;
-        if (player == null || player.onGround() || !inPlainAir(player)) {
+        if (player == null || player.onGround() || !MovementUtil.inPlainAir(player)) {
             stop();
             return;
         }
@@ -48,13 +48,6 @@ public final class JumpCarry {
     public void stop() {
         active = false;
         hasHeading = false;
-    }
-
-    // True whilst nothing but gravity is acting on the player.
-    public static boolean inPlainAir(LocalPlayer player) {
-        return !player.isSpectator() && !player.isPassenger()
-            && !player.getAbilities().flying && !player.isFallFlying()
-            && !player.isInWater() && !player.isInLava() && !player.onClimbable();
     }
 
     // Takes the heading from the keys. False when there is none to take and none kept.

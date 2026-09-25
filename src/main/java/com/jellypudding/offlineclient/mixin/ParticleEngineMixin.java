@@ -15,7 +15,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public class ParticleEngineMixin {
 
     @Inject(method = "add(Lnet/minecraft/client/particle/Particle;)V", at = @At("HEAD"), cancellable = true)
-    private void onAdd(Particle particle, CallbackInfo ci) {
+    private void onAdd(CallbackInfo ci) {
         ClearView clearView = Modules.active(ClearView.class);
         if (clearView != null && clearView.blocksAllParticles()) {
             ci.cancel();

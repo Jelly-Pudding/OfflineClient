@@ -35,8 +35,7 @@ public class FogRendererMixin {
             return vanilla;
         }
         int colour = ambience.fogColor();
-        return new Vector4f(ARGB.red(colour) / 255f, ARGB.green(colour) / 255f,
-            ARGB.blue(colour) / 255f, 1f);
+        return ARGB.vector4fFromARGB32(ARGB.opaque(colour));
     }
 
     @Inject(method = "setupFog", at = @At("RETURN"))

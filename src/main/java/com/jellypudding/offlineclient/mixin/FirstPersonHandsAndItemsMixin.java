@@ -19,7 +19,7 @@ public abstract class FirstPersonHandsAndItemsMixin {
         return original || (handView != null && handView.skipsSwap());
     }
 
-    // A swap scale of one skips the ease and gives the instant swap of old animations.
+    // A swap scale of one skips the ease and swaps the item in instantly.
     @ModifyExpressionValue(method = "tick(Lnet/minecraft/client/player/LocalPlayer;)V",
         at = @At(value = "INVOKE",
             target = "Lnet/minecraft/client/player/LocalPlayer;getItemSwapScale(F)F"))

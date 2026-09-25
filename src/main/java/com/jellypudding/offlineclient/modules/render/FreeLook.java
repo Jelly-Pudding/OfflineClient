@@ -53,7 +53,6 @@ public final class FreeLook extends Module {
     private CameraType savedCamera;
     // Null whilst nothing is swapped.
     private Entity swapped;
-    private boolean primed;
 
     public FreeLook() {
         super("FreeLook", "Look around without turning your body.", Category.RENDER);
@@ -73,7 +72,6 @@ public final class FreeLook extends Module {
             setEnabled(false);
             return;
         }
-        primed = true;
         yaw = mc.player.getYRot();
         pitch = mc.player.getXRot();
         savedCamera = mc.options.getCameraType();
@@ -154,12 +152,6 @@ public final class FreeLook extends Module {
             return;
         }
         Entity entity = target();
-        if (!primed) {
-            // The module can be enabled before a player exists.
-            yaw = entity.getYRot();
-            pitch = entity.getXRot();
-            primed = true;
-        }
         savedYaw = entity.getYRot();
         savedPitch = entity.getXRot();
         savedYawO = entity.yRotO;

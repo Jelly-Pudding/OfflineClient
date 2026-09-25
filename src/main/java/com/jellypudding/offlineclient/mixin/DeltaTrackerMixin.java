@@ -21,7 +21,7 @@ public abstract class DeltaTrackerMixin {
             target = "Lnet/minecraft/client/DeltaTracker$Timer;lastMs:J",
             opcode = Opcodes.PUTFIELD,
             ordinal = 0))
-    private void onAdvanceGameTime(long timeMillis, CallbackInfoReturnable<Integer> cir) {
+    private void onAdvanceGameTime(CallbackInfoReturnable<Integer> cir) {
         Timer timer = Modules.get(Timer.class);
         if (timer != null) {
             deltaTicks *= timer.getSpeed();

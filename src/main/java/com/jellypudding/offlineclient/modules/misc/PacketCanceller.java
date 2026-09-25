@@ -44,7 +44,7 @@ public final class PacketCanceller extends Module {
     @Override
     public String getSuffix() {
         int count = dropped.get();
-        return count == 0 ? null : count + " dropped";
+        return count(count, "dropped");
     }
 
     @Override

@@ -24,7 +24,6 @@ import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
-import net.minecraft.world.phys.HitResult;
 
 // An ender chest breaks into eight obsidian without silk touch. The chest
 // goes on the block you look at and is mined straight back out.
@@ -105,7 +104,8 @@ public final class EChestFarmer extends Module {
 
     // The block above whatever the crosshair rests on.
     private boolean pickTarget() {
-        if (!(mc.hitResult instanceof BlockHitResult hit) || hit.getType() != HitResult.Type.BLOCK) {
+        BlockHitResult hit = BlockUtil.aimedBlock();
+        if (hit == null) {
             return false;
         }
         BlockPos above = hit.getBlockPos().above();
@@ -127,8 +127,7 @@ public final class EChestFarmer extends Module {
             stack -> ItemUtil.enchantLevel(Enchantments.SILK_TOUCH, stack) == 0,
             InventoryUtil.HOTBAR_SIZE);
         if (slot == -1) {
-            ChatUtil.error("No pickaxe without Silk Touch in the hotbar.");
-            setEnabled(false);
+            disable("No pickaxe without Silk Touch in the hotbar.");
             return;
         }
         slots.select(slot);
@@ -139,8 +138,7 @@ public final class EChestFarmer extends Module {
         BlockMiner.release();
         int slot = InventoryUtil.hotbarSlot(stack -> stack.is(Items.ENDER_CHEST));
         if (slot == -1) {
-            ChatUtil.error("No ender chests in the hotbar.");
-            setEnabled(false);
+            disable("No ender chests in the hotbar.");
             return;
         }
         Direction support = BlockUtil.findPlaceSupport(target);

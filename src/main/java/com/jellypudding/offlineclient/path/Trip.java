@@ -31,10 +31,6 @@ public final class Trip {
         return walker;
     }
 
-    public State state() {
-        return state;
-    }
-
     public boolean active() {
         return state == State.WALKING;
     }

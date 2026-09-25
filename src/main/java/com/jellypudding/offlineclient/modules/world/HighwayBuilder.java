@@ -9,6 +9,7 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.modules.combat.KillAura;
 import com.jellypudding.offlineclient.modules.movement.NoKnockback;
 import com.jellypudding.offlineclient.modules.movement.Speed;
+import com.jellypudding.offlineclient.modules.player.FastBreak;
 import com.jellypudding.offlineclient.render.BoxStyle;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
@@ -24,6 +25,7 @@ import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.ItemUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
+import com.jellypudding.offlineclient.util.MenuClicks;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.ProjectileUtil;
 import com.jellypudding.offlineclient.util.RotationManager;
@@ -460,7 +462,7 @@ public final class HighwayBuilder extends Module {
             stop("HighwayBuilder stopped because you cannot build from there.");
             return false;
         }
-        if (!reLevel.isOn() && Math.abs(mc.player.getY() - walker.floorY()) > 1.5) {
+        if (!reLevel.isOn() && walker.offFloor()) {
             stop("HighwayBuilder stopped because you left the highway floor.");
             return false;
         }
@@ -495,8 +497,8 @@ public final class HighwayBuilder extends Module {
         }
     }
 
-    // Collects every block of the tunnel and its shell between two depths along the
-    // line by sieving the box around the player by distance along and across it.
+    // Every block of the tunnel and its shell between two depths along the line. The box
+    // around the player is sieved by distance along and across it.
     private void gatherStretch(double from, double to) {
         stretch.clear();
         int reach = AHEAD + width.getInt() + 2;
@@ -636,7 +638,7 @@ public final class HighwayBuilder extends Module {
             return;
         }
         spare.progress += BlockUtil.breakDelta(mc.player.getMainHandItem(), spare.pos);
-        float due = fastBreak.isOn() ? 0.7f : 1f;
+        float due = fastBreak.isOn() ? FastBreak.SERVER_ACCEPTS : 1f;
         if (spare.progress < due) {
             return;
         }
@@ -819,7 +821,7 @@ public final class HighwayBuilder extends Module {
     }
 
     private boolean placeTorch(BlockPos pos) {
-        int slot = BlockUtil.findBlockSlot(block -> block == Blocks.TORCH || block == Blocks.SOUL_TORCH);
+        int slot = BlockUtil.findTorchSlot();
         if (slot == -1) {
             return false;
         }
@@ -919,10 +921,20 @@ public final class HighwayBuilder extends Module {
     }
 
     private boolean startRestock() {
+        return setDownContainer(this::usefulShulker);
+    }
+
+    // Sets an ender chest down and empties it the way a shulker is emptied.
+    private boolean enderChestRestock() {
+        return setDownContainer(stack -> stack.is(Items.ENDER_CHEST));
+    }
+
+    // Puts the first matching container down behind you ready to be emptied.
+    private boolean setDownContainer(Predicate<ItemStack> which) {
         if (hasBlocksSomewhere() || mc.player.getInventory().getFreeSlot() == -1) {
             return false;
         }
-        int slot = InventoryUtil.findSlot(this::usefulShulker, InventoryUtil.WHOLE_INVENTORY);
+        int slot = InventoryUtil.findSlot(which, InventoryUtil.WHOLE_INVENTORY);
         if (slot == -1) {
             return false;
         }
@@ -943,31 +955,6 @@ public final class HighwayBuilder extends Module {
         return true;
     }
 
-    // Sets an ender chest down and empties it the way a shulker is emptied.
-    private boolean enderChestRestock() {
-        if (hasBlocksSomewhere() || mc.player.getInventory().getFreeSlot() == -1) {
-            return false;
-        }
-        int slot = InventoryUtil.findSlot(Items.ENDER_CHEST, InventoryUtil.WHOLE_INVENTORY);
-        if (slot == -1) {
-            return false;
-        }
-        if (slot >= InventoryUtil.HOTBAR_SIZE) {
-            return moveToHotbar(slot);
-        }
-        BlockPos spot = restockSpot();
-        if (spot == null) {
-            return false;
-        }
-        slots.select(slot);
-        if (!BlockUtil.placeAny(spot, rotation.isAny(Rotation.PLACE, Rotation.BOTH), true)) {
-            return false;
-        }
-        shulkerPos = spot;
-        stage = Stage.TAKE;
-        stageTicks = 0;
-        return true;
-    }
 
     // Sets ender chests down behind you and mines them back for obsidian until enough is held.
     private boolean enderChestGrind() {
@@ -1082,8 +1069,7 @@ public final class HighwayBuilder extends Module {
                 if (!slot.hasItem() || !neededItem(slot.getItem())) {
                     continue;
                 }
-                mc.gameMode.handleContainerInput(menu.containerId, i, 0,
-                    ContainerInput.QUICK_MOVE, mc.player);
+                MenuClicks.quickMove(menu, i);
                 sinceInventory = 0;
                 return true;
             }
@@ -1319,12 +1305,9 @@ public final class HighwayBuilder extends Module {
     }
 
     private void aimAtCrystal() {
-        Vec3 eye = mc.player.getEyePosition();
         Vec3 at = crystal.getBoundingBox().getCenter();
-        double dx = at.x - eye.x;
-        double dz = at.z - eye.z;
-        float yaw = (float) Math.toDegrees(Math.atan2(dz, dx)) - 90f;
-        RotationManager.requestExact(yaw, bowPitch(eye, at), RotationPriority.ATTACK);
+        RotationManager.requestExact(RotationManager.yawTo(at), bowPitch(mc.player.getEyePosition(), at),
+            RotationPriority.ATTACK);
     }
 
     // The lower of the two arcs that reach the point with no drag worked in.
@@ -1400,11 +1383,11 @@ public final class HighwayBuilder extends Module {
     }
 
     private int leftLane() {
-        return -((width.getInt() - 1) / 2);
+        return AxisWalker.leftLane(width.getInt());
     }
 
     private int rightLane() {
-        return width.getInt() - 1 + leftLane();
+        return AxisWalker.rightLane(width.getInt());
     }
 
     private void stop(String reason) {

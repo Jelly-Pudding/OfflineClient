@@ -40,7 +40,7 @@ public final class SoundBlocker extends Module {
     @Override
     public String getSuffix() {
         int count = muted.get();
-        return count == 0 ? null : count + " muted";
+        return count(count, "muted");
     }
 
     @Override

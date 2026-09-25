@@ -8,7 +8,7 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.modules.combat.Hitboxes;
 import com.jellypudding.offlineclient.render.BoxStyle;
 import com.jellypudding.offlineclient.render.DrawBatch;
-import com.jellypudding.offlineclient.render.WireframeRenderer;
+import com.jellypudding.offlineclient.render.ModelWireframe;
 import com.jellypudding.offlineclient.render.WorldToScreen;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
@@ -19,6 +19,7 @@ import com.jellypudding.offlineclient.util.EntityColors;
 import com.jellypudding.offlineclient.util.EntityFilter;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.Modules;
+import com.jellypudding.offlineclient.util.NeutralMobs;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityTypes;
@@ -35,8 +36,6 @@ public final class Esp extends Module {
     public enum Style { BOXES, WIREFRAME, FLAT, GLOW }
 
     public enum Size { ACCURATE, FANCY }
-
-    public enum Neutral { ALWAYS, WHEN_ANGRY, NEVER }
 
     // How much a fancy box grows on every side and how far it lifts.
     private static final double FANCY_GROW = 0.05;
@@ -68,11 +67,7 @@ public final class Esp extends Module {
         "Tamed and saddled and trusting animals get nothing.", false);
     private final BoolSetting armourStands = new BoolSetting("Armour stands",
         "Also mark armour stands.", true);
-    private final EnumSetting<Neutral> neutral = new EnumSetting<>("Neutral mobs",
-        "Endermen and piglins and wolves and the like.", Neutral.ALWAYS)
-        .describe(Neutral.ALWAYS, "Mark them like any other mob.")
-        .describe(Neutral.WHEN_ANGRY, "Only mark them once they are angry.")
-        .describe(Neutral.NEVER, "Leave them out.");
+    private final EnumSetting<NeutralMobs> neutral = NeutralMobs.setting(NeutralMobs.ALWAYS);
     private final BoolSetting self = new BoolSetting("Self",
         "Also mark your own body in third person.", false);
     private final NumberSetting range = new NumberSetting("Range",
@@ -128,7 +123,7 @@ public final class Esp extends Module {
             int fill = ColorUtil.fade(line, shape.fillShare());
             AABB box = grownBox(entity, partial, hitboxes);
             if (style.is(Style.WIREFRAME)) {
-                WireframeRenderer.draw(batch, entity, partial, shape, line, fill, true);
+                ModelWireframe.draw(batch, entity, partial, shape.shape(), line, fill, true);
             } else if (style.is(Style.BOXES)) {
                 shape.draw(batch, box, line, fill, true);
             }
@@ -232,17 +227,7 @@ public final class Esp extends Module {
     }
 
     private boolean wantedMob(Mob mob) {
-        if (ignorePets.isOn() && EntityUtil.isPet(mob)) {
-            return false;
-        }
-        if (!EntityUtil.isNeutral(mob)) {
-            return true;
-        }
-        return switch (neutral.getValue()) {
-            case ALWAYS -> true;
-            case WHEN_ANGRY -> !EntityUtil.isCalm(mob);
-            case NEVER -> false;
-        };
+        return !(ignorePets.isOn() && EntityUtil.isPet(mob)) && neutral.getValue().admit(mob);
     }
 
     private boolean matches(Entity entity) {
@@ -250,7 +235,7 @@ public final class Esp extends Module {
             return false;
         }
         if (entity == mc.player) {
-            return self.isOn() && (Modules.enabled(Freecam.class) || !mc.options.getCameraType().isFirstPerson());
+            return self.isOn() && Freecam.ownBodyVisible();
         }
         if (ignoreInvisible.isOn() && entity.isInvisible()) {
             return false;

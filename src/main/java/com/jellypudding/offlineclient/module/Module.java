@@ -3,13 +3,13 @@ package com.jellypudding.offlineclient.module;
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.setting.Setting;
+import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.SearchRank;
 import net.minecraft.client.Minecraft;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Locale;
 
 public abstract class Module {
 
@@ -59,46 +59,28 @@ public abstract class Module {
         this.tags = tags;
     }
 
-    // How closely this module matches a search query. Higher scores are better matches.
-    // The name outranks a tag and a tag outranks the description.
+    // Higher scores match the query better. The name outranks a tag and a tag outranks the
+    // description. Only the strongest tag counts. Setting names are searched as well and a
+    // half remembered setting still finds its module.
     public int searchScore(String query) {
-        String bestTag = "";
-        int bestTagScore = SearchRank.NO_MATCH;
-        for (String tag : tags) {
-            // Only the strongest tag is offered. A weak one must not drag the module down.
-            int score = SearchRank.score(tag, query);
-            if (score > bestTagScore) {
-                bestTagScore = score;
-                bestTag = tag;
-            }
-        }
-        return SearchRank.best(query, name, bestTag, description, bestSettingName(query));
-    }
-
-    // The name of the setting that best answers the query or an empty string.
-    // Searching for a setting you half remember should find the module holding it.
-    private String bestSettingName(String query) {
-        String best = "";
-        int bestScore = SearchRank.NO_MATCH;
-        for (Setting<?> setting : settings) {
-            int score = SearchRank.score(setting.getName(), query);
-            if (score > bestScore) {
-                bestScore = score;
-                best = setting.getName();
-            }
-        }
-        return best;
+        List<String> settingNames = settings.stream().map(Setting::getName).toList();
+        return SearchRank.best(query, name, SearchRank.strongest(query, List.of(tags)), description,
+            SearchRank.strongest(query, settingNames));
     }
 
     public List<Setting<?>> getSettings() {
         return settingsView;
     }
 
+    public List<String> settingIds() {
+        return settings.stream().map(Setting::id).toList();
+    }
+
     // Spaces and case are ignored.
     public Setting<?> getSetting(String settingName) {
-        String wanted = settingName.replace(" ", "").toLowerCase(Locale.ROOT);
-        for (Setting<?> setting : getSettings()) {
-            if (setting.getName().replace(" ", "").toLowerCase(Locale.ROOT).equals(wanted)) {
+        String wanted = Setting.idFor(settingName);
+        for (Setting<?> setting : settings) {
+            if (setting.id().equals(wanted)) {
                 return setting;
             }
         }
@@ -127,6 +109,7 @@ public abstract class Module {
             OfflineClient.INSTANCE.getEventBus().unregister(this);
             onDisable();
         }
+        OfflineClient.INSTANCE.getConfigManager().saveSoon();
     }
 
     // Null when the module clashes with nothing.
@@ -189,9 +172,20 @@ public abstract class Module {
         return n == 0 ? null : String.valueOf(n);
     }
 
+    // The same with a word after the number such as "3 fed".
+    protected static String count(int n, String what) {
+        return n == 0 ? null : n + " " + what;
+    }
+
     public String getDisplayName() {
         String suffix = getSuffix();
         return suffix == null ? name : name + " §7[" + suffix + "]";
+    }
+
+    // Tells the player why in chat and switches the module off.
+    protected void disable(String reason) {
+        ChatUtil.error(reason);
+        setEnabled(false);
     }
 
     protected boolean inGame() {

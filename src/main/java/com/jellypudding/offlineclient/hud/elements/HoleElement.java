@@ -1,6 +1,7 @@
 package com.jellypudding.offlineclient.hud.elements;
 
 import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.gui.GuiTheme;
 import com.jellypudding.offlineclient.hud.HudElement;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
@@ -10,13 +11,11 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.world.level.block.state.BlockState;
 
 // A small plan of what surrounds your feet. Shows at a glance whether a
 // crystal can reach you.
 public final class HoleElement extends HudElement {
 
-    private enum Strength { UNBREAKABLE, STRONG, WEAK, OPEN }
 
     private static final int CELL = 8;
     private static final int GAP = 1;
@@ -44,22 +43,14 @@ public final class HoleElement extends HudElement {
     }
 
     // Only the four sides matter. The middle is where you stand.
-    private static Strength at(BlockPos pos) {
-        BlockState state = OfflineClient.MC.level.getBlockState(pos);
-        if (!BlockUtil.blocksMotion(state)) {
-            return Strength.OPEN;
-        }
-        if (state.getBlock().defaultDestroyTime() < 0) {
-            return Strength.UNBREAKABLE;
-        }
-        return state.getBlock().getExplosionResistance() >= BlockUtil.BLAST_PROOF
-            ? Strength.STRONG : Strength.WEAK;
+    private static BlockUtil.Wall at(BlockPos pos) {
+        return BlockUtil.wallOf(OfflineClient.MC.level.getBlockState(pos));
     }
 
-    private int colorOf(Strength strength) {
-        return switch (strength) {
+    private int colorOf(BlockUtil.Wall wall) {
+        return switch (wall) {
             case UNBREAKABLE -> unbreakable.getColor();
-            case STRONG -> strong.getColor();
+            case BLAST_PROOF -> strong.getColor();
             case WEAK -> weak.getColor();
             case OPEN -> open.getColor();
         };
@@ -73,8 +64,7 @@ public final class HoleElement extends HudElement {
         BlockPos feet = player.blockPosition();
         boolean safe = true;
         for (Direction side : Direction.Plane.HORIZONTAL) {
-            Strength strength = at(feet.relative(side));
-            safe &= strength == Strength.UNBREAKABLE || strength == Strength.STRONG;
+            safe &= at(feet.relative(side)).holds();
         }
         return safe ? "In a hole" : "Out in the open";
     }
@@ -103,7 +93,7 @@ public final class HoleElement extends HudElement {
             }
         }
         if (word.isOn()) {
-            context.text(font, verdict(), 0, GRID * (CELL + GAP) + GAP, 0xFFECECF4, true);
+            context.text(font, verdict(), 0, GRID * (CELL + GAP) + GAP, GuiTheme.HUD_TEXT, true);
         }
     }
 

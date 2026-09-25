@@ -16,16 +16,15 @@ import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.RenderUtil;
+import com.jellypudding.offlineclient.util.WorldWatch;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.protocol.game.ClientboundBlockDestructionPacket;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
-import java.lang.ref.WeakReference;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -91,7 +90,7 @@ public final class BreakIndicators extends Module {
     // The server keys break progress by breaker id.
     private final Map<Integer, Indicator> indicators = new HashMap<>();
 
-    private WeakReference<Level> world;
+    private final WorldWatch world = new WorldWatch();
 
     public BreakIndicators() {
         super("BreakIndicators", "Shows blocks other players are mining.", Category.RENDER);
@@ -136,9 +135,8 @@ public final class BreakIndicators extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (world == null || world.get() != mc.level) {
+        if (world.changed()) {
             // Block positions and entity ids from the old world mean nothing here.
-            world = new WeakReference<>(mc.level);
             clear();
             return;
         }

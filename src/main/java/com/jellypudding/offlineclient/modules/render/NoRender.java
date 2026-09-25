@@ -1,5 +1,7 @@
 package com.jellypudding.offlineclient.modules.render;
 
+import com.jellypudding.offlineclient.event.Subscribe;
+import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
@@ -70,6 +72,9 @@ public final class NoRender extends Module {
     private final BoolSetting nametags = new BoolSetting("Nametags",
         "The vanilla name labels above entities are not drawn.", false);
 
+    private final ChunkRebuild rebuild = new ChunkRebuild();
+    private int meshKey;
+
     public NoRender() {
         super("NoRender", "Leaves out things in the world you do not need drawn.",
             Category.RENDER);
@@ -83,6 +88,7 @@ public final class NoRender extends Module {
     // Culling and rotations are baked into the chunk meshes. They need a rebuild.
     @Override
     protected void onEnable() {
+        meshKey = meshKey();
         rebuildChunks();
     }
 
@@ -91,8 +97,19 @@ public final class NoRender extends Module {
         rebuildChunks();
     }
 
+    @Subscribe
+    private void onTick(TickEvent event) {
+        int key = meshKey();
+        rebuild.tick(key != meshKey);
+        meshKey = key;
+    }
+
+    private int meshKey() {
+        return (caveCulling.isOn() ? 1 : 0) | (textureRotations.isOn() ? 2 : 0);
+    }
+
     private void rebuildChunks() {
-        if (caveCulling.isOn() || textureRotations.isOn()) {
+        if (meshKey() != 0) {
             ChunkRebuild.now();
         }
     }

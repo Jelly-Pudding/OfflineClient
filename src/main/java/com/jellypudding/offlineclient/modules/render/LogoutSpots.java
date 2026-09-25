@@ -7,6 +7,7 @@ import com.jellypudding.offlineclient.event.events.Render3DEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.util.BoundedMap;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.render.BoxStyle;
 import com.jellypudding.offlineclient.render.DrawBatch;
@@ -16,16 +17,14 @@ import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.RenderUtil;
+import com.jellypudding.offlineclient.util.WorldWatch;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.network.protocol.game.ClientboundPlayerInfoRemovePacket;
 import net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
-import java.lang.ref.WeakReference;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
@@ -38,9 +37,9 @@ public final class LogoutSpots extends Module {
     private record Spot(String name, AABB box, float health, float maxHealth) {
     }
 
-    // Players remembered at once.
+    // The most players remembered at once.
     private static final int MAX_TRACKED = 512;
-    // Markers kept at once.
+    // The most markers kept at once.
     private static final int MAX_SPOTS = 128;
     // A flat marker still needs a sliver of height. Its edges then have a direction.
     private static final double FLAT_HEIGHT = 0.01;
@@ -61,24 +60,14 @@ public final class LogoutSpots extends Module {
     private final NumberSetting nameBackgroundOpacity = new NumberSetting("Name background opacity",
         "How solid the background behind the name is.", 30, 0, 100, 5, "%").under(nametag);
 
-    // Kept even after a player walks out of view. Access ordered.
-    // The least recently seen player drops when the store fills up.
-    private final Map<UUID, Spot> lastSeen = new LinkedHashMap<UUID, Spot>(16, 0.75f, true) {
-        @Override
-        protected boolean removeEldestEntry(Map.Entry<UUID, Spot> eldest) {
-            return size() > MAX_TRACKED;
-        }
-    };
+    // Kept even after a player walks out of view. The least recently seen player
+    // drops when the store fills up.
+    private final Map<UUID, Spot> lastSeen = new BoundedMap<>(MAX_TRACKED, true);
     // Filled from the network thread and handled on the next tick.
     private final Queue<UUID> loggedOut = new ConcurrentLinkedQueue<>();
     private final Queue<UUID> returned = new ConcurrentLinkedQueue<>();
-    private final Map<UUID, Spot> spots = new LinkedHashMap<UUID, Spot>() {
-        @Override
-        protected boolean removeEldestEntry(Map.Entry<UUID, Spot> eldest) {
-            return size() > MAX_SPOTS;
-        }
-    };
-    private WeakReference<Level> world = new WeakReference<>(null);
+    private final Map<UUID, Spot> spots = new BoundedMap<>(MAX_SPOTS);
+    private final WorldWatch world = new WorldWatch();
 
     public LogoutSpots() {
         super("LogoutSpots", "Marks where players logged out.", Category.RENDER);
@@ -96,14 +85,14 @@ public final class LogoutSpots extends Module {
     @Override
     protected void onEnable() {
         if (inGame()) {
-            world = new WeakReference<>(mc.level);
+            world.accept();
             snapshot();
         }
     }
 
     @Override
     protected void onDisable() {
-        world = new WeakReference<>(null);
+        world.forget();
         clear();
     }
 
@@ -131,9 +120,7 @@ public final class LogoutSpots extends Module {
         if (!inGame()) {
             return;
         }
-        // A new world object covers a dimension change and a rejoin alike.
-        if (mc.level != world.get()) {
-            world = new WeakReference<>(mc.level);
+        if (world.changed()) {
             clear();
         }
 

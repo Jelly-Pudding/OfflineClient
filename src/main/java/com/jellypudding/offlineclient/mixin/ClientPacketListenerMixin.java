@@ -11,8 +11,6 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.network.protocol.game.ClientboundAddEntityPacket;
 import net.minecraft.network.protocol.game.ClientboundLevelChunkWithLightPacket;
-import net.minecraft.network.protocol.game.ClientboundPlayerPositionPacket;
-import net.minecraft.network.protocol.game.ClientboundPlayerRotationPacket;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -93,7 +91,7 @@ public abstract class ClientPacketListenerMixin {
     @Inject(
         method = "handleMovePlayer(Lnet/minecraft/network/protocol/game/ClientboundPlayerPositionPacket;)V",
         at = @At("HEAD"))
-    private void onMovePlayerHead(ClientboundPlayerPositionPacket packet, CallbackInfo ci) {
+    private void onMovePlayerHead(CallbackInfo ci) {
         if (offlineclient$noRotateActive()) {
             offlineclient$saveRotation();
         }
@@ -102,7 +100,7 @@ public abstract class ClientPacketListenerMixin {
     @Inject(
         method = "handleMovePlayer(Lnet/minecraft/network/protocol/game/ClientboundPlayerPositionPacket;)V",
         at = @At("RETURN"))
-    private void onMovePlayerReturn(ClientboundPlayerPositionPacket packet, CallbackInfo ci) {
+    private void onMovePlayerReturn(CallbackInfo ci) {
         if (offlineclient$noRotateActive()) {
             offlineclient$restoreRotation();
         }
@@ -111,7 +109,7 @@ public abstract class ClientPacketListenerMixin {
     @Inject(
         method = "handleRotatePlayer(Lnet/minecraft/network/protocol/game/ClientboundPlayerRotationPacket;)V",
         at = @At("HEAD"))
-    private void onRotatePlayerHead(ClientboundPlayerRotationPacket packet, CallbackInfo ci) {
+    private void onRotatePlayerHead(CallbackInfo ci) {
         if (offlineclient$noRotateActive()) {
             offlineclient$saveRotation();
         }
@@ -120,7 +118,7 @@ public abstract class ClientPacketListenerMixin {
     @Inject(
         method = "handleRotatePlayer(Lnet/minecraft/network/protocol/game/ClientboundPlayerRotationPacket;)V",
         at = @At("RETURN"))
-    private void onRotatePlayerReturn(ClientboundPlayerRotationPacket packet, CallbackInfo ci) {
+    private void onRotatePlayerReturn(CallbackInfo ci) {
         if (offlineclient$noRotateActive()) {
             offlineclient$restoreRotation();
         }

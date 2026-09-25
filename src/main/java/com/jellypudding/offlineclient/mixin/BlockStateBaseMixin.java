@@ -25,8 +25,8 @@ public abstract class BlockStateBaseMixin {
         method = "getShadeBrightness(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/core/BlockPos;)F",
         at = @At("RETURN"),
         cancellable = true)
-    private void onGetShadeBrightness(BlockGetter level, BlockPos pos, CallbackInfoReturnable<Float> cir) {
-        XRay xray = XRay.get();
+    private void onGetShadeBrightness(CallbackInfoReturnable<Float> cir) {
+        XRay xray = Modules.get(XRay.class);
         if (xray != null && xray.isEnabled()) {
             cir.setReturnValue(1f);
         }
@@ -51,14 +51,14 @@ public abstract class BlockStateBaseMixin {
     // The offset and the seed are what make grass and flowers sit differently in each spot.
     @Inject(method = "getOffset(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/phys/Vec3;",
         at = @At("HEAD"), cancellable = true)
-    private void onGetOffset(BlockPos pos, CallbackInfoReturnable<Vec3> cir) {
+    private void onGetOffset(CallbackInfoReturnable<Vec3> cir) {
         if (offlineclient$fixedRotations()) {
             cir.setReturnValue(Vec3.ZERO);
         }
     }
 
     @Inject(method = "getSeed(Lnet/minecraft/core/BlockPos;)J", at = @At("HEAD"), cancellable = true)
-    private void onGetSeed(BlockPos pos, CallbackInfoReturnable<Long> cir) {
+    private void onGetSeed(CallbackInfoReturnable<Long> cir) {
         if (offlineclient$fixedRotations()) {
             cir.setReturnValue(0L);
         }

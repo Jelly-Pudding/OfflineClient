@@ -31,8 +31,8 @@ public final class NoteSong {
     private static final String NAME_HEADER = "// Name:";
     private static final String AUTHOR_HEADER = "// Author:";
 
-    public static final int LOWEST = 0;
-    public static final int HIGHEST = 24;
+    private static final int LOWEST = 0;
+    private static final int HIGHEST = 24;
 
     private static final NoteBlockInstrument[] INSTRUMENTS = {
         NoteBlockInstrument.HARP, NoteBlockInstrument.BASS, NoteBlockInstrument.BASEDRUM,

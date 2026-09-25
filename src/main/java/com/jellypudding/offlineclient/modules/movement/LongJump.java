@@ -1,7 +1,6 @@
 package com.jellypudding.offlineclient.modules.movement;
 
 import com.jellypudding.offlineclient.event.Subscribe;
-import com.jellypudding.offlineclient.event.events.PacketReceiveEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
@@ -11,14 +10,12 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.JumpCarry;
+import com.jellypudding.offlineclient.util.Lagback;
 import com.jellypudding.offlineclient.util.MovementUtil;
-import net.minecraft.network.protocol.game.ClientboundPlayerPositionPacket;
-import net.minecraft.world.effect.MobEffectInstance;
-import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.phys.Vec3;
 
 // Vanilla carries a real jump further. Burst and Glide are staged speed
-// exploits from older servers and a modern movement check pulls them back.
+// exploits that a modern movement check pulls back.
 public final class LongJump extends Module {
 
     public enum Mode { VANILLA, BURST, GLIDE }
@@ -27,10 +24,6 @@ public final class LongJump extends Module {
     private static final double BASE_SPEED = 0.35;
 
     private static final String TIMER_KEY = "longjump";
-
-    // Walking pace on flat ground and the boost each Speed level adds to it.
-    private static final double WALK_SPEED = 0.2873;
-    private static final double SPEED_EFFECT_STEP = 0.2;
 
     // Burst lifts with a vanilla jump then bleeds a sliver of speed a tick.
     private static final double BURST_JUMP = 0.42;
@@ -48,7 +41,7 @@ public final class LongJump extends Module {
     private static final int GLIDE_SOFTEN_FROM = 6;
     private static final int GLIDE_SOFTEN_TICKS = 9;
     private static final double GLIDE_SOFTEN = 0.65;
-    // Two ticks of a small step off the ground then a re jump.
+    // Two ticks of a small step off the ground then another jump.
     private static final int GLIDE_GROUND_TICKS = 2;
     private static final double GLIDE_STEP = 0.01;
     private static final double GLIDE_REJUMP_PUSH = 0.3;
@@ -97,6 +90,8 @@ public final class LongJump extends Module {
     private int airTicks;
     private int groundTicks;
 
+    private final Lagback.Watcher lagback = new Lagback.Watcher();
+
     public LongJump() {
         super("LongJump", "Jump much further than normal.", Category.MOVEMENT);
         addSettings(mode, multiplier, burstStart, burstBoost, onlyOnGround, onJump,
@@ -110,6 +105,7 @@ public final class LongJump extends Module {
 
     @Override
     protected void onEnable() {
+        lagback.sync();
         carry.stop();
         stage = 0;
         burstSpeed = 0;
@@ -126,7 +122,7 @@ public final class LongJump extends Module {
     // Called from LocalPlayerMixin once the game has set the jump velocity.
     public void onJump() {
         if (!isEnabled() || !mode.is(Mode.VANILLA) || !inGame()
-            || !JumpCarry.inPlainAir(mc.player)) {
+            || !MovementUtil.inPlainAir(mc.player)) {
             return;
         }
         carry.start(BASE_SPEED * multiplier.getValue());
@@ -137,7 +133,12 @@ public final class LongJump extends Module {
         if (!inGame()) {
             return;
         }
-        boolean moving = MovementUtil.inputDirection().lengthSqr() > 0;
+        if (lagback.happened() && stopOnLagback.isOn()) {
+            carry.stop();
+            stage = 0;
+            airTicks = 0;
+        }
+        boolean moving = MovementUtil.hasInput();
         Timer.override(TIMER_KEY, moving ? timer.getFloat() : 1f);
         switch (mode.getValue()) {
             case VANILLA -> carry.tick();
@@ -190,13 +191,8 @@ public final class LongJump extends Module {
         return mc.level.noCollision(mc.player, mc.player.getBoundingBox().move(0, dy, 0));
     }
 
-    // Walking pace with the Speed effect counted in.
     private double walkSpeed() {
-        MobEffectInstance speed = mc.player.getEffect(MobEffects.SPEED);
-        if (speed == null) {
-            return WALK_SPEED;
-        }
-        return WALK_SPEED * (1 + SPEED_EFFECT_STEP * (speed.getAmplifier() + 1));
+        return MovementUtil.withSpeedEffects(mc.player, MovementUtil.WALK_SPEED);
     }
 
     // In the air the pace follows a falling curve and the descent is softened.
@@ -256,14 +252,5 @@ public final class LongJump extends Module {
         airborne = false;
         setEnabled(false);
         ChatUtil.message("LongJump turned off after the jump.");
-    }
-
-    @Subscribe
-    private void onPacketReceive(PacketReceiveEvent event) {
-        if (stopOnLagback.isOn() && event.getPacket() instanceof ClientboundPlayerPositionPacket) {
-            carry.stop();
-            stage = 0;
-            airTicks = 0;
-        }
     }
 }

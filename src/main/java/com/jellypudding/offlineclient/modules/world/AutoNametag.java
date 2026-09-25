@@ -8,12 +8,10 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
-import com.jellypudding.offlineclient.util.BlockUtil;
-import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.Cooldowns;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
-import com.jellypudding.offlineclient.util.SwingMode;
 import com.jellypudding.offlineclient.util.TargetPriority;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.InteractionHand;
@@ -24,11 +22,8 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.phys.EntityHitResult;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 // Puts the name tag in your hotbar on every chosen mob in reach.
 public final class AutoNametag extends Module {
@@ -47,8 +42,7 @@ public final class AutoNametag extends Module {
     private final BoolSetting rotate = new BoolSetting("Rotate",
         "Turn towards the mob on the server side.", true);
 
-    private final Map<Integer, Integer> tried = new HashMap<>();
-    private int lastTick;
+    private final Cooldowns<Integer> tried = new Cooldowns<>();
     private final SlotSwap slots = new SlotSwap();
     private int named;
 
@@ -60,7 +54,7 @@ public final class AutoNametag extends Module {
 
     @Override
     public String getSuffix() {
-        return named == 0 ? null : named + " named";
+        return count(named, "named");
     }
 
     @Override
@@ -81,16 +75,10 @@ public final class AutoNametag extends Module {
         }
         int slot = InventoryUtil.hotbarSlot(stack -> stack.is(Items.NAME_TAG));
         if (slot == -1) {
-            ChatUtil.error("No name tag in the hotbar.");
-            setEnabled(false);
+            disable("No name tag in the hotbar.");
             return;
         }
-        int now = mc.player.tickCount;
-        if (now < lastTick) {
-            tried.clear();
-        }
-        lastTick = now;
-        tried.values().removeIf(expiry -> expiry <= now);
+        tried.tick();
         ItemStack tag = mc.player.getInventory().getItem(slot);
 
         Entity target = EntityUtil.best(range.getValue(), priority.getValue(),
@@ -100,15 +88,10 @@ public final class AutoNametag extends Module {
             return;
         }
         slots.select(slot);
-        if (rotate.isOn()) {
-            BlockUtil.faceVector(target.getBoundingBox().getCenter());
-        }
-        EntityHitResult hit = new EntityHitResult(target, target.getBoundingBox().getCenter());
-        if (mc.gameMode.interact(mc.player, target, hit, InteractionHand.MAIN_HAND).consumesAction()) {
-            SwingMode.swingArm(InteractionHand.MAIN_HAND);
+        if (EntityUtil.interact(target, InteractionHand.MAIN_HAND, rotate.isOn())) {
             named++;
         }
-        tried.put(target.getId(), now + COOLDOWN);
+        tried.put(target.getId(), COOLDOWN);
         slots.restoreIfMine();
     }
 
@@ -116,7 +99,7 @@ public final class AutoNametag extends Module {
         if (entity instanceof Player || !(entity instanceof LivingEntity living) || !living.isAlive()) {
             return false;
         }
-        if (!entities.contains(entity.getType()) || tried.containsKey(entity.getId())) {
+        if (!entities.contains(entity.getType()) || tried.contains(entity.getId())) {
             return false;
         }
         if (!entity.hasCustomName()) {

@@ -7,7 +7,6 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.Setting;
 import com.jellypudding.offlineclient.util.ChatUtil;
 
-import java.util.ArrayList;
 import java.util.List;
 
 public final class ResetCommand extends Command {
@@ -56,10 +55,6 @@ public final class ResetCommand extends Command {
         if (module == null) {
             return List.of();
         }
-        List<String> ids = new ArrayList<>();
-        for (Setting<?> setting : module.getSettings()) {
-            ids.add(CommandManager.settingId(setting));
-        }
-        return CommandManager.filter(current, ids);
+        return CommandManager.filter(current, module.settingIds());
     }
 }

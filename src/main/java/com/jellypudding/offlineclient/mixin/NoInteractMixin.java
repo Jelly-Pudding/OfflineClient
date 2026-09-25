@@ -1,8 +1,6 @@
 package com.jellypudding.offlineclient.mixin;
 
 import com.jellypudding.offlineclient.OfflineClient;
-import com.jellypudding.offlineclient.modules.player.AutoEat;
-import com.jellypudding.offlineclient.modules.player.AutoGap;
 import com.jellypudding.offlineclient.modules.player.NoInteract;
 import com.jellypudding.offlineclient.util.Modules;
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
@@ -13,7 +11,6 @@ import net.minecraft.core.Direction;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -39,7 +36,7 @@ public abstract class NoInteractMixin {
     private void wrapStartUseItem(Operation<Void> original) {
         Minecraft mc = OfflineClient.MC;
         HitResult real = mc.hitResult;
-        if (real == null || real.getType() == HitResult.Type.MISS || !offlineclient$feeding()) {
+        if (real == null || real.getType() == HitResult.Type.MISS || !Modules.feeding(null)) {
             original.call();
             return;
         }
@@ -52,18 +49,8 @@ public abstract class NoInteractMixin {
         }
     }
 
-    @Unique
-    private static boolean offlineclient$feeding() {
-        AutoEat autoEat = Modules.get(AutoEat.class);
-        if (autoEat != null && autoEat.isBusy()) {
-            return true;
-        }
-        AutoGap autoGap = Modules.get(AutoGap.class);
-        return autoGap != null && autoGap.isBusy();
-    }
-
     @Inject(method = "continueAttack(Z)V", at = @At("HEAD"), cancellable = true)
-    private void onContinueAttack(boolean holding, CallbackInfo ci) {
+    private void onContinueAttack(CallbackInfo ci) {
         NoInteract noInteract = Modules.active(NoInteract.class);
         if (noInteract == null) {
             return;

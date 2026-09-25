@@ -9,9 +9,7 @@ import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.resource.GraphicsResourceAllocator;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.renderer.LevelRenderer;
-import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
-import net.minecraft.client.renderer.state.level.LevelRenderState;
 import org.joml.Vector4f;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -44,8 +42,7 @@ public class LevelRendererMixin {
     @Inject(
         method = "submitBlockOutline(Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/SubmitNodeCollector;Lnet/minecraft/client/renderer/state/level/LevelRenderState;)V",
         at = @At("HEAD"), cancellable = true)
-    private void onSubmitBlockOutline(PoseStack poseStack, SubmitNodeCollector collector,
-                                      LevelRenderState state, CallbackInfo ci) {
+    private void onSubmitBlockOutline(CallbackInfo ci) {
         if (Modules.enabled(BlockSelection.class)) {
             ci.cancel();
         }

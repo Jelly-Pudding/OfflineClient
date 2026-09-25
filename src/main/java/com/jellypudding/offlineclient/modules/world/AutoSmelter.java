@@ -7,14 +7,13 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
-import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.MenuClicks;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.inventory.AbstractFurnaceMenu;
 import net.minecraft.world.inventory.BlastFurnaceMenu;
-import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.SmokerMenu;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -22,7 +21,6 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.RecipePropertySet;
 
 import java.util.List;
-import java.util.function.Predicate;
 
 // Keeps a furnace fed whilst its screen is open and takes what comes out.
 public final class AutoSmelter extends Module {
@@ -59,7 +57,7 @@ public final class AutoSmelter extends Module {
 
     @Override
     public String getSuffix() {
-        return taken == 0 ? null : taken + " taken";
+        return count(taken, "taken");
     }
 
     @Override
@@ -96,10 +94,8 @@ public final class AutoSmelter extends Module {
             return;
         }
         int count = output.getCount();
-        quickMove(furnace, OUTPUT_SLOT);
-        if (!furnace.slots.get(OUTPUT_SLOT).getItem().isEmpty()) {
-            ChatUtil.error("No room in the inventory for what came out.");
-            setEnabled(false);
+        if (!MenuClicks.quickMoved(furnace, OUTPUT_SLOT)) {
+            disable("No room in the inventory for what came out.");
             return;
         }
         taken += count;
@@ -109,7 +105,7 @@ public final class AutoSmelter extends Module {
         if (furnace.getLitProgress() > 0 || !furnace.slots.get(FUEL_SLOT).getItem().isEmpty()) {
             return;
         }
-        int slot = findPlayerSlot(furnace, stack -> fuels.contains(stack.getItem())
+        int slot = MenuClicks.firstSlot(furnace, FIRST_PLAYER_SLOT, stack -> fuels.contains(stack.getItem())
             && stack.has(DataComponents.COOKING_FUEL));
         if (slot == -1) {
             giveUp("Out of fuel.");
@@ -117,7 +113,7 @@ public final class AutoSmelter extends Module {
         }
         ItemStack source = furnace.slots.get(slot).getItem();
         int count = Math.min(fuelPerRefill.getInt(), source.getCount());
-        moveSome(furnace, slot, FUEL_SLOT, count);
+        MenuClicks.moveSome(furnace, slot, FUEL_SLOT, count);
     }
 
     private void feed(AbstractFurnaceMenu furnace) {
@@ -125,7 +121,7 @@ public final class AutoSmelter extends Module {
             return;
         }
         ResourceKey<RecipePropertySet> recipes = recipesFor(furnace);
-        int slot = findPlayerSlot(furnace, stack -> inputs.contains(stack.getItem())
+        int slot = MenuClicks.firstSlot(furnace, FIRST_PLAYER_SLOT, stack -> inputs.contains(stack.getItem())
             && mc.level.recipeAccess().propertySet(recipes).test(stack));
         if (slot == -1) {
             // The last item may still be cooking.
@@ -134,7 +130,7 @@ public final class AutoSmelter extends Module {
             }
             return;
         }
-        quickMove(furnace, slot);
+        MenuClicks.quickMove(furnace, slot);
     }
 
     // Each furnace type takes its own set of inputs.
@@ -150,32 +146,7 @@ public final class AutoSmelter extends Module {
 
     private void giveUp(String reason) {
         if (stopWhenEmpty.isOn()) {
-            ChatUtil.error(reason);
-            setEnabled(false);
-        }
-    }
-
-    private static int findPlayerSlot(AbstractFurnaceMenu furnace, Predicate<ItemStack> test) {
-        for (int i = FIRST_PLAYER_SLOT; i < furnace.slots.size(); i++) {
-            if (test.test(furnace.slots.get(i).getItem())) {
-                return i;
-            }
-        }
-        return -1;
-    }
-
-    private void quickMove(AbstractFurnaceMenu furnace, int slot) {
-        mc.gameMode.handleContainerInput(furnace.containerId, slot, 0, ContainerInput.QUICK_MOVE, mc.player);
-    }
-
-    // Picks the stack up and drops items one at a time with right clicks.
-    private void moveSome(AbstractFurnaceMenu furnace, int from, int to, int count) {
-        mc.gameMode.handleContainerInput(furnace.containerId, from, 0, ContainerInput.PICKUP, mc.player);
-        for (int i = 0; i < count && !furnace.getCarried().isEmpty(); i++) {
-            mc.gameMode.handleContainerInput(furnace.containerId, to, 1, ContainerInput.PICKUP, mc.player);
-        }
-        if (!furnace.getCarried().isEmpty()) {
-            mc.gameMode.handleContainerInput(furnace.containerId, from, 0, ContainerInput.PICKUP, mc.player);
+            disable(reason);
         }
     }
 }

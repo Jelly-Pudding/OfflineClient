@@ -11,8 +11,7 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.MovementUtil;
-import net.minecraft.world.effect.MobEffectInstance;
-import net.minecraft.world.effect.MobEffects;
+import net.minecraft.SharedConstants;
 import net.minecraft.world.phys.Vec3;
 
 public final class Speed extends Module {
@@ -28,12 +27,6 @@ public final class Speed extends Module {
     }
 
     private static final double BASE_SPEED = 0.2806;
-
-    // Each level of the speed effect adds a fifth.
-    // Each level of slowness takes off just under a sixth.
-    private static final double SPEED_PER_LEVEL = 0.2;
-
-    private static final double TICKS_PER_SECOND = 20;
 
     private static final String TIMER_KEY = "speed";
 
@@ -154,21 +147,12 @@ public final class Speed extends Module {
         if (!capSpeed.isOn()) {
             return perTick;
         }
-        return Math.min(perTick, cap.getValue() / (TICKS_PER_SECOND * Timer.current()));
+        return Math.min(perTick, cap.getValue() / (SharedConstants.TICKS_PER_SECOND * Timer.current()));
     }
 
     // Potion effects scale the walk speed attribute. The ceiling moves with them.
     private double baseSpeed() {
-        double speed = BASE_SPEED;
-        MobEffectInstance boost = mc.player.getEffect(MobEffects.SPEED);
-        if (boost != null) {
-            speed *= 1 + SPEED_PER_LEVEL * (boost.getAmplifier() + 1);
-        }
-        MobEffectInstance slow = mc.player.getEffect(MobEffects.SLOWNESS);
-        if (slow != null) {
-            speed *= Math.max(0, 1 - NoSlowdown.SLOWNESS_PER_LEVEL * (slow.getAmplifier() + 1));
-        }
-        return speed;
+        return MovementUtil.withSpeedEffects(mc.player, BASE_SPEED);
     }
 
     // The air movement stays vanilla.

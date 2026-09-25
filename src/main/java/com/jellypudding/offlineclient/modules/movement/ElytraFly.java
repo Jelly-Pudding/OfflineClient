@@ -1,7 +1,6 @@
 package com.jellypudding.offlineclient.modules.movement;
 
 import com.jellypudding.offlineclient.event.Subscribe;
-import com.jellypudding.offlineclient.event.events.PacketReceiveEvent;
 import com.jellypudding.offlineclient.event.events.PostMotionEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
@@ -11,13 +10,16 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.CrashGuard;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
+import com.jellypudding.offlineclient.util.ItemUtil;
+import com.jellypudding.offlineclient.util.Lagback;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.MovementUtil;
 
+import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
-import net.minecraft.network.protocol.game.ClientboundPlayerPositionPacket;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket;
 import net.minecraft.util.Mth;
@@ -27,7 +29,6 @@ import net.minecraft.world.entity.player.Input;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.ClipContext;
-import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
@@ -46,8 +47,6 @@ public final class ElytraFly extends Module {
 
     // Each acceleration step adds this much speed a tick.
     private static final double RAMP_UNIT = 0.1;
-
-    private static final double TICKS_PER_SECOND = 20;
 
     // Below this fraction of the target speed a climb would stall.
     private static final double STALL_FRACTION = 0.5;
@@ -68,13 +67,6 @@ public final class ElytraFly extends Module {
     // Pitched further down than this is a dive and the height is let go when asked.
     private static final float HOLD_PITCH_LIMIT = 25;
 
-    // Ticks of travel the crash check sweeps ahead at the least and at the most.
-    private static final double CRASH_TICKS = 4;
-    private static final int CRASH_MAX_TICKS = 40;
-
-    // Share of the safe speed kept after a brake. Leaves room to add some back.
-    private static final double CRASH_KEEP = 0.6;
-
     // How hard the held height pulls back per block of drift.
     // The most it may pull in a single tick.
     private static final double HOLD_GAIN = 0.3;
@@ -82,8 +74,6 @@ public final class ElytraFly extends Module {
     // How quickly a steady drift is learned and cancelled outright.
     private static final double HOLD_LEARN = 0.02;
     private static final double HOLD_BIAS_LIMIT = 0.05;
-
-    private static final double GRAVITY = 0.08;
 
     // Auto hover eases down inside this and stops inside the smaller gap.
     private static final double HOVER_APPROACH = 2;
@@ -222,23 +212,19 @@ public final class ElytraFly extends Module {
     private final NumberSetting chunkLookahead = new NumberSetting("Look ahead",
         "How far in front to check for loaded ground.", 24, 8, 64, 1, " blocks").min(1)
         .under(chunkGuard);
-    private final BoolSetting noCrash = new BoolSetting("No crash",
-        "Brakes before you fly into a wall or the ground. The faster you go the further ahead it looks.", false);
-    private final NumberSetting crashLookAhead = new NumberSetting("Crash look ahead",
-        "The least distance along your flight path to check.", 5, 1, 15, 1, " blocks").min(1).max(32)
-        .under(noCrash);
+    private final CrashGuard crashGuard = new CrashGuard();
     private final BoolSetting replaceElytra = new BoolSetting("Replace elytra",
         "Swaps in a fresher elytra from your inventory once the worn one runs low.", false);
     private final NumberSetting replaceAt = new NumberSetting("Replace at",
-        "Durability points left that count as run low.", 10, 1, 100, 1).min(1)
+        "Swaps once the worn elytra has this much durability left.", 10, 1, 50, 1, "%").min(1).max(99)
         .under(replaceElytra);
     private final BoolSetting durabilityGuard = new BoolSetting("Durability guard",
         "Stops helping and warns you when the elytra is nearly broken.", true);
     private final EnumSetting<ChestSwapMode> chestSwap = new EnumSetting<>("Chest swap",
-        "Runs ChestSwap when the module toggles.", ChestSwapMode.NEVER)
+        "Uses ChestSwap to wear the elytra whilst the module is on.", ChestSwapMode.NEVER)
         .describe(ChestSwapMode.NEVER, "Leaves your chest slot alone.")
-        .describe(ChestSwapMode.ALWAYS, "Puts the elytra on when enabled and the chestplate back when disabled.")
-        .describe(ChestSwapMode.WAIT_FOR_GROUND, "Puts the elytra on when enabled and the chestplate back once you land.");
+        .describe(ChestSwapMode.ALWAYS, "Puts the chestplate back as soon as the module is off.")
+        .describe(ChestSwapMode.WAIT_FOR_GROUND, "Puts the chestplate back once you land after the module is off.");
     private final BoolSetting replenishRockets = new BoolSetting("Replenish rockets",
         "Moves rockets from your inventory into a hotbar slot once the hotbar has none.", false);
     private final NumberSetting rocketSlot = new NumberSetting("Rocket slot",
@@ -278,12 +264,19 @@ public final class ElytraFly extends Module {
                 unwatch(this);
                 return;
             }
-            if (mc.player.onGround()) {
+            ChestSwap swapper = Modules.get(ChestSwap.class);
+            if (swapper == null) {
                 unwatch(this);
-                swapChest(true);
+            } else if (mc.player.onGround() && swapper.canSwap()) {
+                unwatch(this);
+                swapper.takeOffElytra();
             }
         }
     };
+
+    // The Chest swap choice the last tick saw and whether the elytra still has to go on.
+    private ChestSwapMode chestSwapSeen;
+    private boolean elytraWanted;
 
     private int restartCooldown;
     // Ticks left to force the elytra open after a standing jump.
@@ -308,8 +301,9 @@ public final class ElytraFly extends Module {
     // Bounce keys held down by the module and the wait after a rubberband.
     private boolean bounceKeys;
     private int bounceRestart;
-    // Set from the packet thread when the server sends the player back.
-    private volatile boolean rubberbanded;
+    // Set on the tick after the server sends the player back.
+    private boolean rubberbanded;
+    private final Lagback.Watcher lagback = new Lagback.Watcher();
 
     public ElytraFly() {
         super("ElytraFly", "Full elytra control without firework rockets.", Category.MOVEMENT);
@@ -320,9 +314,9 @@ public final class ElytraFly extends Module {
             rockets, rocketDelay, lockYaw,
             bounceHeading, bounceYaw, lockPitch, bouncePitch, autoJump, manualTakeOff,
             sprintAlways, restart, restartDelay, instantDrop,
-            autoTakeOff, groundStart, keepGliding, stopInWater, chunkGuard, chunkLookahead,
-            noCrash, crashLookAhead, replaceElytra, replaceAt, durabilityGuard,
-            chestSwap, replenishRockets, rocketSlot);
+            autoTakeOff, groundStart, keepGliding, stopInWater, chunkGuard, chunkLookahead);
+        addSettings(crashGuard.settings());
+        addSettings(replaceElytra, replaceAt, durabilityGuard, chestSwap, replenishRockets, rocketSlot);
         searchTags("elytra", "glide", "fly", "cruise", "bounce", "packet fly", "pitch 40");
     }
 
@@ -352,20 +346,17 @@ public final class ElytraFly extends Module {
         rocketTimer = 0;
         bounceRestart = 0;
         rubberbanded = false;
+        lagback.sync();
         heldY = Double.NaN;
         holdBias = 0;
         ramp = 0;
         pilotHeld = false;
         reopen = false;
-        if (inGame() && chestSwap.getValue() != ChestSwapMode.NEVER
-            && !mc.player.getItemBySlot(EquipmentSlot.CHEST).is(Items.ELYTRA)) {
-            swapChest(false);
-        }
+        chestSwapSeen = ChestSwapMode.NEVER;
     }
 
     @Override
     protected void onDisable() {
-        cruising = false;
         letGo();
         if (mc.player == null) {
             return;
@@ -373,30 +364,39 @@ public final class ElytraFly extends Module {
         if (instantDrop.isOn() && applied != Mode.BOUNCE && mc.player.isFallFlying()) {
             watch(dropWatcher);
         }
+        ChestSwap swapper = Modules.get(ChestSwap.class);
+        if (swapper == null) {
+            return;
+        }
         if (chestSwap.is(ChestSwapMode.ALWAYS)) {
-            swapChest(true);
+            swapper.takeOffElytra();
         } else if (chestSwap.is(ChestSwapMode.WAIT_FOR_GROUND)) {
             watch(landingWatcher);
         }
     }
 
-    // ChestSwap decides which piece goes on. Taking the elytra off only makes
-    // sense whilst one is worn.
-    private void swapChest(boolean takeOff) {
-        ChestSwap module = Modules.get(ChestSwap.class);
-        if (module == null) {
-            return;
+    // The elytra goes on once when the module turns on and again when Chest swap is
+    // switched on midflight. It waits whilst the inventory is busy.
+    private void wearElytra() {
+        if (chestSwap.getValue() != chestSwapSeen) {
+            chestSwapSeen = chestSwap.getValue();
+            elytraWanted = chestSwapSeen != ChestSwapMode.NEVER;
         }
-        if (takeOff && !mc.player.getItemBySlot(EquipmentSlot.CHEST).is(Items.ELYTRA)) {
-            return;
+        ChestSwap swapper = Modules.get(ChestSwap.class);
+        if (elytraWanted && swapper != null && swapper.canSwap()) {
+            elytraWanted = false;
+            swapper.wearElytra();
         }
-        module.swap();
     }
 
     @Subscribe
     private void onTick(TickEvent event) {
         if (!inGame() || mc.player.isSpectator()) {
             return;
+        }
+        if (lagback.happened()) {
+            ramp = 0;
+            rubberbanded = mode.is(Mode.BOUNCE);
         }
         // A mode change lets go of whatever the old mode was holding.
         if (applied != mode.getValue()) {
@@ -409,8 +409,8 @@ public final class ElytraFly extends Module {
         if (rocketTimer > 0) {
             rocketTimer--;
         }
+        wearElytra();
         if (stopInWater.isOn() && (mc.player.isInWater() || mc.player.isUnderWater())) {
-            cruising = false;
             wasGliding = false;
             ramp = 0;
             letGo();
@@ -423,7 +423,6 @@ public final class ElytraFly extends Module {
             replenishHotbarRockets();
         }
         if (durabilityGuard.isOn() && checkDurability()) {
-            cruising = false;
             wasGliding = mc.player.isFallFlying();
             letGo();
             return;
@@ -477,46 +476,14 @@ public final class ElytraFly extends Module {
         if (chunkGuard.isOn() && aheadIsUnloaded()) {
             brakeForChunks();
         }
-        if (noCrash.isOn()) {
-            brakeForBlocks();
-        }
-    }
-
-    // Sweeps the body along the flight path a tick at a time and brakes before
-    // the first tick that would touch a block. A margin covers the glide's added speed.
-    private void brakeForBlocks() {
-        Vec3 velocity = mc.player.getDeltaMovement();
-        double pace = velocity.length();
-        if (pace < 0.01) {
-            return;
-        }
-        int ticks = (int) Math.ceil(Math.max(crashLookAhead.getValue(), pace * CRASH_TICKS) / pace);
-        ticks = Math.min(ticks, CRASH_MAX_TICKS);
-        AABB box = mc.player.getBoundingBox();
-        for (int step = 1; step <= ticks; step++) {
-            if (mc.level.noCollision(mc.player, box.move(velocity.scale(step)))) {
-                continue;
-            }
-            // Stop short of the tick that would hit.
-            // Two ticks out means one tick of travel is left.
-            double allowed = pace * Math.max(0, step - 1) / ticks * CRASH_KEEP;
-            if (step <= 2) {
-                allowed = 0;
-            }
-            if (pace > allowed) {
-                mc.player.setDeltaMovement(velocity.scale(allowed / pace));
-            }
-            return;
-        }
+        crashGuard.brake(mc.player);
     }
 
     // A worn elytra at the threshold gives way to the fullest one in the bag.
     private void replaceWornElytra() {
         ItemStack worn = mc.player.getItemBySlot(EquipmentSlot.CHEST);
-        if (!worn.is(Items.ELYTRA) || worn.getMaxDamage() - worn.getDamageValue() > replaceAt.getInt()) {
-            return;
-        }
-        if (!InventoryUtil.inventoryFree()) {
+        if (!worn.is(Items.ELYTRA) || !ItemUtil.wornBelow(worn, replaceAt.getValue() / 100)
+            || !InventoryUtil.inventoryFree()) {
             return;
         }
         int best = -1;
@@ -629,7 +596,7 @@ public final class ElytraFly extends Module {
         Input keys = mc.player.input.keyPresses;
         Vec3 velocity = mc.player.getDeltaMovement();
         boolean steering = keys.forward() || keys.backward() || keys.left() || keys.right();
-        double accel = GRAVITY * rampedSpeed(steering);
+        double accel = MovementUtil.GRAVITY * rampedSpeed(steering);
 
         double vx = velocity.x;
         double vy = velocity.y;
@@ -662,9 +629,9 @@ public final class ElytraFly extends Module {
         float pitch = mc.player.getXRot();
         boolean holding = false;
         if (keys.jump()) {
-            vy += GRAVITY * climb;
+            vy += MovementUtil.GRAVITY * climb;
         } else if (keys.shift()) {
-            vy = autoHover.isOn() ? hover(vy, climb) : vy - GRAVITY / 2 * climb;
+            vy = autoHover.isOn() ? hover(vy, climb) : vy - MovementUtil.GRAVITY / 2 * climb;
         } else if (holdHeight.isOn() && pitch < 0 && steering) {
             // Looking up whilst moving climbs.
             // The lift only stops the sink underneath the climb.
@@ -695,7 +662,7 @@ public final class ElytraFly extends Module {
     // Zero at the pitch where lift matches gravity.
     private static double glideSink(float pitch) {
         double cos = Math.cos(Math.toRadians(pitch));
-        return GRAVITY * (1 - 0.75 * cos * cos);
+        return MovementUtil.GRAVITY * (1 - 0.75 * cos * cos);
     }
 
     // Holds the height the player had when the vertical keys let go.
@@ -716,7 +683,7 @@ public final class ElytraFly extends Module {
     private double hover(double vy, double climb) {
         double gap = groundGap(HOVER_APPROACH);
         if (gap < 0) {
-            return vy - GRAVITY / 2 * climb;
+            return vy - MovementUtil.GRAVITY / 2 * climb;
         }
         if (gap <= HOVER_GAP) {
             return Math.max(vy, glideSink(mc.player.getXRot()));
@@ -751,7 +718,7 @@ public final class ElytraFly extends Module {
         }
 
         Vec3 velocity = mc.player.getDeltaMovement();
-        double bps = velocity.horizontalDistance() * TICKS_PER_SECOND;
+        double bps = velocity.horizontalDistance() * SharedConstants.TICKS_PER_SECOND;
         double target = cruiseSpeed.getValue();
         double y = mc.player.getY();
 
@@ -803,14 +770,14 @@ public final class ElytraFly extends Module {
             return;
         }
         boost.fire();
-        rocketTimer = (int) Math.round(rocketDelay.getValue() * TICKS_PER_SECOND);
+        rocketTimer = (int) Math.round(rocketDelay.getValue() * SharedConstants.TICKS_PER_SECOND);
     }
 
     // Creative style flight inside a glide the server holds open. A glide is never
     // kicked for flying and it never banks fall distance. LivingEntityMixin keeps the
     // glide physics off the flight.
     private void packetTick() {
-        if (!mc.player.getItemBySlot(EquipmentSlot.CHEST).is(Items.ELYTRA)) {
+        if (!MovementUtil.wearsGlider()) {
             endPacketFlight();
             return;
         }
@@ -849,6 +816,7 @@ public final class ElytraFly extends Module {
     // Lets go of whatever the mode holds whilst it changes or stands aside.
     // A packet flight left on with no fly speed would strand you midair.
     private void letGo() {
+        cruising = false;
         releaseBounceKeys();
         releasePilot();
         restoreFovScale();
@@ -886,7 +854,7 @@ public final class ElytraFly extends Module {
             return;
         }
         if (mc.player.isPassenger() || mc.player.getAbilities().flying
-            || !mc.player.getItemBySlot(EquipmentSlot.CHEST).is(Items.ELYTRA)) {
+            || !MovementUtil.wearsGlider()) {
             releaseBounceKeys();
             return;
         }
@@ -929,18 +897,6 @@ public final class ElytraFly extends Module {
         InputUtil.release(mc.options.keyJump);
     }
 
-    // Fired on the netty thread.
-    @Subscribe
-    private void onPacketReceive(PacketReceiveEvent event) {
-        if (!(event.getPacket() instanceof ClientboundPlayerPositionPacket)) {
-            return;
-        }
-        ramp = 0;
-        if (mode.is(Mode.BOUNCE)) {
-            rubberbanded = true;
-        }
-    }
-
     // Leaves the ground to give the glide something to start from.
     private void jumpOff() {
         if (!groundStart.isOn() || takeOffWindow > 0 || restartCooldown > 0) {
@@ -948,7 +904,7 @@ public final class ElytraFly extends Module {
         }
         if (!mc.player.onGround() || !mc.player.input.keyPresses.jump()
             || mc.player.isPassenger() || mc.player.getAbilities().flying
-            || !mc.player.getItemBySlot(EquipmentSlot.CHEST).is(Items.ELYTRA)) {
+            || !MovementUtil.wearsGlider()) {
             return;
         }
         mc.player.jumpFromGround();
@@ -962,7 +918,7 @@ public final class ElytraFly extends Module {
         }
         if (takeOffWindow > 0) {
             if (!mc.player.onGround()
-                && mc.player.getItemBySlot(EquipmentSlot.CHEST).is(Items.ELYTRA)) {
+                && MovementUtil.wearsGlider()) {
                 openGlide();
             }
             return;
@@ -973,7 +929,7 @@ public final class ElytraFly extends Module {
         }
         if (mc.player.onGround() || mc.player.isPassenger() || mc.player.isInWater()
             || mc.player.getAbilities().flying
-            || !mc.player.getItemBySlot(EquipmentSlot.CHEST).is(Items.ELYTRA)) {
+            || !MovementUtil.wearsGlider()) {
             return;
         }
         if (mc.player.getDeltaMovement().y >= 0) {
@@ -999,16 +955,10 @@ public final class ElytraFly extends Module {
             ServerboundPlayerCommandPacket.Action.START_FALL_FLYING));
     }
 
-    // Warns once.
+    // True whilst the worn elytra is nearly broken. The chat warning goes out only once.
     private boolean checkDurability() {
         ItemStack chest = mc.player.getItemBySlot(EquipmentSlot.CHEST);
-        if (!chest.is(Items.ELYTRA) || !chest.isDamageableItem()) {
-            warned = false;
-            return false;
-        }
-        int max = chest.getMaxDamage();
-        int left = max - chest.getDamageValue();
-        if (left > max * LOW_DURABILITY) {
+        if (!chest.is(Items.ELYTRA) || !ItemUtil.wornBelow(chest, LOW_DURABILITY)) {
             warned = false;
             return false;
         }

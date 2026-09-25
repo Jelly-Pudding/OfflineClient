@@ -13,11 +13,11 @@ import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.ColorUtil;
+import com.jellypudding.offlineclient.util.WorldWatch;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket;
 import net.minecraft.network.protocol.game.ClientboundSectionBlocksUpdatePacket;
 import net.minecraft.world.level.ChunkPos;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
@@ -25,7 +25,6 @@ import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.phys.AABB;
 
-import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -83,7 +82,7 @@ public final class NewChunks extends Module {
     private final Set<Long> newChunks = new HashSet<>();
     private final Set<Long> oldChunks = new HashSet<>();
 
-    // Insertion ordered. Every chunk that landed whilst this ran mapped to its tick.
+    // Every chunk that landed whilst this ran mapped to its tick in arrival order.
     private final Map<Long, Integer> watched = new LinkedHashMap<>();
 
     // Filled from the network thread and drained on the next tick.
@@ -103,7 +102,7 @@ public final class NewChunks extends Module {
     private int drawnRevision = -1;
     private int drawnLayout = -1;
 
-    private WeakReference<Level> world;
+    private final WorldWatch world = new WorldWatch();
     private int ticks;
 
     public NewChunks() {
@@ -195,12 +194,10 @@ public final class NewChunks extends Module {
         }
     }
 
-    // A rejoin gives a fresh level object even in the same dimension.
     private boolean sameWorld() {
-        if (world != null && world.get() == mc.level) {
+        if (!world.changed()) {
             return true;
         }
-        world = new WeakReference<>(mc.level);
         reset();
         return false;
     }
@@ -216,8 +213,7 @@ public final class NewChunks extends Module {
     }
 
     private void noteFlow(BlockPos pos, BlockState state) {
-        FluidState fluid = state.getFluidState();
-        if (!fluid.isEmpty() && !fluid.isSource()) {
+        if (isFlowing(state)) {
             flowing.add(pos.immutable());
         }
     }

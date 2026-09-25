@@ -12,6 +12,7 @@ import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.MoveGate;
 import com.mojang.blaze3d.platform.InputConstants;
+import net.minecraft.SharedConstants;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
@@ -19,6 +20,8 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
 
 import java.lang.ref.WeakReference;
+import java.util.ArrayDeque;
+import java.util.Locale;
 import java.util.Queue;
 import java.util.concurrent.LinkedBlockingQueue;
 
@@ -29,7 +32,8 @@ public final class Blink extends Module {
     private final BoolSetting showCopy = new BoolSetting("Show copy",
         "Leaves a copy of you standing where the blink began.", true);
     private final NumberSetting pulseDelay = new NumberSetting("Pulse delay",
-        "Sends the held packets and starts again after this many ticks. 0 never does.",
+        "How often in ticks the held movement is sent and the blink starts over."
+            + " Nought waits until you turn Blink off.",
         0, 0, 60, 1, " ticks").min(0);
     private final NumberSetting limit = new NumberSetting("Limit",
         "Restarts after holding this many packets. Nought holds them for as long as you like.",
@@ -40,6 +44,10 @@ public final class Blink extends Module {
 
     // Filled from the packet thread and read by the HUD.
     private final Queue<Packet<?>> held = new LinkedBlockingQueue<>();
+
+    // Packets from blinks already let go. They leave one position a tick and keep
+    // going whilst the next blink holds its own.
+    private final Queue<Packet<?>> sending = new ArrayDeque<>();
 
     // The last packet queued. A repeat of it is not worth holding.
     private volatile ServerboundMovePlayerPacket lastHeld;
@@ -67,13 +75,12 @@ public final class Blink extends Module {
 
     @Override
     public String getSuffix() {
-        return held.size() + " held " + String.format("%.1fs", timer / 20f);
+        return held.size() + " held "
+            + String.format(Locale.ROOT, "%.1fs", timer / (float) SharedConstants.TICKS_PER_SECOND);
     }
 
     @Override
     protected void onEnable() {
-        // Drops a walk home that is still under way.
-        unwatch(drain);
         begin();
     }
 
@@ -129,18 +136,15 @@ public final class Blink extends Module {
             lastHeld = null;
             owner = new WeakReference<>(player);
         }
-        if (limit.getInt() > 0 && held.size() >= limit.getInt()) {
-            // Toggling the module from the packet thread would edit the bus mid dispatch.
-            release();
-            owner = new WeakReference<>(player);
-            return;
-        }
         event.cancel();
-        if (sameAs(lastHeld, packet)) {
-            return;
+        if (!sameAs(lastHeld, packet)) {
+            held.add(packet);
+            lastHeld = packet;
         }
-        held.add(packet);
-        lastHeld = packet;
+        if (limit.getInt() > 0 && held.size() >= limit.getInt()) {
+            release();
+            begin();
+        }
     }
 
     // Standing still makes a stream of identical packets. One of them says it all.
@@ -158,6 +162,8 @@ public final class Blink extends Module {
     // Throws the held packets away and walks the player back to the start.
     private void cancel() {
         held.clear();
+        sending.clear();
+        unwatch(drain);
         lastHeld = null;
         if (inGame() && start != null) {
             mc.player.setPos(start);
@@ -170,15 +176,15 @@ public final class Blink extends Module {
     // is switched off.
     private void release() {
         LocalPlayer player = mc.player;
-        LocalPlayer captured = owner.get();
-        owner = new WeakReference<>(null);
-        if (player == null || player != captured) {
-            held.clear();
+        if (player != null && player == owner.get()) {
+            sending.addAll(held);
         }
+        held.clear();
+        owner = new WeakReference<>(null);
         lastHeld = null;
         removeCopy();
         timer = 0;
-        if (!held.isEmpty()) {
+        if (!sending.isEmpty()) {
             watch(drain);
         }
     }
@@ -188,18 +194,18 @@ public final class Blink extends Module {
         private void onTick(TickEvent event) {
             LocalPlayer player = mc.player;
             if (player == null) {
-                held.clear();
+                sending.clear();
             }
             releasing = true;
             try {
                 Packet<?> next;
-                while ((next = held.peek()) != null) {
+                while ((next = sending.peek()) != null) {
                     boolean carriesPosition = next instanceof ServerboundMovePlayerPacket move
                         && move.hasPosition();
                     if (carriesPosition && !MoveGate.free()) {
                         return;
                     }
-                    held.poll();
+                    sending.poll();
                     player.connection.send(next);
                     if (carriesPosition) {
                         return;

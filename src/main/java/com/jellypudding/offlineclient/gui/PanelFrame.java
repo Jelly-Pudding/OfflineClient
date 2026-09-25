@@ -1,23 +1,28 @@
 package com.jellypudding.offlineclient.gui;
 
+import com.google.gson.JsonObject;
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.RenderUtil;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 
-// A titled box that drags by its header and resizes by any edge. Every
-// draggable box in the client is one of these with its own rows inside.
+// A titled box that drags by its header and resizes by any edge. It holds
+// rows of its own inside.
 // Each starts at the same width and height and a right click on an edge
 // puts that side back.
 public abstract class PanelFrame {
 
-    protected static final int MIN_VIEW = 16;
-    protected static final int MIN_WIDTH = 60;
-    protected static final int MAX_WIDTH = 320;
+    private static final int MIN_VIEW = 16;
+    private static final int MIN_WIDTH = 60;
+    private static final int MAX_WIDTH = 320;
 
-    private static final int GRAB = 4;
+    // The title stops short of the chevron by this much.
     private static final int MARKER_ZONE = 14;
+    // The chevron sits this far in from the right edge. A click within a small
+    // reach of it folds the panel and the corner beyond still drags it.
+    private static final int MARKER_INSET = 11;
+    private static final int MARKER_REACH = 2;
 
     private final String title;
     private final int startWidth;
@@ -99,10 +104,6 @@ public abstract class PanelFrame {
         return scrollBar.getOffset();
     }
 
-    public boolean isDragging() {
-        return dragging;
-    }
-
     // True once the user has put this box somewhere themselves. Until then a
     // resize of the window lays it out again.
     public boolean isPlaced() {
@@ -135,8 +136,36 @@ public abstract class PanelFrame {
         this.placed = placed;
     }
 
-    protected int getScreenHeight() {
-        return screenHeight;
+    // The place and size and fold of the box. Each owner adds what else it keeps.
+    public void writeFrame(JsonObject state) {
+        state.addProperty("x", x);
+        state.addProperty("y", y);
+        state.addProperty("width", width);
+        state.addProperty("height", viewHeight);
+        state.addProperty("collapsed", collapsed);
+        state.addProperty("scroll", scrollBar.getOffset());
+        state.addProperty("placed", placed);
+    }
+
+    public void readFrame(JsonObject state) {
+        if (state.has("x") && state.has("y")) {
+            setPosition(state.get("x").getAsInt(), state.get("y").getAsInt());
+        }
+        if (state.has("width")) {
+            setWidth(state.get("width").getAsInt());
+        }
+        if (state.has("height")) {
+            setViewHeight(state.get("height").getAsInt());
+        }
+        if (state.has("collapsed")) {
+            setCollapsed(state.get("collapsed").getAsBoolean());
+        }
+        if (state.has("scroll")) {
+            setScrollOffset(state.get("scroll").getAsInt());
+        }
+        if (state.has("placed")) {
+            setPlaced(state.get("placed").getAsBoolean());
+        }
     }
 
     // Never taller than the rows or the space left below the box.
@@ -146,7 +175,7 @@ public abstract class PanelFrame {
         if (screenHeight > 0) {
             limit = Math.min(limit, screenHeight - y - GuiTheme.HEADER_HEIGHT - footerHeight() - 2);
         }
-        return Math.clamp(limit, Math.min(MIN_VIEW, full), full);
+        return Math.clamp(limit, minView(), full);
     }
 
     private int minView() {
@@ -162,11 +191,11 @@ public abstract class PanelFrame {
 
     // The full rectangle including the grab margin around it.
     public final boolean isOver(double mx, double my) {
-        return mx >= x - GRAB && mx < x + width + GRAB
-            && my >= y - GRAB && my < y + getTotalHeight() + GRAB;
+        return mx >= x - GuiTheme.GRAB && mx < x + width + GuiTheme.GRAB
+            && my >= y - GuiTheme.GRAB && my < y + getTotalHeight() + GuiTheme.GRAB;
     }
 
-    public final boolean contains(double mx, double my) {
+    private boolean contains(double mx, double my) {
         return mx >= x && mx < x + width && my >= y && my < y + getTotalHeight();
     }
 
@@ -183,22 +212,24 @@ public abstract class PanelFrame {
 
     // The grab bands sit on the border and just outside it.
     private boolean nearLeft(double mx, double my) {
-        return mx >= x - GRAB && mx <= x + 1 && my >= y - GRAB && my < y + getTotalHeight() + GRAB;
+        return mx >= x - GuiTheme.GRAB && mx <= x + 1
+            && my >= y - GuiTheme.GRAB && my < y + getTotalHeight() + GuiTheme.GRAB;
     }
 
     private boolean nearRight(double mx, double my) {
-        return mx >= x + width - 1 && mx <= x + width + GRAB
-            && my >= y - GRAB && my < y + getTotalHeight() + GRAB;
+        return mx >= x + width - 1 && mx <= x + width + GuiTheme.GRAB
+            && my >= y - GuiTheme.GRAB && my < y + getTotalHeight() + GuiTheme.GRAB;
     }
 
     private boolean nearTop(double mx, double my) {
-        return !collapsed && my >= y - GRAB && my <= y + 1 && mx >= x - GRAB && mx < x + width + GRAB;
+        return !collapsed && my >= y - GuiTheme.GRAB && my <= y + 1
+            && mx >= x - GuiTheme.GRAB && mx < x + width + GuiTheme.GRAB;
     }
 
     private boolean nearBottom(double mx, double my) {
         int bottom = y + getTotalHeight();
-        return !collapsed && my >= bottom - 1 && my <= bottom + GRAB
-            && mx >= x - GRAB && mx < x + width + GRAB;
+        return !collapsed && my >= bottom - 1 && my <= bottom + GuiTheme.GRAB
+            && mx >= x - GuiTheme.GRAB && mx < x + width + GuiTheme.GRAB;
     }
 
     private boolean scrollable() {
@@ -273,10 +304,21 @@ public abstract class PanelFrame {
             GuiTheme.accentText(), GuiTheme.accent(12));
         context.disableScissor();
 
-        boolean overMarker = mouseX >= x + width - MARKER_ZONE && mouseX < x + width
-            && mouseY >= y && mouseY < y + h;
-        RenderUtil.chevron(context, x + width - 11, y + (h - 5) / 2, collapsed,
-            overMarker ? GuiTheme.text() : GuiTheme.textDim());
+        RenderUtil.chevron(context, markerX(), markerY(), collapsed,
+            overMarker(mouseX, mouseY) ? GuiTheme.text() : GuiTheme.textDim());
+    }
+
+    private int markerX() {
+        return x + width - MARKER_INSET;
+    }
+
+    private int markerY() {
+        return y + (GuiTheme.HEADER_HEIGHT - 2 - RenderUtil.CHEVRON_HEIGHT) / 2;
+    }
+
+    private boolean overMarker(double mx, double my) {
+        return mx >= markerX() - MARKER_REACH && mx < markerX() + RenderUtil.CHEVRON_WIDTH + MARKER_REACH
+            && my >= markerY() - MARKER_REACH && my < markerY() + RenderUtil.CHEVRON_HEIGHT + MARKER_REACH;
     }
 
     private void renderViewport(GuiGraphicsExtractor context, int mouseX, int mouseY) {
@@ -390,7 +432,7 @@ public abstract class PanelFrame {
     }
 
     private void clickHeader(int mx, int my, int button) {
-        if (InputUtil.isRight(button) || (InputUtil.isLeft(button) && mx >= x + width - MARKER_ZONE)) {
+        if (InputUtil.isRight(button) || (InputUtil.isLeft(button) && overMarker(mx, my))) {
             collapsed = !collapsed;
         } else if (InputUtil.isLeft(button)) {
             dragging = true;

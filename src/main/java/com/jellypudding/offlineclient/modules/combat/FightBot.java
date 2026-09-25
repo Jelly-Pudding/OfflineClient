@@ -81,7 +81,7 @@ public final class FightBot extends Module {
             chase.stop();
             return;
         }
-        if (pauseInContainers.isOn() && InventoryUtil.isStorage(mc.gui.screen())) {
+        if (pauseInContainers.isOn() && InventoryUtil.containerOpen()) {
             chase.stop();
             return;
         }

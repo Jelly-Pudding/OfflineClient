@@ -9,7 +9,9 @@ import com.jellypudding.offlineclient.modules.misc.Timer;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.InputUtil;
+import com.jellypudding.offlineclient.util.MovementUtil;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 
@@ -18,9 +20,6 @@ import net.minecraft.world.level.block.Blocks;
 public final class NoSlowdown extends Module {
 
     public enum WebMode { FULL_SPEED, TIMER, OFF }
-
-    // Slowness takes this share of the speed off per level.
-    public static final double SLOWNESS_PER_LEVEL = 0.15;
 
     // The friction of plain ground. Slime is stickier which drags the top speed down.
     private static final float NORMAL_FRICTION = 0.6f;
@@ -49,7 +48,7 @@ public final class NoSlowdown extends Module {
     private final EnumSetting<WebMode> webs = new EnumSetting<>("Cobwebs",
         "How cobwebs are handled.", WebMode.FULL_SPEED)
         .describe(WebMode.FULL_SPEED, "Walk through cobwebs at full speed.")
-        .describe(WebMode.TIMER, "Speeds the game up whilst you hang in a cobweb off the ground.")
+        .describe(WebMode.TIMER, "Speeds the game up whilst you are caught in a cobweb.")
         .describe(WebMode.OFF, "Cobwebs slow you as normal.");
     private final NumberSetting webTimer = new NumberSetting("Web timer",
         "Game speed whilst in a cobweb.", 10, 1, 20, 0.5, "x")
@@ -132,7 +131,7 @@ public final class NoSlowdown extends Module {
         if (!isEnabled() || !slowness.isOn()) {
             return speed;
         }
-        double kept = 1 - SLOWNESS_PER_LEVEL * (amplifier + 1);
+        double kept = 1 - MovementUtil.SLOWNESS_PER_LEVEL * (amplifier + 1);
         return kept <= 0 ? speed : (float) (speed / kept);
     }
 
@@ -141,9 +140,8 @@ public final class NoSlowdown extends Module {
         if (!inGame()) {
             return;
         }
-        boolean hanging = webs.is(WebMode.TIMER) && !mc.player.onGround()
-            && mc.player.getInBlockState().is(Blocks.COBWEB);
-        Timer.override(TIMER_KEY, hanging ? webTimer.getFloat() : 1f);
+        boolean caught = webs.is(WebMode.TIMER) && BlockUtil.inCobweb(mc.player);
+        Timer.override(TIMER_KEY, caught ? webTimer.getFloat() : 1f);
 
         boolean strict = items.isOn() && airStrict.isOn() && mc.player.isUsingItem();
         if (strict != strictTold) {

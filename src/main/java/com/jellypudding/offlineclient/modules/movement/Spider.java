@@ -15,8 +15,8 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 // Both keep a block within reach to dodge the vanilla flight kick.
 public final class Spider extends Module {
 
-    // How far the box is probed upward for a ceiling to hang from.
-    private static final double CEILING_PROBE = 0.05;
+    // How far past the box a ceiling or a wall is felt for.
+    private static final double PROBE = 0.05;
 
     // Pace along a ceiling in blocks a tick. About walking speed.
     private static final double CEILING_PACE = 0.2;
@@ -34,9 +34,13 @@ public final class Spider extends Module {
     private final NumberSetting speed = new NumberSetting("Speed",
         "How fast you go up the wall in blocks a tick.",
         0.2, 0.1, 0.5, 0.05, " blocks").min(0.01);
+    private final BoolSetting holdOn = new BoolSetting("Hold on",
+        "Keeps you in place on a wall when you stop climbing. Sneak to let go.", true);
     private final BoolSetting ceilings = new BoolSetting("Ceilings",
-        "Hang from a ceiling and walk along it. At an edge you climb round and up. Sneak to drop.",
-        false);
+        "Hang from ceilings and walk along them. Sneak to drop.", false);
+    private final BoolSetting autoRound = new BoolSetting("Auto climb edges",
+        "Climbs round a ceiling edge without you holding jump.", false)
+        .under(ceilings);
 
     private boolean hanging;
     // Something held the player up last tick.
@@ -46,7 +50,7 @@ public final class Spider extends Module {
 
     public Spider() {
         super("Spider", "Climb up any wall like a spider.", Category.MOVEMENT);
-        addSettings(speed, ceilings);
+        addSettings(speed, holdOn, ceilings, autoRound);
         searchTags("wall climb", "ceiling");
     }
 
@@ -86,6 +90,9 @@ public final class Spider extends Module {
         if (mc.player.horizontalCollision) {
             climb();
             clinging = true;
+        } else if (held && holdOn.isOn() && canCling() && besideWall()) {
+            stay();
+            clinging = true;
         } else if (held) {
             release();
         }
@@ -112,17 +119,23 @@ public final class Spider extends Module {
         return true;
     }
 
-    // Past the edge of a ceiling the block just left is held from the side. The
-    // player climbs its face and either lands on top of it or meets a higher ceiling.
+    private void stay() {
+        Vec3 velocity = mc.player.getDeltaMovement();
+        mc.player.setDeltaMovement(velocity.x, 0, velocity.z);
+    }
+
+    // Past the edge of a ceiling the block just left is held from the side. Jump
+    // climbs its face onto the top of it or up to a higher ceiling.
     private boolean roundEdge() {
-        if (!canCling()) {
+        boolean rising = autoRound.isOn() || mc.player.input.keyPresses.jump();
+        if (!canCling() || (!rising && !holdOn.isOn())) {
             return false;
         }
         Vec3 pull = pullTowardsEdge();
         if (pull == null) {
             return false;
         }
-        mc.player.setDeltaMovement(pull.x * GRIP_PULL, speed.getValue(), pull.z * GRIP_PULL);
+        mc.player.setDeltaMovement(pull.x * GRIP_PULL, rising ? speed.getValue() : 0, pull.z * GRIP_PULL);
         return true;
     }
 
@@ -159,14 +172,19 @@ public final class Spider extends Module {
         }
     }
 
-    // Hanging and rounding an edge happen in the air. Sneak lets go.
+    // Clinging only happens in the air. Sneak lets go.
     private boolean canCling() {
         return !mc.player.onGround() && !mc.player.isShiftKeyDown() && !mc.player.isInWater()
             && !mc.player.isInLava();
     }
 
+    private boolean besideWall() {
+        return !mc.level.noCollision(mc.player,
+            mc.player.getBoundingBox().inflate(PROBE, -PROBE, PROBE));
+    }
+
     private boolean ceilingAbove() {
         return !mc.level.noCollision(mc.player,
-            mc.player.getBoundingBox().move(0, CEILING_PROBE, 0));
+            mc.player.getBoundingBox().move(0, PROBE, 0));
     }
 }

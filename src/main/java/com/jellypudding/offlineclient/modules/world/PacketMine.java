@@ -278,12 +278,7 @@ public final class PacketMine extends Module {
         if (!autoTool.isOn() || (notOnUse.isOn() && mc.player.isUsingItem())) {
             return;
         }
-        // A slot the player picked themselves is left alone.
-        if (slots.isHolding() && !slots.stillMine()) {
-            slots.forget();
-            return;
-        }
-        ItemUtil.selectBestTool(state, slots);
+        ItemUtil.holdBestTool(state, slots);
     }
 
     @Subscribe

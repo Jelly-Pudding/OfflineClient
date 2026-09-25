@@ -11,8 +11,10 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
+import com.jellypudding.offlineclient.util.BoundedMap;
 import com.jellypudding.offlineclient.util.ChatUtil;
-import net.minecraft.client.multiplayer.ClientLevel;
+import com.jellypudding.offlineclient.util.WorldWatch;
+import net.minecraft.ChatFormatting;
 import net.minecraft.client.multiplayer.chat.GuiMessage;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -30,9 +32,9 @@ import net.minecraft.world.entity.projectile.throwableitemprojectile.ThrownEnder
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayDeque;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
@@ -141,28 +143,20 @@ public final class Notifier extends Module {
     private final Queue<Pending> queue = new LinkedBlockingQueue<>(MAX_PENDING);
     private final Deque<String> joinLeaveQueue = new ArrayDeque<>();
     // Entity id to what we last knew about it.
-    private final Map<Integer, Watched> watched = bounded(MAX_TRACKED);
-    private final Map<Integer, Pearl> flying = bounded(MAX_TRACKED);
+    // The client removes some entities without a packet. None of these maps can be
+    // trusted to empty itself.
+    private final Map<Integer, Watched> watched = new BoundedMap<>(MAX_TRACKED);
+    private final Map<Integer, Pearl> flying = new BoundedMap<>(MAX_TRACKED);
     // Totem pops per player since their last death.
-    private final Map<UUID, Integer> pops = bounded(MAX_TRACKED);
+    private final Map<UUID, Integer> pops = new BoundedMap<>(MAX_TRACKED);
     // The last totem line printed for a player. The next one replaces it.
-    private final Map<UUID, String> popLines = bounded(MAX_TRACKED);
-    // Names from the tab list. The netty thread must not read the real one.
-    private final Map<UUID, String> tabNames = bounded(MAX_TRACKED);
-    private ClientLevel lastLevel;
-    private boolean firstTabPacket = true;
+    private final Map<UUID, String> popLines = new BoundedMap<>(MAX_TRACKED);
+    // Names from the tab list. The netty thread must not read the real one. It fills
+    // this copy whilst the game thread clears it.
+    private final Map<UUID, String> tabNames = Collections.synchronizedMap(new BoundedMap<>(MAX_TRACKED));
+    private final WorldWatch world = new WorldWatch();
+    private volatile boolean firstTabPacket = true;
     private int delayTimer;
-
-    // The client removes some entities without a packet.
-    // None of these maps can be trusted to empty itself.
-    private static <K, V> Map<K, V> bounded(int max) {
-        return new LinkedHashMap<K, V>() {
-            @Override
-            protected boolean removeEldestEntry(Map.Entry<K, V> eldest) {
-                return size() > max;
-            }
-        };
-    }
 
     public Notifier() {
         super("Notifier", "Chat messages when players come and go and when totems pop.", Category.MISC);
@@ -190,7 +184,7 @@ public final class Notifier extends Module {
         pops.clear();
         popLines.clear();
         tabNames.clear();
-        lastLevel = null;
+        world.forget();
         firstTabPacket = true;
         delayTimer = 0;
     }
@@ -273,14 +267,13 @@ public final class Notifier extends Module {
         if (!inGame()) {
             return;
         }
-        if (mc.level != lastLevel) {
+        if (world.changed()) {
             // A new dimension resends every entity. Queued ids belong to the old one.
             queue.clear();
             watched.clear();
             flying.clear();
             pops.clear();
             popLines.clear();
-            lastLevel = mc.level;
         }
         Pending pending;
         while ((pending = queue.poll()) != null) {
@@ -440,28 +433,16 @@ public final class Notifier extends Module {
     }
 
     private static void drop(String message) {
-        String wanted = plain(message);
+        String wanted = ChatFormatting.stripFormatting(message);
         List<GuiMessage> all = mc.gui.hud.getChat().allMessages;
         int max = Math.min(REPLACE_DEPTH, all.size());
         for (int i = 0; i < max; i++) {
-            if (plain(all.get(i).content().getString()).contains(wanted)) {
+            if (ChatFormatting.stripFormatting(all.get(i).content().getString()).contains(wanted)) {
                 all.remove(i);
                 mc.gui.hud.getChat().refreshTrimmedMessages();
                 return;
             }
         }
-    }
-
-    private static String plain(String text) {
-        StringBuilder out = new StringBuilder(text.length());
-        for (int i = 0; i < text.length(); i++) {
-            if (text.charAt(i) == '§') {
-                i++;
-            } else {
-                out.append(text.charAt(i));
-            }
-        }
-        return out.toString();
     }
 
     private boolean skip(String name) {

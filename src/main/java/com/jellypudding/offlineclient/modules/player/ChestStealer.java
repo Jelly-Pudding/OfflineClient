@@ -6,9 +6,11 @@ import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
+import com.jellypudding.offlineclient.setting.ListMode;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.InventoryUtil;
+import com.jellypudding.offlineclient.util.MenuClicks;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.RotationManager;
 import com.jellypudding.offlineclient.util.RotationPriority;
@@ -27,8 +29,6 @@ import java.util.concurrent.ThreadLocalRandom;
 
 public final class ChestStealer extends Module {
 
-    public enum ListMode { WHITELIST, BLACKLIST }
-
     private final NumberSetting delay = new NumberSetting("Delay",
         "Milliseconds between each item grab.", 50, 0, 500, 10, "ms").min(0).max(5000);
     private final NumberSetting initialDelay = new NumberSetting("Initial delay",
@@ -37,10 +37,8 @@ public final class ChestStealer extends Module {
     private final NumberSetting jitter = new NumberSetting("Jitter",
         "Adds up to this many milliseconds at random to each grab.", 50, 0, 500, 10, "ms")
         .min(0).max(1000);
-    private final EnumSetting<ListMode> listMode = new EnumSetting<>("List mode",
-        "What the list means.", ListMode.BLACKLIST)
-        .describe(ListMode.WHITELIST, "Takes only the listed items.")
-        .describe(ListMode.BLACKLIST, "Takes everything except the listed items.");
+    private final EnumSetting<ListMode> listMode = ListMode.setting("List mode", ListMode.BLACKLIST,
+        "Takes only the listed items.", "Takes everything except the listed items.");
     private final RegistryListSetting<Item> items = new RegistryListSetting<>("Items",
         "The items the list applies to. Click to pick them.", BuiltInRegistries.ITEM,
         List.of());
@@ -63,8 +61,10 @@ public final class ChestStealer extends Module {
     private int lastCount = -1;
     private boolean inventoryFull;
     private boolean open;
-    // Set by the dump button. One stack moves per tick until the pass is done.
-    private boolean dumpOnce;
+    // Set by the dump button until every stack the dump wants has gone in.
+    private boolean dumping;
+    // What a dump put in the container is left there for the rest of the visit.
+    private boolean dumped;
 
     public ChestStealer() {
         super("ChestStealer", "Takes everything out of containers for you.", Category.PLAYER);
@@ -88,7 +88,10 @@ public final class ChestStealer extends Module {
     }
 
     public void dumpNow() {
-        dumpOnce = true;
+        dumping = true;
+        dumped = true;
+        lastSlot = -1;
+        lastCount = -1;
         nextClick = 0;
     }
 
@@ -114,9 +117,10 @@ public final class ChestStealer extends Module {
             open = true;
             nextClick = System.currentTimeMillis() + initialDelay.getInt();
         }
-        if (dumpOnce) {
-            dumpOnce = false;
-            dumpPass();
+        if (dumping) {
+            if (System.currentTimeMillis() >= nextClick) {
+                dumping = dumpStep();
+            }
             return;
         }
         if (inventoryFull && !throwOut.isOn()) {
@@ -162,8 +166,7 @@ public final class ChestStealer extends Module {
 
     private void take(AbstractContainerMenu menu, int slot) {
         if (!throwOut.isOn()) {
-            mc.gameMode.handleContainerInput(menu.containerId, slot, 0,
-                ContainerInput.QUICK_MOVE, mc.player);
+            MenuClicks.quickMove(menu, slot);
             return;
         }
         if (backwards.isOn()) {
@@ -171,29 +174,33 @@ public final class ChestStealer extends Module {
                 RotationPriority.IDLE);
         }
         // Button one throws the whole stack straight onto the ground.
-        mc.gameMode.handleContainerInput(menu.containerId, slot, 1,
-            ContainerInput.THROW, mc.player);
+        MenuClicks.click(menu, slot, 1, ContainerInput.THROW);
     }
 
-    // Moves everything the filter does not want back into the container.
-    private void dumpPass() {
+    // Moves one stack the InventoryTweaks dump filter wants into the container.
+    // False once nothing is left to move or the container has no room.
+    private boolean dumpStep() {
         AbstractContainerMenu menu = mc.player.containerMenu;
-        InventoryTweaks tweaks = Modules.get(InventoryTweaks.class);
         for (int i = menu.slots.size() - InventoryUtil.WHOLE_INVENTORY; i < menu.slots.size(); i++) {
-            Slot slot = menu.slots.get(i);
-            ItemStack stack = slot.getItem();
-            if (stack.isEmpty()) {
+            ItemStack stack = menu.slots.get(i).getItem();
+            if (!dumps(stack)) {
                 continue;
             }
-            if (tweaks != null && !tweaks.dumps(stack)) {
-                continue;
+            if (i == lastSlot && stack.getCount() == lastCount) {
+                return false;
             }
-            mc.gameMode.handleContainerInput(menu.containerId, i, 0,
-                ContainerInput.QUICK_MOVE, mc.player);
+            lastSlot = i;
+            lastCount = stack.getCount();
+            MenuClicks.quickMove(menu, i);
             waitAgain();
-            dumpOnce = true;
-            return;
+            return true;
         }
+        return false;
+    }
+
+    private static boolean dumps(ItemStack stack) {
+        InventoryTweaks tweaks = Modules.get(InventoryTweaks.class);
+        return tweaks == null ? !stack.isEmpty() : tweaks.dumps(stack);
     }
 
     private void waitAgain() {
@@ -210,11 +217,12 @@ public final class ChestStealer extends Module {
         lastCount = -1;
         inventoryFull = false;
         open = false;
-        dumpOnce = false;
+        dumping = false;
+        dumped = false;
     }
 
     // An empty blacklist leaves every item wanted.
     private boolean wanted(ItemStack stack) {
-        return items.contains(stack.getItem()) == listMode.is(ListMode.WHITELIST);
+        return listMode.getValue().admits(items.contains(stack.getItem())) && !(dumped && dumps(stack));
     }
 }

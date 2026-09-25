@@ -1,9 +1,14 @@
 package com.jellypudding.offlineclient.util;
 
+import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.event.events.PacketReceiveEvent;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.Connection;
 import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.game.ClientboundOpenScreenPacket;
+import net.minecraft.network.protocol.game.ServerboundContainerClosePacket;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
+import net.minecraft.world.inventory.MenuType;
 
 public final class PacketUtil {
 
@@ -15,6 +20,17 @@ public final class PacketUtil {
 
     public static void noteConnection(Connection live) {
         connection = live;
+    }
+
+    // A click on an anvil already down makes the server open its repair menu. Closing it on
+    // the server as well keeps the next click from being swallowed.
+    public static void closeAnvilMenu(PacketReceiveEvent event) {
+        LocalPlayer player = OfflineClient.MC.player;
+        if (player != null && event.getPacket() instanceof ClientboundOpenScreenPacket packet
+            && packet.getType() == MenuType.ANVIL) {
+            event.cancel();
+            player.connection.send(new ServerboundContainerClosePacket(packet.getContainerId()));
+        }
     }
 
     // Sends straight down the wire. Works before a world exists.

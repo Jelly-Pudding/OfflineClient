@@ -100,7 +100,6 @@ public final class TabGui extends Module {
         List<Module> modules = modules();
         if (row < modules.size() && modules.get(row).isTogglable()) {
             modules.get(row).toggle();
-            OfflineClient.INSTANCE.getConfigManager().saveSoon();
         }
     }
 

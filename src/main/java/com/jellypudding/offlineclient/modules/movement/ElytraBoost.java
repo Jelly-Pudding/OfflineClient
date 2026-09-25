@@ -7,16 +7,18 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.CrashGuard;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.Modules;
+import com.jellypudding.offlineclient.util.MovementUtil;
 import com.jellypudding.offlineclient.util.SwingMode;
+import net.minecraft.SharedConstants;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.projectile.FireworkRocketEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -29,8 +31,6 @@ import java.util.Set;
 // A client side rocket boosts you the same way a real one does and the server
 // only ever sees the movement. A real rocket is used when that is switched off.
 public final class ElytraBoost extends Module {
-
-    private static final double TICKS_PER_SECOND = 20;
 
     private static final int MIN_GAP_TICKS = 10;
 
@@ -47,7 +47,7 @@ public final class ElytraBoost extends Module {
         "Keeps firing on its own whilst you glide.", false);
     private final NumberSetting interval = new NumberSetting("Interval",
         "Seconds between rockets whilst Auto is on.", 3, 0.5, 15, 0.5, "s")
-        .min(MIN_GAP_TICKS / TICKS_PER_SECOND).under(auto);
+        .min((double) MIN_GAP_TICKS / SharedConstants.TICKS_PER_SECOND).under(auto);
     private final BoolSetting takeOff = new BoolSetting("Take off",
         "Opens the elytra when you press the bind midair.", true);
     private final BoolSetting swapBack = new BoolSetting("Swap back",
@@ -55,6 +55,7 @@ public final class ElytraBoost extends Module {
     private final BoolSetting fromInventory = new BoolSetting("Take from inventory",
         "Borrows rockets from the rest of the inventory when the hotbar has none.", true)
         .unless(antiConsume);
+    private final CrashGuard crashGuard = new CrashGuard();
 
     private int lastFireTick = Integer.MIN_VALUE / 2;
     private boolean warned;
@@ -67,6 +68,7 @@ public final class ElytraBoost extends Module {
         super("ElytraBoost", "Press the bind whilst gliding to fire a firework rocket.", Category.MOVEMENT);
         addSettings(antiConsume, flightDuration, playSound, auto, interval, takeOff, swapBack,
             fromInventory);
+        addSettings(crashGuard.settings());
         searchTags("elytra", "firework", "rocket", "boost");
     }
 
@@ -131,17 +133,19 @@ public final class ElytraBoost extends Module {
     @Subscribe
     private void onTick(TickEvent event) {
         fakes.removeIf(Entity::isRemoved);
-        if (inGame() && !mc.player.isFallFlying()) {
+        if (!inGame()) {
+            return;
+        }
+        if (!mc.player.isFallFlying()) {
             // Borrowed rockets go home once the glide is over.
             loan.giveBack();
-        }
-        if (!auto.isOn() || !usable() || !mc.player.isFallFlying()) {
             return;
         }
-        if (cruising()) {
+        crashGuard.brake(mc.player);
+        if (!auto.isOn() || !usable() || cruising()) {
             return;
         }
-        int gap = (int) Math.round(interval.getValue() * TICKS_PER_SECOND);
+        int gap = (int) Math.round(interval.getValue() * SharedConstants.TICKS_PER_SECOND);
         if (now() - lastFireTick < Math.max(gap, MIN_GAP_TICKS)) {
             return;
         }
@@ -165,7 +169,7 @@ public final class ElytraBoost extends Module {
 
     private boolean canGlide() {
         return !mc.player.onGround() && !mc.player.isPassenger()
-            && mc.player.getItemBySlot(EquipmentSlot.CHEST).is(Items.ELYTRA);
+            && MovementUtil.wearsGlider();
     }
 
     // Also used by ElytraFly whilst it cruises on rockets.

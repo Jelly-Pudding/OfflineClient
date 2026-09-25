@@ -12,6 +12,7 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.ItemUtil;
+import com.jellypudding.offlineclient.util.MenuClicks;
 import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
@@ -38,10 +39,6 @@ public final class InventoryTweaks extends Module {
         BLACKLIST,
         EVERYTHING
     }
-
-    // Inventory indices nine and up are the main grid.
-    private static final int GRID_START = 9;
-    private static final int GRID_END = 36;
 
     private final BoolSetting sort = new BoolSetting("Sort",
         "Keep the inventory in a stable order.", true);
@@ -217,9 +214,9 @@ public final class InventoryTweaks extends Module {
                 continue;
             }
             int index = slot.getContainerSlot();
-            if (index >= GRID_START && index < GRID_END) {
+            if (index >= InventoryUtil.MAIN_START && index < InventoryUtil.WHOLE_INVENTORY) {
                 found.add(i);
-            } else if (withHotbar && index < GRID_START) {
+            } else if (withHotbar && index < InventoryUtil.MAIN_START) {
                 found.add(i);
             }
         }
@@ -256,7 +253,7 @@ public final class InventoryTweaks extends Module {
                 continue;
             }
             int index = slot.getContainerSlot();
-            if (index < GRID_START || index >= GRID_END) {
+            if (index < InventoryUtil.MAIN_START || index >= InventoryUtil.WHOLE_INVENTORY) {
                 continue;
             }
             ItemStack stack = slot.getItem();
@@ -269,7 +266,7 @@ public final class InventoryTweaks extends Module {
             }
             dumpSlot = i;
             dumpCount = stack.getCount();
-            click(menu, i, 0, ContainerInput.QUICK_MOVE);
+            MenuClicks.quickMove(menu, i);
             return true;
         }
         return false;
@@ -290,10 +287,10 @@ public final class InventoryTweaks extends Module {
                 if (!ItemStack.isSameItemSameComponents(first, second)) {
                     continue;
                 }
-                click(menu, region.get(b), 0, ContainerInput.PICKUP);
-                click(menu, region.get(a), 0, ContainerInput.PICKUP);
+                MenuClicks.click(menu, region.get(b), 0, ContainerInput.PICKUP);
+                MenuClicks.click(menu, region.get(a), 0, ContainerInput.PICKUP);
                 if (!menu.getCarried().isEmpty()) {
-                    click(menu, region.get(b), 0, ContainerInput.PICKUP);
+                    MenuClicks.click(menu, region.get(b), 0, ContainerInput.PICKUP);
                 }
                 return true;
             }
@@ -322,17 +319,13 @@ public final class InventoryTweaks extends Module {
 
     // Trades two slots with three pickup clicks.
     private void swap(AbstractContainerMenu menu, int from, int to) {
-        click(menu, from, 0, ContainerInput.PICKUP);
-        click(menu, to, 0, ContainerInput.PICKUP);
-        click(menu, from, 0, ContainerInput.PICKUP);
+        MenuClicks.click(menu, from, 0, ContainerInput.PICKUP);
+        MenuClicks.click(menu, to, 0, ContainerInput.PICKUP);
+        MenuClicks.click(menu, from, 0, ContainerInput.PICKUP);
         // Never leave a stack stuck to the cursor.
         if (!menu.getCarried().isEmpty()) {
-            click(menu, to, 0, ContainerInput.PICKUP);
+            MenuClicks.click(menu, to, 0, ContainerInput.PICKUP);
         }
-    }
-
-    private void click(AbstractContainerMenu menu, int slot, int button, ContainerInput kind) {
-        mc.gameMode.handleContainerInput(menu.containerId, slot, button, kind, mc.player);
     }
 
     // Empty slots sink to the end and everything else goes by id then size.

@@ -14,7 +14,6 @@ import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ColorUtil;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
@@ -27,13 +26,13 @@ import java.util.Set;
 // Finds one block wide holes walled in bedrock or obsidian. Those survive crystal blasts.
 public final class HoleEsp extends Module {
 
-    private enum Wall {
+    private enum Kind {
         BEDROCK,
         OBSIDIAN,
         MIXED
     }
 
-    private record Hole(AABB box, Wall wall) {
+    private record Hole(AABB box, Kind kind) {
     }
 
     // Reused by every column test. One scan probes thousands of positions.
@@ -158,10 +157,10 @@ public final class HoleEsp extends Module {
                 continue;
             }
             BlockPos next = pos.relative(side);
-            Wall wall = wallAt(next);
-            if (wall == Wall.BEDROCK) {
+            Kind wall = wallAt(next);
+            if (wall == Kind.BEDROCK) {
                 bedrock++;
-            } else if (wall == Wall.OBSIDIAN) {
+            } else if (wall == Kind.OBSIDIAN) {
                 obsidian++;
             } else if (side == Direction.DOWN || partner != null || !doubles.isOn() || !isOpen(next)) {
                 return;
@@ -171,10 +170,10 @@ public final class HoleEsp extends Module {
                     if (other == Direction.UP || other == side.getOpposite()) {
                         continue;
                     }
-                    Wall otherWall = wallAt(next.relative(other));
-                    if (otherWall == Wall.BEDROCK) {
+                    Kind otherWall = wallAt(next.relative(other));
+                    if (otherWall == Kind.BEDROCK) {
                         bedrock++;
-                    } else if (otherWall == Wall.OBSIDIAN) {
+                    } else if (otherWall == Kind.OBSIDIAN) {
                         obsidian++;
                     } else {
                         return;
@@ -192,7 +191,7 @@ public final class HoleEsp extends Module {
             return;
         }
 
-        Wall kind = obsidian == 0 ? Wall.BEDROCK : bedrock == 0 ? Wall.OBSIDIAN : Wall.MIXED;
+        Kind kind = obsidian == 0 ? Kind.BEDROCK : bedrock == 0 ? Kind.OBSIDIAN : Kind.MIXED;
         double top = height.getValue();
         AABB box = new AABB(pos.getX(), pos.getY(), pos.getZ(),
             pos.getX() + 1, pos.getY() + top, pos.getZ() + 1);
@@ -226,17 +225,12 @@ public final class HoleEsp extends Module {
     }
 
     // Null for blocks that do not survive a crystal.
-    private Wall wallAt(BlockPos pos) {
-        BlockState state = mc.level.getBlockState(pos);
-        Block block = state.getBlock();
-        boolean breakable = block.defaultDestroyTime() >= 0;
-        if (!breakable && BlockUtil.blocksMotion(state)) {
-            return Wall.BEDROCK;
-        }
-        if (breakable && block.getExplosionResistance() >= BlockUtil.BLAST_PROOF && BlockUtil.blocksMotion(state)) {
-            return Wall.OBSIDIAN;
-        }
-        return null;
+    private Kind wallAt(BlockPos pos) {
+        return switch (BlockUtil.wallOf(mc.level.getBlockState(pos))) {
+            case UNBREAKABLE -> Kind.BEDROCK;
+            case BLAST_PROOF -> Kind.OBSIDIAN;
+            case OPEN, WEAK -> null;
+        };
     }
 
     @Subscribe
@@ -245,8 +239,8 @@ public final class HoleEsp extends Module {
         boolean through = throughWalls.isOn();
         float share = style.fillShare();
         for (Hole hole : holes) {
-            int top = topColor(hole.wall());
-            int bottom = bottomColor(hole.wall());
+            int top = topColor(hole.kind());
+            int bottom = bottomColor(hole.kind());
             AABB box = hole.box();
             if (style.drawsSides()) {
                 batch.gradientSides(box, ColorUtil.fade(bottom, 0), ColorUtil.fade(top, share), through);
@@ -264,7 +258,7 @@ public final class HoleEsp extends Module {
         }
     }
 
-    private int topColor(Wall wall) {
+    private int topColor(Kind wall) {
         return switch (wall) {
             case BEDROCK -> bedrockTop.getColor();
             case OBSIDIAN -> obsidianTop.getColor();
@@ -272,7 +266,7 @@ public final class HoleEsp extends Module {
         };
     }
 
-    private int bottomColor(Wall wall) {
+    private int bottomColor(Kind wall) {
         return switch (wall) {
             case BEDROCK -> bedrockBottom.getColor();
             case OBSIDIAN -> obsidianBottom.getColor();

@@ -16,6 +16,7 @@ import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.BlockMiner;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.Cooldowns;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.ItemUtil;
@@ -30,9 +31,7 @@ import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 // Mines for as long as the pickaxe lasts. When it wears down the bot swaps to
 // ore that drops experience and lets Mending heal it before going back.
@@ -44,7 +43,6 @@ public final class InfinityMiner extends Module {
     // Ticks a spot the walker could not reach is left alone.
     private static final int SHUN_TICKS = 1200;
     private static final double GOAL_RADIUS = 3;
-    private static final int PERCENT = 100;
 
     private final RegistryListSetting<Block> targetBlocks = new RegistryListSetting<>("Target blocks",
         "The ore mined whilst the pickaxe is healthy. Click to pick it.", BuiltInRegistries.BLOCK,
@@ -77,7 +75,7 @@ public final class InfinityMiner extends Module {
 
     private final Trip trip = new Trip();
     private final SlotSwap slots = new SlotSwap();
-    private final Map<BlockPos, Integer> shunned = new HashMap<>();
+    private final Cooldowns<BlockPos> shunned = new Cooldowns<>();
 
     private BlockPos home;
     private BlockPos target;
@@ -146,17 +144,15 @@ public final class InfinityMiner extends Module {
             return;
         }
         if (!holdPickaxe()) {
-            ChatUtil.error("InfinityMiner needs a Mending pickaxe without Silk Touch in the hotbar.");
-            setEnabled(false);
+            disable("InfinityMiner needs a Mending pickaxe without Silk Touch in the hotbar.");
             return;
         }
         if (repairAt.getValue() >= mineAt.getValue()) {
-            ChatUtil.error("Repair at has to be lower than Mine at.");
-            setEnabled(false);
+            disable("Repair at has to be lower than Mine at.");
             return;
         }
         updateRepairing();
-        forgetShunned();
+        shunned.tick();
         if (target != null && !wanted(target)) {
             target = null;
             trip.stop();
@@ -176,7 +172,7 @@ public final class InfinityMiner extends Module {
         // A walk that ends short of reach has run into something the walker cannot pass.
         Trip.State state = trip.tick();
         if (state == Trip.State.FAILED || state == Trip.State.ARRIVED) {
-            shunned.put(target, mc.player.tickCount);
+            shunned.put(target, SHUN_TICKS);
             target = null;
         }
     }
@@ -184,7 +180,7 @@ public final class InfinityMiner extends Module {
     // A worn pickaxe swaps the target to experience ore until it is healthy again.
     private void updateRepairing() {
         ItemStack pick = mc.player.getMainHandItem();
-        double left = (pick.getMaxDamage() - pick.getDamageValue()) * (double) PERCENT / pick.getMaxDamage();
+        double left = ItemUtil.durabilityPercent(pick);
         if (!repairing && left <= repairAt.getValue()) {
             repairing = true;
             target = null;
@@ -208,17 +204,12 @@ public final class InfinityMiner extends Module {
         }
         scanTimer = SCAN_TICKS;
         for (BlockPos pos : BlockUtil.positionsWithin(scanRange.getValue())) {
-            if (wanted(pos) && !shunned.containsKey(pos)) {
+            if (wanted(pos) && !shunned.contains(pos)) {
                 target = pos.immutable();
                 return true;
             }
         }
         return false;
-    }
-
-    private void forgetShunned() {
-        int now = mc.player.tickCount;
-        shunned.values().removeIf(when -> now - when > SHUN_TICKS || now < when);
     }
 
     private boolean holdPickaxe() {
@@ -274,8 +265,7 @@ public final class InfinityMiner extends Module {
                 }
             }
             case FAILED -> {
-                ChatUtil.error("Could not find the way home.");
-                setEnabled(false);
+                disable("Could not find the way home.");
             }
             default -> {
             }

@@ -1,6 +1,7 @@
 package com.jellypudding.offlineclient.modules.render;
 
 import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.config.DataFiles;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.Render3DEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
@@ -11,8 +12,7 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ColorUtil;
-import net.minecraft.resources.ResourceKey;
-import net.minecraft.world.level.Level;
+import com.jellypudding.offlineclient.util.ServerInfo;
 import net.minecraft.world.phys.Vec3;
 
 import java.io.IOException;
@@ -43,7 +43,8 @@ public final class Breadcrumbs extends Module {
         .min(10).max(100000);
 
     private final Deque<Vec3> trail = new ArrayDeque<>();
-    private ResourceKey<Level> dimension;
+    // The server and dimension the trail belongs to. Null until the first tick in a world.
+    private String world;
     private int sinceSave;
 
     public Breadcrumbs() {
@@ -66,10 +67,11 @@ public final class Breadcrumbs extends Module {
         if (persist.isOn() && inGame()) {
             // A trail kept from another world would be drawn at the wrong coordinates
             // and then saved over this world.
-            if (dimension != mc.level.dimension()) {
+            String here = currentWorld();
+            if (!here.equals(world)) {
                 trail.clear();
             }
-            dimension = mc.level.dimension();
+            world = here;
             if (trail.isEmpty()) {
                 load();
             }
@@ -88,12 +90,12 @@ public final class Breadcrumbs extends Module {
         if (!inGame()) {
             return;
         }
-        // A portal or a rejoin swaps the dimension key.
-        if (mc.level.dimension() != dimension) {
-            if (persist.isOn() && dimension != null) {
+        String here = currentWorld();
+        if (!here.equals(world)) {
+            if (persist.isOn() && world != null) {
                 save();
             }
-            dimension = mc.level.dimension();
+            world = here;
             trail.clear();
             if (persist.isOn()) {
                 load();
@@ -143,7 +145,7 @@ public final class Breadcrumbs extends Module {
 
     // One point per line as three plain numbers.
     private void save() {
-        if (dimension == null) {
+        if (world == null) {
             return;
         }
         StringBuilder text = new StringBuilder();
@@ -151,7 +153,7 @@ public final class Breadcrumbs extends Module {
             text.append(point.x).append(' ').append(point.y).append(' ').append(point.z).append('\n');
         }
         try {
-            Path file = fileFor(dimension);
+            Path file = fileFor(world);
             Files.createDirectories(file.getParent());
             Files.writeString(file, text.toString());
         } catch (IOException e) {
@@ -160,10 +162,10 @@ public final class Breadcrumbs extends Module {
     }
 
     private void load() {
-        if (dimension == null) {
+        if (world == null) {
             return;
         }
-        Path file = fileFor(dimension);
+        Path file = fileFor(world);
         if (!Files.exists(file)) {
             return;
         }
@@ -182,8 +184,11 @@ public final class Breadcrumbs extends Module {
         }
     }
 
-    private Path fileFor(ResourceKey<Level> key) {
-        String name = key.identifier().toString().replace(':', '_').replace('/', '_');
-        return mc.gameDirectory.toPath().resolve("offlineclient").resolve("trails").resolve(name + ".txt");
+    private String currentWorld() {
+        return ServerInfo.key() + "_" + mc.level.dimension().identifier();
+    }
+
+    private static Path fileFor(String world) {
+        return DataFiles.path("trails", world.replaceAll("[^a-zA-Z0-9_.-]", "_") + ".txt");
     }
 }

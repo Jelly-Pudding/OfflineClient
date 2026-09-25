@@ -23,6 +23,7 @@ import com.jellypudding.offlineclient.util.RotationManager;
 import com.jellypudding.offlineclient.util.RotationPriority;
 import com.jellypudding.offlineclient.util.SwingMode;
 import com.jellypudding.offlineclient.util.TickRate;
+import net.minecraft.SharedConstants;
 import net.minecraft.client.multiplayer.MultiPlayerGameMode;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
@@ -50,7 +51,6 @@ public final class AutoFish extends Module {
 
     // Durability points left that count as about to break.
     private static final int NEARLY_BROKEN = 2;
-    private static final double TICKS_PER_SECOND = 20;
 
     // What each enchantment level is worth when picking the best rod.
     private static final int LUCK_WORTH = 9;
@@ -243,7 +243,7 @@ public final class AutoFish extends Module {
         reeling = false;
         splashHeard = false;
         reeledId = -1;
-        patienceTimer = patience.getInt() * 20;
+        patienceTimer = patience.getInt() * SharedConstants.TICKS_PER_SECOND;
         if (!autoCast.isOn() || castTimer > 0) {
             return;
         }
@@ -339,7 +339,7 @@ public final class AutoFish extends Module {
 
     // How much of a server tick one client tick is worth.
     private static double serverTick() {
-        return TickRate.INSTANCE.tps() / TICKS_PER_SECOND;
+        return TickRate.INSTANCE.tps() / SharedConstants.TICKS_PER_SECOND;
     }
 
     // The delay shifted by a random amount that is usually small and never
@@ -409,7 +409,7 @@ public final class AutoFish extends Module {
 
     // Swaps the offhand rod into the hotbar. Always waits a tick afterwards.
     private boolean borrowOffhand() {
-        if (!InventoryUtil.canClick() || !InventoryUtil.carried().isEmpty()) {
+        if (!InventoryUtil.cursorFree()) {
             return false;
         }
         int hotbar = InventoryUtil.freeHotbarSlot(InventoryUtil.selectedSlot());
@@ -529,7 +529,7 @@ public final class AutoFish extends Module {
             return;
         }
         if (!sameWater) {
-            // The same aim landed somewhere new. The old note was wrong.
+            // The same aim landed somewhere new. The saved spot was wrong.
             Spot fixed = new Spot(lastSpot.playerPos(), lastSpot.yaw(), lastSpot.pitch(),
                 bobber.position());
             spots.remove(lastSpot);

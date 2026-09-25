@@ -10,7 +10,6 @@ import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.Hud;
 import net.minecraft.resources.Identifier;
-import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import org.spongepowered.asm.mixin.Mixin;
@@ -66,7 +65,7 @@ public class HudMixin {
     }
 
     @Inject(method = "extractVignette", at = @At("HEAD"), cancellable = true)
-    private void onRenderVignette(GuiGraphicsExtractor context, Entity entity, CallbackInfo ci) {
+    private void onRenderVignette(CallbackInfo ci) {
         ClearView clearView = Modules.active(ClearView.class);
         if (clearView != null && clearView.blocksVignette()) {
             ci.cancel();

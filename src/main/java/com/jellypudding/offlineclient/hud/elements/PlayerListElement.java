@@ -21,9 +21,6 @@ public final class PlayerListElement extends HudElement {
 
     private static final int LINE = 10;
 
-    // Hue zero is red and hue one hundred and twenty is green.
-    private static final float GREEN_HUE = 120;
-
     private final NumberSetting range = new NumberSetting("Player list range",
         "How far away a player still shows.", 64, 8, 256, 8, " blocks").min(1);
     private final NumberSetting limit = new NumberSetting("Player list limit",
@@ -75,9 +72,7 @@ public final class PlayerListElement extends HudElement {
         if (EntityUtil.isFriend(player)) {
             return EntityUtil.FRIEND_COLOR;
         }
-        float max = EntityUtil.totalMaxHealth(player);
-        float share = max <= 0 ? 1 : Math.clamp(EntityUtil.totalHealth(player) / max, 0f, 1f);
-        return ColorUtil.hsv(share * GREEN_HUE, 0.8f, 1f);
+        return ColorUtil.redToGreen(EntityUtil.healthShare(player));
     }
 
     // Rows are right aligned. The block hugs the edge of the screen.

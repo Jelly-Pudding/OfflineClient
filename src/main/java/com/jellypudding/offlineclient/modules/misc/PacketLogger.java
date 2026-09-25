@@ -1,6 +1,7 @@
 package com.jellypudding.offlineclient.modules.misc;
 
 import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.config.DataFiles;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.ClientTickEvent;
 import com.jellypudding.offlineclient.event.events.PacketReceiveEvent;
@@ -234,8 +235,7 @@ public final class PacketLogger extends Module {
     }
 
     private static Path folder() {
-        return OfflineClient.MC.gameDirectory.toPath().resolve("offlineclient")
-            .resolve("packet-logs");
+        return DataFiles.path("packet-logs");
     }
 
     private static Path nextFile(Path folder) throws IOException {

@@ -8,9 +8,7 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
-import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
-import com.jellypudding.offlineclient.util.SwingMode;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
@@ -26,7 +24,6 @@ import net.minecraft.world.entity.monster.Strider;
 import net.minecraft.world.entity.vehicle.boat.AbstractBoat;
 import net.minecraft.world.entity.vehicle.minecart.Minecart;
 import net.minecraft.world.item.SpawnEggItem;
-import net.minecraft.world.phys.EntityHitResult;
 
 import java.util.List;
 
@@ -70,13 +67,7 @@ public final class AutoMount extends Module {
         if (ride == null) {
             return;
         }
-        if (rotate.isOn()) {
-            BlockUtil.faceVector(ride.getBoundingBox().getCenter());
-        }
-        EntityHitResult hit = new EntityHitResult(ride, ride.getBoundingBox().getCenter());
-        if (mc.gameMode.interact(mc.player, ride, hit, InteractionHand.MAIN_HAND).consumesAction()) {
-            SwingMode.swingArm(InteractionHand.MAIN_HAND);
-        }
+        EntityUtil.interact(ride, InteractionHand.MAIN_HAND, rotate.isOn());
     }
 
     private boolean wanted(Entity entity) {

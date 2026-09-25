@@ -16,9 +16,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(DisconnectedScreen.class)
 public abstract class DisconnectedScreenMixin extends Screen {
 
-    private static final int BUTTON_WIDTH = 200;
-    private static final int BUTTON_HEIGHT = 20;
-
     private DisconnectedScreenMixin(Component title) {
         super(title);
     }
@@ -35,15 +32,15 @@ public abstract class DisconnectedScreenMixin extends Screen {
         if (module == null || !module.showsButtons() || !AutoReconnect.canReconnect()) {
             return;
         }
-        int x = (width - BUTTON_WIDTH) / 2;
+        int x = (width - Button.BIG_WIDTH) / 2;
         offlineclient$reconnect = addRenderableWidget(
             Button.builder(Component.literal("Reconnect"), button -> module.reconnectNow())
-                .bounds(x, height - 52, BUTTON_WIDTH, BUTTON_HEIGHT).build());
+                .bounds(x, height - 52, Button.BIG_WIDTH, Button.DEFAULT_HEIGHT).build());
         offlineclient$toggle = addRenderableWidget(
             Button.builder(offlineclient$toggleText(module), button -> {
                 module.toggleFromScreen();
                 offlineclient$toggle.setMessage(offlineclient$toggleText(module));
-            }).bounds(x, height - 28, BUTTON_WIDTH, BUTTON_HEIGHT).build());
+            }).bounds(x, height - 28, Button.BIG_WIDTH, Button.DEFAULT_HEIGHT).build());
     }
 
     @Unique

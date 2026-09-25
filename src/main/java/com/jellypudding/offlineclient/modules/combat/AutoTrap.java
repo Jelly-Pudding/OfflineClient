@@ -21,8 +21,6 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.AABB;
-import net.minecraft.world.phys.Vec3;
-import net.minecraft.world.phys.shapes.CollisionContext;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -217,10 +215,8 @@ public final class AutoTrap extends Module {
         }
     }
 
-    // A spot only counts when a full block would fit in it and it is within reach.
     private void addOpen(Set<BlockPos> spots, BlockPos pos) {
-        if (!BlockUtil.isReplaceable(pos) || !mc.level.isUnobstructed(
-            Blocks.OBSIDIAN.defaultBlockState(), pos, CollisionContext.empty())) {
+        if (!BlockUtil.blockFits(pos)) {
             return;
         }
         if (inReach(pos)) {
@@ -229,8 +225,7 @@ public final class AutoTrap extends Module {
     }
 
     private boolean inReach(BlockPos pos) {
-        double reach = BlockUtil.canSee(Vec3.atCenterOf(pos)) ? placeRange.getValue() : wallsRange.getValue();
-        return BlockUtil.distanceTo(pos) <= reach;
+        return BlockUtil.inReach(pos, placeRange.getValue(), wallsRange.getValue());
     }
 
     @Subscribe

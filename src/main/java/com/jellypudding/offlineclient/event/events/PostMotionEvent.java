@@ -1,14 +1,8 @@
 package com.jellypudding.offlineclient.event.events;
 
-import com.jellypudding.offlineclient.event.Event;
+import com.jellypudding.offlineclient.event.UncancellableEvent;
 
 // Fired right after the client sends its movement packets.
-public final class PostMotionEvent extends Event {
+public final class PostMotionEvent extends UncancellableEvent {
     public static final PostMotionEvent INSTANCE = new PostMotionEvent();
-
-    // One shared instance. A cancel would stick for the rest of the session.
-    @Override
-    public void cancel() {
-        throw new UnsupportedOperationException("PostMotionEvent cannot be cancelled");
-    }
 }

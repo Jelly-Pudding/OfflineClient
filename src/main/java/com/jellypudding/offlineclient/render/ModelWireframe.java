@@ -62,6 +62,13 @@ public final class ModelWireframe {
         }
     }
 
+    // Captures and draws in one go for a module that redraws the model every frame.
+    public static void draw(DrawBatch batch, Entity entity, float partialTicks, BoxStyle.Shape shape,
+                            int line, int fill, boolean throughWalls) {
+        draw(batch, capture(entity, partialTicks), origin(entity, partialTicks), 1, shape, line, fill,
+            throughWalls);
+    }
+
     @SuppressWarnings("unchecked")
     private static EntityRenderer<Entity, EntityRenderState> rendererOf(Entity entity) {
         return (EntityRenderer<Entity, EntityRenderState>)

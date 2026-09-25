@@ -7,13 +7,10 @@ import com.jellypudding.offlineclient.modules.render.NoRender;
 import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
-import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.state.BlockState;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -47,7 +44,7 @@ public abstract class ClientLevelMixin {
     // Block crumbs are made here and never pass through the particle engine's options path.
     @Inject(method = "addDestroyBlockEffect(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;)V",
         at = @At("HEAD"), cancellable = true)
-    private void onDestroyBlockEffect(BlockPos pos, BlockState state, CallbackInfo ci) {
+    private void onDestroyBlockEffect(CallbackInfo ci) {
         if (offlineclient$blocksBlockParticles()) {
             ci.cancel();
         }
@@ -55,7 +52,7 @@ public abstract class ClientLevelMixin {
 
     @Inject(method = "addBreakingBlockEffects(Lnet/minecraft/core/BlockPos;Lnet/minecraft/core/Direction;Z)V",
         at = @At("HEAD"), cancellable = true)
-    private void onBreakingBlockEffect(BlockPos pos, Direction side, boolean flag, CallbackInfo ci) {
+    private void onBreakingBlockEffect(CallbackInfo ci) {
         if (offlineclient$blocksBlockParticles()) {
             ci.cancel();
         }

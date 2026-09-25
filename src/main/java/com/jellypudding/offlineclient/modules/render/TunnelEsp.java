@@ -8,11 +8,11 @@ import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.render.BoxStyle;
 import com.jellypudding.offlineclient.render.DrawBatch;
+import com.jellypudding.offlineclient.render.JoinedCells;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChunkScanner;
-import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
@@ -22,7 +22,6 @@ import java.util.List;
 // Highlights one wide two high corridors. Natural caves almost never make that shape.
 public final class TunnelEsp extends Module {
 
-    // A box is only ankle high. It can only touch the four sideways.
     // How open a neighbouring column is.
     private enum Side {
         WALKABLE,
@@ -47,9 +46,8 @@ public final class TunnelEsp extends Module {
 
     private final ChunkScanner<Spot> scanner = new ChunkScanner<>();
 
-    // The spots the neighbour keys were built from.
-    private List<Spot> known = List.of();
-    private final LongOpenHashSet keys = new LongOpenHashSet();
+    private final JoinedCells<Spot> joined = new JoinedCells<>(
+        spot -> BlockPos.asLong(spot.x(), spot.y(), spot.z()));
 
     // The scan bounds the cached chunks were built with.
     private int lastLow = Integer.MIN_VALUE;
@@ -64,7 +62,7 @@ public final class TunnelEsp extends Module {
 
     @Override
     public String getSuffix() {
-        return scanner.size() == 0 ? null : String.valueOf(scanner.size());
+        return count(scanner.size());
     }
 
     @Override
@@ -79,8 +77,7 @@ public final class TunnelEsp extends Module {
 
     private void forget() {
         scanner.reset();
-        known = List.of();
-        keys.clear();
+        joined.clear();
     }
 
     @Subscribe
@@ -201,17 +198,13 @@ public final class TunnelEsp extends Module {
         double boxHeight = height.getValue();
         List<Spot> spots = scanner.results();
         boolean join = connected.isOn();
-        if (join && spots != known) {
-            known = spots;
-            keys.clear();
-            for (Spot spot : spots) {
-                keys.add(BlockPos.asLong(spot.x(), spot.y(), spot.z()));
-            }
+        if (join) {
+            joined.update(spots);
         }
         for (Spot spot : spots) {
             AABB box = new AABB(spot.x(), spot.y(), spot.z(),
                 spot.x() + 1, spot.y() + boxHeight, spot.z() + 1);
-            style.drawJoined(batch, box, join ? DrawBatch.sharedSides(keys, BlockPos.asLong(spot.x(), spot.y(), spot.z())) : 0, true);
+            style.drawJoined(batch, box, join ? joined.hiddenSides(spot) : 0, true);
         }
     }
 }

@@ -15,16 +15,18 @@ import java.util.Optional;
 public final class NoKnockback extends Module {
 
     private final NumberSetting horizontal = new NumberSetting("Horizontal",
-        "How much horizontal knockback to take. Over a hundred throws you further and under nought reverses it.", 0, -100, 200, 1, "%").min(-100).max(200);
+        "How much horizontal knockback to take. Over a hundred throws you further and under nought reverses it.",
+        0, -100, 200, 1, "%");
     private final NumberSetting vertical = new NumberSetting("Vertical",
-        "How much vertical knockback to take. Over a hundred throws you further and under nought reverses it.", 0, -100, 200, 1, "%").min(-100).max(200);
+        "How much vertical knockback to take. Over a hundred throws you further and under nought reverses it.",
+        0, -100, 200, 1, "%");
     private final BoolSetting separateExplosions = new BoolSetting("Separate explosions",
         "Give explosions their own pair of sliders.", false);
     private final NumberSetting explosionHorizontal = new NumberSetting("Explosion horizontal",
-        "How much sideways push to take from explosions.", 100, -100, 200, 1, "%").min(-100).max(200)
+        "How much sideways push to take from explosions.", 100, -100, 200, 1, "%")
         .under(separateExplosions);
     private final NumberSetting explosionVertical = new NumberSetting("Explosion vertical",
-        "How much upward push to take from explosions.", 100, -100, 200, 1, "%").min(-100).max(200)
+        "How much upward push to take from explosions.", 100, -100, 200, 1, "%")
         .under(separateExplosions);
     private final BoolSetting fishingRods = new BoolSetting("Fishing rods",
         "A rod hooked into you cannot reel you in.", true);

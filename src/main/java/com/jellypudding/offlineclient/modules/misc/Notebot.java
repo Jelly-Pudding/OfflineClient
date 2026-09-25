@@ -1,6 +1,6 @@
 package com.jellypudding.offlineclient.modules.misc;
 
-import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.config.DataFiles;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.Render2DEvent;
 import com.jellypudding.offlineclient.event.events.Render3DEvent;
@@ -16,11 +16,11 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.Setting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
-import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
+import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.ItemUtil;
-import com.jellypudding.offlineclient.util.NoteSong;
 import com.jellypudding.offlineclient.util.NoteSong.Note;
+import com.jellypudding.offlineclient.util.NoteSong;
 import com.jellypudding.offlineclient.util.RenderUtil;
 import com.jellypudding.offlineclient.util.SwingMode;
 import net.minecraft.core.BlockPos;
@@ -121,9 +121,9 @@ public final class Notebot extends Module {
         "Outlines the note blocks the song uses.", true);
     private final BoxStyle untunedStyle = new BoxStyle("Untuned", BoxStyle.Shape.LINES, 0f)
         .under(render);
-    private final BoxStyle tunedStyle = new BoxStyle("Tuned", BoxStyle.Shape.LINES, 0.33f)
+    private final BoxStyle tunedStyle = new BoxStyle("Tuned", BoxStyle.Shape.LINES, 120f)
         .under(render);
-    private final BoxStyle hitStyle = new BoxStyle("Hit", BoxStyle.Shape.BOTH, 0.1f)
+    private final BoxStyle hitStyle = new BoxStyle("Hit", BoxStyle.Shape.BOTH, 36f)
         .under(render);
     private final BoolSetting renderText = new BoolSetting("Show notes",
         "Draws the pitch of each note block above it.", true)
@@ -133,7 +133,7 @@ public final class Notebot extends Module {
         .under(renderText);
     private final BoolSetting showScanned = new BoolSetting("Show scanned",
         "Also outlines every note block found in the scan.", false);
-    private final BoxStyle scannedStyle = new BoxStyle("Scanned", BoxStyle.Shape.LINES, 0.16f)
+    private final BoxStyle scannedStyle = new BoxStyle("Scanned", BoxStyle.Shape.LINES, 58f)
         .under(showScanned);
 
     private NoteSong loaded;
@@ -192,8 +192,7 @@ public final class Notebot extends Module {
     }
 
     private static String rowName(NoteBlockInstrument instrument) {
-        String words = instrument.name().toLowerCase(Locale.ROOT).replace('_', ' ');
-        return Character.toUpperCase(words.charAt(0)) + words.substring(1) + " notes";
+        return EnumSetting.label(instrument) + " notes";
     }
 
     // The names the song picker offers.
@@ -229,7 +228,7 @@ public final class Notebot extends Module {
         };
     }
 
-    // The bind pauses a running song. Off the module it switches on as usual.
+    // The bind pauses a running song. Whilst the module is off it switches it on as usual.
     @Override
     public void onKeybind() {
         if (!isEnabled() || (stage != Stage.PLAY && stage != Stage.PREVIEW)) {
@@ -265,7 +264,7 @@ public final class Notebot extends Module {
     }
 
     private static Path songsFolder() {
-        return OfflineClient.MC.gameDirectory.toPath().resolve("offlineclient").resolve("songs");
+        return DataFiles.path("songs");
     }
 
     private void loadSong() {
@@ -281,8 +280,7 @@ public final class Notebot extends Module {
         try {
             loaded = NoteSong.read(file).remapped(remapTable()).foldedIntoRange(foldNotes.isOn());
         } catch (IOException e) {
-            ChatUtil.error("Could not read " + file.getFileName() + ".");
-            setEnabled(false);
+            disable("Could not read " + file.getFileName() + ".");
             return;
         }
         tick = 0;
@@ -302,8 +300,7 @@ public final class Notebot extends Module {
         } catch (IOException ignored) {
         }
         if (files.isEmpty()) {
-            ChatUtil.error("No songs to play in " + folder + ".");
-            setEnabled(false);
+            disable("No songs to play in " + folder + ".");
             return null;
         }
         return files.get(random.nextInt(files.size()));
@@ -350,14 +347,12 @@ public final class Notebot extends Module {
     private void scan() {
         Map<Note, List<BlockPos>> found = findNoteBlocks();
         if (found.isEmpty()) {
-            ChatUtil.error("No note blocks in reach with air above them.");
-            setEnabled(false);
+            disable("No note blocks in reach with air above them.");
             return;
         }
         assign(found);
         if (assigned.isEmpty()) {
-            ChatUtil.error("None of the note blocks in reach can play this song.");
-            setEnabled(false);
+            disable("None of the note blocks in reach can play this song.");
             return;
         }
         int missing = loaded.needed().size() - assigned.size();
@@ -491,8 +486,7 @@ public final class Notebot extends Module {
             return;
         }
         if (mc.player.getAbilities().instabuild) {
-            ChatUtil.error("Notebot cannot strike note blocks in creative. They break instead.");
-            setEnabled(false);
+            disable("Notebot cannot strike note blocks in creative. They break instead.");
             return;
         }
         holdSafeItem();
@@ -610,7 +604,7 @@ public final class Notebot extends Module {
     // The pitch each block sits on with the clicks it still owes after it.
     @Subscribe
     private void onRender2D(Render2DEvent event) {
-        if (loaded == null || !render.isOn() || !renderText.isOn() || !inGame()) {
+        if (loaded == null || !render.isOn() || !renderText.isOn() || !inGame() || !WorldToScreen.update()) {
             return;
         }
         for (BlockPos pos : assigned.values()) {

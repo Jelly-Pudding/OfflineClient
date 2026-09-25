@@ -2,8 +2,7 @@ package com.jellypudding.offlineclient.path;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.util.BlockUtil;
-import net.minecraft.client.multiplayer.ClientChunkCache;
-import net.minecraft.client.multiplayer.ClientLevel;
+import com.jellypudding.offlineclient.util.ChunkWindow;
 import net.minecraft.core.BlockPos;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.FluidTags;
@@ -22,9 +21,6 @@ import net.minecraft.world.level.block.WallBlock;
 import net.minecraft.world.level.block.WebBlock;
 import net.minecraft.world.level.block.WitherRoseBlock;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.chunk.LevelChunk;
-import net.minecraft.world.level.chunk.LevelChunkSection;
-import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.level.material.FluidState;
 
 import java.util.ArrayList;
@@ -54,7 +50,11 @@ public final class PathFinder {
     private static final double WEB = 3;
     private static final double SOUL_SAND = 1;
     private static final double BREAK = 5;
-    private static final double PLACE = 5;
+
+    // The nodes a search may open before it settles for the closest it got. Then the
+    // radius in chunks it may search around the start.
+    private static final int NODE_BUDGET = 20000;
+    private static final int AREA_CHUNKS = 8;
 
     // The eight ways round the compass. The four diagonals come last.
     private static final int[] STEP_X = {0, 1, 0, -1, 1, 1, -1, -1};
@@ -68,9 +68,8 @@ public final class PathFinder {
         return thread;
     });
 
-    // Nodes from the player to the goal. Reached is false when the search ran
-    // out and these only go as close as it managed.
-    public record Result(List<BlockPos> nodes, boolean reached) {
+    // Nodes from the player to the goal. A search that ran out goes only as close as it managed.
+    public record Result(List<BlockPos> nodes) {
     }
 
     public record Step(BlockPos to, double cost) {
@@ -79,9 +78,6 @@ public final class PathFinder {
     private int maxFall = 3;
     private boolean swim = true;
     private boolean breakBlocks;
-    private boolean placeBlocks;
-    private int budget = 20000;
-    private int area = 8;
 
     private Future<Result> running;
 
@@ -100,24 +96,9 @@ public final class PathFinder {
         return this;
     }
 
-    public PathFinder placeBlocks(boolean allowed) {
-        this.placeBlocks = allowed;
-        return this;
-    }
-
-    public PathFinder budget(int nodes) {
-        this.budget = nodes;
-        return this;
-    }
-
-    public PathFinder area(int chunks) {
-        this.area = chunks;
-        return this;
-    }
-
     // The rules a walker checks the live world against on the client thread.
     public Rules liveRules() {
-        return new Rules(View.live(), maxFall, swim, breakBlocks, placeBlocks);
+        return new Rules(ChunkWindow.live(), maxFall, swim, breakBlocks);
     }
 
     // The block an entity counts as standing in.
@@ -132,9 +113,8 @@ public final class PathFinder {
             return false;
         }
         BlockPos from = start.immutable();
-        Rules rules = new Rules(View.capture(from, area), maxFall, swim, breakBlocks, placeBlocks);
-        int nodes = budget;
-        running = POOL.submit(() -> new Search(rules, goal, from, nodes).run());
+        Rules rules = new Rules(ChunkWindow.capture(from, AREA_CHUNKS), maxFall, swim, breakBlocks);
+        running = POOL.submit(() -> new Search(rules, goal, from, NODE_BUDGET).run());
         return true;
     }
 
@@ -170,109 +150,28 @@ public final class PathFinder {
         }
     }
 
-    // A read only window on the world. A captured view holds the chunks. The
-    // worker never touches the live chunk map.
-    public static final class View {
-
-        private static final BlockState OUTSIDE = Blocks.VOID_AIR.defaultBlockState();
-        private static final BlockState AIR = Blocks.AIR.defaultBlockState();
-
-        private final ClientChunkCache source;
-        private final LevelChunk[] chunks;
-        private final int originX;
-        private final int originZ;
-        private final int side;
-        private final int minY;
-        private final int maxY;
-
-        private View(ClientChunkCache source, LevelChunk[] chunks,
-                     int originX, int originZ, int side, int minY, int maxY) {
-            this.source = source;
-            this.chunks = chunks;
-            this.originX = originX;
-            this.originZ = originZ;
-            this.side = side;
-            this.minY = minY;
-            this.maxY = maxY;
-        }
-
-        // Reads straight from the world. Only safe on the client thread.
-        public static View live() {
-            ClientLevel level = OfflineClient.MC.level;
-            return new View(level.getChunkSource(), null, 0, 0, 0,
-                level.getMinY(), level.getMaxY());
-        }
-
-        public static View capture(BlockPos centre, int radius) {
-            ClientLevel level = OfflineClient.MC.level;
-            int side = radius * 2 + 1;
-            int originX = (centre.getX() >> 4) - radius;
-            int originZ = (centre.getZ() >> 4) - radius;
-            LevelChunk[] chunks = new LevelChunk[side * side];
-            for (int dx = 0; dx < side; dx++) {
-                for (int dz = 0; dz < side; dz++) {
-                    chunks[dx * side + dz] = level.getChunkSource()
-                        .getChunk(originX + dx, originZ + dz, ChunkStatus.FULL, false);
-                }
-            }
-            return new View(null, chunks, originX, originZ, side,
-                level.getMinY(), level.getMaxY());
-        }
-
-        public BlockState get(BlockPos pos) {
-            int y = pos.getY();
-            if (y < minY || y > maxY) {
-                return OUTSIDE;
-            }
-            LevelChunk chunk = chunkAt(pos.getX() >> 4, pos.getZ() >> 4);
-            if (chunk == null) {
-                return OUTSIDE;
-            }
-            LevelChunkSection section = chunk.getSections()[chunk.getSectionIndex(y)];
-            if (section == null || section.hasOnlyAir()) {
-                return AIR;
-            }
-            return section.getBlockState(pos.getX() & 15, y & 15, pos.getZ() & 15);
-        }
-
-        private LevelChunk chunkAt(int x, int z) {
-            if (source != null) {
-                return source.getChunk(x, z, ChunkStatus.FULL, false);
-            }
-            int dx = x - originX;
-            int dz = z - originZ;
-            if (dx < 0 || dx >= side || dz < 0 || dz >= side) {
-                return null;
-            }
-            return chunks[dx * side + dz];
-        }
-    }
-
     // What the player may walk into and what it costs. Shared by the search and
     // by the walker. Both agree on where a step may go.
     public static final class Rules {
 
-        private final View view;
+        private final ChunkWindow view;
         private final int maxFall;
         private final boolean swim;
         private final boolean breakBlocks;
-        private final boolean placeBlocks;
 
-        public Rules(View view, int maxFall, boolean swim,
-                     boolean breakBlocks, boolean placeBlocks) {
+        public Rules(ChunkWindow view, int maxFall, boolean swim, boolean breakBlocks) {
             this.view = view;
             this.maxFall = maxFall;
             this.swim = swim;
             this.breakBlocks = breakBlocks;
-            this.placeBlocks = placeBlocks;
         }
 
-        // True whilst the player could hold this spot.
+        // True when the player could stand in this spot.
         public boolean canStand(BlockPos pos) {
-            return entryCost(pos, false) >= 0;
+            return entryCost(pos) >= 0;
         }
 
-        // True whilst a step from one spot to the next is still on offer.
+        // True when a step from one spot to the next is allowed.
         public boolean canStep(BlockPos from, BlockPos to) {
             List<Step> steps = new ArrayList<>();
             steps(from, steps);
@@ -284,8 +183,8 @@ public final class PathFinder {
             return false;
         }
 
-        // The first block to dig out of the way of a spot. Null whilst nothing
-        // is in the way or whilst breaking is switched off.
+        // The first block to dig out of the way of a spot. Null when nothing is in
+        // the way or breaking is switched off.
         public BlockPos blocking(BlockPos pos) {
             if (!breakBlocks) {
                 return null;
@@ -311,7 +210,7 @@ public final class PathFinder {
                 }
                 double base = diagonal ? DIAGONAL : 1;
                 BlockPos side = from.offset(dx, 0, dz);
-                double level = entryCost(side, placeBlocks);
+                double level = entryCost(side);
                 if (level >= 0) {
                     out.add(new Step(side, base + level));
                 }
@@ -328,7 +227,7 @@ public final class PathFinder {
             if (spaceCost(from.above(2), false) < 0) {
                 return;
             }
-            double cost = entryCost(side.above(), placeBlocks);
+            double cost = entryCost(side.above());
             if (cost >= 0) {
                 out.add(new Step(side.above(), base + cost + JUMP));
             }
@@ -343,7 +242,7 @@ public final class PathFinder {
             }
             for (int drop = 1; drop <= maxFall; drop++) {
                 BlockPos landing = side.below(drop);
-                double cost = entryCost(landing, false);
+                double cost = entryCost(landing);
                 if (cost >= 0) {
                     out.add(new Step(landing, base + cost + FALL * drop));
                     return;
@@ -362,10 +261,10 @@ public final class PathFinder {
                 if (spaceCost(up, false) >= 0 && spaceCost(up.above(), false) >= 0) {
                     out.add(new Step(up, CLIMB));
                 }
-            } else if (canFloat(view.get(up)) && entryCost(up, false) >= 0) {
+            } else if (canFloat(view.get(up)) && entryCost(up) >= 0) {
                 out.add(new Step(up, CLIMB));
             }
-            if (canFloat(view.get(down)) && entryCost(down, false) >= 0) {
+            if (canFloat(view.get(down)) && entryCost(down) >= 0) {
                 out.add(new Step(down, CLIMB));
             }
         }
@@ -374,20 +273,20 @@ public final class PathFinder {
             return climbable(state) || (swim && state.getFluidState().is(FluidTags.WATER));
         }
 
-        // A diagonal is only allowed whilst both of the sides beside it are open
-        // or the player would clip the corner.
+        // A diagonal needs both of the sides beside it open or the player would clip
+        // the corner.
         private boolean cornerClear(BlockPos from, int dx, int dz) {
             return fitsAt(from.offset(dx, 0, 0)) && fitsAt(from.offset(0, 0, dz));
         }
 
-        // True whilst the player would fit in the spot whatever is under it.
+        // True when the player would fit in the spot whatever is under it.
         public boolean fitsAt(BlockPos pos) {
             return spaceCost(pos, false) >= 0 && spaceCost(pos.above(), false) >= 0;
         }
 
-        // Minus one whilst the player cannot hold the spot. Otherwise the extra
+        // Minus one when the player cannot stand in the spot. Otherwise the extra
         // cost of getting into it which is nought on plain ground.
-        private double entryCost(BlockPos pos, boolean bridge) {
+        private double entryCost(BlockPos pos) {
             double feet = spaceCost(pos, breakBlocks);
             if (feet < 0) {
                 return -1;
@@ -401,16 +300,13 @@ public final class PathFinder {
                 return extra;
             }
             BlockState floor = view.get(pos.below());
-            if (solidFloor(floor)) {
-                return floor.getBlock() == Blocks.SOUL_SAND ? extra + SOUL_SAND : extra;
-            }
-            if (!bridge || unknown(floor) || !floor.canBeReplaced()) {
+            if (!solidFloor(floor)) {
                 return -1;
             }
-            return extra + PLACE;
+            return floor.getBlock() == Blocks.SOUL_SAND ? extra + SOUL_SAND : extra;
         }
 
-        // Minus one whilst the player cannot move through the block.
+        // Minus one when the player cannot move through the block.
         private double spaceCost(BlockPos pos, boolean mine) {
             BlockState state = view.get(pos);
             if (unknown(state) || harmful(state)) {
@@ -498,7 +394,7 @@ public final class PathFinder {
 
             for (int expanded = 0; expanded < budget && !open.isEmpty(); expanded++) {
                 if (expanded % CANCEL_CHECK == 0 && Thread.currentThread().isInterrupted()) {
-                    return new Result(List.of(), false);
+                    return new Result(List.of());
                 }
                 long key = open.poll().key();
                 if (!settled.add(key)) {
@@ -506,7 +402,7 @@ public final class PathFinder {
                 }
                 BlockPos pos = BlockPos.of(key);
                 if (goal.reached(pos)) {
-                    return new Result(trace(pos), true);
+                    return new Result(trace(pos));
                 }
                 double here = goal.heuristic(pos);
                 if (here < closestScore) {
@@ -517,7 +413,7 @@ public final class PathFinder {
                 rules.steps(pos, steps);
                 relax(key, steps);
             }
-            return new Result(trace(closest), false);
+            return new Result(trace(closest));
         }
 
         private void relax(long from, List<Step> steps) {

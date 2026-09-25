@@ -1,6 +1,5 @@
 package com.jellypudding.offlineclient.modules.misc;
 
-import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.PacketReceiveEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
@@ -34,9 +33,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 public final class AutoLog extends Module {
 
     public enum Count { TOGETHER, EACH }
-
-    // Health points in one heart.
-    private static final float HEART = 2;
 
     // How close a player has to be for a one hit kill to count.
     private static final double INSTANT_KILL_RANGE = 8;
@@ -148,9 +144,9 @@ public final class AutoLog extends Module {
             logOut("Health was at or below " + health.getValueString() + ".", true);
             return;
         }
-        float line = health.getFloat() * HEART;
+        float line = health.getFloat() * EntityUtil.HEART;
         if (predict.isOn()
-            && EntityUtil.totalHealth(mc.player) - DamageUtil.possibleIncoming() <= line) {
+            && DamageUtil.healthAfterIncoming() <= line) {
             logOut("Something nearby was about to take you below " + health.getValueString() + ".", false);
             return;
         }
@@ -241,7 +237,7 @@ public final class AutoLog extends Module {
         if (toggleOff.isOn()) {
             setEnabled(false);
             if (lowHealth && rearm.isOn()) {
-                OfflineClient.INSTANCE.getEventBus().register(healWatcher);
+                watch(healWatcher);
             }
         }
         switch (mode.getValue()) {
@@ -254,6 +250,6 @@ public final class AutoLog extends Module {
     }
 
     private void stopWatching() {
-        OfflineClient.INSTANCE.getEventBus().unregister(healWatcher);
+        unwatch(healWatcher);
     }
 }

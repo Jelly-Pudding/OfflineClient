@@ -6,7 +6,9 @@ import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
+import com.jellypudding.offlineclient.setting.ListMode;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
+import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -30,8 +32,6 @@ import java.util.List;
 
 public final class NoInteract extends Module {
 
-    public enum ListMode { WHITELIST, BLACKLIST }
-
     public enum Hand { NONE, MAIN_HAND, OFF_HAND, BOTH }
 
     // Which clicks a protected kind of entity is spared.
@@ -42,8 +42,8 @@ public final class NoInteract extends Module {
     private final RegistryListSetting<Block> useBlocks = new RegistryListSetting<>("No use",
         "Blocks that never take a right click. Click to pick them.",
         BuiltInRegistries.BLOCK, List.of());
-    private final EnumSetting<ListMode> useBlocksMode = listMode("No use list mode",
-        "Only the listed blocks take a right click.",
+    private final EnumSetting<ListMode> useBlocksMode = ListMode.setting("No use list mode",
+        ListMode.BLACKLIST, "Only the listed blocks take a right click.",
         "Every block except the listed ones takes a right click.");
     private final EnumSetting<Hand> useHand = new EnumSetting<>("No use hand",
         "A hand whose right clicks on blocks are all dropped.", Hand.NONE)
@@ -54,20 +54,20 @@ public final class NoInteract extends Module {
     private final RegistryListSetting<Block> mineBlocks = new RegistryListSetting<>("No mine",
         "Blocks that never get broken. Click to pick them.",
         BuiltInRegistries.BLOCK, List.of());
-    private final EnumSetting<ListMode> mineBlocksMode = listMode("No mine list mode",
-        "Only the listed blocks get broken.",
+    private final EnumSetting<ListMode> mineBlocksMode = ListMode.setting("No mine list mode",
+        ListMode.BLACKLIST, "Only the listed blocks get broken.",
         "Every block except the listed ones gets broken.");
     private final RegistryListSetting<EntityType<?>> hitEntities = new RegistryListSetting<>("No hit",
         "Entities that never take a hit. Click to pick them.",
         BuiltInRegistries.ENTITY_TYPE, List.of());
-    private final EnumSetting<ListMode> hitEntitiesMode = listMode("No hit list mode",
-        "Only the listed entities take a hit.",
+    private final EnumSetting<ListMode> hitEntitiesMode = ListMode.setting("No hit list mode",
+        ListMode.BLACKLIST, "Only the listed entities take a hit.",
         "Every entity except the listed ones takes a hit.");
     private final RegistryListSetting<EntityType<?>> useEntities = new RegistryListSetting<>(
         "No entity use", "Entities that never take a right click. Click to pick them.",
         BuiltInRegistries.ENTITY_TYPE, List.of());
-    private final EnumSetting<ListMode> useEntitiesMode = listMode("No entity use list mode",
-        "Only the listed entities take a right click.",
+    private final EnumSetting<ListMode> useEntitiesMode = ListMode.setting("No entity use list mode",
+        ListMode.BLACKLIST, "Only the listed entities take a right click.",
         "Every entity except the listed ones takes a right click.");
     private final EnumSetting<Hand> useEntityHand = new EnumSetting<>("No entity use hand",
         "A hand whose right clicks on entities are all dropped.", Hand.NONE)
@@ -89,12 +89,6 @@ public final class NoInteract extends Module {
         searchTags("no click", "protect", "anti bed");
     }
 
-    private static EnumSetting<ListMode> listMode(String name, String whitelist, String blacklist) {
-        return new EnumSetting<>(name, "What the list means.", ListMode.BLACKLIST)
-            .describe(ListMode.WHITELIST, whitelist)
-            .describe(ListMode.BLACKLIST, blacklist);
-    }
-
     private static EnumSetting<Protect> protect(String name, String what, Protect defaultValue) {
         return new EnumSetting<>(name, "Which clicks " + what + " is spared.", defaultValue)
             .describe(Protect.NONE, "Hits and right clicks land on " + what + ".")
@@ -108,8 +102,8 @@ public final class NoInteract extends Module {
         if (!inGame() || mc.hitResult == null) {
             return;
         }
-        if (mc.hitResult instanceof BlockHitResult hit && hit.getType() == HitResult.Type.BLOCK
-            && blocksUse(hit.getBlockPos())) {
+        BlockHitResult aimed = BlockUtil.aimedBlock();
+        if (aimed != null && blocksUse(aimed.getBlockPos())) {
             event.cancel();
         }
         if (mc.hitResult instanceof EntityHitResult hit && blocksEntityUse(hit.getEntity())) {
@@ -218,7 +212,7 @@ public final class NoInteract extends Module {
 
     private static <T> boolean listed(RegistryListSetting<T> list, EnumSetting<ListMode> mode,
                                       T entry) {
-        return list.contains(entry) == mode.is(ListMode.BLACKLIST);
+        return !mode.getValue().admits(list.contains(entry));
     }
 
     public boolean blocksAttack(HitResult result) {

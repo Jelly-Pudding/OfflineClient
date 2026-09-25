@@ -121,8 +121,8 @@ public final class RenderUtil {
         }
     }
 
-    // A hairline following the same rounded shape. The middle is left alone.
-    // That is what lets a see through panel stay see through.
+    // A hairline following the same rounded shape. The middle is left alone and a see
+    // through panel stays see through.
     public static void roundedOutline(GuiGraphicsExtractor context, int x, int y, int x2, int y2,
                                       int radius, int color) {
         int r = radiusFor(x, y, x2, y2, radius);
@@ -177,10 +177,13 @@ public final class RenderUtil {
         roundedRect(context, knobX, y + 2, knobX + knob, y + 2 + knob, knob / 2, knobColor);
     }
 
+    public static final int CHEVRON_WIDTH = 6;
+    public static final int CHEVRON_HEIGHT = 3;
+
     public static void chevron(GuiGraphicsExtractor context, int x, int y, boolean down, int color) {
-        for (int i = 0; i < 3; i++) {
-            int row = down ? y + i : y + 2 - i;
-            context.fill(x + i, row, x + 6 - i, row + 1, color);
+        for (int i = 0; i < CHEVRON_HEIGHT; i++) {
+            int row = down ? y + i : y + CHEVRON_HEIGHT - 1 - i;
+            context.fill(x + i, row, x + CHEVRON_WIDTH - i, row + 1, color);
         }
     }
 
@@ -196,8 +199,8 @@ public final class RenderUtil {
     private static final float[] STAR_FILL = rasteriseStar(1);
     private static final float[] STAR_RING = ring(STAR_FILL, rasteriseStar(STAR_HOLLOW));
 
-    // A five point star with soft edges. Chosen is solid and not chosen is a hollow ring.
-    // Each pixel carries the share of its samples inside the shape. Edges stay crisp.
+    // A five point star. Chosen is solid and not chosen is a hollow ring. Each pixel carries
+    // the share of its samples inside the shape and the edges come out smooth.
     public static void star(GuiGraphicsExtractor context, int x, int y, int color, boolean filled) {
         float[] cover = filled ? STAR_FILL : STAR_RING;
         for (int row = 0; row < STAR_SIZE; row++) {
@@ -298,7 +301,7 @@ public final class RenderUtil {
     }
 
     // Behind a world label. Text over bright terrain is unreadable without it.
-    public static final int LABEL_BACKGROUND = 0x90000000;
+    private static final int LABEL_BACKGROUND = 0x90000000;
 
     private static final int TOOLTIP_BORDER = 0x50FFFFFF;
 

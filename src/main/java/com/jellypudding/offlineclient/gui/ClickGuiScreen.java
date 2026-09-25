@@ -34,8 +34,6 @@ public final class ClickGuiScreen extends GuiScreenBase {
     private static final int SEARCH_WIDTH_MIN = 120;
     private static final int SEARCH_WIDTH_MAX = 460;
 
-    // How close to an edge the pointer has to be to grab it.
-    private static final int GRIP = 4;
     private static final int RESULTS_GAP = 6;
     // Room between the tabs and whatever a tab opens.
     private static final int TAB_GAP = 4;
@@ -195,26 +193,9 @@ public final class ClickGuiScreen extends GuiScreenBase {
             return false;
         }
         JsonObject state = gui.getAsJsonObject(panel.getTitle());
-        if (state.has("x") && state.has("y")) {
-            panel.setPosition(state.get("x").getAsInt(), state.get("y").getAsInt());
-        }
-        if (state.has("collapsed")) {
-            panel.setCollapsed(state.get("collapsed").getAsBoolean());
-        }
-        if (state.has("height")) {
-            panel.setViewHeight(state.get("height").getAsInt());
-        }
-        if (state.has("width")) {
-            panel.setWidth(state.get("width").getAsInt());
-        }
-        if (state.has("scroll")) {
-            panel.setScrollOffset(state.get("scroll").getAsInt());
-        }
+        panel.readFrame(state);
         if (state.has("layer")) {
             layers.put(panel, state.get("layer").getAsInt());
-        }
-        if (state.has("placed")) {
-            panel.setPlaced(state.get("placed").getAsBoolean());
         }
         if (state.has("expanded")) {
             JsonArray expanded = state.getAsJsonArray("expanded");
@@ -235,14 +216,8 @@ public final class ClickGuiScreen extends GuiScreenBase {
         for (int layer = 0; layer < panels.size(); layer++) {
             Panel panel = panels.get(layer);
             JsonObject state = new JsonObject();
-            state.addProperty("x", panel.getX());
-            state.addProperty("y", panel.getY());
+            panel.writeFrame(state);
             state.addProperty("layer", layer);
-            state.addProperty("collapsed", panel.isCollapsed());
-            state.addProperty("height", panel.getViewHeight());
-            state.addProperty("width", panel.getWidth());
-            state.addProperty("scroll", panel.getScrollOffset());
-            state.addProperty("placed", panel.isPlaced());
             JsonArray expanded = new JsonArray();
             for (ModuleRow row : panel.getRows()) {
                 if (row.isExpanded()) {
@@ -271,14 +246,18 @@ public final class ClickGuiScreen extends GuiScreenBase {
 
     @Override
     protected void releaseDrags() {
+        releaseOwn();
+        for (Panel panel : panels) {
+            panel.releaseDrags();
+        }
+    }
+
+    private void releaseOwn() {
         resizingLeft = false;
         resizingRight = false;
         movingSearch = false;
         pressedBar = false;
         resultsScroll.release();
-        for (Panel panel : panels) {
-            panel.releaseDrags();
-        }
         for (ModuleRow row : searchRows) {
             row.mouseReleased();
         }
@@ -351,8 +330,8 @@ public final class ClickGuiScreen extends GuiScreenBase {
             return;
         }
         searchX = travel(searchX, wasW - searchWidth, viewWidth() - searchWidth);
-        searchY = floor + travel(searchY - floor, wasH - floor - SEARCH_HEIGHT,
-            viewHeight() - floor - SEARCH_HEIGHT);
+        searchY = floor + travel(searchY - floor, wasH - floor - SearchField.HEIGHT,
+            viewHeight() - floor - SearchField.HEIGHT);
     }
 
     // Centred rows under the search bar. Starting hard against the left edge
@@ -362,7 +341,7 @@ public final class ClickGuiScreen extends GuiScreenBase {
             return;
         }
         int usable = Math.max(GuiTheme.PANEL_WIDTH, viewWidth() - TILE_MARGIN * 2);
-        int y = searchY + SEARCH_HEIGHT + RESULTS_GAP;
+        int y = searchY + SearchField.HEIGHT + RESULTS_GAP;
         int index = 0;
         while (index < loose.size()) {
             int count = rowCount(loose, index, usable);
@@ -411,16 +390,12 @@ public final class ClickGuiScreen extends GuiScreenBase {
     }
 
     private int resultsTop() {
-        return searchY + SEARCH_HEIGHT + RESULTS_GAP;
+        return searchY + SearchField.HEIGHT + RESULTS_GAP;
     }
 
     // Everything the rows need. Taller than the view means the box scrolls.
     private int resultsContentHeight() {
-        int total = 0;
-        for (ModuleRow row : searchRows) {
-            total += row.getHeight();
-        }
-        return total;
+        return ModuleRow.totalHeight(searchRows);
     }
 
     // The screen below the box less a small margin.
@@ -560,7 +535,7 @@ public final class ClickGuiScreen extends GuiScreenBase {
             int floor = searchFloor();
             searchX = Math.clamp(mouseX - grabX, 0, Math.max(0, viewWidth() - searchWidth));
             searchY = Math.clamp(mouseY - grabY, floor,
-                Math.max(floor, viewHeight() - SEARCH_HEIGHT));
+                Math.max(floor, viewHeight() - SearchField.HEIGHT));
         }
         if (resizingRight) {
             int room = Math.max(SEARCH_WIDTH_MIN, viewWidth() - searchX);
@@ -575,7 +550,7 @@ public final class ClickGuiScreen extends GuiScreenBase {
             searchWidth = right - wanted;
         }
         cover(context, new int[] {searchX, searchY, searchX + searchWidth,
-            searchY + SEARCH_HEIGHT});
+            searchY + SearchField.HEIGHT});
         renderSearchBox(context, font, searchX, searchY, searchWidth, mouseX, mouseY,
             searchRows.size());
         if (isSearching()) {
@@ -588,10 +563,10 @@ public final class ClickGuiScreen extends GuiScreenBase {
     // Either upright edge of the search bar or of the results box below it.
     private boolean overSearchEdge(double mx, double my, boolean left) {
         double edge = left ? searchX : searchX + searchWidth;
-        if (Math.abs(mx - edge) > GRIP) {
+        if (Math.abs(mx - edge) > GuiTheme.GRAB) {
             return false;
         }
-        if (my >= searchY && my <= searchY + SEARCH_HEIGHT) {
+        if (my >= searchY && my <= searchY + SearchField.HEIGHT) {
             return true;
         }
         if (!isSearching()) {
@@ -624,19 +599,9 @@ public final class ClickGuiScreen extends GuiScreenBase {
         int rowW = ScrollBar.rowWidth(searchWidth - 4, total, view);
         resultsScroll.update(mouseY, total, view);
 
-        // A slider being dragged still gets the real pointer position.
-        boolean mouseInView = SettingWidget.isOver(mouseX, mouseY, rowX, viewTop, rowW, view);
-
         context.enableScissor(rowX, viewTop, rowX + rowW, viewTop + view);
-        int rowY = viewTop - resultsScroll.getOffset();
-        for (ModuleRow row : searchRows) {
-            int rowH = row.getHeight();
-            row.place(rowX, rowY, rowW, mouseX, mouseY, mouseInView);
-            if (rowY + rowH > viewTop && rowY < viewTop + view) {
-                row.render(context, mouseX, mouseY);
-            }
-            rowY += rowH;
-        }
+        ModuleRow.renderAll(context, searchRows, rowX, viewTop, view, rowW, resultsScroll.getOffset(),
+            mouseX, mouseY);
         context.disableScissor();
 
         if (scrollable) {
@@ -691,8 +656,13 @@ public final class ClickGuiScreen extends GuiScreenBase {
             searchFront = true;
             return true;
         }
-        if (clickSearchBox(mx, my, searchX, searchY, searchWidth)) {
-            pressedBar = InputUtil.isLeft(button);
+        SearchField.Click click = clickSearchBox(mx, my);
+        if (click != SearchField.Click.MISSED) {
+            // A drag from the text selects it. From the empty space it moves the bar.
+            pressedBar = click == SearchField.Click.SPACE && InputUtil.isLeft(button);
+            if (pressedBar) {
+                searchBar.release();
+            }
             pressedX = (int) mx;
             pressedY = (int) my;
             grabX = (int) mx - searchX;
@@ -710,7 +680,7 @@ public final class ClickGuiScreen extends GuiScreenBase {
             if (panel.mouseClicked(mx, my, button)) {
                 panels.remove(i);
                 panels.add(panel);
-                searchFocused = false;
+                searchBar.setFocused(false);
                 searchFront = false;
                 return true;
             }
@@ -738,7 +708,7 @@ public final class ClickGuiScreen extends GuiScreenBase {
             views.get(openTab).release();
         }
         openTab = openTab == tab ? null : tab;
-        searchFocused = false;
+        searchBar.setFocused(false);
     }
 
     // The border of the box is left alone. A click there falls through to
@@ -769,7 +739,7 @@ public final class ClickGuiScreen extends GuiScreenBase {
         for (ModuleRow row : searchRows) {
             if (row.mouseClicked(mx, my, button)) {
                 // Keys go to whatever the row is editing and not the search box.
-                searchFocused = false;
+                searchBar.setFocused(false);
                 keepVisible(row);
                 return true;
             }
@@ -779,30 +749,22 @@ public final class ClickGuiScreen extends GuiScreenBase {
 
     @Override
     protected boolean releaseGui(double mx, double my, int button) {
-        resizingLeft = false;
-        resizingRight = false;
-        movingSearch = false;
-        pressedBar = false;
-        resultsScroll.release();
+        releaseOwn();
         for (Panel panel : panels) {
             panel.mouseReleased();
-        }
-        for (ModuleRow row : searchRows) {
-            row.mouseReleased();
-        }
-        for (TabView view : views.values()) {
-            view.release();
         }
         return false;
     }
 
-    // A press in the bar places the caret. Pulling away from that press
-    // carries the bar with it instead.
+    // A press on the empty part of the bar that pulls away carries the bar with it.
     @Override
     public boolean mouseDragged(MouseButtonEvent event, double dragX, double dragY) {
+        double mx = toView(event.x());
+        double my = toView(event.y());
+        if (openTab != null) {
+            views.get(openTab).drag(mx);
+        }
         if (pressedBar && openTab == null && InputUtil.isLeft(event.button())) {
-            double mx = toView(event.x());
-            double my = toView(event.y());
             if (Math.abs(mx - pressedX) > DRAG_SLACK || Math.abs(my - pressedY) > DRAG_SLACK) {
                 movingSearch = true;
                 searchPlaced = true;

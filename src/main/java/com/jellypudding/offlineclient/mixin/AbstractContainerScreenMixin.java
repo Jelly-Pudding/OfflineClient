@@ -1,10 +1,10 @@
 package com.jellypudding.offlineclient.mixin;
 
-import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.modules.player.ChestStealer;
 import com.jellypudding.offlineclient.modules.player.InventoryTweaks;
 import com.jellypudding.offlineclient.modules.render.BetterTooltips;
 import com.jellypudding.offlineclient.modules.render.ItemHighlight;
+import com.jellypudding.offlineclient.util.MenuClicks;
 import com.jellypudding.offlineclient.util.Modules;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -14,10 +14,10 @@ import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.network.chat.Component;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -27,7 +27,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(AbstractContainerScreen.class)
 public abstract class AbstractContainerScreenMixin extends Screen {
 
+    @Unique
     private static final int BUTTON_WIDTH = 40;
+    @Unique
     private static final int BUTTON_HEIGHT = 14;
 
     private AbstractContainerScreenMixin(Component title) {
@@ -81,7 +83,7 @@ public abstract class AbstractContainerScreenMixin extends Screen {
         at = @At("HEAD"), cancellable = true)
     private void onMouseClicked(MouseButtonEvent event, boolean doubleClick, CallbackInfoReturnable<Boolean> cir) {
         BetterTooltips tooltips = Modules.get(BetterTooltips.class);
-        if (tooltips != null && tooltips.wantsToOpen(event) && openHovered(tooltips)) {
+        if (tooltips != null && tooltips.wantsToOpen(event) && offlineclient$openHovered(tooltips)) {
             cir.setReturnValue(true);
         }
     }
@@ -90,7 +92,7 @@ public abstract class AbstractContainerScreenMixin extends Screen {
         at = @At("HEAD"), cancellable = true)
     private void onKeyPressed(KeyEvent event, CallbackInfoReturnable<Boolean> cir) {
         BetterTooltips tooltips = Modules.get(BetterTooltips.class);
-        if (tooltips != null && tooltips.wantsToOpen(event) && openHovered(tooltips)) {
+        if (tooltips != null && tooltips.wantsToOpen(event) && offlineclient$openHovered(tooltips)) {
             cir.setReturnValue(true);
         }
     }
@@ -108,12 +110,12 @@ public abstract class AbstractContainerScreenMixin extends Screen {
         if (hoveredSlot == null || !hoveredSlot.hasItem() || !getMenu().getCarried().isEmpty()) {
             return;
         }
-        OfflineClient.MC.gameMode.handleContainerInput(getMenu().containerId, hoveredSlot.index, 0,
-            ContainerInput.QUICK_MOVE, OfflineClient.MC.player);
+        MenuClicks.quickMove(getMenu(), hoveredSlot.index);
     }
 
     // Nothing opens whilst an item is on the cursor. A drop still lands.
-    private boolean openHovered(BetterTooltips tooltips) {
+    @Unique
+    private boolean offlineclient$openHovered(BetterTooltips tooltips) {
         if (hoveredSlot == null || hoveredSlot.getItem().isEmpty() || !getMenu().getCarried().isEmpty()) {
             return false;
         }

@@ -8,9 +8,9 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.Feeding;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.Modules;
-import com.jellypudding.offlineclient.util.UseHold;
 import net.minecraft.core.Holder;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectInstance;
@@ -63,12 +63,9 @@ public final class AutoGap extends Module {
     private final BoolSetting noSlowdown = new BoolSetting("No slowdown",
         "Keeps your normal speed whilst an apple goes down.", false);
 
-    private boolean eating;
-    private final UseHold use = new UseHold();
+    private final Feeding feeding = new Feeding();
     private boolean needsEnchanted;
-    private int settle;
     private int lastMeal = Integer.MIN_VALUE / 2;
-    private final InventoryUtil.HotbarLoan loan = new InventoryUtil.HotbarLoan();
 
     public AutoGap() {
         super("AutoGap", "Eats golden apples to hold your buffs and your health up.", Category.PLAYER);
@@ -78,11 +75,11 @@ public final class AutoGap extends Module {
     }
 
     public boolean isEating() {
-        return isEnabled() && eating && pauseCombat.isOn();
+        return isBusy() && pauseCombat.isOn();
     }
 
     public boolean isBusy() {
-        return isEnabled() && eating;
+        return isEnabled() && feeding.isActive();
     }
 
     // Read by LocalPlayerMixin to stop the apple slowing you. Manual bites count too.
@@ -96,37 +93,28 @@ public final class AutoGap extends Module {
 
     @Override
     public String getSuffix() {
-        return eating ? "eating" : null;
+        return feeding.isActive() ? "eating" : null;
     }
 
     @Override
     protected void onDisable() {
-        stopEating();
+        feeding.stop();
     }
 
     @Subscribe
     private void onTick(TickEvent event) {
         if (!inGame() || mc.player.isSpectator()) {
-            stopEating();
+            feeding.stop();
             return;
         }
-        // A fresh world hands you a player whose tick count starts again at zero.
+        // A respawn or a fresh world starts the tick count again at zero.
         if (mc.player.tickCount < lastMeal) {
             lastMeal = Integer.MIN_VALUE / 2;
         }
-        if (mc.player.isDeadOrDying()) {
-            // Respawn rebuilds the inventory and restarts the tick count.
-            loan.forget();
-            stopEating();
-            settle = 0;
-            lastMeal = Integer.MIN_VALUE / 2;
+        if (feeding.waiting()) {
             return;
         }
-        if (settle > 0) {
-            settle--;
-            return;
-        }
-        if (eating) {
+        if (feeding.isActive()) {
             continueEating();
             return;
         }
@@ -139,7 +127,7 @@ public final class AutoGap extends Module {
 
         needsEnchanted = false;
         if (!wantsApple()) {
-            loan.giveBack();
+            feeding.loan().giveBack();
             return;
         }
         // Health that is actually low is never made to wait. A buff top up is.
@@ -149,10 +137,10 @@ public final class AutoGap extends Module {
         }
         int slot = findApple();
         if (slot == -1) {
-            loan.giveBack();
+            feeding.loan().giveBack();
             return;
         }
-        beginEating(slot);
+        feeding.begin(slot);
     }
 
     private boolean handBusy() {
@@ -179,42 +167,16 @@ public final class AutoGap extends Module {
         return instance == null || instance.getDuration() <= expiry.getInt();
     }
 
-    private void beginEating(int slot) {
-        if (!loan.select(slot)) {
-            return;
-        }
-        eating = true;
-        use.begin();
-    }
-
     private void continueEating() {
         ItemStack held = mc.player.getInventory().getSelectedItem();
         if (mc.gui.screen() != null || !isApple(held)) {
-            stopEating();
+            feeding.stop();
             return;
         }
-        if (!use.tick()) {
-            finishBite();
+        if (!feeding.tick()) {
+            feeding.finish(SETTLE_TICKS, hold.isOn() && !feeding.loan().isLent());
+            lastMeal = mc.player.tickCount;
         }
-    }
-
-    private void finishBite() {
-        boolean keep = hold.isOn() && !loan.isLent();
-        use.release();
-        eating = false;
-        settle = SETTLE_TICKS;
-        lastMeal = mc.player.tickCount;
-        if (!keep) {
-            loan.giveBack();
-        }
-    }
-
-    private void stopEating() {
-        if (eating) {
-            use.release();
-            eating = false;
-        }
-        loan.giveBack();
     }
 
     private int findApple() {

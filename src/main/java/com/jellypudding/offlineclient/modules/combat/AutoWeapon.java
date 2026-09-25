@@ -9,17 +9,12 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
-import com.jellypudding.offlineclient.util.DamageUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
-import com.jellypudding.offlineclient.util.ItemUtil;
-import net.minecraft.tags.ItemTags;
+import com.jellypudding.offlineclient.util.WeaponUtil;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.EquipmentSlot;
-import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.phys.EntityHitResult;
-import net.minecraft.world.item.ItemStack;
 
 public final class AutoWeapon extends Module {
 
@@ -130,100 +125,11 @@ public final class AutoWeapon extends Module {
         slots.restore();
     }
 
-    private int bestSlot(LivingEntity target) {
+    // Read by KillAura ahead of its hits.
+    public int bestSlot(LivingEntity target) {
         if (prefer.is(Prefer.SPEED)) {
-            return fastestWeaponSlot(antiBreak.isOn());
+            return WeaponUtil.fastestWeaponSlot(antiBreak.isOn());
         }
-        return bestWeaponSlot(target, prefer.is(Prefer.SWORD), threshold.getValue(), antiBreak.isOn());
-    }
-
-    // The hotbar slot holding the sword or axe that swings most often or minus one.
-    private static int fastestWeaponSlot(boolean skipBreaking) {
-        int best = -1;
-        double bestSpeed = 0;
-        for (int i = 0; i < InventoryUtil.HOTBAR_SIZE; i++) {
-            ItemStack stack = mc.player.getInventory().getItem(i);
-            if (!stack.is(ItemTags.SWORDS) && !stack.is(ItemTags.AXES)
-                || (skipBreaking && ItemUtil.nearlyBroken(stack))) {
-                continue;
-            }
-            double speed = ItemUtil.attributeValue(stack, Attributes.ATTACK_SPEED, EquipmentSlot.MAINHAND);
-            if (speed > bestSpeed) {
-                bestSpeed = speed;
-                best = i;
-            }
-        }
-        return best;
-    }
-
-    public static int bestWeaponSlot(LivingEntity target) {
-        return bestWeaponSlot(target, true, 2, true);
-    }
-
-    // The hotbar slot holding the strongest axe or minus one.
-    // Only an axe staggers a raised shield however hard the sword hits.
-    public static int bestAxeSlot(LivingEntity target, boolean skipBreaking) {
-        int best = -1;
-        double bestDamage = 0;
-        for (int i = 0; i < InventoryUtil.HOTBAR_SIZE; i++) {
-            ItemStack stack = mc.player.getInventory().getItem(i);
-            if (!stack.is(ItemTags.AXES) || (skipBreaking && ItemUtil.nearlyBroken(stack))) {
-                continue;
-            }
-            double damage = weaponDamage(stack, target);
-            if (damage > bestDamage) {
-                bestDamage = damage;
-                best = i;
-            }
-        }
-        return best;
-    }
-
-    // The hotbar slot holding the strongest weapon against this target or minus one.
-    public static int bestWeaponSlot(LivingEntity target, boolean preferSword,
-                                     double margin, boolean skipBreaking) {
-        int swordSlot = -1;
-        int axeSlot = -1;
-        double swordDamage = 0;
-        double axeDamage = 0;
-
-        for (int i = 0; i < InventoryUtil.HOTBAR_SIZE; i++) {
-            ItemStack stack = mc.player.getInventory().getItem(i);
-            if (stack.isEmpty()) {
-                continue;
-            }
-            if (skipBreaking && ItemUtil.nearlyBroken(stack)) {
-                continue;
-            }
-            if (stack.is(ItemTags.SWORDS)) {
-                double damage = weaponDamage(stack, target);
-                if (damage > swordDamage) {
-                    swordDamage = damage;
-                    swordSlot = i;
-                }
-            } else if (stack.is(ItemTags.AXES)) {
-                double damage = weaponDamage(stack, target);
-                if (damage > axeDamage) {
-                    axeDamage = damage;
-                    axeSlot = i;
-                }
-            }
-        }
-
-        if (swordSlot == -1) {
-            return axeSlot;
-        }
-        if (axeSlot == -1) {
-            return swordSlot;
-        }
-        if (preferSword) {
-            return axeDamage - swordDamage > margin ? axeSlot : swordSlot;
-        }
-        return swordDamage - axeDamage > margin ? swordSlot : axeSlot;
-    }
-
-    // Damage one full strength hit would deal after their armour and your own effects.
-    private static double weaponDamage(ItemStack stack, LivingEntity target) {
-        return DamageUtil.attackDamage(mc.player, target, stack);
+        return WeaponUtil.bestWeaponSlot(target, prefer.is(Prefer.SWORD), threshold.getValue(), antiBreak.isOn());
     }
 }

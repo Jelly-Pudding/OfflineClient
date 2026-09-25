@@ -16,7 +16,7 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 // Open water is a five by five column of water with two air blocks above the bobber.
-// Only open water gives treasure. This scans once a tick rather than every frame.
+// Only open water gives treasure. The scan runs once a tick rather than every frame.
 public final class OpenWaterEsp extends Module {
 
     private final BoxStyle style = BoxStyle.shapeOnly(BoxStyle.Shape.LINES);

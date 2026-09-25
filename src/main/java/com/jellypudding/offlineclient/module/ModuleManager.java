@@ -248,7 +248,7 @@ public final class ModuleManager {
         OfflineClient.INSTANCE.getEventBus().register(this);
     }
 
-    // Runs once the client holds this manager. The config load then overrides it.
+    // Runs once the client holds this manager. A saved config loaded afterwards wins.
     public void enableDefaults() {
         for (Module module : modules.values()) {
             if (module.enabledByDefault()) {
@@ -563,6 +563,17 @@ public final class ModuleManager {
             }
         }
         return result;
+    }
+
+    // For a picker of modules to switch. The module asking is left out.
+    public List<String> togglableNames(Module asking) {
+        List<String> names = new ArrayList<>();
+        for (Module module : modules.values()) {
+            if (module.isTogglable() && module != asking) {
+                names.add(module.getName());
+            }
+        }
+        return names;
     }
 
     public List<Module> getEnabled() {

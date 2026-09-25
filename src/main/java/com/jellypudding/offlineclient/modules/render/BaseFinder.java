@@ -84,7 +84,7 @@ public final class BaseFinder extends Module {
 
     @Override
     public String getSuffix() {
-        return found.isEmpty() ? null : count(found.size());
+        return count(found.size());
     }
 
     @Override

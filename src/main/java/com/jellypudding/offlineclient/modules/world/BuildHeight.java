@@ -30,8 +30,7 @@ public final class BuildHeight extends Module {
 
     @Override
     public String getSuffix() {
-        int count = swaps.get();
-        return count == 0 ? null : String.valueOf(count);
+        return count(swaps.get());
     }
 
     @Override

@@ -97,15 +97,12 @@ public abstract class LocalPlayerMixin extends AbstractClientPlayer {
         return Modules.active(PortalMenus.class) == null ? original : null;
     }
 
-    @WrapOperation(method = "aiStep()V",
-        at = @At(value = "INVOKE",
-            target = "Lnet/minecraft/client/player/LocalPlayer;isSlowDueToUsingItem()Z",
-            ordinal = 0))
-    private boolean wrapAiStepItemUse(LocalPlayer instance, Operation<Boolean> original) {
+    // Both the sprint start and the sprint stop ask this.
+    @Inject(method = "isSlowDueToUsingItem()Z", at = @At("HEAD"), cancellable = true)
+    private void onSlowDueToUsingItem(CallbackInfoReturnable<Boolean> cir) {
         if (offlineclient$noSlowdown()) {
-            return false;
+            cir.setReturnValue(false);
         }
-        return original.call(instance);
     }
 
     @WrapOperation(
@@ -317,7 +314,7 @@ public abstract class LocalPlayerMixin extends AbstractClientPlayer {
 
     // Vanilla shoves the player out of any block they stand inside.
     @Inject(method = "moveTowardsClosestSpace(DD)V", at = @At("HEAD"), cancellable = true)
-    private void onMoveTowardsClosestSpace(double x, double z, CallbackInfo ci) {
+    private void onMoveTowardsClosestSpace(CallbackInfo ci) {
         NoKnockback noKnockback = Modules.get(NoKnockback.class);
         if (noKnockback != null && noKnockback.blocksBlockPush()) {
             ci.cancel();
@@ -361,7 +358,7 @@ public abstract class LocalPlayerMixin extends AbstractClientPlayer {
 
     @Override
     public boolean hasEffect(Holder<MobEffect> effect) {
-        if (blocked(effect)) {
+        if (offlineclient$blocked(effect)) {
             return false;
         }
         return super.hasEffect(effect);
@@ -370,14 +367,14 @@ public abstract class LocalPlayerMixin extends AbstractClientPlayer {
     // The pulsing darkness dimming and the nausea spin read this instead of hasEffect.
     @Override
     public float getEffectBlendFactor(Holder<MobEffect> effect, float partialTicks) {
-        if (blocked(effect)) {
+        if (offlineclient$blocked(effect)) {
             return 0;
         }
         return super.getEffectBlendFactor(effect, partialTicks);
     }
 
     @Unique
-    private static boolean blocked(Holder<MobEffect> effect) {
+    private static boolean offlineclient$blocked(Holder<MobEffect> effect) {
         AntiBlind antiBlind = Modules.active(AntiBlind.class);
         if (antiBlind == null) {
             return false;

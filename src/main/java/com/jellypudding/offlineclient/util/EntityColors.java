@@ -16,9 +16,6 @@ public final class EntityColors {
 
     public enum Mode { TYPE, DISTANCE, HEALTH, SINGLE }
 
-    // Hue zero is red and hue one hundred and twenty is green.
-    private static final float GREEN_HUE = 120;
-
     private final EnumSetting<Mode> mode;
     private final ColorSetting playerColor;
     private final ColorSetting hostileColor;
@@ -95,15 +92,13 @@ public final class EntityColors {
         Player self = OfflineClient.MC.player;
         double away = self == null ? fadeDistance.getValue() : self.distanceTo(entity);
         float share = (float) Math.clamp(away / fadeDistance.getValue(), 0, 1);
-        return ColorUtil.hsv(share * GREEN_HUE, 0.85f, 1f);
+        return ColorUtil.redToGreen(share);
     }
 
     private static int healthColor(LivingEntity living) {
-        float max = living.getMaxHealth();
-        if (max <= 0) {
+        if (living.getMaxHealth() <= 0) {
             return EntityUtil.colorOf(living);
         }
-        float left = Math.clamp(EntityUtil.totalHealth(living) / max, 0f, 1f);
-        return ColorUtil.hsv(left * GREEN_HUE, 0.85f, 1f);
+        return ColorUtil.redToGreen(EntityUtil.healthShare(living));
     }
 }

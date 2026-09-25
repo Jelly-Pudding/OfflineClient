@@ -10,6 +10,8 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.BlockUtil;
+import com.jellypudding.offlineclient.util.HeldPacket;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.MoveGate;
 import com.jellypudding.offlineclient.util.SprintPause;
@@ -17,7 +19,6 @@ import net.minecraft.network.protocol.game.ServerboundAttackPacket;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
 
 // A critical hit needs the server to believe the player is falling. The packet
@@ -70,7 +71,7 @@ public final class Criticals extends Module {
     // Drops the sprint for a hit and hands it back afterwards.
     private final SprintPause sprintPause = new SprintPause();
 
-    private ServerboundAttackPacket heldAttack;
+    private final HeldPacket<ServerboundAttackPacket> held = new HeldPacket<>();
     private Stage stage = Stage.IDLE;
     private boolean waitingForPeak;
     private double lastY;
@@ -79,9 +80,6 @@ public final class Criticals extends Module {
     // How far the next outgoing packet moves the reported height.
     private double offset;
     private int waited;
-
-    // Packets sent by release come straight back through the send handler.
-    private boolean releasing;
 
     public Criticals() {
         super("Criticals", "Makes every melee hit a critical hit.", Category.COMBAT);
@@ -108,7 +106,7 @@ public final class Criticals extends Module {
 
     @Subscribe
     private void onPacketSend(PacketSendEvent event) {
-        if (releasing || !inGame() || mc.player.isSpectator()) {
+        if (held.releasing() || !inGame() || mc.player.isSpectator()) {
             return;
         }
         if (event.getPacket() instanceof ServerboundAttackPacket attack) {
@@ -123,8 +121,7 @@ public final class Criticals extends Module {
         if (mace.isOn() && mc.player.getMainHandItem().is(Items.MACE)) {
             if (!mc.player.isFallFlying() && !mc.player.isInWater() && !mc.player.isInLava()
                 && startSmash()) {
-                heldAttack = attack;
-                event.cancel();
+                held.hold(event, attack);
             }
             return;
         }
@@ -133,16 +130,14 @@ public final class Criticals extends Module {
         }
         switch (mode.getValue()) {
             case PACKET, SUBTLE -> {
-                heldAttack = attack;
+                held.hold(event, attack);
                 offset = -(mode.is(Mode.PACKET) ? CRIT_DIP : SUBTLE_DIP);
                 stage = Stage.DIP;
-                event.cancel();
             }
             case MINI_JUMP, FULL_JUMP -> {
-                heldAttack = attack;
+                held.hold(event, attack);
                 stage = Stage.JUMP;
                 jump();
-                event.cancel();
             }
             case NONE -> {
             }
@@ -181,12 +176,7 @@ public final class Criticals extends Module {
             || mc.player.onClimbable()) {
             return true;
         }
-        return mode.isAny(Mode.MINI_JUMP, Mode.FULL_JUMP) && inCobweb();
-    }
-
-    private boolean inCobweb() {
-        return mc.level.getBlockStates(mc.player.getBoundingBox())
-            .anyMatch(state -> state.is(Blocks.COBWEB));
+        return mode.isAny(Mode.MINI_JUMP, Mode.FULL_JUMP) && BlockUtil.inCobweb(mc.player);
     }
 
     private void jump() {
@@ -254,24 +244,18 @@ public final class Criticals extends Module {
 
     // Sends the held hit now that the server sees a fall.
     private void release() {
-        ServerboundAttackPacket attack = heldAttack;
-        clearHeld();
-        if (attack == null || mc.player == null) {
-            return;
-        }
-        releasing = true;
-        try {
-            dropSprint();
-            mc.player.connection.send(attack);
-        } finally {
-            releasing = false;
-        }
+        resetStage();
+        held.release(this::dropSprint);
     }
 
     private void clearHeld() {
+        resetStage();
+        held.drop();
+    }
+
+    private void resetStage() {
         stage = Stage.IDLE;
         waitingForPeak = false;
-        heldAttack = null;
         sendTimer = 0;
         offset = 0;
         waited = 0;

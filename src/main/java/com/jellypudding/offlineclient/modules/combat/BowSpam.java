@@ -159,8 +159,7 @@ public final class BowSpam extends Module {
     // the room. The hotbar slot it landed in or minus one.
     private int fetchLoadedCrossbow() {
         int from = InventoryUtil.findSlot(BowSpam::isLoaded, InventoryUtil.WHOLE_INVENTORY);
-        if (from < InventoryUtil.HOTBAR_SIZE || !InventoryUtil.canClick()
-            || !InventoryUtil.carried().isEmpty()) {
+        if (from < InventoryUtil.HOTBAR_SIZE || !InventoryUtil.cursorFree()) {
             return -1;
         }
         int to = InventoryUtil.hotbarSlot(stack -> stack.isEmpty()

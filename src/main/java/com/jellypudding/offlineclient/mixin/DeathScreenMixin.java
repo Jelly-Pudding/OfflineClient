@@ -7,6 +7,7 @@ import net.minecraft.client.gui.screens.DeathScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -15,9 +16,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(DeathScreen.class)
 public abstract class DeathScreenMixin extends Screen {
 
-    private static final int BUTTON_WIDTH = 200;
-    private static final int BUTTON_HEIGHT = 20;
     // The vanilla buttons sit at a quarter of the height plus 72 and 96.
+    @Unique
     private static final int BUTTON_TOP = 120;
 
     private DeathScreenMixin(Component title) {
@@ -32,7 +32,7 @@ public abstract class DeathScreenMixin extends Screen {
         }
         addRenderableWidget(Button.builder(Component.literal("Turn AutoRespawn on"),
                 button -> module.setEnabled(true))
-            .bounds((width - BUTTON_WIDTH) / 2, height / 4 + BUTTON_TOP, BUTTON_WIDTH, BUTTON_HEIGHT)
+            .bounds((width - Button.BIG_WIDTH) / 2, height / 4 + BUTTON_TOP, Button.BIG_WIDTH, Button.DEFAULT_HEIGHT)
             .build());
     }
 }

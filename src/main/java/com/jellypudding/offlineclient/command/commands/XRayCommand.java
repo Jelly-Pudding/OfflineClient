@@ -4,12 +4,13 @@ import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.command.Command;
 import com.jellypudding.offlineclient.command.CommandManager;
 import com.jellypudding.offlineclient.modules.render.XRay;
+import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.phys.BlockHitResult;
-import net.minecraft.world.phys.HitResult;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -27,7 +28,7 @@ public final class XRayCommand extends Command {
 
     @Override
     public void execute(String[] args) {
-        XRay xray = XRay.get();
+        XRay xray = Modules.get(XRay.class);
         if (xray == null || OfflineClient.MC.player == null) {
             return;
         }
@@ -48,8 +49,8 @@ public final class XRayCommand extends Command {
     }
 
     private static Block lookedAt() {
-        if (!(OfflineClient.MC.hitResult instanceof BlockHitResult hit)
-            || hit.getType() != HitResult.Type.BLOCK) {
+        BlockHitResult hit = BlockUtil.aimedBlock();
+        if (hit == null) {
             return null;
         }
         return OfflineClient.MC.level.getBlockState(hit.getBlockPos()).getBlock();

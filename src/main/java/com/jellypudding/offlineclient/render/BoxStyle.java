@@ -13,6 +13,8 @@ import net.minecraft.world.phys.AABB;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Supplier;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 
 // The shape and colours of the boxes a render module draws.
 public final class BoxStyle {
@@ -96,7 +98,7 @@ public final class BoxStyle {
     }
 
     public int fillColor() {
-        return ColorUtil.fade(fillColor.getColor(), fillOpacity.getFloat() / 100f);
+        return ColorUtil.fade(fillColor.getColor(), fillShare());
     }
 
     private static String cap(String text) {
@@ -112,6 +114,26 @@ public final class BoxStyle {
         }
         all.add(fillOpacity);
         return all.toArray(new Setting<?>[0]);
+    }
+
+    // The rows in their own order. A module keeping styles of its own saves them this way.
+    public JsonArray toJson() {
+        JsonArray rows = new JsonArray();
+        for (Setting<?> setting : settings()) {
+            rows.add(setting.toJson());
+        }
+        return rows;
+    }
+
+    public void fromJson(JsonElement json) {
+        if (!json.isJsonArray()) {
+            return;
+        }
+        JsonArray rows = json.getAsJsonArray();
+        Setting<?>[] settings = settings();
+        for (int i = 0; i < settings.length && i < rows.size(); i++) {
+            settings[i].fromJson(rows.get(i));
+        }
     }
 
     public int lineColor() {
@@ -149,10 +171,10 @@ public final class BoxStyle {
 
     // One face of a box in the usual colours.
     public void drawFace(DrawBatch batch, AABB box, Direction side, boolean throughWalls) {
-        if (!shape.is(Shape.SIDES)) {
+        if (drawsLines()) {
             batch.outlineFace(box, side, lineColor.getColor(), throughWalls);
         }
-        if (!shape.is(Shape.LINES)) {
+        if (drawsSides()) {
             batch.solidFace(box, side, fillColor(), throughWalls);
         }
     }
@@ -165,10 +187,10 @@ public final class BoxStyle {
 
     public void drawJoined(DrawBatch batch, AABB box, int hidden, int line, int fill,
                            boolean throughWalls) {
-        if (!shape.is(Shape.SIDES)) {
+        if (drawsLines()) {
             batch.outlineBoxPart(box, hidden, line, throughWalls);
         }
-        if (!shape.is(Shape.LINES)) {
+        if (drawsSides()) {
             batch.solidBoxPart(box, hidden, ColorUtil.fade(fill, fillShare()), throughWalls);
         }
     }
@@ -183,11 +205,11 @@ public final class BoxStyle {
 
     // The same shape with an edge colour and a face colour worked out per box.
     public void draw(DrawBatch batch, AABB box, int line, int fill, boolean throughWalls) {
-        if (!shape.is(Shape.SIDES)) {
+        if (drawsLines()) {
             batch.outlineBox(box, line, throughWalls);
         }
-        if (!shape.is(Shape.LINES)) {
-            batch.solidBox(box, ColorUtil.fade(fill, fillOpacity.getFloat() / 100f), throughWalls);
+        if (drawsSides()) {
+            batch.solidBox(box, ColorUtil.fade(fill, fillShare()), throughWalls);
         }
     }
 }

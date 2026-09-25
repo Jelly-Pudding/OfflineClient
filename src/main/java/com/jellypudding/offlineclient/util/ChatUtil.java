@@ -37,7 +37,6 @@ public final class ChatUtil {
     public static void toggled(Module module) {
         message("§b" + module.getName() + " §7is now "
             + (module.isEnabled() ? "§aenabled" : "§cdisabled") + "§7.");
-        OfflineClient.INSTANCE.getConfigManager().saveSoon();
     }
 
     // Where the name next sits as a word of its own or minus one. Sam inside

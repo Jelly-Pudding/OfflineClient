@@ -70,14 +70,35 @@ public abstract class Command {
         }
     }
 
-    // Moves the player there in one hop and says how it went.
-    protected static void hopTo(Vec3 spot, String done) {
-        Hop.Result result = Hop.to(spot);
-        if (result == Hop.Result.MOVED) {
-            ChatUtil.message(done);
-        } else {
-            ChatUtil.error(result.problem());
+    // A tilde means where you already are on that axis.
+    protected static OptionalDouble coordinate(String text, double here) {
+        if (!text.startsWith("~")) {
+            return number(text);
         }
+        if (text.length() == 1) {
+            return OptionalDouble.of(here);
+        }
+        OptionalDouble offset = number(text.substring(1));
+        return offset.isPresent() ? OptionalDouble.of(here + offset.getAsDouble()) : offset;
+    }
+
+    // Three coordinates from the given index. Null after telling the player what was wrong.
+    protected static Vec3 coordinates(String[] args, int from, Vec3 here) {
+        OptionalDouble x = coordinate(args[from], here.x);
+        OptionalDouble y = x.isPresent() ? coordinate(args[from + 1], here.y) : OptionalDouble.empty();
+        OptionalDouble z = y.isPresent() ? coordinate(args[from + 2], here.z) : OptionalDouble.empty();
+        return z.isPresent() ? new Vec3(x.getAsDouble(), y.getAsDouble(), z.getAsDouble()) : null;
+    }
+
+    // Hops the player there and says how it went once the trip is over.
+    protected static void hopTo(Vec3 spot, String done) {
+        Hop.travel(spot, result -> {
+            if (result == Hop.Result.MOVED) {
+                ChatUtil.message(done);
+            } else {
+                ChatUtil.error(result.problem());
+            }
+        });
     }
 
     // Null after telling the player there is no module with that name.

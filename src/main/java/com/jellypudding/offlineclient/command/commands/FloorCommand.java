@@ -61,26 +61,26 @@ public final class FloorCommand extends Command {
         }
         Vec3 spot = findFloor(player, floors);
         if (spot == null) {
-            ChatUtil.error("There is no floor " + way + " you within reach.");
+            ChatUtil.error("There is no floor " + way + " you.");
             return;
         }
         hopTo(spot, "§7Moved " + (direction > 0 ? "up" : "down") + " §b"
             + plain(Math.abs(spot.y - player.getY())) + " §7blocks.");
     }
 
-    // The chosen floor in the direction of travel. Null when it lies out of reach.
+    // The chosen floor in the direction of travel. Null when the world runs out first.
     private Vec3 findFloor(LocalPlayer player, int floors) {
         double feet = player.getY();
         double last = feet;
         int found = 0;
-        for (int step = 1; step <= Mth.ceil(Hop.REACH) + 1; step++) {
+        Level level = player.level();
+        int steps = Math.min(Hop.MAX_TRIP,
+            direction > 0 ? level.getMaxY() - Mth.floor(feet) : Mth.floor(feet) - level.getMinY());
+        for (int step = 1; step <= steps; step++) {
             double floor = floorUnder(player, Math.floor(feet) + step * direction);
             if (Double.isNaN(floor) || (floor - feet) * direction < SAME_FLOOR
                 || Math.abs(floor - last) < SAME_FLOOR) {
                 continue;
-            }
-            if (Math.abs(floor - feet) > Hop.REACH) {
-                return null;
             }
             last = floor;
             if (++found == floors) {

@@ -12,7 +12,6 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.RespawnAnchorBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
-import net.minecraft.world.phys.shapes.CollisionContext;
 
 // Only works where an anchor does not set a spawn point.
 public final class AnchorAura extends RespawnBlockAura {
@@ -84,10 +83,8 @@ public final class AnchorAura extends RespawnBlockAura {
             if (BlockUtil.state(pos).getBlock() != Blocks.RESPAWN_ANCHOR || !inReach(pos, false)) {
                 continue;
             }
-            Vec3 centre = Vec3.atCenterOf(pos);
-            float damage = ExplosionUtil.blastDamage(target, centre, ExplosionUtil.RESPAWN_BLOCK_POWER,
-                Vec3.ZERO, pos);
-            if (!worthIt(damage) || damage <= bestDamage || !selfSafe(centre, pos)) {
+            float damage = damageBeating(bestDamage, target, pos, pos);
+            if (damage == 0) {
                 continue;
             }
             bestDamage = damage;
@@ -104,14 +101,11 @@ public final class AnchorAura extends RespawnBlockAura {
             if (!placeable(pos) || !inReach(pos, true)) {
                 continue;
             }
-            if (!mc.level.isUnobstructed(Blocks.RESPAWN_ANCHOR.defaultBlockState(), pos,
-                CollisionContext.empty())) {
+            if (!BlockUtil.unobstructed(pos, Blocks.RESPAWN_ANCHOR.defaultBlockState())) {
                 continue;
             }
-            Vec3 centre = Vec3.atCenterOf(pos);
-            float damage = ExplosionUtil.blastDamage(target, centre, ExplosionUtil.RESPAWN_BLOCK_POWER,
-                Vec3.ZERO, pos);
-            if (!worthIt(damage) || damage <= bestDamage || !selfSafe(centre, pos)) {
+            float damage = damageBeating(bestDamage, target, pos, pos);
+            if (damage == 0) {
                 continue;
             }
             bestDamage = damage;

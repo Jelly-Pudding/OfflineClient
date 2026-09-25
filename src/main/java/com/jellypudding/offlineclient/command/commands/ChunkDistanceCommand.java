@@ -2,6 +2,7 @@ package com.jellypudding.offlineclient.command.commands;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.command.Command;
+import com.jellypudding.offlineclient.mixinterface.ISimpleOption;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import net.minecraft.client.OptionInstance;
 
@@ -56,7 +57,7 @@ public final class ChunkDistanceCommand extends Command {
             ChatUtil.error("Pick between " + min + " and " + max + " chunks.");
             return;
         }
-        option.get().set(value);
+        ISimpleOption.force(option.get(), value);
         ChatUtil.message("§7" + label + " is now §b" + value + " §7chunks.");
     }
 }

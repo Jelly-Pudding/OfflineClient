@@ -2,21 +2,19 @@ package com.jellypudding.offlineclient.hud.elements;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.hud.HudElement;
+import com.jellypudding.offlineclient.render.EntityPreview;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.player.LocalPlayer;
-import net.minecraft.client.renderer.entity.state.EntityRenderState;
 import net.minecraft.client.renderer.entity.state.LivingEntityRenderState;
-import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
 // Your own body drawn the way the inventory screen draws it.
 public final class PlayerModelElement extends HudElement {
 
-    private static final int FULL_LIGHT = 0xF000F0;
 
     // The inventory screen fits a body of thirty into a box seventy tall.
     private static final float FIT = 30f / 70f;
@@ -56,14 +54,10 @@ public final class PlayerModelElement extends HudElement {
         if (background.isOn()) {
             context.fill(0, 0, width(font), height(font), backgroundColor.getColor());
         }
-        EntityRenderState raw = OfflineClient.MC.getEntityRenderDispatcher()
-            .getRenderer(player).createRenderState(player, 1f);
-        if (!(raw instanceof LivingEntityRenderState state)) {
+        LivingEntityRenderState state = EntityPreview.flatState(player);
+        if (state == null) {
             return;
         }
-        state.lightCoords = FULL_LIGHT;
-        state.shadowPieces.clear();
-        state.outlineColor = EntityRenderState.NO_OUTLINE;
         state.bodyRot = follow.isOn() ? player.getYRot() + 180 : angle.getFloat();
         state.yRot = state.bodyRot;
         state.xRot = follow.isOn() ? player.getXRot() : 0;
@@ -75,9 +69,8 @@ public final class PlayerModelElement extends HudElement {
         // The box is given in screen pixels because this draw ignores the pose.
         int left = boxLeft();
         int top = boxTop();
-        context.entity(state, boxHeight() * FIT,
+        EntityPreview.draw(context, state, boxHeight() * FIT,
             new Vector3f(0, state.boundingBoxHeight / 2 + FOOTING, 0),
-            new Quaternionf().rotateZ((float) Math.PI), null,
             left, top, left + boxWidth(), top + boxHeight());
     }
 

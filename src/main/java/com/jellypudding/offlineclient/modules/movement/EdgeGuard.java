@@ -1,7 +1,6 @@
 package com.jellypudding.offlineclient.modules.movement;
 
 import com.jellypudding.offlineclient.event.Subscribe;
-import com.jellypudding.offlineclient.event.events.Render3DEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.ExclusivityGroup;
@@ -9,7 +8,6 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
-import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.MovementUtil;
 import net.minecraft.world.phys.AABB;
@@ -22,7 +20,6 @@ public final class EdgeGuard extends Module {
     public enum Mode { HOLD, SNEAK }
 
     // Vanilla air physics for a player.
-    private static final double GRAVITY = 0.08;
     private static final double AIR_DRAG = 0.98;
     private static final double AIR_FRICTION = 0.91;
     private static final double AIR_ACCELERATION = 0.02;
@@ -36,9 +33,6 @@ public final class EdgeGuard extends Module {
 
     // Lets a drop of exactly the allowed depth through.
     private static final double TOLERANCE = 1e-4;
-
-    private static final int EDGE_BOX_COLOR = 0xFF4080FF;
-    private static final int PLAYER_BOX_COLOR = 0xFF60E060;
 
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
         "What happens at an edge.", Mode.HOLD)
@@ -54,22 +48,15 @@ public final class EdgeGuard extends Module {
         "Also sneaks whilst you hold the sprint key. Off lets a sprint run straight off.", true)
         .under(mode, Mode.SNEAK);
     private final NumberSetting edgeDistance = new NumberSetting("Edge distance",
-        "How far before the edge the sneak starts.", 0.3, 0, 0.3, 0.01, " blocks")
+        "How much of your feet is still on the block when the sneak starts.", 0.3, 0, 0.3, 0.01, " blocks")
         .min(0).max(0.3).under(mode, Mode.SNEAK);
-    private final BoolSetting showEdgeBox = new BoolSetting("Show edge box",
-        "Draws the box the edge check looks under.", false)
-        .under(mode, Mode.SNEAK);
-    private final BoolSetting showPlayerBox = new BoolSetting("Show player box",
-        "Also draws your own box.", false)
-        .under(showEdgeBox);
 
     private boolean sneaking;
 
     public EdgeGuard() {
         super("EdgeGuard", "Stops you from going over edges without the sneak slowdown.",
             Category.MOVEMENT);
-        addSettings(mode, maxDrop, safeSneak, sneakWhenSprinting, edgeDistance, showEdgeBox,
-            showPlayerBox);
+        addSettings(mode, maxDrop, safeSneak, sneakWhenSprinting, edgeDistance);
         searchTags("safewalk", "safe walk", "edge", "ledge");
     }
 
@@ -116,18 +103,6 @@ public final class EdgeGuard extends Module {
         }
     }
 
-    @Subscribe
-    private void onRender3D(Render3DEvent event) {
-        if (!showEdgeBox.isOn() || !mode.is(Mode.SNEAK) || !inGame()) {
-            return;
-        }
-        AABB box = EntityUtil.lerpedBox(mc.player, event.getPartialTicks());
-        event.getBatch().outlineBox(shrink(box), EDGE_BOX_COLOR, false);
-        if (showPlayerBox.isOn()) {
-            event.getBatch().outlineBox(box, PLAYER_BOX_COLOR, false);
-        }
-    }
-
     private boolean sprintOverrides() {
         return !sneakWhenSprinting.isOn() && mc.options.keySprint.isDown();
     }
@@ -142,12 +117,8 @@ public final class EdgeGuard extends Module {
     // The player box pulled in from the sides. Standing with only the rim of the
     // feet over the drop leaves nothing under it.
     private AABB edgeBox() {
-        return shrink(mc.player.getBoundingBox());
-    }
-
-    private AABB shrink(AABB box) {
         double edge = edgeDistance.getValue();
-        return box.inflate(-edge, 0, -edge);
+        return mc.player.getBoundingBox().inflate(-edge, 0, -edge);
     }
 
     // True when the fall under the box would be deeper than allowed.
@@ -182,7 +153,7 @@ public final class EdgeGuard extends Module {
                 }
                 // The edge is passed. The first fall tick carries the gravity already stored.
                 supported = false;
-                vy = -GRAVITY * AIR_DRAG;
+                vy = -MovementUtil.GRAVITY * AIR_DRAG;
             }
 
             AABB dropped = box.move(0, vy, 0);
@@ -199,7 +170,7 @@ public final class EdgeGuard extends Module {
             }
             vx = vx * AIR_FRICTION + push.x;
             vz = vz * AIR_FRICTION + push.z;
-            vy = (vy - GRAVITY) * AIR_DRAG;
+            vy = (vy - MovementUtil.GRAVITY) * AIR_DRAG;
         }
         return false;
     }

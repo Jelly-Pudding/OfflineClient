@@ -54,7 +54,7 @@ public final class WorldToScreen {
         return screen != null && screen.x >= 0 && screen.x <= width && screen.y >= 0 && screen.y <= height;
     }
 
-    // A unit direction across the screen from its centre toward a world point.
+    // A unit direction across the screen from its centre towards a world point.
     // Points behind the camera still give the way round to them.
     public static Vec3 directionTo(Vec3 world) {
         Vector4f v = new Vector4f((float) (world.x - cameraPos.x), (float) (world.y - cameraPos.y),

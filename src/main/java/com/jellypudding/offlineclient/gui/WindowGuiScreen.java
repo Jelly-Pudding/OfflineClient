@@ -7,7 +7,6 @@ import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.modules.misc.ClickGuiModule;
-import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.RenderUtil;
 import com.jellypudding.offlineclient.util.SearchRank;
 import net.minecraft.client.gui.Font;
@@ -39,7 +38,6 @@ public final class WindowGuiScreen extends GuiScreenBase {
     private static final int ARROW_ZONE = 18;
     private static final int PILL_WIDTH = 22;
     private static final int PILL_HEIGHT = 10;
-    private static final int STAR_COLOR = 0xFFF2C744;
 
     private static final String FAVOURITES = "Favourites";
     private static final String ENABLED = "Enabled";
@@ -163,7 +161,7 @@ public final class WindowGuiScreen extends GuiScreenBase {
     }
 
     private int contentTop() {
-        return searchY() + SEARCH_HEIGHT + 5;
+        return searchY() + SearchField.HEIGHT + 5;
     }
 
     private int contentBottom() {
@@ -406,7 +404,7 @@ public final class WindowGuiScreen extends GuiScreenBase {
 
         boolean favourite = Favourites.has(module);
         RenderUtil.star(context, x + 8, y + (MODULE_ROW - RenderUtil.STAR_SIZE) / 2,
-            favourite ? STAR_COLOR : (hovered ? GuiTheme.textDim() : GuiTheme.textFaint()),
+            favourite ? GuiTheme.STAR : (hovered ? GuiTheme.textDim() : GuiTheme.textFaint()),
             favourite);
 
         int ty = GuiTheme.textY(y, MODULE_ROW);
@@ -429,7 +427,7 @@ public final class WindowGuiScreen extends GuiScreenBase {
                 GuiTheme.GREEN, GuiTheme.bgSetting(),
                 on ? 0xFF0B2415 : (hovered ? GuiTheme.text() : GuiTheme.textDim()));
         }
-        RenderUtil.chevron(context, x + w - 14, y + (MODULE_ROW - 3) / 2, !open,
+        RenderUtil.chevron(context, x + w - 14, y + (MODULE_ROW - RenderUtil.CHEVRON_HEIGHT) / 2, !open,
             hovered ? GuiTheme.text() : GuiTheme.textDim());
 
         if (hovered) {
@@ -463,7 +461,7 @@ public final class WindowGuiScreen extends GuiScreenBase {
     @Override
     protected boolean clickGui(double mx, double my, int button) {
         settings.beginClick();
-        return clickSearchBox(mx, my, windowX() + MARGIN, searchY(), windowWidth() - 2 * MARGIN)
+        return clickSearchBox(mx, my) != SearchField.Click.MISSED
             || clickSidebar(mx, my)
             || clickList(mx, my, button);
     }
@@ -481,10 +479,9 @@ public final class WindowGuiScreen extends GuiScreenBase {
             if (SettingWidget.isOver(mx, my, x, y, w, pitch - 2)) {
                 tab = name;
                 if (isSearching()) {
-                    searchBox.clear();
-                    onSearchChanged();
+                    searchBar.clear();
                 }
-                searchFocused = false;
+                searchBar.setFocused(false);
                 scrollBar.setOffset(0);
                 return true;
             }
@@ -531,22 +528,12 @@ public final class WindowGuiScreen extends GuiScreenBase {
     }
 
     private void clickModule(Module module, double mx, int x, int w, int button) {
-        if (!InputUtil.isLeft(button) && !InputUtil.isRight(button)) {
-            return;
-        }
         String name = module.getName();
-        if (InputUtil.isLeft(button) && mx < x + FAV_ZONE) {
-            Favourites.toggle(module);
-            return;
-        }
-        if (InputUtil.isRight(button) || mx >= x + w - ARROW_ZONE || !module.isTogglable()) {
+        ModuleRow.clickModule(module, button, mx < x + FAV_ZONE, mx >= x + w - ARROW_ZONE, () -> {
             if (!expanded.remove(name)) {
                 expanded.add(name);
             }
-            return;
-        }
-        module.toggle();
-        OfflineClient.INSTANCE.getConfigManager().saveSoon();
+        });
     }
 
     @Override

@@ -16,7 +16,6 @@ import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.AABB;
 
 import java.util.ArrayList;
@@ -116,7 +115,7 @@ public final class Tunneller extends Module {
             stop("Tunneller stopped because you cannot dig from there.");
             return;
         }
-        if (Math.abs(mc.player.getY() - walker.floorY()) > 1.5) {
+        if (walker.offFloor()) {
             stop("Tunneller stopped because you left the tunnel floor.");
             return;
         }
@@ -211,14 +210,14 @@ public final class Tunneller extends Module {
     }
 
     private int leftLane() {
-        return -((width.getInt() - 1) / 2);
+        return AxisWalker.leftLane(width.getInt());
     }
 
     private int rightLane() {
-        return width.getInt() - 1 + leftLane();
+        return AxisWalker.rightLane(width.getInt());
     }
 
-    // Puts a torch against the left wall at a set spacing.
+    // Puts a torch on the floor of the left lane at a set spacing.
     private void placeTorch() {
         if (!torches.isOn()) {
             return;
@@ -231,7 +230,7 @@ public final class Tunneller extends Module {
         if (!BlockUtil.isReplaceable(target) || !BlockUtil.isSolid(target.below())) {
             return;
         }
-        int slot = BlockUtil.findBlockSlot(block -> block == Blocks.TORCH || block == Blocks.SOUL_TORCH);
+        int slot = BlockUtil.findTorchSlot();
         if (slot == -1) {
             return;
         }
@@ -243,8 +242,7 @@ public final class Tunneller extends Module {
     }
 
     private void stop(String reason) {
-        ChatUtil.error(reason);
-        setEnabled(false);
+        disable(reason);
     }
 
     @Subscribe

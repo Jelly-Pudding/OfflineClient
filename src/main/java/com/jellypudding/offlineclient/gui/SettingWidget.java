@@ -77,7 +77,7 @@ public final class SettingWidget {
         // How far the row being dragged sits in from the block edge.
         private int indent;
 
-        public boolean isActive() {
+        private boolean isActive() {
             return slider != null || color != null;
         }
 
@@ -104,7 +104,7 @@ public final class SettingWidget {
     }
 
     // A colour row needs room under the hue bar for the two extra bars.
-    public static int rowHeight(Setting<?> setting) {
+    private static int rowHeight(Setting<?> setting) {
         if (setting instanceof ColorSetting) {
             return GuiTheme.SETTING_HEIGHT + (COLOR_BARS - 1) * BAR_PITCH;
         }
@@ -128,7 +128,7 @@ public final class SettingWidget {
         return mx >= left && mx <= right + 1 && my >= y && my < y + VALUE_BAND;
     }
 
-    public static void render(GuiGraphicsExtractor context, Font font, Setting<?> setting,
+    private static void render(GuiGraphicsExtractor context, Font font, Setting<?> setting,
                               int x, int y, int width, int mouseX, int mouseY,
                               boolean hoverAllowed, Host host) {
         int w = width;
@@ -141,7 +141,7 @@ public final class SettingWidget {
             // A bind row wants the help text and not the description of the key.
             host.setTooltip(setting instanceof KeybindSetting
                 ? BIND_HELP : setting.getDescription());
-            context.fill(x, y, x + w, y + h, 0x14FFFFFF);
+            context.fill(x, y, x + w, y + h, GuiTheme.HOVER_WASH);
             context.guiRenderState.up();
         }
         int nameColor = hovered ? GuiTheme.text() : GuiTheme.textDim();
@@ -393,11 +393,11 @@ public final class SettingWidget {
         boolean rowHovered = hoverAllowed && isOver(mouseX, mouseY, x, y, w, h);
         boolean hovered = rowHovered && mouseX < x + FOLD_ZONE;
         if (rowHovered) {
-            context.fill(x, y, x + FOLD_ZONE, y + h, 0x14FFFFFF);
+            context.fill(x, y, x + FOLD_ZONE, y + h, GuiTheme.HOVER_WASH);
             context.guiRenderState.up();
         }
-        RenderUtil.chevron(context, x + 1, y + (GuiTheme.SETTING_HEIGHT - 3) / 2, setting.isFolded(),
-            hovered ? GuiTheme.text() : GuiTheme.textFaint());
+        RenderUtil.chevron(context, x + 1, y + (GuiTheme.SETTING_HEIGHT - RenderUtil.CHEVRON_HEIGHT) / 2,
+            setting.isFolded(), hovered ? GuiTheme.text() : GuiTheme.textFaint());
     }
 
     // A hairline down the side of a sub option that ties it to its parent.
@@ -577,7 +577,7 @@ public final class SettingWidget {
         if (font.width(text) <= room) {
             return text;
         }
-        // Nothing beats a lone dot.
+        // A lone dot reads worse than an empty space.
         if (room < font.width("..")) {
             return "";
         }

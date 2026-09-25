@@ -1,6 +1,7 @@
 package com.jellypudding.offlineclient.mixin;
 
 import com.jellypudding.offlineclient.modules.render.Fullbright;
+import com.jellypudding.offlineclient.util.Modules;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import net.minecraft.util.LightCoordsUtil;
 import net.minecraft.world.level.LightLayer;
@@ -15,7 +16,7 @@ public interface BrightnessGetterMixin {
         target = "Lnet/minecraft/world/level/BlockAndLightGetter;getBrightness(Lnet/minecraft/world/level/LightLayer;Lnet/minecraft/core/BlockPos;)I",
         ordinal = 0))
     private static int onSkyLight(int sky) {
-        Fullbright fullbright = Fullbright.get();
+        Fullbright fullbright = Modules.get(Fullbright.class);
         return fullbright == null ? sky : Math.max(sky, fullbright.lightFloor(LightLayer.SKY));
     }
 
@@ -23,7 +24,7 @@ public interface BrightnessGetterMixin {
         target = "Lnet/minecraft/world/level/BlockAndLightGetter;getBrightness(Lnet/minecraft/world/level/LightLayer;Lnet/minecraft/core/BlockPos;)I",
         ordinal = 1))
     private static int onBlockLight(int block) {
-        Fullbright fullbright = Fullbright.get();
+        Fullbright fullbright = Modules.get(Fullbright.class);
         return fullbright == null ? block : Math.max(block, fullbright.lightFloor(LightLayer.BLOCK));
     }
 }

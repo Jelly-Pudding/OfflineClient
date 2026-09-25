@@ -8,33 +8,26 @@ import com.jellypudding.offlineclient.modules.misc.HudModule;
 import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.setting.Setting;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
-import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.stream.Stream;
 
 // Writes everything the client remembers to offlineclient/config.json.
 // Named profiles are saved next to it under offlineclient/profiles.
 public final class ConfigManager {
 
-    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-
     // Raised whenever saved values need a one time conversion on load.
     private static final int CONFIG_VERSION = 3;
 
-    private final Path file;
-    private final Path profilesFolder;
+    private final Path file = DataFiles.path("config.json");
+    private final Path profilesFolder = DataFiles.path("profiles");
     private JsonObject guiState = new JsonObject();
     private final AtomicBoolean dirty = new AtomicBoolean();
 
@@ -44,14 +37,7 @@ public final class ConfigManager {
     // A save before the load has finished would wipe the file with defaults.
     private volatile boolean loaded;
 
-    public ConfigManager(Path folder) {
-        this.file = folder.resolve("config.json");
-        this.profilesFolder = folder.resolve("profiles");
-        try {
-            Files.createDirectories(profilesFolder);
-        } catch (IOException e) {
-            OfflineClient.LOG.error("Failed to create the profiles folder", e);
-        }
+    public ConfigManager() {
         Runtime.getRuntime().addShutdownHook(new Thread(this::saveOnExit, "OfflineClient config save"));
     }
 
@@ -68,7 +54,7 @@ public final class ConfigManager {
 
     public synchronized void saveNow() {
         if (loaded) {
-            write(file, buildRoot());
+            DataFiles.writeJson(file, buildRoot());
         }
     }
 
@@ -79,14 +65,13 @@ public final class ConfigManager {
     }
 
     public void load() {
-        if (Files.exists(file)) {
-            JsonObject root = read(file);
+        read(file).ifPresent(root -> {
             applyRoot(root);
             // Macros live in their own file and a profile must never touch them.
-            if (root != null && versionOf(root) < 3) {
+            if (versionOf(root) < 3) {
                 MacroStore.get().migrateLegacyKeys();
             }
-        }
+        });
         loaded = true;
     }
 
@@ -156,7 +141,7 @@ public final class ConfigManager {
             greeted = root.has("greeted") && root.get("greeted").getAsBoolean();
 
             if (version < 2) {
-                // Version 1 forced every HUD element on.
+                // A version 1 file has every HUD element forced on.
                 for (Setting<?> setting : OfflineClient.INSTANCE.getModuleManager()
                     .get(HudModule.class).getSettings()) {
                     setting.reset();
@@ -170,8 +155,8 @@ public final class ConfigManager {
         }
     }
 
-    // One bad entry only loses its own module. Binds written before 26.3 hold
-    // window library codes and only the ones actually read are moved across.
+    // One bad entry only loses its own module. A legacy config holds binds as
+    // window library codes and only the ones read are moved across.
     private static void applyModule(Module module, JsonElement saved, boolean legacyKeys) {
         try {
             JsonObject m = saved.getAsJsonObject();
@@ -251,16 +236,12 @@ public final class ConfigManager {
     }
 
     public void saveProfile(String name) {
-        write(profilesFolder.resolve(sanitize(name) + ".json"), buildRoot());
+        DataFiles.writeJson(profileFile(name), buildRoot());
     }
 
     // False when the profile does not exist.
     public boolean loadProfile(String name) {
-        Path path = profilesFolder.resolve(sanitize(name) + ".json");
-        if (!Files.exists(path)) {
-            return false;
-        }
-        JsonObject root = read(path);
+        JsonObject root = read(profileFile(name)).orElse(null);
         if (root == null) {
             return false;
         }
@@ -276,7 +257,7 @@ public final class ConfigManager {
     // False when there was no profile of that name to remove.
     public boolean deleteProfile(String name) {
         try {
-            return Files.deleteIfExists(profilesFolder.resolve(sanitize(name) + ".json"));
+            return Files.deleteIfExists(profileFile(name));
         } catch (IOException e) {
             OfflineClient.LOG.error("Failed to delete the profile {}", name, e);
             return false;
@@ -284,41 +265,16 @@ public final class ConfigManager {
     }
 
     public List<String> listProfiles() {
-        List<String> names = new ArrayList<>();
-        try (Stream<Path> stream = Files.list(profilesFolder)) {
-            stream.filter(p -> p.toString().endsWith(".json"))
-                .forEach(p -> {
-                    String file = p.getFileName().toString();
-                    names.add(file.substring(0, file.length() - 5));
-                });
-        } catch (IOException e) {
-            OfflineClient.LOG.warn("Cannot list the profiles folder", e);
-        }
-        return names;
+        return DataFiles.jsonNames(profilesFolder);
     }
 
-    private static String sanitize(String name) {
-        return name.replaceAll("[^a-zA-Z0-9_-]", "_");
+    // Anything but letters and digits and underscores and dashes becomes an underscore.
+    private Path profileFile(String name) {
+        return DataFiles.jsonFile(profilesFolder, name.replaceAll("[^a-zA-Z0-9_-]", "_"));
     }
 
-    // Written to a temp file first. A crash mid write cannot corrupt the saved file.
-    static void write(Path path, JsonElement root) {
-        Path temp = path.resolveSibling(path.getFileName() + ".tmp");
-        try {
-            Files.writeString(temp, GSON.toJson(root));
-            Files.move(temp, path, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-        } catch (IOException e) {
-            OfflineClient.LOG.error("Failed to save {}", path.getFileName(), e);
-        }
-    }
-
-    private static JsonObject read(Path path) {
-        try {
-            return JsonParser.parseString(Files.readString(path)).getAsJsonObject();
-        } catch (Exception e) {
-            OfflineClient.LOG.error("Failed to read {}", path.getFileName(), e);
-            return null;
-        }
+    private static Optional<JsonObject> read(Path path) {
+        return DataFiles.readJson(path, JsonElement::getAsJsonObject);
     }
 
     public JsonObject getGuiState() {

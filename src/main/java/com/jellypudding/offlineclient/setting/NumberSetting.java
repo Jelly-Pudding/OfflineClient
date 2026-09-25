@@ -72,10 +72,6 @@ public final class NumberSetting extends Setting<Double> {
         return hardMax;
     }
 
-    public String getSuffix() {
-        return suffix;
-    }
-
     public int getInt() {
         return (int) Math.round(value);
     }

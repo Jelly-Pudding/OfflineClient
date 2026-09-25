@@ -11,6 +11,7 @@ import com.jellypudding.offlineclient.event.events.ClientTickEvent;
 import com.jellypudding.offlineclient.friend.FriendManager;
 import com.jellypudding.offlineclient.module.ModuleManager;
 import com.jellypudding.offlineclient.util.Hop;
+import com.jellypudding.offlineclient.util.Lagback;
 import com.jellypudding.offlineclient.util.MoveGate;
 import com.jellypudding.offlineclient.util.RotationManager;
 import com.jellypudding.offlineclient.util.TickRate;
@@ -18,16 +19,14 @@ import net.minecraft.client.Minecraft;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.nio.file.Path;
 
-// A utility client made for minecraftoffline.net
+// A Fabric client made for minecraftoffline.net
 public enum OfflineClient {
     INSTANCE;
 
     public static final String NAME = "OfflineClient";
     public static final String VERSION = "0.9.0";
     public static final String SERVER_NAME = "minecraftoffline.net";
-    public static final String SERVER_ADDRESS = "minecraftoffline.net";
 
     // Read again in init. Anything that loads this class before the game has finished
     // building itself captures a null here and would keep it for the whole run.
@@ -48,15 +47,12 @@ public enum OfflineClient {
         MC = Minecraft.getInstance();
         LOG.info("Starting {} v{} for {}", NAME, VERSION, SERVER_NAME);
 
-        Path folder = MC.gameDirectory.toPath().resolve("offlineclient");
-
         eventBus = new EventBus();
         friendManager = new FriendManager();
         commandManager = new CommandManager();
+        configManager = new ConfigManager();
         moduleManager = new ModuleManager();
         moduleManager.enableDefaults();
-
-        configManager = new ConfigManager(folder);
         configManager.load();
 
         eventBus.register(this);
@@ -64,7 +60,8 @@ public enum OfflineClient {
         eventBus.register(MoveGate.INSTANCE);
         eventBus.register(Hop.INSTANCE);
         eventBus.register(TickRate.INSTANCE);
-        // Reading them now puts the macro key handler on the bus.
+        eventBus.register(Lagback.INSTANCE);
+        // Loading the macros puts their key handler on the bus.
         MacroStore.get();
     }
 
@@ -75,7 +72,7 @@ public enum OfflineClient {
         greetOnFirstJoin();
     }
 
-    // A line of hello the first time a fresh install reaches a world.
+    // Says hello the first time a fresh install reaches a world.
     private void greetOnFirstJoin() {
         boolean inWorld = MC.player != null;
         if (inWorld && !wasInWorld && configManager.needsGreeting()) {

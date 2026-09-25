@@ -64,13 +64,8 @@ public final class CityEsp extends Module {
             return;
         }
         for (Player player : mc.level.players()) {
-            if (player == mc.player || !player.isAlive() || player.isSpectator()) {
-                continue;
-            }
-            if (EntityUtil.isFriend(player)) {
-                continue;
-            }
-            if (mc.player.distanceTo(player) > targetRange.getValue()) {
+            if (player == mc.player || !EntityUtil.isEnemy(player)
+                || mc.player.distanceTo(player) > targetRange.getValue()) {
                 continue;
             }
             addTarget(player, reach);

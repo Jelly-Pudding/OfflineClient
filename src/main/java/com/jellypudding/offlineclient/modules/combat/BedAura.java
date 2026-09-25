@@ -20,7 +20,6 @@ import net.minecraft.world.level.block.HorizontalDirectionalBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BedPart;
 import net.minecraft.world.phys.Vec3;
-import net.minecraft.world.phys.shapes.CollisionContext;
 
 // Only works where a bed explodes instead of letting anyone sleep.
 public final class BedAura extends RespawnBlockAura {
@@ -66,10 +65,8 @@ public final class BedAura extends RespawnBlockAura {
                 continue;
             }
             BlockPos head = headOf(pos, state);
-            Vec3 centre = Vec3.atCenterOf(head);
-            float damage = ExplosionUtil.blastDamage(target, centre, ExplosionUtil.RESPAWN_BLOCK_POWER,
-                Vec3.ZERO, pos, head);
-            if (!worthIt(damage) || damage <= bestDamage || !selfSafe(centre, pos, head)) {
+            float damage = damageBeating(bestDamage, target, head, pos, head);
+            if (damage == 0) {
                 continue;
             }
             bestDamage = damage;
@@ -128,10 +125,8 @@ public final class BedAura extends RespawnBlockAura {
                 if (!free(head, bed)) {
                     continue;
                 }
-                Vec3 centre = Vec3.atCenterOf(head);
-                float damage = ExplosionUtil.blastDamage(target, centre, ExplosionUtil.RESPAWN_BLOCK_POWER,
-                    Vec3.ZERO, foot, head);
-                if (!worthIt(damage) || damage <= bestDamage || !selfSafe(centre, foot, head)) {
+                float damage = damageBeating(bestDamage, target, head, foot, head);
+                if (damage == 0) {
                     continue;
                 }
                 bestDamage = damage;
@@ -172,7 +167,7 @@ public final class BedAura extends RespawnBlockAura {
 
     private boolean free(BlockPos pos, Block bed) {
         return BlockUtil.isReplaceable(pos)
-            && mc.level.isUnobstructed(bed.defaultBlockState(), pos, CollisionContext.empty());
+            && BlockUtil.unobstructed(pos, bed.defaultBlockState());
     }
 
     // Bed direction comes from the yaw held server side when the click lands.

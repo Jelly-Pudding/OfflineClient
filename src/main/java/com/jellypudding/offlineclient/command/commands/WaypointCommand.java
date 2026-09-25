@@ -8,10 +8,12 @@ import com.jellypudding.offlineclient.modules.render.Waypoints;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
 import java.util.Locale;
 import com.jellypudding.offlineclient.command.CommandManager;
+import com.jellypudding.offlineclient.util.ServerInfo;
 
 public final class WaypointCommand extends Command {
 
@@ -50,24 +52,21 @@ public final class WaypointCommand extends Command {
             return;
         }
         BlockPos pos = OfflineClient.MC.player.blockPosition();
+        if (args.length >= 5) {
+            Vec3 spot = coordinates(args, 2, Vec3.atLowerCornerOf(pos));
+            if (spot == null) {
+                return;
+            }
+            pos = BlockPos.containing(spot);
+        }
         int x = pos.getX();
         int y = pos.getY();
         int z = pos.getZ();
-        if (args.length >= 5) {
-            try {
-                x = Integer.parseInt(args[2]);
-                y = Integer.parseInt(args[3]);
-                z = Integer.parseInt(args[4]);
-            } catch (NumberFormatException e) {
-                ChatUtil.error("Those coordinates are not whole numbers.");
-                return;
-            }
-        }
         String name = args[1];
         Waypoints module = Modules.get(Waypoints.class);
         int hue = module == null ? Waypoint.AUTO_HUE : module.nextHue();
         WaypointStore.get().add(new Waypoint(name, x, y, z,
-            WaypointStore.currentDimension(), WaypointStore.currentServer(), hue));
+            WaypointStore.currentDimension(), ServerInfo.key(), hue));
         ChatUtil.message("§aSaved §b" + name + " §7at §f" + x + " " + y + " " + z);
     }
 
@@ -110,10 +109,10 @@ public final class WaypointCommand extends Command {
             + (hue < 0 ? "the colour of its name." : "hue §f" + hue + "§7."));
     }
 
-    // A hidden waypoint stays saved and simply stops being drawn.
+    // A hidden waypoint stays saved but is not drawn.
     private void hidden(String[] args, boolean hide) {
         if (args.length < 2) {
-            ChatUtil.error("Usage: waypoint " + (hide ? "hide" : "show") + " <name>");
+            usage("waypoint " + (hide ? "hide" : "show") + " <name>");
             return;
         }
         Waypoint waypoint = WaypointStore.get().find(args[1]);
@@ -144,7 +143,7 @@ public final class WaypointCommand extends Command {
         ChatUtil.message("§cRemoved every waypoint.");
     }
 
-    public static List<String> names() {
+    private static List<String> names() {
         return WaypointStore.get().here().stream().map(Waypoint::name).toList();
     }
 

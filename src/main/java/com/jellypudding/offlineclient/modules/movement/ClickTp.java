@@ -19,14 +19,11 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
-// Teleports you onto the block you right click. A long trip is walked as one hop a tick.
+// Teleports you onto the block you right click. A long way is covered a hop a tick.
 public final class ClickTp extends Module {
 
     private final NumberSetting range = new NumberSetting("Range",
         "How far away the clicked block may be.", 100, 1, 200, 1, " blocks");
-
-    // Where the current trip ends. Null whilst there is no trip.
-    private Vec3 destination;
 
     public ClickTp() {
         super("ClickTp", "Teleports you to the block you right click.", Category.MOVEMENT);
@@ -34,24 +31,9 @@ public final class ClickTp extends Module {
         searchTags("teleport", "click teleport");
     }
 
-    @Override
-    protected void onEnable() {
-        destination = null;
-    }
-
-    @Override
-    protected void onDisable() {
-        destination = null;
-    }
-
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || mc.player.isDeadOrDying()) {
-            destination = null;
-            return;
-        }
-        if (destination != null) {
-            hop();
+        if (!inGame() || mc.player.isDeadOrDying() || Hop.travelling()) {
             return;
         }
         if (!mc.options.keyUse.isDown() || mc.gui.screen() != null) {
@@ -78,9 +60,8 @@ public final class ClickTp extends Module {
         }
         double top = shape.isEmpty() ? 1 : shape.max(Direction.Axis.Y);
         Direction side = hit.getDirection();
-        destination = new Vec3(pos.getX() + 0.5 + side.getStepX(), pos.getY() + top,
-            pos.getZ() + 0.5 + side.getStepZ());
-        hop();
+        Hop.travel(new Vec3(pos.getX() + 0.5 + side.getStepX(), pos.getY() + top,
+            pos.getZ() + 0.5 + side.getStepZ()));
     }
 
     // A use on an entity or a block placement keeps its normal meaning.
@@ -103,24 +84,5 @@ public final class ClickTp extends Module {
             .scale(range.getValue()));
         return mc.level.clip(new ClipContext(from, to, ClipContext.Block.OUTLINE,
             ClipContext.Fluid.NONE, mc.player));
-    }
-
-    // Moves as far along the trip as one hop can carry. A step into a block ends it.
-    private void hop() {
-        Vec3 from = mc.player.position();
-        double left = from.distanceTo(destination);
-        boolean arriving = left <= Hop.REACH;
-        Vec3 step = arriving
-            ? destination
-            : from.add(destination.subtract(from).scale(Hop.REACH / left));
-        switch (Hop.to(step)) {
-            case MOVED -> {
-                if (arriving) {
-                    destination = null;
-                }
-            }
-            case BUSY -> { }
-            case TOO_FAR, BLOCKED -> destination = null;
-        }
     }
 }

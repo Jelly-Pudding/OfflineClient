@@ -48,13 +48,12 @@ public final class HudEditorScreen extends Screen {
 
     private final HudManager manager;
     private final SettingHost settings = new SettingHost(this, this::setTooltip);
+    private final TextInput textInput = new TextInput(this);
     private final HudElementList list;
 
     private String tooltip;
 
-    // Held still whilst the pointer is down as the ClickGUI holds its own.
-    private float panelScale = GuiScreenBase.guiScale();
-    private boolean pointerDown;
+    private final LatchedScale panelScale = new LatchedScale();
 
     private HudElement dragged;
     private HudElement resized;
@@ -91,6 +90,12 @@ public final class HudEditorScreen extends Screen {
     }
 
     @Override
+    public void removed() {
+        textInput.set(false);
+        super.removed();
+    }
+
+    @Override
     public void onClose() {
         settings.commitEditing();
         list.save();
@@ -113,6 +118,7 @@ public final class HudEditorScreen extends Screen {
     @Override
     public void extractRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY,
                                    float partialTicks) {
+        textInput.set(settings.isEditing());
         context.fill(0, 0, width, height, SHADE);
         List<Placement> placed = placements();
         for (Placement placement : placed) {
@@ -162,24 +168,22 @@ public final class HudEditorScreen extends Screen {
     // covers are moved into the same scale first.
     private void renderPanel(GuiGraphicsExtractor context, int mouseX, int mouseY,
                              List<int[]> boxes) {
-        if (!pointerDown) {
-            panelScale = GuiScreenBase.guiScale();
-        }
+        panelScale.refresh();
         int panelX = toPanel(mouseX);
         int panelY = toPanel(mouseY);
         int panelW = toPanel(width);
         int panelH = toPanel(height);
         tooltip = null;
         list.update(panelX, panelY, panelW, panelH, 0);
-        if (!pointerDown) {
+        if (!panelScale.isHeld()) {
             keepInReach(panelW, panelH);
         }
         List<int[]> under = new ArrayList<>(boxes.size());
         for (int[] box : boxes) {
-            under.add(RenderUtil.scaled(box[0], box[1], box[2], box[3], panelScale));
+            under.add(RenderUtil.scaled(box[0], box[1], box[2], box[3], panelScale.get()));
         }
         context.pose().pushMatrix();
-        context.pose().scale(panelScale, panelScale);
+        context.pose().scale(panelScale.get(), panelScale.get());
         RenderUtil.cover(context, list.bounds(), under, GuiTheme.bgSolid());
         list.render(context, panelX, panelY);
         HudElement hovered = list.isCollapsed() ? null : list.getHovered();
@@ -194,7 +198,7 @@ public final class HudEditorScreen extends Screen {
     }
 
     private int toPanel(double screen) {
-        return (int) (screen / panelScale);
+        return (int) panelScale.toView(screen);
     }
 
     // A new scale or a smaller window must never leave the panel out of reach.
@@ -236,7 +240,7 @@ public final class HudEditorScreen extends Screen {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-        pointerDown = true;
+        panelScale.hold(true);
         settings.beginClick();
         if (list.mouseClicked(toPanel(event.x()), toPanel(event.y()), event.button())) {
             return true;
@@ -297,7 +301,7 @@ public final class HudEditorScreen extends Screen {
 
     @Override
     public boolean mouseReleased(MouseButtonEvent event) {
-        pointerDown = false;
+        panelScale.hold(false);
         list.mouseReleased();
         if (dragged != null || resized != null) {
             dragged = null;

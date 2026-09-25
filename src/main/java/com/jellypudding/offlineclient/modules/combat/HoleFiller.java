@@ -25,13 +25,12 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
-import net.minecraft.world.phys.shapes.CollisionContext;
 
 import java.util.ArrayList;
 import java.util.List;
 
 // A hole with somebody already in it cannot be filled since the server
-// refuses a block inside a player. This seals holes before an enemy reaches one.
+// refuses a block inside a player. HoleFiller seals a hole before an enemy reaches it.
 public final class HoleFiller extends Module {
 
     private final NumberSetting range = new NumberSetting("Range",
@@ -176,7 +175,7 @@ public final class HoleFiller extends Module {
             if (mc.player.distanceTo(player) > reach) {
                 continue;
             }
-            if (onlyMoving.isOn() && EntityUtil.velocityOf(player).horizontalDistanceSqr() < 0.0004) {
+            if (onlyMoving.isOn() && !EntityUtil.isMoving(EntityUtil.velocityOf(player))) {
                 continue;
             }
             if (ignoreSafe.isOn() && walledIn(player)) {
@@ -220,17 +219,13 @@ public final class HoleFiller extends Module {
     }
 
     private boolean inReach(BlockPos pos) {
-        Vec3 top = Vec3.upFromBottomCenterOf(pos, 1);
-        double reach = BlockUtil.canSee(top) ? range.getValue() : wallsRange.getValue();
-        return BlockUtil.distanceTo(pos) <= reach;
+        return BlockUtil.distanceTo(pos)
+            <= BlockUtil.reachFor(Vec3.upFromBottomCenterOf(pos, 1), range.getValue(), wallsRange.getValue());
     }
 
     // Open and empty. A hole with a player in it is not open.
     private boolean open(BlockPos pos) {
-        if (!BlockUtil.isReplaceable(pos) || !BlockUtil.state(pos.above()).isAir()) {
-            return false;
-        }
-        return mc.level.isUnobstructed(Blocks.OBSIDIAN.defaultBlockState(), pos, CollisionContext.empty());
+        return BlockUtil.state(pos.above()).isAir() && BlockUtil.blockFits(pos);
     }
 
     // True when the spot is really a hole.
@@ -274,7 +269,7 @@ public final class HoleFiller extends Module {
 
     private boolean blastProof(BlockPos pos) {
         return BlockUtil.isSolid(pos)
-            && BlockUtil.state(pos).getBlock().getExplosionResistance() >= BlockUtil.BLAST_PROOF;
+            && BlockUtil.isBlastProof(pos);
     }
 
     private boolean nearAnEnemy(BlockPos pos) {
@@ -296,7 +291,7 @@ public final class HoleFiller extends Module {
         double lead = leadTicks.getValue();
         for (Player enemy : enemies) {
             Vec3 pace = EntityUtil.velocityOf(enemy);
-            if (pace.horizontalDistanceSqr() < 0.0004) {
+            if (!EntityUtil.isMoving(pace)) {
                 continue;
             }
             Vec3 ahead = enemy.position().add(pace.x * lead, 0, pace.z * lead);

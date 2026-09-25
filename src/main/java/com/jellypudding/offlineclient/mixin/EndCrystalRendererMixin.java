@@ -1,6 +1,7 @@
 package com.jellypudding.offlineclient.mixin;
 
 import com.jellypudding.offlineclient.modules.render.Chams;
+import com.jellypudding.offlineclient.util.Modules;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -25,7 +26,7 @@ public abstract class EndCrystalRendererMixin {
         at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/vertex/PoseStack;scale(FFF)V"))
     private void onScale(EndCrystalRenderState state, PoseStack poseStack, SubmitNodeCollector collector,
                          CameraRenderState camera, CallbackInfo ci) {
-        Chams chams = Chams.get();
+        Chams chams = Modules.get(Chams.class);
         if (chams != null && chams.reshapesCrystals()) {
             float scale = chams.crystalScale();
             poseStack.scale(scale, scale, scale);
@@ -41,7 +42,7 @@ public abstract class EndCrystalRendererMixin {
     private <S> void onSubmitModel(SubmitNodeCollector collector, Model<? super S> model, S state,
                                    PoseStack poseStack, Identifier texture, int light, int overlay,
                                    int outline, Operation<Void> original) {
-        Chams chams = Chams.get();
+        Chams chams = Modules.get(Chams.class);
         if (chams == null || !chams.reshapesCrystals()) {
             original.call(collector, model, state, poseStack, texture, light, overlay, outline);
             return;

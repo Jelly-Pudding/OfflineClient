@@ -17,6 +17,7 @@ import java.util.Arrays;
 import java.util.Locale;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.OptionalDouble;
 
 public final class SetCommand extends Command {
 
@@ -66,18 +67,18 @@ public final class SetCommand extends Command {
             ChatUtil.message("§b" + module.getName() + "§7 has no settings.");
             return;
         }
-        ChatUtil.message("§3" + module.getName() + " settings:");
+        ChatUtil.message("§3" + module.getName() + " settings");
         for (Setting<?> setting : module.getSettings()) {
-            ChatUtil.message("§b" + CommandManager.settingId(setting) + " §7= §f"
+            ChatUtil.message("§b" + setting.id() + " §7= §f"
                 + valueString(setting) + rangeHint(setting));
         }
     }
 
     private static void describe(Setting<?> setting) {
-        ChatUtil.message("§b" + CommandManager.settingId(setting) + " §7= §f" + valueString(setting)
+        ChatUtil.message("§b" + setting.id() + " §7= §f" + valueString(setting)
             + rangeHint(setting) + " §8(" + setting.getDescription() + ")");
         if (setting instanceof EnumSetting<?> e) {
-            ChatUtil.message("§7Options: §f" + enumOptions(e));
+            ChatUtil.message("§7Pick from §f" + enumOptions(e));
         }
     }
 
@@ -85,34 +86,25 @@ public final class SetCommand extends Command {
         if (module.getSettings().isEmpty()) {
             return "It has no settings.";
         }
-        StringBuilder names = new StringBuilder();
-        for (Setting<?> setting : module.getSettings()) {
-            if (!names.isEmpty()) {
-                names.append("§c/§f");
-            }
-            names.append(CommandManager.settingId(setting));
-        }
-        return "Its settings are §f" + names + "§c.";
+        return "Its settings are §f" + String.join("§c/§f", module.settingIds()) + "§c.";
     }
 
     private static void apply(Module module, Setting<?> setting, String value) {
         switch (setting) {
             case BoolSetting b -> {
                 if (!value.matches("(?i)true|false|on|off")) {
-                    ChatUtil.error("§f" + CommandManager.settingId(setting)
+                    ChatUtil.error("§f" + setting.id()
                         + "§c needs §ftrue §cor §ffalse§c.");
                     return;
                 }
                 b.setValue(value.equalsIgnoreCase("true") || value.equalsIgnoreCase("on"));
             }
             case NumberSetting n -> {
-                double parsed;
-                try {
-                    parsed = Double.parseDouble(value);
-                } catch (NumberFormatException e) {
-                    ChatUtil.error("§f" + value + "§c is not a number.");
+                OptionalDouble number = number(value);
+                if (number.isEmpty()) {
                     return;
                 }
+                double parsed = number.getAsDouble();
                 n.setValue(parsed);
                 if (n.getValue() != parsed) {
                     ChatUtil.message("§7That is outside the allowed range. Using §f"
@@ -155,7 +147,7 @@ public final class SetCommand extends Command {
             }
         }
         OfflineClient.INSTANCE.getConfigManager().saveSoon();
-        ChatUtil.message("§b" + module.getName() + " " + CommandManager.settingId(setting)
+        ChatUtil.message("§b" + module.getName() + " " + setting.id()
             + " §7set to §f" + valueString(setting));
     }
 
@@ -170,14 +162,7 @@ public final class SetCommand extends Command {
     }
 
     private static String enumOptions(EnumSetting<?> setting) {
-        StringBuilder options = new StringBuilder();
-        for (Object constant : setting.getValue().getDeclaringClass().getEnumConstants()) {
-            if (!options.isEmpty()) {
-                options.append(" §7/ §f");
-            }
-            options.append(((Enum<?>) constant).name().toLowerCase(Locale.ROOT));
-        }
-        return options.toString();
+        return String.join(" §7/ §f", options(setting));
     }
 
     private static String rangeHint(Setting<?> setting) {
@@ -215,11 +200,7 @@ public final class SetCommand extends Command {
             return List.of();
         }
         if (index == 2) {
-            List<String> ids = new ArrayList<>();
-            for (Setting<?> setting : module.getSettings()) {
-                ids.add(CommandManager.settingId(setting));
-            }
-            return CommandManager.filter(current, ids);
+            return CommandManager.filter(current, module.settingIds());
         }
         if (index != 3) {
             return List.of();

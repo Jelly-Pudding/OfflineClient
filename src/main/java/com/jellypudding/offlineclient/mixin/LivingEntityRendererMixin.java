@@ -3,6 +3,7 @@ package com.jellypudding.offlineclient.mixin;
 import com.jellypudding.offlineclient.mixinterface.IRenderState;
 import com.jellypudding.offlineclient.modules.render.Chams;
 import com.jellypudding.offlineclient.render.EntityPipelines;
+import com.jellypudding.offlineclient.util.Modules;
 import com.llamalad7.mixinextras.injector.ModifyReturnValue;
 import net.minecraft.client.renderer.entity.LivingEntityRenderer;
 import net.minecraft.client.renderer.entity.state.LivingEntityRenderState;
@@ -66,7 +67,7 @@ public abstract class LivingEntityRendererMixin {
         at = @At("TAIL"))
     private void onExtractLivingState(LivingEntity entity, LivingEntityRenderState state, float partialTicks,
                                       CallbackInfo ci) {
-        Chams chams = Chams.get();
+        Chams chams = Modules.get(Chams.class);
         if (chams != null) {
             state.scale *= chams.scaleFor(entity);
         }

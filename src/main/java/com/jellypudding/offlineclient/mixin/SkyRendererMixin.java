@@ -6,8 +6,8 @@ import net.minecraft.client.Camera;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.SkyRenderer;
 import net.minecraft.client.renderer.state.level.SkyRenderState;
+import net.minecraft.util.ARGB;
 import net.minecraft.world.level.dimension.DimensionType;
-import org.joml.Vector3f;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -28,8 +28,7 @@ public abstract class SkyRendererMixin {
         }
         if (ambience.paintsSky()) {
             int color = ambience.skyColor();
-            state.skyColor = new Vector3f(((color >> 16) & 0xFF) / 255f,
-                ((color >> 8) & 0xFF) / 255f, (color & 0xFF) / 255f);
+            state.skyColor = ARGB.vector3fFromRGB24(color);
         }
     }
 }

@@ -22,9 +22,8 @@ public final class Derp extends Module {
 
     public enum Mode { SPIN, SHAKE, HEADBANG, FLAIL, TWERK, RANDOM }
 
-    // Ticks a full crouch and stand takes at the slowest twerk speed. At the
-    // fastest it flips every tick which is as quick as the server will show.
-    private static final int TWERK_SLOWEST = 11;
+    // The fastest twerk flips every tick which is as quick as the server will show.
+    // Each step slower waits one more tick between flips.
     private static final int TWERK_FASTEST = 10;
 
     // Ticks between arm swings whilst flailing. A swing takes about six to play out.
@@ -146,7 +145,7 @@ public final class Derp extends Module {
             twerkTimer--;
             return;
         }
-        twerkTimer = TWERK_SLOWEST - twerkSpeed.getInt();
+        twerkTimer = TWERK_FASTEST - twerkSpeed.getInt();
         crouched = !crouched;
         InputUtil.sendShift(crouched);
     }

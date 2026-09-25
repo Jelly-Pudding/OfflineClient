@@ -20,9 +20,6 @@ public final class ChestSwap extends Module {
 
     public enum Choice { STRONGEST, FIRST_FOUND, DIAMOND, NETHERITE, PREFER_DIAMOND, PREFER_NETHERITE }
 
-    // Container slot the chest piece sits in on the survival inventory.
-    private static final int CHEST_SLOT = 6;
-
     private final EnumSetting<Choice> chestplate = new EnumSetting<>("Chestplate",
         "Which chestplate goes on.", Choice.STRONGEST)
         .describe(Choice.STRONGEST, "The chestplate with the most armour.")
@@ -77,17 +74,18 @@ public final class ChestSwap extends Module {
         swap();
     }
 
-    public void swap() {
-        if (!inGame() || mc.player.isSpectator() || mc.gameMode == null) {
-            return;
-        }
-        // Container clicks need the survival inventory with a clear cursor.
-        if (mc.player.containerMenu.containerId != 0
-            || !mc.player.containerMenu.getCarried().isEmpty()) {
-            return;
-        }
+    // Container clicks need the survival inventory with a clear cursor.
+    public boolean canSwap() {
+        return inGame() && !mc.player.isSpectator() && mc.gameMode != null
+            && mc.player.containerMenu.containerId == 0
+            && mc.player.containerMenu.getCarried().isEmpty();
+    }
 
-        ItemStack worn = mc.player.getItemBySlot(EquipmentSlot.CHEST);
+    public void swap() {
+        if (!canSwap()) {
+            return;
+        }
+        ItemStack worn = worn();
         if (isElytra(worn)) {
             equipChestplate();
         } else if (isChestplate(worn)) {
@@ -95,6 +93,23 @@ public final class ChestSwap extends Module {
         } else if (!equipChestplate()) {
             equipElytra();
         }
+    }
+
+    public void wearElytra() {
+        if (canSwap() && !isElytra(worn())) {
+            equipElytra();
+        }
+    }
+
+    // Swaps a worn elytra for a chestplate. Any other chest piece stays on.
+    public void takeOffElytra() {
+        if (canSwap() && isElytra(worn())) {
+            equipChestplate();
+        }
+    }
+
+    private ItemStack worn() {
+        return mc.player.getItemBySlot(EquipmentSlot.CHEST);
     }
 
     private boolean equipElytra() {
@@ -143,7 +158,7 @@ public final class ChestSwap extends Module {
     }
 
     private void wear(int inventorySlot) {
-        InventoryUtil.swap(InventoryUtil.networkSlot(inventorySlot), CHEST_SLOT);
+        InventoryUtil.swap(InventoryUtil.networkSlot(inventorySlot), InventoryUtil.CHEST_SLOT);
         if (closeInventory.isOn()) {
             mc.player.connection.send(new ServerboundContainerClosePacket(0));
         }

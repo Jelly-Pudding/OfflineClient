@@ -24,7 +24,6 @@ import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
-import net.minecraft.world.phys.shapes.CollisionContext;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -322,8 +321,7 @@ public final class Scaffold extends Module {
         if (BlockUtil.intersectsPlayer(pos)) {
             return true;
         }
-        return !mc.level.isUnobstructed(Blocks.STONE.defaultBlockState(), pos,
-            CollisionContext.empty());
+        return !BlockUtil.unobstructed(pos);
     }
 
     // A listed block still has to be something worth standing on. An empty allow

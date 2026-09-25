@@ -10,11 +10,10 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.MovementUtil;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
-import net.minecraft.world.entity.EquipmentSlot;
-import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
 
@@ -77,8 +76,7 @@ public final class AutoWasp extends Module {
         jumpTimer = 0;
         jumped = false;
         if (!pickTarget()) {
-            ChatUtil.error("AutoWasp found no player to follow.");
-            setEnabled(false);
+            disable("AutoWasp found no player to follow.");
         }
     }
 
@@ -90,7 +88,7 @@ public final class AutoWasp extends Module {
     // Read by LivingEntityMixin. The glide velocity that heads for the target
     // or null whilst the module has nothing to steer.
     public Vec3 glideVelocity() {
-        if (target == null || !inGame() || !mc.player.isFallFlying() || !wearingWings()) {
+        if (target == null || !inGame() || !mc.player.isFallFlying() || !MovementUtil.wearsGlider()) {
             return null;
         }
         Vec3 aim = aimPoint();
@@ -119,7 +117,7 @@ public final class AutoWasp extends Module {
                 return;
             }
         }
-        if (!wearingWings()) {
+        if (!MovementUtil.wearsGlider()) {
             return;
         }
         if (mc.player.isFallFlying()) {
@@ -151,8 +149,7 @@ public final class AutoWasp extends Module {
             case SWITCH_OFF -> setEnabled(false);
             case NEW_TARGET -> {
                 if (!pickTarget()) {
-                    ChatUtil.error("AutoWasp found no new player to follow.");
-                    setEnabled(false);
+                    disable("AutoWasp found no new player to follow.");
                 }
             }
             case DISCONNECT -> mc.player.connection.getConnection()
@@ -168,11 +165,6 @@ public final class AutoWasp extends Module {
             ChatUtil.message("AutoWasp is following " + EntityUtil.nameOf(target) + ".");
         }
         return target != null;
-    }
-
-    private boolean wearingWings() {
-        return LivingEntity.canGlideUsing(mc.player.getItemBySlot(EquipmentSlot.CHEST),
-            EquipmentSlot.CHEST);
     }
 
     private Vec3 aimPoint() {

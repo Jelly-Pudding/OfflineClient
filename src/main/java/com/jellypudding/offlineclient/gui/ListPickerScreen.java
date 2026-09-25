@@ -52,7 +52,7 @@ public final class ListPickerScreen<T> extends Screen {
     private final ScrollBar leftBar = new ScrollBar();
     private final ScrollBar rightBar = new ScrollBar();
 
-    private final TextField search = new TextField();
+    private final SearchField search = SearchField.sticky("type to search", this::refresh);
     private final TextInput textInput = new TextInput(this);
     private String tooltip;
 
@@ -168,9 +168,8 @@ public final class ListPickerScreen<T> extends Screen {
         Font font = OfflineClient.MC.font;
 
         context.centeredText(font, setting.getName(), width / 2, TITLE_Y, GuiTheme.text());
-        // The search box is always focused on this screen.
-        GuiScreenBase.searchField(context, font, width / 2 - SEARCH_WIDTH / 2, SEARCH_TOP,
-            SEARCH_WIDTH, search, "type to search", true, false, true, null);
+        search.render(context, font, width / 2 - SEARCH_WIDTH / 2, SEARCH_TOP, SEARCH_WIDTH,
+            mouseX, mouseY, null);
 
         renderColumn(context, font, leftX(), "available", available, leftBar, mouseX, mouseY);
         renderColumn(context, font, rightX(), "chosen", chosen, rightBar, mouseX, mouseY);
@@ -197,14 +196,7 @@ public final class ListPickerScreen<T> extends Screen {
 
     private void button(GuiGraphicsExtractor context, Font font, int x, String label,
                         boolean hovered, boolean live) {
-        int y = buttonY();
-        RenderUtil.roundedBorderedRect(context, x, y, x + BUTTON_WIDTH, y + BUTTON_HEIGHT,
-            GuiTheme.CORNER, hovered ? GuiTheme.bgRowHover() : GuiTheme.bgPanel(),
-            hovered ? GuiTheme.accent() : GuiTheme.edge());
-        context.guiRenderState.up();
-        context.centeredText(font, label, x + BUTTON_WIDTH / 2,
-            GuiTheme.textY(y, BUTTON_HEIGHT),
-            live ? (hovered ? GuiTheme.accentText() : GuiTheme.text()) : GuiTheme.textFaint());
+        GuiTheme.button(context, font, x, buttonY(), BUTTON_WIDTH, BUTTON_HEIGHT, label, hovered, live);
     }
 
     private void renderColumn(GuiGraphicsExtractor context, Font font, int x, String header,
@@ -283,10 +275,7 @@ public final class ListPickerScreen<T> extends Screen {
             refresh();
             return true;
         }
-        if (GuiScreenBase.overClear(search, mx, my, width / 2 - SEARCH_WIDTH / 2, SEARCH_TOP,
-            SEARCH_WIDTH)) {
-            search.clear();
-            refresh();
+        if (search.click(mx, my) != SearchField.Click.MISSED) {
             return true;
         }
         if (clickColumn(mx, my, leftX(), available, leftBar, true)) {
@@ -325,9 +314,16 @@ public final class ListPickerScreen<T> extends Screen {
     }
 
     @Override
+    public boolean mouseDragged(MouseButtonEvent event, double dragX, double dragY) {
+        search.drag(event.x());
+        return super.mouseDragged(event, dragX, dragY);
+    }
+
+    @Override
     public boolean mouseReleased(MouseButtonEvent event) {
         leftBar.release();
         rightBar.release();
+        search.release();
         return super.mouseReleased(event);
     }
 
@@ -353,23 +349,12 @@ public final class ListPickerScreen<T> extends Screen {
             onClose();
             return true;
         }
-        String before = search.get();
-        if (search.keyPressed(event, TextField.ANY)) {
-            if (!search.get().equals(before)) {
-                refresh();
-            }
-            return true;
-        }
-        return super.keyPressed(event);
+        return search.keyPressed(event) || super.keyPressed(event);
     }
 
     @Override
     public boolean charTyped(CharacterEvent event) {
-        if (search.charTyped((char) event.codepoint(), TextField.ANY)) {
-            refresh();
-            return true;
-        }
-        return super.charTyped(event);
+        return search.charTyped((char) event.codepoint()) || super.charTyped(event);
     }
 
     // The search here is always live and takes every character typed.

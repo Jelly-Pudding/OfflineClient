@@ -4,6 +4,9 @@ import com.jellypudding.offlineclient.modules.misc.ClickGuiModule;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.Modules;
+import com.jellypudding.offlineclient.util.RenderUtil;
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 
 // Shared colours and metrics for the ClickGUI and HUD.
 public final class GuiTheme {
@@ -44,6 +47,18 @@ public final class GuiTheme {
     public static final int RED_TEXT = 0xFFFF9090;
     // Hairline between rows in a list.
     public static final int RULE = 0x40000000;
+
+    // The favourite star.
+    public static final int STAR = 0xFFF2C744;
+    // A multiplication sign. The closest thing to a cross the font has.
+    public static final String CROSS = "×";
+    // How far outside an edge a press still grabs it for a resize.
+    public static final int GRAB = 4;
+    // A faint light laid over a row the pointer is on.
+    public static final int HOVER_WASH = 0x14FFFFFF;
+    // HUD elements draw in the untinted text colour over a dark bar track.
+    public static final int HUD_TEXT = DEFAULT_TEXT;
+    public static final int BAR_TRACK = 0xC0202020;
     public static final int SCROLL_TRACK = 0x50000000;
 
     private GuiTheme() {
@@ -170,5 +185,15 @@ public final class GuiTheme {
 
     public static int contrastText(int background) {
         return ColorUtil.luminance(background) > 0.55f ? 0xFF10121A : text();
+    }
+
+    // A rounded button with its label in the middle. A button that is not live greys out.
+    public static void button(GuiGraphicsExtractor context, Font font, int x, int y, int w, int h,
+                              String label, boolean hovered, boolean live) {
+        RenderUtil.roundedBorderedRect(context, x, y, x + w, y + h, CORNER,
+            hovered ? bgRowHover() : bgPanel(), hovered ? accent() : edge());
+        context.guiRenderState.up();
+        context.centeredText(font, label, x + w / 2, textY(y, h),
+            live ? (hovered ? accentText() : text()) : textFaint());
     }
 }

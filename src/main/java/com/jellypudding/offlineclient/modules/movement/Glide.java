@@ -9,6 +9,7 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
+import com.jellypudding.offlineclient.util.MovementUtil;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -60,14 +61,13 @@ public final class Glide extends Module {
     @Subscribe
     private void onTick(TickEvent event) {
         gliding = false;
-        if (!inGame() || mc.player.isSpectator() || mc.player.isPassenger()) {
+        if (!inGame()) {
             return;
         }
         if (pauseOnSneak.isOn() && mc.player.isShiftKeyDown()) {
             return;
         }
-        if (mc.player.onGround() || mc.player.isFallFlying() || mc.player.getAbilities().flying
-            || mc.player.isInWater() || mc.player.isInLava() || mc.player.onClimbable()) {
+        if (mc.player.onGround() || !MovementUtil.inPlainAir(mc.player)) {
             return;
         }
         Vec3 velocity = mc.player.getDeltaMovement();

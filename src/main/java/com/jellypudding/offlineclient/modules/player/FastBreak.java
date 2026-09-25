@@ -8,8 +8,10 @@ import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
+import com.jellypudding.offlineclient.setting.ListMode;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
+import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.PacketUtil;
 import net.minecraft.client.multiplayer.MultiPlayerGameMode;
 import net.minecraft.client.player.LocalPlayer;
@@ -30,10 +32,8 @@ public final class FastBreak extends Module {
 
     public enum Mode { NORMAL, HASTE, DAMAGE }
 
-    public enum ListMode { WHITELIST, BLACKLIST }
-
     // The server finishes a block once the client reports this much progress.
-    private static final float SERVER_ACCEPTS = 0.7f;
+    public static final float SERVER_ACCEPTS = 0.7f;
 
     // A block whose tick progress passes this is gone on the second server tick.
     private static final float INSTAMINE_PROGRESS = 0.5f;
@@ -64,10 +64,8 @@ public final class FastBreak extends Module {
     private final RegistryListSetting<Block> blocks = new RegistryListSetting<>("Blocks",
         "Blocks the speed up applies to. Click to pick them.", BuiltInRegistries.BLOCK, List.of())
         .under(mode, Mode.NORMAL, Mode.DAMAGE);
-    private final EnumSetting<ListMode> listMode = new EnumSetting<>("List mode",
-        "What the block list means.", ListMode.BLACKLIST)
-        .describe(ListMode.WHITELIST, "Only the listed blocks are sped up.")
-        .describe(ListMode.BLACKLIST, "Every block except the listed ones is sped up.")
+    private final EnumSetting<ListMode> listMode = ListMode.setting("List mode", ListMode.BLACKLIST,
+        "Only the listed blocks are sped up.", "Every block except the listed ones is sped up.")
         .under(mode, Mode.NORMAL, Mode.DAMAGE);
     private final NumberSetting delay = new NumberSetting("Delay",
         "Ticks between breaking blocks. Vanilla waits 5.", 0, 0, 5, 1, " ticks");
@@ -125,7 +123,7 @@ public final class FastBreak extends Module {
         float adjusted = vanilla;
         // Vanilla divides purely on being off the ground. Water has its own factor.
         if (airPenalty.isOn() && !mc.player.onGround()) {
-            adjusted *= 5;
+            adjusted *= BlockUtil.AIR_PENALTY;
         }
         if (!mode.is(Mode.NORMAL) || !allows(state.getBlock()) || !lucky(aimedBlock())) {
             return adjusted;
@@ -163,7 +161,7 @@ public final class FastBreak extends Module {
         if (hardness <= 0) {
             return after;
         }
-        float divisor = hardness * (mc.player.hasCorrectToolForDrops(state) ? 30 : 100);
+        float divisor = BlockUtil.breakDivisor(hardness, mc.player.hasCorrectToolForDrops(state));
         boolean instantBefore = before / divisor >= 1;
         boolean instantAfter = after / divisor >= 1;
         return instantBefore == instantAfter ? after : SAFE_PROGRESS * divisor;
@@ -205,7 +203,7 @@ public final class FastBreak extends Module {
     }
 
     private boolean allows(Block block) {
-        return blocks.contains(block) == listMode.is(ListMode.WHITELIST);
+        return listMode.getValue().admits(blocks.contains(block));
     }
 
     @Subscribe

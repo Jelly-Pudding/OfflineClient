@@ -1,7 +1,6 @@
 package com.jellypudding.offlineclient.modules.misc;
 
 import com.jellypudding.offlineclient.OfflineClient;
-import com.jellypudding.offlineclient.config.ConfigManager;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.module.ModuleManager;
@@ -49,10 +48,6 @@ public final class Panic extends Module {
         if (announce.isOn()) {
             ChatUtil.message("§cPanic§7. Turned off §f" + count + "§7 "
                 + (count == 1 ? "module" : "modules") + ".");
-        }
-        ConfigManager config = OfflineClient.INSTANCE.getConfigManager();
-        if (config != null) {
-            config.saveSoon();
         }
         setEnabled(false);
     }

@@ -6,8 +6,8 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.input.KeyEvent;
 
-// One line of editable text with a caret and a selection. Every place the
-// client routes typed input through this for the same editing and clipboard keys.
+// One line of editable text with a caret and a selection. Every text box in the
+// client uses it and gets the same editing and clipboard keys.
 public final class TextField {
 
     @FunctionalInterface
@@ -238,6 +238,11 @@ public final class TextField {
             position++;
         }
         moveTo(position, extend);
+    }
+
+    public int drawnWidth(Font font, int room) {
+        ensureVisible(font, room);
+        return width(firstVisible, lastFitting(firstVisible, room));
     }
 
     // Draws the visible run of text with the selection behind it and the

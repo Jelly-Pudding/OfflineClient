@@ -1,6 +1,5 @@
 package com.jellypudding.offlineclient.modules.misc;
 
-import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.Render2DEvent;
 import com.jellypudding.offlineclient.gui.HudEditorScreen;
@@ -26,8 +25,8 @@ import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.Setting;
 
-// The overlay itself lives in the hud package. This module owns the elements and
-// their settings save and show in the ClickGUI like any other module.
+// The overlay itself lives in the hud package. The elements belong to this module.
+// Their settings save and show in the ClickGUI like any other.
 public final class HudModule extends Module {
 
     private final HudManager manager = new HudManager();
@@ -65,20 +64,20 @@ public final class HudModule extends Module {
     // A key on the HUD opens the editor. The switch in the GUI still turns it all off.
     @Override
     public void onKeybind() {
-        OfflineClient.MC.schedule(() -> OfflineClient.MC.gui.setScreen(new HudEditorScreen(manager)));
+        mc.schedule(() -> mc.gui.setScreen(new HudEditorScreen(manager)));
     }
 
     // The windowed ClickGUI draws the client name in the same corner as the watermark.
     private boolean cornerTaken() {
-        return OfflineClient.MC.gui.screen() instanceof WindowGuiScreen
+        return mc.gui.screen() instanceof WindowGuiScreen
             && watermark.xPercent() < 25 && watermark.yPercent() < 25;
     }
 
     @Subscribe
     private void onRender2D(Render2DEvent event) {
-        if (OfflineClient.MC.gui.screen() instanceof HudEditorScreen || cornerTaken()) {
+        if (mc.gui.screen() instanceof HudEditorScreen || cornerTaken()) {
             return;
         }
-        manager.render(event.getContext(), mc.font, false);
+        manager.render(event.getContext(), mc.font);
     }
 }

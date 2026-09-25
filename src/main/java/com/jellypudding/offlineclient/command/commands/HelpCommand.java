@@ -68,14 +68,12 @@ public final class HelpCommand extends Command {
     }
 
     private static void describe(CommandManager manager, String prefix, String name) {
-        for (Command command : manager.getCommands()) {
-            if (command.matches(name)) {
-                ChatUtil.message("§b" + prefix + command.getUsage() + " §8» §7"
-                    + command.getDescription());
-                return;
-            }
+        Command command = manager.find(name);
+        if (command == null) {
+            ChatUtil.error("There is no command called " + name);
+            return;
         }
-        ChatUtil.error("There is no command called " + name);
+        ChatUtil.message("§b" + prefix + command.getUsage() + " §8» §7" + command.getDescription());
     }
 
     @Override

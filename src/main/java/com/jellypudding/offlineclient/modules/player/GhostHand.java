@@ -6,6 +6,8 @@ import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
+import com.jellypudding.offlineclient.util.BlockUtil;
+import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.SwingMode;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -16,7 +18,6 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.ShulkerBoxBlock;
 import net.minecraft.world.phys.BlockHitResult;
-import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
@@ -24,11 +25,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-// Opens containers through walls.
 public final class GhostHand extends Module {
-
-    // The delay a normal right click leaves behind.
-    private static final int USE_DELAY = 4;
 
     private final BoolSetting everything = new BoolSetting("Any container",
         "Reach through walls for anything that opens a screen.", true);
@@ -76,8 +73,8 @@ public final class GhostHand extends Module {
         if (mc.player.isSpectator() || mc.player.isShiftKeyDown()) {
             return;
         }
-        if (mc.hitResult instanceof BlockHitResult hit && hit.getType() == HitResult.Type.BLOCK
-            && wanted(hit.getBlockPos())) {
+        BlockHitResult aimed = BlockUtil.aimedBlock();
+        if (aimed != null && wanted(aimed.getBlockPos())) {
             return;
         }
 
@@ -96,7 +93,7 @@ public final class GhostHand extends Module {
             }
             BlockHitResult hit = new BlockHitResult(Vec3.atCenterOf(pos), Direction.UP, pos, true);
             // Cancelling skips the delay the game would have set itself.
-            mc.rightClickDelay = USE_DELAY;
+            mc.rightClickDelay = InputUtil.USE_DELAY;
             InteractionResult result = mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND, hit);
             if (result.consumesAction()) {
                 SwingMode.swingArm(InteractionHand.MAIN_HAND);

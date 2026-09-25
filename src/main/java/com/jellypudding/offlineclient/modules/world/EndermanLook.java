@@ -23,7 +23,6 @@ public final class EndermanLook extends Module {
     // How wide the vanilla stare test is before distance widens it.
     private static final double STARE_SPREAD = 0.025;
 
-    // Straight down.
     private static final float FLOOR_PITCH = 90f;
 
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",

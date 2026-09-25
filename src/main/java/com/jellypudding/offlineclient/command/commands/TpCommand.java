@@ -7,7 +7,6 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
 
-import java.util.OptionalDouble;
 
 public final class TpCommand extends Command {
 
@@ -29,24 +28,10 @@ public final class TpCommand extends Command {
             usage();
             return;
         }
-        OptionalDouble x = coordinate(args[0], player.getX());
-        OptionalDouble y = x.isPresent() ? coordinate(args[1], player.getY()) : OptionalDouble.empty();
-        OptionalDouble z = y.isPresent() ? coordinate(args[2], player.getZ()) : OptionalDouble.empty();
-        if (z.isPresent()) {
-            hopTo(new Vec3(x.getAsDouble(), y.getAsDouble(), z.getAsDouble()), "§7Moved you there.");
+        Vec3 spot = coordinates(args, 0, player.position());
+        if (spot != null) {
+            hopTo(spot, "§7Moved you there.");
         }
-    }
-
-    // A tilde means the spot you are already at on that axis.
-    private static OptionalDouble coordinate(String text, double here) {
-        if (!text.startsWith("~")) {
-            return number(text);
-        }
-        if (text.length() == 1) {
-            return OptionalDouble.of(here);
-        }
-        OptionalDouble offset = number(text.substring(1));
-        return offset.isPresent() ? OptionalDouble.of(here + offset.getAsDouble()) : offset;
     }
 
     private static void toPlayer(LocalPlayer self, String name) {

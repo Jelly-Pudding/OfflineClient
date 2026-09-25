@@ -59,14 +59,12 @@ public final class InstantBunker extends Module {
             return;
         }
         if (!mc.player.onGround()) {
-            ChatUtil.error("You need to be standing on the ground.");
-            setEnabled(false);
+            disable("You need to be standing on the ground.");
             return;
         }
         ItemStack held = mc.player.getMainHandItem();
         if (!(held.getItem() instanceof BlockItem)) {
-            ChatUtil.error("Hold the blocks in your main hand.");
-            setEnabled(false);
+            disable("Hold the blocks in your main hand.");
             return;
         }
         if (held.getCount() < SHELL.length && !mc.player.getAbilities().instabuild) {

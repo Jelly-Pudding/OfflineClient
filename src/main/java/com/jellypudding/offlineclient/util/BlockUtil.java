@@ -12,6 +12,8 @@ import net.minecraft.world.InteractionResult;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.effect.MobEffects;
@@ -73,7 +75,7 @@ public final class BlockUtil {
 
     // The vanilla break time formula. Off the ground mines five times slower and
     // the wrong tool takes over three times as long.
-    private static final float AIR_PENALTY = 5;
+    public static final float AIR_PENALTY = 5;
     private static final int RIGHT_TOOL_DIVISOR = 30;
     private static final int WRONG_TOOL_DIVISOR = 100;
 
@@ -124,27 +126,9 @@ public final class BlockUtil {
 
     // Nearest first.
     public static List<BlockPos> positionsWithin(double range) {
-        range = Math.min(range, MAX_SCAN_RANGE);
-        Vec3 eye = MC.player.getEyePosition();
-        double limitSq = range * range;
-        int r = (int) Math.ceil(range);
-        BlockPos center = BlockPos.containing(eye);
         // Sorting on a fresh Vec3 per comparison allocates millions at this radius.
         List<Scored> scored = new ArrayList<>();
-        for (int dx = -r; dx <= r; dx++) {
-            for (int dy = -r; dy <= r; dy++) {
-                for (int dz = -r; dz <= r; dz++) {
-                    BlockPos pos = center.offset(dx, dy, dz);
-                    double ox = pos.getX() + 0.5 - eye.x;
-                    double oy = pos.getY() + 0.5 - eye.y;
-                    double oz = pos.getZ() + 0.5 - eye.z;
-                    double distanceSq = ox * ox + oy * oy + oz * oz;
-                    if (distanceSq <= limitSq) {
-                        scored.add(new Scored(pos, distanceSq));
-                    }
-                }
-            }
-        }
+        scan(range, (pos, distanceSq) -> scored.add(new Scored(pos.immutable(), distanceSq)));
         scored.sort(Comparator.comparingDouble(Scored::distanceSq));
         List<BlockPos> result = new ArrayList<>(scored.size());
         for (Scored entry : scored) {
@@ -153,9 +137,14 @@ public final class BlockUtil {
         return result;
     }
 
-    // Every position in range in no particular order. The same mutable
+    @FunctionalInterface
+    private interface ScanVisitor {
+        void visit(BlockPos.MutableBlockPos pos, double distanceSq);
+    }
+
+    // Every block whose middle lies within the range of the eyes. The same mutable
     // position is handed over each time and is only valid inside the call.
-    public static void forEachWithin(double range, Consumer<BlockPos> action) {
+    private static void scan(double range, ScanVisitor visitor) {
         range = Math.min(range, MAX_SCAN_RANGE);
         Vec3 eye = MC.player.getEyePosition();
         BlockPos centre = BlockPos.containing(eye);
@@ -168,12 +157,19 @@ public final class BlockUtil {
                     double ox = centre.getX() + dx + 0.5 - eye.x;
                     double oy = centre.getY() + dy + 0.5 - eye.y;
                     double oz = centre.getZ() + dz + 0.5 - eye.z;
-                    if (ox * ox + oy * oy + oz * oz <= limitSq) {
-                        action.accept(cursor.set(centre.getX() + dx, centre.getY() + dy, centre.getZ() + dz));
+                    double distanceSq = ox * ox + oy * oy + oz * oz;
+                    if (distanceSq <= limitSq) {
+                        visitor.visit(cursor.set(centre.getX() + dx, centre.getY() + dy, centre.getZ() + dz),
+                            distanceSq);
                     }
                 }
             }
         }
+    }
+
+    // Every position in range in no particular order. The position is only valid inside the call.
+    public static void forEachWithin(double range, Consumer<BlockPos> action) {
+        scan(range, (pos, distanceSq) -> action.accept(pos));
     }
 
     public static Iterable<BlockPos> positionsAround(BlockPos center, int radius) {
@@ -192,6 +188,18 @@ public final class BlockUtil {
     public static boolean intersectsPlayer(BlockPos pos) {
         AABB block = new AABB(pos);
         return MC.player.getBoundingBox().intersects(block);
+    }
+
+    // The block under the crosshair or null when it rests on anything else.
+    public static BlockHitResult aimedBlock() {
+        return MC.hitResult instanceof BlockHitResult hit && hit.getType() == HitResult.Type.BLOCK ? hit : null;
+    }
+
+    // True whilst any part of the box is inside a cobweb. As in vanilla a web that
+    // only touches the outside of the box does not count.
+    public static boolean inCobweb(Entity entity) {
+        return entity.level().getBlockStates(entity.getBoundingBox().deflate(1.0E-5))
+            .anyMatch(state -> state.is(Blocks.COBWEB));
     }
 
     // Places against the neighbour in the support direction. True when the click was taken.
@@ -224,6 +232,27 @@ public final class BlockUtil {
     public static boolean placeAny(BlockPos target, boolean rotate, boolean swing) {
         Direction support = findPlaceSupport(target);
         return support != null ? place(target, support, rotate, swing) : placeDirect(target, rotate, swing);
+    }
+
+    // Holds the hotbar slot for one placement and swaps back straight after. A slot of
+    // minus one places nothing.
+    public static boolean placeFrom(InventoryUtil.SlotSwap slots, int slot, BlockPos target, boolean rotate) {
+        if (slot == -1) {
+            return false;
+        }
+        slots.select(slot);
+        boolean placed = placeAny(target, rotate, true);
+        slots.restore();
+        return placed;
+    }
+
+    public static boolean isWebbable(BlockPos pos) {
+        return isReplaceable(pos) && state(pos).getBlock() != Blocks.COBWEB;
+    }
+
+    public static boolean placeWeb(InventoryUtil.SlotSwap slots, BlockPos pos, boolean rotate) {
+        return isWebbable(pos)
+            && placeFrom(slots, InventoryUtil.hotbarSlot(stack -> stack.is(Items.COBWEB)), pos, rotate);
     }
 
     // The server accepts a click on a replaceable block as a placement there.
@@ -281,36 +310,48 @@ public final class BlockUtil {
 
     // The closest position within the range that passes the test.
     public static BlockPos nearestWithin(double range, Predicate<BlockPos> test) {
-        range = Math.min(range, MAX_SCAN_RANGE);
-        Vec3 eye = MC.player.getEyePosition();
-        BlockPos centre = BlockPos.containing(eye);
-        int r = (int) Math.ceil(range);
-        double bestDistanceSq = range * range;
-        BlockPos best = null;
-        for (int dx = -r; dx <= r; dx++) {
-            for (int dy = -r; dy <= r; dy++) {
-                for (int dz = -r; dz <= r; dz++) {
-                    double ox = centre.getX() + dx + 0.5 - eye.x;
-                    double oy = centre.getY() + dy + 0.5 - eye.y;
-                    double oz = centre.getZ() + dz + 0.5 - eye.z;
-                    double distanceSq = ox * ox + oy * oy + oz * oz;
-                    // Anything further out than the best hit cannot win.
-                    if (distanceSq > bestDistanceSq) {
-                        continue;
-                    }
-                    BlockPos pos = centre.offset(dx, dy, dz);
-                    if (test.test(pos)) {
-                        bestDistanceSq = distanceSq;
-                        best = pos;
-                    }
-                }
+        BlockPos[] best = {null};
+        double[] bestDistanceSq = {Double.MAX_VALUE};
+        scan(range, (pos, distanceSq) -> {
+            // Anything further out than the best hit cannot win and is never tested.
+            if (distanceSq > bestDistanceSq[0]) {
+                return;
             }
-        }
-        return best;
+            BlockPos candidate = pos.immutable();
+            if (test.test(candidate)) {
+                bestDistanceSq[0] = distanceSq;
+                best[0] = candidate;
+            }
+        });
+        return best[0];
     }
 
-    private static boolean isBlastProof(BlockPos pos) {
-        return state(pos).getBlock().getExplosionResistance() >= BLAST_PROOF;
+    public static boolean isBlastProof(BlockPos pos) {
+        return isBlastProof(state(pos));
+    }
+
+    // A crystal or a bed cannot break it.
+    public static boolean isBlastProof(BlockState state) {
+        return state.getBlock().getExplosionResistance() >= BLAST_PROOF;
+    }
+
+    // How well a block shields whoever stands beside it from a blast.
+    public enum Wall {
+        OPEN, WEAK, BLAST_PROOF, UNBREAKABLE;
+
+        public boolean holds() {
+            return this == BLAST_PROOF || this == UNBREAKABLE;
+        }
+    }
+
+    public static Wall wallOf(BlockState state) {
+        if (!blocksMotion(state)) {
+            return Wall.OPEN;
+        }
+        if (state.getBlock().defaultDestroyTime() < 0) {
+            return Wall.UNBREAKABLE;
+        }
+        return isBlastProof(state) ? Wall.BLAST_PROOF : Wall.WEAK;
     }
 
     // True whilst the player stands in a hole walled with blast proof blocks.
@@ -391,12 +432,29 @@ public final class BlockUtil {
         return spots;
     }
 
-    // A spot only counts when a full block would actually fit in it.
     private static void addOpen(List<BlockPos> spots, BlockPos pos) {
-        if (isReplaceable(pos) && MC.level.isUnobstructed(
-            Blocks.OBSIDIAN.defaultBlockState(), pos, CollisionContext.empty())) {
+        if (blockFits(pos)) {
             spots.add(pos);
         }
+    }
+
+    // No entity stands where the block would go. The server refuses a placement into one.
+    public static boolean unobstructed(BlockPos pos, BlockState state) {
+        return MC.level.isUnobstructed(state, pos, CollisionContext.empty());
+    }
+
+    public static boolean unobstructed(BlockPos pos) {
+        return unobstructed(pos, Blocks.OBSIDIAN.defaultBlockState());
+    }
+
+    // A full block would go in. The spot is replaceable and nobody stands in it.
+    public static boolean blockFits(BlockPos pos) {
+        return isReplaceable(pos) && unobstructed(pos);
+    }
+
+    // The items place the wall kinds as well.
+    public static int findTorchSlot() {
+        return findBlockSlot(block -> block == Blocks.TORCH || block == Blocks.SOUL_TORCH);
     }
 
     // Clicks a block face. Vanilla skips a block interaction whilst the player sneaks.
@@ -502,6 +560,15 @@ public final class BlockUtil {
         return best;
     }
 
+    // How far away a spot may be. One out of sight gets the walls range.
+    public static double reachFor(Vec3 aim, double range, double wallsRange) {
+        return canSee(aim) ? range : wallsRange;
+    }
+
+    public static boolean inReach(BlockPos pos, double range, double wallsRange) {
+        return distanceTo(pos) <= reachFor(Vec3.atCenterOf(pos), range, wallsRange);
+    }
+
     // True when nothing solid sits between the eyes and the point.
     public static boolean canSee(Vec3 point) {
         BlockHitResult hit = MC.level.clip(new ClipContext(MC.player.getEyePosition(), point,
@@ -545,8 +612,8 @@ public final class BlockUtil {
         return state(pos).getDestroyProgress(MC.player, MC.level, pos) >= 1;
     }
 
-    // Progress one tick of mining with this tool would make. The tool need not be held.
-    // Follows the vanilla dig speed maths. A packet miner can time a tool it swapped away.
+    // Progress one tick of mining with this tool would make by the vanilla dig speed maths.
+    // The tool need not be held and a packet miner can time one it swapped away.
     public static float breakDelta(ItemStack tool, BlockPos pos) {
         BlockState state = state(pos);
         float hardness = state.getDestroySpeed(MC.level, pos);
@@ -578,7 +645,12 @@ public final class BlockUtil {
             speed /= AIR_PENALTY;
         }
         boolean rightTool = !state.requiresCorrectToolForDrops() || tool.isCorrectToolForDrops(state);
-        return speed / hardness / (rightTool ? RIGHT_TOOL_DIVISOR : WRONG_TOOL_DIVISOR);
+        return speed / breakDivisor(hardness, rightTool);
+    }
+
+    // The break speed over this is the share of the block mined each tick.
+    public static float breakDivisor(float hardness, boolean rightTool) {
+        return hardness * (rightTool ? RIGHT_TOOL_DIVISOR : WRONG_TOOL_DIVISOR);
     }
 
     public static int breakTicks(BlockPos pos) {

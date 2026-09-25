@@ -12,12 +12,10 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
-import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.TargetPriority;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
 
@@ -116,7 +114,7 @@ public final class AutoWeb extends Module {
         for (BlockPos spot : spotsFor(target)) {
             if (BlockUtil.state(spot).getBlock() == Blocks.COBWEB) {
                 done.add(spot);
-            } else if (webbable(spot) && inReach(spot)) {
+            } else if (BlockUtil.isWebbable(spot) && inReach(spot)) {
                 pending.add(spot);
             }
         }
@@ -129,7 +127,7 @@ public final class AutoWeb extends Module {
             if (placed >= perTick.getInt()) {
                 break;
             }
-            if (placeWeb(spot, rotate.isOn(), slots)) {
+            if (BlockUtil.placeWeb(slots, spot, rotate.isOn())) {
                 placed++;
             }
         }
@@ -145,7 +143,7 @@ public final class AutoWeb extends Module {
         Vec3 pace = predict.isOn() ? EntityUtil.velocityOf(target) : Vec3.ZERO;
         // Vertical movement is a jump. The web wants the block they land in.
         pace = new Vec3(pace.x, 0, pace.z);
-        int ahead = pace.horizontalDistanceSqr() > 0.0004 ? lead.getInt() : 0;
+        int ahead = EntityUtil.isMoving(pace) ? lead.getInt() : 0;
         for (int tick = ahead; tick >= 0; tick--) {
             addColumn(spots, BlockPos.containing(feet.add(pace.scale(tick))));
         }
@@ -167,26 +165,7 @@ public final class AutoWeb extends Module {
     }
 
     private boolean inReach(BlockPos pos) {
-        double reach = BlockUtil.canSee(Vec3.atCenterOf(pos)) ? range.getValue() : wallsRange.getValue();
-        return BlockUtil.distanceTo(pos) <= reach;
-    }
-
-    static boolean webbable(BlockPos pos) {
-        return BlockUtil.isReplaceable(pos) && BlockUtil.state(pos).getBlock() != Blocks.COBWEB;
-    }
-
-    static boolean placeWeb(BlockPos pos, boolean rotate, SlotSwap slots) {
-        if (!webbable(pos)) {
-            return false;
-        }
-        int slot = InventoryUtil.hotbarSlot(stack -> stack.is(Items.COBWEB));
-        if (slot == -1) {
-            return false;
-        }
-        slots.select(slot);
-        boolean placed = BlockUtil.placeAny(pos, rotate, true);
-        slots.restore();
-        return placed;
+        return BlockUtil.inReach(pos, range.getValue(), wallsRange.getValue());
     }
 
     @Subscribe

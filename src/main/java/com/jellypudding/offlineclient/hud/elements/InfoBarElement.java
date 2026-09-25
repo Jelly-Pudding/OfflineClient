@@ -4,6 +4,7 @@ import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.hud.HudElement;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.util.RenderUtil;
+import net.minecraft.SharedConstants;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.ChatScreen;
@@ -15,9 +16,6 @@ import java.util.List;
 import java.util.Locale;
 
 public final class InfoBarElement extends HudElement {
-
-    // Ticks a second. Speed reads better a second than a tick.
-    private static final double TICKS = 20;
 
     private final BoolSetting coords = new BoolSetting("Coordinates",
         "Show where you are.", true);
@@ -62,7 +60,7 @@ public final class InfoBarElement extends HudElement {
         if (speed.isOn()) {
             Vec3 velocity = player.getDeltaMovement();
             parts.add(String.format(Locale.ROOT, "%.1f m/s",
-                velocity.horizontalDistance() * TICKS));
+                velocity.horizontalDistance() * SharedConstants.TICKS_PER_SECOND));
         }
         if (fps.isOn()) {
             parts.add(OfflineClient.MC.getFps() + " fps");

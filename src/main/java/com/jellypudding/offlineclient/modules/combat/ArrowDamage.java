@@ -8,6 +8,7 @@ import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.HeldPacket;
 import com.jellypudding.offlineclient.util.MoveGate;
 import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;
 import net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket;
@@ -34,15 +35,20 @@ public final class ArrowDamage extends Module {
     private final BoolSetting tridents = new BoolSetting("Tridents",
         "Also boosts a thrown trident. One that flies too far is easily lost.", false);
 
-    private ServerboundPlayerActionPacket held;
+    private final HeldPacket<ServerboundPlayerActionPacket> held = new HeldPacket<>();
     private Stage stage = Stage.IDLE;
     private int waited;
-    private boolean releasing;
 
     public ArrowDamage() {
         super("ArrowDamage", "Makes your arrows fly faster and hit harder.", Category.COMBAT);
         addSettings(strength, tridents);
         searchTags("arrow dmg", "bow damage", "arrow speed");
+    }
+
+    // A shot caught mid step still goes out.
+    @Override
+    protected void onDisable() {
+        fire();
     }
 
     private boolean boosts(ItemStack stack) {
@@ -53,7 +59,7 @@ public final class ArrowDamage extends Module {
     // home each need a tick of their own and the release waits for both.
     @Subscribe
     private void onPacketSend(PacketSendEvent event) {
-        if (releasing || mc.player == null
+        if (held.releasing() || mc.player == null
             || !(event.getPacket() instanceof ServerboundPlayerActionPacket packet)
             || packet.getAction() != ServerboundPlayerActionPacket.Action.RELEASE_USE_ITEM
             || !boosts(mc.player.getMainHandItem())) {
@@ -62,10 +68,9 @@ public final class ArrowDamage extends Module {
         if (stage != Stage.IDLE) {
             return;
         }
-        held = packet;
+        held.hold(event, packet);
         stage = Stage.BACK;
         waited = 0;
-        event.cancel();
         mc.player.connection.send(new ServerboundPlayerCommandPacket(mc.player,
             ServerboundPlayerCommandPacket.Action.START_SPRINTING));
     }
@@ -108,18 +113,8 @@ public final class ArrowDamage extends Module {
     }
 
     private void fire() {
-        ServerboundPlayerActionPacket packet = held;
-        held = null;
         stage = Stage.IDLE;
         waited = 0;
-        if (packet == null || mc.player == null) {
-            return;
-        }
-        releasing = true;
-        try {
-            mc.player.connection.send(packet);
-        } finally {
-            releasing = false;
-        }
+        held.release();
     }
 }

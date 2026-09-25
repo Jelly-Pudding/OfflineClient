@@ -9,11 +9,11 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.Swap;
+import com.jellypudding.offlineclient.util.ItemUtil;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.effect.MobEffect;
-import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.item.BowItem;
 import net.minecraft.world.item.CrossbowItem;
@@ -93,32 +93,20 @@ public final class Quiver extends Module {
         }
         chosen = label(mc.player.getInventory().getItem(want));
 
-        // An arrow in the offhand beats everything else the game looks at.
-        if (isArrow(mc.player.getOffhandItem())) {
-            if (!ItemStack.isSameItemSameComponents(mc.player.getOffhandItem(),
-                mc.player.getInventory().getItem(want))) {
-                move(InventoryUtil.networkSlot(want), InventoryUtil.OFFHAND_SLOT);
-            }
+        int first = InventoryUtil.firstArrowSlot();
+        int wanted = InventoryUtil.networkSlot(want);
+        if (first == -1 || first == wanted || (first == InventoryUtil.OFFHAND_SLOT
+            && ItemStack.isSameItemSameComponents(mc.player.getOffhandItem(),
+                mc.player.getInventory().getItem(want)))) {
             return;
         }
-
-        int first = firstArrow();
-        if (first == -1 || first == want) {
-            return;
-        }
-        move(InventoryUtil.networkSlot(want), InventoryUtil.networkSlot(first));
+        move(wanted, first);
     }
 
     private void move(int from, int to) {
-        Swap result = InventoryUtil.swap(from, to);
-        if (result == Swap.REFUSED) {
-            return;
+        if (cursor.swap(from, to) != Swap.REFUSED) {
+            timer = delay.getInt();
         }
-        if (result == Swap.STRANDED) {
-            // Whatever the arrow displaced had nowhere to go.
-            cursor.hold(from);
-        }
-        timer = delay.getInt();
     }
 
     private boolean holdsLauncher() {
@@ -136,10 +124,6 @@ public final class Quiver extends Module {
         return isLauncher(mc.player.getMainHandItem()) && mc.options.keyUse.isDown();
     }
 
-    private int firstArrow() {
-        return InventoryUtil.findSlot(Quiver::isArrow, InventoryUtil.WHOLE_INVENTORY);
-    }
-
     // Inventory index of the arrow that should be fired next.
     private int findWanted() {
         for (Identifier id : effects.getValue()) {
@@ -147,11 +131,10 @@ public final class Quiver extends Module {
                 continue;
             }
             MobEffect effect = BuiltInRegistries.MOB_EFFECT.getValue(id);
-            for (int i = 0; i < InventoryUtil.WHOLE_INVENTORY; i++) {
-                ItemStack stack = mc.player.getInventory().getItem(i);
-                if (stack.is(Items.TIPPED_ARROW) && hasEffect(stack, effect)) {
-                    return i;
-                }
+            int slot = InventoryUtil.findSlot(stack -> stack.is(Items.TIPPED_ARROW)
+                && ItemUtil.carriesEffect(stack, effect), InventoryUtil.WHOLE_INVENTORY);
+            if (slot != -1) {
+                return slot;
             }
         }
         if (!plainFallback.isOn()) {
@@ -160,23 +143,6 @@ public final class Quiver extends Module {
         return InventoryUtil.findSlot(Items.ARROW, InventoryUtil.WHOLE_INVENTORY);
     }
 
-    private static boolean hasEffect(ItemStack stack, MobEffect effect) {
-        PotionContents contents = stack.get(DataComponents.POTION_CONTENTS);
-        if (contents == null) {
-            return false;
-        }
-        for (MobEffectInstance instance : contents.getAllEffects()) {
-            if (instance.getEffect().value() == effect) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static boolean isArrow(ItemStack stack) {
-        return stack.is(Items.ARROW) || stack.is(Items.TIPPED_ARROW)
-            || stack.is(Items.SPECTRAL_ARROW);
-    }
 
     private static String label(ItemStack stack) {
         if (!stack.is(Items.TIPPED_ARROW)) {

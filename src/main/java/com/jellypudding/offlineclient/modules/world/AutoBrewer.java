@@ -6,13 +6,12 @@ import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
-import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.MenuClicks;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.inventory.BrewingStandMenu;
-import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -26,7 +25,6 @@ import java.util.Deque;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.function.Predicate;
 
 // Brews the chosen potion whilst a brewing stand is open using the game's own
 // brewing rules. Any potion a server allows can be made.
@@ -142,7 +140,7 @@ public final class AutoBrewer extends Module {
 
     @Override
     public String getSuffix() {
-        return brewed == 0 ? null : brewed + " brewed";
+        return count(brewed, "brewed");
     }
 
     @Override
@@ -165,8 +163,7 @@ public final class AutoBrewer extends Module {
             settle = 0;
             plan = buildPlan();
             if (plan == null) {
-                ChatUtil.error("That potion cannot be brewed from water on this server.");
-                setEnabled(false);
+                disable("That potion cannot be brewed from water on this server.");
                 return;
             }
         }
@@ -194,10 +191,8 @@ public final class AutoBrewer extends Module {
             if (!isWaterBottle(stand.slots.get(i).getItem())) {
                 brewed++;
             }
-            quickMove(stand, i);
-            if (!stand.slots.get(i).getItem().isEmpty()) {
-                ChatUtil.error("No room in the inventory for the finished potions.");
-                setEnabled(false);
+            if (!MenuClicks.quickMoved(stand, i)) {
+                disable("No room in the inventory for the finished potions.");
                 return;
             }
         }
@@ -209,13 +204,12 @@ public final class AutoBrewer extends Module {
             if (!stand.slots.get(i).getItem().isEmpty()) {
                 continue;
             }
-            int slot = findPlayerSlot(stand, AutoBrewer::isWaterBottle);
+            int slot = MenuClicks.firstSlot(stand, FIRST_PLAYER_SLOT, AutoBrewer::isWaterBottle);
             if (slot == -1) {
-                ChatUtil.error("Out of water bottles.");
-                setEnabled(false);
+                disable("Out of water bottles.");
                 return;
             }
-            moveOne(stand, slot, i);
+            MenuClicks.moveSome(stand, slot, i, 1);
         }
         planIndex = 0;
         stage = Stage.BREW;
@@ -224,10 +218,8 @@ public final class AutoBrewer extends Module {
     private void brew(BrewingStandMenu stand) {
         // The leftover of the last ingredient goes home before the next one.
         if (!stand.slots.get(INGREDIENT_SLOT).getItem().isEmpty()) {
-            quickMove(stand, INGREDIENT_SLOT);
-            if (!stand.slots.get(INGREDIENT_SLOT).getItem().isEmpty()) {
-                ChatUtil.error("No room in the inventory for the leftover ingredient.");
-                setEnabled(false);
+            if (!MenuClicks.quickMoved(stand, INGREDIENT_SLOT)) {
+                disable("No room in the inventory for the leftover ingredient.");
             }
             return;
         }
@@ -236,23 +228,21 @@ public final class AutoBrewer extends Module {
             return;
         }
         if (stand.getFuel() == 0) {
-            int fuel = findPlayerSlot(stand, stack -> stack.is(Items.BLAZE_POWDER));
+            int fuel = MenuClicks.firstSlot(stand, FIRST_PLAYER_SLOT, stack -> stack.is(Items.BLAZE_POWDER));
             if (fuel == -1) {
-                ChatUtil.error("Out of blaze powder.");
-                setEnabled(false);
+                disable("Out of blaze powder.");
                 return;
             }
-            moveOne(stand, fuel, FUEL_SLOT);
+            MenuClicks.moveSome(stand, fuel, FUEL_SLOT, 1);
             return;
         }
         Item ingredient = plan.get(planIndex);
-        int slot = findPlayerSlot(stand, stack -> stack.is(ingredient));
+        int slot = MenuClicks.firstSlot(stand, FIRST_PLAYER_SLOT, stack -> stack.is(ingredient));
         if (slot == -1) {
-            ChatUtil.error("Out of " + ingredient.getName(ingredient.getDefaultInstance()).getString() + ".");
-            setEnabled(false);
+            disable("Out of " + ingredient.getName(ingredient.getDefaultInstance()).getString() + ".");
             return;
         }
-        moveOne(stand, slot, INGREDIENT_SLOT);
+        MenuClicks.moveSome(stand, slot, INGREDIENT_SLOT, 1);
         planIndex++;
     }
 
@@ -307,30 +297,5 @@ public final class AutoBrewer extends Module {
 
     private static boolean isWaterBottle(ItemStack stack) {
         return stack.is(Items.POTION) && contentsOf(stack).is(Potions.WATER);
-    }
-
-    private static int findPlayerSlot(BrewingStandMenu stand, Predicate<ItemStack> test) {
-        for (int i = FIRST_PLAYER_SLOT; i < stand.slots.size(); i++) {
-            if (test.test(stand.slots.get(i).getItem())) {
-                return i;
-            }
-        }
-        return -1;
-    }
-
-    private void quickMove(BrewingStandMenu stand, int slot) {
-        mc.gameMode.handleContainerInput(stand.containerId, slot, 0, ContainerInput.QUICK_MOVE, mc.player);
-    }
-
-    // Picks the stack up and drops a single item into the target with a right click.
-    private void moveOne(BrewingStandMenu stand, int from, int to) {
-        if (!stand.getCarried().isEmpty()) {
-            return;
-        }
-        mc.gameMode.handleContainerInput(stand.containerId, from, 0, ContainerInput.PICKUP, mc.player);
-        mc.gameMode.handleContainerInput(stand.containerId, to, 1, ContainerInput.PICKUP, mc.player);
-        if (!stand.getCarried().isEmpty()) {
-            mc.gameMode.handleContainerInput(stand.containerId, from, 0, ContainerInput.PICKUP, mc.player);
-        }
     }
 }

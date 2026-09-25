@@ -10,16 +10,21 @@ import net.minecraft.util.ARGB;
 import net.minecraft.util.FormattedCharSequence;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-// The chat drawn whilst the chat screen is closed.
-@Mixin(targets = "net.minecraft.client.gui.components.ChatComponent$DrawingBackgroundGraphicsAccess")
-public abstract class ChatBackgroundGraphicsMixin {
+// The chat is drawn by one of these whilst the chat screen is closed and the other whilst it is open.
+@Mixin(targets = {
+    "net.minecraft.client.gui.components.ChatComponent$DrawingBackgroundGraphicsAccess",
+    "net.minecraft.client.gui.components.ChatComponent$DrawingFocusedGraphicsAccess"
+})
+public abstract class ChatGraphicsMixin {
 
+    @Unique
     private static final String ACCEPT = "Lnet/minecraft/client/gui/ActiveTextCollector;accept"
         + "(Lnet/minecraft/client/gui/TextAlignment;II"
         + "Lnet/minecraft/client/gui/ActiveTextCollector$Parameters;"
@@ -48,8 +53,7 @@ public abstract class ChatBackgroundGraphicsMixin {
     }
 
     @Inject(method = "handleMessage", at = @At("TAIL"))
-    private void afterText(int top, float opacity, FormattedCharSequence text,
-                           CallbackInfoReturnable<Boolean> cir) {
+    private void afterText(CallbackInfoReturnable<Boolean> cir) {
         BetterChat betterChat = Modules.get(BetterChat.class);
         if (betterChat != null) {
             betterChat.endLine();

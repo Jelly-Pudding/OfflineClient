@@ -3,16 +3,13 @@ package com.jellypudding.offlineclient.util;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.Setting;
+import net.minecraft.SharedConstants;
 
 import java.util.Random;
 
 // The wait between one hit and the next.
 // The spread keeps the gap from landing on the same number every time.
 public final class AttackTimer {
-
-    // Milliseconds in one game tick.
-    private static final long TICK_MS = 50;
-    private static final float FULL_TPS = 20;
 
     private final NumberSetting delay = new NumberSetting("Hit delay",
         "Ticks to wait between hits.", 0, 0, 20, 1, " ticks").min(0);
@@ -41,9 +38,9 @@ public final class AttackTimer {
         int spread = randomise.getInt();
         double ticks = delay.getInt() + (spread > 0 ? random.nextInt(spread + 1) : 0);
         if (tpsSync.isOn()) {
-            ticks *= FULL_TPS / Math.max(1, TickRate.INSTANCE.tps());
+            ticks *= SharedConstants.TICKS_PER_SECOND / Math.max(1, TickRate.INSTANCE.tps());
         }
-        readyAt = System.currentTimeMillis() + Math.round(ticks * TICK_MS);
+        readyAt = System.currentTimeMillis() + Math.round(ticks * SharedConstants.MILLIS_PER_TICK);
     }
 
     // Lets the next hit through straight away.

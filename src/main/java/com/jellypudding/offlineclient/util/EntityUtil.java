@@ -5,6 +5,7 @@ import com.jellypudding.offlineclient.modules.misc.NameProtect;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.tags.TagKey;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
@@ -28,7 +29,9 @@ import net.minecraft.world.entity.monster.piglin.AbstractPiglin;
 import net.minecraft.world.entity.monster.zombie.ZombieVillager;
 import net.minecraft.world.entity.npc.villager.AbstractVillager;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.GameType;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.function.Predicate;
@@ -36,17 +39,19 @@ import java.util.function.Predicate;
 public final class EntityUtil {
 
     // Health points in one heart.
-    private static final double HEART = 2;
+    public static final float HEART = 2;
+
+    private static final double MOVING_SQR = 0.02 * 0.02;
 
     // Friends are drawn in blue wherever they appear.
     public static final int FRIEND_COLOR = 0xFF4080FF;
-    public static final int ITEM_COLOR = 0xFFFFE040;
+    private static final int ITEM_COLOR = 0xFFFFE040;
     // Anything that hunts the player.
-    public static final int HOSTILE_COLOR = 0xFFFF5030;
-    public static final int PASSIVE_COLOR = 0xFF60E060;
-    public static final int WATER_COLOR = 0xFF40C8FF;
-    public static final int AMBIENT_COLOR = 0xFFB080FF;
-    public static final int MOB_COLOR = 0xFFFF8020;
+    private static final int HOSTILE_COLOR = 0xFFFF5030;
+    private static final int PASSIVE_COLOR = 0xFF60E060;
+    private static final int WATER_COLOR = 0xFF40C8FF;
+    private static final int AMBIENT_COLOR = 0xFFB080FF;
+    private static final int MOB_COLOR = 0xFFFF8020;
 
     // Blocks at which a player reads as far away. Closer fades towards red.
     private static final float FADE_DISTANCE = 20;
@@ -72,6 +77,12 @@ public final class EntityUtil {
     // The most the bar can hold with the absorption on top.
     public static float totalMaxHealth(LivingEntity entity) {
         return entity.getMaxHealth() + entity.getAbsorptionAmount();
+    }
+
+    // How much of its health is left from nought to one. Nought when it has none to lose.
+    public static float healthShare(LivingEntity entity) {
+        float max = totalMaxHealth(entity);
+        return max <= 0 ? 0 : Math.clamp(totalHealth(entity) / max, 0f, 1f);
     }
 
     // Zero hearts turns the check off.
@@ -128,6 +139,19 @@ public final class EntityUtil {
         String name = nameOf(player);
         NameProtect nameProtect = Modules.get(NameProtect.class);
         return nameProtect == null || name == null ? name : nameProtect.display(name);
+    }
+
+    // S C A or Sp for a game mode and a question mark when it is not known.
+    public static String gameModeLetter(GameType mode) {
+        if (mode == null) {
+            return "?";
+        }
+        return switch (mode) {
+            case SURVIVAL -> "S";
+            case CREATIVE -> "C";
+            case ADVENTURE -> "A";
+            case SPECTATOR -> "Sp";
+        };
     }
 
     public static boolean isFriend(Entity entity) {
@@ -206,6 +230,11 @@ public final class EntityUtil {
         return eye.distanceTo(closest);
     }
 
+    // Faster than a fiftieth of a block a tick along the ground. Slower is standing still.
+    public static boolean isMoving(Vec3 velocity) {
+        return velocity.horizontalDistanceSqr() > MOVING_SQR;
+    }
+
     // The distance covered on the last tick. The client keeps no velocity field.
     public static Vec3 velocityOf(Entity entity) {
         return new Vec3(entity.getX() - entity.xOld, entity.getY() - entity.yOld,
@@ -227,13 +256,27 @@ public final class EntityUtil {
         return Math.toDegrees(Math.acos(cosine));
     }
 
+    // A right click on the middle of the entity. The hand swings when the game takes it.
+    public static boolean interact(Entity target, InteractionHand hand, boolean rotate) {
+        Vec3 centre = target.getBoundingBox().getCenter();
+        if (rotate) {
+            BlockUtil.faceVector(centre);
+        }
+        Minecraft mc = OfflineClient.MC;
+        if (!mc.gameMode.interact(mc.player, target, new EntityHitResult(target, centre), hand).consumesAction()) {
+            return false;
+        }
+        SwingMode.swingArm(hand);
+        return true;
+    }
+
     public static AABB lerpedBox(Entity entity, float partialTicks) {
         Vec3 lerped = entity.getPosition(partialTicks);
         return entity.getBoundingBox().move(lerped.subtract(entity.position()));
     }
 
     // Friends are blue. Players fade red to green with distance. Items are yellow.
-    // Hostile mobs are red passive mobs green sea life blue and bats purple.
+    // Hostile mobs are red and passive mobs green. Sea life is blue and bats are purple.
     public static int colorOf(Entity entity) {
         if (entity instanceof Player) {
             return isFriend(entity) ? FRIEND_COLOR : distanceColor(entity);

@@ -32,7 +32,7 @@ public final class UseHold {
         return true;
     }
 
-    // Lets the key go without lifting a finger really on it.
+    // Lets go of the key. A key the player really holds stays down.
     public void release() {
         InputUtil.release(MC.options.keyUse);
         begin();

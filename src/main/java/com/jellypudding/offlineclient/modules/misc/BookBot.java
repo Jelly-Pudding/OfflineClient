@@ -1,6 +1,6 @@
 package com.jellypudding.offlineclient.modules.misc;
 
-import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.config.DataFiles;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
@@ -96,7 +96,7 @@ public final class BookBot extends Module {
 
     @Override
     public String getSuffix() {
-        return written == 0 ? null : written + " written";
+        return count(written, "written");
     }
 
     @Override
@@ -199,7 +199,7 @@ public final class BookBot extends Module {
 
     // Null when the file cannot be read. A message says why.
     private List<String> fromFile() {
-        Path path = OfflineClient.MC.gameDirectory.toPath().resolve("offlineclient").resolve(file.getValue());
+        Path path = DataFiles.path(file.getValue());
         String text;
         try {
             text = Files.readString(path);

@@ -8,7 +8,6 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.TextSetting;
-import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.mojang.authlib.GameProfile;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -58,8 +57,7 @@ public final class FakePlayer extends Module {
     @Override
     protected void onEnable() {
         if (!inGame()) {
-            ChatUtil.error("Join a world before spawning a fake player.");
-            setEnabled(false);
+            disable("Join a world before spawning a fake player.");
             return;
         }
         int count = copies.getInt();
@@ -101,6 +99,9 @@ public final class FakePlayer extends Module {
     // The level refuses two entities with the same UUID. Every body gets a fresh one.
     public static final class Body extends RemotePlayer {
 
+        // The arms reach past the box. A ghost stays hidden until the camera is clear of them.
+        private static final double CAMERA_CLEARANCE = 0.5;
+
         // Read live. A skin that finishes downloading later still shows up.
         private final Supplier<PlayerSkin> skin;
         private final UUID infoOwner;
@@ -136,8 +137,8 @@ public final class FakePlayer extends Module {
             }
 
             copyPosition(source);
-            yRotO = getYRot();
-            xRotO = getXRot();
+            // Without this the first frame draws the body sliding in from the world origin.
+            setOldPosAndRot();
             yHeadRot = source.yHeadRot;
             yHeadRotO = yHeadRot;
             yBodyRot = source.yBodyRot;
@@ -159,9 +160,9 @@ public final class FakePlayer extends Module {
             }
         }
 
-        // Read by EntityRendererMixin. A ghost vanishes whilst the camera stands inside it.
-        public boolean hidesAroundCamera() {
-            return ghost;
+        // Read by EntityRendererMixin. A ghost vanishes whilst the camera is inside or beside it.
+        public boolean hidesFrom(double cameraX, double cameraY, double cameraZ) {
+            return ghost && getBoundingBox().inflate(CAMERA_CLEARANCE).contains(cameraX, cameraY, cameraZ);
         }
 
         @Override

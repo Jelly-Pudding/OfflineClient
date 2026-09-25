@@ -8,10 +8,10 @@ import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.render.BoxStyle;
 import com.jellypudding.offlineclient.render.DrawBatch;
+import com.jellypudding.offlineclient.render.JoinedCells;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ChunkScanner;
-import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
@@ -45,9 +45,8 @@ public final class VoidEsp extends Module {
 
     private final ChunkScanner<Hole> scanner = new ChunkScanner<>();
 
-    // The holes the neighbour keys were built from.
-    private List<Hole> known = List.of();
-    private final LongOpenHashSet keys = new LongOpenHashSet();
+    private final JoinedCells<Hole> joined = new JoinedCells<>(
+        hole -> BlockPos.asLong(hole.x(), hole.y(), hole.z()));
 
     // The scan settings the cached chunks were built with.
     private int lastLayers = -1;
@@ -64,7 +63,7 @@ public final class VoidEsp extends Module {
 
     @Override
     public String getSuffix() {
-        return scanner.size() == 0 ? null : String.valueOf(scanner.size());
+        return count(scanner.size());
     }
 
     @Override
@@ -79,8 +78,7 @@ public final class VoidEsp extends Module {
 
     private void forget() {
         scanner.reset();
-        known = List.of();
-        keys.clear();
+        joined.clear();
     }
 
     @Subscribe
@@ -143,18 +141,14 @@ public final class VoidEsp extends Module {
         DrawBatch batch = event.getBatch();
         List<Hole> holes = scanner.results();
         boolean join = connected.isOn();
-        if (join && holes != known) {
-            known = holes;
-            keys.clear();
-            for (Hole hole : holes) {
-                keys.add(BlockPos.asLong(hole.x(), hole.y(), hole.z()));
-            }
+        if (join) {
+            joined.update(holes);
         }
         for (Hole hole : holes) {
             AABB box = new AABB(hole.x(), hole.y(), hole.z(),
                 hole.x() + 1, hole.y() + 1, hole.z() + 1);
             BoxStyle style = hole.roof() ? roofStyle : floorStyle;
-            style.drawJoined(batch, box, join ? DrawBatch.sharedSides(keys, BlockPos.asLong(hole.x(), hole.y(), hole.z())) : 0, true);
+            style.drawJoined(batch, box, join ? joined.hiddenSides(hole) : 0, true);
         }
     }
 }

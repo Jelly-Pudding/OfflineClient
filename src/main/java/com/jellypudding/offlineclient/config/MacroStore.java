@@ -3,7 +3,6 @@ package com.jellypudding.offlineclient.config;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.KeyPressEvent;
@@ -11,8 +10,6 @@ import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.mojang.blaze3d.platform.InputConstants;
 
-import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -33,21 +30,15 @@ public final class MacroStore {
     private final Path file;
     private final List<Macro> macros = new ArrayList<>();
 
-    private MacroStore(Path folder) {
-        this.file = folder.resolve("macros.json");
+    private MacroStore(Path file) {
+        this.file = file;
         load();
         OfflineClient.INSTANCE.getEventBus().register(this);
     }
 
     public static synchronized MacroStore get() {
         if (instance == null) {
-            Path folder = OfflineClient.MC.gameDirectory.toPath().resolve("offlineclient");
-            try {
-                Files.createDirectories(folder);
-            } catch (IOException e) {
-                OfflineClient.LOG.error("Failed to create the macro folder", e);
-            }
-            instance = new MacroStore(folder);
+            instance = new MacroStore(DataFiles.path("macros.json"));
         }
         return instance;
     }
@@ -116,23 +107,20 @@ public final class MacroStore {
     }
 
     private void load() {
-        if (!Files.exists(file)) {
-            return;
-        }
-        try {
-            JsonElement root = JsonParser.parseString(Files.readString(file));
-            for (JsonElement element : root.getAsJsonArray()) {
-                JsonObject object = element.getAsJsonObject();
-                List<String> lines = new ArrayList<>();
-                for (JsonElement line : object.getAsJsonArray("lines")) {
-                    lines.add(line.getAsString());
-                }
-                macros.add(new Macro(object.get("name").getAsString(),
-                    object.get("key").getAsInt(), lines));
+        DataFiles.readJson(file, MacroStore::decode).ifPresent(macros::addAll);
+    }
+
+    private static List<Macro> decode(JsonElement root) {
+        List<Macro> decoded = new ArrayList<>();
+        for (JsonElement element : root.getAsJsonArray()) {
+            JsonObject object = element.getAsJsonObject();
+            List<String> lines = new ArrayList<>();
+            for (JsonElement line : object.getAsJsonArray("lines")) {
+                lines.add(line.getAsString());
             }
-        } catch (Exception e) {
-            OfflineClient.LOG.error("Failed to read macros", e);
+            decoded.add(new Macro(object.get("name").getAsString(), object.get("key").getAsInt(), lines));
         }
+        return decoded;
     }
 
     private void save() {
@@ -146,6 +134,6 @@ public final class MacroStore {
             object.add("lines", lines);
             root.add(object);
         }
-        ConfigManager.write(file, root);
+        DataFiles.writeJson(file, root);
     }
 }

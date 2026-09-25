@@ -40,7 +40,6 @@ import com.jellypudding.offlineclient.command.commands.XRayCommand;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.ChatSendEvent;
 import com.jellypudding.offlineclient.module.Module;
-import com.jellypudding.offlineclient.setting.Setting;
 import com.jellypudding.offlineclient.util.ChatUtil;
 
 import java.util.ArrayList;
@@ -136,16 +135,10 @@ public final class CommandManager {
             ChatUtil.toggled(module);
             return true;
         }
-        for (Command command : commands) {
-            if (command.matches(name)) {
-                try {
-                    command.execute(args);
-                } catch (Exception e) {
-                    ChatUtil.error("Error: " + e.getMessage());
-                    OfflineClient.LOG.error("Command {} failed", name, e);
-                }
-                return true;
-            }
+        Command command = find(name);
+        if (command != null) {
+            execute(command, args);
+            return true;
         }
 
         if (module != null && args.length > 0) {
@@ -160,17 +153,22 @@ public final class CommandManager {
         String[] setArgs = new String[args.length + 1];
         setArgs[0] = moduleName;
         System.arraycopy(args, 0, setArgs, 1, args.length);
-        try {
-            find("set").execute(setArgs);
-        } catch (Exception e) {
-            ChatUtil.error("Error: " + e.getMessage());
-            OfflineClient.LOG.error("Command set failed", e);
-        }
+        execute(find("set"), setArgs);
         return true;
     }
 
+    // A command that throws tells the player why and the log where.
+    private static void execute(Command command, String[] args) {
+        try {
+            command.execute(args);
+        } catch (Exception e) {
+            ChatUtil.error(String.valueOf(e.getMessage()));
+            OfflineClient.LOG.error("Command {} failed", command.getName(), e);
+        }
+    }
+
     // Null when nothing answers to the name or one of its aliases.
-    private Command find(String name) {
+    public Command find(String name) {
         for (Command command : commands) {
             if (command.matches(name)) {
                 return command;
@@ -220,21 +218,12 @@ public final class CommandManager {
         return command.complete(tokens, index, current);
     }
 
-
-
-
-
     public static List<String> moduleIds() {
         List<String> ids = new ArrayList<>();
         for (Module module : OfflineClient.INSTANCE.getModuleManager().getAll()) {
             ids.add(module.getName().toLowerCase(Locale.ROOT));
         }
         return ids;
-    }
-
-    // Lowercase without spaces.
-    public static String settingId(Setting<?> setting) {
-        return setting.getName().replace(" ", "").toLowerCase(Locale.ROOT);
     }
 
     // The options that carry on from what has been typed.

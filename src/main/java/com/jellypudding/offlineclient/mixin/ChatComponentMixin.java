@@ -10,6 +10,7 @@ import net.minecraft.client.multiplayer.chat.GuiMessageTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MessageSignature;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
@@ -19,12 +20,14 @@ import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 @Mixin(ChatComponent.class)
 public abstract class ChatComponentMixin {
 
+    @Unique
     private static final String ADD_MESSAGE = "addMessage"
         + "(Lnet/minecraft/network/chat/Component;"
         + "Lnet/minecraft/network/chat/MessageSignature;"
         + "Lnet/minecraft/client/multiplayer/chat/GuiMessageSource;"
         + "Lnet/minecraft/client/multiplayer/chat/GuiMessageTag;)V";
 
+    @Unique
     private static final String EXTRACT =
         "extractRenderState(Lnet/minecraft/client/gui/components/ChatComponent$ChatGraphicsAccess;"
             + "IILnet/minecraft/client/gui/components/ChatComponent$DisplayMode;)V";
@@ -85,7 +88,7 @@ public abstract class ChatComponentMixin {
 
     // Called on a disconnect and by the debug clear key.
     @Inject(method = "clearMessages(Z)V", at = @At("HEAD"), cancellable = true)
-    private void onClearMessages(boolean history, CallbackInfo ci) {
+    private void onClearMessages(CallbackInfo ci) {
         BetterChat betterChat = Modules.get(BetterChat.class);
         if (betterChat != null && betterChat.keepsHistory()) {
             ci.cancel();

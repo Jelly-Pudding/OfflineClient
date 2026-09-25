@@ -11,6 +11,7 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.MovementUtil;
 import com.jellypudding.offlineclient.util.PacketUtil;
+import net.minecraft.SharedConstants;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
@@ -50,12 +51,11 @@ public final class Jesus extends Module {
     private static final double PACKET_WOBBLE = 0.05;
 
     // Fire Resistance with less than this left is not worth swimming on.
-    private static final int SHORT_RESISTANCE_TICKS = 15 * 20;
+    private static final int SHORT_RESISTANCE_TICKS = 15 * SharedConstants.TICKS_PER_SECOND;
 
     // A NoCheatPlus bypass. Ticks of a plain walk between hops and the hop
     // itself and how the sent height creeps down each tick.
     private static final int NCP_HOP_EVERY = 15;
-    private static final double NCP_WALK_SPEED = 0.2873;
     private static final double NCP_HOP = 0.08;
     private static final double NCP_SINK = 0.02;
     private static final double NCP_SINK_STEP = 0.0001;
@@ -380,7 +380,7 @@ public final class Jesus extends Module {
         Vec3 velocity = mc.player.getDeltaMovement();
         if (++swimmingTicks < NCP_HOP_EVERY) {
             if (mc.player.onGround()) {
-                Vec3 heading = MovementUtil.inputDirection().scale(NCP_WALK_SPEED);
+                Vec3 heading = MovementUtil.inputDirection().scale(MovementUtil.WALK_SPEED);
                 mc.player.setDeltaMovement(heading.x, velocity.y, heading.z);
             }
             return;

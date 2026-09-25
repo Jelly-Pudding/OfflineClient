@@ -24,7 +24,7 @@ public class PlayerTabOverlayMixin {
         cancellable = true)
     private void onExtractPingIcon(GuiGraphicsExtractor context, int width, int x, int y,
                                    PlayerInfo info, CallbackInfo ci) {
-        BetterTab tab = BetterTab.get();
+        BetterTab tab = Modules.get(BetterTab.class);
         if (tab != null && tab.showsPing()) {
             tab.drawPing(context, width, x, y, info);
             ci.cancel();
@@ -39,14 +39,14 @@ public class PlayerTabOverlayMixin {
         if (nameProtect != null) {
             original = nameProtect.filter(original);
         }
-        BetterTab tab = BetterTab.get();
+        BetterTab tab = Modules.get(BetterTab.class);
         return tab == null ? original : tab.decorate(original, info);
     }
 
     // Vanilla caps the list at eighty sorted players.
     @ModifyConstant(method = "getPlayerInfos()Ljava/util/List;", constant = @Constant(longValue = 80L))
     private long onPlayerLimit(long original) {
-        BetterTab tab = BetterTab.get();
+        BetterTab tab = Modules.get(BetterTab.class);
         return tab == null ? original : tab.playerLimit();
     }
 
@@ -55,7 +55,7 @@ public class PlayerTabOverlayMixin {
         method = "extractRenderState(Lnet/minecraft/client/gui/GuiGraphicsExtractor;ILnet/minecraft/world/scores/Scoreboard;Lnet/minecraft/world/scores/Objective;)V",
         constant = @Constant(intValue = 13))
     private int onPingRoom(int original) {
-        BetterTab tab = BetterTab.get();
+        BetterTab tab = Modules.get(BetterTab.class);
         return tab == null ? original : tab.pingRoom(original);
     }
 
@@ -64,7 +64,7 @@ public class PlayerTabOverlayMixin {
         method = "extractRenderState(Lnet/minecraft/client/gui/GuiGraphicsExtractor;ILnet/minecraft/world/scores/Scoreboard;Lnet/minecraft/world/scores/Objective;)V",
         constant = @Constant(intValue = 20))
     private int onColumnHeight(int original) {
-        BetterTab tab = BetterTab.get();
+        BetterTab tab = Modules.get(BetterTab.class);
         return tab == null ? original : tab.columnHeight();
     }
 }

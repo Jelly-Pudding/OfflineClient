@@ -11,6 +11,7 @@ import com.jellypudding.offlineclient.util.EntityFilter;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.TargetFilter;
 import com.jellypudding.offlineclient.util.RotationManager;
+import net.minecraft.SharedConstants;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
@@ -24,9 +25,6 @@ import java.util.List;
 public final class AimAssist extends Module {
 
     public enum AimPoint { AUTO, HEAD, CENTRE, FEET }
-
-    // Ticks a second. Turn speed is given per second.
-    private static final double TICKS = 20;
 
     private final NumberSetting range = new NumberSetting("Range",
         "How far away a target can be.", 4.5, 1, 6, 0.05, " blocks").min(1).max(6);
@@ -138,15 +136,6 @@ public final class AimAssist extends Module {
     }
 
     private void turnTowards(Vec3 point) {
-        float step = (float) (speed.getValue() / TICKS);
-        mc.player.setYRot(approach(mc.player.getYRot(), RotationManager.yawTo(point), step));
-        mc.player.setXRot(Mth.clamp(approach(mc.player.getXRot(),
-            RotationManager.pitchTo(point), step), -90f, 90f));
-    }
-
-    // Lands exactly on the wanted angle once it is within one step.
-    private static float approach(float from, float to, float step) {
-        float difference = Mth.wrapDegrees(to - from);
-        return Math.abs(difference) <= step ? to : from + Math.copySign(step, difference);
+        RotationManager.turnCamera(point, (float) (speed.getValue() / SharedConstants.TICKS_PER_SECOND));
     }
 }

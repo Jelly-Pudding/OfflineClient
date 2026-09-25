@@ -77,7 +77,7 @@ public final class CrystalAura extends Module {
     // How far ahead of a moving target the damage is scored.
     private static final double LEAD_TICKS = 1;
 
-    // Ticks a placed spot stays on the own crystal list.
+    // Ticks a placed spot stays on the list of our own crystals.
     private static final int OWN_MEMORY = 100;
 
     // Ticks between attempts to pull crystals up from the backpack.
@@ -216,7 +216,8 @@ public final class CrystalAura extends Module {
         "How long the server may go quiet before that counts as lag.", 1000, 250, 5000, 250, " ms").min(50)
         .under(pauseOnLag);
     private final ChoiceListSetting pauseModules = new ChoiceListSetting("Pause modules",
-        "Holds off whilst any of these modules is on.", CrystalAura::moduleNames);
+        "Holds off whilst any of these modules is on.",
+        () -> OfflineClient.INSTANCE.getModuleManager().togglableNames(this));
     private final NumberSetting pauseHealth = new NumberSetting("Pause health",
         "Holds off whilst your health plus absorption is at or below this. Zero never pauses.", 5, 0, 36, 0.5);
 
@@ -326,16 +327,6 @@ public final class CrystalAura extends Module {
         addSettings(renderPlace, placeTime, renderBreak, breakTime, smoothness, gradientHeight,
             fadeTime, showDamage, damageColor, damageScale);
         searchTags("end crystal", "cpvp", "ca");
-    }
-
-    private static List<String> moduleNames() {
-        List<String> names = new ArrayList<>();
-        for (Module module : OfflineClient.INSTANCE.getModuleManager().getAll()) {
-            if (module.isTogglable()) {
-                names.add(module.getName());
-            }
-        }
-        return names;
     }
 
     @Override
@@ -594,7 +585,7 @@ public final class CrystalAura extends Module {
             return false;
         }
         Vec3 centre = crystal.getBoundingBox().getCenter();
-        double reach = BlockUtil.canSee(centre) ? breakRange.getValue() : breakWallsRange.getValue();
+        double reach = BlockUtil.reachFor(centre, breakRange.getValue(), breakWallsRange.getValue());
         if (EntityUtil.reachDistance(mc.player, crystal) > reach) {
             return false;
         }
@@ -710,7 +701,7 @@ public final class CrystalAura extends Module {
             if (oldPlacement.isOn() && !BlockUtil.state(above.above()).isAir()) {
                 continue;
             }
-            double reach = BlockUtil.canSee(crystalPos) ? placeRange.getValue() : placeWallsRange.getValue();
+            double reach = BlockUtil.reachFor(crystalPos, placeRange.getValue(), placeWallsRange.getValue());
             if (eye.distanceTo(crystalPos) > reach) {
                 continue;
             }
@@ -818,7 +809,7 @@ public final class CrystalAura extends Module {
         if (bestSlot == -1 || base + bestBonus <= 0) {
             return false;
         }
-        select(bestSlot);
+        slots.select(bestSlot);
         return true;
     }
 
@@ -854,7 +845,7 @@ public final class CrystalAura extends Module {
         }
         int slot = InventoryUtil.hotbarSlot(stack -> stack.is(Items.END_CRYSTAL));
         if (slot != -1) {
-            select(slot);
+            slots.select(slot);
             return InteractionHand.MAIN_HAND;
         }
         refillCrystals();
@@ -873,14 +864,6 @@ public final class CrystalAura extends Module {
             }
         }
         return false;
-    }
-
-    // A hotbar swap the server has to hear about before a hit is believed.
-    private void select(int slot) {
-        if (mc.player.getInventory().getSelectedSlot() != slot) {
-            switchTimer = switchDelay.getInt();
-        }
-        slots.select(slot);
     }
 
     private void refillCrystals() {
@@ -944,7 +927,7 @@ public final class CrystalAura extends Module {
             return;
         }
         if (slot < InventoryUtil.HOTBAR_SIZE) {
-            select(slot);
+            slots.select(slot);
         } else if (!loan.select(slot)) {
             status = "(no room for obsidian)";
             return;

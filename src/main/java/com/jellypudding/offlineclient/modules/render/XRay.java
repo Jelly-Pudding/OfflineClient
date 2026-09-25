@@ -1,13 +1,9 @@
 package com.jellypudding.offlineclient.modules.render;
 
-import com.jellypudding.offlineclient.event.Subscribe;
-import com.jellypudding.offlineclient.event.events.TickEvent;
-import com.jellypudding.offlineclient.module.Category;
-import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.module.MeshFilterModule;
 import com.jellypudding.offlineclient.setting.BoolSetting;
-import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
-import com.jellypudding.offlineclient.util.ChunkRebuild;
+import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -22,10 +18,7 @@ import java.util.Set;
 
 // The chunk mesher asks this module which blocks to keep.
 // Chunks are rebuilt whenever a setting changes.
-public final class XRay extends Module {
-
-    // The chunk mesher reads this once per block.
-    private static volatile XRay instance;
+public final class XRay extends MeshFilterModule {
 
     private final RegistryListSetting<Block> blocks = new RegistryListSetting<>("Blocks",
         "The blocks that stay visible.", BuiltInRegistries.BLOCK,
@@ -44,25 +37,18 @@ public final class XRay extends Module {
         "Show water.", false);
     private final BoolSetting exposedOnly = new BoolSetting("Exposed only",
         "Only show ores that touch air or a cave.", false);
-    private final NumberSetting opacity = new NumberSetting("Opacity",
-        "How visible the hidden blocks stay.",
-        0, 0, 100, 5, "%").max(100);
 
     // Alpha of the block being meshed on the current worker thread. Minus one
     // means the block is untouched.
     private static final ThreadLocal<Integer> MESH_ALPHA = ThreadLocal.withInitial(() -> -1);
 
-    // Read from worker threads and replaced whole.
-    private volatile Set<Block> visible = Set.of();
+    // Read from worker threads.
     private volatile boolean exposed;
-    private volatile int alpha;
-    private final ChunkRebuild rebuild = new ChunkRebuild();
 
     public XRay() {
-        super("XRay", "See ores through the ground.", Category.RENDER);
+        super("XRay", "See ores through the ground.", "How visible the hidden blocks stay.");
         addSettings(blocks, lava, water, exposedOnly, opacity);
         searchTags("ore", "wallhack");
-        instance = this;
     }
 
     // Puts a block on the list or takes it off. True when it went on.
@@ -75,19 +61,14 @@ public final class XRay extends Module {
         return true;
     }
 
-    // Null before the client has started.
-    public static XRay get() {
-        return instance;
-    }
-
     // The alpha the chunk mesher gives this block. Minus one leaves it alone
     // and zero skips it. WallHack drives the same path with the list turned round.
     public static int meshAlphaFor(BlockGetter level, BlockState state, BlockPos pos) {
-        XRay xray = instance;
+        XRay xray = Modules.get(XRay.class);
         if (xray != null && xray.isEnabled()) {
             return xray.alphaFor(level, state, pos);
         }
-        WallHack wallHack = WallHack.get();
+        WallHack wallHack = Modules.get(WallHack.class);
         return wallHack == null ? -1 : wallHack.alphaFor(state.getBlock());
     }
 
@@ -106,50 +87,32 @@ public final class XRay extends Module {
 
     @Override
     public String getSuffix() {
-        int a = alpha;
-        return a > 0 ? opacity.getValueString() : null;
+        return seeThrough() ? opacity.getValueString() : null;
     }
 
     @Override
-    protected void onEnable() {
-        snapshot();
-        ChunkRebuild.now();
-    }
-
-    @Override
-    protected void onDisable() {
-        ChunkRebuild.now();
-    }
-
-    @Subscribe
-    private void onTick(TickEvent event) {
-        rebuild.tick(snapshot());
-    }
-
-    // True if anything changed.
-    private boolean snapshot() {
-        Set<Block> next = new HashSet<>(blocks.resolved());
+    protected Set<Block> chosenBlocks() {
+        Set<Block> chosen = new HashSet<>(blocks.resolved());
         if (lava.isOn()) {
-            next.add(Blocks.LAVA);
+            chosen.add(Blocks.LAVA);
         }
         if (water.isOn()) {
-            next.add(Blocks.WATER);
+            chosen.add(Blocks.WATER);
         }
-        int nextAlpha = (int) Math.round(opacity.getValue() / 100.0 * 255.0);
-        boolean nextExposed = exposedOnly.isOn();
+        return chosen;
+    }
 
-        boolean changed = !next.equals(visible) || nextAlpha != alpha || nextExposed != exposed;
-        if (changed) {
-            visible = Set.copyOf(next);
-            alpha = nextAlpha;
-            exposed = nextExposed;
-        }
+    @Override
+    protected boolean snapshotExtra() {
+        boolean next = exposedOnly.isOn();
+        boolean changed = next != exposed;
+        exposed = next;
         return changed;
     }
 
     // A null position skips the exposed only check.
     public boolean isVisible(BlockGetter level, Block block, BlockPos pos) {
-        if (!visible.contains(block)) {
+        if (!listed(block)) {
             return false;
         }
         if (exposed && pos != null && level != null) {
@@ -160,20 +123,11 @@ public final class XRay extends Module {
 
     // Ignores the exposed only check.
     public boolean isVisible(Block block) {
-        return visible.contains(block);
+        return listed(block);
     }
 
-    // Minus one leaves the block alone and zero skips it. Anything else is the
-    // alpha for a see through version.
     public int alphaFor(BlockGetter level, BlockState state, BlockPos pos) {
-        if (!isEnabled()) {
-            return -1;
-        }
-        if (isVisible(level, state.getBlock(), pos)) {
-            return -1;
-        }
-        int a = alpha;
-        return a >= 255 ? -1 : a;
+        return isEnabled() && !isVisible(level, state.getBlock(), pos) ? hiddenAlpha() : -1;
     }
 
     private static boolean isExposed(BlockGetter level, BlockPos pos) {

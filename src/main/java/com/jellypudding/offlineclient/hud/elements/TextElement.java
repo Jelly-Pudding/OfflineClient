@@ -7,6 +7,7 @@ import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.TextSetting;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.ServerInfo;
+import net.minecraft.SharedConstants;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.player.LocalPlayer;
@@ -18,7 +19,6 @@ import java.util.Objects;
 // A line of your own with a handful of words swapped in for live numbers.
 public final class TextElement extends HudElement {
 
-    private static final double TICKS = 20;
     // A Minecraft day in ticks and the ticks in one of its hours. Day starts at six.
     private static final long DAY_TICKS = 24000;
     private static final long HOUR_TICKS = 1000;
@@ -79,7 +79,7 @@ public final class TextElement extends HudElement {
             case "dimension" -> player.level().dimension().identifier().getPath();
             case "direction" -> player.getDirection().getName();
             case "speed" -> String.format(Locale.ROOT, "%.1f",
-                player.getDeltaMovement().horizontalDistance() * TICKS);
+                player.getDeltaMovement().horizontalDistance() * SharedConstants.TICKS_PER_SECOND);
             case "health" -> String.valueOf(Math.round(EntityUtil.totalHealth(player)));
             case "server" -> Objects.requireNonNullElse(ServerInfo.address(), "singleplayer");
             case "time" -> dayTime(player);

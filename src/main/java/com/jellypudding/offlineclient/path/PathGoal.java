@@ -2,7 +2,6 @@ package com.jellypudding.offlineclient.path;
 
 import net.minecraft.core.BlockPos;
 
-import java.util.List;
 
 // Where a search is trying to get to. The heuristic is measured in blocks and
 // must never read higher than the real walk or the search stops finding the
@@ -46,32 +45,6 @@ public interface PathGoal {
         @Override
         public double heuristic(BlockPos pos) {
             return Math.max(0, straightLine(pos, target) - radius);
-        }
-    }
-
-    // Within the radius of any block on the list. An empty list is never reached.
-    record AnyOf(List<BlockPos> targets, double radius) implements PathGoal {
-
-        public AnyOf {
-            targets = List.copyOf(targets);
-        }
-
-        @Override
-        public boolean reached(BlockPos pos) {
-            return nearest(pos) <= radius;
-        }
-
-        @Override
-        public double heuristic(BlockPos pos) {
-            return Math.max(0, nearest(pos) - radius);
-        }
-
-        private double nearest(BlockPos pos) {
-            double best = Double.MAX_VALUE;
-            for (BlockPos target : targets) {
-                best = Math.min(best, straightLine(pos, target));
-            }
-            return best;
         }
     }
 

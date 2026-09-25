@@ -16,9 +16,6 @@ public final class AntiSpam extends Module {
 
     private static final Pattern COUNTER = Pattern.compile(" x(\\d{1,8})$");
 
-    // A clock stamp on the front of a stored line. BetterChat adds one and some servers do too.
-    private static final Pattern STAMP = Pattern.compile("^\\[\\d{2}:\\d{2}(?::\\d{2})?\\] ");
-
     private final NumberSetting depth = new NumberSetting("Depth",
         "How many recent lines are checked.", 4, 1, 20, 1).max(50);
 
@@ -28,24 +25,19 @@ public final class AntiSpam extends Module {
         searchTags("chat", "duplicate");
     }
 
-    // A stored line may already carry a clock stamp. Compare the text without it.
-    private static String body(String line) {
-        return STAMP.matcher(line).replaceFirst("");
-    }
-
-    // Returns the line to add.
+    // A repeat of a recent line takes that line out and comes back with a count on the end.
     public Component fold(ChatComponent chat, Component message) {
         if (!isEnabled()) {
             return message;
         }
-        String incoming = body(message.getString());
+        String incoming = BetterChat.withoutStamp(message.getString());
         if (incoming.isBlank()) {
             return message;
         }
         List<GuiMessage> all = chat.allMessages;
         int max = Math.min(depth.getInt(), all.size());
         for (int i = 0; i < max; i++) {
-            String existing = body(all.get(i).content().getString());
+            String existing = BetterChat.withoutStamp(all.get(i).content().getString());
             int count = 0;
             if (existing.equals(incoming)) {
                 count = 2;

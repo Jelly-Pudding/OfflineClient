@@ -15,6 +15,7 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
+import com.jellypudding.offlineclient.util.Cooldowns;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.ExplosionUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
@@ -31,16 +32,12 @@ import net.minecraft.world.entity.boss.enderdragon.EndCrystal;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
-import net.minecraft.world.phys.shapes.CollisionContext;
 
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.SortedSet;
 
@@ -85,7 +82,8 @@ public final class Surround extends Module {
     private final BoolSetting protect = new BoolSetting("Protect",
         "Hits any crystal sitting on an open side before it can be set off.", true);
     private final ChoiceListSetting disableModules = new ChoiceListSetting("Disable modules",
-        "Modules switched off whilst this is on.", Surround::moduleNames);
+        "Modules switched off whilst this is on.",
+        () -> OfflineClient.INSTANCE.getModuleManager().togglableNames(this));
     private final BoolSetting restoreModules = new BoolSetting("Restore modules",
         "Switches those modules back on when this turns off.", true)
         .under(disableModules, () -> disableModules.size() > 0);
@@ -110,7 +108,7 @@ public final class Surround extends Module {
     private final ColorSetting openColor = new ColorSetting("Open colour",
         "A side with nothing in it.", 0, false).under(render);
 
-    private final Map<Integer, Integer> hitCrystals = new HashMap<>();
+    private final Cooldowns<Integer> hitCrystals = new Cooldowns<>();
     private final List<Module> disabled = new ArrayList<>();
     private int timer;
     private BlockPos anchor;
@@ -126,20 +124,11 @@ public final class Surround extends Module {
         searchTags("obsidian", "crystal", "hole");
     }
 
-    private static List<String> moduleNames() {
-        List<String> names = new ArrayList<>();
-        for (Module module : OfflineClient.INSTANCE.getModuleManager().getAll()) {
-            if (module.isTogglable() && !(module instanceof Surround)) {
-                names.add(module.getName());
-            }
-        }
-        return names;
-    }
-
     @Override
     protected void onEnable() {
         timer = 0;
         anchor = null;
+        hitCrystals.clear();
         slots.forget();
         holdModules();
         if (inGame()) {
@@ -210,7 +199,7 @@ public final class Surround extends Module {
 
         List<BlockPos> missing = missingSides(feet);
         // Off the ground the floor of the pocket comes first.
-        if (!mc.player.onGround() && canFill(feet.below())) {
+        if (!mc.player.onGround() && BlockUtil.blockFits(feet.below())) {
             missing.add(0, feet.below());
         }
         if (missing.isEmpty()) {
@@ -261,7 +250,7 @@ public final class Surround extends Module {
             Direction support = BlockUtil.findPlaceSupport(pos);
             if (support == null) {
                 BlockPos below = pos.below();
-                Direction belowSupport = canFill(below) ? BlockUtil.findPlaceSupport(below) : null;
+                Direction belowSupport = BlockUtil.blockFits(below) ? BlockUtil.findPlaceSupport(below) : null;
                 if (belowSupport != null) {
                     target = below;
                     support = belowSupport;
@@ -287,7 +276,7 @@ public final class Surround extends Module {
         List<BlockPos> result = new ArrayList<>();
         for (Direction side : Direction.Plane.HORIZONTAL) {
             BlockPos pos = feet.relative(side);
-            if (canFill(pos)) {
+            if (BlockUtil.blockFits(pos)) {
                 result.add(pos);
             }
         }
@@ -302,20 +291,12 @@ public final class Surround extends Module {
             BlockPos head = feet.above();
             for (Direction side : Direction.Plane.HORIZONTAL) {
                 BlockPos pos = head.relative(side);
-                if (canFill(pos)) {
+                if (BlockUtil.blockFits(pos)) {
                     result.add(pos);
                 }
             }
         }
         return result;
-    }
-
-    private boolean canFill(BlockPos pos) {
-        if (!BlockUtil.isReplaceable(pos)) {
-            return false;
-        }
-        BlockState obsidian = Blocks.OBSIDIAN.defaultBlockState();
-        return mc.level.isUnobstructed(obsidian, pos, CollisionContext.empty());
     }
 
     private int findBlastBlock() {
@@ -325,8 +306,7 @@ public final class Surround extends Module {
     // A side that is open or being mined is where a crystal would go.
     // Any crystal touching such a side is hit unless popping it would kill us.
     private void protectSides(BlockPos feet) {
-        int now = mc.player.tickCount;
-        hitCrystals.values().removeIf(tick -> now - tick > HIT_MEMORY);
+        hitCrystals.tick();
         float health = EntityUtil.totalHealth(mc.player);
         for (Direction side : Direction.Plane.HORIZONTAL) {
             BlockPos pos = feet.relative(side);
@@ -339,10 +319,10 @@ public final class Surround extends Module {
                     continue;
                 }
                 // One hit a crystal. A second packet before it pops is wasted.
-                if (hitCrystals.containsKey(crystal.getId())) {
+                if (hitCrystals.contains(crystal.getId())) {
                     continue;
                 }
-                hitCrystals.put(crystal.getId(), now);
+                hitCrystals.put(crystal.getId(), HIT_MEMORY);
                 if (rotate.isOn()) {
                     BlockUtil.faceVector(crystal.position(), RotationPriority.ATTACK);
                 }
@@ -385,14 +365,11 @@ public final class Surround extends Module {
     }
 
     private int sideColor(BlockPos pos) {
-        if (BlockUtil.isReplaceable(pos)) {
-            return openColor.getColor();
-        }
-        BlockState state = BlockUtil.state(pos);
-        if (state.getBlock().defaultDestroyTime() < 0) {
-            return unbreakableColor.getColor();
-        }
-        return state.getBlock().getExplosionResistance() >= BlockUtil.BLAST_PROOF
-            ? safeColor.getColor() : weakColor.getColor();
+        return switch (BlockUtil.wallOf(BlockUtil.state(pos))) {
+            case OPEN -> openColor.getColor();
+            case WEAK -> weakColor.getColor();
+            case BLAST_PROOF -> safeColor.getColor();
+            case UNBREAKABLE -> unbreakableColor.getColor();
+        };
     }
 }

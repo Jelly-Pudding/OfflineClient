@@ -7,6 +7,7 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import net.minecraft.core.BlockPos;
@@ -47,13 +48,13 @@ public final class SelfWeb extends Module {
         }
 
         BlockPos feet = mc.player.blockPosition();
-        AutoWeb.placeWeb(feet, rotate.isOn(), slots);
+        BlockUtil.placeWeb(slots, feet, rotate.isOn());
         if (doubles.isOn()) {
-            AutoWeb.placeWeb(feet.above(), rotate.isOn(), slots);
+            BlockUtil.placeWeb(slots, feet.above(), rotate.isOn());
         }
         // The client puts its own copy down.
-        boolean done = !AutoWeb.webbable(feet)
-            && (!doubles.isOn() || !AutoWeb.webbable(feet.above()));
+        boolean done = !BlockUtil.isWebbable(feet)
+            && (!doubles.isOn() || !BlockUtil.isWebbable(feet.above()));
         if (toggleOff.isOn() && done) {
             setEnabled(false);
         }

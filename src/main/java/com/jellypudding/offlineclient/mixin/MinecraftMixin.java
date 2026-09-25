@@ -46,7 +46,7 @@ public abstract class MinecraftMixin {
         return tweaks != null && tweaks.frameInput();
     }
 
-    // The keys are read once a frame instead. The tick call goes.
+    // Whilst InventoryTweaks reads the keys once a frame the tick skips its own read.
     @WrapOperation(method = "tick()V",
         at = @At(value = "INVOKE", target = "Lnet/minecraft/client/Minecraft;handleKeybinds()V"))
     private void tickKeybinds(Minecraft instance, Operation<Void> original) {
@@ -89,7 +89,7 @@ public abstract class MinecraftMixin {
     // Vanilla aborts any block mining every tick the attack key is up and
     // restarts it on whatever the crosshair hits.
     @Inject(method = "continueAttack(Z)V", at = @At("HEAD"), cancellable = true)
-    private void onContinueAttack(boolean holding, CallbackInfo ci) {
+    private void onContinueAttack(CallbackInfo ci) {
         if (BlockMiner.isActive() || offlineclient$freecamBlocks()) {
             ci.cancel();
         }

@@ -18,6 +18,7 @@ import com.jellypudding.offlineclient.util.FaceMode;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.ItemUtil;
+import com.jellypudding.offlineclient.util.MenuClicks;
 import com.jellypudding.offlineclient.util.RotationPriority;
 import com.jellypudding.offlineclient.util.SwingMode;
 import net.minecraft.client.gui.screens.inventory.MerchantScreen;
@@ -32,7 +33,6 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.npc.villager.Villager;
 import net.minecraft.world.entity.npc.villager.VillagerProfession;
-import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.MerchantMenu;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -168,9 +168,8 @@ public final class AutoLibrarian extends Module {
     private void findVillager() {
         Villager best = (Villager) EntityUtil.nearest(range.getValue(), this::trainable);
         if (best == null) {
-            ChatUtil.error("No fresh librarian in reach."
+            disable("No fresh librarian in reach."
                 + (spent.isEmpty() ? "" : " " + spent.size() + " nearby already traded."));
-            setEnabled(false);
             return;
         }
         villager = best;
@@ -200,8 +199,7 @@ public final class AutoLibrarian extends Module {
             }
         }
         if (best == null) {
-            ChatUtil.error("No lectern in reach for that librarian.");
-            setEnabled(false);
+            disable("No lectern in reach for that librarian.");
             return;
         }
         lectern = best;
@@ -217,8 +215,7 @@ public final class AutoLibrarian extends Module {
             return;
         }
         if (!villager.isAlive() || mc.player.distanceTo(villager) > range.getValue()) {
-            ChatUtil.error("The librarian wandered out of reach. Trap it first.");
-            setEnabled(false);
+            disable("The librarian wandered out of reach. Trap it first.");
             return;
         }
         Vec3 centre = villager.getBoundingBox().getCenter();
@@ -227,7 +224,7 @@ public final class AutoLibrarian extends Module {
         if (mc.gameMode.interact(mc.player, villager, hit, InteractionHand.MAIN_HAND).consumesAction()) {
             swing.getValue().swing(InteractionHand.MAIN_HAND);
         }
-        mc.rightClickDelay = 4;
+        mc.rightClickDelay = InputUtil.USE_DELAY;
     }
 
     private void readTrade() {
@@ -325,7 +322,7 @@ public final class AutoLibrarian extends Module {
             menu.setSelectionHint(index);
             menu.tryMoveItems(index);
             mc.player.connection.send(new ServerboundSelectTradePacket(index));
-            mc.gameMode.handleContainerInput(menu.containerId, RESULT_SLOT, 0, ContainerInput.QUICK_MOVE, mc.player);
+            MenuClicks.quickMove(menu, RESULT_SLOT);
         }
         updateWanted(wish, price);
         closeTrade();
@@ -403,8 +400,7 @@ public final class AutoLibrarian extends Module {
         }
         int slot = InventoryUtil.findSlot(Items.LECTERN, InventoryUtil.WHOLE_INVENTORY);
         if (slot == -1) {
-            ChatUtil.error("No lectern left to put back.");
-            setEnabled(false);
+            disable("No lectern left to put back.");
             return;
         }
         Direction support = BlockUtil.findPlaceSupport(lectern);

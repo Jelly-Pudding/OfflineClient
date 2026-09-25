@@ -8,7 +8,6 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.EntityFilter;
 import com.jellypudding.offlineclient.util.EntityUtil;
-import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
@@ -22,8 +21,6 @@ public final class Chams extends Module {
 
     // A plain white texture that leaves only the tint on a model.
     public static final Identifier BLANK = Identifier.parse("offlineclient:textures/blank.png");
-
-    private static volatile Chams instance;
 
     private final EntityFilter filter = EntityFilter.living("Draw", "drawn", true,
         EntityFilter.Pick.NONE, List.of());
@@ -81,12 +78,6 @@ public final class Chams extends Module {
             crystals, crystalScale, crystalBounce, crystalSpin, crystalTexture, crystalColor,
             hand, handTexture, handColor, handOpacity);
         searchTags("see through", "models", "wallhack");
-        instance = this;
-    }
-
-    // Null before the client has started.
-    public static Chams get() {
-        return instance;
     }
 
     public boolean applies(Entity entity) {
@@ -94,14 +85,9 @@ public final class Chams extends Module {
             return false;
         }
         if (entity == mc.player) {
-            return self.isOn() && showsSelf();
+            return self.isOn() && Freecam.ownBodyVisible();
         }
         return filter.matches(entity);
-    }
-
-    // The player's own model is only on screen in third person or Freecam.
-    private boolean showsSelf() {
-        return Modules.enabled(Freecam.class) || !mc.options.getCameraType().isFirstPerson();
     }
 
     public boolean throughWalls() {

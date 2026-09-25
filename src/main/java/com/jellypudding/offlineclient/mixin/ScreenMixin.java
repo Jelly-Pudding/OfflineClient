@@ -24,7 +24,7 @@ public abstract class ScreenMixin {
     @Inject(method = "extractTransparentBackground(Lnet/minecraft/client/gui/GuiGraphicsExtractor;)V",
         at = @At("HEAD"),
         cancellable = true)
-    private void onExtractTransparentBackground(GuiGraphicsExtractor graphics, CallbackInfo ci) {
+    private void onExtractTransparentBackground(CallbackInfo ci) {
         NoBackground noBackground = Modules.get(NoBackground.class);
         if (noBackground != null && noBackground.clears((Screen) (Object) this)) {
             ci.cancel();

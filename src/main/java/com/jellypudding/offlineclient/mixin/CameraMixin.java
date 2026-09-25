@@ -35,7 +35,7 @@ public abstract class CameraMixin {
 
     // The world and the hand each read the field of view. One ease a frame keeps them level.
     @Inject(method = "update(Lnet/minecraft/client/DeltaTracker;)V", at = @At("HEAD"))
-    private void onCameraUpdate(DeltaTracker deltaTracker, CallbackInfo ci) {
+    private void onCameraUpdate(CallbackInfo ci) {
         Zoom zoom = Modules.get(Zoom.class);
         if (zoom != null) {
             zoom.advance();
@@ -77,7 +77,7 @@ public abstract class CameraMixin {
         at = @At("RETURN"))
     private void onExtractRenderState(CameraRenderState state, DeltaTracker deltaTracker,
                                       CallbackInfo ci) {
-        XRay xray = XRay.get();
+        XRay xray = Modules.get(XRay.class);
         WallHack wallHack = Modules.get(WallHack.class);
         NoRender noRender = Modules.get(NoRender.class);
         if ((xray != null && xray.isEnabled()) || (wallHack != null && wallHack.showsHiddenChunks())
@@ -86,14 +86,8 @@ public abstract class CameraMixin {
         }
     }
 
-    @ModifyReturnValue(method = "calculateFov(F)F", at = @At("RETURN"))
+    @ModifyReturnValue(method = {"calculateFov(F)F", "calculateHudFov(F)F"}, at = @At("RETURN"))
     private float onCalculateFov(float original) {
-        Zoom zoom = Modules.get(Zoom.class);
-        return zoom == null ? original : zoom.applyZoom(original);
-    }
-
-    @ModifyReturnValue(method = "calculateHudFov(F)F", at = @At("RETURN"))
-    private float onCalculateHudFov(float original) {
         Zoom zoom = Modules.get(Zoom.class);
         return zoom == null ? original : zoom.applyZoom(original);
     }

@@ -77,7 +77,6 @@ public final class DrawBatch {
         return new AABB(pos).deflate(BLOCK_INSET);
     }
 
-    // Outlines a single block.
     public void outlineBlock(BlockPos pos, int color, boolean throughWalls) {
         outlineBox(blockBox(pos), color, throughWalls);
     }
@@ -113,17 +112,13 @@ public final class DrawBatch {
 
     // The edges of a box leaving out every edge that lies on a hidden face.
     public void outlineBoxPart(AABB box, int hidden, int color, boolean throughWalls) {
-        if (hidden == 0) {
-            outlineBox(box, color, throughWalls);
-            return;
-        }
-        AABB b = box.move(camera.reverse());
-        float x1 = (float) b.minX;
-        float y1 = (float) b.minY;
-        float z1 = (float) b.minZ;
-        float x2 = (float) b.maxX;
-        float y2 = (float) b.maxY;
-        float z2 = (float) b.maxZ;
+        float[] b = relative(box);
+        float x1 = b[0];
+        float y1 = b[1];
+        float z1 = b[2];
+        float x2 = b[3];
+        float y2 = b[4];
+        float z2 = b[5];
 
         if (shown(hidden, Direction.DOWN, Direction.NORTH)) {
             edge(x1, y1, z1, x2, y1, z1, color, throughWalls);
@@ -169,26 +164,7 @@ public final class DrawBatch {
     }
 
     public void outlineBox(AABB box, int color, boolean throughWalls) {
-        AABB b = box.move(camera.reverse());
-        float x1 = (float) b.minX;
-        float y1 = (float) b.minY;
-        float z1 = (float) b.minZ;
-        float x2 = (float) b.maxX;
-        float y2 = (float) b.maxY;
-        float z2 = (float) b.maxZ;
-
-        edge(x1, y1, z1, x2, y1, z1, color, throughWalls);
-        edge(x2, y1, z1, x2, y1, z2, color, throughWalls);
-        edge(x2, y1, z2, x1, y1, z2, color, throughWalls);
-        edge(x1, y1, z2, x1, y1, z1, color, throughWalls);
-        edge(x1, y2, z1, x2, y2, z1, color, throughWalls);
-        edge(x2, y2, z1, x2, y2, z2, color, throughWalls);
-        edge(x2, y2, z2, x1, y2, z2, color, throughWalls);
-        edge(x1, y2, z2, x1, y2, z1, color, throughWalls);
-        edge(x1, y1, z1, x1, y2, z1, color, throughWalls);
-        edge(x2, y1, z1, x2, y2, z1, color, throughWalls);
-        edge(x2, y1, z2, x2, y2, z2, color, throughWalls);
-        edge(x1, y1, z2, x1, y2, z2, color, throughWalls);
+        outlineBoxPart(box, 0, color, throughWalls);
     }
 
     // The four edges of a rectangle lying flat at one height.
@@ -202,47 +178,41 @@ public final class DrawBatch {
 
     public void solidBox(AABB box, int color, boolean throughWalls) {
         VertexConsumer vc = buffer(Pipelines.fill(throughWalls));
-        AABB b = box.move(camera.reverse());
-        float x1 = (float) b.minX;
-        float y1 = (float) b.minY;
-        float z1 = (float) b.minZ;
-        float x2 = (float) b.maxX;
-        float y2 = (float) b.maxY;
-        float z2 = (float) b.maxZ;
-
-        quad(vc, color, x1, y1, z1, x2, y1, z1, x2, y1, z2, x1, y1, z2);
-        quad(vc, color, x1, y2, z1, x1, y2, z2, x2, y2, z2, x2, y2, z1);
-        quad(vc, color, x1, y1, z1, x1, y2, z1, x2, y2, z1, x2, y1, z1);
-        quad(vc, color, x2, y1, z1, x2, y2, z1, x2, y2, z2, x2, y1, z2);
-        quad(vc, color, x1, y1, z2, x2, y1, z2, x2, y2, z2, x1, y2, z2);
-        quad(vc, color, x1, y1, z1, x1, y1, z2, x1, y2, z2, x1, y2, z1);
+        float[] b = relative(box);
+        for (Direction side : SIDES) {
+            quad(vc, color, corners(b, side));
+        }
     }
 
     // One face of a box as a tinted quad.
     public void solidFace(AABB box, Direction side, int color, boolean throughWalls) {
-        float[] c = faceCorners(box, side);
-        quad(buffer(Pipelines.fill(throughWalls)), color,
-            c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7], c[8], c[9], c[10], c[11]);
+        quad(buffer(Pipelines.fill(throughWalls)), color, corners(relative(box), side));
     }
 
     // The four edges of one face of a box.
     public void outlineFace(AABB box, Direction side, int color, boolean throughWalls) {
-        float[] c = faceCorners(box, side);
+        float[] c = corners(relative(box), side);
         edge(c[0], c[1], c[2], c[3], c[4], c[5], color, throughWalls);
         edge(c[3], c[4], c[5], c[6], c[7], c[8], color, throughWalls);
         edge(c[6], c[7], c[8], c[9], c[10], c[11], color, throughWalls);
         edge(c[9], c[10], c[11], c[0], c[1], c[2], color, throughWalls);
     }
 
-    // The corners of one face in order round its edge relative to the camera.
-    private float[] faceCorners(AABB box, Direction side) {
+    // The box relative to the camera as its low corner then its high corner.
+    private float[] relative(AABB box) {
         AABB b = box.move(camera.reverse());
-        float x1 = (float) b.minX;
-        float y1 = (float) b.minY;
-        float z1 = (float) b.minZ;
-        float x2 = (float) b.maxX;
-        float y2 = (float) b.maxY;
-        float z2 = (float) b.maxZ;
+        return new float[] {(float) b.minX, (float) b.minY, (float) b.minZ,
+            (float) b.maxX, (float) b.maxY, (float) b.maxZ};
+    }
+
+    // The corners of one face in order round its edge.
+    private static float[] corners(float[] b, Direction side) {
+        float x1 = b[0];
+        float y1 = b[1];
+        float z1 = b[2];
+        float x2 = b[3];
+        float y2 = b[4];
+        float z2 = b[5];
         return switch (side) {
             case DOWN -> new float[] {x1, y1, z1, x2, y1, z1, x2, y1, z2, x1, y1, z2};
             case UP -> new float[] {x1, y2, z1, x1, y2, z2, x2, y2, z2, x2, y2, z1};
@@ -282,13 +252,13 @@ public final class DrawBatch {
     // The four upright faces of a box blending from bottom colour to top colour.
     public void gradientSides(AABB box, int bottom, int top, boolean throughWalls) {
         VertexConsumer vc = buffer(Pipelines.fill(throughWalls));
-        AABB b = box.move(camera.reverse());
-        float x1 = (float) b.minX;
-        float y1 = (float) b.minY;
-        float z1 = (float) b.minZ;
-        float x2 = (float) b.maxX;
-        float y2 = (float) b.maxY;
-        float z2 = (float) b.maxZ;
+        float[] b = relative(box);
+        float x1 = b[0];
+        float y1 = b[1];
+        float z1 = b[2];
+        float x2 = b[3];
+        float y2 = b[4];
+        float z2 = b[5];
 
         wall(vc, bottom, top, x1, z1, x2, z1, y1, y2);
         wall(vc, bottom, top, x2, z1, x2, z2, y1, y2);
@@ -360,6 +330,11 @@ public final class DrawBatch {
         }
 
         vc.addVertex(pose, x2, y2, z2).setColor(color).setNormal(pose, normal).setLineWidth(LINE_WIDTH);
+    }
+
+    // Four corners of three coordinates each.
+    private void quad(VertexConsumer vc, int color, float[] c) {
+        quad(vc, color, c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7], c[8], c[9], c[10], c[11]);
     }
 
     private void quad(VertexConsumer vc, int color,

@@ -8,6 +8,8 @@ import com.jellypudding.offlineclient.util.RenderUtil;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 
+import java.util.List;
+
 // One module entry inside a panel.
 public final class ModuleRow {
 
@@ -15,7 +17,6 @@ public final class ModuleRow {
     private static final int ARROW_ZONE = 14;
     // The star sits beside it and shows whilst starred or hovered.
     private static final int STAR_ZONE = 12;
-    private static final int STAR_COLOR = 0xFFF2C744;
 
     private final Module module;
     private final SettingWidget.Host host;
@@ -51,6 +52,30 @@ public final class ModuleRow {
 
     public void setExpanded(boolean expanded) {
         this.expanded = expanded;
+    }
+
+    public static int totalHeight(List<ModuleRow> rows) {
+        int total = 0;
+        for (ModuleRow row : rows) {
+            total += row.getHeight();
+        }
+        return total;
+    }
+
+    // Lays out a scrolled column of rows and draws the ones inside the view. A slider
+    // being dragged still gets the real pointer position.
+    public static void renderAll(GuiGraphicsExtractor context, List<ModuleRow> rows, int x, int viewTop,
+                                 int view, int width, int offset, int mouseX, int mouseY) {
+        boolean inView = SettingWidget.isOver(mouseX, mouseY, x, viewTop, width, view);
+        int rowY = viewTop - offset;
+        for (ModuleRow row : rows) {
+            int rowH = row.getHeight();
+            row.place(x, rowY, width, mouseX, mouseY, inView);
+            if (rowY + rowH > viewTop && rowY < viewTop + view) {
+                row.render(context, mouseX, mouseY);
+            }
+            rowY += rowH;
+        }
     }
 
     public int getHeight() {
@@ -94,14 +119,14 @@ public final class ModuleRow {
         int nameRoom = w - 7 - ARROW_ZONE - STAR_ZONE;
         context.text(font, SettingWidget.trimEnd(font, module.getName(), nameRoom), x + 7,
             GuiTheme.textY(y, h), textColor, false);
-        RenderUtil.chevron(context, x + w - 11, y + (h - 3) / 2, !expanded,
+        RenderUtil.chevron(context, x + w - 11, y + (h - RenderUtil.CHEVRON_HEIGHT) / 2, !expanded,
             hovered ? GuiTheme.text() : GuiTheme.textFaint());
 
         boolean starred = Favourites.has(module);
         boolean overStar = hovered && mouseX >= starX() && mouseX < starX() + STAR_ZONE;
         if (starred || hovered) {
             RenderUtil.star(context, starX() + 1, y + (h - RenderUtil.STAR_SIZE) / 2,
-                starred ? STAR_COLOR : (overStar ? GuiTheme.text() : GuiTheme.textFaint()),
+                starred ? GuiTheme.STAR : (overStar ? GuiTheme.text() : GuiTheme.textFaint()),
                 starred);
         }
 
@@ -130,6 +155,22 @@ public final class ModuleRow {
         hoverFade = hovered ? Math.min(1f, hoverFade + step) : Math.max(0f, hoverFade - step);
     }
 
+    // The click rules both ClickGUI styles share. A left click on the star marks a
+    // favourite. A right click or the arrow or a module with no toggle opens the settings.
+    static void clickModule(Module module, int button, boolean onStar, boolean onArrow,
+                            Runnable openSettings) {
+        if (!InputUtil.isLeft(button) && !InputUtil.isRight(button)) {
+            return;
+        }
+        if (InputUtil.isLeft(button) && onStar) {
+            Favourites.toggle(module);
+        } else if (InputUtil.isRight(button) || onArrow || !module.isTogglable()) {
+            openSettings.run();
+        } else {
+            module.toggle();
+        }
+    }
+
     public boolean mouseClicked(double mx, double my, int button) {
         if (!placed) {
             return false;
@@ -137,19 +178,8 @@ public final class ModuleRow {
         int w = width;
 
         if (SettingWidget.isOver(mx, my, x, y, w, GuiTheme.ROW_HEIGHT)) {
-            if (!InputUtil.isLeft(button) && !InputUtil.isRight(button)) {
-                return true;
-            }
-            if (InputUtil.isLeft(button) && mx >= starX() && mx < starX() + STAR_ZONE) {
-                Favourites.toggle(module);
-                return true;
-            }
-            if (InputUtil.isRight(button) || mx >= x + w - ARROW_ZONE || !module.isTogglable()) {
-                expanded = !expanded;
-            } else {
-                module.toggle();
-                OfflineClient.INSTANCE.getConfigManager().saveSoon();
-            }
+            clickModule(module, button, mx >= starX() && mx < starX() + STAR_ZONE,
+                mx >= x + w - ARROW_ZONE, () -> expanded = !expanded);
             return true;
         }
 

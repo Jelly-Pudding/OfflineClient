@@ -22,9 +22,6 @@ import net.minecraft.world.item.Items;
 // Steps aside whilst AutoTotem has claimed the offhand for a totem.
 public final class Offhand extends Module {
 
-    private static final double HEART = 2;
-    private static final int HOTBAR_SIZE = InventoryUtil.HOTBAR_SIZE;
-
     public enum Choice {
         CRYSTAL("Crystal", Items.END_CRYSTAL),
         TOTEM("Totem", Items.TOTEM_OF_UNDYING),
@@ -127,10 +124,7 @@ public final class Offhand extends Module {
             return;
         }
 
-        if (!InventoryUtil.canClick()) {
-            return;
-        }
-        if (!InventoryUtil.carried().isEmpty()) {
+        if (!InventoryUtil.cursorFree()) {
             return;
         }
         if (timer > 0) {
@@ -143,15 +137,9 @@ public final class Offhand extends Module {
             return;
         }
 
-        Swap result = InventoryUtil.swap(slot, InventoryUtil.OFFHAND_SLOT);
-        if (result == Swap.REFUSED) {
-            return;
+        if (cursor.swap(slot, InventoryUtil.OFFHAND_SLOT) != Swap.REFUSED) {
+            timer = delay.getInt();
         }
-        if (result == Swap.STRANDED) {
-            // Whatever the new item displaced had nowhere to go.
-            cursor.hold(slot);
-        }
-        timer = delay.getInt();
     }
 
     private static boolean autoTotemLocked() {
@@ -180,9 +168,8 @@ public final class Offhand extends Module {
         if (elytra.isOn() && mc.player.isFallFlying()) {
             return true;
         }
-        float incoming = DamageUtil.possibleIncoming(DamageUtil.BLAST_RANGE,
-            explosion.isOn(), false, falling.isOn());
-        return EntityUtil.totalHealth(mc.player) - incoming <= totemHealth.getValue() * HEART;
+        return DamageUtil.healthAfterIncoming(DamageUtil.BLAST_RANGE, explosion.isOn(), false,
+            falling.isOn()) <= totemHealth.getValue() * EntityUtil.HEART;
     }
 
     // The item the quick rule asks for right now. Null when it asks for nothing.
@@ -218,7 +205,7 @@ public final class Offhand extends Module {
 
     // Network slot of the first stack of the item. Minus one when absent.
     private int findSlot(Item wanted) {
-        int first = hotbar.isOn() ? 0 : HOTBAR_SIZE;
+        int first = hotbar.isOn() ? 0 : InventoryUtil.HOTBAR_SIZE;
         for (int i = first; i < InventoryUtil.WHOLE_INVENTORY; i++) {
             if (mc.player.getInventory().getItem(i).is(wanted)) {
                 return InventoryUtil.networkSlot(i);

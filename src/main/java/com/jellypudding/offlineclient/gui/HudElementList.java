@@ -43,18 +43,7 @@ public final class HudElementList extends PanelFrame {
             return;
         }
         JsonObject state = gui.getAsJsonObject(STATE_KEY);
-        if (state.has("x") && state.has("y")) {
-            setPosition(state.get("x").getAsInt(), state.get("y").getAsInt());
-        }
-        if (state.has("width")) {
-            setWidth(state.get("width").getAsInt());
-        }
-        if (state.has("height")) {
-            setViewHeight(state.get("height").getAsInt());
-        }
-        if (state.has("collapsed")) {
-            setCollapsed(state.get("collapsed").getAsBoolean());
-        }
+        readFrame(state);
         if (state.has("open")) {
             for (var name : state.getAsJsonArray("open")) {
                 expanded.add(name.getAsString());
@@ -64,11 +53,7 @@ public final class HudElementList extends PanelFrame {
 
     public void save() {
         JsonObject state = new JsonObject();
-        state.addProperty("x", getX());
-        state.addProperty("y", getY());
-        state.addProperty("width", getWidth());
-        state.addProperty("height", getViewHeight());
-        state.addProperty("collapsed", isCollapsed());
+        writeFrame(state);
         JsonArray open = new JsonArray();
         expanded.forEach(open::add);
         state.add("open", open);
@@ -138,7 +123,7 @@ public final class HudElementList extends PanelFrame {
             y + (h - PILL_HEIGHT) / 2, PILL_WIDTH, PILL_HEIGHT, on,
             GuiTheme.accent(), GuiTheme.bgSetting(),
             on ? GuiTheme.contrastText(GuiTheme.accent()) : GuiTheme.textDim());
-        RenderUtil.chevron(context, getX() + rowWidth - 10, y + (h - 3) / 2,
+        RenderUtil.chevron(context, getX() + rowWidth - 10, y + (h - RenderUtil.CHEVRON_HEIGHT) / 2,
             !expanded.contains(element.getName()),
             over ? GuiTheme.text() : GuiTheme.textFaint());
 

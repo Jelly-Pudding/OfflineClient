@@ -1,6 +1,5 @@
 package com.jellypudding.offlineclient.modules.misc;
 
-import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.EntityAddedEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
@@ -9,6 +8,7 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.TextSetting;
+import com.jellypudding.offlineclient.util.EntityUtil;
 import net.minecraft.world.entity.player.Player;
 
 import java.util.ArrayDeque;
@@ -66,8 +66,7 @@ public final class MessageAura extends Module {
             return;
         }
         String name = player.getGameProfile().name();
-        if (name.isBlank() || (ignoreFriends.isOn()
-            && OfflineClient.INSTANCE.getFriendManager().isFriend(name))) {
+        if (name.isBlank() || (ignoreFriends.isOn() && EntityUtil.isFriend(player))) {
             return;
         }
         String key = name.toLowerCase(Locale.ROOT);

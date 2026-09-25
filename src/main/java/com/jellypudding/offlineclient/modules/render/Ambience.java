@@ -12,9 +12,6 @@ import net.minecraft.world.level.Level;
 // Recolours the world on your screen only. The mixins ask this what to paint.
 public final class Ambience extends Module {
 
-    // Ticks the settings must sit still before the chunks are rebuilt.
-    private static final int REBUILD_DELAY = 10;
-
     private final BoolSetting endSky = new BoolSetting("End sky",
         "Draws the End sky box in every dimension.", false);
     private final BoolSetting customSky = new BoolSetting("Custom sky colour",
@@ -65,8 +62,8 @@ public final class Ambience extends Module {
         .under(customFog);
 
     // The block colours only change when a chunk is built again.
+    private final ChunkRebuild rebuild = new ChunkRebuild();
     private int lastBlockColours;
-    private int rebuildCooldown;
 
     public Ambience() {
         super("Ambience", "Recolours the sky and the clouds and the ground around you.",
@@ -81,24 +78,19 @@ public final class Ambience extends Module {
     @Override
     protected void onEnable() {
         lastBlockColours = blockColourKey();
-        rebuild();
+        ChunkRebuild.now();
     }
 
     @Override
     protected void onDisable() {
-        rebuild();
+        ChunkRebuild.now();
     }
 
-    // The rebuild fires once the colours sit still for half a second.
     @Subscribe
     private void onTick(TickEvent event) {
         int key = blockColourKey();
-        if (key != lastBlockColours) {
-            lastBlockColours = key;
-            rebuildCooldown = REBUILD_DELAY;
-        } else if (rebuildCooldown > 0 && --rebuildCooldown == 0) {
-            rebuild();
-        }
+        rebuild.tick(key != lastBlockColours);
+        lastBlockColours = key;
     }
 
     private int blockColourKey() {
@@ -108,10 +100,6 @@ public final class Ambience extends Module {
         key = key * 31 + (customWater.isOn() ? waterColor.getColor() : 0);
         key = key * 31 + (customLava.isOn() ? lavaColor.getColor() : 0);
         return key;
-    }
-
-    private static void rebuild() {
-        ChunkRebuild.now();
     }
 
     public boolean drawsEndSky() {

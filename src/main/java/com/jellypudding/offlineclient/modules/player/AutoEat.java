@@ -10,9 +10,9 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.Feeding;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.Modules;
-import com.jellypudding.offlineclient.util.UseHold;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.InteractionHand;
@@ -102,21 +102,18 @@ public final class AutoEat extends Module {
     private final BoolSetting offhand = new BoolSetting("Use offhand",
         "Reach for food in your offhand first.", true);
     private final BoolSetting whileMoving = new BoolSetting("Eat whilst moving",
-        "Eat on the move. Eating drops you to walking speed.", true);
+        "Eats whilst you move. Off waits for you to stand still.", true);
     private final BoolSetting pauseCombat = new BoolSetting("Pause combat",
         "Holds the combat modules back whilst you eat.", true);
     private final BoolSetting whileBusy = new BoolSetting("Eat in screens",
         "Keeps eating whilst a chest or inventory is open.", false);
     private final BoolSetting noSlowdown = new BoolSetting("No slowdown",
-        "Keeps your normal speed whilst eating. Meals you start yourself count too.", false);
+        "Keeps your full speed and sprint whilst you eat. Meals you start yourself count too.", false);
     private final BoolSetting pauseOnFire = new BoolSetting("Pause on fire",
         "Stops eating whilst you are burning.", false);
 
-    private boolean eating;
+    private final Feeding feeding = new Feeding(swapBack::isOn);
     private boolean healing;
-    private final UseHold use = new UseHold();
-    private int settle;
-    private final InventoryUtil.HotbarLoan loan = new InventoryUtil.HotbarLoan();
 
     public AutoEat() {
         super("AutoEat", "Eats for you when you get hungry or hurt.", Category.PLAYER);
@@ -127,11 +124,11 @@ public final class AutoEat extends Module {
     }
 
     public boolean isEating() {
-        return isEnabled() && eating && pauseCombat.isOn();
+        return isBusy() && pauseCombat.isOn();
     }
 
     public boolean isBusy() {
-        return isEnabled() && eating;
+        return isEnabled() && feeding.isActive();
     }
 
     // Read by LocalPlayerMixin to keep a meal from slowing you down.
@@ -147,38 +144,30 @@ public final class AutoEat extends Module {
 
     @Override
     public String getSuffix() {
-        return eating ? "eating" : null;
+        return feeding.isActive() ? "eating" : null;
     }
 
     @Override
     protected void onDisable() {
-        stopEating();
+        feeding.stop();
     }
 
     @Subscribe
     private void onTick(TickEvent event) {
         if (!inGame() || mc.player.isSpectator() || mc.player.getAbilities().instabuild) {
-            stopEating();
+            feeding.stop();
             return;
         }
-        if (mc.player.isDeadOrDying()) {
-            // Respawn rebuilds the inventory.
-            loan.forget();
-            stopEating();
-            settle = 0;
-            return;
-        }
-        if (settle > 0) {
-            settle--;
+        if (feeding.waiting()) {
             return;
         }
         moveBowl();
         if (burning()) {
-            stopEating();
+            feeding.stop();
             return;
         }
 
-        if (eating) {
+        if (feeding.isActive()) {
             continueEating();
             return;
         }
@@ -186,13 +175,13 @@ public final class AutoEat extends Module {
             return;
         }
         // A carried stack would be dropped by a slot swap.
-        if (!mc.player.containerMenu.getCarried().isEmpty()) {
+        if (!InventoryUtil.carried().isEmpty()) {
             return;
         }
         if (busy() && !whileBusy.isOn()) {
             return;
         }
-        if (potionBusy() || clickInTheWay()) {
+        if (clickInTheWay()) {
             return;
         }
         if (!whileMoving.isOn() && mc.player.getDeltaMovement().horizontalDistanceSqr() > 1.0E-4) {
@@ -212,10 +201,9 @@ public final class AutoEat extends Module {
         if (slot == -1) {
             slot = findFood(limit);
         }
-        if (slot == -1) {
-            return;
+        if (slot != -1) {
+            feeding.begin(slot);
         }
-        beginEating(slot);
     }
 
     // The Health value only counts in the modes that show it.
@@ -265,11 +253,6 @@ public final class AutoEat extends Module {
             && !mc.player.hasEffect(MobEffects.FIRE_RESISTANCE);
     }
 
-    private boolean potionBusy() {
-        AutoPotion potion = Modules.get(AutoPotion.class);
-        return potion != null && potion.isDrinking();
-    }
-
     private boolean wantsFood() {
         int food = mc.player.getFoodData().getFoodLevel();
         return food <= (injured() ? injuredHunger.getInt() : hunger.getInt());
@@ -277,7 +260,7 @@ public final class AutoEat extends Module {
 
     // True whilst enough health is missing for the injured threshold to take over.
     private boolean injured() {
-        return mc.player.getMaxHealth() - mc.player.getHealth() >= injuryThreshold.getValue() * 2;
+        return mc.player.getMaxHealth() - mc.player.getHealth() >= injuryThreshold.getValue() * EntityUtil.HEART;
     }
 
     // A right click through a meal would open a chest or start a trade.
@@ -295,7 +278,7 @@ public final class AutoEat extends Module {
 
     // Soup servers want the empties in one place for a refill.
     private void moveBowl() {
-        if (!tidyBowls.isOn() || eating || !InventoryUtil.inventoryFree()) {
+        if (!tidyBowls.isOn() || feeding.isActive() || !InventoryUtil.inventoryFree()) {
             return;
         }
         if (mc.player.getInventory().getItem(BOWL_SLOT).is(Items.BOWL)) {
@@ -314,30 +297,17 @@ public final class AutoEat extends Module {
         if (food == null) {
             return false;
         }
-        return mc.player.getFoodData().getFoodLevel() < 20 || food.canAlwaysEat();
-    }
-
-    private void beginEating(int slot) {
-        // The offhand needs no swap at all.
-        if (slot == Inventory.SLOT_OFFHAND) {
-            eating = true;
-            use.begin();
-            return;
-        }
-        if (!loan.select(slot)) {
-            return;
-        }
-        eating = true;
-        use.begin();
+        return mc.player.canEat(food.canAlwaysEat());
     }
 
     private void continueEating() {
         if ((busy() && !whileBusy.isOn()) || !holdingFood()) {
-            stopEating();
+            feeding.stop();
             return;
         }
-        if (!use.tick()) {
-            finishMeal();
+        if (!feeding.tick()) {
+            // A golden apple needs longer before the health is worth reading again.
+            feeding.finish(healing ? HEAL_SETTLE_TICKS : SETTLE_TICKS, false);
             return;
         }
         // A screen stops the game reading the use key. The meal is started by hand.
@@ -345,13 +315,6 @@ public final class AutoEat extends Module {
             mc.gameMode.useItem(mc.player, offhandUsable()
                 ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND);
         }
-    }
-
-    // A golden apple needs longer before the health is worth reading again.
-    private void finishMeal() {
-        boolean wasHealing = healing;
-        stopEating();
-        settle = wasHealing ? HEAL_SETTLE_TICKS : SETTLE_TICKS;
     }
 
     // The use key hits the main hand first. Food there fires instead of the offhand.
@@ -365,16 +328,6 @@ public final class AutoEat extends Module {
             return true;
         }
         return offhand.isOn() && isEdible(mc.player.getOffhandItem());
-    }
-
-    private void stopEating() {
-        if (eating) {
-            eating = false;
-            healing = false;
-            use.release();
-        }
-        // A loan whose return was refused earlier gets another go.
-        loan.giveBack(swapBack.isOn());
     }
 
     // The plain apple wins over the enchanted one.

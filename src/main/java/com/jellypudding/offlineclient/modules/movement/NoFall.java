@@ -1,7 +1,6 @@
 package com.jellypudding.offlineclient.modules.movement;
 
 import com.jellypudding.offlineclient.event.Subscribe;
-import com.jellypudding.offlineclient.event.events.PacketReceiveEvent;
 import com.jellypudding.offlineclient.event.events.PacketSendEvent;
 import com.jellypudding.offlineclient.event.events.PreMotionEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
@@ -13,12 +12,12 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
+import com.jellypudding.offlineclient.util.Lagback;
 import com.jellypudding.offlineclient.util.PacketUtil;
 import com.jellypudding.offlineclient.util.SwingMode;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.network.protocol.game.ClientboundPlayerPositionPacket;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.attribute.EnvironmentAttributes;
@@ -80,8 +79,7 @@ public final class NoFall extends Module {
 
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
         "How the fall is stopped.", Mode.PACKET)
-        .describe(Mode.PACKET, "Tells the server you have landed on every packet whilst you fall."
-            + " Only a drop of four blocks within one tick can still hurt.")
+        .describe(Mode.PACKET, "Tells the server you have landed on every packet whilst you fall.")
         .describe(Mode.PLACE, "Drops water or another soft landing under you. Survives a strict server.")
         .describe(Mode.AIR_PLACE, "Puts any block from your hotbar under your feet just before the fall would hurt.")
         .describe(Mode.BOTH, "Claims the landing and drops the soft landing as well.");
@@ -99,6 +97,9 @@ public final class NoFall extends Module {
     private final BoolSetting anchor = new BoolSetting("Anchor",
         "Centres you first to put the landing block right under you.", true)
         .under(mode, Mode.PLACE, Mode.AIR_PLACE, Mode.BOTH);
+    private final BoolSetting limitSpeed = new BoolSetting("Limit fall speed",
+        "Keeps you under four blocks a tick. Anything faster hurts even with NoFall.", true)
+        .under(mode, Mode.PACKET, Mode.BOTH);
     private final NumberSetting minFall = new NumberSetting("Min fall",
         "Short drops are left alone until the fall passes this. Three blocks is the most"
             + " that is safe because a longer one already hurts.",
@@ -115,6 +116,8 @@ public final class NoFall extends Module {
     private double lastY;
     private boolean tracking;
 
+    private final Lagback.Watcher lagback = new Lagback.Watcher();
+
     private final InventoryUtil.HotbarLoan loan = new InventoryUtil.HotbarLoan();
     // Where the soft landing went and what it was. Null once collected or given up.
     private BlockPos placedAt;
@@ -124,7 +127,7 @@ public final class NoFall extends Module {
 
     public NoFall() {
         super("NoFall", "Stops fall damage.", Category.MOVEMENT);
-        addSettings(mode, placedItem, pickUp, airPlaceWhen, anchor, minFall, whilstGliding,
+        addSettings(mode, limitSpeed, placedItem, pickUp, airPlaceWhen, anchor, minFall, whilstGliding,
             antiBounce, pauseOnMace);
         searchTags("fall damage", "water bucket", "clutch", "air place");
     }
@@ -150,6 +153,7 @@ public final class NoFall extends Module {
     }
 
     private void reset() {
+        lagback.sync();
         descent = 0;
         tracking = false;
         placedAt = null;
@@ -189,7 +193,16 @@ public final class NoFall extends Module {
         return !pauseOnMace.isOn() || !holdingMace();
     }
 
+    // The server moved the player and the fall it holds with them.
+    private void forgetOnLagback() {
+        if (lagback.happened()) {
+            descent = 0;
+            tracking = false;
+        }
+    }
+
     private void trackDescent() {
+        forgetOnLagback();
         double y = mc.player.getY();
         if (!tracking) {
             lastY = y;
@@ -231,6 +244,7 @@ public final class NoFall extends Module {
     }
 
     private boolean claimsGround(LocalPlayer player) {
+        forgetOnLagback();
         if (player.onGround() || player.isInWater() || !protecting()) {
             return false;
         }
@@ -244,12 +258,17 @@ public final class NoFall extends Module {
         return descent >= minFall.getValue() || descent + nextDrop >= HURTING_FALL;
     }
 
-    // The server moved the player and the fall it holds with them.
-    @Subscribe
-    private void onPacketReceive(PacketReceiveEvent event) {
-        if (event.getPacket() instanceof ClientboundPlayerPositionPacket) {
-            descent = 0;
-            tracking = false;
+    // The server charges each landed packet for its own drop past three blocks. This
+    // runs last and catches FastFall and Step and Flight alike.
+    @Subscribe(priority = -100)
+    private void onLimitTick(TickEvent event) {
+        if (!inGame() || !packetMode() || !limitSpeed.isOn() || !protecting()
+            || mc.player.isFallFlying()) {
+            return;
+        }
+        Vec3 velocity = mc.player.getDeltaMovement();
+        if (velocity.y < -HURTING_FALL) {
+            mc.player.setDeltaMovement(velocity.x, -HURTING_FALL, velocity.z);
         }
     }
 
@@ -283,15 +302,8 @@ public final class NoFall extends Module {
 
     // True whilst a fall is running that the module ought to be watching.
     private boolean falling() {
-        LocalPlayer player = mc.player;
-        if (player.getAbilities().invulnerable || player.onGround() || player.isInWater()
-            || player.getDeltaMovement().y >= 0) {
-            return false;
-        }
-        if (player.isFallFlying() && !whilstGliding.isOn()) {
-            return false;
-        }
-        return !pauseOnMace.isOn() || !holdingMace();
+        return protecting() && !mc.player.onGround() && !mc.player.isInWater()
+            && mc.player.getDeltaMovement().y < 0;
     }
 
     // The ground straight below within reach or null.

@@ -12,6 +12,7 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.MovementUtil;
+import net.minecraft.SharedConstants;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.protocol.game.ClientboundMoveVehiclePacket;
 import net.minecraft.core.PositionAndRotation;
@@ -41,14 +42,12 @@ public final class VehicleFly extends Module {
     // A drop longer than this starts to hurt.
     private static final double SAFE_DROP = 3;
 
-    // The physics never move a vehicle this far in one tick. The server did.
+    // Vehicle physics never move this far in one tick. A jump this big came from the server.
     private static final double RESYNC_DISTANCE = 4;
 
     // The server banks every drop a vehicle packet makes. Only a ground flag wipes it.
     // A tick with a big drop is sent as several packets. None crosses the hurt line.
     private static final double SAFE_PACKET_DROP = 2.5;
-
-    private static final double TICKS_PER_SECOND = 20;
 
     private final RegistryListSetting<EntityType<?>> vehicles = new RegistryListSetting<>("Vehicles",
         "Which kinds of vehicle the module drives.", BuiltInRegistries.ENTITY_TYPE, rideableTypes());
@@ -222,7 +221,7 @@ public final class VehicleFly extends Module {
 
         if (speedApplies(vehicle)) {
             Vec3 heading = MovementUtil.inputDirection();
-            double h = groundSpeed.getValue() / TICKS_PER_SECOND;
+            double h = groundSpeed.getValue() / SharedConstants.TICKS_PER_SECOND;
             vx = heading.x * h;
             vz = heading.z * h;
         }
@@ -245,7 +244,7 @@ public final class VehicleFly extends Module {
         }
         if (fallSpeed.getValue() > 0) {
             holding = false;
-            return -fallSpeed.getValue() / TICKS_PER_SECOND;
+            return -fallSpeed.getValue() / SharedConstants.TICKS_PER_SECOND;
         }
         return holdHeight(vehicle, limit);
     }

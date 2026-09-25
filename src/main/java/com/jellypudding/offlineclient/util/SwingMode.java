@@ -37,7 +37,7 @@ public enum SwingMode {
         }
     }
 
-    public static SwingAnimation animationOf(InteractionHand hand) {
+    private static SwingAnimation animationOf(InteractionHand hand) {
         LocalPlayer player = OfflineClient.MC.player;
         return player == null
             ? SwingAnimation.DEFAULT : player.getItemInHand(hand).getAttackAnimation();

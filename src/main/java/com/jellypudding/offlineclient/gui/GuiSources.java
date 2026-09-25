@@ -165,7 +165,6 @@ public final class GuiSources {
                 Module module = moduleNamed(name);
                 if (module != null && module.isTogglable()) {
                     module.toggle();
-                    OfflineClient.INSTANCE.getConfigManager().saveSoon();
                 }
             }
 

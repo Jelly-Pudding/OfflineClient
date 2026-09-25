@@ -23,6 +23,9 @@ public final class PathWalker {
 
     private static final Minecraft MC = OfflineClient.MC;
 
+    // A drop this deep or shallower is walked off without a care.
+    private static final int SAFE_FALL = 3;
+
     // How far ahead a node may be and still count as the one the player is on.
     private static final int LOOK_AHEAD = 8;
 
@@ -43,7 +46,6 @@ public final class PathWalker {
 
     private Turn turn = Turn.CLIENT;
     private boolean sprint = true;
-    private int safeFall = 3;
 
     public PathWalker turn(Turn mode) {
         this.turn = mode;
@@ -52,11 +54,6 @@ public final class PathWalker {
 
     public PathWalker sprint(boolean allowed) {
         this.sprint = allowed;
-        return this;
-    }
-
-    public PathWalker safeFall(int blocks) {
-        this.safeFall = blocks;
         return this;
     }
 
@@ -250,7 +247,7 @@ public final class PathWalker {
     }
 
     private boolean deepDrop(PathFinder.Rules rules, BlockPos pos) {
-        for (int drop = 1; drop <= safeFall; drop++) {
+        for (int drop = 1; drop <= SAFE_FALL; drop++) {
             if (rules.canStand(pos.below(drop))) {
                 return false;
             }

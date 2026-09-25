@@ -3,8 +3,6 @@ package com.jellypudding.offlineclient.config;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
-import com.jellypudding.offlineclient.OfflineClient;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -12,15 +10,12 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 
-import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Stream;
 
 // A shape saved as a list of block offsets in offlineclient/templates. Positions
 // run sideways then up then forward from the block you build on. A block name
@@ -31,7 +26,6 @@ public final class BuildTemplate {
     public record Entry(int x, int y, int z, Block block) {
     }
 
-    private static final String EXTENSION = ".json";
     private static final int VERSION = 2;
 
     // The shapes written out the first time the folder is empty.
@@ -65,34 +59,20 @@ public final class BuildTemplate {
     }
 
     public static Path folder() {
-        return OfflineClient.MC.gameDirectory.toPath().resolve("offlineclient").resolve("templates");
+        return DataFiles.path("templates");
     }
 
     // The names on offer with the defaults written out on the first look.
     public static Collection<String> names() {
-        List<String> names = new ArrayList<>();
-        try {
-            Files.createDirectories(folder());
-            writeDefaults();
-            try (Stream<Path> files = Files.list(folder())) {
-                files.filter(path -> path.toString().endsWith(EXTENSION))
-                    .map(path -> path.getFileName().toString())
-                    .map(file -> file.substring(0, file.length() - EXTENSION.length()))
-                    .sorted(String.CASE_INSENSITIVE_ORDER)
-                    .forEach(names::add);
-            }
-        } catch (IOException error) {
-            OfflineClient.LOG.error("Failed to list the templates", error);
+        List<String> names = DataFiles.jsonNames(folder());
+        if (!names.isEmpty()) {
+            return names;
         }
-        return names;
+        writeDefaults();
+        return DataFiles.jsonNames(folder());
     }
 
-    private static void writeDefaults() throws IOException {
-        try (Stream<Path> files = Files.list(folder())) {
-            if (files.findAny().isPresent()) {
-                return;
-            }
-        }
+    private static void writeDefaults() {
         for (Map.Entry<String, int[][]> shape : DEFAULTS.entrySet()) {
             List<Entry> entries = new ArrayList<>();
             for (int[] at : shape.getValue()) {
@@ -104,22 +84,14 @@ public final class BuildTemplate {
 
     // Null when the file is missing or unreadable.
     public static BuildTemplate load(String name) {
-        Path path = folder().resolve(name + EXTENSION);
-        if (!Files.exists(path)) {
-            return null;
-        }
-        try {
-            JsonObject root = JsonParser.parseString(Files.readString(path)).getAsJsonObject();
+        return DataFiles.readJson(DataFiles.jsonFile(folder(), name), root -> {
             List<Entry> entries = new ArrayList<>();
-            for (JsonElement element : root.getAsJsonArray("blocks")) {
+            for (JsonElement element : root.getAsJsonObject().getAsJsonArray("blocks")) {
                 entries.add(element.isJsonArray() ? plainEntry(element.getAsJsonArray())
                     : namedEntry(element.getAsJsonObject()));
             }
             return entries.isEmpty() ? null : new BuildTemplate(name, entries);
-        } catch (Exception error) {
-            OfflineClient.LOG.error("Failed to read the template {}", name, error);
-            return null;
-        }
+        }).orElse(null);
     }
 
     // An entry can also be a bare list of three numbers.
@@ -140,7 +112,8 @@ public final class BuildTemplate {
         return new Entry(at.get(0).getAsInt(), at.get(1).getAsInt(), at.get(2).getAsInt(), block);
     }
 
-    public static void save(String name, List<Entry> entries) throws IOException {
+    // False when the file could not be written.
+    public static boolean save(String name, List<Entry> entries) {
         JsonArray blocks = new JsonArray();
         for (Entry entry : entries) {
             JsonObject block = new JsonObject();
@@ -156,8 +129,7 @@ public final class BuildTemplate {
         JsonObject root = new JsonObject();
         root.addProperty("version", VERSION);
         root.add("blocks", blocks);
-        Files.createDirectories(folder());
-        ConfigManager.write(folder().resolve(name + EXTENSION), root);
+        return DataFiles.writeJson(DataFiles.jsonFile(folder(), name), root);
     }
 
     // Every block of the shape laid out from the origin in the facing given.

@@ -1,13 +1,12 @@
 package com.jellypudding.offlineclient.modules.movement;
 
 import com.jellypudding.offlineclient.event.Subscribe;
-import com.jellypudding.offlineclient.event.events.PacketReceiveEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.Lagback;
 import com.jellypudding.offlineclient.util.MovementUtil;
-import net.minecraft.network.protocol.game.ClientboundPlayerPositionPacket;
 import net.minecraft.world.phys.Vec3;
 
 // PlayerMixin keeps physics off whilst active. Vanilla and singleplayer pull you back.
@@ -20,8 +19,7 @@ public final class NoClip extends Module {
     private final NumberSetting speed = new NumberSetting("Speed",
         "Blocks a tick you move through the world.", 0.5, 0.1, 5, 0.1, " blocks");
 
-    // Set from the packet thread when the server sends the player back.
-    private volatile boolean pulledBack;
+    private final Lagback.Watcher lagback = new Lagback.Watcher();
     private int settle;
 
     public NoClip() {
@@ -43,7 +41,7 @@ public final class NoClip extends Module {
 
     @Override
     protected void onEnable() {
-        pulledBack = false;
+        lagback.sync();
         settle = 0;
     }
 
@@ -55,19 +53,11 @@ public final class NoClip extends Module {
     }
 
     @Subscribe
-    private void onPacketReceive(PacketReceiveEvent event) {
-        if (event.getPacket() instanceof ClientboundPlayerPositionPacket) {
-            pulledBack = true;
-        }
-    }
-
-    @Subscribe
     private void onTick(TickEvent event) {
         if (!inGame()) {
             return;
         }
-        if (pulledBack) {
-            pulledBack = false;
+        if (lagback.happened()) {
             settle = SETTLE_TICKS;
             mc.player.noPhysics = false;
         }

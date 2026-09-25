@@ -81,7 +81,7 @@ public final class AutoArmor extends Module {
         if (!InventoryUtil.canClick()) {
             return;
         }
-        if (!whileMoving.isOn() && MovementUtil.inputDirection().lengthSqr() > 0) {
+        if (!whileMoving.isOn() && MovementUtil.hasInput()) {
             return;
         }
         if (!InventoryUtil.carried().isEmpty()) {

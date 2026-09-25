@@ -32,7 +32,7 @@ public final class DamageUtil {
     private static final Minecraft MC = OfflineClient.MC;
 
     // A player this close could land a hit before the next tick.
-    public static final double MELEE_RANGE = 5;
+    private static final double MELEE_RANGE = 5;
 
     // How far a crystal or a bed or an anchor is looked for.
     public static final double BLAST_RANGE = 8;
@@ -43,12 +43,16 @@ public final class DamageUtil {
     private DamageUtil() {
     }
 
-    // The worst single thing that could hit the player this tick.
-    public static float possibleIncoming() {
-        return possibleIncoming(BLAST_RANGE, true, true, true);
+    // Health and absorption left once the worst hit on its way lands.
+    public static float healthAfterIncoming() {
+        return healthAfterIncoming(BLAST_RANGE, true, true, true);
     }
 
-    public static float possibleIncoming(double blastRange, boolean blasts, boolean melee, boolean fall) {
+    public static float healthAfterIncoming(double blastRange, boolean blasts, boolean melee, boolean fall) {
+        return EntityUtil.totalHealth(MC.player) - possibleIncoming(blastRange, blasts, melee, fall);
+    }
+
+    private static float possibleIncoming(double blastRange, boolean blasts, boolean melee, boolean fall) {
         if (MC.player == null || MC.level == null) {
             return 0;
         }

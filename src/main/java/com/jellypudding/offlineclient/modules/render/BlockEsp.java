@@ -1,6 +1,5 @@
 package com.jellypudding.offlineclient.modules.render;
 
-import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.jellypudding.offlineclient.event.Subscribe;
@@ -428,11 +427,7 @@ public final class BlockEsp extends Module {
 
         private JsonElement toJson() {
             JsonObject out = new JsonObject();
-            JsonArray rows = new JsonArray();
-            for (Setting<?> setting : style.settings()) {
-                rows.add(setting.toJson());
-            }
-            out.add("style", rows);
+            out.add("style", style.toJson());
             out.add("tracer", tracer.toJson());
             out.add("tracerColour", tracerColor.toJson());
             return out;
@@ -444,12 +439,8 @@ public final class BlockEsp extends Module {
             }
             JsonObject o = json.getAsJsonObject();
             own.setValue(true);
-            if (o.has("style") && o.get("style").isJsonArray()) {
-                JsonArray rows = o.getAsJsonArray("style");
-                Setting<?>[] settings = style.settings();
-                for (int i = 0; i < settings.length && i < rows.size(); i++) {
-                    settings[i].fromJson(rows.get(i));
-                }
+            if (o.has("style")) {
+                style.fromJson(o.get("style"));
             }
             if (o.has("tracer")) {
                 tracer.fromJson(o.get("tracer"));

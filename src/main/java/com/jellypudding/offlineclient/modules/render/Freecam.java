@@ -20,6 +20,7 @@ import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.ChunkRebuild;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.InputUtil;
+import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.RotationManager;
 import com.jellypudding.offlineclient.util.RotationPriority;
 import net.minecraft.client.CameraType;
@@ -130,8 +131,13 @@ public final class Freecam extends Module {
         super("Freecam", "Fly the camera around whilst your character stays still.", Category.RENDER);
         addSettings(start, speed, verticalSpeed, inputTarget, interactFrom, scrollSensitivity, hideHand,
             blockClicks, rotate, staySneaking, stillView, tracer, tracerColor, disableOnDamage, disableOnDeath,
-            disableOnLeave, reloadChunks);
+            disableOnLeave, clickToWalk, doubleClick, reloadChunks);
         searchTags("free camera", "spectator", "detach");
+    }
+
+    // The player's own model is only on screen in third person or Freecam.
+    public static boolean ownBodyVisible() {
+        return Modules.enabled(Freecam.class) || !mc.options.getCameraType().isFirstPerson();
     }
 
     @Override
@@ -272,7 +278,7 @@ public final class Freecam extends Module {
         dummyInput = null;
     }
 
-    // Fires even without a world. Leaving the server can be seen.
+    // Fires even without a world to catch leaving the server.
     @Subscribe
     private void onClientTick(ClientTickEvent event) {
         if (disableOnLeave.isOn() && mc.level == null && seededFor != null) {

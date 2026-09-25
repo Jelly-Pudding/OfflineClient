@@ -17,13 +17,12 @@ import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.ProjectileUtil;
 import com.jellypudding.offlineclient.util.RenderUtil;
+import com.jellypudding.offlineclient.util.RotationManager;
+import com.jellypudding.offlineclient.util.TargetFilter;
 import com.jellypudding.offlineclient.util.TargetPriority;
 
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.Mob;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.BowItem;
 import net.minecraft.world.item.CrossbowItem;
 import net.minecraft.world.item.ItemStack;
@@ -37,9 +36,6 @@ import java.util.List;
 // The pitch comes from the real arrow physics and the flight time leads the target.
 public final class BowAimbot extends Module {
 
-    public enum Calm { ALWAYS, ANGRY_ONLY, NEVER }
-
-
     // Pixels below the middle of the screen the readout sits.
     private static final int CROSSHAIR_GAP = 12;
 
@@ -50,10 +46,7 @@ public final class BowAimbot extends Module {
 
     private final EntityFilter filter = EntityFilter.living("Aim at", "aimed at", true,
         EntityFilter.Pick.NONE, List.of());
-    private final BoolSetting babies = new BoolSetting("Babies",
-        "Also aim at baby mobs.", true);
-    private final BoolSetting named = new BoolSetting("Named mobs",
-        "Also aim at mobs that have been given a name tag.", false);
+    private final TargetFilter targets = new TargetFilter();
     private final NumberSetting range = new NumberSetting("Range",
         "Furthest target to aim at in blocks.", 40, 5, 80, 1);
     private final EnumSetting<TargetPriority> priority = TargetPriority.setting("Aims at",
@@ -63,20 +56,6 @@ public final class BowAimbot extends Module {
     private final NumberSetting predictStrength = new NumberSetting("Predict strength",
         "How much of the worked out lead is used.", 100, 0, 200, 5, "%").min(0).max(200)
         .under(predict);
-    private final BoolSetting sleeping = new BoolSetting("Aim at sleeping",
-        "Also aim at players lying in a bed.", false);
-    private final BoolSetting invisible = new BoolSetting("Aim at invisible",
-        "Also aim at entities you cannot see.", false);
-    private final BoolSetting pets = new BoolSetting("Aim at pets",
-        "Also aim at tamed animals and mounts.", false);
-    private final EnumSetting<Calm> neutral = new EnumSetting<>("Neutral mobs",
-        "Whether mobs that only fight back are aimed at.", Calm.NEVER)
-        .describe(Calm.ALWAYS, "Always aim at them.")
-        .describe(Calm.ANGRY_ONLY, "Only once they have turned on you.")
-        .describe(Calm.NEVER, "Never aim at them.");
-    private final NumberSetting flying = new NumberSetting("Ignore flying",
-        "Skip players with no block this far under them. Nought turns it off.",
-        0, 0, 4, 0.5, " blocks").min(0);
     private final BoolSetting walls = new BoolSetting("Through walls",
         "Also aim at targets you cannot see.", false);
     private final BoolSetting render = new BoolSetting("Highlight",
@@ -97,8 +76,8 @@ public final class BowAimbot extends Module {
     public BowAimbot() {
         super("BowAimbot", "Aims your bow or crossbow at the nearest target whilst you draw it.", Category.COMBAT);
         addSettings(filter.settings());
-        addSettings(babies, named, sleeping, invisible, pets, neutral, flying,
-            range, priority, predict, predictStrength, walls,
+        addSettings(targets.settings());
+        addSettings(range, priority, predict, predictStrength, walls,
             render, highlightColor, readout, trajectory, noSlow);
         searchTags("bow aim", "crossbow", "aimbot", "arrow");
     }
@@ -179,58 +158,11 @@ public final class BowAimbot extends Module {
     }
 
     private boolean valid(Entity entity) {
-        if (entity == mc.player || entity == mc.getCameraEntity() || !filter.matches(entity)) {
+        if (entity == mc.player || entity == mc.getCameraEntity()
+            || mc.player.distanceTo(entity) > range.getValue() || !targets.attackable(entity, filter)) {
             return false;
-        }
-        if (!entity.isAlive() || mc.player.distanceTo(entity) > range.getValue()) {
-            return false;
-        }
-        if (!invisible.isOn() && entity.isInvisible()) {
-            return false;
-        }
-        if (entity instanceof Player player) {
-            if (player.isCreative() || EntityUtil.isFriend(player)) {
-                return false;
-            }
-            if (!sleeping.isOn() && player.isSleeping()) {
-                return false;
-            }
-            if (flying.getValue() > 0 && airborne(player)) {
-                return false;
-            }
-        } else {
-            if (!pets.isOn() && entity instanceof Mob mob && EntityUtil.isPet(mob)) {
-                return false;
-            }
-            if (entity instanceof Mob mob && EntityUtil.isNeutral(mob) && skipNeutral(mob)) {
-                return false;
-            }
-            if (entity instanceof LivingEntity living && living.isDeadOrDying()) {
-                return false;
-            }
-            if (!babies.isOn() && entity instanceof LivingEntity living && living.isBaby()) {
-                return false;
-            }
-            if (!named.isOn() && entity.hasCustomName()) {
-                return false;
-            }
         }
         return walls.isOn() || mc.player.hasLineOfSight(entity);
-    }
-
-    private boolean skipNeutral(Mob mob) {
-        return switch (neutral.getValue()) {
-            case ALWAYS -> false;
-            case ANGRY_ONLY -> EntityUtil.isCalm(mob);
-            case NEVER -> true;
-        };
-    }
-
-    // True whilst nothing solid sits under the player within the set drop.
-    private boolean airborne(Player player) {
-        AABB feet = player.getBoundingBox().move(0, -flying.getValue(), 0)
-            .expandTowards(0, flying.getValue(), 0);
-        return mc.level.noCollision(player, feet);
     }
 
     // Turns the player towards the point the arrow needs to fly through.
@@ -260,16 +192,8 @@ public final class BowAimbot extends Module {
             }
         }
 
-        double dx = aimPoint.x - eye.x;
-        double dz = aimPoint.z - eye.z;
-        float yaw = (float) Math.toDegrees(Math.atan2(dz, dx)) - 90f;
-        float pitch;
-        if (solution == null) {
-            double dy = aimPoint.y - eye.y;
-            pitch = (float) -Math.toDegrees(Math.atan2(dy, Math.sqrt(dx * dx + dz * dz)));
-        } else {
-            pitch = (float) -solution[0];
-        }
+        float yaw = RotationManager.yawTo(aimPoint);
+        float pitch = solution == null ? RotationManager.pitchTo(aimPoint) : (float) -solution[0];
 
         // The view itself turns. A bow shot has to leave from where the camera points.
         mc.player.setYRot(yaw);
@@ -300,7 +224,7 @@ public final class BowAimbot extends Module {
         if (ticks <= 0) {
             return 0;
         }
-        return (1 - Math.pow(ProjectileUtil.ARROW_DRAG, ticks)) / (1 - ProjectileUtil.ARROW_DRAG);
+        return (1 - Math.pow(ProjectileUtil.AIR_DRAG, ticks)) / (1 - ProjectileUtil.AIR_DRAG);
     }
 
     // Finds the lowest launch angle that lands an arrow on the point.
@@ -347,11 +271,11 @@ public final class BowAimbot extends Module {
     // Ticks an arrow needs to travel the horizontal distance or NaN if it never gets there.
     private static double flightTicks(double angleDegrees, double distance, double speed) {
         double horizontal = speed * Math.cos(Math.toRadians(angleDegrees));
-        double reach = horizontal / (1 - ProjectileUtil.ARROW_DRAG);
+        double reach = horizontal / (1 - ProjectileUtil.AIR_DRAG);
         if (horizontal <= 0 || distance >= reach) {
             return Double.NaN;
         }
-        return Math.log(1 - distance / reach) / Math.log(ProjectileUtil.ARROW_DRAG);
+        return Math.log(1 - distance / reach) / Math.log(ProjectileUtil.AIR_DRAG);
     }
 
     // Height an arrow reaches at the horizontal distance using the closed
@@ -362,9 +286,9 @@ public final class BowAimbot extends Module {
             return Double.NaN;
         }
         double vertical = speed * Math.sin(Math.toRadians(angleDegrees));
-        double terminal = ProjectileUtil.ARROW_GRAVITY / (1 - ProjectileUtil.ARROW_DRAG);
-        double fallen = 1 - Math.pow(ProjectileUtil.ARROW_DRAG, ticks);
-        return (vertical + terminal) * fallen / (1 - ProjectileUtil.ARROW_DRAG) - terminal * ticks;
+        double terminal = ProjectileUtil.ARROW_GRAVITY / (1 - ProjectileUtil.AIR_DRAG);
+        double fallen = 1 - Math.pow(ProjectileUtil.AIR_DRAG, ticks);
+        return (vertical + terminal) * fallen / (1 - ProjectileUtil.AIR_DRAG) - terminal * ticks;
     }
 
     // A word under the crosshair that says when to let go.

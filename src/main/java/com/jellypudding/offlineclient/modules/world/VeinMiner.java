@@ -10,6 +10,7 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.render.BoxStyle;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
+import com.jellypudding.offlineclient.setting.ListMode;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.BlockMiner;
@@ -35,8 +36,6 @@ public final class VeinMiner extends Module {
 
     public enum Targets { ORES, ORES_AND_LOGS, ANY_BLOCK, LIST }
 
-    public enum ListMode { WHITELIST, BLACKLIST }
-
     private final NumberSetting range = new NumberSetting("Range",
         "How far from your eyes a vein block may be.", 4.5, 1, 6, 0.1).min(1).max(6);
     private final NumberSetting delay = new NumberSetting("Delay",
@@ -53,10 +52,8 @@ public final class VeinMiner extends Module {
         "The blocks the list applies to. Click to pick them.", BuiltInRegistries.BLOCK,
         List.of(Blocks.STONE, Blocks.DIRT, Blocks.GRASS_BLOCK))
         .under(targets, Targets.LIST);
-    private final EnumSetting<ListMode> listMode = new EnumSetting<>("List mode",
-        "What the list means.", ListMode.BLACKLIST)
-        .describe(ListMode.WHITELIST, "Only the listed blocks start a vein.")
-        .describe(ListMode.BLACKLIST, "Everything but the listed blocks starts a vein.")
+    private final EnumSetting<ListMode> listMode = ListMode.setting("List mode", ListMode.BLACKLIST,
+        "Only the listed blocks start a vein.", "Everything but the listed blocks starts a vein.")
         .under(targets, Targets.LIST);
     private final BoolSetting flat = new BoolSetting("Flat",
         "Never mines below your feet.", false);
@@ -216,7 +213,6 @@ public final class VeinMiner extends Module {
         }
     }
 
-    // Range plus the optional floor guard and line of sight test.
     private boolean reachable(BlockPos pos) {
         if (BlockUtil.distanceTo(pos) > range.getValue()) {
             return false;
@@ -238,7 +234,7 @@ public final class VeinMiner extends Module {
             case ORES -> BlockUtil.isOre(state);
             case ORES_AND_LOGS -> BlockUtil.isOre(state) || state.is(BlockTags.LOGS);
             case ANY_BLOCK -> true;
-            case LIST -> blocks.contains(state.getBlock()) == listMode.is(ListMode.WHITELIST);
+            case LIST -> listMode.getValue().admits(blocks.contains(state.getBlock()));
         };
     }
 

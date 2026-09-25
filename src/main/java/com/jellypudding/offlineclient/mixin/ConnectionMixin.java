@@ -65,7 +65,7 @@ public abstract class ConnectionMixin extends SimpleChannelInboundHandler<Packet
         at = @At(value = "INVOKE",
             target = "Lnet/minecraft/network/Connection;genericsFtw(Lnet/minecraft/network/protocol/Packet;Lnet/minecraft/network/PacketListener;)V"))
     private void wrapHandle(Packet<?> packet, PacketListener listener, Operation<Void> original) {
-        // Bundles already had an event each in unpackBundle.
+        // unpackBundle fires an event for each packet inside a bundle.
         if (packet instanceof ClientboundBundlePacket) {
             original.call(packet, listener);
             return;

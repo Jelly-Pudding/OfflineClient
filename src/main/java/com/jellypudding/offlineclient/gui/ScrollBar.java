@@ -36,10 +36,6 @@ public final class ScrollBar {
         this.offset = Math.max(0, offset);
     }
 
-    public boolean isDragging() {
-        return dragging;
-    }
-
     public static int clamp(int value, int total, int view) {
         return Math.clamp(value, 0, Math.max(0, total - view));
     }

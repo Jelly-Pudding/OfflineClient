@@ -27,8 +27,7 @@ public abstract class EntityRendererMixin {
         at = @At("HEAD"), cancellable = true)
     private void onShouldRender(Entity entity, Frustum frustum, double x, double y, double z,
                                 float partialTicks, CallbackInfoReturnable<Boolean> cir) {
-        if (entity instanceof FakePlayer.Body body && body.hidesAroundCamera()
-            && body.getBoundingBox().contains(x, y, z)) {
+        if (entity instanceof FakePlayer.Body body && body.hidesFrom(x, y, z)) {
             cir.setReturnValue(false);
             return;
         }

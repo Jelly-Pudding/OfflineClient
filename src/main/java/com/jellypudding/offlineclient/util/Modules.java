@@ -63,7 +63,7 @@ public final class Modules {
             return true;
         }
         AutoPotion potion = get(AutoPotion.class);
-        return potion != null && potion != asker && potion.isDrinking();
+        return potion != null && potion != asker && potion.isBusy();
     }
 
     // True whilst either feeder is putting something away.

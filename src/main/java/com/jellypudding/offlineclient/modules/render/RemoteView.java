@@ -63,8 +63,7 @@ public final class RemoteView extends Module {
     protected void onEnable() {
         viewed = inGame() ? pickTarget() : null;
         if (viewed == null) {
-            ChatUtil.error("Nothing to view was found.");
-            setEnabled(false);
+            disable("Nothing to view was found.");
             return;
         }
         wasInvisible = viewed.isInvisible();

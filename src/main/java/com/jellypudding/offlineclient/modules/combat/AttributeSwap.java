@@ -15,6 +15,8 @@ import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.ItemUtil;
 import com.jellypudding.offlineclient.util.Modules;
+import com.jellypudding.offlineclient.util.WeaponKinds;
+import com.jellypudding.offlineclient.util.WeaponUtil;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.tags.EntityTypeTags;
 import net.minecraft.tags.ItemTags;
@@ -26,7 +28,6 @@ import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.MaceItem;
-import net.minecraft.world.item.TridentItem;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.phys.AABB;
@@ -142,20 +143,7 @@ public final class AttributeSwap extends Module {
         "Stay put unless KillAura is on.", false);
     private final BoolSetting onlyOnWeapon = new BoolSetting("Only on weapon",
         "Only swap whilst you already hold one of the ticked kinds.", false);
-    private final BoolSetting sword = new BoolSetting("Sword", "A sword counts.", true)
-        .under(onlyOnWeapon);
-    private final BoolSetting axe = new BoolSetting("Axe", "An axe counts.", true)
-        .under(onlyOnWeapon);
-    private final BoolSetting pickaxe = new BoolSetting("Pickaxe", "A pickaxe counts.", true)
-        .under(onlyOnWeapon);
-    private final BoolSetting shovel = new BoolSetting("Shovel", "A shovel counts.", true)
-        .under(onlyOnWeapon);
-    private final BoolSetting hoe = new BoolSetting("Hoe", "A hoe counts.", true)
-        .under(onlyOnWeapon);
-    private final BoolSetting mace = new BoolSetting("Mace", "A mace counts.", true)
-        .under(onlyOnWeapon);
-    private final BoolSetting trident = new BoolSetting("Trident", "A trident counts.", true)
-        .under(onlyOnWeapon);
+    private final WeaponKinds weaponKinds = new WeaponKinds(onlyOnWeapon);
 
     private final SlotSwap slots = new SlotSwap();
     private int timer;
@@ -169,7 +157,8 @@ public final class AttributeSwap extends Module {
             maces, regularMace, density, breach, windBurst,
             spears, lunge, reach, keepLungeSpear,
             others, impaling,
-            onlyWithKillAura, onlyOnWeapon, sword, axe, pickaxe, shovel, hoe, mace, trident);
+            onlyWithKillAura, onlyOnWeapon);
+        addSettings(weaponKinds.settings());
         searchTags("attribute", "damage swap", "hotbar", "spear", "mace");
     }
 
@@ -260,17 +249,7 @@ public final class AttributeSwap extends Module {
         if (onlyWithKillAura.isOn() && !Modules.enabled(KillAura.class)) {
             return false;
         }
-        return !onlyOnWeapon.isOn() || allowedWeapon(mc.player.getMainHandItem());
-    }
-
-    private boolean allowedWeapon(ItemStack held) {
-        return sword.isOn() && held.is(ItemTags.SWORDS)
-            || axe.isOn() && held.is(ItemTags.AXES)
-            || pickaxe.isOn() && held.is(ItemTags.PICKAXES)
-            || shovel.isOn() && held.is(ItemTags.SHOVELS)
-            || hoe.isOn() && held.is(ItemTags.HOES)
-            || mace.isOn() && held.getItem() instanceof MaceItem
-            || trident.isOn() && held.getItem() instanceof TridentItem;
+        return !onlyOnWeapon.isOn() || weaponKinds.matches(mc.player.getMainHandItem());
     }
 
     // The slot packet leaves before the attack packet.
@@ -327,7 +306,7 @@ public final class AttributeSwap extends Module {
     private int bestSlot(LivingEntity target) {
         ItemStack held = mc.player.getMainHandItem();
         if (shieldBreaker.isOn() && target.isBlocking() && !held.is(ItemTags.AXES)) {
-            int axeSlot = AutoWeapon.bestAxeSlot(target, antiBreak.isOn());
+            int axeSlot = WeaponUtil.bestAxeSlot(target, antiBreak.isOn());
             if (axeSlot != -1) {
                 return axeSlot;
             }
@@ -426,7 +405,8 @@ public final class AttributeSwap extends Module {
         return score;
     }
 
-    // The vanilla smash bonus. Four a block to three then two to eight then one.
+    // The vanilla smash bonus. Four a block for the first three blocks then two a block
+    // up to eight and one a block beyond.
     private static double smashBonus(double fall) {
         if (fall <= 3) {
             return 4 * fall;

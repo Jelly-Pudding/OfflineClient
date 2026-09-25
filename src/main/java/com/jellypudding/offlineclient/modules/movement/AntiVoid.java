@@ -180,18 +180,8 @@ public final class AntiVoid extends Module {
     }
 
     private boolean placeUnderfoot() {
-        int slot = BlockUtil.findBlockSlot();
-        if (slot == -1) {
-            return false;
-        }
         BlockPos target = mc.player.blockPosition().below();
-        if (!BlockUtil.isReplaceable(target)) {
-            return false;
-        }
-        slots.select(slot);
-        boolean placed = BlockUtil.placeAny(target, rotate.isOn(), true);
-        slots.restore();
-        if (!placed) {
+        if (!BlockUtil.placeFrom(slots, BlockUtil.findBlockSlot(), target, rotate.isOn())) {
             return false;
         }
         Vec3 motion = mc.player.getDeltaMovement();

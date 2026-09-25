@@ -12,13 +12,18 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public final class ModuleListElement extends HudElement {
 
     public enum Sort { LENGTH, ALPHABETICAL }
 
     private static final int LINE = 10;
+
+    // How quickly a row closes on its new place. Most of the way in a tenth of a second.
+    private static final double GLIDE_RATE = 20;
 
     private final EnumSetting<Sort> sort = new EnumSetting<>("List order",
         "How the rows are ordered.", Sort.LENGTH)
@@ -41,6 +46,10 @@ public final class ModuleListElement extends HudElement {
         add(sort, color, suffixColor, bracketColor, background, backgroundColor);
     }
 
+    // Where each row is drawn right now. A row that changes place glides there.
+    private final Map<Module, Double> rowY = new HashMap<>();
+    private long lastFrame;
+
     @Override
     public boolean visible() {
         return isActive() && !shown().isEmpty();
@@ -59,7 +68,8 @@ public final class ModuleListElement extends HudElement {
         if (sort.is(Sort.ALPHABETICAL)) {
             enabled.sort(Comparator.comparing(Module::getName, String.CASE_INSENSITIVE_ORDER));
         } else {
-            enabled.sort(Comparator.comparingInt((Module module) -> rowWidth(font, module)).reversed());
+            enabled.sort(Comparator.comparingInt((Module module) -> rowWidth(font, module)).reversed()
+                .thenComparing(Module::getName, String.CASE_INSENSITIVE_ORDER));
         }
         return enabled;
     }
@@ -82,8 +92,14 @@ public final class ModuleListElement extends HudElement {
         int tint = color.getColor();
         int suffixTint = suffixColor.getColor();
         int bracketTint = bracketColor.getColor();
-        int y = 0;
-        for (Module module : enabled) {
+        double keep = glideKeep();
+        rowY.keySet().retainAll(enabled);
+        for (int row = 0; row < enabled.size(); row++) {
+            Module module = enabled.get(row);
+            int target = row * LINE;
+            double drawn = target + (rowY.getOrDefault(module, (double) target) - target) * keep;
+            rowY.put(module, drawn);
+            int y = (int) Math.round(drawn);
             int x = widest - rowWidth(font, module);
             String name = module.getName();
             String suffix = module.getSuffix();
@@ -97,8 +113,15 @@ public final class ModuleListElement extends HudElement {
                 x += font.width(suffix);
                 context.text(font, "]", x, y, bracketTint, true);
             }
-            y += LINE;
         }
+    }
+
+    // The share of the gap to its place a row still has left after this frame.
+    private double glideKeep() {
+        long now = System.nanoTime();
+        double seconds = lastFrame == 0 ? 0 : Math.min((now - lastFrame) / 1.0E9, 1);
+        lastFrame = now;
+        return Math.exp(-GLIDE_RATE * seconds);
     }
 
     @Override

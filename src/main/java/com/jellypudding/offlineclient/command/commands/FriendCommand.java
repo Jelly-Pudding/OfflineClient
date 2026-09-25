@@ -26,7 +26,7 @@ public final class FriendCommand extends Command {
             if (friends.getAll().isEmpty()) {
                 ChatUtil.message("§7Your friends list is empty.");
             } else {
-                ChatUtil.message("§3Friends: §b" + String.join("§7 §b", friends.getAll()));
+                ChatUtil.message("§3Friends §b" + String.join("§7 §b", friends.getAll()));
             }
             return;
         }

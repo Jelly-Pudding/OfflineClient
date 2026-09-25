@@ -1,13 +1,13 @@
 package com.jellypudding.offlineclient.mixin;
 
 import com.jellypudding.offlineclient.modules.render.XRay;
+import com.jellypudding.offlineclient.util.Modules;
 import com.llamalad7.mixinextras.injector.ModifyReturnValue;
 import com.mojang.blaze3d.vertex.QuadInstance;
 import net.minecraft.client.renderer.block.BlockAndTintGetter;
 import net.minecraft.client.renderer.block.BlockQuadOutput;
 import net.minecraft.client.renderer.block.ModelBlockRenderer;
 import net.minecraft.client.renderer.block.dispatch.BlockStateModelPart;
-import net.minecraft.client.resources.model.geometry.BakedQuad;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.util.ARGB;
@@ -50,8 +50,7 @@ public abstract class ModelBlockRendererMixin {
     @Inject(
         method = "putQuadWithTint(Lnet/minecraft/client/renderer/block/BlockQuadOutput;FFFLnet/minecraft/client/renderer/block/BlockAndTintGetter;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/core/BlockPos;Lnet/minecraft/client/resources/model/geometry/BakedQuad;)V",
         at = @At("HEAD"))
-    private void onPutQuad(BlockQuadOutput output, float x, float y, float z, BlockAndTintGetter level,
-                           BlockState state, BlockPos pos, BakedQuad quad, CallbackInfo ci) {
+    private void onPutQuad(CallbackInfo ci) {
         if (XRay.meshingTranslucent()) {
             quadInstance.multiplyColor(ARGB.color(XRay.meshAlpha(), 255, 255, 255));
         }
@@ -66,7 +65,7 @@ public abstract class ModelBlockRendererMixin {
         if (original) {
             return true;
         }
-        XRay xray = XRay.get();
+        XRay xray = Modules.get(XRay.class);
         if (xray == null || !xray.isEnabled() || !xray.isVisible(state.getBlock())) {
             return false;
         }

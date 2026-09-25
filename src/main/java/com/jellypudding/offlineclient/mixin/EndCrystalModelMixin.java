@@ -1,6 +1,7 @@
 package com.jellypudding.offlineclient.mixin;
 
 import com.jellypudding.offlineclient.modules.render.Chams;
+import com.jellypudding.offlineclient.util.Modules;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import net.minecraft.client.model.object.crystal.EndCrystalModel;
 import net.minecraft.client.renderer.entity.state.EndCrystalRenderState;
@@ -19,7 +20,7 @@ public abstract class EndCrystalModelMixin {
         at = @At(value = "INVOKE",
             target = "Lnet/minecraft/client/renderer/entity/EndCrystalRenderer;getY(F)F"))
     private float onBounce(float original, EndCrystalRenderState state) {
-        Chams chams = Chams.get();
+        Chams chams = Modules.get(Chams.class);
         if (chams == null || !chams.reshapesCrystals()) {
             return original;
         }
@@ -34,7 +35,7 @@ public abstract class EndCrystalModelMixin {
             target = "Lnet/minecraft/client/renderer/entity/state/EndCrystalRenderState;ageInTicks:F",
             opcode = Opcodes.GETFIELD, ordinal = 0))
     private float onSpin(float original) {
-        Chams chams = Chams.get();
+        Chams chams = Modules.get(Chams.class);
         return chams == null || !chams.reshapesCrystals() ? original : original * chams.crystalSpin();
     }
 }

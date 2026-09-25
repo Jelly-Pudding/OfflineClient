@@ -9,6 +9,7 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.path.PathFinder;
 import com.jellypudding.offlineclient.path.PathGoal;
 import com.jellypudding.offlineclient.path.PathWalker;
+import com.jellypudding.offlineclient.util.CornerPicker;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.render.BoxStyle;
 import com.jellypudding.offlineclient.setting.BoolSetting;
@@ -17,21 +18,19 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockMiner;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.PacketBreaker;
 import com.jellypudding.offlineclient.util.SwingMode;
-import net.minecraft.client.multiplayer.ClientLevel;
+import com.jellypudding.offlineclient.util.WorldWatch;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
-import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.function.Predicate;
 
 // Digs out a box marked with two corners. Blocks come out from the top down.
@@ -65,21 +64,15 @@ public final class Excavator extends Module {
 
     public enum Speed { LEGIT, INSTANT }
 
-    // Ticks before a one hit block that did not vanish is sent again.
-    private static final int RETRY_TICKS = 10;
-
     private final PathFinder finder = new PathFinder();
     private final PathWalker walker = new PathWalker();
 
-    private BlockPos first;
-    private BlockPos second;
+    private final CornerPicker corners = new CornerPicker();
     private final List<BlockPos> remaining = new ArrayList<>();
     private BlockPos current;
-    private ClientLevel lastLevel;
+    private final WorldWatch world = new WorldWatch();
 
-    // One hit blocks already sent and the tick they may be sent again.
-    private final Map<BlockPos, Integer> attempted = new HashMap<>();
-    private int lastTick;
+    private final PacketBreaker breaker = new PacketBreaker();
 
     public Excavator() {
         super("Excavator", "Digs out a box. Press the bind at each corner whilst it is on.", Category.WORLD);
@@ -91,13 +84,8 @@ public final class Excavator extends Module {
 
     @Override
     public String getSuffix() {
-        if (first == null) {
-            return "pick a corner";
-        }
-        if (second == null) {
-            return "pick the other corner";
-        }
-        return remaining.size() + " left";
+        String prompt = corners.prompt();
+        return prompt != null ? prompt : remaining.size() + " left";
     }
 
     @Override
@@ -108,14 +96,14 @@ public final class Excavator extends Module {
     @Override
     protected void onEnable() {
         clear();
-        lastLevel = mc.level;
+        world.accept();
     }
 
     @Override
     protected void onDisable() {
         BlockMiner.release();
         clear();
-        lastLevel = null;
+        world.forget();
     }
 
     // Bringing this back at launch would start digging at once.
@@ -126,10 +114,9 @@ public final class Excavator extends Module {
 
     private void clear() {
         stopWalking();
-        first = null;
-        second = null;
+        corners.clear();
         remaining.clear();
-        attempted.clear();
+        breaker.reset();
         current = null;
     }
 
@@ -141,7 +128,8 @@ public final class Excavator extends Module {
             toggle();
             return;
         }
-        if (mc.hitResult instanceof BlockHitResult hit && hit.getType() == HitResult.Type.BLOCK) {
+        BlockHitResult hit = BlockUtil.aimedBlock();
+        if (hit != null) {
             mark(hit.getBlockPos().immutable());
             return;
         }
@@ -149,15 +137,15 @@ public final class Excavator extends Module {
     }
 
     private void mark(BlockPos pos) {
-        if (first == null || second != null) {
+        if (!corners.started() || corners.done()) {
             clear();
-            first = pos;
+            corners.mark(pos);
             ChatUtil.message("§bExcavator §7first corner at §f" + BlockUtil.text(pos) + "§7.");
             return;
         }
-        second = pos;
+        corners.mark(pos);
         if (!build()) {
-            second = null;
+            corners.undoSecond();
             return;
         }
         if (logSelection.isOn()) {
@@ -170,16 +158,14 @@ public final class Excavator extends Module {
     private boolean build() {
         remaining.clear();
         current = null;
-        long volume = (long) (Math.abs(first.getX() - second.getX()) + 1)
-            * (Math.abs(first.getY() - second.getY()) + 1)
-            * (Math.abs(first.getZ() - second.getZ()) + 1);
+        long volume = corners.volume();
         if (volume > maxBlocks.getInt()) {
             ChatUtil.error("That box holds " + volume + " blocks and the limit is "
                 + maxBlocks.getInt() + ". Pick a smaller one.");
             return false;
         }
         Vec3 eye = mc.player.getEyePosition();
-        for (BlockPos pos : BlockPos.betweenClosed(first, second)) {
+        for (BlockPos pos : BlockPos.betweenClosed(corners.first(), corners.second())) {
             remaining.add(pos.immutable());
         }
         Comparator<BlockPos> topDownThenNear = Comparator.<BlockPos>comparingInt(BlockPos::getY).reversed()
@@ -194,13 +180,12 @@ public final class Excavator extends Module {
         if (!inGame() || mc.player.isSpectator()) {
             return;
         }
-        if (mc.level != lastLevel) {
+        if (world.changed()) {
             // Corners taken in another world point at nothing here.
-            lastLevel = mc.level;
             clear();
             return;
         }
-        if (second == null) {
+        if (!corners.done()) {
             return;
         }
         // Holding attack means the player is mining by hand.
@@ -273,21 +258,14 @@ public final class Excavator extends Module {
     // Sends the break packets for the one hit blocks in reach. True when any
     // went out. Slower blocks fall through to the held click path.
     private boolean breakInstantly() {
-        int now = mc.player.tickCount;
-        if (now < lastTick) {
-            attempted.clear();
-        }
-        lastTick = now;
-        attempted.values().removeIf(expiry -> expiry <= now);
+        breaker.tick();
         int sent = 0;
         while (sent < perTick.getInt()) {
-            BlockPos pos = next(candidate -> BlockUtil.canInstantBreak(candidate)
-                && !attempted.containsKey(candidate));
+            BlockPos pos = next(breaker::canSendInstant);
             if (pos == null) {
                 break;
             }
-            BlockMiner.breakInstantly(pos);
-            attempted.put(pos, now + RETRY_TICKS);
+            breaker.send(pos);
             current = pos;
             sent++;
         }
@@ -317,17 +295,15 @@ public final class Excavator extends Module {
 
     @Subscribe
     private void onRender3D(Render3DEvent event) {
-        if (first == null) {
+        if (!corners.started()) {
             return;
         }
-        if (second == null) {
-            boxStyle.draw(event.getBatch(), new AABB(first).inflate(0.005), true);
+        boxStyle.draw(event.getBatch(), corners.box().inflate(0.005), true);
+        if (!corners.done()) {
             return;
         }
-        AABB box = new AABB(first).minmax(new AABB(second));
-        boxStyle.draw(event.getBatch(), box.inflate(0.005), true);
-        event.getBatch().outlineBox(new AABB(first).deflate(0.3), CORNER_COLOR, true);
-        event.getBatch().outlineBox(new AABB(second).deflate(0.3), CORNER_COLOR, true);
+        event.getBatch().outlineBox(new AABB(corners.first()).deflate(0.3), CORNER_COLOR, true);
+        event.getBatch().outlineBox(new AABB(corners.second()).deflate(0.3), CORNER_COLOR, true);
         if (current != null) {
             targetStyle.draw(event.getBatch(), current, false);
         }

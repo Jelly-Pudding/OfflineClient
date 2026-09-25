@@ -33,7 +33,7 @@ public final class TimeChanger extends Module {
         return time.getValueString();
     }
 
-    // Noted by ClientClockManagerMixin.
+    // Handed over by ClientClockManagerMixin.
     private static volatile Object overworldClock;
 
     public static void noteOverworldClock(Object instance) {

@@ -8,8 +8,8 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
-import com.jellypudding.offlineclient.util.BlockUtil;
-import com.jellypudding.offlineclient.util.SwingMode;
+import com.jellypudding.offlineclient.util.Cooldowns;
+import com.jellypudding.offlineclient.util.EntityUtil;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
@@ -18,12 +18,8 @@ import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.TamableAnimal;
 import net.minecraft.world.entity.animal.Animal;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.phys.EntityHitResult;
 
-import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 // Feeds the food in your hand to any animal that will take it.
 public final class AutoBreed extends Module {
@@ -61,10 +57,9 @@ public final class AutoBreed extends Module {
 
     private static final int FULL_COOLDOWN = 6600;
 
-    // Every animal fed and the tick it was fed on.
-    private final Map<Integer, Integer> fed = new LinkedHashMap<>();
+    // Animals fed lately. One comes back once feeding it again is allowed.
+    private final Cooldowns<Integer> fed = new Cooldowns<>();
     private int count;
-    private int lastTick;
 
     public AutoBreed() {
         super("AutoBreed", "Breeds the animals around you with the food you hold.", Category.WORLD);
@@ -74,7 +69,7 @@ public final class AutoBreed extends Module {
 
     @Override
     public String getSuffix() {
-        return count == 0 ? null : count + " fed";
+        return count(count, "fed");
     }
 
     @Override
@@ -88,8 +83,7 @@ public final class AutoBreed extends Module {
         if (!inGame() || mc.player.isSpectator() || mc.gui.screen() != null) {
             return;
         }
-        int now = mc.player.tickCount;
-        forgetOld(now);
+        fed.tick();
         InteractionHand useHand = hand.is(Hand.OFF_HAND) ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND;
         ItemStack food = mc.player.getItemInHand(useHand);
         if (food.isEmpty()) {
@@ -102,21 +96,17 @@ public final class AutoBreed extends Module {
             if (mc.player.distanceTo(animal) > range.getValue()) {
                 continue;
             }
-            if (rotate.isOn()) {
-                BlockUtil.faceVector(animal.getBoundingBox().getCenter());
-            }
-            EntityHitResult hit = new EntityHitResult(animal, animal.getBoundingBox().getCenter());
-            if (mc.gameMode.interact(mc.player, animal, hit, useHand).consumesAction()) {
-                SwingMode.swingArm(useHand);
+            if (EntityUtil.interact(animal, useHand, rotate.isOn())) {
                 count++;
-                fed.put(animal.getId(), now);
+                // Without repeats an animal only returns after the game's longest cooldown.
+                fed.put(animal.getId(), repeat.isOn() ? interval.getInt() : FULL_COOLDOWN);
             }
             return;
         }
     }
 
     private boolean wanted(Animal animal, ItemStack food) {
-        if (!animal.isAlive() || !animals.contains(animal.getType()) || fed.containsKey(animal.getId())) {
+        if (!animal.isAlive() || !animals.contains(animal.getType()) || fed.contains(animal.getId())) {
             return false;
         }
         if (skipUntamed.isOn() && animal instanceof TamableAnimal tamable && !tamable.isTame()) {
@@ -127,22 +117,5 @@ public final class AutoBreed extends Module {
             return false;
         }
         return animal.isFood(food);
-    }
-
-    // An animal only comes back onto the list when feeding again is allowed.
-    private void forgetOld(int now) {
-        // The tick count restarts on a respawn.
-        if (now < lastTick) {
-            fed.clear();
-        }
-        lastTick = now;
-        // Without repeats an animal only returns after the game's longest cooldown.
-        int keep = repeat.isOn() ? interval.getInt() : FULL_COOLDOWN;
-        Iterator<Map.Entry<Integer, Integer>> it = fed.entrySet().iterator();
-        while (it.hasNext()) {
-            if (now - it.next().getValue() >= keep) {
-                it.remove();
-            }
-        }
     }
 }

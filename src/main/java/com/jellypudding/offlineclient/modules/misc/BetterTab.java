@@ -7,12 +7,12 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ColorUtil;
+import com.jellypudding.offlineclient.util.EntityUtil;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.network.chat.Component;
-import net.minecraft.world.level.GameType;
 
 // PlayerTabOverlayMixin calls into this for the ping column and the names
 // and the row limit and the column height.
@@ -21,9 +21,6 @@ public final class BetterTab extends Module {
     private static final long VANILLA_LIMIT = 80;
     private static final int VANILLA_COLUMN = 20;
     private static final int PING_ICON = 10;
-
-    // Looked up once per row whilst the list is open.
-    private static volatile BetterTab instance;
 
     private final BoolSetting ping = new BoolSetting("Ping",
         "Show the exact latency instead of the signal bars.", true);
@@ -53,12 +50,6 @@ public final class BetterTab extends Module {
         super("BetterTab", "Ping numbers and friend colours in the player list.", Category.MISC);
         addSettings(ping, friends, friendColor, self, selfColor, gameMode, raiseLimit, limit, columnHeight);
         searchTags("tab list", "player list", "latency");
-        instance = this;
-    }
-
-    // The registered module or null before the client has started.
-    public static BetterTab get() {
-        return instance;
     }
 
     public boolean showsPing() {
@@ -97,12 +88,12 @@ public final class BetterTab extends Module {
         Component name = original;
         int color = highlightColor(info);
         if (color != 0) {
-            // Server colour codes inside the name would fight the highlight. They go.
+            // Server colour codes inside the name would fight the highlight and are stripped.
             String plain = ChatFormatting.stripFormatting(original.getString());
             name = Component.literal(plain).withStyle(original.getStyle().withColor(color & 0xFFFFFF));
         }
         if (gameMode.isOn()) {
-            name = Component.empty().append(name).append(" [" + modeLetter(info.getGameMode()) + "]");
+            name = Component.empty().append(name).append(" [" + EntityUtil.gameModeLetter(info.getGameMode()) + "]");
         }
         return name;
     }
@@ -116,18 +107,5 @@ public final class BetterTab extends Module {
             return friendColor.getColor();
         }
         return 0;
-    }
-
-    private static String modeLetter(GameType mode) {
-        if (mode == null) {
-            return "?";
-        }
-        if (mode == GameType.SPECTATOR) {
-            return "Sp";
-        }
-        if (mode == GameType.CREATIVE) {
-            return "C";
-        }
-        return mode == GameType.ADVENTURE ? "A" : "S";
     }
 }

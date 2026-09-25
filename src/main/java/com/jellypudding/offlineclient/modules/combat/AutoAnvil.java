@@ -12,19 +12,16 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
+import com.jellypudding.offlineclient.util.PacketUtil;
 import com.jellypudding.offlineclient.util.TargetPriority;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.network.protocol.game.ClientboundOpenScreenPacket;
-import net.minecraft.network.protocol.game.ServerboundContainerClosePacket;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.level.block.AnvilBlock;
 import net.minecraft.world.level.block.BasePressurePlateBlock;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.ButtonBlock;
-import net.minecraft.world.phys.shapes.CollisionContext;
 
 // Places anvils in the air above an enemy.
 // A landing anvil damages the helmet of whoever is under it.
@@ -147,14 +144,10 @@ public final class AutoAnvil extends Module {
         slots.restore();
     }
 
-    // The server opens the repair menu for a click that lands on an anvil already down.
-    // The menu is closed on the server too. The next click is then not swallowed.
     @Subscribe
     private void onPacketReceive(PacketReceiveEvent event) {
-        if (closeMenu.isOn() && event.getPacket() instanceof ClientboundOpenScreenPacket packet
-            && packet.getType() == MenuType.ANVIL && mc.player != null) {
-            event.cancel();
-            mc.player.connection.send(new ServerboundContainerClosePacket(packet.getContainerId()));
+        if (closeMenu.isOn()) {
+            PacketUtil.closeAnvilMenu(event);
         }
     }
 
@@ -184,7 +177,7 @@ public final class AutoAnvil extends Module {
                 return false;
             }
         }
-        return mc.level.isUnobstructed(Blocks.ANVIL.defaultBlockState(), above, CollisionContext.empty());
+        return BlockUtil.unobstructed(above, Blocks.ANVIL.defaultBlockState());
     }
 
     @Subscribe

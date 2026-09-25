@@ -13,8 +13,6 @@ import java.util.List;
 // EntityRendererMixin flags them and LivingEntityRendererMixin forces the body to render.
 public final class TrueSight extends Module {
 
-    private static volatile TrueSight instance;
-
     private final EntityFilter filter = EntityFilter.living("Reveal", "revealed", true,
         EntityFilter.Pick.ALL, List.of());
     private final NumberSetting strength = new NumberSetting("Strength",
@@ -25,12 +23,6 @@ public final class TrueSight extends Module {
         addSettings(filter.settings());
         addSettings(strength);
         searchTags("invisible", "potion", "reveal");
-        instance = this;
-    }
-
-    // Null before the client has started.
-    public static TrueSight get() {
-        return instance;
     }
 
     public boolean applies(Entity entity) {

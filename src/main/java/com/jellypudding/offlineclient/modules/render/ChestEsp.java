@@ -15,11 +15,11 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ColorUtil;
+import com.jellypudding.offlineclient.util.WorldWatch;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.protocol.game.ServerboundUseItemOnPacket;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.ChestBlock;
 import net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity;
 import net.minecraft.world.level.block.entity.BarrelBlockEntity;
@@ -44,7 +44,6 @@ import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.phys.AABB;
 
-import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -154,7 +153,7 @@ public final class ChestEsp extends Module {
     private final Set<BlockPos> opened = ConcurrentHashMap.newKeySet();
     // Glow colour by position for the block entity renderer mixin. Replaced whole each tick.
     private volatile Map<BlockPos, Integer> glows = Map.of();
-    private WeakReference<Level> world = new WeakReference<>(null);
+    private final WorldWatch world = new WorldWatch();
 
     // The colour the block entity being drawn right now should glow in. Zero for none.
     private static int currentGlow;
@@ -238,8 +237,7 @@ public final class ChestEsp extends Module {
         if (!inGame()) {
             return;
         }
-        if (mc.level != world.get()) {
-            world = new WeakReference<>(mc.level);
+        if (world.changed()) {
             opened.clear();
         }
         int r = radius.getInt();

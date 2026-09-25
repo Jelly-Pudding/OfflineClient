@@ -12,7 +12,7 @@ import com.jellypudding.offlineclient.util.ChatUtil;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.BlockHitResult;
-import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -59,8 +59,8 @@ public final class GotoCommand extends Command {
     }
 
     private BlockPos pointedAt() {
-        if (OfflineClient.MC.hitResult instanceof BlockHitResult hit
-            && hit.getType() == HitResult.Type.BLOCK) {
+        BlockHitResult hit = BlockUtil.aimedBlock();
+        if (hit != null) {
             return hit.getBlockPos().above();
         }
         ChatUtil.error("Point at a block or type the coordinates.");
@@ -72,27 +72,8 @@ public final class GotoCommand extends Command {
             usage();
             return null;
         }
-        BlockPos from = player.blockPosition();
-        Integer x = coordinate(args[0], from.getX());
-        Integer y = coordinate(args[1], from.getY());
-        Integer z = coordinate(args[2], from.getZ());
-        if (x == null || y == null || z == null) {
-            ChatUtil.error("Those are not coordinates.");
-            return null;
-        }
-        return new BlockPos(x, y, z);
-    }
-
-    // A tilde means the spot you are standing on already.
-    private static Integer coordinate(String text, int origin) {
-        try {
-            if (text.startsWith("~")) {
-                return origin + (text.length() == 1 ? 0 : Integer.parseInt(text.substring(1)));
-            }
-            return Integer.parseInt(text);
-        } catch (NumberFormatException e) {
-            return null;
-        }
+        Vec3 spot = coordinates(args, 0, Vec3.atLowerCornerOf(player.blockPosition()));
+        return spot == null ? null : BlockPos.containing(spot);
     }
 
     private void stop() {

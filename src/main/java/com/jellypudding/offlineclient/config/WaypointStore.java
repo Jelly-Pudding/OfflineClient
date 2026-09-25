@@ -3,16 +3,12 @@ package com.jellypudding.offlineclient.config;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 import com.jellypudding.offlineclient.OfflineClient;
-import net.minecraft.client.multiplayer.ServerData;
+import com.jellypudding.offlineclient.util.ServerInfo;
 
-import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 
 // Named coordinates saved to offlineclient/waypoints.json.
 // Each one remembers the server and the dimension it was marked in.
@@ -40,27 +36,21 @@ public final class WaypointStore {
     private static final String OVERWORLD = "minecraft:overworld";
     private static final String NETHER = "minecraft:the_nether";
     // Eight overworld blocks to one nether block.
-    private static final int NETHER_SCALE = 8;
+    public static final int NETHER_SCALE = 8;
 
     private static WaypointStore instance;
 
     private final Path file;
     private final List<Waypoint> waypoints = new ArrayList<>();
 
-    private WaypointStore(Path folder) {
-        this.file = folder.resolve("waypoints.json");
+    private WaypointStore(Path file) {
+        this.file = file;
         load();
     }
 
     public static synchronized WaypointStore get() {
         if (instance == null) {
-            Path folder = OfflineClient.MC.gameDirectory.toPath().resolve("offlineclient");
-            try {
-                Files.createDirectories(folder);
-            } catch (IOException e) {
-                OfflineClient.LOG.error("Failed to create the waypoint folder", e);
-            }
-            instance = new WaypointStore(folder);
+            instance = new WaypointStore(DataFiles.path("waypoints.json"));
         }
         return instance;
     }
@@ -68,7 +58,7 @@ public final class WaypointStore {
     // Only the waypoints marked in the world the player is standing in.
     public List<Waypoint> here() {
         String dimension = currentDimension();
-        String server = currentServer();
+        String server = ServerInfo.key();
         List<Waypoint> matching = new ArrayList<>();
         for (Waypoint waypoint : waypoints) {
             if (waypoint.dimension().equals(dimension) && waypoint.server().equals(server)) {
@@ -82,7 +72,7 @@ public final class WaypointStore {
     // to this side. Empty anywhere but the overworld and the nether.
     public List<Waypoint> mirrored() {
         String dimension = currentDimension();
-        String server = currentServer();
+        String server = ServerInfo.key();
         String other = dimension.equals(OVERWORLD) ? NETHER : dimension.equals(NETHER) ? OVERWORLD : null;
         List<Waypoint> matching = new ArrayList<>();
         if (other == null) {
@@ -131,7 +121,7 @@ public final class WaypointStore {
     private static boolean sameSpot(Waypoint waypoint, String name) {
         return waypoint.name().equalsIgnoreCase(name)
             && waypoint.dimension().equals(currentDimension())
-            && waypoint.server().equals(currentServer());
+            && waypoint.server().equals(ServerInfo.key());
     }
 
     public void clear() {
@@ -146,32 +136,25 @@ public final class WaypointStore {
     }
 
     // Address of the server the player is on. Single player worlds share one key.
-    public static String currentServer() {
-        ServerData server = OfflineClient.MC.getCurrentServer();
-        return server == null ? "singleplayer" : server.ip.toLowerCase(Locale.ROOT);
+    private void load() {
+        DataFiles.readJson(file, WaypointStore::decode).ifPresent(waypoints::addAll);
     }
 
-    private void load() {
-        if (!Files.exists(file)) {
-            return;
+    private static List<Waypoint> decode(JsonElement root) {
+        List<Waypoint> decoded = new ArrayList<>();
+        for (JsonElement element : root.getAsJsonArray()) {
+            JsonObject o = element.getAsJsonObject();
+            decoded.add(new Waypoint(
+                o.get("name").getAsString(),
+                o.get("x").getAsInt(),
+                o.get("y").getAsInt(),
+                o.get("z").getAsInt(),
+                o.get("dimension").getAsString(),
+                o.get("server").getAsString(),
+                o.has("hue") ? o.get("hue").getAsInt() : Waypoint.AUTO_HUE,
+                o.has("hidden") && o.get("hidden").getAsBoolean()));
         }
-        try {
-            JsonElement root = JsonParser.parseString(Files.readString(file));
-            for (JsonElement element : root.getAsJsonArray()) {
-                JsonObject o = element.getAsJsonObject();
-                waypoints.add(new Waypoint(
-                    o.get("name").getAsString(),
-                    o.get("x").getAsInt(),
-                    o.get("y").getAsInt(),
-                    o.get("z").getAsInt(),
-                    o.get("dimension").getAsString(),
-                    o.get("server").getAsString(),
-                    o.has("hue") ? o.get("hue").getAsInt() : Waypoint.AUTO_HUE,
-                    o.has("hidden") && o.get("hidden").getAsBoolean()));
-            }
-        } catch (Exception e) {
-            OfflineClient.LOG.error("Failed to read waypoints", e);
-        }
+        return decoded;
     }
 
     private void save() {
@@ -192,6 +175,6 @@ public final class WaypointStore {
             }
             root.add(o);
         }
-        ConfigManager.write(file, root);
+        DataFiles.writeJson(file, root);
     }
 }

@@ -86,7 +86,7 @@ public abstract class RespawnBlockAura extends Module {
     private String targetName;
     protected String status;
 
-    // addSettings is final and files the settings away without handing out the module.
+    // The escape is safe because addSettings is final and never hands the module out.
     @SuppressWarnings("this-escape")
     protected RespawnBlockAura(String name, String description, String noun, float hue) {
         super(name, description, Category.COMBAT);
@@ -280,11 +280,8 @@ public abstract class RespawnBlockAura extends Module {
 
     // The reach allowed for a spot depending on whether it can be seen.
     protected double reach(Vec3 point, boolean placing) {
-        boolean seen = BlockUtil.canSee(point);
-        if (placing) {
-            return seen ? placeRange.getValue() : placeWallsRange.getValue();
-        }
-        return seen ? breakRange.getValue() : breakWallsRange.getValue();
+        return placing ? BlockUtil.reachFor(point, placeRange.getValue(), placeWallsRange.getValue())
+            : BlockUtil.reachFor(point, breakRange.getValue(), breakWallsRange.getValue());
     }
 
     protected boolean inReach(BlockPos pos, boolean placing) {
@@ -295,13 +292,17 @@ public abstract class RespawnBlockAura extends Module {
         return BlockUtil.distanceTo(pos) <= reach(centre, placing);
     }
 
-    protected boolean worthIt(float damage) {
-        return damage >= minDamage.getFloat();
-    }
-
-    protected boolean selfSafe(Vec3 source, BlockPos... ignored) {
-        return ExplosionUtil.selfSafe(source, ExplosionUtil.RESPAWN_BLOCK_POWER,
-            maxSelfDamage.getFloat(), antiSuicide.isOn(), ignored);
+    // What a blast at the block would deal the target. Nought unless it beats the best yet
+    // and the minimum and leaves you safe. The ignored blocks are gone by then.
+    protected float damageBeating(float best, LivingEntity target, BlockPos blastAt, BlockPos... ignored) {
+        Vec3 centre = Vec3.atCenterOf(blastAt);
+        float damage = ExplosionUtil.blastDamage(target, centre, ExplosionUtil.RESPAWN_BLOCK_POWER,
+            Vec3.ZERO, ignored);
+        if (damage < minDamage.getFloat() || damage <= best) {
+            return 0;
+        }
+        return ExplosionUtil.selfSafe(centre, ExplosionUtil.RESPAWN_BLOCK_POWER, maxSelfDamage.getFloat(),
+            antiSuicide.isOn(), ignored) ? damage : 0;
     }
 
     protected Iterable<BlockPos> nearby(LivingEntity target) {
