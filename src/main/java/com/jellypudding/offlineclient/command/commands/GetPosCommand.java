@@ -25,11 +25,11 @@ public final class GetPosCommand extends Command {
         BlockPos pos = player.blockPosition();
         ChatUtil.message("§7You are at §b" + BlockUtil.text(pos));
         if (player.level().dimension() == Level.NETHER) {
-            ChatUtil.message("§7Overworld §b" + pos.getX() * WaypointStore.NETHER_SCALE + " "
-                + pos.getZ() * WaypointStore.NETHER_SCALE);
+            ChatUtil.message("§7Overworld §b" + WaypointStore.acrossPortal(pos.getX(), false) + " "
+                + WaypointStore.acrossPortal(pos.getZ(), false));
         } else if (player.level().dimension() == Level.OVERWORLD) {
-            ChatUtil.message("§7Nether §b" + Math.floorDiv(pos.getX(), WaypointStore.NETHER_SCALE) + " "
-                + Math.floorDiv(pos.getZ(), WaypointStore.NETHER_SCALE));
+            ChatUtil.message("§7Nether §b" + WaypointStore.acrossPortal(pos.getX(), true) + " "
+                + WaypointStore.acrossPortal(pos.getZ(), true));
         }
     }
 }

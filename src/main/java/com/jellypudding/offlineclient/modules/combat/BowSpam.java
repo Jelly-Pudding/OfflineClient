@@ -12,7 +12,6 @@ import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.item.BowItem;
 import net.minecraft.world.item.CrossbowItem;
 import net.minecraft.world.item.ItemStack;
@@ -167,8 +166,7 @@ public final class BowSpam extends Module {
         if (to == -1) {
             return -1;
         }
-        mc.gameMode.handleContainerInput(0, InventoryUtil.networkSlot(from), to,
-            ContainerInput.SWAP, mc.player);
+        InventoryUtil.swapWithHotbar(InventoryUtil.networkSlot(from), to);
         return to;
     }
 

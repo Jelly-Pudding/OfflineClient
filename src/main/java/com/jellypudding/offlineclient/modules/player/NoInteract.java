@@ -10,10 +10,10 @@ import com.jellypudding.offlineclient.setting.ListMode;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.ExplosionUtil;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.InteractionHand;
-import net.minecraft.world.attribute.EnvironmentAttributes;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
@@ -120,18 +120,15 @@ public final class NoInteract extends Module {
         if (!explosives.isOn()) {
             return false;
         }
-        // Whether a bed or an anchor goes off is an environment attribute of the position.
         if (block instanceof BedBlock) {
-            return mc.level.environmentAttributes()
-                .getValue(EnvironmentAttributes.BED_RULE, pos).destroyOnUse();
+            return ExplosionUtil.bedsExplodeAt(pos);
         }
         return block instanceof RespawnAnchorBlock && anchorDetonates(state, pos);
     }
 
-    // True for an anchor that blows up. A charge or a spawn set means false.
+    // True when the click sets the anchor off rather than charging it or setting a spawn.
     private boolean anchorDetonates(BlockState state, BlockPos pos) {
-        if (mc.level.environmentAttributes()
-            .getValue(EnvironmentAttributes.RESPAWN_ANCHOR_WORKS, pos)) {
+        if (!ExplosionUtil.anchorsExplodeAt(pos)) {
             return false;
         }
         int charge = state.getValue(RespawnAnchorBlock.CHARGE);

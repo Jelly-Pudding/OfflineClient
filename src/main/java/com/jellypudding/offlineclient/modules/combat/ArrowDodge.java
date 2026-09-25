@@ -15,6 +15,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.entity.projectile.arrow.AbstractArrow;
+import net.minecraft.world.entity.projectile.hurtingprojectile.AbstractHurtingProjectile;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.HitResult;
@@ -149,9 +150,10 @@ public final class ArrowDodge extends Module {
             || !EntityUtil.isFriend(player);
     }
 
+    // A fireball keeps its heading and speed. Everything else slows in the air and falls.
     private void predict(Projectile projectile) {
-        double gravity = projectile instanceof AbstractArrow
-            ? ProjectileUtil.ARROW_GRAVITY : ProjectileUtil.THROWN_GRAVITY;
+        double gravity = projectile.getGravity();
+        double drag = projectile instanceof AbstractHurtingProjectile ? 1 : ProjectileUtil.AIR_DRAG;
         Vec3 pos = projectile.position();
         Vec3 velocity = projectile.getDeltaMovement();
         int limit = steps.getInt();
@@ -160,7 +162,7 @@ public final class ArrowDodge extends Module {
         for (int i = 0; i < limit; i++) {
             Vec3 previous = pos;
             pos = pos.add(velocity);
-            velocity = velocity.scale(ProjectileUtil.AIR_DRAG).subtract(0, gravity, 0);
+            velocity = velocity.scale(drag).subtract(0, gravity, 0);
             if (pos.y < minY) {
                 break;
             }

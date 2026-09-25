@@ -5,16 +5,15 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import net.minecraft.SharedConstants;
 import net.minecraft.world.level.MoonPhase;
 
 // ClientClockManagerMixin answers the day clock with this time. The server keeps its own.
 public final class TimeChanger extends Module {
 
-    private static final int DAY_LENGTH = 24000;
-
     private final NumberSetting time = new NumberSetting("Time",
         "Tick of the day to show. Zero is sunrise and eighteen thousand is midnight.",
-        6000, 0, DAY_LENGTH, 500, " ticks");
+        6000, 0, SharedConstants.TICKS_PER_GAME_DAY, 500, " ticks");
 
     private final BoolSetting changeMoon = new BoolSetting("Change moon phase",
         "Also fixes the moon to a face you pick.", false);
@@ -46,7 +45,7 @@ public final class TimeChanger extends Module {
 
     // The phase is the day count. A whole day is added per step.
     public long clockTime() {
-        long day = time.getInt() % DAY_LENGTH;
+        long day = time.getInt() % SharedConstants.TICKS_PER_GAME_DAY;
         return changeMoon.isOn() ? moon.getValue().startTick() + day : day;
     }
 }

@@ -57,8 +57,8 @@ public abstract class FluidRendererMixin {
         if (!occluded) {
             return false;
         }
-        XRay xray = Modules.get(XRay.class);
-        if (xray == null || !xray.isEnabled()) {
+        XRay xray = Modules.active(XRay.class);
+        if (xray == null) {
             return true;
         }
         if (!xray.isVisible(fluidState.createLegacyBlock().getBlock())) {

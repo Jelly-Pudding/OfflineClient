@@ -8,10 +8,8 @@ import com.jellypudding.offlineclient.util.ColorUtil;
 // Rainbow mode cycles the hue on its own.
 public final class ColorSetting extends Setting<Float> {
 
-    // Full saturation and full brightness.
     private static final float FULL = 1f;
 
-    // Saturation for a colour saved without one.
     private static final float DEFAULT_SATURATION = 0.75f;
 
     private final boolean defaultRainbow;

@@ -48,7 +48,6 @@ public final class GuiTheme {
     // Hairline between rows in a list.
     public static final int RULE = 0x40000000;
 
-    // The favourite star.
     public static final int STAR = 0xFFF2C744;
     // A multiplication sign. The closest thing to a cross the font has.
     public static final String CROSS = "×";

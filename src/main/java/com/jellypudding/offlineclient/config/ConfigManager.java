@@ -4,8 +4,6 @@ import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.command.CommandManager;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.module.ModuleManager;
-import com.jellypudding.offlineclient.modules.misc.HudModule;
-import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.setting.Setting;
 
 import com.google.gson.JsonArray;
@@ -31,7 +29,6 @@ public final class ConfigManager {
     private JsonObject guiState = new JsonObject();
     private final AtomicBoolean dirty = new AtomicBoolean();
 
-    // False until the client has said hello once.
     private boolean greeted;
 
     // A save before the load has finished would wipe the file with defaults.
@@ -65,18 +62,8 @@ public final class ConfigManager {
     }
 
     public void load() {
-        read(file).ifPresent(root -> {
-            applyRoot(root);
-            // Macros live in their own file and a profile must never touch them.
-            if (versionOf(root) < 3) {
-                MacroStore.get().migrateLegacyKeys();
-            }
-        });
+        read(file).ifPresent(this::applyRoot);
         loaded = true;
-    }
-
-    private static int versionOf(JsonObject root) {
-        return root.has("version") ? root.get("version").getAsInt() : 1;
     }
 
     private JsonObject buildRoot() {
@@ -114,9 +101,6 @@ public final class ConfigManager {
     }
 
     private void applyRoot(JsonObject root) {
-        if (root == null) {
-            return;
-        }
         try {
             if (root.has("prefix")) {
                 OfflineClient.INSTANCE.getCommandManager().setPrefix(root.get("prefix").getAsString());
@@ -126,12 +110,11 @@ public final class ConfigManager {
                     OfflineClient.INSTANCE.getFriendManager().add(friend.getAsString());
                 }
             }
-            int version = versionOf(root);
             if (root.has("modules")) {
                 JsonObject modules = root.getAsJsonObject("modules");
                 for (Module module : OfflineClient.INSTANCE.getModuleManager().getAll()) {
                     if (modules.has(module.getName())) {
-                        applyModule(module, modules.get(module.getName()), version < 3);
+                        applyModule(module, modules.get(module.getName()));
                     }
                 }
             }
@@ -139,32 +122,17 @@ public final class ConfigManager {
                 guiState = root.getAsJsonObject("gui");
             }
             greeted = root.has("greeted") && root.get("greeted").getAsBoolean();
-
-            if (version < 2) {
-                // A version 1 file has every HUD element forced on.
-                for (Setting<?> setting : OfflineClient.INSTANCE.getModuleManager()
-                    .get(HudModule.class).getSettings()) {
-                    setting.reset();
-                }
-            }
-            if (version < CONFIG_VERSION) {
-                saveSoon();
-            }
         } catch (Exception e) {
             OfflineClient.LOG.error("Failed to apply config", e);
         }
     }
 
-    // One bad entry only loses its own module. A legacy config holds binds as
-    // window library codes and only the ones read are moved across.
-    private static void applyModule(Module module, JsonElement saved, boolean legacyKeys) {
+    // One bad entry only loses its own module.
+    private static void applyModule(Module module, JsonElement saved) {
         try {
             JsonObject m = saved.getAsJsonObject();
             if (m.has("bind")) {
                 module.getKeybind().fromJson(m.get("bind"));
-                if (legacyKeys) {
-                    module.getKeybind().migrateLegacyKey();
-                }
             }
             if (m.has("settings")) {
                 JsonObject settings = m.getAsJsonObject("settings");
@@ -172,9 +140,6 @@ public final class ConfigManager {
                 for (Setting<?> setting : module.getSettings()) {
                     if (settings.has(setting.getName())) {
                         setting.fromJson(settings.get(setting.getName()));
-                        if (legacyKeys && setting instanceof KeybindSetting bind) {
-                            bind.migrateLegacyKey();
-                        }
                     }
                     if (folds.has(setting.getName())) {
                         setting.setFolded(folds.get(setting.getName()).getAsBoolean());

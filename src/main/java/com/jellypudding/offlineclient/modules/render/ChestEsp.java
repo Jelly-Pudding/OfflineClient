@@ -155,7 +155,7 @@ public final class ChestEsp extends Module {
     private volatile Map<BlockPos, Integer> glows = Map.of();
     private final WorldWatch world = new WorldWatch();
 
-    // The colour the block entity being drawn right now should glow in. Zero for none.
+    // The colour the block entity being drawn should glow in. Zero for none.
     private static int currentGlow;
 
     public ChestEsp() {
@@ -194,7 +194,7 @@ public final class ChestEsp extends Module {
         return currentGlow;
     }
 
-    // The glow colour for a block entity at a position. Zero when it gets none.
+    // Zero when the block entity there gets no glow.
     public int glowFor(BlockPos pos) {
         if (!isEnabled() || !mode.is(Mode.GLOW)) {
             return 0;
@@ -216,11 +216,18 @@ public final class ChestEsp extends Module {
             return;
         }
         opened.add(pos);
-        BlockState state = blockEntity.getBlockState();
-        if (blockEntity instanceof ChestBlockEntity && state.hasProperty(ChestBlock.TYPE)
-            && state.getValue(ChestBlock.TYPE) != ChestType.SINGLE) {
-            opened.add(pos.relative(ChestBlock.getConnectedDirection(state)));
+        BlockPos other = otherHalf(pos, blockEntity.getBlockState());
+        if (other != null) {
+            opened.add(other);
         }
+    }
+
+    // Null unless the state is one half of a double chest.
+    private static BlockPos otherHalf(BlockPos pos, BlockState state) {
+        if (!state.hasProperty(ChestBlock.TYPE) || state.getValue(ChestBlock.TYPE) == ChestType.SINGLE) {
+            return null;
+        }
+        return pos.relative(ChestBlock.getConnectedDirection(state));
     }
 
     @Subscribe
@@ -258,11 +265,17 @@ public final class ChestEsp extends Module {
         glows = mode.is(Mode.GLOW) ? glowMap() : Map.of();
     }
 
+    // Each half of a double chest draws itself and needs the colour too.
     private Map<BlockPos, Integer> glowMap() {
         Map<BlockPos, Integer> map = new HashMap<>();
         for (Target target : targets) {
-            if (target.pos() != null && target.modelled()) {
-                map.put(target.pos(), target.color());
+            if (target.pos() == null || !target.modelled()) {
+                continue;
+            }
+            map.put(target.pos(), target.color());
+            BlockPos other = otherHalf(target.pos(), mc.level.getBlockState(target.pos()));
+            if (other != null) {
+                map.put(other, target.color());
             }
         }
         return map;
@@ -286,17 +299,13 @@ public final class ChestEsp extends Module {
                 || blockEntity instanceof EnderChestBlockEntity;
             AABB box = chestShape ? chestBox(pos) : DrawBatch.blockBox(pos);
             // A double chest is one container drawn from its right half.
-            if (blockEntity instanceof ChestBlockEntity) {
-                BlockState state = blockEntity.getBlockState();
-                if (state.hasProperty(ChestBlock.TYPE)) {
-                    ChestType type = state.getValue(ChestBlock.TYPE);
-                    if (type == ChestType.LEFT) {
-                        continue;
-                    }
-                    if (type == ChestType.RIGHT) {
-                        box = box.minmax(chestBox(pos.relative(ChestBlock.getConnectedDirection(state))));
-                    }
+            BlockState state = blockEntity.getBlockState();
+            BlockPos other = otherHalf(pos, state);
+            if (other != null) {
+                if (state.getValue(ChestBlock.TYPE) == ChestType.LEFT) {
+                    continue;
                 }
+                box = box.minmax(chestBox(other));
             }
             boolean modelled = chestShape || blockEntity instanceof ShulkerBoxBlockEntity;
             targets.add(new Target(pos, box, color, modelled));

@@ -25,6 +25,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ThreadLocalRandom;
@@ -93,7 +94,8 @@ public final class BetterChat extends Module {
     private final BoolSetting filterRegex = new BoolSetting("Filter regex",
         "Drops any line that matches one of your patterns.", false);
     private final TextLines patterns = new TextLines("Patterns",
-        "How many patterns to match against.").plain().under(filterRegex);
+        "How many patterns to match against.",
+        "A pattern that hides every chat line it matches. Click to type it.").plain().under(filterRegex);
 
     private final BoolSetting annoy = new BoolSetting("Annoy",
         "Sends your messages in aLtErNaTiNg case.", false);
@@ -135,7 +137,6 @@ public final class BetterChat extends Module {
     private GuiMessage.Line drawing;
     private boolean topOfEntry;
 
-    // A stored line with any clock stamp taken off its front.
     public static String withoutStamp(String line) {
         return STAMP.matcher(line).replaceFirst("");
     }
@@ -329,17 +330,18 @@ public final class BetterChat extends Module {
         if (fancy.isOn()) {
             body = smallCaps(body);
         }
-        return affix(prefix, prefixRandom, prefixText, prefixSmall) + body
-            + affix(suffix, suffixRandom, suffixText, suffixSmall);
+        return affix(prefix, prefixRandom, prefixText, prefixSmall, "(%03d) ") + body
+            + affix(suffix, suffixRandom, suffixText, suffixSmall, " (%03d)");
     }
 
+    // The random form carries its own gap on the side that meets the message.
     private static String affix(BoolSetting on, BoolSetting random, TextSetting text,
-                                BoolSetting small) {
+                                BoolSetting small, String randomForm) {
         if (!on.isOn()) {
             return "";
         }
         if (random.isOn()) {
-            return String.format("(%03d) ", ThreadLocalRandom.current().nextInt(1000));
+            return String.format(Locale.ROOT, randomForm, ThreadLocalRandom.current().nextInt(1000));
         }
         return small.isOn() ? smallCaps(text.getValue()) : text.getValue();
     }

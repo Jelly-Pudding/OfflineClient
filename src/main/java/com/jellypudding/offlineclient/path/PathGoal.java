@@ -2,7 +2,6 @@ package com.jellypudding.offlineclient.path;
 
 import net.minecraft.core.BlockPos;
 
-
 // Where a search is trying to get to. The heuristic is measured in blocks and
 // must never read higher than the real walk or the search stops finding the
 // shortest way round.
@@ -26,7 +25,7 @@ public interface PathGoal {
 
         @Override
         public double heuristic(BlockPos pos) {
-            return straightLine(pos, target);
+            return estimate(pos, target);
         }
     }
 
@@ -44,8 +43,19 @@ public interface PathGoal {
 
         @Override
         public double heuristic(BlockPos pos) {
-            return Math.max(0, straightLine(pos, target) - radius);
+            return Math.max(0, estimate(pos, target) - radius);
         }
+    }
+
+    // The straight line with any height below counted at the cost of falling it.
+    static double estimate(BlockPos from, BlockPos to) {
+        double dx = from.getX() - to.getX();
+        double dy = to.getY() - from.getY();
+        double dz = from.getZ() - to.getZ();
+        if (dy < 0) {
+            dy *= PathFinder.FALL;
+        }
+        return Math.sqrt(dx * dx + dy * dy + dz * dz);
     }
 
     static double straightLine(BlockPos from, BlockPos to) {

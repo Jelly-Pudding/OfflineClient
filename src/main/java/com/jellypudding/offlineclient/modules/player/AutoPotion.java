@@ -11,7 +11,9 @@ import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.FaceMode;
 import com.jellypudding.offlineclient.util.Feeding;
 import com.jellypudding.offlineclient.util.InventoryUtil;
+import com.jellypudding.offlineclient.util.ItemUtil;
 import com.jellypudding.offlineclient.util.Modules;
+import com.jellypudding.offlineclient.util.RotationManager;
 import com.jellypudding.offlineclient.util.RotationPriority;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.component.DataComponents;
@@ -23,7 +25,6 @@ import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.item.alchemy.PotionContents;
 
 import java.util.List;
 import java.util.function.Predicate;
@@ -107,21 +108,21 @@ public final class AutoPotion extends Module {
     private int findWanted() {
         if (EntityUtil.healthAtOrBelow(health.getValue())) {
             if (splash.isOn()) {
-                int thrown = findSplash();
+                // A splash bottle thrown at the feet heals at once.
+                int thrown = find(stack -> stack.is(Items.SPLASH_POTION), AutoPotion::heals);
                 if (thrown != -1) {
                     throwSplash(thrown);
                     return -1;
                 }
             }
-            int slot = findPotion(effect -> effect == MobEffects.INSTANT_HEALTH.value()
-                || effect == MobEffects.REGENERATION.value());
+            int slot = find(this::isPotion, AutoPotion::heals);
             if (slot != -1) {
                 return slot;
             }
         }
         if (fire.isOn() && mc.player.isOnFire()
             && !mc.player.hasEffect(MobEffects.FIRE_RESISTANCE)) {
-            int slot = findPotion(effect -> effect == MobEffects.FIRE_RESISTANCE.value());
+            int slot = find(this::isPotion, effect -> effect == MobEffects.FIRE_RESISTANCE.value());
             if (slot != -1) {
                 return slot;
             }
@@ -135,7 +136,7 @@ public final class AutoPotion extends Module {
                 continue;
             }
             MobEffect wanted = active.getEffect().value();
-            int slot = findPotion(effect -> effect == wanted);
+            int slot = find(this::isPotion, effect -> effect == wanted);
             if (slot != -1) {
                 return slot;
             }
@@ -143,37 +144,13 @@ public final class AutoPotion extends Module {
         return -1;
     }
 
-    private int findPotion(Predicate<MobEffect> wanted) {
-        for (int i = 0; i < InventoryUtil.WHOLE_INVENTORY; i++) {
-            ItemStack stack = mc.player.getInventory().getItem(i);
-            if (!isPotion(stack)) {
-                continue;
-            }
-            PotionContents contents = stack.get(DataComponents.POTION_CONTENTS);
-            for (MobEffectInstance effect : contents.getAllEffects()) {
-                if (wanted.test(effect.getEffect().value())) {
-                    return i;
-                }
-            }
-        }
-        return -1;
+    private int find(Predicate<ItemStack> bottle, Predicate<MobEffect> effect) {
+        return InventoryUtil.findSlot(stack -> bottle.test(stack) && ItemUtil.carriesEffect(stack, effect),
+            InventoryUtil.WHOLE_INVENTORY);
     }
 
-    // A splash bottle that heals. Thrown at the feet it lands at once.
-    private int findSplash() {
-        for (int i = 0; i < InventoryUtil.WHOLE_INVENTORY; i++) {
-            ItemStack stack = mc.player.getInventory().getItem(i);
-            if (!stack.is(Items.SPLASH_POTION) || !stack.has(DataComponents.POTION_CONTENTS)) {
-                continue;
-            }
-            for (MobEffectInstance effect : stack.get(DataComponents.POTION_CONTENTS).getAllEffects()) {
-                MobEffect kind = effect.getEffect().value();
-                if (kind == MobEffects.INSTANT_HEALTH.value() || kind == MobEffects.REGENERATION.value()) {
-                    return i;
-                }
-            }
-        }
-        return -1;
+    private static boolean heals(MobEffect effect) {
+        return effect == MobEffects.INSTANT_HEALTH.value() || effect == MobEffects.REGENERATION.value();
     }
 
     // The look packet goes out first. The bottle then lands on your own feet.
@@ -181,7 +158,7 @@ public final class AutoPotion extends Module {
         if (!feeding.loan().select(slot)) {
             return;
         }
-        FaceMode.SPAM.faceExact(mc.player.getYRot(), 90, RotationPriority.PLACE);
+        FaceMode.SPAM.faceExact(mc.player.getYRot(), RotationManager.STRAIGHT_DOWN, RotationPriority.PLACE);
         mc.gameMode.useItem(mc.player, InteractionHand.MAIN_HAND);
         feeding.loan().giveBack();
         feeding.pause(SETTLE_TICKS);

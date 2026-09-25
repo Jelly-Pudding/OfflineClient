@@ -43,7 +43,7 @@ public final class WaypointCommand extends Command {
     }
 
     private void add(String[] args) {
-        if (args.length < 2) {
+        if (args.length != 2 && args.length != 5) {
             usage("waypoint add <name> [x y z]");
             return;
         }
@@ -52,7 +52,7 @@ public final class WaypointCommand extends Command {
             return;
         }
         BlockPos pos = OfflineClient.MC.player.blockPosition();
-        if (args.length >= 5) {
+        if (args.length == 5) {
             Vec3 spot = coordinates(args, 2, Vec3.atLowerCornerOf(pos));
             if (spot == null) {
                 return;

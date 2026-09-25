@@ -4,7 +4,6 @@ import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.util.BlockMiner;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.RotationManager;
-import com.jellypudding.offlineclient.util.RotationPriority;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
@@ -19,7 +18,7 @@ import java.util.List;
 public final class PathWalker {
 
     // How the view is pointed at the next node.
-    public enum Turn { CLIENT, SERVER, NONE }
+    public enum Turn { CLIENT, NONE }
 
     private static final Minecraft MC = OfflineClient.MC;
 
@@ -184,17 +183,12 @@ public final class PathWalker {
     }
 
     private void face(Vec3 target) {
-        float want = RotationManager.yawTo(target);
-        switch (turn) {
-            case CLIENT -> {
-                float delta = Mth.wrapDegrees(want - MC.player.getYRot());
-                delta = Math.clamp(delta, -TURN_STEP, TURN_STEP);
-                MC.player.turn(delta / InputUtil.MOUSE_TURN, 0);
-            }
-            case SERVER -> RotationManager.request(want, MC.player.getXRot(), RotationPriority.IDLE);
-            case NONE -> {
-            }
+        if (turn == Turn.NONE) {
+            return;
         }
+        float delta = Mth.wrapDegrees(RotationManager.yawTo(target) - MC.player.getYRot());
+        delta = Math.clamp(delta, -TURN_STEP, TURN_STEP);
+        MC.player.turn(delta / InputUtil.MOUSE_TURN, 0);
     }
 
     // Presses whichever movement keys carry the player towards the point given

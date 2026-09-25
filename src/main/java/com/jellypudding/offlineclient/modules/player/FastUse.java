@@ -1,6 +1,5 @@
 package com.jellypudding.offlineclient.modules.player;
 
-import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
@@ -9,6 +8,7 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
+import com.jellypudding.offlineclient.util.InputUtil;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.item.BlockItem;
@@ -47,18 +47,13 @@ public final class FastUse extends Module {
         "Any other items to speed up. Click to pick them.", BuiltInRegistries.ITEM, List.of())
         .under(mode, Mode.CHOSEN_ONLY);
     private final NumberSetting cooldown = new NumberSetting("Cooldown",
-        "Ticks to keep between uses. 0 is one use every tick.", 0, 0, 4, 1, " ticks").max(4);
+        "Ticks to keep between uses. 0 is one use every tick.", 0, 0, InputUtil.USE_DELAY, 1, " ticks")
+        .max(InputUtil.USE_DELAY);
 
     public FastUse() {
         super("FastUse", "Removes the delay between right clicks for items.", Category.PLAYER);
         addSettings(mode, food, pearls, potions, experience, throwables, items, cooldown);
         searchTags("fast pearl", "fast eat", "fast throw", "right click delay");
-    }
-
-    // Shared cap on the vanilla right click delay. The game sets it to
-    // four on every use and counts it down once a tick.
-    public static void capUseDelay(int ticks) {
-        OfflineClient.MC.rightClickDelay = Math.min(OfflineClient.MC.rightClickDelay, Math.max(0, ticks));
     }
 
     @Subscribe
@@ -74,7 +69,7 @@ public final class FastUse extends Module {
             return;
         }
         if (mode.is(Mode.ALL_ITEMS) || wanted(held)) {
-            capUseDelay(cooldown.getInt());
+            InputUtil.capUseDelay(cooldown.getInt());
         }
     }
 

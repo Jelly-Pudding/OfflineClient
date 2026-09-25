@@ -36,8 +36,8 @@ public abstract class ScreenMixin {
         at = @At("HEAD"),
         cancellable = true)
     private void onExtractBlurredBackground(GuiGraphicsExtractor graphics, CallbackInfo ci) {
-        Blur blur = Modules.get(Blur.class);
-        if (blur == null || !blur.isEnabled()) {
+        Blur blur = Modules.active(Blur.class);
+        if (blur == null) {
             return;
         }
         ci.cancel();

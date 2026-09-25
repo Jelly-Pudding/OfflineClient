@@ -3,9 +3,11 @@ package com.jellypudding.offlineclient.command.commands;
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.command.Command;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.RotationManager;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.util.Mth;
 
+import java.util.Locale;
 import java.util.OptionalDouble;
 
 public final class RotationCommand extends Command {
@@ -36,12 +38,12 @@ public final class RotationCommand extends Command {
             return;
         }
         player.setYRot(Mth.wrapDegrees((float) yaw.getAsDouble()));
-        player.setXRot(Mth.clamp((float) pitch.getAsDouble(), -90f, 90f));
+        player.setXRot(RotationManager.clampPitch((float) pitch.getAsDouble()));
         ChatUtil.message("§7Looking at yaw §b" + round(player.getYRot())
             + " §7pitch §b" + round(player.getXRot()));
     }
 
     private static String round(float value) {
-        return String.format("%.1f", value);
+        return String.format(Locale.ROOT, "%.1f", value);
     }
 }

@@ -6,6 +6,7 @@ import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import net.minecraft.SharedConstants;
 import net.minecraft.client.gui.screens.ConnectScreen;
 import net.minecraft.client.gui.screens.DisconnectedScreen;
 import net.minecraft.client.multiplayer.ServerData;
@@ -75,7 +76,7 @@ public final class AutoReconnect extends Module {
         }
 
         if (countdown == -1) {
-            countdown = (int) Math.round(delay.getValue() * 20);
+            countdown = (int) Math.round(delay.getValue() * SharedConstants.TICKS_PER_SECOND);
         }
         countdown--;
         if (countdown > 0) {

@@ -19,7 +19,7 @@ import java.util.List;
 
 public final class SpawnEsp extends Module {
 
-    // Night marks a spot the sun is keeping clear for now.
+    // Night marks a spot that only the sun keeps clear.
     private record Spot(BlockPos pos, boolean night) {
     }
 

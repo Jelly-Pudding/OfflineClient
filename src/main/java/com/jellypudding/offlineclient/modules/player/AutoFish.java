@@ -33,7 +33,6 @@ import net.minecraft.tags.FluidTags;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.projectile.FishingHook;
-import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.item.FishingRodItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.enchantment.Enchantments;
@@ -355,7 +354,7 @@ public final class AutoFish extends Module {
 
     // False whilst the hand is busy or the rod moved this tick.
     private boolean pickRod() {
-        if (Modules.eating()) {
+        if (Modules.feeding(null)) {
             return false;
         }
         int best = -1;
@@ -413,8 +412,7 @@ public final class AutoFish extends Module {
             return false;
         }
         int hotbar = InventoryUtil.freeHotbarSlot(InventoryUtil.selectedSlot());
-        mc.gameMode.handleContainerInput(0, InventoryUtil.OFFHAND_SLOT, hotbar,
-            ContainerInput.SWAP, mc.player);
+        InventoryUtil.swapWithHotbar(InventoryUtil.OFFHAND_SLOT, hotbar);
         mc.player.getInventory().setSelectedSlot(hotbar);
         return false;
     }

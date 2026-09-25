@@ -35,14 +35,20 @@ public final class ExplosionUtil {
 
     // An anchor that sets a spawn point never goes off.
     public static boolean anchorsExplodeHere() {
-        return !MC.level.environmentAttributes()
-            .getValue(EnvironmentAttributes.RESPAWN_ANCHOR_WORKS, MC.player.blockPosition());
+        return anchorsExplodeAt(MC.player.blockPosition());
+    }
+
+    public static boolean anchorsExplodeAt(BlockPos pos) {
+        return !MC.level.environmentAttributes().getValue(EnvironmentAttributes.RESPAWN_ANCHOR_WORKS, pos);
     }
 
     // A bed that sets a spawn point never goes off.
     public static boolean bedsExplodeHere() {
-        return MC.level.environmentAttributes()
-            .getValue(EnvironmentAttributes.BED_RULE, MC.player.blockPosition()).destroyOnUse();
+        return bedsExplodeAt(MC.player.blockPosition());
+    }
+
+    public static boolean bedsExplodeAt(BlockPos pos) {
+        return MC.level.environmentAttributes().getValue(EnvironmentAttributes.BED_RULE, pos).destroyOnUse();
     }
 
     public static float crystalDamage(LivingEntity target, Vec3 source) {

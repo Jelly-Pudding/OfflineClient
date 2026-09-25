@@ -3,6 +3,8 @@ package com.jellypudding.offlineclient.util;
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.module.ModuleManager;
+import com.jellypudding.offlineclient.modules.combat.CrystalAura;
+import com.jellypudding.offlineclient.modules.movement.Sneak;
 import com.jellypudding.offlineclient.modules.player.AutoEat;
 import com.jellypudding.offlineclient.modules.player.AutoGap;
 import com.jellypudding.offlineclient.modules.player.AutoPotion;
@@ -66,14 +68,25 @@ public final class Modules {
         return potion != null && potion != asker && potion.isBusy();
     }
 
-    // True whilst either feeder is putting something away.
-    public static boolean eating() {
+    // True whilst AutoEat or AutoGap is eating with Pause combat on.
+    public static boolean feedersPauseCombat() {
         AutoEat autoEat = get(AutoEat.class);
         if (autoEat != null && autoEat.isEating()) {
             return true;
         }
         AutoGap autoGap = get(AutoGap.class);
         return autoGap != null && autoGap.isEating();
+    }
+
+    // Only the ticks around a real crystal place or break count.
+    public static boolean crystalsActing() {
+        CrystalAura crystals = active(CrystalAura.class);
+        return crystals != null && crystals.isActing();
+    }
+
+    // The sneak key held or Sneak keeping the player down.
+    public static boolean sneaking() {
+        return OfflineClient.MC.player.isShiftKeyDown() || enabled(Sneak.class);
     }
 
     // The module only whilst it is switched on. Null otherwise.

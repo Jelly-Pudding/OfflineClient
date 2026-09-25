@@ -5,9 +5,9 @@ import com.jellypudding.offlineclient.event.events.RightClickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.BlockUtil;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.phys.BlockHitResult;
-import net.minecraft.world.phys.HitResult;
 
 // Every right click is repeated many times in the same tick. A stack of pearls
 // or snowballs or eggs goes out in one go.
@@ -33,8 +33,8 @@ public final class Throw extends Module {
             return;
         }
         for (int i = 0; i < amount.getInt(); i++) {
-            if (mc.hitResult instanceof BlockHitResult block
-                && block.getType() == HitResult.Type.BLOCK) {
+            BlockHitResult block = BlockUtil.aimedBlock();
+            if (block != null) {
                 mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND, block);
             }
             mc.gameMode.useItem(mc.player, InteractionHand.MAIN_HAND);

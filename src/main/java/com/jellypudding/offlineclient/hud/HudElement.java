@@ -120,7 +120,6 @@ public abstract class HudElement {
         scale.setValue(value);
     }
 
-    // Back to the size this element ships at.
     public final void resetScale() {
         scale.reset();
     }

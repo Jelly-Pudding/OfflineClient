@@ -14,6 +14,7 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.WorldWatch;
+import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket;
 import net.minecraft.network.protocol.game.ClientboundSectionBlocksUpdatePacket;
@@ -228,8 +229,8 @@ public final class NewChunks extends Module {
         }
         ticks++;
 
-        // A flow that turns up after the chunk landed means it was made just now.
-        int window = settle.getInt() * 20;
+        // A flow that turns up after the chunk landed means the chunk is fresh.
+        int window = settle.getInt() * SharedConstants.TICKS_PER_SECOND;
         BlockPos pos;
         while ((pos = flowing.poll()) != null) {
             long key = ChunkPos.pack(pos);

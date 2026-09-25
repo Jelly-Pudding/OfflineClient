@@ -58,7 +58,6 @@ public final class AutoLibrarian extends Module {
     private static final int LECTERN_COLOR = 0xFF40C0FF;
     private static final int SPENT_COLOR = 0xFFE03030;
 
-    // Trade slots of the merchant screen.
     private static final int RESULT_SLOT = 2;
 
     private enum Stage { FIND_VILLAGER, FIND_LECTERN, OPEN_TRADE, READ_TRADE, BREAK_LECTERN, PLACE_LECTERN }
@@ -85,7 +84,7 @@ public final class AutoLibrarian extends Module {
         "Buys the book once and the villager keeps the trade. Needs emeralds and paper or a book.", false);
     private final NumberSetting range = new NumberSetting("Range",
         "How far the villager and its lectern may be.", 5, 1, 6, 0.1).max(6);
-    private final NumberSetting repairMode = new NumberSetting("Repair mode",
+    private final NumberSetting spareUses = new NumberSetting("Spare uses",
         "Stops using a tool once this many uses are left. Nought never stops.",
         1, 0, 100, 1, " uses").min(0);
     private final EnumSetting<FaceMode> faceTarget = FaceMode.setting(FaceMode.SERVER);
@@ -101,7 +100,7 @@ public final class AutoLibrarian extends Module {
 
     public AutoLibrarian() {
         super("AutoLibrarian", "Rerolls a librarian until it sells a book you want.", Category.WORLD);
-        addSettings(wanted, maxPrice, updateBooks, lockIn, range, repairMode, faceTarget, swing);
+        addSettings(wanted, maxPrice, updateBooks, lockIn, range, spareUses, faceTarget, swing);
         searchTags("villager trainer", "enchanted book", "lectern");
     }
 
@@ -176,7 +175,6 @@ public final class AutoLibrarian extends Module {
         stage = Stage.FIND_LECTERN;
     }
 
-    // A living level one librarian that has not traded yet.
     private boolean trainable(Entity entity) {
         if (!(entity instanceof Villager candidate) || !candidate.isAlive() || spent.contains(candidate.getId())) {
             return false;
@@ -373,7 +371,7 @@ public final class AutoLibrarian extends Module {
             return;
         }
         int tool = ItemUtil.bestToolSlot(BlockUtil.state(lectern), 1,
-            stack -> !ItemUtil.nearlyBroken(stack, repairMode.getInt()), InventoryUtil.HOTBAR_SIZE);
+            stack -> !ItemUtil.nearlyBroken(stack, spareUses.getInt()), InventoryUtil.HOTBAR_SIZE);
         if (tool != -1) {
             loan.select(tool);
         }

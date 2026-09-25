@@ -11,7 +11,6 @@ import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.ItemUtil;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -88,8 +87,7 @@ public final class AutoDrop extends Module {
             if (fullStacksOnly.isOn() && stack.getCount() < stack.getMaxStackSize()) {
                 continue;
             }
-            // Button 1 throws the whole stack in one click.
-            mc.gameMode.handleContainerInput(0, netSlot, 1, ContainerInput.THROW, mc.player);
+            InventoryUtil.throwStack(netSlot);
             timer = delay.getInt();
             return;
         }

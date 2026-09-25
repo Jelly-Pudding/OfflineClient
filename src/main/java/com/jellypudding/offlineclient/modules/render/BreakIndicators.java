@@ -152,7 +152,8 @@ public final class BreakIndicators extends Module {
     }
 
     // The server never sends your own break progress back. The client keeps a
-    // smooth fraction of its own which beats the ten coarse stages.
+    // smooth fraction of its own which beats the ten coarse stages. Nothing tells
+    // it the job is over either and the box goes the moment you stop.
     private void applyOwnProgress(long now) {
         if (!inGame() || mc.gameMode == null) {
             return;
@@ -160,6 +161,7 @@ public final class BreakIndicators extends Module {
         MultiPlayerGameModeAccessor mode = (MultiPlayerGameModeAccessor) mc.gameMode;
         BlockPos pos = mode.offlineclient$destroyBlockPos();
         if (!mc.gameMode.isDestroying() || pos == null) {
+            indicators.remove(mc.player.getId());
             return;
         }
         apply(new Stage(mc.player.getId(), pos, Math.clamp(mode.offlineclient$destroyProgress(), 0, 1)), now);

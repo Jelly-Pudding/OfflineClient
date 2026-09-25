@@ -42,7 +42,6 @@ public final class HoleElement extends HudElement {
         return isActive() && OfflineClient.MC.player != null;
     }
 
-    // Only the four sides matter. The middle is where you stand.
     private static BlockUtil.Wall at(BlockPos pos) {
         return BlockUtil.wallOf(OfflineClient.MC.level.getBlockState(pos));
     }

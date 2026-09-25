@@ -40,7 +40,7 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
 // CameraMixin positions the camera and MouseHandlerMixin routes the mouse here.
-// PickMixin aims the crosshair and VisGraphMixin keeps chunk insides drawn.
+// LocalPlayerMixin aims the crosshair and VisGraphMixin keeps chunk insides drawn.
 public final class Freecam extends Module {
 
     public enum Start { INSIDE, IN_FRONT, ABOVE }
@@ -52,7 +52,6 @@ public final class Freecam extends Module {
     private static final double NOTCH_SHARE = 0.25;
     private static final double MIN_SPEED = 0.1;
 
-    // Two clicks this close together count as a double click.
     private static final long DOUBLE_CLICK_MS = 500;
 
     public enum InputTarget { CAMERA, PLAYER }
@@ -124,6 +123,8 @@ public final class Freecam extends Module {
     private double savedFovScale;
     private boolean savedBobbing;
     private boolean viewChanged;
+    // Whether this run switched bobbing and the FOV effects off. The setting may change meanwhile.
+    private boolean stilled;
     // Set on the netty thread and acted on next tick.
     private volatile String stopReason;
 
@@ -221,7 +222,6 @@ public final class Freecam extends Module {
         takeView();
     }
 
-    // Where the camera is placed the moment it is switched on.
     private Vec3 startPos() {
         Vec3 eye = mc.player.getEyePosition();
         return switch (start.getValue()) {
@@ -241,7 +241,8 @@ public final class Freecam extends Module {
         savedFovScale = mc.options.fovEffectScale().get();
         savedBobbing = mc.options.bobView().get();
         mc.options.setCameraType(CameraType.FIRST_PERSON);
-        if (stillView.isOn()) {
+        stilled = stillView.isOn();
+        if (stilled) {
             mc.options.fovEffectScale().set(0.0);
             mc.options.bobView().set(false);
         }
@@ -253,7 +254,7 @@ public final class Freecam extends Module {
         }
         viewChanged = false;
         mc.options.setCameraType(savedView);
-        if (stillView.isOn()) {
+        if (stilled) {
             mc.options.fovEffectScale().set(savedFovScale);
             mc.options.bobView().set(savedBobbing);
         }
@@ -375,7 +376,6 @@ public final class Freecam extends Module {
         }
     }
 
-    // Turns the body towards whatever the camera crosshair rests on.
     private void faceCrosshair() {
         HitResult hit = mc.hitResult;
         if (hit instanceof EntityHitResult entityHit) {
@@ -446,7 +446,7 @@ public final class Freecam extends Module {
     // Mouse movement lands here instead of turning the player.
     public void turn(double deltaYaw, double deltaPitch) {
         camYaw += (float) (deltaYaw * InputUtil.MOUSE_TURN);
-        camPitch = Mth.clamp(camPitch + (float) (deltaPitch * InputUtil.MOUSE_TURN), -90f, 90f);
+        camPitch = RotationManager.clampPitch(camPitch + (float) (deltaPitch * InputUtil.MOUSE_TURN));
     }
 
     public Vec3 getCamPos(float partialTicks) {

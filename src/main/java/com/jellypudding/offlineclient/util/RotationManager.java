@@ -116,19 +116,26 @@ public final class RotationManager {
         return (float) Math.toDegrees(Math.atan2(point.z - eye.z, point.x - eye.x)) - 90f;
     }
 
+    // Looking straight at the feet. The steepest pitch the game allows either way.
+    public static final float STRAIGHT_DOWN = 90f;
+
+    public static float clampPitch(float pitch) {
+        return Math.clamp(pitch, -STRAIGHT_DOWN, STRAIGHT_DOWN);
+    }
+
     public static float pitchTo(Vec3 point) {
         Vec3 eye = MC.player.getEyePosition();
         double dx = point.x - eye.x;
         double dz = point.z - eye.z;
         double horizontal = Math.sqrt(dx * dx + dz * dz);
-        return Math.clamp((float) -Math.toDegrees(Math.atan2(point.y - eye.y, horizontal)), -90f, 90f);
+        return clampPitch((float) -Math.toDegrees(Math.atan2(point.y - eye.y, horizontal)));
     }
 
     // Turns the real view towards the point by at most the step on each axis.
     public static void turnCamera(Vec3 point, float step) {
         LocalPlayer player = MC.player;
         player.setYRot(Mth.approachDegrees(player.getYRot(), yawTo(point), step));
-        player.setXRot(Mth.clamp(Mth.approach(player.getXRot(), pitchTo(point), step), -90f, 90f));
+        player.setXRot(clampPitch(Mth.approach(player.getXRot(), pitchTo(point), step)));
     }
 
     // Ties go to the first caller.
@@ -142,7 +149,7 @@ public final class RotationManager {
         float fromYaw = holding ? from.yaw() : MC.player.getYRot();
         float fromPitch = holding ? from.pitch() : MC.player.getXRot();
         projectedYaw = Mth.wrapDegrees(Mth.approachDegrees(fromYaw, yaw, step));
-        projectedPitch = Math.clamp(Mth.approach(fromPitch, pitch, step), -90f, 90f);
+        projectedPitch = clampPitch(Mth.approach(fromPitch, pitch, step));
         projected = true;
     }
 

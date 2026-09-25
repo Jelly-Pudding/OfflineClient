@@ -11,6 +11,7 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.TextSetting;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
+import net.minecraft.client.gui.screens.inventory.BookEditScreen;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.FormattedText;
@@ -18,6 +19,7 @@ import net.minecraft.network.protocol.game.ServerboundEditBookPacket;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.component.WritableBookContent;
+import net.minecraft.world.item.component.WrittenBookContent;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -35,20 +37,15 @@ public final class BookBot extends Module {
 
     public enum Characters { ASCII, UNICODE, PAPER }
 
-    // Book limits the server enforces.
-    private static final int MAX_PAGES = 100;
-    private static final int MAX_PAGE_LENGTH = 1024;
-
     // The Paper layout. Pages before this hold one wide character and the rest ASCII.
     private static final int PAPER_LIGHT_PAGES = 50;
     private static final int PAPER_MIXED_WIDE = 110;
 
-    // Three bytes and two bytes of UTF-8 each.
+    // Three bytes and two bytes of UTF8 each.
     private static final char WIDE_CHARACTER = 0x4E00;
     private static final char MIDDLE_CHARACTER = 0x00A9;
 
-    // Width in pixels and lines of one book page.
-    private static final int PAGE_WIDTH = 114;
+    // Lines of text on one book page.
     private static final int PAGE_LINES = 14;
 
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
@@ -65,11 +62,11 @@ public final class BookBot extends Module {
         .describe(Characters.PAPER, "A fixed hundred page layout sized to the Paper packet limit. Pages and characters are ignored.")
         .under(mode, Mode.RANDOM);
     private final NumberSetting pages = new NumberSetting("Pages",
-        "Pages per book.", 50, 1, MAX_PAGES, 1).max(MAX_PAGES)
+        "Pages per book.", 50, 1, WritableBookContent.MAX_PAGES, 1).max(WritableBookContent.MAX_PAGES)
         .under(mode, () -> mode.is(Mode.RANDOM) && !characters.is(Characters.PAPER));
     private final NumberSetting perPage = new NumberSetting("Characters per page",
-        "How many characters each page holds.", 128, 1, MAX_PAGE_LENGTH, 1)
-        .max(MAX_PAGE_LENGTH)
+        "How many characters each page holds.", 128, 1, WritableBookContent.PAGE_EDIT_LENGTH, 1)
+        .max(WritableBookContent.PAGE_EDIT_LENGTH)
         .under(mode, () -> mode.is(Mode.RANDOM) && !characters.is(Characters.PAPER));
     private final BoolSetting wordWrap = new BoolSetting("Word wrap",
         "Breaks lines between words the way the book screen would.", true)
@@ -168,16 +165,16 @@ public final class BookBot extends Module {
     // A hundred pages built to sit right on the Paper packet size limit. The
     // first fifty are mostly one byte characters and the last fifty are three.
     private List<String> paperPages() {
-        List<String> result = new ArrayList<>(MAX_PAGES);
-        for (int page = 0; page < MAX_PAGES; page++) {
-            StringBuilder text = new StringBuilder(MAX_PAGE_LENGTH);
+        List<String> result = new ArrayList<>(WritableBookContent.MAX_PAGES);
+        for (int page = 0; page < WritableBookContent.MAX_PAGES; page++) {
+            StringBuilder text = new StringBuilder(WritableBookContent.PAGE_EDIT_LENGTH);
             if (page < PAPER_LIGHT_PAGES) {
-                text.append(wide(1)).append(narrow(MAX_PAGE_LENGTH - 1));
+                text.append(wide(1)).append(narrow(WritableBookContent.PAGE_EDIT_LENGTH - 1));
             } else if (page == PAPER_LIGHT_PAGES) {
                 text.append(wide(PAPER_MIXED_WIDE)).append(MIDDLE_CHARACTER)
-                    .append(narrow(MAX_PAGE_LENGTH - PAPER_MIXED_WIDE - 1));
+                    .append(narrow(WritableBookContent.PAGE_EDIT_LENGTH - PAPER_MIXED_WIDE - 1));
             } else {
-                text.append(wide(MAX_PAGE_LENGTH));
+                text.append(wide(WritableBookContent.PAGE_EDIT_LENGTH));
             }
             result.add(text.toString());
         }
@@ -216,7 +213,7 @@ public final class BookBot extends Module {
 
     // The game's own line breaking decides where each page ends.
     private List<String> wrapPages(String text) {
-        List<FormattedText> lines = mc.font.splitIgnoringLanguage(Component.literal(text), PAGE_WIDTH);
+        List<FormattedText> lines = mc.font.splitIgnoringLanguage(Component.literal(text), BookEditScreen.TEXT_WIDTH);
         List<String> result = new ArrayList<>();
         StringBuilder page = new StringBuilder();
         int lineCount = 0;
@@ -229,7 +226,7 @@ public final class BookBot extends Module {
                 result.add(page.toString());
                 page.setLength(0);
                 lineCount = 0;
-                if (result.size() == MAX_PAGES) {
+                if (result.size() == WritableBookContent.MAX_PAGES) {
                     return result;
                 }
             }
@@ -242,17 +239,19 @@ public final class BookBot extends Module {
 
     private static List<String> cutPages(String text) {
         List<String> result = new ArrayList<>();
-        for (int start = 0; start < text.length() && result.size() < MAX_PAGES; start += MAX_PAGE_LENGTH) {
-            result.add(text.substring(start, Math.min(text.length(), start + MAX_PAGE_LENGTH)));
+        int page = WritableBookContent.PAGE_EDIT_LENGTH;
+        for (int start = 0; start < text.length() && result.size() < WritableBookContent.MAX_PAGES; start += page) {
+            result.add(text.substring(start, Math.min(text.length(), start + page)));
         }
         return result;
     }
 
+    // The packet refuses a longer title and the connection drops with it.
     private void send(List<String> text) {
-        String name = title.getValue();
-        if (number.isOn()) {
-            name += " " + (written + 1);
-        }
+        String count = number.isOn() ? " " + (written + 1) : "";
+        String base = title.getValue();
+        int room = WrittenBookContent.TITLE_MAX_LENGTH - count.length();
+        String name = (base.length() > room ? base.substring(0, room) : base) + count;
         Optional<String> signed = sign.isOn() ? Optional.of(name) : Optional.empty();
         mc.player.connection.send(new ServerboundEditBookPacket(
             InventoryUtil.selectedSlot(), text, signed));

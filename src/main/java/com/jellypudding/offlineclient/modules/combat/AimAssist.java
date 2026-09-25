@@ -42,10 +42,8 @@ public final class AimAssist extends Module {
         "How much of your own mouse movement is swallowed whilst aiming.", 0, 0, 100, 1, "%");
     private final BoolSetting lineOfSight = new BoolSetting("Line of sight",
         "Drop the target when the aim point is behind a block.", true);
-    private final BoolSetting whileBlocking = new BoolSetting("Aim whilst blocking",
-        "Keep aiming whilst you use an item.", false);
-    private final BoolSetting ignoreFriends = new BoolSetting("Ignore friends",
-        "Never aim at a friend.", true);
+    private final BoolSetting whileUsing = new BoolSetting("Aim whilst using",
+        "Keep aiming whilst you eat or block or draw a bow.", false);
     private final EntityFilter filter = EntityFilter.living("Aim at", "aimed at", true,
         EntityFilter.Pick.NONE, List.of());
 
@@ -55,7 +53,7 @@ public final class AimAssist extends Module {
 
     public AimAssist() {
         super("AimAssist", "Nudges your view towards whatever you are fighting.", Category.COMBAT);
-        addSettings(range, speed, fov, aimPoint, ignoreMouse, lineOfSight, whileBlocking, ignoreFriends);
+        addSettings(range, speed, fov, aimPoint, ignoreMouse, lineOfSight, whileUsing);
         addSettings(filter.settings());
         addSettings(targets.settings());
         searchTags("aim", "aimbot", "legit", "assist");
@@ -82,7 +80,7 @@ public final class AimAssist extends Module {
         if (!inGame() || mc.player.isSpectator() || mc.gui.screen() != null) {
             return;
         }
-        if (!whileBlocking.isOn() && mc.player.isUsingItem()) {
+        if (!whileUsing.isOn() && mc.player.isUsingItem()) {
             return;
         }
         target = pickTarget();
@@ -98,11 +96,8 @@ public final class AimAssist extends Module {
         Entity best = null;
         double bestAngle = widest;
         for (Entity entity : mc.level.entitiesForRendering()) {
-            if (entity == mc.player || !filter.matches(entity) || !targets.allows(entity)
-                || mc.player.distanceTo(entity) > reach) {
-                continue;
-            }
-            if (ignoreFriends.isOn() && EntityUtil.isFriend(entity)) {
+            if (entity == mc.player || mc.player.distanceTo(entity) > reach
+                || !targets.attackable(entity, filter)) {
                 continue;
             }
             if (lineOfSight.isOn() && !mc.player.hasLineOfSight(entity)) {

@@ -124,7 +124,7 @@ public final class ElytraBoost extends Module {
         }
         // ElytraFly opens the elytra itself.
         if (takeOff.isOn() && !Modules.enabled(ElytraFly.class) && canGlide()) {
-            ElytraFly.sendStartGlide();
+            MovementUtil.sendStartGlide();
             return;
         }
         toggle();

@@ -21,7 +21,7 @@ public final class AttackTimer {
 
     private final Random random = new Random();
 
-    // The moment the next hit is allowed at.
+    // Wall clock milliseconds.
     private long readyAt;
 
     // The settings in the order a module should show them.

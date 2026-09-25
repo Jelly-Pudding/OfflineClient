@@ -73,7 +73,6 @@ public final class Radar extends Module {
         searchTags("minimap", "entity map");
     }
 
-    // Which kinds of entity the filters let through.
     private boolean shows(Entity entity) {
         if (entity == mc.player) {
             return false;
@@ -115,7 +114,7 @@ public final class Radar extends Module {
         int centerX = left + box / 2;
         int centerY = top + box / 2;
 
-        RenderUtil.borderedRect(context, left, top, left + box, top + box, BACKGROUND, BORDER);
+        RenderUtil.roundedBorderedRect(context, left, top, left + box, top + box, 0, BACKGROUND, BORDER);
         context.fill(centerX, top + 2, centerX + 1, top + box - 2, GRID);
         context.fill(left + 2, centerY, left + box - 2, centerY + 1, GRID);
 

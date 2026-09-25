@@ -11,6 +11,7 @@ import com.jellypudding.offlineclient.util.EntityUtil;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.PlayerTabOverlay;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.network.chat.Component;
 
@@ -19,7 +20,6 @@ import net.minecraft.network.chat.Component;
 public final class BetterTab extends Module {
 
     private static final long VANILLA_LIMIT = 80;
-    private static final int VANILLA_COLUMN = 20;
     private static final int PING_ICON = 10;
 
     private final BoolSetting ping = new BoolSetting("Ping",
@@ -69,7 +69,7 @@ public final class BetterTab extends Module {
     }
 
     public int columnHeight() {
-        return isEnabled() ? columnHeight.getInt() : VANILLA_COLUMN;
+        return isEnabled() ? columnHeight.getInt() : PlayerTabOverlay.MAX_ROWS_PER_COL;
     }
 
     // Drawn in the column vanilla fills with the signal bars.

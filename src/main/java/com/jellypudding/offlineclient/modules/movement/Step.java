@@ -252,7 +252,6 @@ public final class Step extends Module {
         return jesus != null && jesus.lifting();
     }
 
-    // True whilst the keys push the player somewhere.
     private static boolean pushing() {
         return mc.player.input.getMoveVector().lengthSquared() >= 1.0E-6f;
     }

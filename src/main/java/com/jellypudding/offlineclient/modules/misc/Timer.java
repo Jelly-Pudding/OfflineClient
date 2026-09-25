@@ -31,7 +31,7 @@ public final class Timer extends Module {
         return new BigDecimal(Float.toString(effective)).stripTrailingZeros().toPlainString() + "x";
     }
 
-    // The game speed in force right now. One when nothing is speeding it up.
+    // The game speed in force. One when nothing is speeding it up.
     public static float current() {
         Timer timer = Modules.get(Timer.class);
         return timer == null ? 1f : timer.getSpeed();

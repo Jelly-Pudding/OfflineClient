@@ -11,6 +11,7 @@ import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.SwingMode;
 import com.jellypudding.offlineclient.util.InventoryUtil;
+import com.jellypudding.offlineclient.util.TakeFrom;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.Items;
@@ -31,8 +32,6 @@ import java.util.List;
 // Feeds bone meal to whatever is still growing around you.
 public final class BonemealAura extends Module {
 
-    public enum TakeFrom { HANDS, HOTBAR, INVENTORY }
-
     private final NumberSetting range = new NumberSetting("Range",
         "How far from your eyes to reach.", 5, 1, 6, 0.1).max(6);
     private final BoolSetting multi = new BoolSetting("Multi meal",
@@ -48,11 +47,7 @@ public final class BonemealAura extends Module {
         "Keeps going whilst you are mining a block.", false);
     private final BoolSetting whileRiding = new BoolSetting("Use whilst riding",
         "Keeps going whilst your hands are busy with a mount.", false);
-    private final EnumSetting<TakeFrom> takeFrom = new EnumSetting<>("Take from",
-        "Where bone meal may be taken from.", TakeFrom.HANDS)
-        .describe(TakeFrom.HANDS, "Only uses bone meal already in your main hand.")
-        .describe(TakeFrom.HOTBAR, "Switches to bone meal in the hotbar.")
-        .describe(TakeFrom.INVENTORY, "Borrows bone meal from anywhere in the inventory.");
+    private final EnumSetting<TakeFrom> takeFrom = TakeFrom.setting("bone meal", TakeFrom.HANDS);
     private final BoolSetting saplings = new BoolSetting("Saplings",
         "Grows saplings into trees.", true);
     private final BoolSetting crops = new BoolSetting("Crops",
@@ -145,11 +140,7 @@ public final class BonemealAura extends Module {
         if (mc.player.getMainHandItem().is(Items.BONE_MEAL)) {
             return true;
         }
-        int limit = switch (takeFrom.getValue()) {
-            case HANDS -> 0;
-            case HOTBAR -> InventoryUtil.HOTBAR_SIZE;
-            case INVENTORY -> InventoryUtil.WHOLE_INVENTORY;
-        };
+        int limit = takeFrom.getValue().limit();
         int slot = InventoryUtil.findSlot(Items.BONE_MEAL, limit);
         return slot != -1 && loan.select(slot);
     }

@@ -38,11 +38,9 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Set;
 
 // Legit mode mines one block at a time like a held click.
@@ -154,9 +152,6 @@ public final class Nuker extends Module {
     // The drawn cube for the two box shapes. Null whilst the shape is a sphere.
     private AABB region;
 
-    // A block is scanned several times a tick and one raycast each covers them all.
-    private final Map<BlockPos, Boolean> sightCache = new HashMap<>();
-
     public Nuker() {
         super("Nuker", "Breaks all blocks around you.", Category.WORLD);
         addSettings(shape, range, up, down, left, right, forward, back, wallsRange,
@@ -209,7 +204,6 @@ public final class Nuker extends Module {
         breaker.reset();
         interacted.clear();
         candidates.clear();
-        sightCache.clear();
         lastChosen = null;
         waitTicks = 0;
         region = null;
@@ -275,7 +269,6 @@ public final class Nuker extends Module {
     @Subscribe
     private void onTick(TickEvent event) {
         candidates.clear();
-        sightCache.clear();
         region = null;
         if (!inGame() || mc.player.isSpectator()) {
             current = null;
@@ -477,17 +470,7 @@ public final class Nuker extends Module {
         if (shape.is(Shape.SPHERE) && distance > range.getValue()) {
             return false;
         }
-        return distance <= wallsRange.getValue() || hasLineOfSight(pos);
-    }
-
-    private boolean hasLineOfSight(BlockPos pos) {
-        Boolean cached = sightCache.get(pos);
-        if (cached != null) {
-            return cached;
-        }
-        boolean result = BlockUtil.canSee(pos);
-        sightCache.put(pos, result);
-        return result;
+        return distance <= wallsRange.getValue() || BlockUtil.canSee(pos);
     }
 
     @Subscribe

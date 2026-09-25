@@ -11,7 +11,7 @@ import net.minecraft.world.phys.Vec3;
 public final class TpCommand extends Command {
 
     public TpCommand() {
-        super("tp", "Moves you to a spot or to another player.", "tp <x> <y> <z|player>");
+        super("tp", "Moves you to a spot or to another player.", "tp <x y z> or tp <player>");
     }
 
     @Override

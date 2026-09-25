@@ -72,7 +72,6 @@ public final class DrawBatch {
     // Pulled in off the faces. A box flush with a block fights it for depth.
     public static final double BLOCK_INSET = 0.002;
 
-    // The bounds of a block pulled in off its faces.
     public static AABB blockBox(BlockPos pos) {
         return new AABB(pos).deflate(BLOCK_INSET);
     }
@@ -167,7 +166,6 @@ public final class DrawBatch {
         outlineBoxPart(box, 0, color, throughWalls);
     }
 
-    // The four edges of a rectangle lying flat at one height.
     public void flatRect(double x1, double z1, double x2, double z2, double y,
                          int color, boolean throughWalls) {
         line(new Vec3(x1, y, z1), new Vec3(x2, y, z1), color, throughWalls);
@@ -189,7 +187,6 @@ public final class DrawBatch {
         quad(buffer(Pipelines.fill(throughWalls)), color, corners(relative(box), side));
     }
 
-    // The four edges of one face of a box.
     public void outlineFace(AABB box, Direction side, int color, boolean throughWalls) {
         float[] c = corners(relative(box), side);
         edge(c[0], c[1], c[2], c[3], c[4], c[5], color, throughWalls);
@@ -234,7 +231,6 @@ public final class DrawBatch {
             (float) rc.x, (float) rc.y, (float) rc.z, (float) rd.x, (float) rd.y, (float) rd.z);
     }
 
-    // The four edges of a face between four world points.
     public void outlineQuad(Vec3 a, Vec3 b, Vec3 c, Vec3 d, int color, boolean throughWalls) {
         line(a, b, color, throughWalls);
         line(b, c, color, throughWalls);

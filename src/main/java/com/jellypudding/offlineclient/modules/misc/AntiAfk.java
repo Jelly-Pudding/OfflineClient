@@ -83,7 +83,8 @@ public final class AntiAfk extends Module {
         "Seconds between messages.", 15, 1, 30, 1, "s").min(1).max(600)
         .under(sendMessages);
     private final TextLines lines = new TextLines("Messages",
-        "How many lines to rotate through.", "I am still here", "Just standing about")
+        "How many lines to rotate through.", "The text to send. Click to type it.", "I am still here",
+        "Just standing about")
         .under(sendMessages);
 
     private int sneakTimer;

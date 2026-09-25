@@ -115,15 +115,12 @@ public final class SetCommand extends Command {
                 if (value.equalsIgnoreCase("rainbow")) {
                     c.setRainbow(true);
                 } else {
-                    float hue;
-                    try {
-                        hue = Float.parseFloat(value);
-                    } catch (NumberFormatException e) {
-                        ChatUtil.error("§f" + value + "§c is not a hue. Use a number from 0 to 360 or §frainbow§c.");
+                    OptionalDouble hue = number(value);
+                    if (hue.isEmpty()) {
                         return;
                     }
                     c.setRainbow(false);
-                    c.setHue(hue);
+                    c.setHue((float) hue.getAsDouble());
                 }
             }
             case EnumSetting<?> e -> {

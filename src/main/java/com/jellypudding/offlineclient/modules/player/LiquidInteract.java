@@ -4,7 +4,6 @@ import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 
-// Puts liquid surfaces back in the crosshair.
 public final class LiquidInteract extends Module {
 
     private final BoolSetting flowing = new BoolSetting("Flowing",

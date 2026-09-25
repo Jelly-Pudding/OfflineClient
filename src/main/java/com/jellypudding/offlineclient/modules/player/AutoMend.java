@@ -12,6 +12,7 @@ import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.ItemUtil;
+import com.jellypudding.offlineclient.util.RotationManager;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.protocol.game.ServerboundUseItemPacket;
 import net.minecraft.world.InteractionHand;
@@ -26,9 +27,6 @@ import java.util.List;
 // Repairs mending gear. Bottles only reach the pieces that are worn or held.
 // The offhand mode is the way to mend items that sit in the inventory.
 public final class AutoMend extends Module {
-
-    // Straight down. The throw direction rides on the use packet.
-    private static final float DOWN_PITCH = 90;
 
     private static final EquipmentSlot[] REPAIRABLE = {
         EquipmentSlot.MAINHAND, EquipmentSlot.OFFHAND,
@@ -178,8 +176,9 @@ public final class AutoMend extends Module {
         if (!throwing || !(event.getPacket() instanceof ServerboundUseItemPacket packet)) {
             return;
         }
+        // The throw direction rides on the use packet.
         event.setPacket(new ServerboundUseItemPacket(packet.hand(), packet.sequence(),
-            packet.yRot(), DOWN_PITCH));
+            packet.yRot(), RotationManager.STRAIGHT_DOWN));
     }
 
     // Keeps one damaged mending item in the offhand until it is whole and
@@ -218,7 +217,6 @@ public final class AutoMend extends Module {
         setEnabled(false);
     }
 
-    // The first damaged mending item in the inventory that is not skipped.
     private int findDamaged() {
         return InventoryUtil.findSlot(stack -> isMending(stack) && stack.getDamageValue() > 0
             && !skip.contains(stack.getItem()), InventoryUtil.WHOLE_INVENTORY);

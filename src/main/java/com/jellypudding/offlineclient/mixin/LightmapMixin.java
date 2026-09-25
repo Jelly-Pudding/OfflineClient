@@ -26,8 +26,7 @@ public abstract class LightmapMixin {
         at = @At("HEAD"),
         cancellable = true)
     private void onRender(CallbackInfo ci) {
-        XRay xray = Modules.get(XRay.class);
-        if (xray == null || !xray.isEnabled()) {
+        if (!Modules.enabled(XRay.class)) {
             return;
         }
         RenderSystem.getDevice().createCommandEncoder()

@@ -9,6 +9,7 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.TextLines;
+import net.minecraft.SharedConstants;
 import net.minecraft.client.gui.screens.DisconnectedScreen;
 
 import java.util.ArrayDeque;
@@ -20,14 +21,12 @@ import java.util.concurrent.ThreadLocalRandom;
 // A message starting with a slash is sent as a command.
 public final class Spam extends Module {
 
-    // Servers cut a chat line off here.
-    private static final int MAX_LENGTH = 256;
-
     // Tacked onto the end of a message when the variation calls for it.
     private static final String TAILS = "!.~";
 
     private final TextLines lines = new TextLines("Messages",
-        "How many lines to rotate through.", "minecraftoffline.net is OK I guess");
+        "How many lines to rotate through.", "The text to send. Click to type it.",
+        "minecraftoffline.net is OK I guess");
     private final NumberSetting delay = new NumberSetting("Delay",
         "Seconds between messages.", 5, 0.1, 60, 0.1, "s").min(0.1).max(600);
     private final BoolSetting randomise = new BoolSetting("Randomise",
@@ -39,14 +38,14 @@ public final class Spam extends Module {
     private final BoolSetting vary = new BoolSetting("Vary text",
         "Makes small random changes to each message to get repeats past a spam filter.", false);
     private final NumberSetting variation = new NumberSetting("Variation",
-        "How many changes each message gets. A letter changes case or doubles or the line gains a tail.",
+        "How many changes each message gets. A letter changes case or doubles or the line gains a tail or a number.",
         1, 1, 10, 1).max(100)
         .under(vary);
     private final BoolSetting split = new BoolSetting("Split long lines",
         "Sends a long message in pieces instead of cutting it short.", false);
     private final NumberSetting splitLength = new NumberSetting("Split length",
-        "How many characters each piece holds.", MAX_LENGTH, 1, MAX_LENGTH, 1)
-        .min(1).max(MAX_LENGTH)
+        "How many characters each piece holds.", SharedConstants.MAX_CHAT_LENGTH, 1, SharedConstants.MAX_CHAT_LENGTH, 1)
+        .min(1).max(SharedConstants.MAX_CHAT_LENGTH)
         .under(split);
     private final NumberSetting splitDelay = new NumberSetting("Split delay",
         "Ticks between one piece and the next.", 20, 0, 200, 1, " ticks").min(0).max(1000)
@@ -135,8 +134,8 @@ public final class Spam extends Module {
             mc.getConnection().sendChat(pieces.removeFirst());
             return;
         }
-        if (text.length() > MAX_LENGTH) {
-            text = text.substring(0, MAX_LENGTH);
+        if (text.length() > SharedConstants.MAX_CHAT_LENGTH) {
+            text = text.substring(0, SharedConstants.MAX_CHAT_LENGTH);
         }
         mc.getConnection().sendChat(text);
     }
@@ -156,7 +155,7 @@ public final class Spam extends Module {
             seconds += ThreadLocalRandom.current().nextDouble(-reach, reach);
             seconds = Math.max(delay.getHardMin(), seconds);
         }
-        return Math.max(1, (int) Math.round(seconds * 20));
+        return Math.max(1, (int) Math.round(seconds * SharedConstants.TICKS_PER_SECOND));
     }
 
     // One small change to keep the message readable. A letter changes case or doubles up

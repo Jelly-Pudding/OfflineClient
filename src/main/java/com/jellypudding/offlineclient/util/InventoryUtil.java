@@ -115,7 +115,17 @@ public final class InventoryUtil {
         if (MC.player == null || MC.gameMode == null) {
             return;
         }
-        MC.gameMode.handleContainerInput(0, networkSlot, 0, ContainerInput.PICKUP, MC.player);
+        MenuClicks.click(MC.player.inventoryMenu, networkSlot, 0, ContainerInput.PICKUP);
+    }
+
+    // The number key swap. The stack trades places with the hotbar slot in one click.
+    public static void swapWithHotbar(int networkSlot, int hotbarSlot) {
+        MenuClicks.click(MC.player.inventoryMenu, networkSlot, hotbarSlot, ContainerInput.SWAP);
+    }
+
+    // Button one throws the whole stack in one click.
+    public static void throwStack(int networkSlot) {
+        MenuClicks.click(MC.player.inventoryMenu, networkSlot, 1, ContainerInput.THROW);
     }
 
     public static int selectedSlot() {
@@ -217,7 +227,7 @@ public final class InventoryUtil {
                     }
                     // A full hotbar means the held slot gives up its place.
                     int hotbar = freeHotbarSlot(selectedSlot());
-                    MC.gameMode.handleContainerInput(0, slot, hotbar, ContainerInput.SWAP, MC.player);
+                    swapWithHotbar(slot, hotbar);
                     lentFrom = slot;
                     lentTo = hotbar;
                     slot = hotbar;
@@ -263,7 +273,7 @@ public final class InventoryUtil {
             if (!cursorFree()) {
                 return false;
             }
-            MC.gameMode.handleContainerInput(0, lentFrom, lentTo, ContainerInput.SWAP, MC.player);
+            swapWithHotbar(lentFrom, lentTo);
             lentFrom = -1;
             lentTo = -1;
             return true;

@@ -22,7 +22,7 @@ import java.util.Map;
 // beside an offset asks for that block and no name means whatever you hold.
 public final class BuildTemplate {
 
-    // One block of the shape. A null block means any block will do.
+    // A null block means any block will do.
     public record Entry(int x, int y, int z, Block block) {
     }
 

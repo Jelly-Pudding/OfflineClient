@@ -7,6 +7,7 @@ import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.render.BoxStyle;
 import com.jellypudding.offlineclient.render.DrawBatch;
+import com.jellypudding.offlineclient.setting.ListMode;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
@@ -34,8 +35,6 @@ import java.util.List;
 // position and where the speed puts the player over the next few ticks.
 public final class Scaffold extends Module {
 
-    public enum ListMode { ONLY_LISTED, EXCEPT_LISTED }
-
     private static final Direction[] BRIDGE_SIDES = {
         Direction.DOWN, Direction.NORTH, Direction.SOUTH, Direction.WEST, Direction.EAST
     };
@@ -52,10 +51,9 @@ public final class Scaffold extends Module {
         BuiltInRegistries.BLOCK,
         List.of(Blocks.COBBLESTONE, Blocks.COBBLED_DEEPSLATE, Blocks.NETHERRACK,
             Blocks.DIRT, Blocks.STONE, Blocks.DEEPSLATE, Blocks.OBSIDIAN));
-    private final EnumSetting<ListMode> listMode = new EnumSetting<>("List mode",
-        "How the block list is used.", ListMode.ONLY_LISTED)
-        .describe(ListMode.ONLY_LISTED, "Only listed blocks go under your feet. An empty list allows any building block.")
-        .describe(ListMode.EXCEPT_LISTED, "Any building block goes under your feet except the listed ones.");
+    private final EnumSetting<ListMode> listMode = ListMode.setting("List mode", ListMode.WHITELIST,
+        "Only listed blocks go under your feet. An empty list allows any building block.",
+        "Any building block goes under your feet except the listed ones.");
     private final BoolSetting tower = new BoolSetting("Tower",
         "Hold jump to build straight up.", true);
     private final NumberSetting towerSpeed = new NumberSetting("Tower speed",
@@ -330,10 +328,8 @@ public final class Scaffold extends Module {
         if (!BlockUtil.isBuildingBlock(block, target)) {
             return false;
         }
-        if (listMode.is(ListMode.EXCEPT_LISTED)) {
-            return !blocks.contains(block);
-        }
-        return blocks.size() == 0 || blocks.contains(block);
+        return blocks.size() == 0 && listMode.is(ListMode.WHITELIST)
+            || listMode.getValue().admits(blocks.contains(block));
     }
 
     private void towerUp(Vec3 velocity) {

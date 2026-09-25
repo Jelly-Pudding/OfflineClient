@@ -46,7 +46,6 @@ public final class EntityUtil {
     // Friends are drawn in blue wherever they appear.
     public static final int FRIEND_COLOR = 0xFF4080FF;
     private static final int ITEM_COLOR = 0xFFFFE040;
-    // Anything that hunts the player.
     private static final int HOSTILE_COLOR = 0xFFFF5030;
     private static final int PASSIVE_COLOR = 0xFF60E060;
     private static final int WATER_COLOR = 0xFF40C8FF;

@@ -1,10 +1,10 @@
 package com.jellypudding.offlineclient.event.events;
 
-import com.jellypudding.offlineclient.event.Event;
+import com.jellypudding.offlineclient.event.UncancellableEvent;
 import com.jellypudding.offlineclient.render.DrawBatch;
 
 // Fired after the world has rendered. The shared batch is drawn once after every handler has run.
-public final class Render3DEvent extends Event {
+public final class Render3DEvent extends UncancellableEvent {
 
     private final DrawBatch batch;
     private final float partialTicks;

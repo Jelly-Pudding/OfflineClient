@@ -65,7 +65,7 @@ public final class TriggerBot extends Module {
             return;
         }
         boolean blocking = whilstBlocking.isOn() && mc.player.isBlocking();
-        if ((mc.player.isUsingItem() && !blocking) || mc.gameMode.isDestroying() || Modules.eating()) {
+        if ((mc.player.isUsingItem() && !blocking) || mc.gameMode.isDestroying() || Modules.feedersPauseCombat()) {
             return;
         }
         if (onlyOnClick.isOn() && !mc.options.keyAttack.isDown()) {

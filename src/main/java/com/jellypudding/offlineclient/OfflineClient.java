@@ -40,7 +40,6 @@ public enum OfflineClient {
     private ModuleManager moduleManager;
     private ConfigManager configManager;
 
-    // Whether the player was in a world last tick.
     private boolean wasInWorld;
 
     public void init() {
@@ -72,7 +71,6 @@ public enum OfflineClient {
         greetOnFirstJoin();
     }
 
-    // Says hello the first time a fresh install reaches a world.
     private void greetOnFirstJoin() {
         boolean inWorld = MC.player != null;
         if (inWorld && !wasInWorld && configManager.needsGreeting()) {

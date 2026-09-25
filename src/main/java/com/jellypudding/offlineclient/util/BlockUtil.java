@@ -1,7 +1,6 @@
 package com.jellypudding.offlineclient.util;
 
 import com.jellypudding.offlineclient.OfflineClient;
-import com.jellypudding.offlineclient.util.SwingMode;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -45,6 +44,7 @@ import net.minecraft.world.level.block.NoteBlock;
 import net.minecraft.world.level.block.RepeaterBlock;
 import net.minecraft.world.level.block.RespawnAnchorBlock;
 import net.minecraft.world.level.block.StonecutterBlock;
+import net.minecraft.world.level.block.TorchBlock;
 import net.minecraft.world.level.block.TrapDoorBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
@@ -76,11 +76,10 @@ public final class BlockUtil {
     // The vanilla break time formula. Off the ground mines five times slower and
     // the wrong tool takes over three times as long.
     public static final float AIR_PENALTY = 5;
+    // The server finishes a block once the client reports this much progress.
+    public static final float SERVER_ACCEPTS = 0.7f;
     private static final int RIGHT_TOOL_DIVISOR = 30;
     private static final int WRONG_TOOL_DIVISOR = 100;
-
-    // Top covers the head. Full seals the sides at head height as well.
-    public enum TrapMode { TOP, FULL }
 
     private BlockUtil() {
     }
@@ -228,6 +227,34 @@ public final class BlockUtil {
         return true;
     }
 
+    // A neighbour face to click for a placement at pos.
+    public record Placement(BlockPos pos, Direction support, Vec3 hit) {
+
+        // Turns the way the face mode says then clicks and swings. False when nothing went down.
+        public boolean place(FaceMode face, SwingMode swing) {
+            face.face(hit, RotationPriority.PLACE);
+            if (!BlockUtil.place(pos, support, false, false)) {
+                return false;
+            }
+            swing.swing(InteractionHand.MAIN_HAND);
+            MC.rightClickDelay = InputUtil.USE_DELAY;
+            return true;
+        }
+    }
+
+    // Null unless a neighbour face sits within range of the eyes and in sight when that is asked for.
+    public static Placement placementInReach(BlockPos pos, double range, boolean needSight) {
+        Direction support = findPlaceSupport(pos);
+        if (support == null) {
+            return null;
+        }
+        Vec3 hit = hitPoint(pos.relative(support), support.getOpposite());
+        if (MC.player.getEyePosition().distanceToSqr(hit) > range * range) {
+            return null;
+        }
+        return needSight && !canSee(hit) ? null : new Placement(pos, support, hit);
+    }
+
     // Places against a neighbour when there is one and clicks the spot itself otherwise.
     public static boolean placeAny(BlockPos target, boolean rotate, boolean swing) {
         Direction support = findPlaceSupport(target);
@@ -333,6 +360,26 @@ public final class BlockUtil {
     // A crystal or a bed cannot break it.
     public static boolean isBlastProof(BlockState state) {
         return state.getBlock().getExplosionResistance() >= BLAST_PROOF;
+    }
+
+    // The blast proof block beside the target's feet that is closest to the player.
+    public static BlockPos cityBlock(Player target, double reach) {
+        BlockPos feet = target.blockPosition();
+        BlockPos best = null;
+        double bestDistance = reach;
+        for (Direction side : Direction.Plane.HORIZONTAL) {
+            BlockPos pos = feet.relative(side);
+            BlockState state = state(pos);
+            if (state.isAir() || !isBreakable(pos) || !isBlastProof(state)) {
+                continue;
+            }
+            double distance = distanceTo(pos);
+            if (distance <= bestDistance) {
+                bestDistance = distance;
+                best = pos;
+            }
+        }
+        return best;
     }
 
     // How well a block shields whoever stands beside it from a blast.
@@ -452,9 +499,13 @@ public final class BlockUtil {
         return isReplaceable(pos) && unobstructed(pos);
     }
 
-    // The items place the wall kinds as well.
+    // A plain or soul or copper torch standing or on a wall. Redstone torches are not lights.
+    public static boolean isTorch(Block block) {
+        return block instanceof TorchBlock;
+    }
+
     public static int findTorchSlot() {
-        return findBlockSlot(block -> block == Blocks.TORCH || block == Blocks.SOUL_TORCH);
+        return findBlockSlot(BlockUtil::isTorch);
     }
 
     // Clicks a block face. Vanilla skips a block interaction whilst the player sneaks.

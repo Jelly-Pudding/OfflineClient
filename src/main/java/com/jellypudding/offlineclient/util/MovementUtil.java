@@ -2,11 +2,14 @@ package com.jellypudding.offlineclient.util;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Abilities;
+import net.minecraft.world.entity.player.Input;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec2;
@@ -14,6 +17,39 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
 public final class MovementUtil {
+
+    // Creative style flight steered by the movement keys. The flying flag turns gravity
+    // off and a fly speed of zero keeps vanilla from pushing as well.
+    public static void flyDirect(double horizontal, double vertical) {
+        LocalPlayer player = OfflineClient.MC.player;
+        Abilities abilities = player.getAbilities();
+        abilities.flying = true;
+        abilities.setFlyingSpeed(0);
+        Input keys = player.input.keyPresses;
+        double vy = (keys.jump() ? vertical : 0) - (keys.shift() ? vertical : 0);
+        Vec3 heading = inputDirection();
+        player.setDeltaMovement(heading.x * horizontal, vy, heading.z * horizontal);
+    }
+
+    // Creative and spectator players keep their flight but get the vanilla speed back.
+    public static void endFlight() {
+        LocalPlayer player = OfflineClient.MC.player;
+        if (player == null) {
+            return;
+        }
+        Abilities abilities = player.getAbilities();
+        abilities.setFlyingSpeed(VANILLA_FLY_SPEED);
+        if (!player.isCreative() && !player.isSpectator()) {
+            abilities.flying = false;
+        }
+    }
+
+    // The server opens the elytra on this packet alone.
+    public static void sendStartGlide() {
+        LocalPlayer player = OfflineClient.MC.player;
+        player.connection.send(new ServerboundPlayerCommandPacket(player,
+            ServerboundPlayerCommandPacket.Action.START_FALL_FLYING));
+    }
 
     // A worn elytra short of breaking or any other chest item that glides.
     public static boolean wearsGlider() {
@@ -38,11 +74,10 @@ public final class MovementUtil {
     private static final double LEDGE_REACH = 0.1;
     private static final double FLOOR_GAP = 0.05;
 
-    // Vanilla player gravity a tick.
-    public static final double GRAVITY = 0.08;
+    public static final double GRAVITY = LivingEntity.DEFAULT_BASE_GRAVITY;
 
     // The pace of a plain sprint on flat ground.
-    public static final double WALK_SPEED = 0.2873;
+    public static final double SPRINT_SPEED = 0.2873;
 
     // Each level of Speed adds a fifth and each level of Slowness takes off
     // just under a sixth.

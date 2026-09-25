@@ -4,9 +4,6 @@ import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.command.Command;
 import com.jellypudding.offlineclient.command.CommandManager;
 import com.jellypudding.offlineclient.gui.HudEditorScreen;
-import com.jellypudding.offlineclient.modules.misc.HudModule;
-import com.jellypudding.offlineclient.util.ChatUtil;
-import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.client.gui.screens.Screen;
 
 import java.util.List;
@@ -23,11 +20,6 @@ public final class HudCommand extends Command {
 
     @Override
     public void execute(String[] args) {
-        HudModule hud = Modules.get(HudModule.class);
-        if (hud == null) {
-            ChatUtil.error("The overlay is not ready yet.");
-            return;
-        }
         if (args.length > 0 && !args[0].equalsIgnoreCase(EDIT)) {
             usage();
             return;

@@ -26,6 +26,7 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Queue;
 import java.util.UUID;
@@ -37,9 +38,7 @@ public final class LogoutSpots extends Module {
     private record Spot(String name, AABB box, float health, float maxHealth) {
     }
 
-    // The most players remembered at once.
     private static final int MAX_TRACKED = 512;
-    // The most markers kept at once.
     private static final int MAX_SPOTS = 128;
     // A flat marker still needs a sliver of height. Its edges then have a direction.
     private static final double FLAT_HEIGHT = 0.01;
@@ -185,7 +184,7 @@ public final class LogoutSpots extends Module {
     private void drawTag(GuiGraphicsExtractor context, Spot spot, Vec3 screen) {
         float fraction = spot.maxHealth() <= 0 ? 0 : spot.health() / spot.maxHealth();
         RenderUtil.label(context, mc.font, screen.x, screen.y, scale.getFloat(),
-            List.of(spot.name(), String.format(" %.0f", spot.health())),
+            List.of(spot.name(), String.format(Locale.ROOT, " %.0f", spot.health())),
             List.of(nameColor.getColor(), ColorUtil.health(fraction)),
             ColorUtil.fade(nameBackground.getColor(), nameBackgroundOpacity.getFloat() / 100f));
     }

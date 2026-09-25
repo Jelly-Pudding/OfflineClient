@@ -44,7 +44,7 @@ public final class PathFinder {
     // Costs are measured in blocks. A plain walk of one block costs one.
     private static final double DIAGONAL = 1.4142135;
     private static final double JUMP = 0.6;
-    private static final double FALL = 0.5;
+    static final double FALL = 0.5;
     private static final double CLIMB = 1.2;
     private static final double WATER = 0.6;
     private static final double WEB = 3;
@@ -72,7 +72,7 @@ public final class PathFinder {
     public record Result(List<BlockPos> nodes) {
     }
 
-    public record Step(BlockPos to, double cost) {
+    record Step(BlockPos to, double cost) {
     }
 
     private int maxFall = 3;
@@ -159,20 +159,18 @@ public final class PathFinder {
         private final boolean swim;
         private final boolean breakBlocks;
 
-        public Rules(ChunkWindow view, int maxFall, boolean swim, boolean breakBlocks) {
+        Rules(ChunkWindow view, int maxFall, boolean swim, boolean breakBlocks) {
             this.view = view;
             this.maxFall = maxFall;
             this.swim = swim;
             this.breakBlocks = breakBlocks;
         }
 
-        // True when the player could stand in this spot.
-        public boolean canStand(BlockPos pos) {
+        boolean canStand(BlockPos pos) {
             return entryCost(pos) >= 0;
         }
 
-        // True when a step from one spot to the next is allowed.
-        public boolean canStep(BlockPos from, BlockPos to) {
+        boolean canStep(BlockPos from, BlockPos to) {
             List<Step> steps = new ArrayList<>();
             steps(from, steps);
             for (Step step : steps) {
@@ -185,7 +183,7 @@ public final class PathFinder {
 
         // The first block to dig out of the way of a spot. Null when nothing is in
         // the way or breaking is switched off.
-        public BlockPos blocking(BlockPos pos) {
+        BlockPos blocking(BlockPos pos) {
             if (!breakBlocks) {
                 return null;
             }
@@ -200,7 +198,7 @@ public final class PathFinder {
         }
 
         // Every spot reachable from here in one move.
-        public void steps(BlockPos from, List<Step> out) {
+        void steps(BlockPos from, List<Step> out) {
             for (int i = 0; i < STEP_X.length; i++) {
                 int dx = STEP_X[i];
                 int dz = STEP_Z[i];
@@ -280,7 +278,7 @@ public final class PathFinder {
         }
 
         // True when the player would fit in the spot whatever is under it.
-        public boolean fitsAt(BlockPos pos) {
+        boolean fitsAt(BlockPos pos) {
             return spaceCost(pos, false) >= 0 && spaceCost(pos.above(), false) >= 0;
         }
 
@@ -326,7 +324,7 @@ public final class PathFinder {
         }
     }
 
-    public static boolean climbable(BlockState state) {
+    private static boolean climbable(BlockState state) {
         return state.is(BlockTags.CLIMBABLE);
     }
 

@@ -15,8 +15,7 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
 import java.util.Locale;
 
-// Changes how the first person hands look and move.
-// Every hook lives in ItemInHandRendererMixin and LivingEntityMixin.
+// Every hook lives in FirstPersonHandsAndItemsRendererMixin and LivingEntityMixin.
 public final class HandView extends Module {
 
     public enum SwingHand { NORMAL, MAIN_HAND, OFF_HAND }

@@ -1,6 +1,7 @@
 package com.jellypudding.offlineclient.modules.render;
 
 import com.jellypudding.offlineclient.event.Subscribe;
+import com.jellypudding.offlineclient.event.events.PacketReceiveEvent;
 import com.jellypudding.offlineclient.event.events.Render3DEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
@@ -9,21 +10,20 @@ import com.jellypudding.offlineclient.render.DrawBatch;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
+import com.jellypudding.offlineclient.util.ChunkScanner;
 import com.jellypudding.offlineclient.util.ColorUtil;
+import com.jellypudding.offlineclient.util.NearestCut;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 
-import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 // Anything that is not part of the natural world was put there by a player.
-// The area around you is swept a slice at a time and every such block lit up.
 public final class BaseFinder extends Module {
 
-    // The sweep covers the whole height in this many ticks.
-    private static final int SWEEP_TICKS = 64;
     private static final int FILL_ALPHA = 64;
 
     private static final List<Block> NATURAL = List.of(Blocks.AIR, Blocks.CAVE_AIR, Blocks.VOID_AIR,
@@ -65,16 +65,16 @@ public final class BaseFinder extends Module {
         "Blocks the world puts down on its own. Anything else counts as a base. Click to pick them.",
         BuiltInRegistries.BLOCK, NATURAL);
     private final NumberSetting range = new NumberSetting("Range",
-        "How far out from you the sweep reaches.", 64, 16, 128, 8, " blocks").min(8).max(256);
+        "Chunk radius to search around you.", 4, 1, 12, 1, " chunks").max(32);
     private final NumberSetting limit = new NumberSetting("Limit",
-        "The most blocks lit up at once.", 2000, 100, 10000, 100).min(1);
+        "The most blocks lit up at once with the nearest first.", 2000, 100, 10000, 100).min(1);
     private final ColorSetting color = new ColorSetting("Colour",
         "Colour of the blocks lit up.", 0, false);
 
-    // The blocks found in the sweep under way and in the last full one.
-    private final List<BlockPos> sweeping = new ArrayList<>();
-    private List<BlockPos> found = List.of();
-    private int slice;
+    private final ChunkScanner<BlockPos> scanner = new ChunkScanner<>();
+    private final NearestCut<BlockPos> found = new NearestCut<>(BlockPos::distToCenterSqr);
+    // Read by the scanner thread. Replaced whole when the list changes.
+    private volatile Set<Block> naturalBlocks = Set.of();
 
     public BaseFinder() {
         super("BaseFinder", "Lights up every block a player put down near you.", Category.RENDER);
@@ -84,51 +84,50 @@ public final class BaseFinder extends Module {
 
     @Override
     public String getSuffix() {
-        return count(found.size());
+        return count(found.result().size());
     }
 
     @Override
     protected void onEnable() {
-        sweeping.clear();
-        found = List.of();
-        slice = 0;
+        forget();
     }
 
-    // One slab of the height a tick. A full sweep takes about three seconds.
+    @Override
+    protected void onDisable() {
+        forget();
+    }
+
+    private void forget() {
+        scanner.reset();
+        found.clear();
+        naturalBlocks = Set.of();
+    }
+
+    @Subscribe
+    private void onPacketReceive(PacketReceiveEvent event) {
+        scanner.markChanged(event.getPacket());
+    }
+
     @Subscribe
     private void onTick(TickEvent event) {
         if (!inGame()) {
             return;
         }
-        int minY = mc.level.getMinY();
-        int step = Math.max(1, mc.level.getHeight() / SWEEP_TICKS);
-        int top = mc.level.getMaxY() - slice * step;
-        int bottom = Math.max(minY, top - step);
-        int reach = range.getInt();
-        BlockPos feet = mc.player.blockPosition();
-        BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
-        for (int y = top; y > bottom && sweeping.size() < limit.getInt(); y--) {
-            for (int x = -reach; x <= reach; x++) {
-                for (int z = -reach; z <= reach; z++) {
-                    cursor.set(feet.getX() + x, y, feet.getZ() + z);
-                    if (!natural.contains(mc.level.getBlockState(cursor).getBlock())) {
-                        sweeping.add(cursor.immutable());
-                    }
-                }
-            }
+        Set<Block> chosen = Set.copyOf(natural.resolved());
+        if (!chosen.equals(naturalBlocks)) {
+            naturalBlocks = chosen;
+            scanner.reset();
         }
-        if (++slice * step >= mc.level.getHeight() || bottom <= minY) {
-            found = List.copyOf(sweeping);
-            sweeping.clear();
-            slice = 0;
-        }
+        scanner.update(range.getInt(), (view, out) -> view.forEachMatching(
+            state -> !chosen.contains(state.getBlock()), (x, y, z, state) -> out.add(new BlockPos(x, y, z))));
+        found.update(scanner.results(), limit.getInt());
     }
 
     @Subscribe
     private void onRender3D(Render3DEvent event) {
         DrawBatch batch = event.getBatch();
         int fill = ColorUtil.withAlpha(color.getColor(), FILL_ALPHA);
-        for (BlockPos pos : found) {
+        for (BlockPos pos : found.result()) {
             batch.solidBox(DrawBatch.blockBox(pos), fill, true);
         }
     }

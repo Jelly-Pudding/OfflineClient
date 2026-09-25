@@ -140,7 +140,9 @@ public final class Excavator extends Module {
         if (!corners.started() || corners.done()) {
             clear();
             corners.mark(pos);
-            ChatUtil.message("§bExcavator §7first corner at §f" + BlockUtil.text(pos) + "§7.");
+            if (logSelection.isOn()) {
+                ChatUtil.message("§bExcavator §7first corner at §f" + BlockUtil.text(pos) + "§7.");
+            }
             return;
         }
         corners.mark(pos);

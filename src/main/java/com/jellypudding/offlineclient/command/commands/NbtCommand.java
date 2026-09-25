@@ -5,7 +5,6 @@ import com.jellypudding.offlineclient.command.Command;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import net.minecraft.world.item.ItemStack;
 
-// Copies the component data out to be pasted somewhere readable.
 public final class NbtCommand extends Command {
 
     // Chat swallows anything much longer than this.

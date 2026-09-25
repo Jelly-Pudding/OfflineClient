@@ -1,6 +1,7 @@
 package com.jellypudding.offlineclient.mixin;
 
 import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.gui.GuiTheme;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.modules.misc.BetterChat;
@@ -28,7 +29,13 @@ import java.util.List;
 @Mixin(ChatScreen.class)
 public abstract class ChatScreenMixin extends Screen {
 
-    private ChatScreenMixin(OfflineClient client, Component title) {
+    // How many completions show at once and the height of each row.
+    @Unique
+    private static final int POPUP_ROWS = 8;
+    @Unique
+    private static final int ROW_PITCH = 10;
+
+    private ChatScreenMixin(Component title) {
         super(title);
     }
 
@@ -118,7 +125,6 @@ public abstract class ChatScreenMixin extends Screen {
         input.moveCursorToEnd(false);
     }
 
-    // The pick for this text. Any change to the text puts it back on the first option.
     @Unique
     private int offlineclient$pickFor(String text, int count) {
         if (!text.equals(offlineclient$pickedFor)) {
@@ -159,7 +165,7 @@ public abstract class ChatScreenMixin extends Screen {
 
         int picked = offlineclient$pickFor(text, options.size());
         // The list scrolls to keep the pick among the rows shown.
-        int shown = Math.min(8, options.size());
+        int shown = Math.min(POPUP_ROWS, options.size());
         int first = Math.clamp(picked - shown + 1, 0, options.size() - shown);
         String overflow = options.size() > shown
             ? "and " + (options.size() - shown) + " more" : null;
@@ -169,18 +175,18 @@ public abstract class ChatScreenMixin extends Screen {
         }
         int x = 4;
         int bottom = height - 16;
-        int top = bottom - shown * 10 - 2;
+        int top = bottom - shown * ROW_PITCH - 2;
         // The overflow line sits a row above the options and needs covering too.
-        context.fill(x - 2, overflow == null ? top - 2 : top - 14,
-            x + boxWidth + 4, bottom, 0xE8101018);
+        context.fill(x - 2, overflow == null ? top - 2 : top - ROW_PITCH - 4,
+            x + boxWidth + 4, bottom, GuiTheme.bgTooltip());
         context.guiRenderState.up();
         for (int i = 0; i < shown; i++) {
             int index = first + i;
-            context.text(minecraft.font, options.get(index), x, top + i * 10,
-                index == picked ? 0xFF00E5FF : 0xFFB0B0C0, false);
+            context.text(minecraft.font, options.get(index), x, top + i * ROW_PITCH,
+                index == picked ? GuiTheme.accentText() : GuiTheme.textDim(), false);
         }
         if (overflow != null) {
-            context.text(minecraft.font, overflow, x, top - 12, 0xFF707080, false);
+            context.text(minecraft.font, overflow, x, top - ROW_PITCH - 2, GuiTheme.textFaint(), false);
         }
     }
 

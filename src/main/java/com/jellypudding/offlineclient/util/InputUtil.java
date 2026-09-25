@@ -17,6 +17,11 @@ public final class InputUtil {
     // Vanilla repeats a held right click this many ticks apart.
     public static final int USE_DELAY = 4;
 
+    // The game sets the right click delay on every use and counts it down once a tick.
+    public static void capUseDelay(int ticks) {
+        OfflineClient.MC.rightClickDelay = Math.min(OfflineClient.MC.rightClickDelay, Math.max(0, ticks));
+    }
+
     private InputUtil() {
     }
 

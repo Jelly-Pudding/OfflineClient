@@ -17,6 +17,7 @@ import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.setting.Setting;
 import com.jellypudding.offlineclient.util.ChunkScanner;
 import com.jellypudding.offlineclient.util.ColorUtil;
+import com.jellypudding.offlineclient.util.NearestCut;
 import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
@@ -24,7 +25,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
-import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.AABB;
@@ -44,7 +44,7 @@ public final class BlockEsp extends Module {
 
     private static final Direction[] SIDES = Direction.values();
 
-    // The block found and where it stands. Built on the scanner thread.
+    // Built on the scanner thread.
     private record Target(int x, int y, int z, Block block) {
     }
 
@@ -138,11 +138,7 @@ public final class BlockEsp extends Module {
     private final ChunkScanner<Target> scanner = new ChunkScanner<>();
     // Set from the settings screen and read on the next tick.
     private volatile boolean listChanged = true;
-    private List<Target> drawn = List.of();
-
-    // The scan list and the chunk the last draw list was cut for.
-    private List<Target> cutFrom;
-    private long cutChunk;
+    private final NearestCut<Target> drawn = new NearestCut<>(BlockEsp::distanceSqr);
 
     // Where every drawn block stands and which run of touching blocks it belongs to.
     private final Long2ObjectOpenHashMap<Block> blockAt = new Long2ObjectOpenHashMap<>();
@@ -174,7 +170,7 @@ public final class BlockEsp extends Module {
 
     @Override
     public String getSuffix() {
-        return count(drawn.size());
+        return count(drawn.result().size());
     }
 
     @Override
@@ -190,8 +186,7 @@ public final class BlockEsp extends Module {
 
     private void reset() {
         scanner.reset();
-        drawn = List.of();
-        cutFrom = null;
+        drawn.clear();
         blockAt.clear();
         groupOf.clear();
         groupCenters.clear();
@@ -246,30 +241,13 @@ public final class BlockEsp extends Module {
             state -> query.contains(state.getBlock()),
             (x, y, z, state) -> out.add(new Target(x, y, z, state.getBlock()))));
 
-        rebuildDrawList();
+        // The nearest blocks win when there are more than the limit allows.
+        if (drawn.update(scanner.results(), limit.getInt())) {
+            regroup(drawn.result());
+        }
     }
 
-    // The nearest blocks win when there are more than the limit allows.
-    private void rebuildDrawList() {
-        List<Target> all = scanner.results();
-        int max = limit.getInt();
-        long chunk = ChunkPos.pack(mc.player.blockPosition());
-        if (all == cutFrom && chunk == cutChunk && drawn.size() == Math.min(max, all.size())) {
-            return;
-        }
-        cutFrom = all;
-        cutChunk = chunk;
-        if (all.size() > max) {
-            Vec3 eye = mc.player.getEyePosition();
-            all = new ArrayList<>(all);
-            all.sort((a, b) -> Double.compare(distanceSqr(eye, a), distanceSqr(eye, b)));
-            all = all.subList(0, max);
-        }
-        drawn = all;
-        regroup(drawn);
-    }
-
-    private static double distanceSqr(Vec3 eye, Target target) {
+    private static double distanceSqr(Target target, Vec3 eye) {
         double dx = target.x() + 0.5 - eye.x;
         double dy = target.y() + 0.5 - eye.y;
         double dz = target.z() + 0.5 - eye.z;
@@ -336,7 +314,7 @@ public final class BlockEsp extends Module {
     private void onRender3D(Render3DEvent event) {
         DrawBatch batch = event.getBatch();
         boolean[] traced = new boolean[groupCenters.size()];
-        for (Target target : drawn) {
+        for (Target target : drawn.result()) {
             BlockLook look = looks.get(target.block());
             boolean own = look != null && look.isOwn();
             BoxStyle style = own ? look.style() : defaultStyle;

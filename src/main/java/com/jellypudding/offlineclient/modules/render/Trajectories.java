@@ -81,10 +81,10 @@ public final class Trajectories extends Module {
         }
     }
 
-    private static final Launch ARROW = new Launch(3, ProjectileUtil.ARROW_GRAVITY, ProjectileUtil.AIR_DRAG,
-        0.6, 0, Motion.ARROW, false);
-    private static final Launch CROSSBOW_ARROW = new Launch(3.15, ProjectileUtil.ARROW_GRAVITY, ProjectileUtil.AIR_DRAG,
-        0.6, 0, Motion.ARROW, false);
+    private static final Launch ARROW = new Launch(ProjectileUtil.BOW_SPEED, ProjectileUtil.ARROW_GRAVITY,
+        ProjectileUtil.AIR_DRAG, 0.6, 0, Motion.ARROW, false);
+    private static final Launch CROSSBOW_ARROW = new Launch(ProjectileUtil.CROSSBOW_SPEED,
+        ProjectileUtil.ARROW_GRAVITY, ProjectileUtil.AIR_DRAG, 0.6, 0, Motion.ARROW, false);
     private static final Launch FIREWORK = new Launch(1.6, 0, 1, 1, 0, Motion.ARROW, false);
     private static final Launch TRIDENT = new Launch(2.5, ProjectileUtil.ARROW_GRAVITY, ProjectileUtil.AIR_DRAG,
         0.99, 0, Motion.ARROW, false);
@@ -149,7 +149,6 @@ public final class Trajectories extends Module {
         searchTags("bow", "arrow", "aim");
     }
 
-    // Every item that can be shot or thrown.
     private static List<Item> throwableItems() {
         List<Item> list = new ArrayList<>();
         for (Item item : BuiltInRegistries.ITEM) {
@@ -187,8 +186,7 @@ public final class Trajectories extends Module {
         }
     }
 
-    // Also called by BowAimbot for its own arc whilst this module is off.
-    public void draw(DrawBatch batch, Player player, float partialTicks) {
+    private void draw(DrawBatch batch, Player player, float partialTicks) {
         ItemStack stack = player.getMainHandItem();
         Launch launch = launchFor(player, stack);
         if (launch == null) {

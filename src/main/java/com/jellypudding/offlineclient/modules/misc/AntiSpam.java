@@ -3,12 +3,11 @@ package com.jellypudding.offlineclient.modules.misc;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.ChatUtil;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.components.ChatComponent;
-import net.minecraft.client.multiplayer.chat.GuiMessage;
 import net.minecraft.network.chat.Component;
 
-import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -34,26 +33,24 @@ public final class AntiSpam extends Module {
         if (incoming.isBlank()) {
             return message;
         }
-        List<GuiMessage> all = chat.allMessages;
-        int max = Math.min(depth.getInt(), all.size());
-        for (int i = 0; i < max; i++) {
-            String existing = BetterChat.withoutStamp(all.get(i).content().getString());
-            int count = 0;
-            if (existing.equals(incoming)) {
-                count = 2;
-            } else {
-                Matcher matcher = COUNTER.matcher(existing);
-                if (matcher.find() && existing.substring(0, matcher.start()).equals(incoming)) {
-                    count = Integer.parseInt(matcher.group(1)) + 1;
-                }
-            }
-            if (count > 0) {
-                all.remove(i);
-                chat.refreshTrimmedMessages();
-                return message.copy()
-                    .append(Component.literal(" x" + count).withStyle(ChatFormatting.GRAY));
-            }
+        String removed = ChatUtil.removeRecent(chat, depth.getInt(), line -> countAfter(line, incoming) > 0);
+        if (removed == null) {
+            return message;
         }
-        return message;
+        return message.copy()
+            .append(Component.literal(" x" + countAfter(removed, incoming)).withStyle(ChatFormatting.GRAY));
+    }
+
+    // The count a stored line reaches once the incoming one joins it. Zero when they differ.
+    private static int countAfter(String line, String incoming) {
+        String existing = BetterChat.withoutStamp(line);
+        if (existing.equals(incoming)) {
+            return 2;
+        }
+        Matcher matcher = COUNTER.matcher(existing);
+        if (matcher.find() && existing.substring(0, matcher.start()).equals(incoming)) {
+            return Integer.parseInt(matcher.group(1)) + 1;
+        }
+        return 0;
     }
 }

@@ -113,7 +113,7 @@ public final class AxisWalker {
         MC.player.setDeltaMovement(velocity.x + rightX * push, velocity.y, velocity.z + rightZ * push);
     }
 
-    // Walks along the line at a walking pace whatever way the player faces.
+    // Walks along the line whatever way the player faces.
     public void walkAlong(double speed) {
         if (axis == null || MC.player == null) {
             return;

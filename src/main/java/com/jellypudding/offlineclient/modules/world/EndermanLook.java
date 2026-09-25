@@ -23,8 +23,6 @@ public final class EndermanLook extends Module {
     // How wide the vanilla stare test is before distance widens it.
     private static final double STARE_SPREAD = 0.025;
 
-    private static final float FLOOR_PITCH = 90f;
-
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
         "What to do about the endermen near you.", Mode.AWAY)
         .describe(Mode.AWAY, "Looks at the floor whenever you would stare at one.")
@@ -66,7 +64,7 @@ public final class EndermanLook extends Module {
                 return;
             }
             if (staringAt(enderman)) {
-                RotationManager.requestExact(mc.player.getYRot(), FLOOR_PITCH, RotationPriority.IDLE);
+                RotationManager.requestExact(mc.player.getYRot(), RotationManager.STRAIGHT_DOWN, RotationPriority.IDLE);
                 return;
             }
         }

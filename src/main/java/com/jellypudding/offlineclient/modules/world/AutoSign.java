@@ -11,11 +11,10 @@ import com.jellypudding.offlineclient.setting.TextSetting;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import net.minecraft.client.gui.screens.inventory.AbstractSignEditScreen;
 import net.minecraft.network.protocol.game.ServerboundSignUpdatePacket;
+import net.minecraft.world.level.block.entity.SignText;
 
 // Fills every placed sign with the same four lines and closes the screen.
 public final class AutoSign extends Module {
-
-    private static final int LINES = 4;
 
     public enum Source { TYPED, FIRST_SIGN }
 
@@ -90,7 +89,7 @@ public final class AutoSign extends Module {
             filled = screen;
             timer = delay.getInt();
             System.arraycopy(lines, 0, screen.messages, 0,
-                Math.min(LINES, screen.messages.length));
+                Math.min(SignText.LINES, screen.messages.length));
         }
         if (timer > 0) {
             timer--;

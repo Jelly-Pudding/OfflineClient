@@ -10,6 +10,7 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.Feeding;
 import com.jellypudding.offlineclient.util.InventoryUtil;
+import com.jellypudding.offlineclient.util.ItemUtil;
 import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.core.Holder;
 import net.minecraft.world.effect.MobEffect;
@@ -87,8 +88,7 @@ public final class AutoGap extends Module {
         if (!isEnabled() || !noSlowdown.isOn() || mc.player == null || !mc.player.isUsingItem()) {
             return false;
         }
-        ItemStack using = mc.player.getUseItem();
-        return using.is(Items.GOLDEN_APPLE) || using.is(Items.ENCHANTED_GOLDEN_APPLE);
+        return ItemUtil.isGoldenApple(mc.player.getUseItem());
     }
 
     @Override
@@ -209,6 +209,6 @@ public final class AutoGap extends Module {
         if (choice.is(Choice.PLAIN_ONLY)) {
             return stack.is(Items.GOLDEN_APPLE);
         }
-        return stack.is(Items.GOLDEN_APPLE) || stack.is(Items.ENCHANTED_GOLDEN_APPLE);
+        return ItemUtil.isGoldenApple(stack);
     }
 }

@@ -6,7 +6,6 @@ import com.jellypudding.offlineclient.event.events.Render3DEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
-import com.jellypudding.offlineclient.modules.render.Trajectories;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
@@ -14,7 +13,6 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.EntityFilter;
 import com.jellypudding.offlineclient.util.EntityUtil;
-import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.ProjectileUtil;
 import com.jellypudding.offlineclient.util.RenderUtil;
 import com.jellypudding.offlineclient.util.RotationManager;
@@ -26,6 +24,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.BowItem;
 import net.minecraft.world.item.CrossbowItem;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.ProjectileWeaponItem;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.HitResult;
@@ -38,11 +37,6 @@ public final class BowAimbot extends Module {
 
     // Pixels below the middle of the screen the readout sits.
     private static final int CROSSHAIR_GAP = 12;
-
-    // Arrow speed in blocks per tick at a full bow draw.
-    private static final double BOW_SPEED = 3.0;
-    // Arrow speed in blocks per tick from a crossbow.
-    private static final double CROSSBOW_SPEED = 3.15;
 
     private final EntityFilter filter = EntityFilter.living("Aim at", "aimed at", true,
         EntityFilter.Pick.NONE, List.of());
@@ -64,8 +58,6 @@ public final class BowAimbot extends Module {
         "Colour of that box.", 0, 0.81f, 1f, false).under(render);
     private final BoolSetting readout = new BoolSetting("Charge readout",
         "Write how far the bow is drawn under your crosshair.", true);
-    private final BoolSetting trajectory = new BoolSetting("Trajectory",
-        "Draws the arc the arrow will fly. Trajectories draws it instead whilst that module is on.", true);
     private final BoolSetting noSlow = new BoolSetting("No slowdown",
         "Move at full speed whilst drawing.", true);
 
@@ -78,7 +70,7 @@ public final class BowAimbot extends Module {
         addSettings(filter.settings());
         addSettings(targets.settings());
         addSettings(range, priority, predict, predictStrength, walls,
-            render, highlightColor, readout, trajectory, noSlow);
+            render, highlightColor, readout, noSlow);
         searchTags("bow aim", "crossbow", "aimbot", "arrow");
     }
 
@@ -96,7 +88,8 @@ public final class BowAimbot extends Module {
 
     // Consulted by LocalPlayerMixin to skip the bow draw slowdown.
     public boolean suppressesSlowdown() {
-        return isEnabled() && noSlow.isOn() && inGame() && mc.player.isUsingItem();
+        return isEnabled() && noSlow.isOn() && inGame() && mc.player.isUsingItem()
+            && mc.player.getUseItem().getItem() instanceof ProjectileWeaponItem;
     }
 
     @Subscribe
@@ -139,20 +132,20 @@ public final class BowAimbot extends Module {
                 return 0;
             }
             charge = BowItem.getPowerForTime(mc.player.getTicksUsingItem());
-            return Math.max(charge, 0.1f) * BOW_SPEED;
+            return Math.max(charge, 0.1f) * ProjectileUtil.BOW_SPEED;
         }
         if (held.getItem() instanceof CrossbowItem) {
             if (!CrossbowItem.isCharged(held) || !mc.options.keyUse.isDown()) {
                 return 0;
             }
             charge = 1;
-            return CROSSBOW_SPEED;
+            return ProjectileUtil.CROSSBOW_SPEED;
         }
         ItemStack offhand = mc.player.getOffhandItem();
         if (offhand.getItem() instanceof BowItem && mc.player.isUsingItem()
             && mc.player.getUseItem().getItem() instanceof BowItem) {
             charge = BowItem.getPowerForTime(mc.player.getTicksUsingItem());
-            return Math.max(charge, 0.1f) * BOW_SPEED;
+            return Math.max(charge, 0.1f) * ProjectileUtil.BOW_SPEED;
         }
         return 0;
     }
@@ -197,7 +190,7 @@ public final class BowAimbot extends Module {
 
         // The view itself turns. A bow shot has to leave from where the camera points.
         mc.player.setYRot(yaw);
-        mc.player.setXRot(Math.clamp(pitch, -90f, 90f));
+        mc.player.setXRot(RotationManager.clampPitch(pitch));
     }
 
     // Aims at the target's middle when it is visible otherwise the highest
@@ -309,18 +302,12 @@ public final class BowAimbot extends Module {
 
     @Subscribe
     private void onRender3D(Render3DEvent event) {
-        if (target == null || !inGame()) {
+        if (target == null || !inGame() || !render.isOn()) {
             return;
         }
-        if (render.isOn()) {
-            int color = highlightColor.getColor();
-            AABB box = EntityUtil.lerpedBox(target, event.getPartialTicks());
-            event.getBatch().outlineBox(box, color, true);
-            event.getBatch().solidBox(box, ColorUtil.withAlpha(color, (int) (90 * charge)), true);
-        }
-        Trajectories trajectories = Modules.get(Trajectories.class);
-        if (trajectory.isOn() && trajectories != null && !trajectories.isEnabled()) {
-            trajectories.draw(event.getBatch(), mc.player, event.getPartialTicks());
-        }
+        int color = highlightColor.getColor();
+        AABB box = EntityUtil.lerpedBox(target, event.getPartialTicks());
+        event.getBatch().outlineBox(box, color, true);
+        event.getBatch().solidBox(box, ColorUtil.withAlpha(color, (int) (90 * charge)), true);
     }
 }

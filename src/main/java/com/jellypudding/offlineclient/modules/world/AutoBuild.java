@@ -15,17 +15,12 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.FaceMode;
-import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
-import com.jellypudding.offlineclient.util.RotationPriority;
 import com.jellypudding.offlineclient.util.SwingMode;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.phys.BlockHitResult;
-import net.minecraft.world.phys.Vec3;
 
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -34,7 +29,6 @@ import java.util.Map;
 // Right click a block and the picked template goes up from there the way you face.
 public final class AutoBuild extends Module {
 
-    // How many boxes are drawn at most whilst a big shape goes up.
     private static final int MAX_DRAWN = 1024;
 
     private final ChoiceListSetting template = new ChoiceListSetting("Template",
@@ -160,27 +154,9 @@ public final class AutoBuild extends Module {
     }
 
     private boolean tryPlace(BlockPos pos, Block wanted) {
-        Direction support = BlockUtil.findPlaceSupport(pos);
-        if (support == null) {
-            return false;
-        }
-        Vec3 hit = BlockUtil.hitPoint(pos.relative(support), support.getOpposite());
-        if (mc.player.getEyePosition().distanceToSqr(hit) > range.getValue() * range.getValue()) {
-            return false;
-        }
-        if (lineOfSight.isOn() && !BlockUtil.canSee(hit)) {
-            return false;
-        }
-        if (!holdBlock(wanted)) {
-            return false;
-        }
-        faceTarget.getValue().face(hit, RotationPriority.PLACE);
-        if (!BlockUtil.place(pos, support, false, false)) {
-            return false;
-        }
-        swing.getValue().swing(InteractionHand.MAIN_HAND);
-        mc.rightClickDelay = InputUtil.USE_DELAY;
-        return true;
+        BlockUtil.Placement placement = BlockUtil.placementInReach(pos, range.getValue(), lineOfSight.isOn());
+        return placement != null && holdBlock(wanted)
+            && placement.place(faceTarget.getValue(), swing.getValue());
     }
 
     // The named block goes in hand when the template asks for one. Otherwise any block.

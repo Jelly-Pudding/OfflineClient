@@ -13,7 +13,7 @@ import java.util.OptionalInt;
 public final class FovCommand extends Command {
 
     private static final int DEFAULT_FOV = 70;
-    // A view as wide as a straight line or wider cannot be drawn.
+    // Zero degrees or a straight line of 180 or wider cannot be drawn.
     private static final int MIN_FOV = 1;
     private static final int MAX_FOV = 179;
 

@@ -27,7 +27,6 @@ import net.minecraft.world.item.SpawnEggItem;
 
 import java.util.List;
 
-// Climbs onto the first rideable thing beside you.
 public final class AutoMount extends Module {
 
     public enum Targets { ANY, LIST }

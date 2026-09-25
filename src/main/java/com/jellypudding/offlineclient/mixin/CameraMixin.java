@@ -77,10 +77,9 @@ public abstract class CameraMixin {
         at = @At("RETURN"))
     private void onExtractRenderState(CameraRenderState state, DeltaTracker deltaTracker,
                                       CallbackInfo ci) {
-        XRay xray = Modules.get(XRay.class);
         WallHack wallHack = Modules.get(WallHack.class);
         NoRender noRender = Modules.get(NoRender.class);
-        if ((xray != null && xray.isEnabled()) || (wallHack != null && wallHack.showsHiddenChunks())
+        if (Modules.enabled(XRay.class) || (wallHack != null && wallHack.showsHiddenChunks())
             || (noRender != null && noRender.skipsCaveCulling())) {
             state.smartCull = false;
         }

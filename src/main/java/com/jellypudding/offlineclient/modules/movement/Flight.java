@@ -21,7 +21,6 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.protocol.game.ClientboundPlayerAbilitiesPacket;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import net.minecraft.world.entity.player.Abilities;
-import net.minecraft.world.phys.Vec3;
 
 public final class Flight extends Module {
 
@@ -96,14 +95,7 @@ public final class Flight extends Module {
     @Override
     protected void onDisable() {
         Timer.override(TIMER_KEY, 1f);
-        if (mc.player == null) {
-            return;
-        }
-        Abilities abilities = mc.player.getAbilities();
-        abilities.setFlyingSpeed(MovementUtil.VANILLA_FLY_SPEED);
-        if (!mc.player.isCreative() && !mc.player.isSpectator()) {
-            abilities.flying = false;
-        }
+        MovementUtil.endFlight();
     }
 
     // TickEvent stops at a disconnect. ClientTickEvent still runs in the menus.
@@ -139,7 +131,8 @@ public final class Flight extends Module {
         if (mode.is(Mode.CREATIVE)) {
             creativeTick();
         } else {
-            directTick();
+            MovementUtil.flyDirect(MovementUtil.FLY_HORIZONTAL * horizontalSpeed.getValue(),
+                MovementUtil.FLY_VERTICAL * verticalSpeed.getValue());
         }
         switch (antiKick.getValue()) {
             case DIP -> dip.tick(antiKickInterval.getInt(), dipTicks.getInt());
@@ -152,26 +145,6 @@ public final class Flight extends Module {
         Abilities abilities = mc.player.getAbilities();
         abilities.flying = true;
         abilities.setFlyingSpeed((float) (MovementUtil.VANILLA_FLY_SPEED * horizontalSpeed.getValue()));
-    }
-
-    private void directTick() {
-        Abilities abilities = mc.player.getAbilities();
-        // The flying flag turns gravity off and zero speed disables the vanilla push.
-        abilities.flying = true;
-        abilities.setFlyingSpeed(0);
-
-        double vertical = MovementUtil.FLY_VERTICAL * verticalSpeed.getValue();
-        double vy = 0;
-        if (mc.options.keyJump.isDown()) {
-            vy += vertical;
-        }
-        if (mc.options.keyShift.isDown()) {
-            vy -= vertical;
-        }
-
-        double horizontal = MovementUtil.FLY_HORIZONTAL * horizontalSpeed.getValue();
-        Vec3 heading = MovementUtil.inputDirection();
-        mc.player.setDeltaMovement(heading.x * horizontal, vy, heading.z * horizontal);
     }
 
     // Sends the dip itself once the interval is up. Waiting for the client's own

@@ -501,8 +501,8 @@ public final class ClickGuiScreen extends GuiScreenBase {
     // The overlay is drawn under this screen. Anything the GUI lays over it
     // gets a solid backing rather than two lots of writing in one place.
     private void coverOverlay() {
-        HudModule hud = Modules.get(HudModule.class);
-        if (hud == null || !hud.isEnabled() || OfflineClient.MC.player == null) {
+        HudModule hud = Modules.active(HudModule.class);
+        if (hud == null || OfflineClient.MC.player == null) {
             return;
         }
         for (Placement placed : hud.getManager().layout(OfflineClient.MC.font,

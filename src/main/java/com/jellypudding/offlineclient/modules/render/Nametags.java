@@ -475,7 +475,7 @@ public final class Nametags extends Module {
         return mc.getConnection() == null ? null : mc.getConnection().getPlayerInfo(player.getUUID());
     }
 
-    // Ping from the tab list or -1 if the player is not on it.
+    // Ping from the tab list or minus one if the player is not on it.
     private int latencyOf(Player player) {
         PlayerInfo info = tabEntry(player);
         return info == null ? -1 : info.getLatency();

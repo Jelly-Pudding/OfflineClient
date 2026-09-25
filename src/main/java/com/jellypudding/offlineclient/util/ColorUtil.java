@@ -1,5 +1,7 @@
 package com.jellypudding.offlineclient.util;
 
+import net.minecraft.util.ARGB;
+
 public final class ColorUtil {
 
     private ColorUtil() {
@@ -40,13 +42,12 @@ public final class ColorUtil {
     }
 
     public static int withAlpha(int color, int alpha) {
-        return (Math.clamp(alpha, 0, 255) << 24) | (color & 0xFFFFFF);
+        return ARGB.color(Math.clamp(alpha, 0, 255), color);
     }
 
     // Multiplies the colour's own alpha by a 0 to 1 factor.
     public static int fade(int color, float alpha) {
-        int a = (int) ((color >>> 24) * Math.clamp(alpha, 0f, 1f));
-        return (a << 24) | (color & 0xFFFFFF);
+        return ARGB.multiplyAlpha(color, Math.clamp(alpha, 0f, 1f));
     }
 
     // Perceived brightness from 0 to 1. Alpha is ignored.
@@ -125,11 +126,6 @@ public final class ColorUtil {
     }
 
     public static int lerp(int from, int to, float t) {
-        t = Math.clamp(t, 0f, 1f);
-        int a = (int) (((from >> 24) & 0xFF) + (((to >> 24) & 0xFF) - ((from >> 24) & 0xFF)) * t);
-        int r = (int) (((from >> 16) & 0xFF) + (((to >> 16) & 0xFF) - ((from >> 16) & 0xFF)) * t);
-        int g = (int) (((from >> 8) & 0xFF) + (((to >> 8) & 0xFF) - ((from >> 8) & 0xFF)) * t);
-        int b = (int) ((from & 0xFF) + ((to & 0xFF) - (from & 0xFF)) * t);
-        return (a << 24) | (r << 16) | (g << 8) | b;
+        return ARGB.srgbLerp(Math.clamp(t, 0f, 1f), from, to);
     }
 }

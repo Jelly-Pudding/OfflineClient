@@ -14,6 +14,7 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.PacketNames;
 import net.minecraft.ChatFormatting;
+import net.minecraft.SharedConstants;
 import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.Packet;
@@ -188,7 +189,7 @@ public final class PacketLogger extends Module {
             flushTimer = 0;
             return;
         }
-        if (++flushTimer < flushSeconds.getInt() * 20) {
+        if (++flushTimer < flushSeconds.getInt() * SharedConstants.TICKS_PER_SECOND) {
             return;
         }
         flush();
@@ -248,7 +249,6 @@ public final class PacketLogger extends Module {
         }
     }
 
-    // The oldest files go once the folder outgrows the allowance.
     private void prune(Path folder) throws IOException {
         long allowance = maxTotalSize.getInt() * (long) MEGABYTE;
         List<Path> files = new ArrayList<>();

@@ -47,9 +47,6 @@ public final class AttributeSwap extends Module {
     // Blocks past the normal reach before a spear is worth swapping to.
     private static final double REACH_SLACK = 0.5;
 
-    // A mace only smashes after falling further than this.
-    private static final double SMASH_FALL = 1.5;
-
     // A mob under this much health is about to drop its loot.
     private static final float NEARLY_DEAD = 20;
 
@@ -389,10 +386,10 @@ public final class AttributeSwap extends Module {
         if (breach.isOn() && armor > 0) {
             score += 0.15 * armor * level(Enchantments.BREACH, stack);
         }
-        double fall = mc.player.fallDistance;
-        if (fall <= SMASH_FALL) {
+        if (!MaceItem.canSmashAttack(mc.player)) {
             return score;
         }
+        double fall = mc.player.fallDistance;
         if (regularMace.isOn() && stack.getItem() instanceof MaceItem) {
             score += smashBonus(fall);
         }

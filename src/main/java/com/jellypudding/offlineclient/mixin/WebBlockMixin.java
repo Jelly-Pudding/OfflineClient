@@ -2,7 +2,6 @@ package com.jellypudding.offlineclient.mixin;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.modules.movement.NoSlowdown;
-import com.jellypudding.offlineclient.modules.movement.NoWeb;
 import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.Entity;
@@ -26,9 +25,8 @@ public abstract class WebBlockMixin {
         if (entity != OfflineClient.MC.player) {
             return;
         }
-        NoWeb noWeb = Modules.get(NoWeb.class);
         NoSlowdown noSlowdown = Modules.get(NoSlowdown.class);
-        if ((noWeb != null && noWeb.skipsWebs()) || (noSlowdown != null && noSlowdown.skipsWebs())) {
+        if (noSlowdown != null && noSlowdown.skipsWebs()) {
             ci.cancel();
         }
     }

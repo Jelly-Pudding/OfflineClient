@@ -1,8 +1,8 @@
 package com.jellypudding.offlineclient.event.events;
 
-import com.jellypudding.offlineclient.event.Event;
+import com.jellypudding.offlineclient.event.UncancellableEvent;
 
-public final class AirStrafingSpeedEvent extends Event {
+public final class AirStrafingSpeedEvent extends UncancellableEvent {
 
     private float speed;
 

@@ -26,8 +26,7 @@ public abstract class BlockStateBaseMixin {
         at = @At("RETURN"),
         cancellable = true)
     private void onGetShadeBrightness(CallbackInfoReturnable<Float> cir) {
-        XRay xray = Modules.get(XRay.class);
-        if (xray != null && xray.isEnabled()) {
+        if (Modules.enabled(XRay.class)) {
             cir.setReturnValue(1f);
         }
     }

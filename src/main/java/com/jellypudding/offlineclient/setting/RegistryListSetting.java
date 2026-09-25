@@ -59,7 +59,6 @@ public final class RegistryListSetting<T> extends Setting<Set<Identifier>> imple
     // Resolved entries. Read from other threads and replaced whole.
     private volatile Set<T> resolved = Set.of();
 
-    // Runs after every change to the list.
     private Runnable onChange;
 
     public RegistryListSetting(String name, String description, Registry<T> registry,

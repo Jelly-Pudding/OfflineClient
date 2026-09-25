@@ -32,9 +32,6 @@ public final class FastBreak extends Module {
 
     public enum Mode { NORMAL, HASTE, DAMAGE }
 
-    // The server finishes a block once the client reports this much progress.
-    public static final float SERVER_ACCEPTS = 0.7f;
-
     // A block whose tick progress passes this is gone on the second server tick.
     private static final float INSTAMINE_PROGRESS = 0.5f;
 
@@ -42,6 +39,7 @@ public final class FastBreak extends Module {
     // block on its own and drifts away from the server.
     private static final float SAFE_PROGRESS = 0.9f;
 
+    // Vanilla waits this many ticks between one broken block and the next.
     private static final int VANILLA_DELAY = 5;
 
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
@@ -68,7 +66,7 @@ public final class FastBreak extends Module {
         "Only the listed blocks are sped up.", "Every block except the listed ones is sped up.")
         .under(mode, Mode.NORMAL, Mode.DAMAGE);
     private final NumberSetting delay = new NumberSetting("Delay",
-        "Ticks between breaking blocks. Vanilla waits 5.", 0, 0, 5, 1, " ticks");
+        "Ticks between breaking blocks. Vanilla waits " + VANILLA_DELAY + ".", 0, 0, VANILLA_DELAY, 1, " ticks");
     private final NumberSetting chance = new NumberSetting("Chance",
         "Share of blocks that get sped up. Below a hundred the timing looks less mechanical.",
         100, 1, 100, 1, "%").min(1).max(100);
@@ -132,7 +130,8 @@ public final class FastBreak extends Module {
     }
 
     private static BlockPos aimedBlock() {
-        return mc.hitResult instanceof BlockHitResult hit ? hit.getBlockPos() : null;
+        BlockHitResult hit = BlockUtil.aimedBlock();
+        return hit == null ? null : hit.getBlockPos();
     }
 
     // One roll per block. The same block reads the same way for as long as it is aimed at.
@@ -172,7 +171,7 @@ public final class FastBreak extends Module {
         if (!isEnabled() || !mode.is(Mode.DAMAGE) || !allows(state.getBlock()) || !lucky(aimedBlock())) {
             return delta;
         }
-        return progress + delta >= SERVER_ACCEPTS ? 1 : delta;
+        return progress + delta >= BlockUtil.SERVER_ACCEPTS ? 1 : delta;
     }
 
     // True when a first click should remove the block outright with a start and

@@ -14,6 +14,7 @@ import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.Lagback;
 import com.jellypudding.offlineclient.util.PacketUtil;
+import com.jellypudding.offlineclient.util.RotationManager;
 import com.jellypudding.offlineclient.util.SwingMode;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
@@ -171,7 +172,6 @@ public final class NoFall extends Module {
         return mode.isAny(Mode.PLACE, Mode.BOTH);
     }
 
-    // Runs once per tick just before the movement packet is built.
     @Subscribe
     private void onPreMotion(PreMotionEvent event) {
         if (!inGame()) {
@@ -362,7 +362,7 @@ public final class NoFall extends Module {
 
     private boolean lookingDown(BooleanSupplier action) {
         float pitch = mc.player.getXRot();
-        mc.player.setXRot(90f);
+        mc.player.setXRot(RotationManager.STRAIGHT_DOWN);
         try {
             return action.getAsBoolean();
         } finally {

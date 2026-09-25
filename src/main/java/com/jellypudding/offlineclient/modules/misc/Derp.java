@@ -86,7 +86,7 @@ public final class Derp extends Module {
         if (!inGame() || mc.player.isSpectator()) {
             return;
         }
-        if (pauseInCombat.isOn() && aimingModuleActive()) {
+        if (pauseInCombat.isOn() && handsBusy()) {
             return;
         }
         if (flailTimer > 0) {
@@ -127,14 +127,15 @@ public final class Derp extends Module {
             }
             case RANDOM -> {
                 yaw = ThreadLocalRandom.current().nextFloat(-180f, 180f);
-                pitch = ThreadLocalRandom.current().nextFloat(-90f, 90f);
+                float steepest = RotationManager.STRAIGHT_DOWN;
+                pitch = ThreadLocalRandom.current().nextFloat(-steepest, steepest);
                 if (ThreadLocalRandom.current().nextInt(4) == 0) {
                     flail();
                 }
             }
         }
         yaw = Mth.wrapDegrees(yaw);
-        pitch = Math.clamp(pitch, -90f, 90f);
+        pitch = RotationManager.clampPitch(pitch);
 
         RotationManager.requestExact(yaw, pitch, RotationPriority.IDLE);
     }
@@ -169,7 +170,7 @@ public final class Derp extends Module {
         mc.player.connection.send(ServerboundPunchPacket.INSTANCE);
     }
 
-    private boolean aimingModuleActive() {
+    private boolean handsBusy() {
         if (mc.player.isSwinging() && !mode.is(Mode.FLAIL) && !mode.is(Mode.RANDOM)
             || mc.options.keyAttack.isDown() || mc.player.isUsingItem()) {
             return true;

@@ -93,7 +93,6 @@ import com.jellypudding.offlineclient.modules.movement.NoClip;
 import com.jellypudding.offlineclient.modules.movement.NoFall;
 import com.jellypudding.offlineclient.modules.movement.NoKnockback;
 import com.jellypudding.offlineclient.modules.movement.NoSlowdown;
-import com.jellypudding.offlineclient.modules.movement.NoWeb;
 import com.jellypudding.offlineclient.modules.movement.Parkour;
 import com.jellypudding.offlineclient.modules.movement.QuickClimb;
 import com.jellypudding.offlineclient.modules.movement.Slippy;
@@ -258,225 +257,233 @@ public final class ModuleManager {
     }
 
     // Each category lists its modules in the order the panels show them.
-    // The everyday ones sit at the top and related ones sit together.
+    // Related modules sit together and the everyday ones lead each group.
     private void registerCombat() {
         add(new KillAura());
-        add(new AimAssist());
-        add(new CrystalAura());
-        add(new AutoTotem());
-        add(new Surround());
-        add(new AutoArmor());
-        add(new Offhand());
-
         add(new TriggerBot());
+        add(new AimAssist());
         add(new Criticals());
-        add(new AutoClicker());
         add(new AutoWeapon());
         add(new AttributeSwap());
         add(new Hitboxes());
+        add(new AutoClicker());
+        add(new TpAura());
 
-        add(new BowAimbot());
-        add(new BowSpam());
-        add(new Quiver());
-        add(new PotionArrows());
-        add(new ArrowDodge());
+        add(new AutoTotem());
+        add(new Offhand());
+        add(new AutoArmor());
 
+        add(new CrystalAura());
         add(new AnchorAura());
         add(new BedAura());
         add(new AutoCity());
-        add(new HoleFiller());
-        add(new AutoWeb());
-        add(new SelfWeb());
-        add(new TpAura());
-        add(new ArrowDamage());
-        add(new FightBot());
-        add(new Protect());
 
+        add(new Surround());
+        add(new HoleFiller());
         add(new AutoTrap());
         add(new SelfTrap());
         add(new Burrow());
+        add(new AutoWeb());
+        add(new SelfWeb());
         add(new AutoAnvil());
         add(new SelfAnvil());
 
         add(new AntiAnvil());
         add(new AntiBed());
         add(new AntiAnchor());
+        add(new ArrowDodge());
+
+        add(new BowAimbot());
+        add(new BowSpam());
+        add(new Quiver());
+        add(new PotionArrows());
+        add(new ArrowDamage());
+
+        add(new FightBot());
+        add(new Protect());
     }
 
     private void registerMovement() {
         add(new Sprint());
         add(new Speed());
         add(new Flight());
-        add(new ElytraFly());
-        add(new ElytraBoost());
         add(new NoFall());
         add(new Step());
-
-        add(new Jesus());
-        add(new Spider());
-        add(new QuickClimb());
         add(new NoSlowdown());
         add(new NoKnockback());
         add(new AntiPush());
-        add(new AntiVoid());
-        add(new HoleSnap());
-        add(new EdgeGuard());
 
-        add(new AutoWalk());
+        add(new ElytraFly());
+        add(new ElytraBoost());
         add(new AutoWasp());
+        add(new Glide());
+
         add(new AutoJump());
         add(new HighJump());
         add(new LongJump());
         add(new AirJump());
         add(new Parkour());
         add(new FastFall());
-        add(new Glide());
-        add(new NoWeb());
+
+        add(new Jesus());
+        add(new Spider());
+        add(new QuickClimb());
         add(new Slippy());
+
         add(new Sneak());
+        add(new EdgeGuard());
+        add(new HoleSnap());
+        add(new AntiVoid());
+
+        add(new AutoWalk());
+        add(new VehicleFly());
+        add(new TridentBoost());
 
         add(new Blink());
         add(new ClickTp());
-        add(new VehicleFly());
-        add(new TridentBoost());
         add(new NoClip());
     }
 
     private void registerRender() {
         add(new Esp());
-        add(new ChestEsp());
+        add(new Chams());
+        add(new Nametags());
+        add(new Tracers());
         add(new ItemEsp());
-        add(new HoleEsp());
+        add(new TrueSight());
+        add(new PopChams());
+        add(new EntityOwner());
+        add(new LogoutSpots());
+
+        add(new ChestEsp());
         add(new BlockEsp());
         add(new XRay());
         add(new WallHack());
-        add(new Fullbright());
-        add(new Nametags());
-        add(new Tracers());
-
-        add(new NewChunks());
-        add(new Chams());
-        add(new PopChams());
-        add(new TrueSight());
+        add(new HoleEsp());
         add(new CityEsp());
         add(new SpawnEsp());
-        add(new TunnelEsp());
-        add(new VoidEsp());
-        add(new LogoutSpots());
-        add(new Portals());
+        add(new BaseFinder());
 
-        add(new Waypoints());
-        add(new Marker());
-        add(new Breadcrumbs());
-        add(new Trail());
-        add(new Radar());
-        add(new Trajectories());
-        add(new BreakIndicators());
-        add(new EntityOwner());
-        add(new BetterTooltips());
-        add(new ItemHighlight());
-        add(new ItemPhysics());
-        add(new OpenWaterEsp());
-
-        add(new Freecam());
-        add(new FreeLook());
-        add(new Zoom());
-        add(new CameraTweaks());
-        add(new NoHurtCam());
+        add(new Fullbright());
+        add(new NoRender());
         add(new AntiBlind());
         add(new ClearView());
         add(new Weather());
         add(new TimeChanger());
         add(new Ambience());
 
-        add(new NoRender());
+        add(new Freecam());
+        add(new FreeLook());
+        add(new Zoom());
+        add(new CameraTweaks());
+        add(new NoHurtCam());
+        add(new RemoteView());
+
+        add(new Waypoints());
+        add(new Marker());
+        add(new Breadcrumbs());
+        add(new Trail());
+        add(new Radar());
+        add(new NewChunks());
+        add(new TunnelEsp());
+        add(new VoidEsp());
+        add(new Portals());
+
+        add(new Trajectories());
+        add(new BreakIndicators());
+        add(new OpenWaterEsp());
+        add(new BetterTooltips());
+        add(new ItemHighlight());
+        add(new ItemPhysics());
+
         add(new HandView());
         add(new NoShieldOverlay());
-        add(new NoBackground());
         add(new BlockSelection());
+        add(new NoBackground());
         add(new Blur());
         add(new BossStack());
-        add(new RemoteView());
-        add(new BaseFinder());
     }
 
     private void registerPlayer() {
         add(new AutoEat());
         add(new AutoGap());
         add(new AutoPotion());
-        add(new AutoTool());
-        add(new AutoReplenish());
         add(new AutoMend());
         add(new AutoRespawn());
-
-        add(new FastPlace());
-        add(new FastBreak());
-        add(new FastUse());
-        add(new Throw());
-        add(new AutoSwitch());
-        add(new Reach());
-        add(new Rotation());
-        add(new NoRotate());
         add(new AntiHunger());
-
-        add(new ChestStealer());
-        add(new ChestSwap());
-        add(new InventoryTweaks());
-        add(new AutoDrop());
-        add(new GUIMove());
-        add(new InvWalk());
-        add(new Follow());
-        add(new Multitask());
-        add(new GhostHand());
-        add(new MiddleClickExtra());
-
-        add(new LiquidInteract());
-        add(new NoInteract());
-        add(new NoMiningTrace());
         add(new PotionSaver());
-        add(new PortalMenus());
         add(new NoStatusEffects());
         add(new AntiCactus());
+
+        add(new AutoTool());
+        add(new FastBreak());
+        add(new FastPlace());
+        add(new FastUse());
+        add(new Reach());
+        add(new Multitask());
+        add(new NoMiningTrace());
+        add(new LiquidInteract());
+        add(new NoInteract());
+        add(new GhostHand());
+        add(new MiddleClickExtra());
+        add(new Throw());
+
+        add(new InventoryTweaks());
+        add(new AutoReplenish());
+        add(new ChestStealer());
+        add(new ChestSwap());
+        add(new AutoDrop());
+        add(new AutoSwitch());
+
+        add(new InvWalk());
+        add(new GUIMove());
+        add(new PortalMenus());
+
+        add(new Rotation());
+        add(new NoRotate());
+        add(new Follow());
         add(new AutoFish());
     }
 
     private void registerWorld() {
         add(new Scaffold());
+        add(new AirPlace());
+        add(new NoGhostBlocks());
+        add(new AutoBuild());
+        add(new TemplateTool());
+        add(new BuildRandom());
+        add(new InstantBunker());
+        add(new BuildHeight());
+
         add(new Nuker());
         add(new VeinMiner());
         add(new PacketMine());
         add(new Excavator());
         add(new Tunneller());
         add(new HighwayBuilder());
-        add(new AirPlace());
-        add(new NoGhostBlocks());
+        add(new InfinityMiner());
+
+        add(new LiquidFiller());
+        add(new SpawnProofer());
+        add(new Kaboom());
+        add(new Collisions());
 
         add(new AutoFarm());
         add(new TillAura());
         add(new BonemealAura());
         add(new AutoBreed());
         add(new AutoShearer());
-        add(new BuildRandom());
-        add(new InstantBunker());
-        add(new InfinityMiner());
-        add(new AutoBuild());
-        add(new TemplateTool());
-        add(new AutoNametag());
-        add(new AutoMount());
-        add(new EndermanLook());
         add(new Flamethrower());
 
-        add(new Kaboom());
-        add(new LiquidFiller());
-        add(new SpawnProofer());
-        add(new BuildHeight());
-        add(new Collisions());
-        add(new AutoSign());
+        add(new AutoMount());
+        add(new AutoNametag());
+        add(new EndermanLook());
 
         add(new EChestFarmer());
-        add(new AutoBrewer());
         add(new AutoSmelter());
+        add(new AutoBrewer());
         add(new AutoLibrarian());
+        add(new AutoSign());
     }
 
     private void registerMisc() {
@@ -484,33 +491,35 @@ public final class ModuleManager {
         add(new HudModule());
         add(new TabGui());
         add(new Panic());
-        add(new MassTpa());
-        add(new SkinDerp());
-        add(new AutoLog());
+
         add(new AutoReconnect());
+        add(new AutoLog());
         add(new AntiAfk());
         add(new Timer());
         add(new FakePlayer());
-        add(new Notifier());
-        add(new StashFinder());
 
-        add(new BetterTab());
         add(new BetterChat());
+        add(new BetterTab());
         add(new AntiSpam());
-        add(new Spam());
         add(new NameProtect());
-
+        add(new Notifier());
+        add(new Spam());
         add(new MessageAura());
+        add(new MassTpa());
+
+        add(new StashFinder());
+        add(new BetterBeacons());
+        add(new SoundBlocker());
+        add(new BookBot());
+        add(new Notebot());
+
+        add(new SkinDerp());
+        add(new Derp());
 
         add(new ServerSpoof());
         add(new AntiPacketKick());
         add(new PacketCanceller());
         add(new PacketLogger());
-        add(new SoundBlocker());
-        add(new BetterBeacons());
-        add(new Derp());
-        add(new BookBot());
-        add(new Notebot());
     }
 
     private void add(Module module) {

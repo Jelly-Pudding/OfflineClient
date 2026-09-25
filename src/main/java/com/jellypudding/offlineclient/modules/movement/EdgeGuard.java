@@ -10,6 +10,7 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.MovementUtil;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
@@ -20,8 +21,6 @@ public final class EdgeGuard extends Module {
     public enum Mode { HOLD, SNEAK }
 
     // Vanilla air physics for a player.
-    private static final double AIR_DRAG = 0.98;
-    private static final double AIR_FRICTION = 0.91;
     private static final double AIR_ACCELERATION = 0.02;
     private static final double SPRINT_AIR_BONUS = 1.3;
 
@@ -153,7 +152,7 @@ public final class EdgeGuard extends Module {
                 }
                 // The edge is passed. The first fall tick carries the gravity already stored.
                 supported = false;
-                vy = -MovementUtil.GRAVITY * AIR_DRAG;
+                vy = -MovementUtil.GRAVITY * LivingEntity.BASE_VERTICAL_AIR_DRAG;
             }
 
             AABB dropped = box.move(0, vy, 0);
@@ -168,9 +167,9 @@ public final class EdgeGuard extends Module {
             if (box.minY < limitY) {
                 return true;
             }
-            vx = vx * AIR_FRICTION + push.x;
-            vz = vz * AIR_FRICTION + push.z;
-            vy = (vy - MovementUtil.GRAVITY) * AIR_DRAG;
+            vx = vx * LivingEntity.BASE_HORIZONTAL_AIR_DRAG + push.x;
+            vz = vz * LivingEntity.BASE_HORIZONTAL_AIR_DRAG + push.z;
+            vy = (vy - MovementUtil.GRAVITY) * LivingEntity.BASE_VERTICAL_AIR_DRAG;
         }
         return false;
     }

@@ -16,7 +16,6 @@ import net.minecraft.world.phys.Vec3;
 import java.util.List;
 import java.util.Locale;
 
-// Works out what a blast on the block you point at would do.
 public final class DamageCommand extends Command {
 
     // How far away another player still counts for the report.

@@ -90,12 +90,6 @@ public final class RenderUtil {
         pose.popMatrix();
     }
 
-    public static void borderedRect(GuiGraphicsExtractor context, int x, int y, int x2, int y2,
-                                    int fillColor, int borderColor) {
-        context.fill(x, y, x2, y2, borderColor);
-        context.fill(x + 1, y + 1, x2 - 1, y2 - 1, fillColor);
-    }
-
     public static void roundedRect(GuiGraphicsExtractor context, int x, int y, int x2, int y2,
                                    int radius, int color) {
         roundedRect(context, x, y, x2, y2, radius, color, true, true);

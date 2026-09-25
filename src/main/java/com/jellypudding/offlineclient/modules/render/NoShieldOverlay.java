@@ -5,7 +5,7 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.mojang.blaze3d.vertex.PoseStack;
 
-// ItemInHandRendererMixin lowers the shield by these amounts.
+// FirstPersonHandsAndItemsRendererMixin lowers the shield by these amounts.
 public final class NoShieldOverlay extends Module {
 
     private final NumberSetting blocking = new NumberSetting("Blocking offset",

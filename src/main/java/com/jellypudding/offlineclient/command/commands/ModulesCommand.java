@@ -36,10 +36,8 @@ public final class ModulesCommand extends Command {
                 continue;
             }
             List<String> names = new ArrayList<>();
-            for (Module module : OfflineClient.INSTANCE.getModuleManager().getAll()) {
-                if (module.getCategory() == category) {
-                    names.add((module.isEnabled() ? "§a" : "§7") + module.getName());
-                }
+            for (Module module : OfflineClient.INSTANCE.getModuleManager().getByCategory(category)) {
+                names.add((module.isEnabled() ? "§a" : "§7") + module.getName());
             }
             ChatUtil.message("§3" + category.getDisplayName() + " §8(" + names.size()
                 + ")§7 " + String.join("§8 ", names));

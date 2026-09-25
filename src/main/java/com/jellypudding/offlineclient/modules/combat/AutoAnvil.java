@@ -23,7 +23,6 @@ import net.minecraft.world.level.block.BasePressurePlateBlock;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.ButtonBlock;
 
-// Places anvils in the air above an enemy.
 // A landing anvil damages the helmet of whoever is under it.
 public final class AutoAnvil extends Module {
 

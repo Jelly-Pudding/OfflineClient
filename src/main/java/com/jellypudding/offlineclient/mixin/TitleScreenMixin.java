@@ -51,7 +51,7 @@ public abstract class TitleScreenMixin extends Screen {
     @Unique
     private int offlineclient$creditY = -1;
 
-    private TitleScreenMixin(OfflineClient client, Component title) {
+    private TitleScreenMixin(Component title) {
         super(title);
     }
 

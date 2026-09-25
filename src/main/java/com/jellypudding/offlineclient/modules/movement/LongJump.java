@@ -12,6 +12,7 @@ import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.JumpCarry;
 import com.jellypudding.offlineclient.util.Lagback;
 import com.jellypudding.offlineclient.util.MovementUtil;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.phys.Vec3;
 
 // Vanilla carries a real jump further. Burst and Glide are staged speed
@@ -26,7 +27,6 @@ public final class LongJump extends Module {
     private static final String TIMER_KEY = "longjump";
 
     // Burst lifts with a vanilla jump then bleeds a sliver of speed a tick.
-    private static final double BURST_JUMP = 0.42;
     private static final double BURST_DECAY = 1.0 / 159;
     private static final double HOVER_PIN = -0.001;
     private static final double HOVER_REACH = 0.4;
@@ -86,7 +86,6 @@ public final class LongJump extends Module {
     private double burstSpeed;
     private boolean airborne;
 
-    // Glide ticks in the air and on the ground.
     private int airTicks;
     private int groundTicks;
 
@@ -171,7 +170,7 @@ public final class LongJump extends Module {
         switch (stage) {
             case 0 -> burstSpeed = walkSpeed() * burstStart.getValue();
             case 1 -> {
-                vy = BURST_JUMP;
+                vy = LivingEntity.BASE_JUMP_POWER;
                 burstSpeed *= burstBoost.getValue();
             }
             case 2 -> burstSpeed = walkSpeed();
@@ -192,7 +191,7 @@ public final class LongJump extends Module {
     }
 
     private double walkSpeed() {
-        return MovementUtil.withSpeedEffects(mc.player, MovementUtil.WALK_SPEED);
+        return MovementUtil.withSpeedEffects(mc.player, MovementUtil.SPRINT_SPEED);
     }
 
     // In the air the pace follows a falling curve and the descent is softened.

@@ -5,11 +5,11 @@ import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.Hop;
 import net.minecraft.client.Camera;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.world.InteractionResult;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemUseAnimation;
 import net.minecraft.world.level.ClipContext;
@@ -51,7 +51,8 @@ public final class ClickTp extends Module {
         }
         BlockPos pos = hit.getBlockPos();
         BlockState state = mc.level.getBlockState(pos);
-        if (state.useWithoutItem(mc.level, mc.player, hit) != InteractionResult.PASS) {
+        // A right click on a door or a chest keeps its normal meaning.
+        if (BlockUtil.opensOnClick(state)) {
             return;
         }
         VoxelShape shape = state.getCollisionShape(mc.level, pos);

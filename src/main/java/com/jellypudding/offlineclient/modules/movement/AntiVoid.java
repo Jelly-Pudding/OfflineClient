@@ -12,6 +12,7 @@ import com.jellypudding.offlineclient.util.HoverDip;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
@@ -21,9 +22,6 @@ public final class AntiVoid extends Module {
 
     // Fall speed that counts as a fall and not a step down.
     private static final double FALLING = -0.2;
-
-    // The lift of a normal jump. Used for climbing out whilst caught.
-    private static final double JUMP = 0.42;
 
     // Ticks between the dips that keep the flight kick away whilst caught.
     private static final int DIP_INTERVAL = 60;
@@ -119,7 +117,7 @@ public final class AntiVoid extends Module {
     // Hangs in place. A jump lets go and the fall after it is caught again.
     private void hold(Vec3 motion) {
         if (mc.player.input.keyPresses.jump()) {
-            mc.player.setDeltaMovement(motion.x, JUMP, motion.z);
+            mc.player.setDeltaMovement(motion.x, LivingEntity.BASE_JUMP_POWER, motion.z);
             catching = false;
             return;
         }

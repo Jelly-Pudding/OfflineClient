@@ -1,9 +1,14 @@
 package com.jellypudding.offlineclient.render;
 
+import com.jellypudding.offlineclient.util.ColorUtil;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.inventory.tooltip.ClientTooltipComponent;
+import net.minecraft.core.NonNullList;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.ShulkerBoxBlock;
 
 import java.util.List;
 
@@ -13,12 +18,32 @@ public final class ContainerPreview implements ClientTooltipComponent {
     private static final int SLOT = 18;
     private static final int PADDING = 2;
     private static final int BACKGROUND = 0xC0100010;
+    private static final int SHULKER_SLOTS = 27;
+    // How far a dyed box background sits from black towards its dye.
+    private static final float TINT_SHADE = 0.45f;
     private static final int BORDER = 0x60FFFFFF;
 
     private final List<ItemStack> items;
     private final int columns;
     private final int rows;
     private final int background;
+
+    // The stacks of a shulker box item with the empty slots in place.
+    public static List<ItemStack> contentsOf(ItemStack stack) {
+        NonNullList<ItemStack> items = NonNullList.withSize(SHULKER_SLOTS, ItemStack.EMPTY);
+        stack.get(DataComponents.CONTAINER).copyInto(items);
+        return items;
+    }
+
+    // A shulker box previews on a dark shade of its own dye.
+    public static int tintOf(ItemStack stack) {
+        if (!(Block.byItem(stack.getItem()) instanceof ShulkerBoxBlock box) || box.getColor() == null) {
+            return BACKGROUND;
+        }
+        int dye = box.getColor().getTextureDiffuseColor();
+        int shaded = ColorUtil.lerp(0xFF000000, dye | 0xFF000000, TINT_SHADE);
+        return ColorUtil.withAlpha(shaded, BACKGROUND >>> 24);
+    }
 
     public ContainerPreview(List<ItemStack> items, int columns) {
         this(items, columns, BACKGROUND);

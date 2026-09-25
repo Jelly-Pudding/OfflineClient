@@ -25,11 +25,6 @@ import java.util.List;
 // Keeps a furnace fed whilst its screen is open and takes what comes out.
 public final class AutoSmelter extends Module {
 
-    private static final int INPUT_SLOT = 0;
-    private static final int FUEL_SLOT = 1;
-    private static final int OUTPUT_SLOT = 2;
-    private static final int FIRST_PLAYER_SLOT = 3;
-
     // Ticks between two rounds of clicks.
     private static final int INTERVAL = 10;
 
@@ -89,12 +84,12 @@ public final class AutoSmelter extends Module {
     }
 
     private void takeOutput(AbstractFurnaceMenu furnace) {
-        ItemStack output = furnace.slots.get(OUTPUT_SLOT).getItem();
+        ItemStack output = furnace.slots.get(AbstractFurnaceMenu.RESULT_SLOT).getItem();
         if (output.isEmpty()) {
             return;
         }
         int count = output.getCount();
-        if (!MenuClicks.quickMoved(furnace, OUTPUT_SLOT)) {
+        if (!MenuClicks.quickMoved(furnace, AbstractFurnaceMenu.RESULT_SLOT)) {
             disable("No room in the inventory for what came out.");
             return;
         }
@@ -102,27 +97,27 @@ public final class AutoSmelter extends Module {
     }
 
     private void refuel(AbstractFurnaceMenu furnace) {
-        if (furnace.getLitProgress() > 0 || !furnace.slots.get(FUEL_SLOT).getItem().isEmpty()) {
+        if (furnace.getLitProgress() > 0 || !furnace.slots.get(AbstractFurnaceMenu.FUEL_SLOT).getItem().isEmpty()) {
             return;
         }
-        int slot = MenuClicks.firstSlot(furnace, FIRST_PLAYER_SLOT, stack -> fuels.contains(stack.getItem())
-            && stack.has(DataComponents.COOKING_FUEL));
+        int slot = MenuClicks.firstSlot(furnace, AbstractFurnaceMenu.SLOT_COUNT,
+            stack -> fuels.contains(stack.getItem()) && stack.has(DataComponents.COOKING_FUEL));
         if (slot == -1) {
             giveUp("Out of fuel.");
             return;
         }
         ItemStack source = furnace.slots.get(slot).getItem();
         int count = Math.min(fuelPerRefill.getInt(), source.getCount());
-        MenuClicks.moveSome(furnace, slot, FUEL_SLOT, count);
+        MenuClicks.moveSome(furnace, slot, AbstractFurnaceMenu.FUEL_SLOT, count);
     }
 
     private void feed(AbstractFurnaceMenu furnace) {
-        if (!furnace.slots.get(INPUT_SLOT).getItem().isEmpty()) {
+        if (!furnace.slots.get(AbstractFurnaceMenu.INGREDIENT_SLOT).getItem().isEmpty()) {
             return;
         }
         ResourceKey<RecipePropertySet> recipes = recipesFor(furnace);
-        int slot = MenuClicks.firstSlot(furnace, FIRST_PLAYER_SLOT, stack -> inputs.contains(stack.getItem())
-            && mc.level.recipeAccess().propertySet(recipes).test(stack));
+        int slot = MenuClicks.firstSlot(furnace, AbstractFurnaceMenu.SLOT_COUNT,
+            stack -> inputs.contains(stack.getItem()) && mc.level.recipeAccess().propertySet(recipes).test(stack));
         if (slot == -1) {
             // The last item may still be cooking.
             if (furnace.getBurnProgress() <= 0) {

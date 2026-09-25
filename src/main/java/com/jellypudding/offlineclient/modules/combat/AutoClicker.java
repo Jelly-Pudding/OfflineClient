@@ -132,7 +132,7 @@ public final class AutoClicker extends Module {
         if (!mc.options.keyAttack.isDown()) {
             return;
         }
-        if (mc.player.isUsingItem() || mc.gameMode.isDestroying() || Modules.eating()) {
+        if (mc.player.isUsingItem() || mc.gameMode.isDestroying() || Modules.feedersPauseCombat()) {
             return;
         }
         if (mc.player.getAttackStrengthScale(0.5f) < 1) {

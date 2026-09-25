@@ -112,11 +112,11 @@ public final class Tunneller extends Module {
             lockAxis();
         }
         if (mc.player.isSpectator() || mc.player.isPassenger()) {
-            stop("Tunneller stopped because you cannot dig from there.");
+            disable("Tunneller stopped because you cannot dig from there.");
             return;
         }
         if (walker.offFloor()) {
-            stop("Tunneller stopped because you left the tunnel floor.");
+            disable("Tunneller stopped because you left the tunnel floor.");
             return;
         }
 
@@ -239,10 +239,6 @@ public final class Tunneller extends Module {
             lastTorch = depth;
         }
         slots.restoreIfMine();
-    }
-
-    private void stop(String reason) {
-        disable(reason);
     }
 
     @Subscribe

@@ -36,7 +36,7 @@ public final class WaypointStore {
     private static final String OVERWORLD = "minecraft:overworld";
     private static final String NETHER = "minecraft:the_nether";
     // Eight overworld blocks to one nether block.
-    public static final int NETHER_SCALE = 8;
+    private static final int NETHER_SCALE = 8;
 
     private static WaypointStore instance;
 
@@ -68,6 +68,11 @@ public final class WaypointStore {
         return matching;
     }
 
+    // A coordinate carried through a nether portal. It shrinks going in and grows coming out.
+    public static int acrossPortal(int coordinate, boolean intoNether) {
+        return intoNether ? Math.floorDiv(coordinate, NETHER_SCALE) : coordinate * NETHER_SCALE;
+    }
+
     // Waypoints from the other side of a nether portal with their coordinates scaled
     // to this side. Empty anywhere but the overworld and the nether.
     public List<Waypoint> mirrored() {
@@ -78,13 +83,13 @@ public final class WaypointStore {
         if (other == null) {
             return matching;
         }
-        boolean shrink = other.equals(OVERWORLD);
+        boolean intoNether = other.equals(OVERWORLD);
         for (Waypoint waypoint : waypoints) {
             if (!waypoint.dimension().equals(other) || !waypoint.server().equals(server)) {
                 continue;
             }
-            int x = shrink ? Math.floorDiv(waypoint.x(), NETHER_SCALE) : waypoint.x() * NETHER_SCALE;
-            int z = shrink ? Math.floorDiv(waypoint.z(), NETHER_SCALE) : waypoint.z() * NETHER_SCALE;
+            int x = acrossPortal(waypoint.x(), intoNether);
+            int z = acrossPortal(waypoint.z(), intoNether);
             matching.add(new Waypoint(waypoint.name(), x, waypoint.y(), z, dimension, server,
                 waypoint.hue(), waypoint.hidden()));
         }
@@ -135,7 +140,6 @@ public final class WaypointStore {
             ? "" : OfflineClient.MC.level.dimension().identifier().toString();
     }
 
-    // Address of the server the player is on. Single player worlds share one key.
     private void load() {
         DataFiles.readJson(file, WaypointStore::decode).ifPresent(waypoints::addAll);
     }

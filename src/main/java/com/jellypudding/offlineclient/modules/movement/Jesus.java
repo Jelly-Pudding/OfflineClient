@@ -380,7 +380,7 @@ public final class Jesus extends Module {
         Vec3 velocity = mc.player.getDeltaMovement();
         if (++swimmingTicks < NCP_HOP_EVERY) {
             if (mc.player.onGround()) {
-                Vec3 heading = MovementUtil.inputDirection().scale(MovementUtil.WALK_SPEED);
+                Vec3 heading = MovementUtil.inputDirection().scale(MovementUtil.SPRINT_SPEED);
                 mc.player.setDeltaMovement(heading.x, velocity.y, heading.z);
             }
             return;

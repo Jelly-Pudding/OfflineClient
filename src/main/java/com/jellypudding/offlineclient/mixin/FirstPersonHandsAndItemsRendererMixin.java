@@ -22,7 +22,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(FirstPersonHandsAndItemsRenderer.class)
-public abstract class ItemInHandRendererMixin {
+public abstract class FirstPersonHandsAndItemsRendererMixin {
 
     @Unique
     private static final String SUBMIT_HANDS = "submitHandsWithItems(FLcom/mojang/blaze3d/vertex/PoseStack;"
@@ -37,7 +37,6 @@ public abstract class ItemInHandRendererMixin {
         + "FFLnet/minecraft/world/InteractionHand;FLnet/minecraft/world/item/ItemStack;F"
         + "Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/SubmitNodeCollector;I)V";
 
-    // The whole first person hand pass is skipped whilst a module hides it.
     @Inject(method = SUBMIT_HANDS, at = @At("HEAD"), cancellable = true)
     private void onSubmitHands(CallbackInfo ci) {
         Freecam freecam = Modules.get(Freecam.class);
@@ -72,6 +71,10 @@ public abstract class ItemInHandRendererMixin {
         if (handView != null) {
             handView.adjustItem(hand, poseStack);
         }
+        if (!offlineclient$blocked) {
+            offlineclient$lowerShield(stack, poseStack, false);
+        }
+        offlineclient$blocked = false;
     }
 
     // Just before an empty arm is drawn.
@@ -91,6 +94,10 @@ public abstract class ItemInHandRendererMixin {
         }
     }
 
+    // Set by the blocking hook for the item drawn next. A shield not in use is only held.
+    @Unique
+    private boolean offlineclient$blocked;
+
     // Reached only whilst the item is in use. A shield in use is a raised shield.
     @Inject(method = SUBMIT_ARM,
         at = @At(value = "INVOKE",
@@ -101,6 +108,7 @@ public abstract class ItemInHandRendererMixin {
                                ItemStack stack, float equip, PoseStack poseStack,
                                SubmitNodeCollector collector, int light, CallbackInfo ci) {
         offlineclient$lowerShield(stack, poseStack, true);
+        offlineclient$blocked = true;
     }
 
     @Unique

@@ -148,16 +148,11 @@ public final class Offhand extends Module {
     }
 
     private Item wantedItem() {
-        if (totemNeeded() && haveTotem()) {
+        if (totemNeeded() && have(Items.TOTEM_OF_UNDYING)) {
             return Items.TOTEM_OF_UNDYING;
         }
         Item extra = quickItem();
         return extra != null ? extra : item.getValue().item;
-    }
-
-    private boolean haveTotem() {
-        return mc.player.getOffhandItem().is(Items.TOTEM_OF_UNDYING)
-            || findSlot(Items.TOTEM_OF_UNDYING) != -1;
     }
 
     // True once the health line is crossed after the damage already on its way.
@@ -196,11 +191,15 @@ public final class Offhand extends Module {
 
     // A golden apple stands in whilst there is no enchanted one.
     private Item apple() {
-        if (mc.player.getOffhandItem().is(Items.ENCHANTED_GOLDEN_APPLE)
-            || findSlot(Items.ENCHANTED_GOLDEN_APPLE) != -1) {
+        if (have(Items.ENCHANTED_GOLDEN_APPLE)) {
             return Items.ENCHANTED_GOLDEN_APPLE;
         }
-        return findSlot(Items.GOLDEN_APPLE) == -1 ? null : Items.GOLDEN_APPLE;
+        return have(Items.GOLDEN_APPLE) ? Items.GOLDEN_APPLE : null;
+    }
+
+    // The offhand counts. The last stack may already be there.
+    private boolean have(Item item) {
+        return mc.player.getOffhandItem().is(item) || findSlot(item) != -1;
     }
 
     // Network slot of the first stack of the item. Minus one when absent.

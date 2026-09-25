@@ -6,17 +6,22 @@ import com.jellypudding.offlineclient.event.events.LeftClickEvent;
 import com.jellypudding.offlineclient.event.events.RightClickEvent;
 import com.jellypudding.offlineclient.modules.player.InventoryTweaks;
 import com.jellypudding.offlineclient.modules.player.Multitask;
+import com.jellypudding.offlineclient.modules.player.NoInteract;
 import com.jellypudding.offlineclient.modules.render.Esp;
 import com.jellypudding.offlineclient.modules.render.Freecam;
 import com.jellypudding.offlineclient.util.BlockMiner;
 import com.jellypudding.offlineclient.util.Modules;
-
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
+import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
@@ -92,6 +97,12 @@ public abstract class MinecraftMixin {
     private void onContinueAttack(CallbackInfo ci) {
         if (BlockMiner.isActive() || offlineclient$freecamBlocks()) {
             ci.cancel();
+            return;
+        }
+        NoInteract noInteract = Modules.active(NoInteract.class);
+        if (noInteract != null && OfflineClient.MC.hitResult instanceof BlockHitResult hit
+            && noInteract.blocksMining(hit.getBlockPos())) {
+            ci.cancel();
         }
     }
 
@@ -100,6 +111,12 @@ public abstract class MinecraftMixin {
         if (OfflineClient.INSTANCE.getEventBus().post(new LeftClickEvent()).isCancelled()
             || offlineclient$freecamBlocks()) {
             cir.setReturnValue(false);
+            return;
+        }
+        NoInteract noInteract = Modules.active(NoInteract.class);
+        HitResult target = OfflineClient.MC.hitResult;
+        if (noInteract != null && target != null && noInteract.blocksAttack(target)) {
+            cir.setReturnValue(false);
         }
     }
 
@@ -107,6 +124,25 @@ public abstract class MinecraftMixin {
     private static boolean offlineclient$freecamBlocks() {
         Freecam freecam = Modules.get(Freecam.class);
         return freecam != null && freecam.blocksClicks();
+    }
+
+    // Blanks the crosshair target whilst a feeder holds the use key. A chest
+    // or villager then cannot swallow the bite. Restored after.
+    @WrapMethod(method = "startUseItem()V")
+    private void wrapStartUseItem(Operation<Void> original) {
+        Minecraft mc = OfflineClient.MC;
+        HitResult real = mc.hitResult;
+        if (real == null || real.getType() == HitResult.Type.MISS || !Modules.feeding(null)) {
+            original.call();
+            return;
+        }
+        mc.hitResult = BlockHitResult.miss(real.getLocation(), Direction.UP,
+            BlockPos.containing(real.getLocation()));
+        try {
+            original.call();
+        } finally {
+            mc.hitResult = real;
+        }
     }
 
     @Inject(method = "startUseItem()V", at = @At("HEAD"), cancellable = true)

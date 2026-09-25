@@ -18,10 +18,6 @@ public final class TabView {
 
     // One row. The detail sits on the right and the tip explains the row.
     public record Entry(String name, String detail, String tip) {
-
-        public Entry(String name) {
-            this(name, "", "");
-        }
     }
 
     // A short how to under the rows. Each example types itself into the field

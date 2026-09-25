@@ -106,10 +106,11 @@ public final class CommandManager {
 
     // False when the prefix is blank or would collide with server commands.
     public boolean setPrefix(String prefix) {
-        if (prefix.isBlank() || prefix.startsWith("/")) {
+        String trimmed = prefix.trim();
+        if (trimmed.isEmpty() || trimmed.startsWith("/")) {
             return false;
         }
-        this.prefix = prefix.trim();
+        this.prefix = trimmed;
         return true;
     }
 

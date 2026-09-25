@@ -100,7 +100,12 @@ public final class AutoCity extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || mc.player.isSpectator()) {
+        if (!inGame()) {
+            // A block from the last world means nothing in the next.
+            forgetBlock();
+            return;
+        }
+        if (mc.player.isSpectator()) {
             return;
         }
 
@@ -125,7 +130,7 @@ public final class AutoCity extends Module {
             stopMining();
         }
         if (current == null) {
-            current = cityBlock(target);
+            current = BlockUtil.cityBlock(target, breakRange.getValue());
         }
         if (current == null) {
             return;
@@ -207,31 +212,6 @@ public final class AutoCity extends Module {
         return BlockUtil.placeFrom(slots, BlockUtil.findBlockSlot(), below, rotate.isOn());
     }
 
-    private BlockPos cityBlock(Player target) {
-        return cityBlock(target, breakRange.getValue());
-    }
-
-    // The blast proof block beside the target's feet that is closest to the player.
-    public static BlockPos cityBlock(Player target, double reach) {
-        BlockPos feet = target.blockPosition();
-        BlockPos best = null;
-        double bestDistance = reach;
-        for (Direction side : Direction.Plane.HORIZONTAL) {
-            BlockPos pos = feet.relative(side);
-            BlockState state = BlockUtil.state(pos);
-            if (state.isAir() || !BlockUtil.isBreakable(pos)
-                || !BlockUtil.isBlastProof(state)) {
-                continue;
-            }
-            double distance = BlockUtil.distanceTo(pos);
-            if (distance <= bestDistance) {
-                bestDistance = distance;
-                best = pos;
-            }
-        }
-        return best;
-    }
-
     private void forgetBlock() {
         slots.restore();
         current = null;
@@ -243,7 +223,7 @@ public final class AutoCity extends Module {
         if (current != null && mode.is(Mode.HOLD)) {
             BlockMiner.release();
         }
-        if (current != null && sent) {
+        if (current != null && sent && inGame()) {
             mc.player.connection.send(new ServerboundPlayerActionPacket(
                 ServerboundPlayerActionPacket.Action.ABORT_DESTROY_BLOCK, current, Direction.DOWN));
         }

@@ -22,7 +22,6 @@ import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.ItemUtil;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.network.chat.Component;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -274,8 +273,7 @@ public final class InfinityMiner extends Module {
 
     private void logOut() {
         setEnabled(false);
-        mc.player.connection.getConnection().disconnect(
-            Component.literal("§b[§3Offline§b] §fInfinityMiner filled the bag."));
+        ChatUtil.leaveServer("InfinityMiner filled the bag.");
     }
 
     @Subscribe

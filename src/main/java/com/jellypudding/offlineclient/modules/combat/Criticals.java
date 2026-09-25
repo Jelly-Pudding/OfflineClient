@@ -68,7 +68,6 @@ public final class Criticals extends Module {
         "Drops sprint for the hit and takes it straight back. A sprinting player cannot crit.",
         true);
 
-    // Drops the sprint for a hit and hands it back afterwards.
     private final SprintPause sprintPause = new SprintPause();
 
     private final HeldPacket<ServerboundAttackPacket> held = new HeldPacket<>();

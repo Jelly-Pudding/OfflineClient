@@ -18,14 +18,12 @@ public final class ChoiceListSetting extends Setting<Set<String>> implements Pic
 
     private final Supplier<Collection<String>> options;
 
-    // Runs after every change to the list.
     private Runnable onChange;
 
     public ChoiceListSetting(String name, String description, Supplier<Collection<String>> options) {
         this(name, description, options, List.of());
     }
 
-    // Names picked before the player touches the list.
     public ChoiceListSetting(String name, String description, Supplier<Collection<String>> options,
                              Collection<String> defaults) {
         super(name, description, Collections.unmodifiableSet(new LinkedHashSet<>(defaults)));
@@ -55,7 +53,6 @@ public final class ChoiceListSetting extends Setting<Set<String>> implements Pic
         changed();
     }
 
-    // A name chosen earlier stays on the list even if the offer has not shown it yet.
     @Override
     public Collection<String> options() {
         Set<String> all = new LinkedHashSet<>(options.get());

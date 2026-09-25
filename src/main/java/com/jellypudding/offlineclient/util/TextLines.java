@@ -41,13 +41,13 @@ public final class TextLines {
     private String last = "";
 
     // The defaults fill the first rows and set how many rows start open.
-    public TextLines(String countName, String countDescription, String... defaults) {
+    public TextLines(String countName, String countDescription, String lineDescription, String... defaults) {
         count = new NumberSetting(countName, countDescription,
             Math.max(1, defaults.length), 1, 30, 1).max(SLOTS)
             .visibleWhen(() -> gate.get());
         for (int i = 0; i < SLOTS; i++) {
             int slot = i;
-            lines[i] = new TextSetting("Line " + (i + 1), "The text to send. Click to type it.",
+            lines[i] = new TextSetting("Line " + (i + 1), lineDescription,
                 i < defaults.length ? defaults[i] : "")
                 .under(count, () -> gate.get() && slot < count.getInt());
         }

@@ -25,7 +25,8 @@ import java.util.List;
 public final class Collisions extends Module {
 
     private final RegistryListSetting<Block> blocks = new RegistryListSetting<>("Blocks",
-        "Blocks that become solid to you. Click to pick them.", BuiltInRegistries.BLOCK, List.of());
+        "Blocks that become solid to you. Click to pick them.", BuiltInRegistries.BLOCK,
+        List.of(Blocks.FIRE, Blocks.SOUL_FIRE, Blocks.COBWEB, Blocks.SWEET_BERRY_BUSH, Blocks.POWDER_SNOW));
     private final BoolSetting magma = new BoolSetting("Magma",
         "Makes the air over magma solid to keep you off it.", false);
     private final BoolSetting unloadedChunks = new BoolSetting("Unloaded chunks",
@@ -33,7 +34,7 @@ public final class Collisions extends Module {
     private final BoolSetting ignoreBorder = new BoolSetting("Ignore border",
         "Walks through the world border instead of stopping at it.", false);
 
-    // The last spot inside a loaded chunk. Nought whilst nothing is known.
+    // The last spot inside a loaded chunk.
     private double safeX;
     private double safeZ;
     private boolean haveSafe;

@@ -14,8 +14,8 @@ import com.jellypudding.offlineclient.util.DamageUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.Modules;
+import com.jellypudding.offlineclient.util.WorldWatch;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ClientboundEntityEventPacket;
 import net.minecraft.network.protocol.game.ServerboundAttackPacket;
 import net.minecraft.world.entity.Entity;
@@ -57,7 +57,7 @@ public final class AutoLog extends Module {
     private final NumberSetting totems = new NumberSetting("Totems",
         "Also disconnect with fewer totems than this. Zero ignores totems.", 0, 0, 10, 1);
     private final NumberSetting totemPops = new NumberSetting("Totem pops",
-        "Disconnect once this many of your totems have popped. Zero ignores pops.", 0, 0, 10, 1);
+        "Disconnect once this many of your totems have popped in one life. Zero ignores pops.", 0, 0, 10, 1);
     private final BoolSetting onlyTrusted = new BoolSetting("Only trusted",
         "Disconnect when any player who is not a friend comes into view.", false);
     private final RegistryListSetting<EntityType<?>> entities = new RegistryListSetting<>("Entities",
@@ -87,6 +87,7 @@ public final class AutoLog extends Module {
 
     // Counted on the network thread and read on the game thread.
     private final AtomicInteger pops = new AtomicInteger();
+    private final WorldWatch world = new WorldWatch();
     private final Map<EntityType<?>, Integer> tally = new HashMap<>();
 
     // Listens whilst the module is off to come back once healed.
@@ -135,6 +136,9 @@ public final class AutoLog extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
+        if (world.changed() || inGame() && mc.player.isDeadOrDying()) {
+            pops.set(0);
+        }
         if (!inGame() || mc.player.isDeadOrDying()
             || (pauseInCreative.isOn() && mc.player.isCreative())) {
             return;
@@ -241,8 +245,7 @@ public final class AutoLog extends Module {
             }
         }
         switch (mode.getValue()) {
-            case QUIT -> mc.player.connection.getConnection().disconnect(
-                Component.literal("§b[§3Offline§b] §fAutoLog saved you.\n§7" + reason + note));
+            case QUIT -> ChatUtil.leaveServer("AutoLog saved you.\n§7" + reason + note);
             // The section sign is refused by every server.
             case CHARS -> mc.player.connection.sendChat("§");
             case SELF_HURT -> mc.player.connection.send(new ServerboundAttackPacket(mc.player.getId()));

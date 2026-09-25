@@ -48,7 +48,6 @@ public final class WorldToScreen {
         return cameraPos;
     }
 
-    // True when the projected point lands inside the window.
     public static boolean onScreen(Vec3 world) {
         Vec3 screen = project(world);
         return screen != null && screen.x >= 0 && screen.x <= width && screen.y >= 0 && screen.y <= height;

@@ -12,7 +12,10 @@ import com.mojang.blaze3d.platform.InputConstants;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 
 // Named lists of lines run by one key press. A line beginning with the command
 // prefix runs as a client command and anything else goes to chat.
@@ -29,6 +32,7 @@ public final class MacroStore {
 
     private final Path file;
     private final List<Macro> macros = new ArrayList<>();
+    private final Set<String> running = new HashSet<>();
 
     private MacroStore(Path file) {
         this.file = file;
@@ -72,17 +76,27 @@ public final class MacroStore {
         return null;
     }
 
+    // A macro may run another but never one already under way. It would repeat itself for ever.
     public void run(Macro macro) {
         if (OfflineClient.MC.player == null) {
             return;
         }
-        for (String line : macro.lines()) {
-            if (line.isBlank()) {
-                continue;
+        String key = macro.name().toLowerCase(Locale.ROOT);
+        if (!running.add(key)) {
+            ChatUtil.error("The macro " + macro.name() + " cannot run itself.");
+            return;
+        }
+        try {
+            for (String line : macro.lines()) {
+                if (line.isBlank()) {
+                    continue;
+                }
+                if (!OfflineClient.INSTANCE.getCommandManager().run(line)) {
+                    ChatUtil.say(line);
+                }
             }
-            if (!OfflineClient.INSTANCE.getCommandManager().run(line)) {
-                ChatUtil.say(line);
-            }
+        } finally {
+            running.remove(key);
         }
     }
 
@@ -96,14 +110,6 @@ public final class MacroStore {
                 run(macro);
             }
         }
-    }
-
-    public void migrateLegacyKeys() {
-        for (int i = 0; i < macros.size(); i++) {
-            Macro macro = macros.get(i);
-            macros.set(i, macro.withKey(KeybindSetting.fromLegacyKey(macro.key())));
-        }
-        save();
     }
 
     private void load() {

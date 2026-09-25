@@ -14,9 +14,9 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
-import com.jellypudding.offlineclient.util.ColorUtil;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.ChatFormatting;
+import net.minecraft.SharedConstants;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.BookViewScreen;
@@ -28,7 +28,6 @@ import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.renderer.state.MapRenderState;
 import net.minecraft.core.HolderSet;
-import net.minecraft.core.NonNullList;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.Tag;
@@ -60,9 +59,7 @@ import net.minecraft.world.item.component.SuspiciousStewEffects;
 import net.minecraft.world.item.component.WritableBookContent;
 import net.minecraft.world.item.component.WrittenBookContent;
 import net.minecraft.world.item.consume_effects.ApplyStatusEffectsConsumeEffect;
-import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.ShulkerBoxBlock;
 import net.minecraft.world.level.block.entity.BannerPattern;
 import net.minecraft.world.level.block.entity.BannerPatternLayers;
 import net.minecraft.world.level.saveddata.maps.MapId;
@@ -87,15 +84,12 @@ public final class BetterTooltips extends Module {
 
     public enum SizeUnit { BYTES, KILOBYTES, MEGABYTES, AUTO }
 
-    private static final int SHULKER_SLOTS = 27;
     private static final int ENDER_CHEST_SLOTS = 27;
     private static final int COLUMNS = 9;
     private static final int COMPACT_ROWS = 5;
     private static final int KILOBYTE = 1024;
     private static final int MEGABYTE = KILOBYTE * KILOBYTE;
     private static final int ENDER_TINT = 0xC0003232;
-    private static final int PREVIEW_ALPHA = 0xC0;
-    private static final float TINT_SHADE = 0.45f;
 
     private final EnumSetting<When> show = new EnumSetting<>("Show previews",
         "When the picture previews appear in a tooltip.", When.KEY_HELD)
@@ -320,9 +314,8 @@ public final class BetterTooltips extends Module {
         return found;
     }
 
-    // Blue for a helpful effect and red for a harmful one.
     private Component effectLine(MobEffectInstance effect) {
-        float tickRate = mc.level == null ? 20 : mc.level.tickRateManager().tickrate();
+        float tickRate = mc.level == null ? SharedConstants.TICKS_PER_SECOND : mc.level.tickRateManager().tickrate();
         MutableComponent line = Component.translatable(effect.getDescriptionId());
         if (effect.getAmplifier() != 0) {
             line.append(" " + (effect.getAmplifier() + 1));
@@ -402,7 +395,7 @@ public final class BetterTooltips extends Module {
     private ClientTooltipComponent preview(ItemStack stack) {
         Item item = stack.getItem();
         if (containers.isOn() && hasContents(stack)) {
-            return new ContainerPreview(contentsOf(stack), COLUMNS, tintOf(stack));
+            return new ContainerPreview(ContainerPreview.contentsOf(stack), COLUMNS, ContainerPreview.tintOf(stack));
         }
         if (enderChest.isOn() && item == Items.ENDER_CHEST) {
             return remembered.isEmpty()
@@ -427,25 +420,9 @@ public final class BetterTooltips extends Module {
         return null;
     }
 
-    // What your ender chest held when you last opened it. Empty until then.
+    // Empty until an ender chest has been opened this session.
     public List<ItemStack> rememberedEnderChest() {
         return List.copyOf(remembered);
-    }
-
-    public static List<ItemStack> contentsOf(ItemStack stack) {
-        NonNullList<ItemStack> items = NonNullList.withSize(SHULKER_SLOTS, ItemStack.EMPTY);
-        stack.get(DataComponents.CONTAINER).copyInto(items);
-        return items;
-    }
-
-    // A shulker box previews on a dark shade of its own dye.
-    public static int tintOf(ItemStack stack) {
-        if (!(Block.byItem(stack.getItem()) instanceof ShulkerBoxBlock box) || box.getColor() == null) {
-            return ColorUtil.withAlpha(0x100010, PREVIEW_ALPHA);
-        }
-        int dye = box.getColor().getTextureDiffuseColor();
-        int shaded = ColorUtil.lerp(0xFF000000, dye | 0xFF000000, TINT_SHADE);
-        return ColorUtil.withAlpha(shaded, PREVIEW_ALPHA);
     }
 
     private ClientTooltipComponent mapPreview(ItemStack stack) {
@@ -537,11 +514,12 @@ public final class BetterTooltips extends Module {
             return true;
         }
         if (item instanceof BundleItem && hasBundleItems(stack)) {
-            open(stack, stack.get(DataComponents.BUNDLE_CONTENTS).itemCopies().toList(), tintOf(stack));
+            open(stack, stack.get(DataComponents.BUNDLE_CONTENTS).itemCopies().toList(),
+                ContainerPreview.tintOf(stack));
             return true;
         }
         if (hasContents(stack)) {
-            open(stack, contentsOf(stack), tintOf(stack));
+            open(stack, ContainerPreview.contentsOf(stack), ContainerPreview.tintOf(stack));
             return true;
         }
         if (item == Items.ENDER_CHEST && !remembered.isEmpty()) {

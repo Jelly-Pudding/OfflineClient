@@ -145,7 +145,6 @@ public final class Notebot extends Module {
     private int tick;
     private int waitTicks;
 
-    // Which note block plays each note.
     private final Map<Note, BlockPos> assigned = new LinkedHashMap<>();
 
     // Clicks still owed to each block whilst tuning.
@@ -157,7 +156,6 @@ public final class Notebot extends Module {
     // Every note block the scan saw whether the song uses it or not.
     private final Set<BlockPos> scanned = new HashSet<>();
 
-    // Ticks left before the next round of tuning clicks.
     private int tuneWait;
 
     private final Random random = new Random();
@@ -195,7 +193,6 @@ public final class Notebot extends Module {
         return EnumSetting.label(instrument) + " notes";
     }
 
-    // The names the song picker offers.
     private static Collection<String> songNames() {
         List<String> names = new ArrayList<>();
         try (Stream<Path> stream = Files.list(songsFolder())) {
@@ -363,7 +360,7 @@ public final class Notebot extends Module {
         stage = Stage.TUNE;
     }
 
-    // Every note block in reach keyed by what it plays right now.
+    // Every note block in reach keyed by the note it plays before any tuning.
     private Map<Note, List<BlockPos>> findNoteBlocks() {
         Map<Note, List<BlockPos>> found = new LinkedHashMap<>();
         scanned.clear();

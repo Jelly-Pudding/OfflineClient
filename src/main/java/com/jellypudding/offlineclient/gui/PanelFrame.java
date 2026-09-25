@@ -96,10 +96,6 @@ public abstract class PanelFrame {
         return collapsed;
     }
 
-    public int getViewHeight() {
-        return viewHeight;
-    }
-
     public int getScrollOffset() {
         return scrollBar.getOffset();
     }
@@ -124,15 +120,15 @@ public abstract class PanelFrame {
     }
 
     // Nought or less means the box was never sized and gets the start height.
-    public void setViewHeight(int viewHeight) {
+    private void setViewHeight(int viewHeight) {
         this.viewHeight = viewHeight > 0 ? viewHeight : GuiTheme.PANEL_VIEW_HEIGHT;
     }
 
-    public void setScrollOffset(int offset) {
+    private void setScrollOffset(int offset) {
         scrollBar.setOffset(offset);
     }
 
-    public void setPlaced(boolean placed) {
+    private void setPlaced(boolean placed) {
         this.placed = placed;
     }
 
@@ -182,7 +178,7 @@ public abstract class PanelFrame {
         return Math.min(MIN_VIEW, contentHeight());
     }
 
-    public final int getTotalHeight() {
+    private int getTotalHeight() {
         if (collapsed) {
             return GuiTheme.HEADER_HEIGHT;
         }

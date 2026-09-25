@@ -169,8 +169,7 @@ public final class AutoTrap extends Module {
     private List<BlockPos> missingSpots(Player target) {
         Set<BlockPos> spots = new LinkedHashSet<>();
         for (BlockPos feet : columnsUnder(target)) {
-            addTop(spots, feet);
-            addBottom(spots, feet);
+            addSpots(spots, feet);
         }
         List<BlockPos> result = new ArrayList<>(spots);
         result.sort(Comparator.comparingDouble(BlockUtil::distanceTo).reversed());
@@ -188,22 +187,13 @@ public final class AutoTrap extends Module {
         return columns;
     }
 
-    private void addTop(Set<BlockPos> spots, BlockPos feet) {
-        if (top.isAny(Top.FULL, Top.TOP)) {
-            addOpen(spots, feet.above(2));
-        }
-        if (top.isAny(Top.FULL, Top.FACE)) {
-            for (Direction side : Direction.Plane.HORIZONTAL) {
-                addOpen(spots, feet.above().relative(side));
+    private void addSpots(Set<BlockPos> spots, BlockPos feet) {
+        for (BlockPos pos : BlockUtil.trapSpots(feet, top.isAny(Top.FULL, Top.TOP),
+            top.isAny(Top.FULL, Top.FACE), !bottom.is(Bottom.NONE))) {
+            if (inReach(pos)) {
+                spots.add(pos);
             }
         }
-    }
-
-    private void addBottom(Set<BlockPos> spots, BlockPos feet) {
-        if (bottom.is(Bottom.NONE)) {
-            return;
-        }
-        addOpen(spots, feet.below());
         if (bottom.is(Bottom.PLATFORM)) {
             for (Direction side : Direction.Plane.HORIZONTAL) {
                 addOpen(spots, feet.below().relative(side));

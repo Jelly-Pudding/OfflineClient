@@ -7,6 +7,7 @@ import com.jellypudding.offlineclient.modules.player.GUIMove;
 import com.jellypudding.offlineclient.modules.player.MiddleClickExtra;
 import com.jellypudding.offlineclient.modules.render.FreeLook;
 import com.jellypudding.offlineclient.modules.render.Freecam;
+import com.jellypudding.offlineclient.modules.render.Zoom;
 import com.jellypudding.offlineclient.util.Modules;
 
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
@@ -25,6 +26,14 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(MouseHandler.class)
 public abstract class MouseHandlerMixin {
+
+    // The only option turnPlayer reads is the mouse sensitivity.
+    @ModifyExpressionValue(method = "turnPlayer(D)V",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/OptionInstance;get()Ljava/lang/Object;"))
+    private Object zoomSensitivity(Object sensitivity) {
+        Zoom zoom = Modules.active(Zoom.class);
+        return zoom == null ? sensitivity : zoom.scaleSensitivity((Double) sensitivity);
+    }
 
     @WrapOperation(method = "turnPlayer(D)V",
         at = @At(value = "INVOKE",

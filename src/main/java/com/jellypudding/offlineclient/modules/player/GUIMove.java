@@ -13,9 +13,9 @@ import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.Modules;
+import com.jellypudding.offlineclient.util.RotationManager;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.util.Mth;
 
 import java.util.Locale;
 
@@ -133,7 +133,7 @@ public final class GUIMove extends Module {
             return;
         }
         mc.player.setYRot(mc.player.getYRot() + yaw);
-        mc.player.setXRot(Mth.clamp(mc.player.getXRot() + pitch, -90, 90));
+        mc.player.setXRot(RotationManager.clampPitch(mc.player.getXRot() + pitch));
     }
 
     private boolean arrowDown(int key) {

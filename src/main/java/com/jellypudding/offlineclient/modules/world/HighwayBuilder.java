@@ -9,7 +9,6 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.modules.combat.KillAura;
 import com.jellypudding.offlineclient.modules.movement.NoKnockback;
 import com.jellypudding.offlineclient.modules.movement.Speed;
-import com.jellypudding.offlineclient.modules.player.FastBreak;
 import com.jellypudding.offlineclient.render.BoxStyle;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
@@ -21,6 +20,7 @@ import com.jellypudding.offlineclient.util.BlockMiner;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.ColorUtil;
+import com.jellypudding.offlineclient.util.FaceMode;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.ItemUtil;
@@ -36,15 +36,14 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.boss.enderdragon.EndCrystal;
 import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.item.BowItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -82,14 +81,10 @@ public final class HighwayBuilder extends Module {
     // How long the server may go quiet before the module waits for it.
     private static final long LAG_MILLIS = 1500;
 
-    // Arrow speed in blocks per tick at a full draw and the ticks that draw takes.
-    private static final double BOW_SPEED = 3;
-    private static final int FULL_DRAW = 20;
     private static final int CRYSTAL_SHOTS = 3;
     private static final double CRYSTAL_NEAR = 12;
     private static final double CRYSTAL_FAR = 24;
 
-    // The most boxes the render draws in one frame.
     private static final int MAX_DRAWN = 512;
 
     // Ticks a shulker restock may take before it is written off.
@@ -443,7 +438,7 @@ public final class HighwayBuilder extends Module {
         if (pauseOnLag.isOn() && TickRate.INSTANCE.lagging(LAG_MILLIS)) {
             return true;
         }
-        if (Modules.eating()) {
+        if (Modules.feeding(null)) {
             return true;
         }
         KillAura aura = Modules.active(KillAura.class);
@@ -563,7 +558,7 @@ public final class HighwayBuilder extends Module {
         idleTicks = 0;
         slots.restoreIfMine();
         // With no mining rotation the server takes the packets on their own.
-        if (!rotation.isAny(Rotation.MINE, Rotation.BOTH)) {
+        if (!rotatesToMine()) {
             return packetMine();
         }
         if (!BlockMiner.mine(dig, true)) {
@@ -638,7 +633,7 @@ public final class HighwayBuilder extends Module {
             return;
         }
         spare.progress += BlockUtil.breakDelta(mc.player.getMainHandItem(), spare.pos);
-        float due = fastBreak.isOn() ? FastBreak.SERVER_ACCEPTS : 1f;
+        float due = fastBreak.isOn() ? BlockUtil.SERVER_ACCEPTS : 1f;
         if (spare.progress < due) {
             return;
         }
@@ -648,7 +643,6 @@ public final class HighwayBuilder extends Module {
         spare = null;
     }
 
-    // The closest block of the stretch within the reach that passes the test.
     private BlockPos nearest(Predicate<BlockPos> wanted, double reach) {
         BlockPos best = null;
         double bestDistance = Double.MAX_VALUE;
@@ -709,10 +703,10 @@ public final class HighwayBuilder extends Module {
         Part part = partOf(pos);
         if (part == Part.TUNNEL) {
             // Torches light the way and never block it.
-            return !isTorch(BlockUtil.state(pos).getBlock());
+            return !BlockUtil.isTorch(BlockUtil.state(pos).getBlock());
         }
         if (part == Part.ABOVE_WALL) {
-            return mineAboveWalls.isOn() && !isTorch(BlockUtil.state(pos).getBlock());
+            return mineAboveWalls.isOn() && !BlockUtil.isTorch(BlockUtil.state(pos).getBlock());
         }
         if (allowed(BlockUtil.state(pos).getBlock())) {
             return false;
@@ -777,7 +771,7 @@ public final class HighwayBuilder extends Module {
             return false;
         }
         slots.select(slot);
-        boolean placed = BlockUtil.placeAny(target, rotation.isAny(Rotation.PLACE, Rotation.BOTH), true);
+        boolean placed = BlockUtil.placeAny(target, rotatesToPlace(), true);
         if (placed) {
             idleTicks = 0;
             blocksPlaced++;
@@ -830,7 +824,7 @@ public final class HighwayBuilder extends Module {
             return false;
         }
         slots.select(slot);
-        boolean placed = BlockUtil.place(pos, support, rotation.isAny(Rotation.PLACE, Rotation.BOTH), true);
+        boolean placed = BlockUtil.place(pos, support, rotatesToPlace(), true);
         slots.restoreIfMine();
         return placed;
     }
@@ -906,7 +900,7 @@ public final class HighwayBuilder extends Module {
                 endRestock();
                 return false;
             }
-            BlockMiner.mine(shulkerPos, rotation.isAny(Rotation.MINE, Rotation.BOTH));
+            BlockMiner.mine(shulkerPos, rotatesToMine());
             return true;
         }
         if (!standing) {
@@ -914,7 +908,7 @@ public final class HighwayBuilder extends Module {
             return false;
         }
         if (!(mc.gui.screen() instanceof AbstractContainerScreen<?>)) {
-            BlockUtil.useOn(shulkerPos, rotation.isAny(Rotation.PLACE, Rotation.BOTH), true);
+            BlockUtil.useOn(shulkerPos, rotatesToPlace(), true);
             return true;
         }
         return emptyShulker();
@@ -946,7 +940,7 @@ public final class HighwayBuilder extends Module {
             return false;
         }
         slots.select(slot);
-        if (!BlockUtil.placeAny(spot, rotation.isAny(Rotation.PLACE, Rotation.BOTH), true)) {
+        if (!BlockUtil.placeAny(spot, rotatesToPlace(), true)) {
             return false;
         }
         shulkerPos = spot;
@@ -954,7 +948,6 @@ public final class HighwayBuilder extends Module {
         stageTicks = 0;
         return true;
     }
-
 
     // Sets ender chests down behind you and mines them back for obsidian until enough is held.
     private boolean enderChestGrind() {
@@ -989,7 +982,7 @@ public final class HighwayBuilder extends Module {
                 endRestock();
                 return false;
             }
-            BlockMiner.mine(shulkerPos, rotation.isAny(Rotation.MINE, Rotation.BOTH));
+            BlockMiner.mine(shulkerPos, rotatesToMine());
             return true;
         }
         BlockMiner.release();
@@ -1002,7 +995,7 @@ public final class HighwayBuilder extends Module {
             return moveToHotbar(slot);
         }
         slots.select(slot);
-        BlockUtil.placeAny(shulkerPos, rotation.isAny(Rotation.PLACE, Rotation.BOTH), true);
+        BlockUtil.placeAny(shulkerPos, rotatesToPlace(), true);
         return true;
     }
 
@@ -1021,13 +1014,13 @@ public final class HighwayBuilder extends Module {
                     return false;
                 }
                 slots.select(slot);
-                return BlockUtil.placeAny(pos, rotation.isAny(Rotation.PLACE, Rotation.BOTH), true);
+                return BlockUtil.placeAny(pos, rotatesToPlace(), true);
             }
         }
         return false;
     }
 
-    // Selects a pickaxe of the given kind for the block. True once one is in hand.
+    // True once a pickaxe of the given kind is in hand.
     private boolean holdPickaxe(BlockState state, boolean silkTouch) {
         int slot = ItemUtil.bestToolSlot(state, 1,
             stack -> (ItemUtil.enchantLevel(Enchantments.SILK_TOUCH, stack) > 0) == silkTouch,
@@ -1143,8 +1136,7 @@ public final class HighwayBuilder extends Module {
                 || !(item.getBlock() instanceof ShulkerBoxBlock) || usefulShulker(stack)) {
                 continue;
             }
-            mc.gameMode.handleContainerInput(0, InventoryUtil.networkSlot(i), 1,
-                ContainerInput.THROW, mc.player);
+            InventoryUtil.throwStack(InventoryUtil.networkSlot(i));
             sinceInventory = 0;
             return true;
         }
@@ -1221,10 +1213,9 @@ public final class HighwayBuilder extends Module {
             if (i == keep || stack.isEmpty() || !trash.contains(stack.getItem())) {
                 continue;
             }
-            // Facing back and up keeps the pile off the line ahead.
-            RotationManager.requestExact(mc.player.getYRot() + 180, -25, RotationPriority.IDLE);
-            mc.gameMode.handleContainerInput(0, InventoryUtil.networkSlot(i), 1,
-                ContainerInput.THROW, mc.player);
+            // Facing back and up keeps the pile off the line ahead. The look goes out first.
+            FaceMode.SPAM.faceExact(mc.player.getYRot() + 180, -25, RotationPriority.IDLE);
+            InventoryUtil.throwStack(InventoryUtil.networkSlot(i));
             sinceInventory = 0;
             return true;
         }
@@ -1259,7 +1250,7 @@ public final class HighwayBuilder extends Module {
         BlockMiner.release();
         slots.select(slot);
         aimAtCrystal();
-        if (mc.player.getTicksUsingItem() >= FULL_DRAW) {
+        if (mc.player.getTicksUsingItem() >= BowItem.MAX_DRAW_DURATION) {
             releaseBow();
             crystalShots++;
             if (crystalShots >= CRYSTAL_SHOTS) {
@@ -1317,7 +1308,7 @@ public final class HighwayBuilder extends Module {
         double flat = Math.sqrt(dx * dx + dz * dz);
         double rise = to.y - from.y;
         double g = ProjectileUtil.ARROW_GRAVITY;
-        double v2 = BOW_SPEED * BOW_SPEED;
+        double v2 = ProjectileUtil.BOW_SPEED * ProjectileUtil.BOW_SPEED;
         double root = v2 * v2 - g * (g * flat * flat + 2 * rise * v2);
         if (root < 0 || flat < 0.01) {
             return (float) -Math.toDegrees(Math.atan2(rise, Math.max(flat, 0.01)));
@@ -1377,11 +1368,6 @@ public final class HighwayBuilder extends Module {
         return blocks.contains(block);
     }
 
-    private static boolean isTorch(Block block) {
-        return block == Blocks.TORCH || block == Blocks.WALL_TORCH
-            || block == Blocks.SOUL_TORCH || block == Blocks.SOUL_WALL_TORCH;
-    }
-
     private int leftLane() {
         return AxisWalker.leftLane(width.getInt());
     }
@@ -1397,8 +1383,7 @@ public final class HighwayBuilder extends Module {
         boolean leave = disconnectOnStop.isOn() && inGame();
         setEnabled(false);
         if (leave) {
-            mc.player.connection.getConnection().disconnect(
-                Component.literal("§b[§3Offline§b] §fHighwayBuilder stopped.\n§7" + reason + "\n" + totals));
+            ChatUtil.leaveServer("HighwayBuilder stopped.\n§7" + reason + "\n" + totals);
         }
     }
 
@@ -1450,5 +1435,13 @@ public final class HighwayBuilder extends Module {
             event.getBatch().line(a.add(0, tall, 0), b.add(0, tall, 0), color, true);
             event.getBatch().line(a, a.add(0, tall, 0), color, true);
         }
+    }
+
+    private boolean rotatesToPlace() {
+        return rotation.isAny(Rotation.PLACE, Rotation.BOTH);
+    }
+
+    private boolean rotatesToMine() {
+        return rotation.isAny(Rotation.MINE, Rotation.BOTH);
     }
 }

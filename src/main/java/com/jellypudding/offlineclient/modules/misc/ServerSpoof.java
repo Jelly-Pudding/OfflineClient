@@ -30,8 +30,9 @@ public final class ServerSpoof extends Module {
     private final BoolSetting blockChannels = new BoolSetting("Block channels",
         "Drop the loader plugin messages that give the mod list away.", true);
     private final TextLines channels = new TextLines("Channels",
-        "How many channel names to drop.", "fabric", "minecraft:register", "minecraft:unregister",
-        "minecraft:version").plain().under(blockChannels);
+        "How many channel names to drop.",
+        "Any channel whose name holds this text is dropped. Click to type it.", "fabric",
+        "minecraft:register", "minecraft:unregister", "minecraft:version").plain().under(blockChannels);
     private final BoolSetting resourcePack = new BoolSetting("Block resource packs",
         "Tells the server a required pack loaded without ever downloading it.", false);
 

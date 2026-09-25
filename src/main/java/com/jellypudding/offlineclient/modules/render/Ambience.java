@@ -110,7 +110,6 @@ public final class Ambience extends Module {
         return isEnabled() && customSky.isOn();
     }
 
-    // The colour for the dimension the player is standing in.
     public int skyColor() {
         if (mc.level == null) {
             return overworldSky.getColor();

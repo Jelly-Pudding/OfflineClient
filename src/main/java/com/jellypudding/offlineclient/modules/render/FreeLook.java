@@ -10,9 +10,9 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.Modules;
+import com.jellypudding.offlineclient.util.RotationManager;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.CameraType;
-import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 
 // CameraMixin swaps the look angles around the camera alignment.
@@ -22,8 +22,6 @@ public final class FreeLook extends Module {
     public enum Perspective { KEEP, THIRD_PERSON, FRONT }
 
     public enum Mode { PLAYER, CAMERA }
-
-    private static final float ARROW_STEP = 0.5f;
 
     private final BoolSetting hold = new BoolSetting("Hold",
         "Look around only whilst the bind is held down.", true);
@@ -103,35 +101,32 @@ public final class FreeLook extends Module {
     public void turn(double deltaYaw, double deltaPitch) {
         double factor = InputUtil.MOUSE_TURN * sensitivity.getValue();
         yaw += (float) (deltaYaw * factor);
-        pitch = Mth.clamp(pitch + (float) (deltaPitch * factor), -90f, 90f);
+        pitch = RotationManager.clampPitch(pitch + (float) (deltaPitch * factor));
     }
 
-    // The arrow keys turn the camera in player mode and your body in camera mode.
+    // The arrow keys turn your body in player mode and the camera in camera mode.
     @Subscribe
     private void onTick(TickEvent event) {
         if (!arrows.isOn() || !isActive() || mc.gui.screen() != null) {
             return;
         }
-        float step = 0;
-        float pitchStep = 0;
-        for (int i = 0; i < arrowSpeed.getValue() / ARROW_STEP; i++) {
-            step += (held(InputConstants.KEY_RIGHT) ? ARROW_STEP : 0) - (held(InputConstants.KEY_LEFT) ? ARROW_STEP : 0);
-            pitchStep += (held(InputConstants.KEY_DOWN) ? ARROW_STEP : 0) - (held(InputConstants.KEY_UP) ? ARROW_STEP : 0);
-        }
+        float speed = arrowSpeed.getFloat();
+        float step = speed * (axis(InputConstants.KEY_RIGHT) - axis(InputConstants.KEY_LEFT));
+        float pitchStep = speed * (axis(InputConstants.KEY_DOWN) - axis(InputConstants.KEY_UP));
         if (step == 0 && pitchStep == 0) {
             return;
         }
         if (mode.is(Mode.PLAYER)) {
-            yaw += step;
-            pitch = Mth.clamp(pitch + pitchStep, -90f, 90f);
-        } else {
             mc.player.setYRot(mc.player.getYRot() + step);
-            mc.player.setXRot(Mth.clamp(mc.player.getXRot() + pitchStep, -90f, 90f));
+            mc.player.setXRot(RotationManager.clampPitch(mc.player.getXRot() + pitchStep));
+        } else {
+            yaw += step;
+            pitch = RotationManager.clampPitch(pitch + pitchStep);
         }
     }
 
-    private static boolean held(int key) {
-        return InputConstants.isKeyDown(key);
+    private static int axis(int key) {
+        return InputConstants.isKeyDown(key) ? 1 : 0;
     }
 
     public boolean isActive() {

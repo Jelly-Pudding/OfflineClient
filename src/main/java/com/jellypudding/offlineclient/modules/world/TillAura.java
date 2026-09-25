@@ -15,7 +15,6 @@ import net.minecraft.world.level.block.Blocks;
 
 import java.util.Set;
 
-// Turns the ground around you into farmland whilst you hold a hoe.
 public final class TillAura extends Module {
 
     private static final Set<Block> TILLABLE = Set.of(

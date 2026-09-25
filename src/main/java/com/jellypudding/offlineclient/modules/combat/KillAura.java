@@ -22,6 +22,7 @@ import com.jellypudding.offlineclient.util.SwingMode;
 import com.jellypudding.offlineclient.util.TargetFilter;
 import com.jellypudding.offlineclient.util.TargetPriority;
 import com.jellypudding.offlineclient.util.TickRate;
+import com.jellypudding.offlineclient.util.WeaponKinds;
 import com.jellypudding.offlineclient.util.WeaponUtil;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.protocol.game.ServerboundSetCarriedItemPacket;
@@ -31,8 +32,6 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.Item;
-import net.minecraft.world.item.Items;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.HitResult;
@@ -49,17 +48,8 @@ public final class KillAura extends Module {
 
     public enum Ages { ADULTS, BABIES, BOTH }
 
-    public enum Holding { ANYTHING, WEAPONS }
-
     // How long the server may go quiet before hits are held back.
     private static final long LAG_MILLIS = 1000;
-
-    private static final List<Item> WEAPONS = List.of(Items.WOODEN_SWORD, Items.STONE_SWORD,
-        Items.COPPER_SWORD, Items.IRON_SWORD, Items.GOLDEN_SWORD, Items.DIAMOND_SWORD,
-        Items.NETHERITE_SWORD, Items.WOODEN_AXE, Items.STONE_AXE, Items.COPPER_AXE, Items.IRON_AXE,
-        Items.GOLDEN_AXE, Items.DIAMOND_AXE, Items.NETHERITE_AXE, Items.MACE, Items.TRIDENT,
-        Items.WOODEN_SPEAR, Items.STONE_SPEAR, Items.COPPER_SPEAR, Items.IRON_SPEAR,
-        Items.GOLDEN_SPEAR, Items.DIAMOND_SPEAR, Items.NETHERITE_SPEAR);
 
     private final NumberSetting range = new NumberSetting("Range",
         "Maximum reach in blocks.", 4.2, 1, 6, 0.05);
@@ -146,13 +136,9 @@ public final class KillAura extends Module {
         .describe(Shields.NONE, "Hits the shield like anything else.")
         .describe(Shields.BREAK, "Reaches for an axe to knock the shield down.")
         .describe(Shields.IGNORE, "Leaves anyone blocking alone.");
-    private final EnumSetting<Holding> holding = new EnumSetting<>("Attack when holding",
-        "What has to be in your hand for a swing.", Holding.ANYTHING)
-        .describe(Holding.ANYTHING, "Swings with whatever you hold.")
-        .describe(Holding.WEAPONS, "Only swings whilst you hold one of the weapons below.");
-    private final RegistryListSetting<Item> weapons = new RegistryListSetting<>("Weapons",
-        "The items that count as a weapon.", BuiltInRegistries.ITEM, WEAPONS)
-        .under(holding, Holding.WEAPONS);
+    private final BoolSetting onlyWithWeapon = new BoolSetting("Only with weapon",
+        "Only swings whilst one of the ticked weapons is in your main hand.", false);
+    private final WeaponKinds weapons = new WeaponKinds(onlyWithWeapon);
     private final BoolSetting onlyOnClick = new BoolSetting("Only on click",
         "Only swing whilst you hold the attack key down.", false);
     private final BoolSetting ignoreCooldown = new BoolSetting("Ignore cooldown",
@@ -187,9 +173,10 @@ public final class KillAura extends Module {
         addSettings(extraMobs, ignoredMobs, filter.invisibleRow(), priority, maxTargets, rotate,
             rotateSpeed);
         addSettings(timer.settings());
-        addSettings(autoWeapon, weaponSwapBack, shields, holding, weapons, onlyOnClick,
-            ignoreCooldown, switchDelay, swing, pauseOnUse, pauseOnContainers, pauseOnCrystals,
-            pauseOnLag, showTarget);
+        addSettings(autoWeapon, weaponSwapBack, shields, onlyWithWeapon);
+        addSettings(weapons.settings());
+        addSettings(onlyOnClick, ignoreCooldown, switchDelay, swing, pauseOnUse, pauseOnContainers,
+            pauseOnCrystals, pauseOnLag, showTarget);
         searchTags("aura", "multi aura", "aimbot", "legit aura");
     }
 
@@ -260,20 +247,14 @@ public final class KillAura extends Module {
         if (onlyOnClick.isOn() && !mc.options.keyAttack.isDown()) {
             return true;
         }
-        if (holding.is(Holding.WEAPONS) && !weapons.contains(mc.player.getMainHandItem().getItem())) {
+        if (onlyWithWeapon.isOn() && !weapons.matches(mc.player.getMainHandItem())) {
             return true;
         }
         if (pauseOnLag.isOn() && TickRate.INSTANCE.lagging(LAG_MILLIS)) {
             return true;
         }
-        return Modules.eating() || (pauseOnCrystals.isOn() && crystalsBusy());
-    }
-
-    // Crystals hurt far more than a sword. Only the ticks around a real
-    // place or break are given up.
-    private boolean crystalsBusy() {
-        CrystalAura crystals = Modules.active(CrystalAura.class);
-        return crystals != null && crystals.isActing();
+        // Crystals hurt far more than a sword.
+        return Modules.feedersPauseCombat() || (pauseOnCrystals.isOn() && Modules.crystalsActing());
     }
 
     // Hits everything in reach on one swing then sets the next wait.
@@ -303,7 +284,6 @@ public final class KillAura extends Module {
         return target.getBoundingBox().getCenter();
     }
 
-    // Moves the real view towards the target by at most the turn speed.
     private void turnCamera(LivingEntity target) {
         RotationManager.turnCamera(aimPoint(target), rotateSpeed.getFloat());
     }

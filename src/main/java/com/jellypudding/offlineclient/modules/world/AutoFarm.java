@@ -177,9 +177,6 @@ public final class AutoFarm extends Module {
     // Ticks a cut spot waits for its seed.
     private static final int PLANT_TICKS = 60;
 
-    // Vanilla repeats a held right click at this rate.
-    private static final int USE_INTERVAL = 4;
-
     private static final AABB NODE = new AABB(BlockPos.ZERO).deflate(0.3);
     private static final AABB SHELL = new AABB(BlockPos.ZERO).deflate(1 / 16.0);
 
@@ -386,7 +383,7 @@ public final class AutoFarm extends Module {
 
     // Berries and glow berries come off with a right click and leave the plant standing.
     private boolean pickByHand(List<BlockPos> toInteract, int now) {
-        if (toInteract.isEmpty() || now - lastUse < USE_INTERVAL) {
+        if (toInteract.isEmpty() || now - lastUse < InputUtil.USE_DELAY) {
             return false;
         }
         // A right click with bone meal would fertilise the bush instead.
@@ -410,7 +407,7 @@ public final class AutoFarm extends Module {
     }
 
     private boolean plantSeeds(List<BlockPos> toReplant, int now) {
-        if (toReplant.isEmpty() || now - lastUse < USE_INTERVAL) {
+        if (toReplant.isEmpty() || now - lastUse < InputUtil.USE_DELAY) {
             return false;
         }
         for (BlockPos pos : toReplant) {
@@ -454,7 +451,7 @@ public final class AutoFarm extends Module {
     }
 
     private void feedTick(List<BlockPos> scan, int now) {
-        if (now - lastUse < USE_INTERVAL) {
+        if (now - lastUse < InputUtil.USE_DELAY) {
             return;
         }
         BlockPos target = findGrowing(scan);
@@ -621,7 +618,7 @@ public final class AutoFarm extends Module {
             return false;
         }
         FluidState fluid = BlockUtil.state(pos).getFluidState();
-        return fluid.is(FluidTags.WATER) && fluid.getAmount() == 8;
+        return fluid.is(FluidTags.WATER) && fluid.getAmount() == FluidState.AMOUNT_FULL;
     }
 
     private static boolean berrySurface(BlockPos pos) {

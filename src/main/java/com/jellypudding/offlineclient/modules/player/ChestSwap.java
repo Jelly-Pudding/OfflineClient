@@ -74,11 +74,8 @@ public final class ChestSwap extends Module {
         swap();
     }
 
-    // Container clicks need the survival inventory with a clear cursor.
     public boolean canSwap() {
-        return inGame() && !mc.player.isSpectator() && mc.gameMode != null
-            && mc.player.containerMenu.containerId == 0
-            && mc.player.containerMenu.getCarried().isEmpty();
+        return inGame() && !mc.player.isSpectator() && InventoryUtil.cursorFree();
     }
 
     public void swap() {

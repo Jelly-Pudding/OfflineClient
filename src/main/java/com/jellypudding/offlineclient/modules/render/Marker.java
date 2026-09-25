@@ -11,6 +11,7 @@ import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.render.BoxStyle;
 import com.jellypudding.offlineclient.render.DrawBatch;
+import com.jellypudding.offlineclient.render.JoinedCells;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.KeybindSetting;
@@ -20,7 +21,6 @@ import com.jellypudding.offlineclient.setting.TextSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.mojang.blaze3d.platform.InputConstants;
-import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.Level;
@@ -213,7 +213,7 @@ public final class Marker extends Module {
         // The ring of the current slice and the numbers it was worked out from.
         private List<BlockPos> ring = List.of();
         private String ringKey = "";
-        private final LongOpenHashSet ringKeys = new LongOpenHashSet();
+        private final JoinedCells<BlockPos> joined = new JoinedCells<>(BlockPos::asLong);
 
         private Entry(String label, Shape shape, World world, BlockPos pos) {
             this.label = label;
@@ -297,9 +297,10 @@ public final class Marker extends Module {
                 return;
             }
             rebuildRing(centre);
+            joined.update(ring);
             for (BlockPos pos : ring) {
                 // A sphere slice is one block tall. Its blocks only ever touch sideways.
-                int hidden = DrawBatch.sharedSides(ringKeys, pos.asLong());
+                int hidden = joined.hiddenSides(pos);
                 style.drawJoined(batch, new AABB(pos.getX(), pos.getY(), pos.getZ(),
                     pos.getX() + 1, pos.getY() + 1, pos.getZ() + 1), hidden, through);
             }
@@ -315,7 +316,6 @@ public final class Marker extends Module {
             }
             ringKey = key;
             List<BlockPos> found = new ArrayList<>();
-            ringKeys.clear();
             int dy = slice - r;
             int flat = (int) Math.ceil(Math.sqrt(Math.max(0, (double) r * r - (double) dy * dy)));
             for (int dx = -flat - 1; dx <= flat + 1; dx++) {
@@ -326,7 +326,6 @@ public final class Marker extends Module {
                     }
                     BlockPos pos = centre.offset(dx, dy, dz);
                     found.add(pos);
-                    ringKeys.add(pos.asLong());
                 }
             }
             ring = found;

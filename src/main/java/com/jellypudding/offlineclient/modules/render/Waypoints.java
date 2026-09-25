@@ -145,7 +145,6 @@ public final class Waypoints extends Module {
         }
     }
 
-    // Keeps only the newest death markers in this world.
     private void dropOldDeaths() {
         List<String> deaths = new ArrayList<>();
         for (WaypointStore.Waypoint waypoint : WaypointStore.get().here()) {

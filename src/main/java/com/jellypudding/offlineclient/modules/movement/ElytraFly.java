@@ -21,10 +21,8 @@ import com.jellypudding.offlineclient.util.MovementUtil;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
-import net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.EquipmentSlot;
-import net.minecraft.world.entity.player.Abilities;
 import net.minecraft.world.entity.player.Input;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -461,7 +459,7 @@ public final class ElytraFly extends Module {
         pilotTick();
         if (mode.is(Mode.CONTROL) && sneakDrop.isOn() && mc.player.input.keyPresses.shift()) {
             // The same command that opens a glide closes one that is already open.
-            sendStartGlide();
+            MovementUtil.sendStartGlide();
             dropped = true;
             return;
         }
@@ -778,25 +776,11 @@ public final class ElytraFly extends Module {
     // glide physics off the flight.
     private void packetTick() {
         if (!MovementUtil.wearsGlider()) {
-            endPacketFlight();
+            MovementUtil.endFlight();
             return;
         }
-        Abilities abilities = mc.player.getAbilities();
-        abilities.flying = true;
-        abilities.setFlyingSpeed(0);
-
-        Input keys = mc.player.input.keyPresses;
-        double vertical = MovementUtil.FLY_VERTICAL * climbSpeed.getValue();
-        double vy = 0;
-        if (keys.jump()) {
-            vy += vertical;
-        }
-        if (keys.shift()) {
-            vy -= vertical;
-        }
-        Vec3 heading = MovementUtil.inputDirection();
-        double horizontal = MovementUtil.FLY_HORIZONTAL * rampedSpeed(heading != Vec3.ZERO);
-        mc.player.setDeltaMovement(heading.x * horizontal, vy, heading.z * horizontal);
+        MovementUtil.flyDirect(MovementUtil.FLY_HORIZONTAL * rampedSpeed(MovementUtil.hasInput()),
+            MovementUtil.FLY_VERTICAL * climbSpeed.getValue());
 
         // A second start would close the glide. It opens once and is set here straight
         // away as vanilla does. The server clears it again if it refuses.
@@ -821,19 +805,7 @@ public final class ElytraFly extends Module {
         releasePilot();
         restoreFovScale();
         if (applied == Mode.PACKET) {
-            endPacketFlight();
-        }
-    }
-
-    // Creative players keep their flight but get the vanilla speed back.
-    private void endPacketFlight() {
-        if (mc.player == null) {
-            return;
-        }
-        Abilities abilities = mc.player.getAbilities();
-        abilities.setFlyingSpeed(MovementUtil.VANILLA_FLY_SPEED);
-        if (!mc.player.isCreative() && !mc.player.isSpectator()) {
-            abilities.flying = false;
+            MovementUtil.endFlight();
         }
     }
 
@@ -945,14 +917,8 @@ public final class ElytraFly extends Module {
     }
 
     private void openGlide() {
-        sendStartGlide();
+        MovementUtil.sendStartGlide();
         restartCooldown = RESTART_COOLDOWN;
-    }
-
-    // The server opens the elytra on this packet alone.
-    static void sendStartGlide() {
-        mc.player.connection.send(new ServerboundPlayerCommandPacket(mc.player,
-            ServerboundPlayerCommandPacket.Action.START_FALL_FLYING));
     }
 
     // True whilst the worn elytra is nearly broken. The chat warning goes out only once.

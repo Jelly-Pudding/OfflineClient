@@ -13,7 +13,6 @@ import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.MovementUtil;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
 
@@ -69,6 +68,12 @@ public final class AutoWasp extends Module {
     @Override
     public String getSuffix() {
         return target == null ? null : EntityUtil.nameOf(target);
+    }
+
+    // The target it chased belongs to the session it was chosen in.
+    @Override
+    public boolean savesEnabledState() {
+        return false;
     }
 
     @Override
@@ -139,7 +144,7 @@ public final class AutoWasp extends Module {
             jumpTimer = 0;
             mc.player.setJumping(false);
             mc.player.setSprinting(true);
-            ElytraFly.sendStartGlide();
+            MovementUtil.sendStartGlide();
         }
     }
 
@@ -152,8 +157,10 @@ public final class AutoWasp extends Module {
                     disable("AutoWasp found no new player to follow.");
                 }
             }
-            case DISCONNECT -> mc.player.connection.getConnection()
-                .disconnect(Component.literal("§b[§3Offline§b] §fAutoWasp lost its target."));
+            case DISCONNECT -> {
+                setEnabled(false);
+                ChatUtil.leaveServer("AutoWasp lost its target.");
+            }
         }
     }
 

@@ -64,7 +64,7 @@ public final class NoSlowdown extends Module {
             Category.MOVEMENT);
         addSettings(items, airStrict, sneaking, hunger, slowness, honey, soulSand, slime,
             berryBushes, webs, webTimer, fluidDrag);
-        searchTags("noslow", "eating", "sneak speed", "soul sand", "honey", "cobweb");
+        searchTags("noslow", "eating", "sneak speed", "soul sand", "honey", "cobweb", "NoWeb", "no web");
     }
 
     @Override

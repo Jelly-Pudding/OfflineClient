@@ -3,8 +3,6 @@ package com.jellypudding.offlineclient.module;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.Render3DEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
-import com.jellypudding.offlineclient.modules.combat.CrystalAura;
-import com.jellypudding.offlineclient.modules.movement.Sneak;
 import com.jellypudding.offlineclient.render.BoxStyle;
 import com.jellypudding.offlineclient.render.DrawBatch;
 import com.jellypudding.offlineclient.setting.BoolSetting;
@@ -257,15 +255,11 @@ public abstract class RespawnBlockAura extends Module {
         if (pauseOnMine.isOn() && mc.gameMode.isDestroying()) {
             return "(mining)";
         }
-        if (pauseOnSneak.isOn()
-            && (mc.player.isShiftKeyDown() || Modules.enabled(Sneak.class))) {
+        if (pauseOnSneak.isOn() && Modules.sneaking()) {
             return "(sneaking)";
         }
-        if (pauseOnCrystals.isOn()) {
-            CrystalAura crystals = Modules.active(CrystalAura.class);
-            if (crystals != null && crystals.isActing()) {
-                return "(crystals)";
-            }
+        if (pauseOnCrystals.isOn() && Modules.crystalsActing()) {
+            return "(crystals)";
         }
         return null;
     }

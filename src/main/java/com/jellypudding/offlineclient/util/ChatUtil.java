@@ -2,12 +2,18 @@ package com.jellypudding.offlineclient.util;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.module.Module;
+import net.minecraft.client.gui.components.ChatComponent;
 import net.minecraft.client.multiplayer.ClientPacketListener;
+import net.minecraft.client.multiplayer.chat.GuiMessage;
 import net.minecraft.network.chat.Component;
+
+import java.util.List;
+import java.util.function.Predicate;
 
 public final class ChatUtil {
 
-    private static final String PREFIX = "§b[§3Offline§b]§r ";
+    private static final String TAG = "§b[§3Offline§b]";
+    private static final String PREFIX = TAG + "§r ";
 
     private ChatUtil() {
     }
@@ -18,6 +24,29 @@ public final class ChatUtil {
 
     public static void error(String message) {
         message("§c" + message);
+    }
+
+    // Leaves the server. The disconnect screen shows the message under the client tag.
+    public static void leaveServer(String message) {
+        ClientPacketListener connection = OfflineClient.MC.getConnection();
+        if (connection != null) {
+            connection.getConnection().disconnect(Component.literal(TAG + " §f" + message));
+        }
+    }
+
+    // Takes the newest line the test accepts out of the last few in chat and hands back
+    // its text. Null when none of them matched.
+    public static String removeRecent(ChatComponent chat, int depth, Predicate<String> text) {
+        List<GuiMessage> all = chat.allMessages;
+        for (int i = 0; i < Math.min(depth, all.size()); i++) {
+            String line = all.get(i).content().getString();
+            if (text.test(line)) {
+                all.remove(i);
+                chat.refreshTrimmedMessages();
+                return line;
+            }
+        }
+        return null;
     }
 
     // Sends a line as the player. A line starting with a slash runs as a server

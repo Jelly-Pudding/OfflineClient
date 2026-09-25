@@ -11,14 +11,9 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.FaceMode;
-import com.jellypudding.offlineclient.util.InputUtil;
-import com.jellypudding.offlineclient.util.RotationPriority;
 import com.jellypudding.offlineclient.util.SwingMode;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.BlockItem;
-import net.minecraft.world.phys.Vec3;
 
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -94,24 +89,10 @@ public final class BuildRandom extends Module {
         if (!BlockUtil.isReplaceable(pos)) {
             return false;
         }
-        Direction support = BlockUtil.findPlaceSupport(pos);
-        if (support == null) {
+        BlockUtil.Placement placement = BlockUtil.placementInReach(pos, range.getValue(), lineOfSight.isOn());
+        if (placement == null || !placement.place(faceTarget.getValue(), swing.getValue())) {
             return false;
         }
-        Vec3 hit = BlockUtil.hitPoint(pos.relative(support), support.getOpposite());
-        double limit = range.getValue() * range.getValue();
-        if (mc.player.getEyePosition().distanceToSqr(hit) > limit) {
-            return false;
-        }
-        if (lineOfSight.isOn() && !BlockUtil.canSee(hit)) {
-            return false;
-        }
-        faceTarget.getValue().face(hit, RotationPriority.PLACE);
-        if (!BlockUtil.place(pos, support, false, false)) {
-            return false;
-        }
-        swing.getValue().swing(InteractionHand.MAIN_HAND);
-        mc.rightClickDelay = InputUtil.USE_DELAY;
         lastPlaced = pos;
         return true;
     }

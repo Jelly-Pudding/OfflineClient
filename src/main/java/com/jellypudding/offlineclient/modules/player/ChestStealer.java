@@ -9,10 +9,10 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.ListMode;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
+import com.jellypudding.offlineclient.util.FaceMode;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.MenuClicks;
 import com.jellypudding.offlineclient.util.Modules;
-import com.jellypudding.offlineclient.util.RotationManager;
 import com.jellypudding.offlineclient.util.RotationPriority;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
@@ -169,9 +169,9 @@ public final class ChestStealer extends Module {
             MenuClicks.quickMove(menu, slot);
             return;
         }
+        // The look has to reach the server before the throw does.
         if (backwards.isOn()) {
-            RotationManager.requestExact(mc.player.getYRot() + 180f, mc.player.getXRot(),
-                RotationPriority.IDLE);
+            FaceMode.SPAM.faceExact(mc.player.getYRot() + 180f, mc.player.getXRot(), RotationPriority.IDLE);
         }
         // Button one throws the whole stack straight onto the ground.
         MenuClicks.click(menu, slot, 1, ContainerInput.THROW);

@@ -42,7 +42,6 @@ public final class BoxStyle {
         this("", defaultShape, hue, DEFAULT_SATURATION, true);
     }
 
-    // A style whose colours start out white.
     public static BoxStyle white(Shape defaultShape) {
         return new BoxStyle("", defaultShape, 0, 0, true);
     }

@@ -79,7 +79,6 @@ public final class Blur extends Module {
         return others.isOn();
     }
 
-    // True whilst the blur is still fading out after a screen has closed.
     public boolean fadingWithoutScreen() {
         return isEnabled() && level > 0 && mc.gui.screen() == null;
     }

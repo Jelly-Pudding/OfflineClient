@@ -8,8 +8,7 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 
-// CameraMixin applies the FOV change at read time.
-// Saved video settings are never touched.
+// CameraMixin and MouseHandlerMixin apply the zoom at read time. The saved options are never touched.
 public final class Zoom extends Module {
 
     // Share of the remaining distance the ease covers each frame.
@@ -39,7 +38,6 @@ public final class Zoom extends Module {
 
     // What the game settings were before the zoom touched them.
     private boolean savedCinematic;
-    private double savedSensitivity = 1;
     private boolean hidHud;
 
     public Zoom() {
@@ -52,7 +50,7 @@ public final class Zoom extends Module {
         return factor.getValueString();
     }
 
-    // A zoom left on at shutdown would come back with the mouse still slowed.
+    // Starting the game zoomed in helps nobody.
     @Override
     public boolean savesEnabledState() {
         return false;
@@ -61,7 +59,6 @@ public final class Zoom extends Module {
     @Override
     protected void onEnable() {
         savedCinematic = mc.options.smoothCamera;
-        savedSensitivity = mc.options.sensitivity().get();
         hidHud = hideHud.isOn() && !mc.gui.hud.isHidden();
         if (hidHud) {
             mc.gui.hud.toggle();
@@ -72,7 +69,6 @@ public final class Zoom extends Module {
     @Override
     protected void onDisable() {
         mc.options.smoothCamera = savedCinematic;
-        mc.options.sensitivity().set(savedSensitivity);
         // Left alone if the player has hidden or shown the HUD since.
         if (hidHud && mc.gui.hud.isHidden()) {
             mc.gui.hud.toggle();
@@ -97,11 +93,13 @@ public final class Zoom extends Module {
         event.cancel();
     }
 
-    // A steadier aim the further in you are. The cinematic camera does that on its own.
     private void apply() {
         mc.options.smoothCamera = savedCinematic || cinematic.isOn();
-        double divisor = cinematic.isOn() ? 1 : Math.max(1, factor.getValue() / 2);
-        mc.options.sensitivity().set(savedSensitivity / divisor);
+    }
+
+    // A steadier aim the further in you are. The cinematic camera does that on its own.
+    public double scaleSensitivity(double sensitivity) {
+        return cinematic.isOn() ? sensitivity : sensitivity / Math.max(1, factor.getValue() / 2);
     }
 
     // Eases the zoom once per camera update. The world and hand read the same value.

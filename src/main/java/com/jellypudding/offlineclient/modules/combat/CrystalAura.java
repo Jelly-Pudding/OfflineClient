@@ -856,7 +856,7 @@ public final class CrystalAura extends Module {
     private boolean holdingSomethingPrecious() {
         for (InteractionHand hand : InteractionHand.values()) {
             ItemStack stack = mc.player.getItemInHand(hand);
-            if (noGapSwitch.isOn() && (stack.is(Items.GOLDEN_APPLE) || stack.is(Items.ENCHANTED_GOLDEN_APPLE))) {
+            if (noGapSwitch.isOn() && ItemUtil.isGoldenApple(stack)) {
                 return true;
             }
             if (noBowSwitch.isOn() && stack.getItem() instanceof BowItem) {

@@ -92,8 +92,7 @@ public final class AutoReplenish extends Module {
             snapshot();
         }
         hadScreen = screen;
-        if (screen || mc.player.containerMenu.containerId != 0
-            || !mc.player.containerMenu.getCarried().isEmpty()) {
+        if (!InventoryUtil.inventoryFree()) {
             return;
         }
         // AutoEat and AutoGap and AutoPotion shuffle stacks between the inventory

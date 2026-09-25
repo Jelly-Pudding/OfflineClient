@@ -51,6 +51,11 @@ public final class ItemUtil {
             .stream().map(Object::toString).sorted().collect(Collectors.toList());
     }
 
+    // Plain or enchanted.
+    public static boolean isGoldenApple(ItemStack stack) {
+        return stack.is(Items.GOLDEN_APPLE) || stack.is(Items.ENCHANTED_GOLDEN_APPLE);
+    }
+
     public static boolean nearlyBroken(ItemStack stack) {
         return nearlyBroken(stack, BREAK_MARGIN);
     }
@@ -62,12 +67,16 @@ public final class ItemUtil {
 
     // True when a potion or a tipped arrow carries the effect.
     public static boolean carriesEffect(ItemStack stack, MobEffect effect) {
+        return carriesEffect(stack, carried -> carried == effect);
+    }
+
+    public static boolean carriesEffect(ItemStack stack, Predicate<MobEffect> effect) {
         PotionContents contents = stack.get(DataComponents.POTION_CONTENTS);
         if (contents == null) {
             return false;
         }
         for (MobEffectInstance instance : contents.getAllEffects()) {
-            if (instance.getEffect().value() == effect) {
+            if (effect.test(instance.getEffect().value())) {
                 return true;
             }
         }

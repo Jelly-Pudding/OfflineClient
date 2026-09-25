@@ -51,7 +51,7 @@ public final class AutoBreed extends Module {
         "Feeds the same animal again once its cooldown has passed.", false);
     private final NumberSetting interval = new NumberSetting("Interval",
         "Ticks before the same animal is fed again. Love lasts thirty seconds and the cooldown five minutes.",
-        6600, 100, 24000, 100, " ticks").min(1).under(repeat);
+        FULL_COOLDOWN, 100, 24000, 100, " ticks").min(1).under(repeat);
     private final BoolSetting rotate = new BoolSetting("Rotate",
         "Turn towards the animal on the server side.", true);
 

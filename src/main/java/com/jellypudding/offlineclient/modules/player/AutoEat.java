@@ -12,7 +12,9 @@ import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.Feeding;
 import com.jellypudding.offlineclient.util.InventoryUtil;
+import com.jellypudding.offlineclient.util.ItemUtil;
 import com.jellypudding.offlineclient.util.Modules;
+import com.jellypudding.offlineclient.util.TakeFrom;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.InteractionHand;
@@ -40,12 +42,10 @@ public final class AutoEat extends Module {
     // A golden apple takes a moment to land. Rechecking too early eats a second one.
     private static final int HEAL_SETTLE_TICKS = 30;
 
-    // The first slot of the backpack. Empty bowls are gathered there.
-    private static final int BOWL_SLOT = 9;
+    // Empty bowls are gathered in the first backpack slot.
+    private static final int BOWL_SLOT = InventoryUtil.MAIN_START;
 
     public enum Priority { BEST_HUNGER, BEST_SATURATION, BEST_OVERALL }
-
-    public enum TakeFrom { HANDS, HOTBAR, INVENTORY }
 
     public enum Trigger { HUNGER, HEALTH, EITHER, BOTH }
 
@@ -83,11 +83,7 @@ public final class AutoEat extends Module {
         "Food that never gets eaten. Click to pick it.", BuiltInRegistries.ITEM,
         List.of(Items.ROTTEN_FLESH, Items.SPIDER_EYE, Items.POISONOUS_POTATO,
             Items.PUFFERFISH, Items.CHICKEN, Items.SUSPICIOUS_STEW, Items.CHORUS_FRUIT));
-    private final EnumSetting<TakeFrom> takeFrom = new EnumSetting<>("Take from",
-        "Where food may be taken from.", TakeFrom.INVENTORY)
-        .describe(TakeFrom.HANDS, "Only eats what is already in your hands.")
-        .describe(TakeFrom.HOTBAR, "Picks food from the hotbar only.")
-        .describe(TakeFrom.INVENTORY, "Borrows food from anywhere in the inventory.");
+    private final EnumSetting<TakeFrom> takeFrom = TakeFrom.setting("food", TakeFrom.INVENTORY);
     private final BoolSetting swapBack = new BoolSetting("Swap back",
         "Returns to the slot you were holding once the meal is over.", true)
         .under(takeFrom, TakeFrom.HOTBAR, TakeFrom.INVENTORY);
@@ -220,16 +216,10 @@ public final class AutoEat extends Module {
         };
     }
 
-    // Hands mode searches no slots. Hotbar mode or an open screen searches the
-    // hotbar. Anything else searches the whole inventory.
+    // An open screen keeps the search to the hotbar.
     private int slotLimit() {
-        if (takeFrom.is(TakeFrom.HANDS)) {
-            return 0;
-        }
-        if (takeFrom.is(TakeFrom.HOTBAR) || busy()) {
-            return InventoryUtil.HOTBAR_SIZE;
-        }
-        return InventoryUtil.WHOLE_INVENTORY;
+        int limit = takeFrom.getValue().limit();
+        return busy() ? Math.min(limit, InventoryUtil.HOTBAR_SIZE) : limit;
     }
 
     // The held slot always counts. The rest only up to the limit.
@@ -272,8 +262,8 @@ public final class AutoEat extends Module {
             Entity entity = entityHit.getEntity();
             return entity instanceof AbstractVillager || entity instanceof TamableAnimal;
         }
-        return mc.hitResult instanceof BlockHitResult blockHit
-            && BlockUtil.opensOnClick(BlockUtil.state(blockHit.getBlockPos()));
+        BlockHitResult aimed = BlockUtil.aimedBlock();
+        return aimed != null && BlockUtil.opensOnClick(BlockUtil.state(aimed.getBlockPos()));
     }
 
     // Soup servers want the empties in one place for a refill.
@@ -334,8 +324,7 @@ public final class AutoEat extends Module {
     private int findHealing(int limit) {
         if (offhandUsable()) {
             ItemStack held = mc.player.getOffhandItem();
-            if ((held.is(Items.GOLDEN_APPLE) || held.is(Items.ENCHANTED_GOLDEN_APPLE))
-                && !avoid.contains(held.getItem())) {
+            if (ItemUtil.isGoldenApple(held) && !avoid.contains(held.getItem())) {
                 return Inventory.SLOT_OFFHAND;
             }
         }
@@ -449,6 +438,6 @@ public final class AutoEat extends Module {
 
     // Golden apples are kept back for the Health check.
     private boolean isHealing(ItemStack stack) {
-        return stack.is(Items.GOLDEN_APPLE) || stack.is(Items.ENCHANTED_GOLDEN_APPLE);
+        return ItemUtil.isGoldenApple(stack);
     }
 }

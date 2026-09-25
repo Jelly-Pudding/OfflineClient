@@ -64,8 +64,8 @@ public final class XRay extends MeshFilterModule {
     // The alpha the chunk mesher gives this block. Minus one leaves it alone
     // and zero skips it. WallHack drives the same path with the list turned round.
     public static int meshAlphaFor(BlockGetter level, BlockState state, BlockPos pos) {
-        XRay xray = Modules.get(XRay.class);
-        if (xray != null && xray.isEnabled()) {
+        XRay xray = Modules.active(XRay.class);
+        if (xray != null) {
             return xray.alphaFor(level, state, pos);
         }
         WallHack wallHack = Modules.get(WallHack.class);
@@ -111,7 +111,7 @@ public final class XRay extends MeshFilterModule {
     }
 
     // A null position skips the exposed only check.
-    public boolean isVisible(BlockGetter level, Block block, BlockPos pos) {
+    private boolean isVisible(BlockGetter level, Block block, BlockPos pos) {
         if (!listed(block)) {
             return false;
         }

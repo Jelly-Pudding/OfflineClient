@@ -26,10 +26,6 @@ public final class ArmourElement extends HudElement {
     private static final int GAP = 2;
     private static final int BAR_HEIGHT = 2;
 
-    private static final EquipmentSlot[] WORN = {
-        EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET
-    };
-
     private final EnumSetting<HudLayout> layout = HudLayout.setting("Armour layout",
         "Which way the pieces are laid out.");
     private final EnumSetting<Wear> wear = new EnumSetting<>("Wear",
@@ -61,7 +57,7 @@ public final class ArmourElement extends HudElement {
         if (player == null) {
             return stacks;
         }
-        for (EquipmentSlot slot : WORN) {
+        for (EquipmentSlot slot : ItemUtil.ARMOR_SLOTS) {
             ItemStack stack = player.getItemBySlot(slot);
             if (!hideEmpty.isOn() || !stack.isEmpty()) {
                 stacks.add(stack);

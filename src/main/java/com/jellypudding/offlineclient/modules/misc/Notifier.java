@@ -15,11 +15,11 @@ import com.jellypudding.offlineclient.util.BoundedMap;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.WorldWatch;
 import net.minecraft.ChatFormatting;
-import net.minecraft.client.multiplayer.chat.GuiMessage;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ClientboundEntityEventPacket;
+import net.minecraft.network.protocol.game.ClientboundLoginPacket;
 import net.minecraft.network.protocol.game.ClientboundPlayerInfoRemovePacket;
 import net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket;
 import net.minecraft.sounds.SoundEvents;
@@ -142,7 +142,6 @@ public final class Notifier extends Module {
 
     private final Queue<Pending> queue = new LinkedBlockingQueue<>(MAX_PENDING);
     private final Deque<String> joinLeaveQueue = new ArrayDeque<>();
-    // Entity id to what we last knew about it.
     // The client removes some entities without a packet. None of these maps can be
     // trusted to empty itself.
     private final Map<Integer, Watched> watched = new BoundedMap<>(MAX_TRACKED);
@@ -169,6 +168,8 @@ public final class Notifier extends Module {
     @Override
     protected void onEnable() {
         reset();
+        // Switched on in a world the full list already came and the next packet is a real join.
+        firstTabPacket = !inGame();
     }
 
     @Override
@@ -193,6 +194,10 @@ public final class Notifier extends Module {
     @Subscribe
     private void onPacketReceive(PacketReceiveEvent event) {
         switch (event.getPacket()) {
+            case ClientboundLoginPacket _ -> {
+                tabNames.clear();
+                firstTabPacket = true;
+            }
             case ClientboundPlayerInfoUpdatePacket packet -> onTabUpdate(packet);
             case ClientboundPlayerInfoRemovePacket packet -> onTabRemove(packet);
             case ClientboundEntityEventPacket packet when packet.getEventId() == EntityEvent.PROTECTED_FROM_DEATH ->
@@ -434,15 +439,8 @@ public final class Notifier extends Module {
 
     private static void drop(String message) {
         String wanted = ChatFormatting.stripFormatting(message);
-        List<GuiMessage> all = mc.gui.hud.getChat().allMessages;
-        int max = Math.min(REPLACE_DEPTH, all.size());
-        for (int i = 0; i < max; i++) {
-            if (ChatFormatting.stripFormatting(all.get(i).content().getString()).contains(wanted)) {
-                all.remove(i);
-                mc.gui.hud.getChat().refreshTrimmedMessages();
-                return;
-            }
-        }
+        ChatUtil.removeRecent(mc.gui.hud.getChat(), REPLACE_DEPTH,
+            line -> ChatFormatting.stripFormatting(line).contains(wanted));
     }
 
     private boolean skip(String name) {

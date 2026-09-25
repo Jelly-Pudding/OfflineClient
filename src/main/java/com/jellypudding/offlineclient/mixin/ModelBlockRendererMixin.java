@@ -65,8 +65,8 @@ public abstract class ModelBlockRendererMixin {
         if (original) {
             return true;
         }
-        XRay xray = Modules.get(XRay.class);
-        if (xray == null || !xray.isEnabled() || !xray.isVisible(state.getBlock())) {
+        XRay xray = Modules.active(XRay.class);
+        if (xray == null || !xray.isVisible(state.getBlock())) {
             return false;
         }
         return !xray.isVisible(level.getBlockState(neighborPos).getBlock());
