@@ -31,6 +31,7 @@ public final class HudModule extends Module {
 
     private final HudManager manager = new HudManager();
     private final WatermarkElement watermark = new WatermarkElement();
+    private final InventoryElement inventory = new InventoryElement();
 
     // addSettings is final and files the settings away without handing out the module.
     @SuppressWarnings("this-escape")
@@ -41,7 +42,7 @@ public final class HudModule extends Module {
             new ArmourElement(), new PotionTimersElement(), new ItemCounterElement(),
             new TextElement(), new CombatElement(), new LagNotifierElement(),
             new CompassElement(), new PlayerListElement(), new ServerInfoElement(),
-            new InventoryElement(), new PlayerModelElement(), new HoleElement());
+            inventory, new PlayerModelElement(), new HoleElement());
         searchTags("overlay", "watermark", "module list", "info", "hud editor");
     }
 
@@ -59,6 +60,10 @@ public final class HudModule extends Module {
 
     public HudManager getManager() {
         return manager;
+    }
+
+    public boolean hidesGameHotbar() {
+        return inventory.hidesGameHotbar();
     }
 
     // A key on the HUD opens the editor. The switch in the GUI still turns it all off.

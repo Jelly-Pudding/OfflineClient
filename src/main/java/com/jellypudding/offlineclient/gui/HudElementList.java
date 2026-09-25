@@ -4,7 +4,6 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.hud.HudElement;
-import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.RenderUtil;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -113,6 +112,7 @@ public final class HudElementList extends PanelFrame {
         context.guiRenderState.up();
         if (over) {
             hovered = element;
+            host.setTooltip(element.getDescription());
         }
 
         int room = rowWidth - PAD * 2 - PILL_WIDTH - ARROW_ZONE;
@@ -152,19 +152,16 @@ public final class HudElementList extends PanelFrame {
         return false;
     }
 
+    // The same rules as a module row.
     private void clickRow(HudElement element, double mx, int button, int rowWidth) {
-        boolean onSwitch = mx >= getX() + rowWidth - ARROW_ZONE - PILL_WIDTH
-            && mx < getX() + rowWidth - ARROW_ZONE;
-        if (InputUtil.isLeft(button) && onSwitch) {
+        ModuleRow.clickRow(button, mx >= getX() + rowWidth - ARROW_ZONE, () -> {
             element.setActive(!element.isActive());
             OfflineClient.INSTANCE.getConfigManager().saveSoon();
-            return;
-        }
-        if (InputUtil.isLeft(button) || InputUtil.isRight(button)) {
+        }, () -> {
             if (!expanded.remove(element.getName())) {
                 expanded.add(element.getName());
             }
-        }
+        });
     }
 
     @Override

@@ -37,7 +37,7 @@ public final class VeinMiner extends Module {
     public enum Targets { ORES, ORES_AND_LOGS, ANY_BLOCK, LIST }
 
     private final NumberSetting range = new NumberSetting("Range",
-        "How far from your eyes a vein block may be.", 4.5, 1, 6, 0.1).min(1).max(6);
+        "How far from your eyes a vein block may be.", 4.5, 1, 6, 0.1).min(1);
     private final NumberSetting delay = new NumberSetting("Delay",
         "Ticks to wait between one block and the next.", 0, 0, 20, 1, " ticks").min(0);
     private final NumberSetting maxBlocks = new NumberSetting("Max blocks",

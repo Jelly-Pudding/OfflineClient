@@ -37,7 +37,7 @@ public final class AutoBreed extends Module {
             EntityTypes.STRIDER, EntityTypes.HOGLIN, EntityTypes.GOAT, EntityTypes.AXOLOTL,
             EntityTypes.FROG, EntityTypes.CAMEL, EntityTypes.SNIFFER, EntityTypes.ARMADILLO));
     private final NumberSetting range = new NumberSetting("Range",
-        "How close an animal has to be.", 4.5, 1, 6, 0.1).max(6);
+        "How close an animal has to be.", 4.5, 1, 6, 0.1);
     private final EnumSetting<Hand> hand = new EnumSetting<>("Hand",
         "Which hand holds the food.", Hand.MAIN_HAND);
     private final EnumSetting<Age> age = new EnumSetting<>("Age",

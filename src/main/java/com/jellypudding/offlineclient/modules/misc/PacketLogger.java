@@ -63,14 +63,14 @@ public final class PacketLogger extends Module {
     private final BoolSetting toFile = new BoolSetting("Log to file",
         "Writes each line into offlineclient/packet-logs inside your game folder.", false);
     private final NumberSetting flushSeconds = new NumberSetting("Flush interval",
-        "Seconds between one write to the file and the next.", 1, 1, 10, 1, "s").min(1).max(60)
+        "Seconds between one write to the file and the next.", 1, 1, 10, 1, "s").min(1)
         .under(toFile);
     private final NumberSetting maxFileSize = new NumberSetting("Max file size",
-        "A new file is started once this one gets bigger.", 10, 1, 100, 1, " MB").min(1).max(1000)
+        "A new file is started once this one gets bigger.", 10, 1, 100, 1, " MB").min(1)
         .under(toFile);
     private final NumberSetting maxTotalSize = new NumberSetting("Max total size",
         "The oldest files are deleted once the folder gets bigger.", 50, 1, 500, 1, " MB")
-        .min(1).max(10000)
+        .min(1)
         .under(toFile);
 
     // Filled from the netty thread and drained on the main thread.

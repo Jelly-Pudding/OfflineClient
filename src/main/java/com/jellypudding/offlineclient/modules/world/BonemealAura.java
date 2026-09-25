@@ -33,7 +33,7 @@ import java.util.List;
 public final class BonemealAura extends Module {
 
     private final NumberSetting range = new NumberSetting("Range",
-        "How far from your eyes to reach.", 5, 1, 6, 0.1).max(6);
+        "How far from your eyes to reach.", 5, 1, 6, 0.1);
     private final BoolSetting multi = new BoolSetting("Multi meal",
         "Feeds every plant in reach in one tick. Fast but obvious to an anti cheat.", false);
     private final BoolSetting lineOfSight = new BoolSetting("Line of sight",

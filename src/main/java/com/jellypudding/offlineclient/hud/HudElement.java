@@ -45,21 +45,22 @@ public abstract class HudElement {
         x = percent(" x", "How far across the screen it sits.", startX);
         y = percent(" y", "How far down the screen it sits.", startY);
         scale = new NumberSetting(name + " scale", "How big it is drawn.",
-            startScale, 0.25, 2, 0.05, "x").min(0.25).max(4).under(active);
+            startScale, 0.25, 2, 0.05, "x").min(0.25).max(4);
         add(x, y, scale);
     }
 
     private NumberSetting percent(String suffix, String description, double start) {
         return new NumberSetting(name + suffix, description, start, 0, 100, 0.5, "%")
-            .min(0).max(100).under(active);
+            .min(0).max(100);
     }
 
     // Files settings in display order. Anything not already a sub option of
-    // something else goes under the element switch.
+    // something else goes under the element switch. Like a module's settings
+    // they show whether the element is on or off.
     protected final void add(Setting<?>... more) {
         for (Setting<?> setting : more) {
             if (setting.getParent() == null) {
-                setting.under(active);
+                setting.under(active, () -> true);
             }
             settings.add(setting);
         }

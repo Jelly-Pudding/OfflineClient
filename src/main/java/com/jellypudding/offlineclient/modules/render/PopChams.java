@@ -58,7 +58,7 @@ public final class PopChams extends Module {
     private static final int MAX_GHOSTS = 32;
 
     private final NumberSetting duration = new NumberSetting("Duration",
-        "How long the copy takes to fade away.", 1.5, 0.5, 5, 0.1, "s").min(0.1).max(30);
+        "How long the copy takes to fade away.", 1.5, 0.5, 5, 0.1, "s").min(0.1);
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode", "How the copy is drawn.", Mode.MODEL)
         .describe(Mode.MODEL, "The textured player model in one tint.")
         .describe(Mode.WIREFRAME, "Boxes around each part of the model.");

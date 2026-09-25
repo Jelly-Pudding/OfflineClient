@@ -27,9 +27,9 @@ public final class SpawnEsp extends Module {
     private static final double LIFT = 0.02;
 
     private final NumberSetting horizontal = new NumberSetting("Horizontal range",
-        "How far sideways to look.", 16, 4, 48, 2, " blocks").min(1).max(64);
+        "How far sideways to look.", 16, 4, 48, 2, " blocks").min(1);
     private final NumberSetting vertical = new NumberSetting("Vertical range",
-        "How far up and down to look.", 6, 1, 24, 1, " blocks").max(64);
+        "How far up and down to look.", 6, 1, 24, 1, " blocks");
     private final NumberSetting light = new NumberSetting("Light",
         "Highest block light a spot may have.", 0, 0, 15, 1).min(0).max(15);
     private final NumberSetting limit = new NumberSetting("Limit",

@@ -27,7 +27,7 @@ public final class TriggerBot extends Module {
     private static final double SCAN_MARGIN = 4;
 
     private final NumberSetting range = new NumberSetting("Range",
-        "Maximum reach in blocks.", 4.2, 1, 10, 0.05).max(10);
+        "Maximum reach in blocks.", 4.2, 1, 10, 0.05);
     private final NumberSetting fov = new NumberSetting("FOV",
         "Only hit what sits within this angle of your view. Small values act as a crosshair check.",
         30, 30, 360, 10, " degrees").min(1).max(360);

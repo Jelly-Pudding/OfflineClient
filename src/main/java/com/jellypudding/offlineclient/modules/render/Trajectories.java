@@ -128,7 +128,7 @@ public final class Trajectories extends Module {
         "Starts your own arc a few ticks out instead of in your face.",
         3, 0, 20, 1, " ticks").min(0);
     private final NumberSetting steps = new NumberSetting("Steps",
-        "How many ticks of flight to predict.", 200, 20, 500, 10).min(1).max(2000);
+        "How many ticks of flight to predict.", 200, 20, 500, 10).min(1);
     private final BoxStyle style = new BoxStyle(BoxStyle.Shape.BOTH, 35f);
     private final BoolSetting resultColour = new BoolSetting("Colour by result",
         "The arc turns green when it lands on a block and red when it hits something.", true);

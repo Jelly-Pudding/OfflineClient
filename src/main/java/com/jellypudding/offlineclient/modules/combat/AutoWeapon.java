@@ -86,7 +86,7 @@ public final class AutoWeapon extends Module {
     }
 
     private void arm(LivingEntity target) {
-        int best = bestSlot(target);
+        int best = bestSlot(target, InventoryUtil.HOTBAR_SIZE);
         if (best != -1 && best != InventoryUtil.selectedSlot()) {
             slots.select(best);
         }
@@ -125,11 +125,12 @@ public final class AutoWeapon extends Module {
         slots.restore();
     }
 
-    // Read by KillAura ahead of its hits.
-    public int bestSlot(LivingEntity target) {
+    // Read by KillAura ahead of its hits. The limit is how far into the inventory to look.
+    public int bestSlot(LivingEntity target, int limit) {
         if (prefer.is(Prefer.SPEED)) {
-            return WeaponUtil.fastestWeaponSlot(antiBreak.isOn());
+            return WeaponUtil.fastestWeaponSlot(antiBreak.isOn(), limit);
         }
-        return WeaponUtil.bestWeaponSlot(target, prefer.is(Prefer.SWORD), threshold.getValue(), antiBreak.isOn());
+        return WeaponUtil.bestWeaponSlot(target, prefer.is(Prefer.SWORD), threshold.getValue(),
+            antiBreak.isOn(), limit);
     }
 }

@@ -15,7 +15,6 @@ import org.joml.Vector3f;
 // Your own body drawn the way the inventory screen draws it.
 public final class PlayerModelElement extends HudElement {
 
-
     // The inventory screen fits a body of thirty into a box seventy tall.
     private static final float FIT = 30f / 70f;
     // The same box is narrower than it is tall.
@@ -54,13 +53,19 @@ public final class PlayerModelElement extends HudElement {
         if (background.isOn()) {
             context.fill(0, 0, width(font), height(font), backgroundColor.getColor());
         }
-        LivingEntityRenderState state = EntityPreview.flatState(player);
+        LivingEntityRenderState state = EntityPreview.flatState(player,
+            OfflineClient.MC.getDeltaTracker().getGameTimeDeltaPartialTick(true));
         if (state == null) {
             return;
         }
-        state.bodyRot = follow.isOn() ? player.getYRot() + 180 : angle.getFloat();
-        state.yRot = state.bodyRot;
-        state.xRot = follow.isOn() ? player.getXRot() : 0;
+        // Facing south faces the screen. The state already turns the head on top of the body.
+        if (follow.isOn()) {
+            state.bodyRot += 180;
+        } else {
+            state.bodyRot = angle.getFloat();
+            state.yRot = 0;
+            state.xRot = 0;
+        }
         // A body scaled by a potion has to be measured at its normal size.
         state.boundingBoxWidth /= state.scale;
         state.boundingBoxHeight /= state.scale;

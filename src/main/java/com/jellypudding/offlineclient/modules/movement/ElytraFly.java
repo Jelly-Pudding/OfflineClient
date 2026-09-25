@@ -110,7 +110,7 @@ public final class ElytraFly extends Module {
         .under(mode, Mode.CONTROL);
     private final NumberSetting fallMultiplier = new NumberSetting("Fall multiplier",
         "Scales the natural sink whilst Hold height is off. Lower values sink slower.",
-        1, 0, 1, 0.01, "x").min(0).max(1)
+        1, 0, 1, 0.01, "x").min(0)
         .under(holdHeight, () -> mode.is(Mode.CONTROL) && !holdHeight.isOn());
     private final BoolSetting acceleration = new BoolSetting("Acceleration",
         "Builds the horizontal speed up over time instead of applying it at once.", false)
@@ -127,7 +127,7 @@ public final class ElytraFly extends Module {
         .under(mode, Mode.CONTROL, Mode.PACKET);
     private final NumberSetting autoPilotHeight = new NumberSetting("Minimum height",
         "Auto pilot only pushes forward above this height.", 120, -64, 320, 1, "")
-        .min(-128).max(2000)
+        .min(-128)
         .under(autoPilot);
     private final NumberSetting cruiseSpeed = new NumberSetting("Cruise speed",
         "The speed the dive and climb cycle aims for.", 30, 10, 60, 1, " bps")
@@ -140,19 +140,19 @@ public final class ElytraFly extends Module {
         .under(mode, Mode.CRUISE);
     private final NumberSetting lowerHeight = new NumberSetting("Lower height",
         "Starts climbing once you sink to this height.", 180, -64, 320, 1, "")
-        .min(-128).max(2000)
+        .min(-128)
         .under(altitude, Altitude.BAND);
     private final NumberSetting upperHeight = new NumberSetting("Upper height",
         "Starts diving once you rise to this height.", 220, -64, 320, 1, "")
-        .min(-128).max(2000)
+        .min(-128)
         .under(altitude, Altitude.BAND);
     private final NumberSetting pitchUpSpeed = new NumberSetting("Pitch up speed",
         "Degrees a tick the nose comes up when a climb starts.", 6, 0.5, 20, 0.05, " degrees")
-        .min(0.5).max(90)
+        .min(0.5)
         .under(mode, Mode.CRUISE);
     private final NumberSetting pitchDownSpeed = new NumberSetting("Pitch down speed",
         "Degrees a tick the nose goes down when a dive starts.", 6, 0.5, 20, 0.05, " degrees")
-        .min(0.5).max(90)
+        .min(0.5)
         .under(mode, Mode.CRUISE);
     private final BoolSetting rockets = new BoolSetting("Rockets",
         "Fires a rocket from your hotbar whenever the cycle runs out of speed.", false)

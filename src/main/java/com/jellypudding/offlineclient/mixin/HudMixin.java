@@ -2,6 +2,7 @@ package com.jellypudding.offlineclient.mixin;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.events.Render2DEvent;
+import com.jellypudding.offlineclient.modules.misc.HudModule;
 import com.jellypudding.offlineclient.modules.render.Blur;
 import com.jellypudding.offlineclient.modules.render.ClearView;
 import com.jellypudding.offlineclient.modules.render.ItemHighlight;
@@ -84,6 +85,15 @@ public class HudMixin {
         int color = highlight.hotbarColorFor(stack);
         if (color != 0) {
             context.fill(x, y, x + 16, y + 16, color);
+        }
+    }
+
+    // The inventory element can take the hotbar's place. Hearts and hunger still draw.
+    @Inject(method = "extractItemHotbar", at = @At("HEAD"), cancellable = true)
+    private void onItemHotbar(CallbackInfo ci) {
+        HudModule hud = Modules.active(HudModule.class);
+        if (hud != null && hud.hidesGameHotbar()) {
+            ci.cancel();
         }
     }
 

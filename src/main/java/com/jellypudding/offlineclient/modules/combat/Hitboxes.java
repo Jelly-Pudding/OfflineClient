@@ -20,7 +20,7 @@ public final class Hitboxes extends Module {
 
     private final NumberSetting expand = new NumberSetting("Expand",
         "How far the hitbox grows on every side.", 0.25, 0.05, 1, 0.05, " blocks")
-        .min(0).max(2);
+        .min(0);
     private final RegistryListSetting<EntityType<?>> entities = new RegistryListSetting<>(
         "Entities", "Kinds of entity to grow. Arrows only take the bigger box on these kinds.",
         BuiltInRegistries.ENTITY_TYPE, List.of(EntityTypes.PLAYER));

@@ -145,8 +145,7 @@ public final class HudEditorScreen extends Screen {
         renderPanel(context, mouseX, mouseY, boxes);
     }
 
-    // The name above the box and its size after it whilst hovered. The size keeps to
-    // the right edge of the box when there is room and never runs into the name.
+    // The name above the box and its size right after it whilst hovered.
     private void renderLabel(GuiGraphicsExtractor context, int[] box, HudElement element,
                              boolean over) {
         String name = element.getName();
@@ -158,9 +157,7 @@ public final class HudEditorScreen extends Screen {
         int y = labelY(box);
         context.text(font, name, x, y, over ? GuiTheme.accentText() : GuiTheme.textDim(), true);
         if (size != null) {
-            int flush = Math.min(box[0] + box[2] + 4, width) - sizeWidth;
-            context.text(font, size, Math.max(x + nameWidth + LABEL_SPACE, flush), y,
-                GuiTheme.textDim(), true);
+            context.text(font, size, x + nameWidth + LABEL_SPACE, y, GuiTheme.textDim(), true);
         }
     }
 

@@ -303,7 +303,7 @@ public final class AttributeSwap extends Module {
     private int bestSlot(LivingEntity target) {
         ItemStack held = mc.player.getMainHandItem();
         if (shieldBreaker.isOn() && target.isBlocking() && !held.is(ItemTags.AXES)) {
-            int axeSlot = WeaponUtil.bestAxeSlot(target, antiBreak.isOn());
+            int axeSlot = WeaponUtil.bestAxeSlot(target, antiBreak.isOn(), InventoryUtil.HOTBAR_SIZE);
             if (axeSlot != -1) {
                 return axeSlot;
             }

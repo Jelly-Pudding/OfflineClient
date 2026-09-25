@@ -14,6 +14,7 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChunkScanner;
 import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ChunkMap;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 
@@ -33,7 +34,7 @@ public final class TunnelEsp extends Module {
     }
 
     private final NumberSetting range = new NumberSetting("Range",
-        "Chunk radius to search around you.", 4, 1, 8, 1, " chunks").max(12);
+        "Chunk radius to search around you.", 4, 1, 8, 1, " chunks").max(ChunkMap.MAX_VIEW_DISTANCE);
     private final NumberSetting bottom = new NumberSetting("Bottom",
         "Lowest height to search.", -60, -64, 320, 4).min(-2048).max(2048);
     private final NumberSetting top = new NumberSetting("Top",

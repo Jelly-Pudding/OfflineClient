@@ -29,7 +29,7 @@ public final class MessageAura extends Module {
     private final BoolSetting once = new BoolSetting("Once each",
         "Messages a player only the first time you see them.", true);
     private final NumberSetting delay = new NumberSetting("Delay",
-        "Ticks between one message and the next.", 20, 0, 200, 1, " ticks").min(0).max(1200);
+        "Ticks between one message and the next.", 20, 0, 200, 1, " ticks").min(0);
 
     private final Deque<String> queue = new ArrayDeque<>();
     private final LinkedHashSet<String> told = new LinkedHashSet<>();

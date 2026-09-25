@@ -74,7 +74,7 @@ public final class Esp extends Module {
         "Furthest an entity can be and still show.", 128, 16, 256, 8, " blocks").min(1);
     private final NumberSetting nearFade = new NumberSetting("Near fade",
         "Entities closer than this to the camera fade out.",
-        3, 0, 12, 0.5, " blocks").min(0).max(32);
+        3, 0, 12, 0.5, " blocks").min(0);
     private final BoolSetting highlightTarget = new BoolSetting("Highlight target",
         "The entity under your crosshair gets its own colour even if its kind is not picked.", false);
     private final ColorSetting targetColor = new ColorSetting("Target colour",

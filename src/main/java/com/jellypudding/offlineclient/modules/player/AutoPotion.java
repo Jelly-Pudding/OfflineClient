@@ -38,7 +38,7 @@ public final class AutoPotion extends Module {
 
     private final NumberSetting health = new NumberSetting("Health",
         "Drink a healing potion at or below this many hearts. Zero turns it off.",
-        7, 0, 10, 0.5, " hearts").min(0).max(20);
+        7, 0, 10, 0.5, " hearts").min(0);
     private final RegistryListSetting<Item> potions = new RegistryListSetting<>("Potions",
         "Bottles that may be drunk. Click to pick them.", BuiltInRegistries.ITEM,
         List.of(Items.POTION));

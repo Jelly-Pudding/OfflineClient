@@ -72,7 +72,7 @@ public final class AutoEat extends Module {
     private final NumberSetting health = new NumberSetting("Health",
         "Start eating at or below this many hearts. A golden apple is reached for first and other food after. "
             + "Zero turns it off.",
-        5, 0, 10, 0.5, " hearts").min(0).max(20)
+        5, 0, 10, 0.5, " hearts").min(0)
         .under(trigger, Trigger.HEALTH, Trigger.EITHER, Trigger.BOTH);
     private final EnumSetting<Priority> priority = new EnumSetting<>("Priority",
         "Which food to reach for first.", Priority.BEST_HUNGER)

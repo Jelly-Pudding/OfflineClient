@@ -42,7 +42,7 @@ public final class EntityPreview implements ClientTooltipComponent {
     @Override
     public void extractImage(Font font, int x, int y, int tooltipWidth, int tooltipHeight,
                              GuiGraphicsExtractor context) {
-        LivingEntityRenderState state = flatState(entity);
+        LivingEntityRenderState state = flatState(entity, 1);
         if (state == null) {
             return;
         }
@@ -57,9 +57,9 @@ public final class EntityPreview implements ClientTooltipComponent {
     }
 
     // A living entity lit fully with no shadow or outline. Null for anything else.
-    public static LivingEntityRenderState flatState(LivingEntity entity) {
+    public static LivingEntityRenderState flatState(LivingEntity entity, float partialTick) {
         EntityRenderState raw = OfflineClient.MC.getEntityRenderDispatcher().getRenderer(entity)
-            .createRenderState(entity, 1f);
+            .createRenderState(entity, partialTick);
         if (!(raw instanceof LivingEntityRenderState state)) {
             return null;
         }

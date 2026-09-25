@@ -22,7 +22,7 @@ import java.util.concurrent.ThreadLocalRandom;
 public final class BuildRandom extends Module {
 
     private final NumberSetting range = new NumberSetting("Range",
-        "How far from your eyes a block may go.", 5, 1, 6, 0.05).min(1).max(6);
+        "How far from your eyes a block may go.", 5, 1, 6, 0.05).min(1);
     private final NumberSetting attempts = new NumberSetting("Attempts",
         "Random spots tried each tick before giving up. More builds faster and lags more.",
         128, 1, 1024, 1).min(1);

@@ -14,7 +14,7 @@ import com.jellypudding.offlineclient.util.AttackTimer;
 import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
-import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
+import com.jellypudding.offlineclient.util.InventoryUtil.HotbarLoan;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.RotationManager;
 import com.jellypudding.offlineclient.util.RotationPriority;
@@ -128,6 +128,9 @@ public final class KillAura extends Module {
 
     private final BoolSetting autoWeapon = new BoolSetting("Auto weapon",
         "Holds your best weapon whilst there is something to hit.", false);
+    private final BoolSetting weaponFromInventory = new BoolSetting("Search inventory",
+        "Also borrows a better weapon from the rest of your inventory and puts it back afterwards.",
+        false).under(autoWeapon);
     private final BoolSetting weaponSwapBack = new BoolSetting("Swap back",
         "Returns to the slot you had once nothing is left to hit.", false)
         .under(autoWeapon);
@@ -159,7 +162,7 @@ public final class KillAura extends Module {
         "Draws a box inside each target that shrinks and reddens as it loses health.", true);
 
     private final AttackTimer timer = new AttackTimer();
-    private final SlotSwap slots = new SlotSwap();
+    private final HotbarLoan loan = new HotbarLoan();
     private final List<LivingEntity> targets = new ArrayList<>();
     private int switchTimer;
 
@@ -173,7 +176,7 @@ public final class KillAura extends Module {
         addSettings(extraMobs, ignoredMobs, filter.invisibleRow(), priority, maxTargets, rotate,
             rotateSpeed);
         addSettings(timer.settings());
-        addSettings(autoWeapon, weaponSwapBack, shields, onlyWithWeapon);
+        addSettings(autoWeapon, weaponFromInventory, weaponSwapBack, shields, onlyWithWeapon);
         addSettings(weapons.settings());
         addSettings(onlyOnClick, ignoreCooldown, switchDelay, swing, pauseOnUse, pauseOnContainers,
             pauseOnCrystals, pauseOnLag, showTarget);
@@ -193,7 +196,7 @@ public final class KillAura extends Module {
     @Override
     protected void onEnable() {
         timer.clear();
-        slots.forget();
+        loan.forget();
         switchTimer = 0;
         targets.clear();
     }
@@ -298,7 +301,8 @@ public final class KillAura extends Module {
 
     // Takes up the best weapon for the target. The server judges a hit by the item held
     // at the end of the last tick. A hit in the tick of a swap waits for the next one.
-    // False whilst it waits or when a raised shield is left alone.
+    // False whilst it waits or when a raised shield is left alone. A swap that cannot
+    // be made leaves the held item to hit with.
     private boolean armWeapon(LivingEntity target) {
         boolean blocking = target.isBlocking();
         if (blocking && shields.is(Shields.IGNORE)) {
@@ -307,30 +311,30 @@ public final class KillAura extends Module {
         if (!autoWeapon.isOn()) {
             return true;
         }
+        int limit = weaponFromInventory.isOn() ? InventoryUtil.WHOLE_INVENTORY : InventoryUtil.HOTBAR_SIZE;
         // An axe staggers a raised shield whilst a sword bounces off it.
         int best = -1;
         if (blocking && shields.is(Shields.BREAK)) {
-            best = WeaponUtil.bestAxeSlot(target, true);
+            best = WeaponUtil.bestAxeSlot(target, true, limit);
         }
         if (best == -1) {
             AutoWeapon chooser = Modules.active(AutoWeapon.class);
-            best = chooser != null ? chooser.bestSlot(target) : WeaponUtil.bestWeaponSlot(target);
+            best = chooser != null ? chooser.bestSlot(target, limit) : WeaponUtil.bestWeaponSlot(target, limit);
         }
         if (best == -1 || best == InventoryUtil.selectedSlot()) {
             return true;
         }
-        slots.select(best);
-        if (!weaponSwapBack.isOn()) {
-            slots.forget();
-        }
-        return false;
+        return !loan.select(best);
     }
 
+    // A borrowed weapon always goes home. The old slot only comes back when the
+    // player has not picked another since.
     private void putWeaponAway() {
-        if (weaponSwapBack.isOn() && inGame()) {
-            slots.restoreIfMine();
+        if (!inGame() || mc.player.isDeadOrDying()) {
+            // Respawn hands out a fresh inventory.
+            loan.forget();
         } else {
-            slots.forget();
+            loan.giveBack(weaponSwapBack.isOn() && loan.stillMine());
         }
     }
 

@@ -46,7 +46,7 @@ public abstract class AreaPlacer extends Module {
         range = new NumberSetting("Range",
             "How far you can reach to place.", 4.5, 1, 6, 0.1).min(1);
         wallsRange = new NumberSetting("Walls range",
-            "How far to place with no clear view from your eyes.", 4.5, 0, 6, 0.1).min(0).max(6);
+            "How far to place with no clear view from your eyes.", 4.5, 0, 6, 0.1).min(0);
         blocks = new RegistryListSetting<>("Blocks", blocksDescription,
             BuiltInRegistries.BLOCK, defaultBlocks);
         perTick = new NumberSetting("Blocks per tick",

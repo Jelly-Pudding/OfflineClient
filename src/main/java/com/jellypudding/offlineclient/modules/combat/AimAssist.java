@@ -27,7 +27,7 @@ public final class AimAssist extends Module {
     public enum AimPoint { AUTO, HEAD, CENTRE, FEET }
 
     private final NumberSetting range = new NumberSetting("Range",
-        "How far away a target can be.", 4.5, 1, 6, 0.05, " blocks").min(1).max(6);
+        "How far away a target can be.", 4.5, 1, 6, 0.05, " blocks").min(1);
     private final NumberSetting speed = new NumberSetting("Turn speed",
         "Degrees a second the view turns at.", 600, 10, 3600, 10, " degrees a second").min(10);
     private final NumberSetting fov = new NumberSetting("Field of view",

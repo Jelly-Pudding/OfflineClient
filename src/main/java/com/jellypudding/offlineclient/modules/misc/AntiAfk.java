@@ -44,10 +44,10 @@ public final class AntiAfk extends Module {
         "Finds a path to each random spot instead of walking straight at it.", false);
     private final NumberSetting aiRange = new NumberSetting("AI range",
         "How far from where you started the random goals may be.", 16, 1, 64, 1, " blocks")
-        .min(1).max(128).under(useAi);
+        .min(1).under(useAi);
     private final NumberSetting walkRange = new NumberSetting("Walk range",
         "How far from where you started the plain walks go. One is a shuffle on the spot.",
-        1, 1, 64, 1, " blocks").min(1).max(128).unless(useAi);
+        1, 1, 64, 1, " blocks").min(1).unless(useAi);
     private final NumberSetting waitTime = new NumberSetting("Wait time",
         "Seconds of standing still between one walk and the next.", 2.5, 0, 60, 0.5, "s").min(0);
     private final NumberSetting waitSpread = new NumberSetting("Wait spread",
@@ -80,7 +80,7 @@ public final class AntiAfk extends Module {
     private final BoolSetting sendMessages = new BoolSetting("Send messages",
         "Sends chat lines on a timer.", false);
     private final NumberSetting messageDelay = new NumberSetting("Message delay",
-        "Seconds between messages.", 15, 1, 30, 1, "s").min(1).max(600)
+        "Seconds between messages.", 15, 1, 30, 1, "s").min(1)
         .under(sendMessages);
     private final TextLines lines = new TextLines("Messages",
         "How many lines to rotate through.", "The text to send. Click to type it.", "I am still here",

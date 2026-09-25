@@ -40,10 +40,10 @@ public final class Excavator extends Module {
 
     private final NumberSetting range = new NumberSetting("Range",
         "How far from your eyes a block may be.",
-        4.5, 1, 6, 0.1).min(1).max(6);
+        4.5, 1, 6, 0.1).min(1);
     private final NumberSetting maxBlocks = new NumberSetting("Max blocks",
         "The most blocks one box may hold.", 4096, 64, 16384, 64)
-        .min(1).max(65536);
+        .min(1);
     private final EnumSetting<Speed> speed = new EnumSetting<>("Speed",
         "How the blocks come down.", Speed.LEGIT)
         .describe(Speed.LEGIT, "One block at a time like a held click.")

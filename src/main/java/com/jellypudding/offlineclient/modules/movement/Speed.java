@@ -39,7 +39,7 @@ public final class Speed extends Module {
         .visibleWhen(() -> mode.is(Mode.STRAFE));
     private final NumberSetting hopBoost = new NumberSetting("Hop boost",
         "Multiplies your speed on every hop. Much past 1.6 the server pulls you back.",
-        1.3, 1, 2, 0.05, "x").min(1).max(20)
+        1.3, 1, 2, 0.05, "x").min(1)
         .visibleWhen(() -> mode.is(Mode.BHOP));
     private final BoolSetting capSpeed = new BoolSetting("Speed cap",
         "Limits your top speed.", false);

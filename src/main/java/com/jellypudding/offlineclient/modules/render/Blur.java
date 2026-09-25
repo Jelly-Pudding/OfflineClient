@@ -21,7 +21,7 @@ public final class Blur extends Module {
         "How far the blur spreads.", 5, 1, GameRenderer.MAX_BLUR_RADIUS, 1, "")
         .min(1).max(GameRenderer.MAX_BLUR_RADIUS);
     private final NumberSetting fadeTime = new NumberSetting("Fade time",
-        "How long the blur takes to come and go.", 100, 0, 500, 10, " ms").min(0).max(2000);
+        "How long the blur takes to come and go.", 100, 0, 500, 10, " ms").min(0);
     private final BoolSetting ownMenus = new BoolSetting("Own menus",
         "Blur behind the ClickGUI and the other menus of this client.", true);
     private final BoolSetting inventories = new BoolSetting("Inventories",

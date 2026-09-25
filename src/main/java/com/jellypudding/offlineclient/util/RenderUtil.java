@@ -176,9 +176,30 @@ public final class RenderUtil {
 
     public static void chevron(GuiGraphicsExtractor context, int x, int y, boolean down, int color) {
         for (int i = 0; i < CHEVRON_HEIGHT; i++) {
-            int row = down ? y + i : y + CHEVRON_HEIGHT - 1 - i;
+            int row = chevronRow(y, i, down);
             context.fill(x + i, row, x + CHEVRON_WIDTH - i, row + 1, color);
         }
+    }
+
+    // True when the pixel under the pointer is within reach of a pixel the chevron
+    // fills. The empty corners either side of its point stay out.
+    public static boolean overChevron(int mx, int my, int x, int y, boolean down, double reach) {
+        double px = mx + 0.5;
+        double py = my + 0.5;
+        for (int i = 0; i < CHEVRON_HEIGHT; i++) {
+            int row = chevronRow(y, i, down);
+            double dx = Math.max(0, Math.max(x + i - px, px - (x + CHEVRON_WIDTH - i)));
+            double dy = Math.max(0, Math.max(row - py, py - (row + 1)));
+            if (dx * dx + dy * dy <= reach * reach) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // The widest row sits at the open end.
+    private static int chevronRow(int y, int i, boolean down) {
+        return down ? y + i : y + CHEVRON_HEIGHT - 1 - i;
     }
 
     public static final int STAR_SIZE = 11;

@@ -40,9 +40,9 @@ public final class HoleEsp extends Module {
     private final BlockPos.MutableBlockPos under = new BlockPos.MutableBlockPos();
 
     private final NumberSetting horizontal = new NumberSetting("Horizontal range",
-        "How far sideways to look for holes.", 8, 1, 16, 1, " blocks").max(32);
+        "How far sideways to look for holes.", 8, 1, 16, 1, " blocks");
     private final NumberSetting vertical = new NumberSetting("Vertical range",
-        "How far up and down to look for holes.", 4, 1, 16, 1, " blocks").max(64);
+        "How far up and down to look for holes.", 4, 1, 16, 1, " blocks");
     private final NumberSetting minHeight = new NumberSetting("Min height",
         "How many air blocks the hole must have above its floor.", 3, 1, 5, 1).min(1);
     private final BoolSetting doubles = new BoolSetting("Doubles",

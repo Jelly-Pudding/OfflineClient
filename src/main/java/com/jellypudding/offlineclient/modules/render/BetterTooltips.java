@@ -108,7 +108,7 @@ public final class BetterTooltips extends Module {
     private final BoolSetting maps = new BoolSetting("Maps",
         "Hover a filled map to see the map itself.", true);
     private final NumberSetting mapSize = new NumberSetting("Map size",
-        "How big the map preview is drawn.", 128, 64, 256, 8, " px").min(16).max(512)
+        "How big the map preview is drawn.", 128, 64, 256, 8, " px").min(16)
         .under(maps);
     private final BoolSetting books = new BoolSetting("Books",
         "Hover a book to read its first page.", true);

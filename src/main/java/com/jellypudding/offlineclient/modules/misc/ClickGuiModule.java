@@ -23,7 +23,7 @@ public final class ClickGuiModule extends Module {
 
     private final NumberSetting scale = new NumberSetting("Scale",
         "Size everything in the GUI is drawn at. Smaller fits more on screen. The size lands on whole pixels to stay sharp.",
-        50, 40, 150, 5, "%").min(30).max(200);
+        50, 40, 150, 5, "%").min(30);
 
     private final BoolSetting hoverHelp = new BoolSetting("Hover help",
         "Explains a module or setting whilst you hover over it.", true);

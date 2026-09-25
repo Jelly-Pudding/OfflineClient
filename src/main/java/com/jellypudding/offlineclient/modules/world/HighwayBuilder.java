@@ -165,7 +165,7 @@ public final class HighwayBuilder extends Module {
         "Ticks between one block break and the next.", 0, 0, 20, 1, " ticks").min(0);
     private final NumberSetting breaksPerTick = new NumberSetting("Breaks per tick",
         "How many one hit blocks come out in a tick whilst no mining rotation is sent.",
-        1, 1, 16, 1).min(1).max(100);
+        1, 1, 16, 1).min(1);
     private final BoolSetting doubleMine = new BoolSetting("Double mine",
         "Breaks a second block with packets whilst the first is mined by hand.", true);
     private final BoolSetting fastBreak = new BoolSetting("Fast break",
@@ -175,7 +175,7 @@ public final class HighwayBuilder extends Module {
         "Turns the module off once you are down to this many pickaxes. Zero never stops.",
         1, 0, 36, 1).min(0).max(36);
     private final NumberSetting placeRange = new NumberSetting("Place range",
-        "The furthest a block is placed from your eyes.", 4.5, 1, 5.5, 0.1).min(1).max(5.5);
+        "The furthest a block is placed from your eyes.", 4.5, 1, 5.5, 0.1).min(1);
     private final NumberSetting placeDelay = new NumberSetting("Place delay",
         "Ticks between one placement and the next.", 0, 0, 20, 1, " ticks").min(0);
     private final NumberSetting placementsPerTick = new NumberSetting("Placements per tick",

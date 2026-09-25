@@ -67,7 +67,7 @@ public final class Nuker extends Module {
         .describe(Shape.CUBE, "A box with its own reach on each of the six sides.");
     private final NumberSetting range = new NumberSetting("Range",
         "How far from your eyes to break blocks.",
-        4.5, 1, 6, 0.1).min(1).max(6).under(shape, Shape.SPHERE, Shape.UNIFORM_CUBE);
+        4.5, 1, 6, 0.1).min(1).under(shape, Shape.SPHERE, Shape.UNIFORM_CUBE);
     private final NumberSetting up = sideSetting("Up", "above your feet").under(shape, Shape.CUBE);
     private final NumberSetting down = sideSetting("Down", "below your feet").under(shape, Shape.CUBE);
     private final NumberSetting left = sideSetting("Left", "to your left").under(shape, Shape.CUBE);
@@ -76,7 +76,7 @@ public final class Nuker extends Module {
     private final NumberSetting back = sideSetting("Back", "behind you").under(shape, Shape.CUBE);
     private final NumberSetting wallsRange = new NumberSetting("Walls range",
         "How far to break blocks with no clear view from your eyes.",
-        4.5, 0, 6, 0.1).min(0).max(6);
+        4.5, 0, 6, 0.1).min(0);
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
         "Which blocks the module is allowed to break.", Mode.ALL)
         .describe(Mode.ALL, "Every block in range.")

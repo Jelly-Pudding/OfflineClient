@@ -64,10 +64,10 @@ public final class NewChunks extends Module {
         .min(-2048).max(2048).unless(followHeight);
     private final NumberSetting distance = new NumberSetting("Distance",
         "How far away a chunk may be and still be drawn.", 16, 4, 64, 1, " chunks")
-        .min(1).max(256);
+        .min(1);
     private final NumberSetting settle = new NumberSetting("Settle time",
         "How long after a chunk lands a liquid flow still counts as fresh.", 60, 5, 300, 5, "s")
-        .min(1).max(3600);
+        .min(1);
     private final NumberSetting minSpread = new NumberSetting("Min spread",
         "How far a flow must have run from its source before it proves a chunk old. Raise it on servers that tick chunks before sending them.",
         3, 1, 7, 1, " blocks").min(1).max(7);

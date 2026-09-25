@@ -35,7 +35,7 @@ public final class AutoNametag extends Module {
         "The mobs to name.", BuiltInRegistries.ENTITY_TYPE,
         List.of(EntityTypes.VILLAGER, EntityTypes.HORSE, EntityTypes.WOLF, EntityTypes.CAT));
     private final NumberSetting range = new NumberSetting("Range",
-        "How close a mob has to be.", 5, 1, 6, 0.1).max(6);
+        "How close a mob has to be.", 5, 1, 6, 0.1);
     private final EnumSetting<TargetPriority> priority = TargetPriority.setting("Names", TargetPriority.NEAREST);
     private final BoolSetting rename = new BoolSetting("Rename",
         "Also names mobs that already carry a different name.", true);

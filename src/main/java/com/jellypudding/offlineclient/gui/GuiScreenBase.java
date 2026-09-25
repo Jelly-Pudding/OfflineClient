@@ -7,6 +7,7 @@ import com.jellypudding.offlineclient.modules.render.Blur;
 import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.Modules;
 import com.mojang.blaze3d.platform.InputConstants;
+import com.mojang.blaze3d.platform.Window;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
@@ -59,15 +60,18 @@ public abstract class GuiScreenBase extends Screen {
     // Everything in the GUI is drawn through this and every pointer position
     // is divided by it to match. The font is a bitmap and goes soft between
     // whole pixels. The chosen size therefore lands on the nearest step the
-    // game's own scale allows.
+    // game's own scale allows. It never outgrows the largest scale the game
+    // would pick for the window and the GUI always fits.
     public static float guiScale() {
         ClickGuiModule gui = Modules.get(ClickGuiModule.class);
         float wanted = gui == null ? 1f : gui.scale();
-        int vanilla = OfflineClient.MC.getWindow().getGuiScale();
+        Window window = OfflineClient.MC.getWindow();
+        int vanilla = window.getGuiScale();
         if (vanilla <= 0) {
             return wanted;
         }
-        return Math.max(1, Math.round(vanilla * wanted)) / (float) vanilla;
+        int largest = Math.max(1, window.calculateScale(0, false));
+        return Math.clamp(Math.round(vanilla * wanted), 1, largest) / (float) vanilla;
     }
 
     // What the last frame drew at. Held still whilst the pointer is down

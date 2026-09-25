@@ -54,7 +54,7 @@ public final class AutoReplenish extends Module {
         "Items that are never refilled. Click to pick them.", BuiltInRegistries.ITEM, List.of());
     private final NumberSetting repairAt = new NumberSetting("Swap worn tools",
         "Swaps a worn tool out of your hotbar once it has this many uses left. Zero leaves it in place.",
-        0, 0, 100, 1, " uses").max(2000);
+        0, 0, 100, 1, " uses");
 
     // What each hotbar slot and the offhand held last tick.
     private final ItemStack[] previous = new ItemStack[10];

@@ -13,6 +13,7 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ChunkScanner;
 import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ChunkMap;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
@@ -30,7 +31,8 @@ public final class VoidEsp extends Module {
     }
 
     private final NumberSetting range = new NumberSetting("Range",
-        "Chunk radius to search around you. Only chunks the game has loaded can be searched.", 6, 1, 12, 1, " chunks").max(64);
+        "Chunk radius to search around you. Only chunks the game has loaded can be searched.", 6, 1, 12, 1, " chunks")
+        .max(ChunkMap.MAX_VIEW_DISTANCE);
     private final NumberSetting depth = new NumberSetting("Depth",
         "How many bedrock layers must be missing.", 1, 1, 5, 1).min(1).max(5);
     private final BoolSetting airOnly = new BoolSetting("Air only",

@@ -1,7 +1,6 @@
 package com.jellypudding.offlineclient.hud.elements;
 
 import com.jellypudding.offlineclient.OfflineClient;
-import com.jellypudding.offlineclient.gui.GuiTheme;
 import com.jellypudding.offlineclient.hud.HudElement;
 import com.jellypudding.offlineclient.hud.HudLayout;
 import com.jellypudding.offlineclient.setting.BoolSetting;
@@ -20,20 +19,21 @@ import java.util.List;
 
 public final class ArmourElement extends HudElement {
 
-    public enum Wear { NONE, NUMBER, PERCENT, BAR }
+    public enum Wear { NONE, NUMBER, PERCENT }
 
     private static final int SLOT = 16;
     private static final int GAP = 2;
-    private static final int BAR_HEIGHT = 2;
+    // Labels side by side need more air than bare items do.
+    private static final int LABEL_GAP = 4;
+    private static final String FULL = "100%";
 
     private final EnumSetting<HudLayout> layout = HudLayout.setting("Armour layout",
         "Which way the pieces are laid out.");
     private final EnumSetting<Wear> wear = new EnumSetting<>("Wear",
-        "How the life left in each piece is shown.", Wear.NUMBER)
-        .describe(Wear.NONE, "Not at all.")
+        "Writes the life left in each piece under it.", Wear.NUMBER)
+        .describe(Wear.NONE, "No text. The game still draws its wear bar.")
         .describe(Wear.NUMBER, "The uses left.")
-        .describe(Wear.PERCENT, "How much of it is left as a share.")
-        .describe(Wear.BAR, "A small bar under the piece.");
+        .describe(Wear.PERCENT, "How much of it is left as a share.");
     private final BoolSetting offhand = new BoolSetting("Armour offhand",
         "Show what you hold in your other hand too.", true);
     private final BoolSetting hideEmpty = new BoolSetting("Hide empty armour",
@@ -75,50 +75,59 @@ public final class ArmourElement extends HudElement {
         return stacks;
     }
 
-    // The room a label under a piece needs.
+    private boolean labelled(ItemStack stack) {
+        return !wear.is(Wear.NONE) && stack.isDamageableItem();
+    }
+
     private int labelHeight(Font font) {
-        return switch (wear.getValue()) {
-            case NONE -> 0;
-            case BAR -> BAR_HEIGHT + 1;
-            case NUMBER, PERCENT -> font.lineHeight;
-        };
+        return wear.is(Wear.NONE) ? 0 : font.lineHeight;
+    }
+
+    // Room for the item or the longest label it could ever carry. A piece that
+    // wears down keeps its place.
+    private int column(Font font, List<ItemStack> stacks) {
+        int widest = SLOT;
+        for (ItemStack stack : stacks) {
+            if (labelled(stack)) {
+                String longest = wear.is(Wear.PERCENT) ? FULL : String.valueOf(stack.getMaxDamage());
+                widest = Math.max(widest, font.width(longest));
+            }
+        }
+        return widest;
+    }
+
+    private int gap() {
+        return wear.is(Wear.NONE) ? GAP : LABEL_GAP;
     }
 
     @Override
     public void render(GuiGraphicsExtractor context, Font font) {
         List<ItemStack> stacks = pieces();
-        int step = SLOT + GAP + (layout.is(HudLayout.DOWN) ? labelHeight(font) : 0);
+        int column = column(font, stacks);
+        boolean across = layout.is(HudLayout.ACROSS);
         for (int i = 0; i < stacks.size(); i++) {
-            int x = layout.is(HudLayout.ACROSS) ? i * (SLOT + GAP) : 0;
-            int y = layout.is(HudLayout.ACROSS) ? 0 : i * step;
+            int left = across ? i * (column + gap()) : 0;
+            int top = across ? 0 : i * (SLOT + labelHeight(font) + GAP);
+            int itemX = left + (column - SLOT) / 2;
             ItemStack stack = stacks.get(i);
-            context.item(stack, x, y);
-            context.itemDecorations(font, stack, x, y);
-            drawWear(context, font, stack, x, y);
+            context.item(stack, itemX, top);
+            context.itemDecorations(font, stack, itemX, top);
+            if (labelled(stack)) {
+                double share = ItemUtil.durabilityPercent(stack);
+                String label = wear.is(Wear.PERCENT) ? Math.round(share) + "%"
+                    : String.valueOf(stack.getMaxDamage() - stack.getDamageValue());
+                context.text(font, label, left + (column - font.width(label)) / 2, top + SLOT,
+                    ColorUtil.redToGreen((float) share / 100f), true);
+            }
         }
-    }
-
-    private void drawWear(GuiGraphicsExtractor context, Font font, ItemStack stack, int x, int y) {
-        if (wear.is(Wear.NONE) || !stack.isDamageableItem()) {
-            return;
-        }
-        int left = stack.getMaxDamage() - stack.getDamageValue();
-        float share = (float) ItemUtil.durabilityPercent(stack) / 100f;
-        int tint = ColorUtil.redToGreen(share);
-        if (wear.is(Wear.BAR)) {
-            context.fill(x, y + SLOT, x + SLOT, y + SLOT + BAR_HEIGHT, GuiTheme.BAR_TRACK);
-            context.fill(x, y + SLOT, x + Math.round(SLOT * share), y + SLOT + BAR_HEIGHT, tint);
-            return;
-        }
-        String label = wear.is(Wear.PERCENT)
-            ? Math.round(share * 100) + "%" : String.valueOf(left);
-        context.text(font, label, x + (SLOT - font.width(label)) / 2, y + SLOT, tint, true);
     }
 
     @Override
     public int width(Font font) {
-        int count = Math.max(1, pieces().size());
-        return layout.is(HudLayout.ACROSS) ? count * (SLOT + GAP) - GAP : SLOT;
+        List<ItemStack> stacks = pieces();
+        int column = column(font, stacks);
+        int count = Math.max(1, stacks.size());
+        return layout.is(HudLayout.ACROSS) ? count * (column + gap()) - gap() : column;
     }
 
     @Override
@@ -126,6 +135,6 @@ public final class ArmourElement extends HudElement {
         int count = Math.max(1, pieces().size());
         int label = labelHeight(font);
         return layout.is(HudLayout.ACROSS)
-            ? SLOT + label : count * (SLOT + GAP + label) - GAP;
+            ? SLOT + label : count * (SLOT + label + GAP) - GAP;
     }
 }

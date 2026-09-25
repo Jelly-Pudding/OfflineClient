@@ -94,7 +94,7 @@ public final class StashFinder extends Module {
         BuiltInRegistries.BLOCK, List.of(Blocks.TUFF_BRICKS, Blocks.BARREL));
     private final NumberSetting minimumDistance = new NumberSetting("Minimum distance",
         "Chunks closer than this to the world origin are never recorded.",
-        0, 0, 10000, 100, " blocks").min(0).max(100000);
+        0, 0, 10000, 100, " blocks").min(0);
     private final BoolSetting notify = new BoolSetting("Notify",
         "Say something when a stash is found.", true);
     private final EnumSetting<Notify> notifyMode = new EnumSetting<>("Notify mode",
@@ -110,11 +110,11 @@ public final class StashFinder extends Module {
         .under(tracers);
     private final NumberSetting tracerHide = new NumberSetting("Hide within",
         "A tracer is dropped once you are this close to the chunk.", 16, 1, 50, 1, " blocks")
-        .min(1).max(200)
+        .min(1)
         .under(tracers);
     private final NumberSetting tracerRange = new NumberSetting("Tracer range",
         "Chunks further away than this get no tracer.", 2000, 50, 10000, 50, " blocks")
-        .min(10).max(1000000)
+        .min(10)
         .under(tracers);
     private final BoolSetting columns = new BoolSetting("Chunk columns",
         "Draws four tall lines at the centre of every recorded chunk.", false);

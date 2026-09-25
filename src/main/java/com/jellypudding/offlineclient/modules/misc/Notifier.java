@@ -112,7 +112,7 @@ public final class Notifier extends Module {
         .under(totemPops);
     private final NumberSetting playerRadius = new NumberSetting("Player radius",
         "How far away a totem pop can be and still be reported.", 30, 1, 50, 1, " blocks")
-        .min(1).max(100)
+        .min(1)
         .under(distanceCheck);
 
     private final BoolSetting pearls = new BoolSetting("Pearls",
@@ -129,7 +129,7 @@ public final class Notifier extends Module {
         .describe(JoinsLeaves.BOTH, "Joins and leaves.");
     private final NumberSetting notificationDelay = new NumberSetting("Notification delay",
         "Ticks between one join or leave line and the next.", 0, 0, 100, 1, " ticks")
-        .min(0).max(1000)
+        .min(0)
         .under(joinsLeaves, JoinsLeaves.JOINS, JoinsLeaves.LEAVES, JoinsLeaves.BOTH);
     private final BoolSetting simpleNotifications = new BoolSetting("Simple notifications",
         "Short join and leave lines with no client prefix.", true)

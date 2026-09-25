@@ -40,11 +40,11 @@ public final class BetterTab extends Module {
         "Let the list show more players than vanilla allows.", false);
     private final NumberSetting limit = new NumberSetting("Limit",
         "How many players the list may show.", 200, 80, 500, 10, " players")
-        .min(1).max(1000)
+        .min(1)
         .under(raiseLimit);
     private final NumberSetting columnHeight = new NumberSetting("Column height",
         "How many players fill a column before the list starts a new one.", 20, 5, 100, 1, " players")
-        .min(1).max(1000);
+        .min(1);
 
     public BetterTab() {
         super("BetterTab", "Ping numbers and friend colours in the player list.", Category.MISC);

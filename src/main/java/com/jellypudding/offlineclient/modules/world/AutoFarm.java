@@ -181,7 +181,7 @@ public final class AutoFarm extends Module {
     private static final AABB SHELL = new AABB(BlockPos.ZERO).deflate(1 / 16.0);
 
     private final NumberSetting range = new NumberSetting("Range",
-        "How far from your eyes to farm.", 4.5, 1, 6, 0.1).max(6);
+        "How far from your eyes to farm.", 4.5, 1, 6, 0.1);
     private final BoolSetting harvest = new BoolSetting("Harvest",
         "Takes the parts of a plant that have finished growing.", true);
     private final ChoiceListSetting harvestPlants = new ChoiceListSetting("Harvest plants",

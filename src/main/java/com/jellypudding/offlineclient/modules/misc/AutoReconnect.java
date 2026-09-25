@@ -15,7 +15,7 @@ import net.minecraft.client.multiplayer.resolver.ServerAddress;
 public final class AutoReconnect extends Module {
 
     private final NumberSetting delay = new NumberSetting("Delay",
-        "Seconds to wait before reconnecting.", 5, 0, 60, 0.1, "s").min(0).max(600);
+        "Seconds to wait before reconnecting.", 5, 0, 60, 0.1, "s").min(0);
     private final BoolSetting buttons = new BoolSetting("Buttons",
         "Adds a reconnect button and a switch to the disconnected screen.", true);
 

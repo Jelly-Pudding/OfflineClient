@@ -47,7 +47,7 @@ public final class ArrowDodge extends Module {
     private final NumberSetting range = new NumberSetting("Range",
         "How far away a projectile is still watched.", 32, 8, 64, 4, " blocks").min(1);
     private final NumberSetting steps = new NumberSetting("Steps",
-        "How many ticks of flight to predict.", 40, 5, 120, 5, " ticks").min(1).max(400);
+        "How many ticks of flight to predict.", 40, 5, 120, 5, " ticks").min(1);
     private final NumberSetting margin = new NumberSetting("Margin",
         "Extra space kept around you.", 0.4, 0, 2, 0.1);
     private final EnumSetting<Move> move = new EnumSetting<>("Move",

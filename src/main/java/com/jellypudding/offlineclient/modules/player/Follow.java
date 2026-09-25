@@ -34,10 +34,10 @@ public final class Follow extends Module {
         "The account name of the player to follow.", "")
         .under(target, Target.NAME);
     private final NumberSetting distance = new NumberSetting("Distance to keep",
-        "How close to get before you stop walking.", 3, 1, 10, 0.5, " blocks").min(1).max(32);
+        "How close to get before you stop walking.", 3, 1, 10, 0.5, " blocks").min(1);
     private final NumberSetting range = new NumberSetting("Range to give up at",
         "How far the target may be before you stop following.", 48, 8, 128, 1, " blocks")
-        .min(4).max(256);
+        .min(4);
     private final BoolSetting rotate = new BoolSetting("Rotate",
         "Turns your view towards the way you are walking.", true);
 

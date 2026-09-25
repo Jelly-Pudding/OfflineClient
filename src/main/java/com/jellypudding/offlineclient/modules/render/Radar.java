@@ -28,7 +28,7 @@ public final class Radar extends Module {
     public enum Corner { TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT }
 
     private final NumberSetting size = new NumberSetting("Size",
-        "Width of the radar in pixels.", 100, 60, 220, 10, " px").min(40).max(400);
+        "Width of the radar in pixels.", 100, 60, 220, 10, " px").min(40);
     private final NumberSetting range = new NumberSetting("Range",
         "How far the edge of the radar reaches.", 64, 16, 256, 8, " blocks").min(4);
     private final EnumSetting<Corner> corner = new EnumSetting<>("Corner",

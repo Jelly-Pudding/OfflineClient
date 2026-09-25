@@ -34,7 +34,7 @@ public final class FakePlayer extends Module {
     private final TextSetting name = new TextSetting("Name",
         "The name over the copy. Blank uses your own name and skin.", "");
     private final NumberSetting copies = new NumberSetting("Copies",
-        "How many are spawned in a ring round you.", 1, 1, 5, 1).min(1).max(10);
+        "How many are spawned in a ring round you.", 1, 1, 5, 1).min(1);
     private final BoolSetting copyGear = new BoolSetting("Copy gear",
         "Give the copy your armour and held items.", true);
     private final NumberSetting health = new NumberSetting("Health",

@@ -25,6 +25,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
+import net.minecraft.server.level.ChunkMap;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.AABB;
@@ -76,7 +77,7 @@ public final class BlockEsp extends Module {
         Map.entry(Blocks.ENCHANTING_TABLE, 0xFFE070FF));
 
     private final NumberSetting range = new NumberSetting("Range",
-        "Chunk radius to scan around you.", 4, 1, 8, 1, " chunks").max(16);
+        "Chunk radius to scan around you.", 4, 1, 8, 1, " chunks").max(ChunkMap.MAX_VIEW_DISTANCE);
     private final NumberSetting limit = new NumberSetting("Limit",
         "Most blocks drawn at once with the nearest first.", 2000, 100, 5000, 100).min(1);
     private final RegistryListSetting<Block> blocks = new RegistryListSetting<>("Blocks",

@@ -40,7 +40,7 @@ public final class Flamethrower extends Module {
         List.of(EntityTypes.PIG, EntityTypes.COW, EntityTypes.SHEEP,
             EntityTypes.CHICKEN, EntityTypes.RABBIT));
     private final NumberSetting range = new NumberSetting("Range",
-        "How close an animal has to be.", 5, 1, 6, 0.1).min(1).max(6);
+        "How close an animal has to be.", 5, 1, 6, 0.1).min(1);
     private final NumberSetting interval = new NumberSetting("Interval",
         "Ticks between one light and the next.", 5, 1, 20, 1, " ticks").min(1);
     private final BoolSetting babies = new BoolSetting("Babies",

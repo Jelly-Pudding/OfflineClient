@@ -36,7 +36,7 @@ public final class AutoGap extends Module {
         false);
     private final NumberSetting health = new NumberSetting("Health",
         "Eat at or below this many hearts. Zero turns it off.", 7, 0, 10, 0.5, " hearts")
-        .min(0).max(20)
+        .min(0)
         .unless(always);
     private final EnumSetting<Choice> choice = new EnumSetting<>("Choice",
         "Which apple to reach for.", Choice.PLAIN_FIRST)

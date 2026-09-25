@@ -156,18 +156,23 @@ public final class ModuleRow {
     }
 
     // The click rules both ClickGUI styles share. A left click on the star marks a
-    // favourite. A right click or the arrow or a module with no toggle opens the settings.
+    // favourite. A module with no toggle opens its settings on any click.
     static void clickModule(Module module, int button, boolean onStar, boolean onArrow,
                             Runnable openSettings) {
-        if (!InputUtil.isLeft(button) && !InputUtil.isRight(button)) {
-            return;
-        }
         if (InputUtil.isLeft(button) && onStar) {
             Favourites.toggle(module);
-        } else if (InputUtil.isRight(button) || onArrow || !module.isTogglable()) {
-            openSettings.run();
         } else {
-            module.toggle();
+            clickRow(button, onArrow || !module.isTogglable(), module::toggle, openSettings);
+        }
+    }
+
+    // Every row with a switch and a settings arrow. A left click flips the switch
+    // and a right click or the arrow opens the settings.
+    static void clickRow(int button, boolean onArrow, Runnable flip, Runnable openSettings) {
+        if (InputUtil.isRight(button) || (InputUtil.isLeft(button) && onArrow)) {
+            openSettings.run();
+        } else if (InputUtil.isLeft(button)) {
+            flip.run();
         }
     }
 

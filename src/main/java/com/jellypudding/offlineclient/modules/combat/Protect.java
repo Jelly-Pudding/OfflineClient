@@ -41,7 +41,7 @@ public final class Protect extends Module {
         "The name of the player to guard. Click to type it.", "")
         .under(friendChoice, Friend.NAME);
     private final NumberSetting range = new NumberSetting("Range",
-        "How close an enemy has to be before the hits start.", 4.25, 1, 6, 0.05).min(1).max(6);
+        "How close an enemy has to be before the hits start.", 4.25, 1, 6, 0.05).min(1);
     private final NumberSetting alertRange = new NumberSetting("Alert range",
         "How close to you an enemy has to come to be fought at all.", 6, 2, 16, 0.5, " blocks")
         .min(1);

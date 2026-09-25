@@ -10,7 +10,8 @@ import net.minecraft.world.item.ItemStack;
 import java.util.function.Predicate;
 import java.util.function.ToDoubleFunction;
 
-// Picks the hotbar weapon for a hit. AutoWeapon and KillAura and AttributeSwap share it.
+// Picks the weapon for a hit. AutoWeapon and KillAura and AttributeSwap share it.
+// Every search covers the inventory up to a limit. The hotbar size keeps it to the hotbar.
 public final class WeaponUtil {
 
     // AutoWeapon's own defaults for a caller with no settings of its own.
@@ -19,22 +20,22 @@ public final class WeaponUtil {
     private WeaponUtil() {
     }
 
-    // The hotbar slot holding the strongest weapon against this target or minus one.
-    public static int bestWeaponSlot(LivingEntity target) {
-        return bestWeaponSlot(target, true, DEFAULT_MARGIN, true);
+    // The slot holding the strongest weapon against this target or minus one.
+    public static int bestWeaponSlot(LivingEntity target, int limit) {
+        return bestWeaponSlot(target, true, DEFAULT_MARGIN, true, limit);
     }
 
     // The preferred kind wins unless the other hits harder by more than the margin.
     public static int bestWeaponSlot(LivingEntity target, boolean preferSword, double margin,
-                                     boolean skipBreaking) {
+                                     boolean skipBreaking, int limit) {
         ToDoubleFunction<ItemStack> damage = stack -> damageAgainst(stack, target);
-        int swordSlot = bestSlot(stack -> stack.is(ItemTags.SWORDS), damage, skipBreaking);
-        int axeSlot = bestSlot(stack -> stack.is(ItemTags.AXES), damage, skipBreaking);
+        int swordSlot = bestSlot(stack -> stack.is(ItemTags.SWORDS), damage, skipBreaking, limit);
+        int axeSlot = bestSlot(stack -> stack.is(ItemTags.AXES), damage, skipBreaking, limit);
         if (swordSlot == -1 || axeSlot == -1) {
             return swordSlot == -1 ? axeSlot : swordSlot;
         }
-        double swordDamage = damage.applyAsDouble(hotbar(swordSlot));
-        double axeDamage = damage.applyAsDouble(hotbar(axeSlot));
+        double swordDamage = damage.applyAsDouble(stackAt(swordSlot));
+        double axeDamage = damage.applyAsDouble(stackAt(axeSlot));
         if (preferSword) {
             return axeDamage - swordDamage > margin ? axeSlot : swordSlot;
         }
@@ -42,24 +43,25 @@ public final class WeaponUtil {
     }
 
     // Only an axe staggers a raised shield however hard the sword hits.
-    public static int bestAxeSlot(LivingEntity target, boolean skipBreaking) {
-        return bestSlot(stack -> stack.is(ItemTags.AXES), stack -> damageAgainst(stack, target), skipBreaking);
+    public static int bestAxeSlot(LivingEntity target, boolean skipBreaking, int limit) {
+        return bestSlot(stack -> stack.is(ItemTags.AXES), stack -> damageAgainst(stack, target),
+            skipBreaking, limit);
     }
 
     // The sword or axe with the fastest swing.
-    public static int fastestWeaponSlot(boolean skipBreaking) {
+    public static int fastestWeaponSlot(boolean skipBreaking, int limit) {
         return bestSlot(stack -> stack.is(ItemTags.SWORDS) || stack.is(ItemTags.AXES),
             stack -> ItemUtil.attributeValue(stack, Attributes.ATTACK_SPEED, EquipmentSlot.MAINHAND),
-            skipBreaking);
+            skipBreaking, limit);
     }
 
-    // The hotbar slot of the highest scoring stack of the kind or minus one.
+    // The slot of the highest scoring stack of the kind or minus one.
     private static int bestSlot(Predicate<ItemStack> kind, ToDoubleFunction<ItemStack> score,
-                                boolean skipBreaking) {
+                                boolean skipBreaking, int limit) {
         int best = -1;
         double bestScore = 0;
-        for (int i = 0; i < InventoryUtil.HOTBAR_SIZE; i++) {
-            ItemStack stack = hotbar(i);
+        for (int i = 0; i < limit; i++) {
+            ItemStack stack = stackAt(i);
             if (!kind.test(stack) || (skipBreaking && ItemUtil.nearlyBroken(stack))) {
                 continue;
             }
@@ -72,7 +74,7 @@ public final class WeaponUtil {
         return best;
     }
 
-    private static ItemStack hotbar(int slot) {
+    private static ItemStack stackAt(int slot) {
         return OfflineClient.MC.player.getInventory().getItem(slot);
     }
 

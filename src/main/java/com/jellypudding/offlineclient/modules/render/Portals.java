@@ -14,6 +14,7 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ChunkScanner;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.server.level.ChunkMap;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.AABB;
@@ -41,7 +42,8 @@ public final class Portals extends Module {
     private static final int MERGE_INTERVAL = 20;
 
     private final NumberSetting range = new NumberSetting("Range",
-        "Chunk radius to scan around you. Only chunks the game has loaded can be scanned.", 6, 1, 8, 1, " chunks").max(64);
+        "Chunk radius to scan around you. Only chunks the game has loaded can be scanned.", 6, 1, 8, 1, " chunks")
+        .max(ChunkMap.MAX_VIEW_DISTANCE);
     private final BoxStyle style = BoxStyle.shapeOnly(BoxStyle.Shape.LINES);
     private final BoolSetting nether = new BoolSetting("Nether portals",
         "Show nether portals.", true);

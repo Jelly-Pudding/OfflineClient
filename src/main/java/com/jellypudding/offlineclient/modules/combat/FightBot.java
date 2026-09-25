@@ -24,9 +24,9 @@ import java.util.List;
 public final class FightBot extends Module {
 
     private final NumberSetting range = new NumberSetting("Range",
-        "How close a target has to be before the hits start.", 4.25, 1, 6, 0.05).min(1).max(6);
+        "How close a target has to be before the hits start.", 4.25, 1, 6, 0.05).min(1);
     private final NumberSetting distance = new NumberSetting("Distance",
-        "How close the bot walks. Keep it under the range.", 3, 1, 6, 0.05).min(0.5).max(6);
+        "How close the bot walks. Keep it under the range.", 3, 1, 6, 0.05).min(0.5);
     private final NumberSetting searchRange = new NumberSetting("Search range",
         "How far away a target is picked up.", 32, 8, 64, 1, " blocks").min(1);
     private final EnumSetting<TargetPriority> priority =

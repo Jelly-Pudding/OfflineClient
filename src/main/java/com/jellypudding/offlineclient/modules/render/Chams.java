@@ -39,18 +39,18 @@ public final class Chams extends Module {
     private final BoolSetting mobTexture = new BoolSetting("Mob texture",
         "Keep the texture on mobs. Off paints them as one flat colour.", true);
     private final NumberSetting playerScale = new NumberSetting("Player scale",
-        "Makes player models bigger or smaller.", 1, 0.25, 3, 0.05, "x").min(0.05).max(10);
+        "Makes player models bigger or smaller.", 1, 0.25, 3, 0.05, "x").min(0.05);
 
     private final BoolSetting crystals = new BoolSetting("Crystals",
         "Reshape and recolour end crystals.", false);
     private final NumberSetting crystalScale = new NumberSetting("Crystal scale",
-        "How big a crystal is drawn.", 0.6, 0.1, 2, 0.05, "x").min(0.05).max(5)
+        "How big a crystal is drawn.", 0.6, 0.1, 2, 0.05, "x").min(0.05)
         .under(crystals);
     private final NumberSetting crystalBounce = new NumberSetting("Crystal bounce",
-        "How high a crystal bobs up and down.", 0.6, 0, 2, 0.05, "x").min(0).max(5)
+        "How high a crystal bobs up and down.", 0.6, 0, 2, 0.05, "x").min(0)
         .under(crystals);
     private final NumberSetting crystalSpin = new NumberSetting("Crystal spin",
-        "How fast a crystal turns.", 0.3, 0, 2, 0.05, "x").min(0).max(10)
+        "How fast a crystal turns.", 0.3, 0, 2, 0.05, "x").min(0)
         .under(crystals);
     private final BoolSetting crystalTexture = new BoolSetting("Crystal texture",
         "Keep the crystal texture under the colour. Off paints it flat.", true)

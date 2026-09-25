@@ -73,9 +73,9 @@ public final class BetterChat extends Module {
         "A bar beside the open chat you can drag or click to scroll.", true);
     private final NumberSetting lift = new NumberSetting("Chat lift",
         "How far the chat sits above the bottom of the screen. Vanilla uses forty.",
-        22, 0, 80, 1, " px").min(0).max(200);
+        22, 0, 80, 1, " px").min(0);
     private final NumberSetting indent = new NumberSetting("Chat indent",
-        "How far the chat sits in from the left edge.", 4, 0, 80, 1, " px").min(0).max(400);
+        "How far the chat sits in from the left edge.", 4, 0, 80, 1, " px").min(0);
     private final BoolSetting longerHistory = new BoolSetting("Longer history",
         "Keeps more lines than the hundred vanilla scrolls back through.", true);
     private final NumberSetting historySize = new NumberSetting("History size",

@@ -35,7 +35,7 @@ public final class AutoBuild extends Module {
         "Which shape to build. The first one picked wins. Files live in offlineclient/templates.",
         BuildTemplate::names);
     private final NumberSetting range = new NumberSetting("Range",
-        "How far from your eyes a block may go.", 6, 1, 10, 0.05).min(1).max(10);
+        "How far from your eyes a block may go.", 6, 1, 10, 0.05).min(1);
     private final BoolSetting lineOfSight = new BoolSetting("Line of sight",
         "Never places through a wall. Safer against anti cheats and slower.", false);
     private final BoolSetting savedBlocks = new BoolSetting("Use saved blocks",

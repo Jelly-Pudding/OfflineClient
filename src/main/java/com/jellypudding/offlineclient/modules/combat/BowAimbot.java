@@ -48,7 +48,7 @@ public final class BowAimbot extends Module {
     private final BoolSetting predict = new BoolSetting("Predict",
         "Lead moving targets by their speed and the arrow flight time.", true);
     private final NumberSetting predictStrength = new NumberSetting("Predict strength",
-        "How much of the worked out lead is used.", 100, 0, 200, 5, "%").min(0).max(200)
+        "How much of the worked out lead is used.", 100, 0, 200, 5, "%").min(0)
         .under(predict);
     private final BoolSetting walls = new BoolSetting("Through walls",
         "Also aim at targets you cannot see.", false);

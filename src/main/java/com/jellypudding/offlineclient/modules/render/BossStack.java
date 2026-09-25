@@ -22,7 +22,7 @@ public final class BossStack extends Module {
     private final BoolSetting hideName = new BoolSetting("Hide names",
         "Leave every boss bar without its name.", false);
     private final NumberSetting gap = new NumberSetting("Bar gap",
-        "Pixels of space between one bar and the next.", 10, 0, 20, 1, " px").min(0).max(40);
+        "Pixels of space between one bar and the next.", 10, 0, 20, 1, " px").min(0);
 
     // How many bars each drawn name stands for this frame.
     private final Map<String, Integer> counts = new HashMap<>();

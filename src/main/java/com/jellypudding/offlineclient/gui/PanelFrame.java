@@ -19,10 +19,10 @@ public abstract class PanelFrame {
 
     // The title stops short of the chevron by this much.
     private static final int MARKER_ZONE = 14;
-    // The chevron sits this far in from the right edge. A click within a small
-    // reach of it folds the panel and the corner beyond still drags it.
+    // The chevron sits this far in from the right edge. A click on it or close
+    // round its outline folds the panel. The rest of the header drags it.
     private static final int MARKER_INSET = 11;
-    private static final int MARKER_REACH = 2;
+    private static final double MARKER_REACH = 1.5;
 
     private final String title;
     private final int startWidth;
@@ -312,9 +312,8 @@ public abstract class PanelFrame {
         return y + (GuiTheme.HEADER_HEIGHT - 2 - RenderUtil.CHEVRON_HEIGHT) / 2;
     }
 
-    private boolean overMarker(double mx, double my) {
-        return mx >= markerX() - MARKER_REACH && mx < markerX() + RenderUtil.CHEVRON_WIDTH + MARKER_REACH
-            && my >= markerY() - MARKER_REACH && my < markerY() + RenderUtil.CHEVRON_HEIGHT + MARKER_REACH;
+    private boolean overMarker(int mx, int my) {
+        return RenderUtil.overChevron(mx, my, markerX(), markerY(), collapsed, MARKER_REACH);
     }
 
     private void renderViewport(GuiGraphicsExtractor context, int mouseX, int mouseY) {

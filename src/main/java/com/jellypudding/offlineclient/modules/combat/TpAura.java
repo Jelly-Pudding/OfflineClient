@@ -29,7 +29,7 @@ public final class TpAura extends Module {
     private static final int HOP = 2;
 
     private final NumberSetting range = new NumberSetting("Range",
-        "How far away a target may be.", 4.25, 1, 6, 0.05).min(1).max(6);
+        "How far away a target may be.", 4.25, 1, 6, 0.05).min(1);
     private final EnumSetting<TargetPriority> priority =
         TargetPriority.setting("Attacks", TargetPriority.CLOSEST_ANGLE);
     private final EnumSetting<SwingMode> swing = SwingMode.setting(SwingMode.BOTH);

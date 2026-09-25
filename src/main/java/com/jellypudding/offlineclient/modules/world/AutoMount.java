@@ -41,7 +41,7 @@ public final class AutoMount extends Module {
             EntityTypes.CAMEL, EntityTypes.STRIDER, EntityTypes.PIG))
         .under(targets, Targets.LIST);
     private final NumberSetting range = new NumberSetting("Range",
-        "How close a ride has to be.", 4, 1, 6, 0.1).min(1).max(6);
+        "How close a ride has to be.", 4, 1, 6, 0.1).min(1);
     private final BoolSetting checkSaddle = new BoolSetting("Check saddle",
         "Skips any mob with no saddle on it. Llamas never need one.", false);
     private final BoolSetting rotate = new BoolSetting("Rotate",

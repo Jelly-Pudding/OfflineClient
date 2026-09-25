@@ -19,7 +19,7 @@ import net.minecraft.world.item.Items;
 public final class AutoShearer extends Module {
 
     private final NumberSetting range = new NumberSetting("Range",
-        "How close an animal has to be.", 5, 1, 6, 0.1).max(6);
+        "How close an animal has to be.", 5, 1, 6, 0.1);
     private final BoolSetting antiBreak = new BoolSetting("Anti break",
         "Never uses shears that are about to break.", true);
     private final BoolSetting rotate = new BoolSetting("Rotate",

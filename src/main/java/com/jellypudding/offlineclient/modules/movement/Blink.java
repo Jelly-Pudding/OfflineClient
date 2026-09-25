@@ -32,8 +32,7 @@ public final class Blink extends Module {
     private final BoolSetting showCopy = new BoolSetting("Show copy",
         "Leaves a copy of you standing where the blink began.", true);
     private final NumberSetting pulseDelay = new NumberSetting("Pulse delay",
-        "How often in ticks the held movement is sent and the blink starts over."
-            + " Nought waits until you turn Blink off.",
+        "Ticks between sends of the held movement. Nought holds it until Blink is off.",
         0, 0, 60, 1, " ticks").min(0);
     private final NumberSetting limit = new NumberSetting("Limit",
         "Restarts after holding this many packets. Nought holds them for as long as you like.",

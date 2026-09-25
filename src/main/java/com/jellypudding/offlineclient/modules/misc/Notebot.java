@@ -129,7 +129,7 @@ public final class Notebot extends Module {
         "Draws the pitch of each note block above it.", true)
         .under(render);
     private final NumberSetting textScale = new NumberSetting("Note scale",
-        "How big that text is drawn.", 1.5, 0.5, 4, 0.1).min(0.1).max(10)
+        "How big that text is drawn.", 1.5, 0.5, 4, 0.1).min(0.1)
         .under(renderText);
     private final BoolSetting showScanned = new BoolSetting("Show scanned",
         "Also outlines every note block found in the scan.", false);

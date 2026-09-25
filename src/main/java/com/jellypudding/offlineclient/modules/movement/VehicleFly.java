@@ -37,7 +37,7 @@ import java.util.List;
 // Only a steerable vehicle can be driven and speed is set right before its tick.
 public final class VehicleFly extends Module {
 
-    public enum Mode { CONTROL, GLIDE }
+    public enum Mode { FLY, GLIDE, SPEED }
 
     // A drop longer than this starts to hurt.
     private static final double SAFE_DROP = 3;
@@ -51,48 +51,33 @@ public final class VehicleFly extends Module {
 
     private final RegistryListSetting<EntityType<?>> vehicles = new RegistryListSetting<>("Vehicles",
         "Which kinds of vehicle the module drives.", BuiltInRegistries.ENTITY_TYPE, rideableTypes());
-    private final BoolSetting fly = new BoolSetting("Fly",
-        "Lifts the vehicle with jump and lowers it with sprint.", true);
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
-        "How much the flight takes over.", Mode.CONTROL)
-        .describe(Mode.CONTROL, "Steers the vehicle from your keys.")
-        .describe(Mode.GLIDE, "Only holds the vehicle up and leaves the steering alone.")
-        .under(fly);
-    private final NumberSetting flySpeed = new NumberSetting("Horizontal speed",
-        "How hard your keys push the vehicle in flight. 1 matches creative flight.", 1, 0.1, 5, 0.1, "x")
-        .min(0.1).max(20).under(mode, Mode.CONTROL);
+        "How the vehicle is moved.", Mode.FLY)
+        .describe(Mode.FLY, "Your keys fly it about. Jump rises and sprint sinks.")
+        .describe(Mode.GLIDE, "Holds it in the air whilst it steers the normal way. Jump rises and sprint sinks.")
+        .describe(Mode.SPEED, "Your keys drive it at the horizontal speed without flying.");
+    private final NumberSetting horizontalSpeed = new NumberSetting("Horizontal speed",
+        "How fast your keys drive it. 1 matches creative flight.", 1, 0.1, 5, 0.1, "x")
+        .min(0.1).under(mode, Mode.FLY, Mode.SPEED);
     private final BoolSetting instantStop = new BoolSetting("Instant stop",
         "The vehicle stops dead the moment you let go of the keys. Off lets it coast to a halt.", true)
-        .under(mode, Mode.CONTROL);
+        .under(mode, Mode.FLY, Mode.SPEED);
     private final NumberSetting verticalSpeed = new NumberSetting("Vertical speed",
-        "Up and down speed with jump climbing and sprint sinking.", 1, 0.1, 5, 0.1, "x")
-        .min(0.1).max(20).under(fly);
+        "How fast jump lifts it and sprint lowers it. 1 matches creative flight.", 1, 0.1, 5, 0.1, "x")
+        .min(0.1).under(mode, Mode.FLY, Mode.GLIDE);
     private final NumberSetting fallSpeed = new NumberSetting("Fall speed",
         "Blocks a second the vehicle sinks whilst no key is held. 0 holds the height.", 0, 0, 10, 0.1, " blocks")
-        .min(0).under(fly);
+        .min(0).under(mode, Mode.FLY, Mode.GLIDE);
     private final BoolSetting fallProtection = new BoolSetting("Fall protection",
         "Tells the server the mount is on the ground. A landing after a long flight then never hurts it.", true)
-        .under(fly);
+        .under(mode, Mode.FLY, Mode.GLIDE);
     private final BoolSetting dismountSafety = new BoolSetting("Dismount safety",
         "Swallows the dismount key whilst the vehicle is too high to step off.", true)
-        .under(fly);
-    private final BoolSetting speed = new BoolSetting("Speed",
-        "Drives the vehicle along the ground at a set speed. It takes over the steering from flight too.", false);
-    private final NumberSetting groundSpeed = new NumberSetting("Ground speed",
-        "Blocks a second the vehicle moves under speed.", 10, 0, 50, 0.5, " blocks")
-        .min(0).under(speed);
-    private final BoolSetting onlyOnGround = new BoolSetting("Only on ground",
-        "Speed only applies whilst the vehicle stands on a block or is a flying kind.", false)
-        .under(speed);
-    private final BoolSetting inWater = new BoolSetting("In water",
-        "Speed also applies whilst the vehicle is in water.", true)
-        .under(speed);
+        .under(mode, Mode.FLY, Mode.GLIDE);
     private final BoolSetting faceView = new BoolSetting("Face view",
         "Turns the vehicle to match where you are looking.", true);
     private final BoolSetting maxJump = new BoolSetting("Max jump",
         "A horse jump is always at full power without holding the key to charge it.", true);
-    private final BoolSetting spoofSaddle = new BoolSetting("Spoof saddle",
-        "Makes the game treat every mount as saddled. Only older servers accept the steering.", false);
     private final BoolSetting ignoreServerMoves = new BoolSetting("Ignore server moves",
         "Drops every vehicle position the server sends. A refused move then leaves you out of sync.", false);
 
@@ -109,9 +94,8 @@ public final class VehicleFly extends Module {
 
     public VehicleFly() {
         super("VehicleFly", "Flies or speeds the boat or mount you are riding.", Category.MOVEMENT);
-        addSettings(vehicles, fly, mode, flySpeed, instantStop, verticalSpeed, fallSpeed,
-            fallProtection, dismountSafety, speed, groundSpeed, onlyOnGround, inWater, faceView,
-            maxJump, spoofSaddle, ignoreServerMoves);
+        addSettings(vehicles, mode, horizontalSpeed, instantStop, verticalSpeed, fallSpeed,
+            fallProtection, dismountSafety, faceView, maxJump, ignoreServerMoves);
         searchTags("boat fly", "vehicle fly", "horse fly", "entity control", "entity speed",
             "minecart", "strider", "camel", "pig");
     }
@@ -133,10 +117,7 @@ public final class VehicleFly extends Module {
 
     @Override
     public String getSuffix() {
-        if (fly.isOn()) {
-            return speed.isOn() ? mode.getValueString() + " and speed" : mode.getValueString();
-        }
-        return speed.isOn() ? "speed" : null;
+        return mode.getValueString();
     }
 
     @Override
@@ -149,11 +130,6 @@ public final class VehicleFly extends Module {
         stop();
     }
 
-    // Read by MobMixin. True whilst every mount should read as saddled.
-    public boolean spoofsSaddle() {
-        return isEnabled() && spoofSaddle.isOn();
-    }
-
     // Read by LocalPlayerMixin. True whilst a horse jump should always be full power.
     public boolean maxesJump() {
         return isEnabled() && maxJump.isOn();
@@ -162,7 +138,7 @@ public final class VehicleFly extends Module {
     // Read by LocalPlayerMixin. Whilst flying a jumping mount the jump key lifts
     // instead of charging its jump.
     public boolean takesJumpKey() {
-        if (!isEnabled() || !fly.isOn() || mc.player == null) {
+        if (!isEnabled() || mode.is(Mode.SPEED) || mc.player == null) {
             return false;
         }
         Entity vehicle = mc.player.getControlledVehicle();
@@ -203,27 +179,20 @@ public final class VehicleFly extends Module {
         double vy = velocity.y;
         double vz = velocity.z;
 
-        if (fly.isOn()) {
+        if (mode.is(Mode.SPEED)) {
+            stop();
+        } else {
             blockDismount = dismountSafety.isOn() && dropIsUnsafe(vehicle);
             protecting = fallProtection.isOn();
             vy = flightLift(vehicle);
-            if (mode.is(Mode.CONTROL)) {
-                Vec3 heading = MovementUtil.inputDirection();
-                if (heading.lengthSqr() > 0 || instantStop.isOn()) {
-                    double h = flySpeed.getValue() * MovementUtil.FLY_HORIZONTAL;
-                    vx = heading.x * h;
-                    vz = heading.z * h;
-                }
-            }
-        } else {
-            stop();
         }
-
-        if (speedApplies(vehicle)) {
+        if (!mode.is(Mode.GLIDE)) {
             Vec3 heading = MovementUtil.inputDirection();
-            double h = groundSpeed.getValue() / SharedConstants.TICKS_PER_SECOND;
-            vx = heading.x * h;
-            vz = heading.z * h;
+            if (heading.lengthSqr() > 0 || instantStop.isOn()) {
+                double h = horizontalSpeed.getValue() * MovementUtil.FLY_HORIZONTAL;
+                vx = heading.x * h;
+                vz = heading.z * h;
+            }
         }
 
         if (faceView.isOn()) {
@@ -247,16 +216,6 @@ public final class VehicleFly extends Module {
             return -fallSpeed.getValue() / SharedConstants.TICKS_PER_SECOND;
         }
         return holdHeight(vehicle, limit);
-    }
-
-    private boolean speedApplies(Entity vehicle) {
-        if (!speed.isOn()) {
-            return false;
-        }
-        if (onlyOnGround.isOn() && !vehicle.onGround() && !vehicle.isFlyingVehicle()) {
-            return false;
-        }
-        return inWater.isOn() || !vehicle.isInWater();
     }
 
     // Corrects back towards the height the vehicle was left at.

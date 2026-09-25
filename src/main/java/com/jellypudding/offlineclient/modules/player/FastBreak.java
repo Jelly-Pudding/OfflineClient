@@ -49,10 +49,10 @@ public final class FastBreak extends Module {
         .describe(Mode.DAMAGE, "Reports the block finished as soon as the server would accept it.");
     private final NumberSetting speed = new NumberSetting("Speed",
         "Speeds up the break the client predicts. The server keeps its own timer.",
-        1, 1, 10, 0.1, "x").min(1).max(100).under(mode, Mode.NORMAL);
+        1, 1, 10, 0.1, "x").min(1).under(mode, Mode.NORMAL);
     private final NumberSetting hasteLevel = new NumberSetting("Haste level",
         "Level of the Haste effect. Above two is not recommended.", 2, 1, 5, 1, "")
-        .min(1).max(10).under(mode, Mode.HASTE);
+        .min(1).under(mode, Mode.HASTE);
     private final BoolSetting instamine = new BoolSetting("Instamine",
         "Removes a block on the first click when the server will finish it within two ticks.",
         true).under(mode, Mode.DAMAGE);

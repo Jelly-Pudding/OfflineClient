@@ -30,13 +30,13 @@ import java.util.concurrent.ThreadLocalRandom;
 public final class ChestStealer extends Module {
 
     private final NumberSetting delay = new NumberSetting("Delay",
-        "Milliseconds between each item grab.", 50, 0, 500, 10, "ms").min(0).max(5000);
+        "Milliseconds between each item grab.", 50, 0, 500, 10, "ms").min(0);
     private final NumberSetting initialDelay = new NumberSetting("Initial delay",
         "Milliseconds to wait before the first grab of a container.", 50, 0, 1000, 10, "ms")
-        .min(0).max(5000);
+        .min(0);
     private final NumberSetting jitter = new NumberSetting("Jitter",
         "Adds up to this many milliseconds at random to each grab.", 50, 0, 500, 10, "ms")
-        .min(0).max(1000);
+        .min(0);
     private final EnumSetting<ListMode> listMode = ListMode.setting("List mode", ListMode.BLACKLIST,
         "Takes only the listed items.", "Takes everything except the listed items.");
     private final RegistryListSetting<Item> items = new RegistryListSetting<>("Items",

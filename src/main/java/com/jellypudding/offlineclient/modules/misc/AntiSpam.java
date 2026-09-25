@@ -16,7 +16,7 @@ public final class AntiSpam extends Module {
     private static final Pattern COUNTER = Pattern.compile(" x(\\d{1,8})$");
 
     private final NumberSetting depth = new NumberSetting("Depth",
-        "How many recent lines are checked.", 4, 1, 20, 1).max(50);
+        "How many recent lines are checked.", 4, 1, 20, 1);
 
     public AntiSpam() {
         super("AntiSpam", "Stacks repeated chat lines into one.", Category.MISC);

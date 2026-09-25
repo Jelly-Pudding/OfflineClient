@@ -40,7 +40,7 @@ public final class Breadcrumbs extends Module {
         "Older parts of the trail draw fainter.", false);
     private final NumberSetting maxPoints = new NumberSetting("Max points",
         "How many points the trail keeps before the oldest drop off.", 10000, 100, 10000, 100, " points")
-        .min(10).max(100000);
+        .min(10);
 
     private final Deque<Vec3> trail = new ArrayDeque<>();
     // The server and dimension the trail belongs to. Null until the first tick in a world.

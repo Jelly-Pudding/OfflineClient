@@ -72,7 +72,7 @@ public final class Freecam extends Module {
         .describe(InteractFrom.CAMERA, "Clicks go where the camera looks. The server still checks reach from your body.");
     private final NumberSetting scrollSensitivity = new NumberSetting("Scroll sensitivity",
         "How much of the speed one wheel notch adds or takes away. Nought leaves the wheel to the hotbar.",
-        0.5, 0, 2, 0.1, "x").min(0).max(5);
+        0.5, 0, 2, 0.1, "x").min(0);
     private final BoolSetting hideHand = new BoolSetting("Hide hand",
         "Hides the held item whilst the camera is away.", true);
     private final BoolSetting blockClicks = new BoolSetting("Block clicks",

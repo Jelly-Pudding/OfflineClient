@@ -59,7 +59,7 @@ public final class InfinityMiner extends Module {
     private final NumberSetting mineAt = new NumberSetting("Mine at",
         "Pickaxe durability that ends the repair.", 70, 1, 99, 1, "%").min(1).max(99);
     private final NumberSetting scanRange = new NumberSetting("Scan range",
-        "How far around you ore is looked for.", 16, 4, 48, 1, " blocks").min(2).max(64);
+        "How far around you ore is looked for.", 16, 4, 48, 1, " blocks").min(2);
     private final EnumSetting<WhenFull> whenFull = new EnumSetting<>("When full",
         "What happens once the bag is full.", WhenFull.STOP)
         .describe(WhenFull.STOP, "Switches off where you stand.")

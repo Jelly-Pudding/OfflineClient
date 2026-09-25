@@ -58,23 +58,23 @@ public final class Scaffold extends Module {
         "Hold jump to build straight up.", true);
     private final NumberSetting towerSpeed = new NumberSetting("Tower speed",
         "How hard each tower jump pushes you up.", 0.42, 0.3, 0.5, 0.01)
-        .min(0.1).max(1).under(tower);
+        .min(0.1).under(tower);
     private final BoolSetting towerWhilstMoving = new BoolSetting("Tower whilst moving",
         "Keeps the tower boost on whilst you walk. Off means jump only lifts you when you stand still.", false)
         .under(tower);
     private final NumberSetting lookAhead = new NumberSetting("Look ahead",
-        "Ticks of movement to build ahead of you.", 2, 0, 5, 1, " ticks").min(0).max(10);
+        "Ticks of movement to build ahead of you.", 2, 0, 5, 1, " ticks").min(0);
     private final BoolSetting airPlace = new BoolSetting("Air place",
         "Places straight into the air with nothing to lean on. Needs a server that allows it.", false);
     private final NumberSetting radius = new NumberSetting("Radius",
         "Also fills every spot within this distance on the same level for a platform.", 0, 0, 6, 0.5, " blocks")
-        .min(0).max(6).under(airPlace);
+        .min(0).under(airPlace);
     private final NumberSetting blocksPerTick = new NumberSetting("Blocks per tick",
         "How many blocks may go down in one tick.", 3, 1, 10, 1, " blocks")
         .min(1).under(airPlace);
     private final NumberSetting reach = new NumberSetting("Reach",
         "When nothing touches the spot under you the nearest spot with support within this range is filled instead.",
-        4, 0, 8, 0.5, " blocks").min(0).max(8).unless(airPlace);
+        4, 0, 8, 0.5, " blocks").min(0).unless(airPlace);
     private final BoolSetting rotate = new BoolSetting("Rotate",
         "Turn towards each block on the server side.", true);
     private final BoolSetting swing = new BoolSetting("Swing",

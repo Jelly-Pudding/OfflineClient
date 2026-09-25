@@ -25,7 +25,7 @@ public final class CrashGuard {
         "Brakes before you fly into a wall or the ground. The faster you go the further ahead it looks.",
         false);
     private final NumberSetting lookAhead = new NumberSetting("Crash look ahead",
-        "The least distance along your flight path to check.", 5, 1, 15, 1, " blocks").min(1).max(32)
+        "The least distance along your flight path to check.", 5, 1, 15, 1, " blocks").min(1)
         .under(enabled);
 
     // The settings in the order a module should show them.

@@ -21,7 +21,7 @@ public final class TillAura extends Module {
         Blocks.GRASS_BLOCK, Blocks.DIRT_PATH, Blocks.DIRT, Blocks.COARSE_DIRT, Blocks.ROOTED_DIRT);
 
     private final NumberSetting range = new NumberSetting("Range",
-        "How far from your eyes to till.", 5, 1, 6, 0.1).max(6);
+        "How far from your eyes to till.", 5, 1, 6, 0.1);
     private final BoolSetting multi = new BoolSetting("Multi till",
         "Tills every block in reach at once. Fast but obvious to an anti cheat.", false);
     private final BoolSetting lineOfSight = new BoolSetting("Line of sight",

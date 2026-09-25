@@ -21,7 +21,7 @@ import java.util.List;
 public final class CityEsp extends Module {
 
     private final NumberSetting targetRange = new NumberSetting("Target range",
-        "How far away enemies are considered.", 6, 1, 16, 0.5, " blocks").max(64);
+        "How far away enemies are considered.", 6, 1, 16, 0.5, " blocks");
     private final NumberSetting breakRange = new NumberSetting("Break range",
         "How far you can reach to mine.", 4.5, 1, 6, 0.1).min(1);
     private final BoolSetting nearestOnly = new BoolSetting("Nearest only",

@@ -14,7 +14,7 @@ import net.minecraft.world.phys.BlockHitResult;
 public final class Throw extends Module {
 
     private final NumberSetting amount = new NumberSetting("Amount",
-        "How many uses one click fires.", 16, 2, 256, 1).min(2).max(100000);
+        "How many uses one click fires.", 16, 2, 256, 1).min(2);
 
     public Throw() {
         super("Throw", "Fires a whole stack of throwables in one click.", Category.PLAYER);

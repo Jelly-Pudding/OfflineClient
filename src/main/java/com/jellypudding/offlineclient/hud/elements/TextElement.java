@@ -16,7 +16,7 @@ import net.minecraft.world.phys.Vec3;
 import java.util.Locale;
 import java.util.Objects;
 
-// A line of your own with a handful of words swapped in for live numbers.
+// Any text you like with a handful of words swapped in for live values.
 public final class TextElement extends HudElement {
 
     // A Minecraft day in ticks and the ticks in one of its hours. Day starts at six.
@@ -25,16 +25,17 @@ public final class TextElement extends HudElement {
     private static final long SIX_AM = 6 * HOUR_TICKS;
     private static final long MINUTES_PER_HOUR = 60;
 
-    private final TextSetting text = new TextSetting("Line",
-        "The writing. Words in braces are swapped for live numbers.",
-        "{x} {y} {z} in {dimension}");
-    private final ColorSetting color = new ColorSetting("Line colour",
-        "Colour of the writing.", 190, false);
-    private final BoolSetting shadow = new BoolSetting("Line shadow",
+    private final TextSetting text = new TextSetting("Text",
+        "What it says. You can use {fps} {tps} {ping} {x} {y} {z} {dimension} {direction}"
+            + " {speed} {health} {server} {time} and {username}.",
+        "Hello {username}");
+    private final ColorSetting color = new ColorSetting("Text colour",
+        "Colour of the text.", 190, false);
+    private final BoolSetting shadow = new BoolSetting("Text shadow",
         "Draw a shadow behind it.", true);
 
     public TextElement() {
-        super("Custom line", "Writing of your own with live numbers swapped in.",
+        super("Custom text", "Any text you type. Words in braces such as {fps} turn into live values.",
             false, 50, 4);
         add(text, color, shadow);
     }

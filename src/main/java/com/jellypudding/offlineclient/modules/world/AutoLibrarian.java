@@ -83,7 +83,7 @@ public final class AutoLibrarian extends Module {
     private final BoolSetting lockIn = new BoolSetting("Lock in",
         "Buys the book once and the villager keeps the trade. Needs emeralds and paper or a book.", false);
     private final NumberSetting range = new NumberSetting("Range",
-        "How far the villager and its lectern may be.", 5, 1, 6, 0.1).max(6);
+        "How far the villager and its lectern may be.", 5, 1, 6, 0.1);
     private final NumberSetting spareUses = new NumberSetting("Spare uses",
         "Stops using a tool once this many uses are left. Nought never stops.",
         1, 0, 100, 1, " uses").min(0);

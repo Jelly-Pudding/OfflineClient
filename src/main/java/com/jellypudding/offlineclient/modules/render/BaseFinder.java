@@ -15,6 +15,7 @@ import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.NearestCut;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.server.level.ChunkMap;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 
@@ -65,7 +66,7 @@ public final class BaseFinder extends Module {
         "Blocks the world puts down on its own. Anything else counts as a base. Click to pick them.",
         BuiltInRegistries.BLOCK, NATURAL);
     private final NumberSetting range = new NumberSetting("Range",
-        "Chunk radius to search around you.", 4, 1, 12, 1, " chunks").max(32);
+        "Chunk radius to search around you.", 4, 1, 12, 1, " chunks").max(ChunkMap.MAX_VIEW_DISTANCE);
     private final NumberSetting limit = new NumberSetting("Limit",
         "The most blocks lit up at once with the nearest first.", 2000, 100, 10000, 100).min(1);
     private final ColorSetting color = new ColorSetting("Colour",

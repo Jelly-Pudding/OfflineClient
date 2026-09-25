@@ -28,18 +28,18 @@ public final class Spam extends Module {
         "How many lines to rotate through.", "The text to send. Click to type it.",
         "minecraftoffline.net is OK I guess");
     private final NumberSetting delay = new NumberSetting("Delay",
-        "Seconds between messages.", 5, 0.1, 60, 0.1, "s").min(0.1).max(600);
+        "Seconds between messages.", 5, 0.1, 60, 0.1, "s").min(0.1);
     private final BoolSetting randomise = new BoolSetting("Randomise",
         "Shifts each delay by a random amount to look less robotic.", false);
     private final NumberSetting spread = new NumberSetting("Spread",
         "The most a delay is shifted either way. A delay of 5s with a spread of 2s waits anywhere from 3s to 7s.",
-        1, 0.1, 10, 0.1, "s").min(0.1).max(300)
+        1, 0.1, 10, 0.1, "s").min(0.1)
         .under(randomise);
     private final BoolSetting vary = new BoolSetting("Vary text",
         "Makes small random changes to each message to get repeats past a spam filter.", false);
     private final NumberSetting variation = new NumberSetting("Variation",
         "How many changes each message gets. A letter changes case or doubles or the line gains a tail or a number.",
-        1, 1, 10, 1).max(100)
+        1, 1, 10, 1)
         .under(vary);
     private final BoolSetting split = new BoolSetting("Split long lines",
         "Sends a long message in pieces instead of cutting it short.", false);
@@ -48,7 +48,7 @@ public final class Spam extends Module {
         .min(1).max(SharedConstants.MAX_CHAT_LENGTH)
         .under(split);
     private final NumberSetting splitDelay = new NumberSetting("Split delay",
-        "Ticks between one piece and the next.", 20, 0, 200, 1, " ticks").min(0).max(1000)
+        "Ticks between one piece and the next.", 20, 0, 200, 1, " ticks").min(0)
         .under(split);
     private final BoolSetting stopOnLeave = new BoolSetting("Stop on leave",
         "Turns itself off when you leave a world.", true);

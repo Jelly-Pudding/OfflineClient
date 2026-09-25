@@ -27,7 +27,7 @@ public final class ModuleListElement extends HudElement {
 
     private final EnumSetting<Sort> sort = new EnumSetting<>("List order",
         "How the rows are ordered.", Sort.LENGTH)
-        .describe(Sort.LENGTH, "Longest row first.")
+        .describe(Sort.LENGTH, "Longest name first. A row keeps its place when the text after it changes.")
         .describe(Sort.ALPHABETICAL, "By name from A to Z.");
     private final ColorSetting color = new ColorSetting("List colour",
         "Colour of the module names.", 200, false);
@@ -68,7 +68,7 @@ public final class ModuleListElement extends HudElement {
         if (sort.is(Sort.ALPHABETICAL)) {
             enabled.sort(Comparator.comparing(Module::getName, String.CASE_INSENSITIVE_ORDER));
         } else {
-            enabled.sort(Comparator.comparingInt((Module module) -> rowWidth(font, module)).reversed()
+            enabled.sort(Comparator.comparingInt((Module module) -> font.width(module.getName())).reversed()
                 .thenComparing(Module::getName, String.CASE_INSENSITIVE_ORDER));
         }
         return enabled;

@@ -37,7 +37,7 @@ public final class AntiVoid extends Module {
         .describe(Mode.FLIGHT, "Switches Flight on until you are back over solid ground.");
     private final NumberSetting depth = new NumberSetting("Depth",
         "Empty blocks below you that count as a void fall.", 12, 3, 40, 1, " blocks")
-        .min(2).max(64);
+        .min(2);
     private final BoolSetting rotate = new BoolSetting("Rotate",
         "Face the block being placed for the server to accept it.", true)
         .under(mode, Mode.PLACE_BLOCK);
