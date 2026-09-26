@@ -8,6 +8,7 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.PickList;
+import com.jellypudding.offlineclient.setting.RankSetting;
 import com.jellypudding.offlineclient.setting.Setting;
 import com.jellypudding.offlineclient.setting.TextSetting;
 import com.jellypudding.offlineclient.util.ColorUtil;
@@ -15,6 +16,7 @@ import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.RenderUtil;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -42,8 +44,20 @@ public final class SettingWidget {
     private static final int SATURATION_CHANNEL = 1;
     private static final int BRIGHTNESS_CHANNEL = 2;
 
+    // A ranked list gives each choice a row tall enough for its item.
+    private static final int ENTRY_HEIGHT = 18;
+    private static final int ICON = 16;
+    private static final int GRIP_WIDTH = 3;
+    private static final int GRIP_HEIGHT = 5;
+    // How far a press on a choice travels before it counts as a drag.
+    private static final int DRAG_SLOP = 3;
+    // Laid over the item of a choice that is switched off.
+    private static final int OFF_VEIL = 0xB0;
+
     private static final String BIND_HELP =
         "Click here and then press a key. DELETE unbinds. ESC cancels.";
+    private static final String RANK_HELP =
+        "Drag a row up or down to change the order. Click it to switch it on or off.";
 
     private SettingWidget() {
     }
@@ -68,30 +82,66 @@ public final class SettingWidget {
     }
 
     // A slider or colour bar keeps following the mouse even when it leaves the row.
+    // A choice in a ranked list follows it up and down.
     public static final class Drag {
 
         private NumberSetting slider;
         private ColorSetting color;
         private int channel;
 
+        private RankSetting<?> rank;
+        private int rankStart;
+        private int rankIndex;
+        private double pressY;
+        // A press that never travels is a click.
+        private boolean travelled;
+
         // How far the row being dragged sits in from the block edge.
         private int indent;
 
         private boolean isActive() {
-            return slider != null || color != null;
+            return slider != null || color != null || rank != null;
+        }
+
+        private void grab(RankSetting<?> setting, int index, double mouseY) {
+            rank = setting;
+            rankStart = index;
+            rankIndex = index;
+            pressY = mouseY;
+            travelled = false;
         }
 
         // Called every frame with the geometry of the settings block.
-        public void follow(int x, int width, int mouseX) {
+        public void follow(int x, int width, int mouseX, int mouseY) {
             if (slider != null) {
                 slider.setFromSlider(fraction(x + indent, width - indent, mouseX));
             }
             if (color != null) {
                 setChannel(color, channel, (float) fraction(x + indent, width - indent, mouseX));
             }
+            if (rank != null) {
+                followRank(mouseY);
+            }
+        }
+
+        // The held choice swaps places with each row it passes.
+        private void followRank(int mouseY) {
+            double travel = mouseY - pressY;
+            travelled |= Math.abs(travel) > DRAG_SLOP;
+            if (!travelled) {
+                return;
+            }
+            int target = Math.clamp(rankStart + Math.round(travel / ENTRY_HEIGHT), 0, rank.size() - 1);
+            if (target != rankIndex) {
+                rank.move(rankIndex, target);
+                rankIndex = target;
+            }
         }
 
         public void release() {
+            if (rank != null && !travelled) {
+                rank.toggle(rankIndex);
+            }
             if (isActive()) {
                 OfflineClient.INSTANCE.getConfigManager().saveSoon();
             }
@@ -100,15 +150,38 @@ public final class SettingWidget {
             }
             slider = null;
             color = null;
+            rank = null;
         }
     }
 
-    // A colour row needs room under the hue bar for the two extra bars.
+    // A colour row needs room under the hue bar for the two extra bars. A ranked list
+    // needs a row for each choice under its name.
     private static int rowHeight(Setting<?> setting) {
-        if (setting instanceof ColorSetting) {
-            return GuiTheme.SETTING_HEIGHT + (COLOR_BARS - 1) * BAR_PITCH;
-        }
-        return GuiTheme.SETTING_HEIGHT;
+        return switch (setting) {
+            case ColorSetting ignored -> GuiTheme.SETTING_HEIGHT + (COLOR_BARS - 1) * BAR_PITCH;
+            case RankSetting<?> rank -> GuiTheme.SETTING_HEIGHT + rank.size() * ENTRY_HEIGHT;
+            default -> GuiTheme.SETTING_HEIGHT;
+        };
+    }
+
+    private static int entryTop(int y, int index) {
+        return y + GuiTheme.SETTING_HEIGHT + index * ENTRY_HEIGHT;
+    }
+
+    // Minus one over the name row.
+    private static int entryAt(RankSetting<?> rank, double my, int y) {
+        int index = (int) Math.floor((my - entryTop(y, 0)) / ENTRY_HEIGHT);
+        return index >= 0 && index < rank.size() ? index : -1;
+    }
+
+    // A bind row wants the help text and not the description of the key. The choices
+    // of a ranked list explain how to move them.
+    private static String tooltipOf(Setting<?> setting, double my, int y) {
+        return switch (setting) {
+            case KeybindSetting ignored -> BIND_HELP;
+            case RankSetting<?> rank when entryAt(rank, my, y) >= 0 -> RANK_HELP;
+            default -> setting.getDescription();
+        };
     }
 
     public static boolean isOver(double mx, double my, int x, int y, int w, int h) {
@@ -138,11 +211,13 @@ public final class SettingWidget {
         int bandY = GuiTheme.textY(y, VALUE_BAND);
         boolean hovered = hoverAllowed && isOver(mouseX, mouseY, x, y, w, h);
         if (hovered) {
-            // A bind row wants the help text and not the description of the key.
-            host.setTooltip(setting instanceof KeybindSetting
-                ? BIND_HELP : setting.getDescription());
-            context.fill(x, y, x + w, y + h, GuiTheme.HOVER_WASH);
-            context.guiRenderState.up();
+            host.setTooltip(tooltipOf(setting, mouseY, y));
+            // The choices of a ranked list light up one at a time.
+            int washed = setting instanceof RankSetting ? GuiTheme.SETTING_HEIGHT : h;
+            if (mouseY < y + washed) {
+                context.fill(x, y, x + w, y + washed, GuiTheme.HOVER_WASH);
+                context.guiRenderState.up();
+            }
         }
         int nameColor = hovered ? GuiTheme.text() : GuiTheme.textDim();
 
@@ -183,7 +258,54 @@ public final class SettingWidget {
                     GuiTheme.accentText(), false);
             }
             case TextSetting t -> renderText(context, font, t, x, y, w, nameColor, ty, host);
+            case RankSetting<?> r -> {
+                context.text(font, trimEnd(font, r.getName(), w - 2 * PAD), x + PAD, ty, nameColor, false);
+                renderRank(context, font, r, x, y, w, mouseX, mouseY, hoverAllowed);
+            }
             default -> context.text(font, setting.getName(), x + PAD, ty, nameColor, false);
+        }
+    }
+
+    // Each choice reads grip then item then name with its box on the right. A choice
+    // that is switched off fades back.
+    private static void renderRank(GuiGraphicsExtractor context, Font font, RankSetting<?> rank,
+                                   int x, int y, int w, int mouseX, int mouseY, boolean hoverAllowed) {
+        int boxX = x + w - PAD - BOX;
+        for (int i = 0; i < rank.size(); i++) {
+            int top = entryTop(y, i);
+            boolean on = rank.get(i).on();
+            boolean over = hoverAllowed && isOver(mouseX, mouseY, x, top, w, ENTRY_HEIGHT);
+            if (over) {
+                context.fill(x, top, x + w, top + ENTRY_HEIGHT, GuiTheme.HOVER_WASH);
+                context.guiRenderState.up();
+            }
+            grip(context, x + PAD, top + (ENTRY_HEIGHT - GRIP_HEIGHT) / 2,
+                over ? GuiTheme.text() : GuiTheme.textFaint());
+            int textX = x + PAD + GRIP_WIDTH + 4;
+            ItemStack icon = rank.icon(i);
+            if (icon != null) {
+                int iconY = top + (ENTRY_HEIGHT - ICON) / 2;
+                context.item(icon, textX, iconY);
+                if (!on) {
+                    context.guiRenderState.up();
+                    context.fill(textX, iconY, textX + ICON, iconY + ICON,
+                        ColorUtil.withAlpha(GuiTheme.bgSetting(), OFF_VEIL));
+                }
+                textX += ICON + 3;
+            }
+            String label = trimEnd(font, rank.label(i), boxX - 4 - textX);
+            context.text(font, label, textX, GuiTheme.textY(top, ENTRY_HEIGHT),
+                on ? (over ? GuiTheme.text() : GuiTheme.textDim()) : GuiTheme.textFaint(), false);
+            checkbox(context, boxX, top + (ENTRY_HEIGHT - BOX) / 2, on);
+        }
+    }
+
+    // Two columns of three dots that say a row can be picked up.
+    private static void grip(GuiGraphicsExtractor context, int x, int y, int color) {
+        for (int row = 0; row < GRIP_HEIGHT; row += 2) {
+            for (int column = 0; column < GRIP_WIDTH; column += 2) {
+                context.fill(x + column, y + row, x + column + 1, y + row + 1, color);
+            }
         }
     }
 
@@ -566,6 +688,18 @@ public final class SettingWidget {
             case TextSetting t -> {
                 host.startEditing(t);
                 return;
+            }
+            // A left press waits to see whether it becomes a drag. Release decides.
+            case RankSetting<?> r -> {
+                int index = entryAt(r, my, y);
+                if (index < 0) {
+                    return;
+                }
+                if (InputUtil.isLeft(button)) {
+                    drag.grab(r, index, my);
+                    return;
+                }
+                r.toggle(index);
             }
             default -> {
             }

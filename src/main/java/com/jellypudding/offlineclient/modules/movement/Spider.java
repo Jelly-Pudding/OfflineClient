@@ -5,6 +5,7 @@ import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
+import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.MovementUtil;
 import net.minecraft.world.phys.AABB;
@@ -14,6 +15,8 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 // A wall the player pushes into is climbed and a risen ceiling can be hung from.
 // Both keep a block within reach to dodge the vanilla flight kick.
 public final class Spider extends Module {
+
+    public enum SneakAction { CLIMB_DOWN, LET_GO }
 
     // How far past the box a ceiling or a wall is felt for.
     private static final double PROBE = 0.05;
@@ -31,11 +34,23 @@ public final class Spider extends Module {
     // wall and no further.
     private static final double RELEASE_SPEED = 0.2;
 
+    // The server banks every block you are lowered and charges it on landing. A climb
+    // down rises this much for a tick before the bank reaches the drop that hurts.
+    private static final double WIPE_RISE = 0.01;
+    private static final double SAFE_DROP = 2.5;
+
     private final NumberSetting speed = new NumberSetting("Speed",
         "How fast you go up the wall in blocks a tick.",
         0.2, 0.1, 0.5, 0.05, " blocks").min(0.01);
+    private final EnumSetting<SneakAction> sneak = new EnumSetting<>("Sneak",
+        "What sneaking does on a wall.", SneakAction.CLIMB_DOWN)
+        .describe(SneakAction.CLIMB_DOWN, "Sneaking lowers you down the wall without any fall damage.")
+        .describe(SneakAction.LET_GO, "Sneaking lets go of the wall.");
+    private final NumberSetting descentSpeed = new NumberSetting("Descent speed",
+        "How fast sneaking lowers you down the wall in blocks a tick.",
+        0.15, 0.05, 0.5, 0.05, " blocks").min(0.01).under(sneak, SneakAction.CLIMB_DOWN);
     private final BoolSetting holdOn = new BoolSetting("Hold on",
-        "Keeps you in place on a wall when you stop climbing. Sneak to let go.", true);
+        "Keeps you in place on a wall when you stop climbing.", true);
     private final BoolSetting ceilings = new BoolSetting("Ceilings",
         "Hang from ceilings and walk along them. Sneak to drop.", false);
     private final BoolSetting autoRound = new BoolSetting("Auto climb edges",
@@ -47,16 +62,22 @@ public final class Spider extends Module {
     private boolean clinging;
     // Climbing round the edge of a ceiling just hung from.
     private boolean rounding;
+    // How far the climb down has lowered you since the last rise.
+    private double lowered;
+    private boolean lowering;
 
     public Spider() {
-        super("Spider", "Climb up any wall like a spider.", Category.MOVEMENT);
-        addSettings(speed, holdOn, ceilings, autoRound);
-        searchTags("wall climb", "ceiling");
+        super("Spider", "Climb up and down any wall like a spider.", Category.MOVEMENT);
+        addSettings(speed, sneak, descentSpeed, holdOn, ceilings, autoRound);
+        searchTags("wall climb", "ceiling", "climb down");
     }
 
     @Override
     public String getSuffix() {
-        return hanging ? "hanging" : null;
+        if (hanging) {
+            return "hanging";
+        }
+        return lowering ? "down" : null;
     }
 
     @Override
@@ -64,14 +85,17 @@ public final class Spider extends Module {
         hanging = false;
         clinging = false;
         rounding = false;
+        lowering = false;
     }
 
     @Subscribe
     private void onTick(TickEvent event) {
         boolean held = clinging;
         boolean hung = hanging;
+        boolean wasLowering = lowering;
         hanging = false;
         clinging = false;
+        lowering = false;
         if (!inGame() || mc.player.isPassenger()) {
             rounding = false;
             return;
@@ -87,7 +111,16 @@ public final class Spider extends Module {
             return;
         }
         rounding = false;
-        if (mc.player.horizontalCollision) {
+        boolean onWall = mc.player.horizontalCollision || (held && besideWall());
+        if (mc.player.isShiftKeyDown() && airborne() && onWall) {
+            if (sneak.is(SneakAction.CLIMB_DOWN)) {
+                climbDown(wasLowering);
+                clinging = true;
+                lowering = true;
+            } else if (held) {
+                release();
+            }
+        } else if (mc.player.horizontalCollision) {
             climb();
             clinging = true;
         } else if (held && holdOn.isOn() && canCling() && besideWall()) {
@@ -105,6 +138,22 @@ public final class Spider extends Module {
             return;
         }
         mc.player.setDeltaMovement(velocity.x, speed.getValue(), velocity.z);
+    }
+
+    // The first tick down always rises. A fall taken before grabbing the wall is still
+    // banked and that rise wipes it.
+    private void climbDown(boolean wasLowering) {
+        Vec3 velocity = mc.player.getDeltaMovement();
+        double step = descentSpeed.getValue();
+        if (!wasLowering || lowered + step > SAFE_DROP) {
+            mc.player.setDeltaMovement(velocity.x, WIPE_RISE, velocity.z);
+            lowered = 0;
+        } else {
+            mc.player.setDeltaMovement(velocity.x, -step, velocity.z);
+            lowered += step;
+        }
+        // The client keeps its own count and would play a hard landing at the bottom.
+        mc.player.resetFallDistance();
     }
 
     // Keeps pushing up into a ceiling. The collision holds the player against it.
@@ -172,10 +221,14 @@ public final class Spider extends Module {
         }
     }
 
-    // Clinging only happens in the air. Sneak lets go.
+    // Clinging only happens in the air.
+    private boolean airborne() {
+        return !mc.player.onGround() && !mc.player.isInWater() && !mc.player.isInLava();
+    }
+
+    // Sneak lets go of a ceiling and takes over on a wall.
     private boolean canCling() {
-        return !mc.player.onGround() && !mc.player.isShiftKeyDown() && !mc.player.isInWater()
-            && !mc.player.isInLava();
+        return airborne() && !mc.player.isShiftKeyDown();
     }
 
     private boolean besideWall() {

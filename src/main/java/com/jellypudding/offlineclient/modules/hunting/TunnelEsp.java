@@ -1,4 +1,4 @@
-package com.jellypudding.offlineclient.modules.render;
+package com.jellypudding.offlineclient.modules.hunting;
 
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.PacketReceiveEvent;
@@ -55,7 +55,7 @@ public final class TunnelEsp extends Module {
     private int lastHigh = Integer.MIN_VALUE;
 
     public TunnelEsp() {
-        super("TunnelESP", "Highlights hand dug tunnels underground.", Category.RENDER);
+        super("TunnelESP", "Highlights hand dug tunnels underground.", Category.HUNTING);
         addSettings(range, bottom, top, height, connected);
         addSettings(style.settings());
         searchTags("tunnel", "base finder", "corridor");

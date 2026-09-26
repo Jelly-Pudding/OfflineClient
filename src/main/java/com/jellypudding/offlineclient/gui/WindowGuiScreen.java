@@ -357,7 +357,7 @@ public final class WindowGuiScreen extends GuiScreenBase {
         context.guiRenderState.up();
 
         boolean mouseInView = SettingWidget.isOver(mouseX, mouseY, x, top, rowW, h);
-        drag.follow(SettingWidget.blockContentX(x), SettingWidget.blockContentWidth(rowW), mouseX);
+        drag.follow(SettingWidget.blockContentX(x), SettingWidget.blockContentWidth(rowW), mouseX, mouseY);
 
         context.enableScissor(x, top, x + rowW, top + h);
         int rowY = top - scrollBar.getOffset();

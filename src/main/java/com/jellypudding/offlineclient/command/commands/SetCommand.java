@@ -9,6 +9,7 @@ import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.setting.RankSetting;
 import com.jellypudding.offlineclient.setting.Setting;
 import com.jellypudding.offlineclient.setting.TextSetting;
 import com.jellypudding.offlineclient.util.ChatUtil;
@@ -80,6 +81,9 @@ public final class SetCommand extends Command {
         if (setting instanceof EnumSetting<?> e) {
             ChatUtil.message("§7Pick from §f" + enumOptions(e));
         }
+        if (setting instanceof RankSetting<?> r) {
+            ChatUtil.message("§7Name the ones you want in order from §f" + rankOptions(r));
+        }
     }
 
     private static String optionsHint(Module module) {
@@ -130,6 +134,13 @@ public final class SetCommand extends Command {
                 }
             }
             case TextSetting t -> t.setValue(value.trim());
+            case RankSetting<?> r -> {
+                if (!r.setFromWords(value)) {
+                    ChatUtil.error("§f" + value + "§c names something not on the list. Pick from §f"
+                        + rankOptions(r));
+                    return;
+                }
+            }
             case KeybindSetting k -> {
                 int key = KeybindSetting.keyFromName(value);
                 if (key == KeybindSetting.UNKNOWN) {
@@ -160,6 +171,10 @@ public final class SetCommand extends Command {
 
     private static String enumOptions(EnumSetting<?> setting) {
         return String.join(" §7/ §f", options(setting));
+    }
+
+    private static String rankOptions(RankSetting<?> setting) {
+        return String.join(" §7/ §f", setting.ids());
     }
 
     private static String rangeHint(Setting<?> setting) {
@@ -199,10 +214,15 @@ public final class SetCommand extends Command {
         if (index == 2) {
             return CommandManager.filter(current, module.settingIds());
         }
+        Setting<?> setting = module.getSetting(tokens[2]);
+        // A ranked list takes one word for each choice.
+        if (setting instanceof RankSetting<?> r) {
+            return CommandManager.filter(current, r.ids());
+        }
         if (index != 3) {
             return List.of();
         }
-        return switch (module.getSetting(tokens[2])) {
+        return switch (setting) {
             case BoolSetting ignored -> CommandManager.filter(current, List.of("true", "false"));
             case EnumSetting<?> choice -> CommandManager.filter(current, options(choice));
             case ColorSetting ignored -> CommandManager.filter(current, List.of("rainbow"));

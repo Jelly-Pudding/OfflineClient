@@ -1,16 +1,17 @@
 package com.jellypudding.offlineclient.mixin;
 
 import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.event.events.ChunkDataEvent;
 import com.jellypudding.offlineclient.event.events.EntityAddedEvent;
 import com.jellypudding.offlineclient.modules.player.NoRotate;
-import com.jellypudding.offlineclient.modules.render.NewChunks;
 import com.jellypudding.offlineclient.modules.render.NoRender;
 import com.jellypudding.offlineclient.util.Modules;
+import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.network.protocol.game.ClientboundAddEntityPacket;
-import net.minecraft.network.protocol.game.ClientboundLevelChunkWithLightPacket;
+import net.minecraft.world.level.chunk.LevelChunk;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -76,16 +77,18 @@ public abstract class ClientPacketListenerMixin {
     }
 
     // The chunk is in the world and every later packet is still queued behind this one.
-    // NewChunks reads the liquid here whilst the data is untouched.
-    @Inject(
+    // Null when the server sent a chunk outside the view range.
+    @ModifyExpressionValue(
         method = "handleLevelChunkWithLight"
             + "(Lnet/minecraft/network/protocol/game/ClientboundLevelChunkWithLightPacket;)V",
-        at = @At("TAIL"))
-    private void onChunkLoaded(ClientboundLevelChunkWithLightPacket packet, CallbackInfo ci) {
-        NewChunks newChunks = Modules.get(NewChunks.class);
-        if (newChunks != null) {
-            newChunks.onChunkLoaded(packet.x(), packet.z());
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/multiplayer/ClientChunkCache;"
+            + "replaceWithPacketData(IILnet/minecraft/network/protocol/game/ClientboundLevelChunkPacketData;)"
+            + "Lnet/minecraft/world/level/chunk/LevelChunk;"))
+    private LevelChunk onChunkData(LevelChunk chunk) {
+        if (chunk != null) {
+            OfflineClient.INSTANCE.getEventBus().post(new ChunkDataEvent(chunk));
         }
+        return chunk;
     }
 
     @Inject(

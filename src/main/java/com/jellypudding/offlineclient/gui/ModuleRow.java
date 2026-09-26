@@ -137,7 +137,7 @@ public final class ModuleRow {
         }
 
         if (expanded) {
-            drag.follow(SettingWidget.blockContentX(x), SettingWidget.blockContentWidth(w), mouseX);
+            drag.follow(SettingWidget.blockContentX(x), SettingWidget.blockContentWidth(w), mouseX, mouseY);
             SettingWidget.renderBlock(context, font, module, x, y + GuiTheme.ROW_HEIGHT, w,
                 mouseX, mouseY, hoverActive, host);
         }

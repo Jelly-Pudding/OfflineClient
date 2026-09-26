@@ -35,7 +35,6 @@ import com.jellypudding.offlineclient.modules.combat.SelfTrap;
 import com.jellypudding.offlineclient.modules.combat.SelfWeb;
 import com.jellypudding.offlineclient.modules.combat.TpAura;
 import com.jellypudding.offlineclient.modules.render.RemoteView;
-import com.jellypudding.offlineclient.modules.render.BaseFinder;
 import com.jellypudding.offlineclient.modules.world.AutoBuild;
 import com.jellypudding.offlineclient.modules.world.TemplateTool;
 import com.jellypudding.offlineclient.modules.combat.FightBot;
@@ -43,6 +42,14 @@ import com.jellypudding.offlineclient.modules.combat.Protect;
 import com.jellypudding.offlineclient.modules.combat.ArrowDamage;
 import com.jellypudding.offlineclient.modules.combat.Surround;
 import com.jellypudding.offlineclient.modules.combat.TriggerBot;
+import com.jellypudding.offlineclient.modules.hunting.BaseFinder;
+import com.jellypudding.offlineclient.modules.hunting.Eavesdrop;
+import com.jellypudding.offlineclient.modules.hunting.GearedMobs;
+import com.jellypudding.offlineclient.modules.hunting.Locator;
+import com.jellypudding.offlineclient.modules.hunting.NewChunks;
+import com.jellypudding.offlineclient.modules.hunting.SpawnerFinder;
+import com.jellypudding.offlineclient.modules.hunting.StashFinder;
+import com.jellypudding.offlineclient.modules.hunting.TunnelEsp;
 import com.jellypudding.offlineclient.modules.misc.AntiAfk;
 import com.jellypudding.offlineclient.modules.misc.AntiPacketKick;
 import com.jellypudding.offlineclient.modules.misc.AntiSpam;
@@ -68,7 +75,6 @@ import com.jellypudding.offlineclient.modules.misc.SkinDerp;
 import com.jellypudding.offlineclient.modules.misc.ServerSpoof;
 import com.jellypudding.offlineclient.modules.misc.SoundBlocker;
 import com.jellypudding.offlineclient.modules.misc.Spam;
-import com.jellypudding.offlineclient.modules.misc.StashFinder;
 import com.jellypudding.offlineclient.modules.misc.TabGui;
 import com.jellypudding.offlineclient.modules.misc.Timer;
 import com.jellypudding.offlineclient.modules.movement.AirJump;
@@ -164,7 +170,6 @@ import com.jellypudding.offlineclient.modules.render.ItemPhysics;
 import com.jellypudding.offlineclient.modules.render.LogoutSpots;
 import com.jellypudding.offlineclient.modules.render.Marker;
 import com.jellypudding.offlineclient.modules.render.Nametags;
-import com.jellypudding.offlineclient.modules.render.NewChunks;
 import com.jellypudding.offlineclient.modules.render.NoBackground;
 import com.jellypudding.offlineclient.modules.render.NoHurtCam;
 import com.jellypudding.offlineclient.modules.render.NoRender;
@@ -179,7 +184,6 @@ import com.jellypudding.offlineclient.modules.render.Tracers;
 import com.jellypudding.offlineclient.modules.render.Trail;
 import com.jellypudding.offlineclient.modules.render.Trajectories;
 import com.jellypudding.offlineclient.modules.render.TrueSight;
-import com.jellypudding.offlineclient.modules.render.TunnelEsp;
 import com.jellypudding.offlineclient.modules.render.VoidEsp;
 import com.jellypudding.offlineclient.modules.render.Waypoints;
 import com.jellypudding.offlineclient.modules.render.Weather;
@@ -242,6 +246,7 @@ public final class ModuleManager {
         registerRender();
         registerPlayer();
         registerWorld();
+        registerHunting();
         registerMisc();
 
         OfflineClient.INSTANCE.getEventBus().register(this);
@@ -362,7 +367,6 @@ public final class ModuleManager {
         add(new HoleEsp());
         add(new CityEsp());
         add(new SpawnEsp());
-        add(new BaseFinder());
 
         add(new Fullbright());
         add(new NoRender());
@@ -384,8 +388,6 @@ public final class ModuleManager {
         add(new Breadcrumbs());
         add(new Trail());
         add(new Radar());
-        add(new NewChunks());
-        add(new TunnelEsp());
         add(new VoidEsp());
         add(new Portals());
 
@@ -486,6 +488,18 @@ public final class ModuleManager {
         add(new AutoSign());
     }
 
+    private void registerHunting() {
+        add(new NewChunks());
+        add(new StashFinder());
+        add(new BaseFinder());
+        add(new SpawnerFinder());
+        add(new TunnelEsp());
+
+        add(new Locator());
+        add(new Eavesdrop());
+        add(new GearedMobs());
+    }
+
     private void registerMisc() {
         add(new ClickGuiModule());
         add(new HudModule());
@@ -507,7 +521,6 @@ public final class ModuleManager {
         add(new MessageAura());
         add(new MassTpa());
 
-        add(new StashFinder());
         add(new BetterBeacons());
         add(new SoundBlocker());
         add(new BookBot());

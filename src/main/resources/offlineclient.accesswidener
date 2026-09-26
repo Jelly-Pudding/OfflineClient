@@ -35,3 +35,13 @@ accessible field net/minecraft/client/gui/components/ChatComponent chatScrollbar
 accessible method net/minecraft/client/gui/components/ChatComponent getScale ()D
 accessible method net/minecraft/client/gui/components/ChatComponent getWidth ()I
 accessible method net/minecraft/client/gui/components/ChatComponent getLineHeight ()I
+accessible class net/minecraft/world/level/chunk/PalettedContainer$Data
+accessible field net/minecraft/world/level/chunk/PalettedContainer data Lnet/minecraft/world/level/chunk/PalettedContainer$Data;
+accessible field net/minecraft/world/level/BaseSpawner spawnDelay I
+accessible field net/minecraft/world/level/BaseSpawner nextSpawnData Lnet/minecraft/world/level/SpawnData;
+accessible class net/minecraft/world/waypoints/TrackedWaypoint$AzimuthWaypoint
+accessible field net/minecraft/world/waypoints/TrackedWaypoint$AzimuthWaypoint angle F
+accessible class net/minecraft/world/waypoints/TrackedWaypoint$ChunkWaypoint
+accessible field net/minecraft/world/waypoints/TrackedWaypoint$ChunkWaypoint chunkPos Lnet/minecraft/world/level/ChunkPos;
+accessible class net/minecraft/world/waypoints/TrackedWaypoint$Vec3iWaypoint
+accessible field net/minecraft/world/waypoints/TrackedWaypoint$Vec3iWaypoint vector Lnet/minecraft/core/Vec3i;

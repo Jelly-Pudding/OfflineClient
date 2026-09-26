@@ -1,4 +1,4 @@
-package com.jellypudding.offlineclient.modules.misc;
+package com.jellypudding.offlineclient.modules.hunting;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -138,7 +138,7 @@ public final class StashFinder extends Module {
     private final WorldWatch world = new WorldWatch();
 
     public StashFinder() {
-        super("StashFinder", "Points out chunks packed with containers as you travel.", Category.MISC);
+        super("StashFinder", "Points out chunks packed with containers as you travel.", Category.HUNTING);
         addSettings(minimum, containers, ignoredSupports, minimumDistance, notify, notifyMode,
             tracers, tracerColor, tracerHide, tracerRange, columns, columnColor, clearKey);
         searchTags("stash", "base finder", "chests", "loot");

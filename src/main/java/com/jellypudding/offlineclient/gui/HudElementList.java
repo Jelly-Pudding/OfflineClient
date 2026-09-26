@@ -88,7 +88,7 @@ public final class HudElementList extends PanelFrame {
         boolean inView = mouseX >= getX() && mouseX < getX() + rowWidth
             && mouseY >= viewTop && mouseY < viewTop + view;
         drag.follow(SettingWidget.blockContentX(getX()),
-            SettingWidget.blockContentWidth(rowWidth), mouseX);
+            SettingWidget.blockContentWidth(rowWidth), mouseX, mouseY);
         int y = viewTop - getScrollOffset();
         for (HudElement element : elements) {
             int h = rowHeight(element);

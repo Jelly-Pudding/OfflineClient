@@ -1,4 +1,4 @@
-package com.jellypudding.offlineclient.modules.render;
+package com.jellypudding.offlineclient.modules.hunting;
 
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.PacketReceiveEvent;
@@ -78,7 +78,7 @@ public final class BaseFinder extends Module {
     private volatile Set<Block> naturalBlocks = Set.of();
 
     public BaseFinder() {
-        super("BaseFinder", "Lights up every block a player put down near you.", Category.RENDER);
+        super("BaseFinder", "Lights up every block a player put down near you.", Category.HUNTING);
         addSettings(natural, range, limit, color);
         searchTags("base finder", "man made", "factions", "player blocks");
     }
