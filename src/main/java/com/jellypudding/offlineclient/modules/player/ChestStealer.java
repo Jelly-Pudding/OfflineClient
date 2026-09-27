@@ -56,6 +56,18 @@ public final class ChestStealer extends Module {
     private final BoolSetting close = new BoolSetting("Close when done",
         "Close the container once everything is taken.", false);
 
+    // How one step over the open container went.
+    public enum Step {
+        // A stack moved and the next one waits out the delay.
+        MOVED,
+        // The delay has not run out yet.
+        WAITING,
+        // Nothing is left that the rules want moved.
+        DONE,
+        // The side the items go to has no room.
+        FULL
+    }
+
     private long nextClick;
     private int lastSlot = -1;
     private int lastCount = -1;
@@ -65,6 +77,8 @@ public final class ChestStealer extends Module {
     private boolean dumping;
     // What a dump put in the container is left there for the rest of the visit.
     private boolean dumped;
+    // Set whilst ChestAura runs a visit. The module's own tick stands back meanwhile.
+    private boolean driven;
 
     public ChestStealer() {
         super("ChestStealer", "Takes everything out of containers for you.", Category.PLAYER);
@@ -101,47 +115,96 @@ public final class ChestStealer extends Module {
             return false;
         }
         MenuType<?> type = container.getMenu().menuType;
-        return type != null && screens.contains(type);
+        return type != null && handles(type);
+    }
+
+    public boolean handles(MenuType<?> type) {
+        return screens.contains(type);
+    }
+
+    // True whilst the stealer is working a container of its own or one ChestAura opened.
+    public boolean busy() {
+        return isEnabled() || driven;
+    }
+
+    // ChestAura opens a container and runs its visit through take or store.
+    public void startVisit() {
+        forget();
+        driven = true;
+    }
+
+    public void endVisit() {
+        forget();
+        driven = false;
+    }
+
+    public Step take() {
+        return step(false);
+    }
+
+    public Step store() {
+        return step(true);
+    }
+
+    // A visit can take something. There is a free slot or the items are thrown out.
+    public boolean roomToTake() {
+        return throwOut.isOn() || mc.player.getInventory().getFreeSlot() != -1;
+    }
+
+    // Something in the inventory is waiting to be stored.
+    public boolean somethingToStore() {
+        return InventoryUtil.findSlot(ChestStealer::dumps, InventoryUtil.WHOLE_INVENTORY) != -1;
     }
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame()) {
+        if (!inGame() || driven) {
             return;
         }
         if (!handles(mc.gui.screen())) {
             forget();
             return;
         }
-        if (!open) {
-            open = true;
-            nextClick = System.currentTimeMillis() + initialDelay.getInt();
-        }
         if (dumping) {
-            if (System.currentTimeMillis() >= nextClick) {
-                dumping = dumpStep();
-            }
+            Step step = store();
+            dumping = step == Step.MOVED || step == Step.WAITING;
             return;
         }
+        if (take() == Step.DONE && close.isOn()) {
+            mc.player.closeContainer();
+        }
+    }
+
+    private Step step(boolean store) {
+        long now = System.currentTimeMillis();
+        if (!open) {
+            open = true;
+            nextClick = now + initialDelay.getInt();
+        }
+        AbstractContainerMenu menu = mc.player.containerMenu;
+        int containerSlots = menu.slots.size() - InventoryUtil.WHOLE_INVENTORY;
+        if (containerSlots <= 0) {
+            return Step.DONE;
+        }
+        if (store) {
+            return now < nextClick ? Step.WAITING : storeStep(menu, containerSlots);
+        }
+        return takeStep(menu, containerSlots, now);
+    }
+
+    private Step takeStep(AbstractContainerMenu menu, int containerSlots, long now) {
         if (inventoryFull && !throwOut.isOn()) {
             if (mc.player.getInventory().getFreeSlot() == -1) {
-                return;
+                return Step.FULL;
             }
             // The refused slot has to look new again or the next pass skips it.
             lastSlot = -1;
             lastCount = -1;
             inventoryFull = false;
         }
-        if (System.currentTimeMillis() < nextClick) {
-            return;
+        if (now < nextClick) {
+            return Step.WAITING;
         }
-
-        AbstractContainerMenu menu = mc.player.containerMenu;
-        int containerSlots = menu.slots.size() - InventoryUtil.WHOLE_INVENTORY;
-        if (containerSlots <= 0) {
-            return;
-        }
-
         for (int i = 0; i < containerSlots; i++) {
             Slot slot = menu.slots.get(i);
             if (!slot.hasItem() || !wanted(slot.getItem())) {
@@ -150,21 +213,18 @@ public final class ChestStealer extends Module {
             // A click that moved nothing means the inventory is full.
             if (i == lastSlot && slot.getItem().getCount() == lastCount) {
                 inventoryFull = true;
-                return;
+                return Step.FULL;
             }
             lastSlot = i;
             lastCount = slot.getItem().getCount();
-            take(menu, i);
+            takeSlot(menu, i);
             waitAgain();
-            return;
+            return Step.MOVED;
         }
-
-        if (close.isOn()) {
-            mc.player.closeContainer();
-        }
+        return Step.DONE;
     }
 
-    private void take(AbstractContainerMenu menu, int slot) {
+    private void takeSlot(AbstractContainerMenu menu, int slot) {
         if (!throwOut.isOn()) {
             MenuClicks.quickMove(menu, slot);
             return;
@@ -178,24 +238,23 @@ public final class ChestStealer extends Module {
     }
 
     // Moves one stack the InventoryTweaks dump filter wants into the container.
-    // False once nothing is left to move or the container has no room.
-    private boolean dumpStep() {
-        AbstractContainerMenu menu = mc.player.containerMenu;
-        for (int i = menu.slots.size() - InventoryUtil.WHOLE_INVENTORY; i < menu.slots.size(); i++) {
+    private Step storeStep(AbstractContainerMenu menu, int containerSlots) {
+        for (int i = containerSlots; i < menu.slots.size(); i++) {
             ItemStack stack = menu.slots.get(i).getItem();
             if (!dumps(stack)) {
                 continue;
             }
+            // The same stack coming back means the container has no room.
             if (i == lastSlot && stack.getCount() == lastCount) {
-                return false;
+                return Step.FULL;
             }
             lastSlot = i;
             lastCount = stack.getCount();
             MenuClicks.quickMove(menu, i);
             waitAgain();
-            return true;
+            return Step.MOVED;
         }
-        return false;
+        return Step.DONE;
     }
 
     private static boolean dumps(ItemStack stack) {

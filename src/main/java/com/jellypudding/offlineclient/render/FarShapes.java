@@ -1,5 +1,6 @@
 package com.jellypudding.offlineclient.render;
 
+import com.jellypudding.offlineclient.util.Bearing;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
@@ -10,6 +11,9 @@ public final class FarShapes {
 
     // Inside the nearest far plane the game uses at two chunks of render distance.
     private static final double REACH = 96;
+
+    private static final double HORIZON = 4096;
+    private static final double RAY_LIFT = 0.1;
 
     private FarShapes() {
     }
@@ -35,5 +39,11 @@ public final class FarShapes {
 
     public static void line(DrawBatch batch, Vec3 from, Vec3 to, int color) {
         batch.line(pullIn(from), pullIn(to), color, true);
+    }
+
+    // A bearing drawn out to the horizon a hair above the ground it starts on.
+    public static void ray(DrawBatch batch, Bearing bearing, double ground, int color) {
+        double y = ground + RAY_LIFT;
+        line(batch, bearing.along(0, y), bearing.along(HORIZON, y), color);
     }
 }

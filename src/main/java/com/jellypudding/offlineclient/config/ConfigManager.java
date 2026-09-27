@@ -233,9 +233,8 @@ public final class ConfigManager {
         return DataFiles.jsonNames(profilesFolder);
     }
 
-    // Anything but letters and digits and underscores and dashes becomes an underscore.
     private Path profileFile(String name) {
-        return DataFiles.jsonFile(profilesFolder, name.replaceAll("[^a-zA-Z0-9_-]", "_"));
+        return DataFiles.jsonFile(profilesFolder, DataFiles.safeName(name));
     }
 
     private static Optional<JsonObject> read(Path path) {

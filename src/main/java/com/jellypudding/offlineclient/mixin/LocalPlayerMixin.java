@@ -6,6 +6,7 @@ import com.jellypudding.offlineclient.event.events.KnockbackEvent;
 import com.jellypudding.offlineclient.event.events.PostMotionEvent;
 import com.jellypudding.offlineclient.event.events.PreMotionEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
+import com.jellypudding.offlineclient.modules.combat.AutoPearl;
 import com.jellypudding.offlineclient.modules.combat.BowAimbot;
 import com.jellypudding.offlineclient.modules.movement.AntiPush;
 import com.jellypudding.offlineclient.modules.movement.Flight;
@@ -324,7 +325,9 @@ public abstract class LocalPlayerMixin extends AbstractClientPlayer {
     @Inject(method = "moveTowardsClosestSpace(DD)V", at = @At("HEAD"), cancellable = true)
     private void onMoveTowardsClosestSpace(CallbackInfo ci) {
         NoKnockback noKnockback = Modules.get(NoKnockback.class);
-        if (noKnockback != null && noKnockback.blocksBlockPush()) {
+        AutoPearl autoPearl = Modules.get(AutoPearl.class);
+        if (noKnockback != null && noKnockback.blocksBlockPush()
+            || autoPearl != null && autoPearl.holdsPhase()) {
             ci.cancel();
         }
     }

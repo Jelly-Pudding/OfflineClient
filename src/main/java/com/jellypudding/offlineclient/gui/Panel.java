@@ -70,4 +70,11 @@ public final class Panel extends PanelFrame {
             row.mouseReleased();
         }
     }
+
+    @Override
+    protected void cancelContent() {
+        for (ModuleRow row : rows) {
+            row.cancelDrag();
+        }
+    }
 }

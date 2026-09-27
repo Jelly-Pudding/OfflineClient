@@ -17,6 +17,11 @@ import net.minecraft.world.level.chunk.Palette;
 import net.minecraft.world.level.chunk.PalettedContainer;
 import net.minecraft.world.level.chunk.PalettedContainerRO;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 // Reads what a chunk from the server gives away about its past. Generation grows every
@@ -75,6 +80,25 @@ public final class ChunkOrigin {
     // The End only hands out the_end biome within 64 chunks of the centre. Further out it
     // gives the outer island biomes it has had since 1.13.
     private static final long CENTRE_CHUNKS_SQUARED = 64 * 64;
+
+    // Paper anti xray adds these to every low section it loads in its hiding mode.
+    private static final Set<Block> ANTI_XRAY_FILLERS = Set.of(Blocks.STONE, Blocks.DEEPSLATE,
+        Blocks.NETHERRACK, Blocks.END_STONE);
+    // In its other modes it adds its whole hidden list to every low section instead. A block
+    // left over in this many sections of one chunk is taken for that list.
+    private static final int ANTI_XRAY_SECTIONS = 3;
+    // The blocks Paper anti xray hides by default and the nether ores servers add to it. It
+    // swaps a buried one for a filler in the packet and leaves its palette entry unused.
+    private static final Set<Block> ANTI_XRAY_HIDDEN = Set.of(Blocks.COAL_ORE, Blocks.DEEPSLATE_COAL_ORE,
+        Blocks.IRON_ORE, Blocks.DEEPSLATE_IRON_ORE, Blocks.COPPER_ORE, Blocks.DEEPSLATE_COPPER_ORE,
+        Blocks.GOLD_ORE, Blocks.DEEPSLATE_GOLD_ORE, Blocks.REDSTONE_ORE, Blocks.DEEPSLATE_REDSTONE_ORE,
+        Blocks.LAPIS_ORE, Blocks.DEEPSLATE_LAPIS_ORE, Blocks.DIAMOND_ORE, Blocks.DEEPSLATE_DIAMOND_ORE,
+        Blocks.EMERALD_ORE, Blocks.DEEPSLATE_EMERALD_ORE, Blocks.RAW_IRON_BLOCK, Blocks.RAW_COPPER_BLOCK,
+        Blocks.MOSSY_COBBLESTONE, Blocks.OBSIDIAN, Blocks.CHEST, Blocks.ENDER_CHEST, Blocks.CLAY,
+        Blocks.OAK_PLANKS, Blocks.ANCIENT_DEBRIS, Blocks.NETHER_GOLD_ORE, Blocks.NETHER_QUARTZ_ORE);
+    // Players rarely leave two of these gone from one chunk at once. Anti xray does it to
+    // nearly every chunk underground.
+    private static final int ANTI_XRAY_SIGNS = 2;
 
     private ChunkOrigin() {
     }
@@ -223,6 +247,71 @@ public final class ChunkOrigin {
             }
         }
         return next == palette.getSize();
+    }
+
+    // The index of a section whose palette still lists a block that no cell holds or minus
+    // one. Only means something for a chunk the palettes call old. The server keeps a loaded
+    // palette as it is until the chunk is saved and unloaded. A block gone from every cell
+    // was broken or replaced since the chunk loaded. A block that only changed its state
+    // still fills a cell and does not count.
+    public static int changedSection(LevelChunk chunk) {
+        LevelChunkSection[] sections = chunk.getSections();
+        List<Set<Block>> gone = new ArrayList<>(sections.length);
+        Map<Block, Integer> sectionsMissing = new HashMap<>();
+        int hiddenGone = 0;
+        for (LevelChunkSection section : sections) {
+            Set<Block> missing = goneBlocks(section);
+            gone.add(missing);
+            for (Block block : missing) {
+                sectionsMissing.merge(block, 1, Integer::sum);
+                if (ANTI_XRAY_HIDDEN.contains(block)) {
+                    hiddenGone++;
+                }
+            }
+        }
+        boolean obfuscated = hiddenGone >= ANTI_XRAY_SIGNS;
+        for (int i = 0; i < gone.size(); i++) {
+            for (Block block : gone.get(i)) {
+                if (sectionsMissing.get(block) < ANTI_XRAY_SECTIONS
+                    && !(obfuscated && ANTI_XRAY_HIDDEN.contains(block))) {
+                    return i;
+                }
+            }
+        }
+        return -1;
+    }
+
+    // The blocks a section's palette lists with no cell of any of their states left.
+    private static Set<Block> goneBlocks(LevelChunkSection section) {
+        PalettedContainer.Data<BlockState> data = section.getStates().data;
+        BitStorage storage = data.storage();
+        int bits = storage.getBits();
+        if (bits == 0 || bits > MAX_LISTED_BLOCK_BITS) {
+            return Set.of();
+        }
+        Palette<BlockState> palette = data.palette();
+        boolean[] used = new boolean[palette.getSize()];
+        storage.unpack(CELLS);
+        for (int i = 0; i < storage.getSize(); i++) {
+            if (CELLS[i] < used.length) {
+                used[CELLS[i]] = true;
+            }
+        }
+        Set<Block> inUse = new HashSet<>();
+        for (int id = 0; id < used.length; id++) {
+            if (used[id]) {
+                inUse.add(palette.valueFor(id).getBlock());
+            }
+        }
+        Set<Block> missing = new HashSet<>();
+        for (int id = 0; id < used.length; id++) {
+            BlockState state = palette.valueFor(id);
+            if (!used[id] && !state.isAir() && !inUse.contains(state.getBlock())
+                && !ANTI_XRAY_FILLERS.contains(state.getBlock())) {
+                missing.add(state.getBlock());
+            }
+        }
+        return missing;
     }
 
     // The index of a section showing the chunk was first generated before the terrain of its

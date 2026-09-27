@@ -210,7 +210,7 @@ public final class PacketMine extends Module {
 
     // True once the entry is done with or can never finish.
     private boolean finished(Target target) {
-        if (BlockUtil.distanceTo(target.pos) > mc.player.blockInteractionRange()) {
+        if (!BlockUtil.inReach(target.pos)) {
             return true;
         }
         BlockState state = BlockUtil.state(target.pos);

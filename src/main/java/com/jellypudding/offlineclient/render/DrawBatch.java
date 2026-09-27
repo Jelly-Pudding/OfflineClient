@@ -1,6 +1,7 @@
 package com.jellypudding.offlineclient.render;
 
 import com.jellypudding.offlineclient.OfflineClient;
+import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.systems.RenderSystem;
@@ -69,6 +70,17 @@ public final class DrawBatch {
         lineRelative(tracerOrigin(), to.subtract(camera), color, throughWalls);
     }
 
+    // A ring of straight pieces through the tips of two radii at right angles to each other.
+    public void circle(Vec3 centre, Vec3 first, Vec3 second, int segments, int color, boolean throughWalls) {
+        Vec3 last = centre.add(first);
+        for (int i = 1; i <= segments; i++) {
+            double turn = 2 * Math.PI * i / segments;
+            Vec3 point = centre.add(first.scale(Math.cos(turn))).add(second.scale(Math.sin(turn)));
+            line(last, point, color, throughWalls);
+            last = point;
+        }
+    }
+
     // Pulled in off the faces. A box flush with a block fights it for depth.
     public static final double BLOCK_INSET = 0.002;
 
@@ -90,6 +102,17 @@ public final class DrawBatch {
         int hidden = 0;
         for (Direction side : Direction.Plane.HORIZONTAL) {
             if (keys.contains(BlockPos.offset(key, side))) {
+                hidden |= sideBit(side);
+            }
+        }
+        return hidden;
+    }
+
+    // A bit for every side on which the map holds the same kind as the key.
+    public static <K> int sharedSides(Long2ObjectMap<K> kinds, long key, K kind) {
+        int hidden = 0;
+        for (Direction side : SIDES) {
+            if (kinds.get(BlockPos.offset(key, side)) == kind) {
                 hidden |= sideBit(side);
             }
         }

@@ -2,6 +2,7 @@ package com.jellypudding.offlineclient.mixin;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.modules.player.AntiCactus;
+import com.jellypudding.offlineclient.modules.player.AutoExtinguish;
 import com.jellypudding.offlineclient.modules.movement.Jesus;
 import com.jellypudding.offlineclient.modules.world.Collisions;
 import com.jellypudding.offlineclient.util.Modules;
@@ -43,6 +44,10 @@ public abstract class BlockCollisionsMixin {
             return shape;
         }
         if (entity == player && state.is(Blocks.CACTUS) && Modules.enabled(AntiCactus.class)) {
+            return Shapes.block();
+        }
+        AutoExtinguish extinguish = Modules.active(AutoExtinguish.class);
+        if (entity == player && extinguish != null && extinguish.isWall(state)) {
             return Shapes.block();
         }
         Collisions collisions = Modules.active(Collisions.class);

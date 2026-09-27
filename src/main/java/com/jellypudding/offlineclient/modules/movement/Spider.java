@@ -50,7 +50,7 @@ public final class Spider extends Module {
         "How fast sneaking lowers you down the wall in blocks a tick.",
         0.15, 0.05, 0.5, 0.05, " blocks").min(0.01).under(sneak, SneakAction.CLIMB_DOWN);
     private final BoolSetting holdOn = new BoolSetting("Hold on",
-        "Keeps you in place on a wall when you stop climbing.", true);
+        "Keeps you in place on a wall when you stop climbing. Move away from the wall to let go.", true);
     private final BoolSetting ceilings = new BoolSetting("Ceilings",
         "Hang from ceilings and walk along them. Sneak to drop.", false);
     private final BoolSetting autoRound = new BoolSetting("Auto climb edges",
@@ -111,21 +111,27 @@ public final class Spider extends Module {
             return;
         }
         rounding = false;
-        boolean onWall = mc.player.horizontalCollision || (held && besideWall());
-        if (mc.player.isShiftKeyDown() && airborne() && onWall) {
-            if (sneak.is(SneakAction.CLIMB_DOWN)) {
-                climbDown(wasLowering);
-                clinging = true;
-                lowering = true;
-            } else if (held) {
-                release();
-            }
+        if (mc.player.isShiftKeyDown()) {
+            sneakOnWall(held, wasLowering);
         } else if (mc.player.horizontalCollision) {
             climb();
             clinging = true;
         } else if (held && holdOn.isOn() && canCling() && besideWall()) {
             stay();
             clinging = true;
+        } else if (held) {
+            release();
+        }
+    }
+
+    // Sneaking never climbs. A player sneaking into a wall from the ground would
+    // otherwise bob between a climb and a climb down.
+    private void sneakOnWall(boolean held, boolean wasLowering) {
+        boolean onWall = mc.player.horizontalCollision || (held && besideWall());
+        if (sneak.is(SneakAction.CLIMB_DOWN) && airborne() && onWall) {
+            climbDown(wasLowering);
+            clinging = true;
+            lowering = true;
         } else if (held) {
             release();
         }

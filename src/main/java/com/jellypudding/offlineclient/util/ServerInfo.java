@@ -8,6 +8,7 @@ import net.minecraft.client.resources.language.I18n;
 import net.minecraft.network.chat.Component;
 
 import java.util.Locale;
+import java.util.regex.Pattern;
 
 // What the client knows about the server it is playing on. The server command
 // and the HUD read it from here and always agree.
@@ -15,6 +16,9 @@ public final class ServerInfo {
 
     // Vanilla gives this label to a direct connect and to a list entry nobody named.
     private static final String UNNAMED_KEY = "selectServer.defaultName";
+
+    private static final Pattern PAPER_FAMILY = Pattern.compile(
+        "paper|purpur|pufferfish|folia|spigot|bukkit|leaves|gale", Pattern.CASE_INSENSITIVE);
 
     private ServerInfo() {
     }
@@ -54,6 +58,13 @@ public final class ServerInfo {
     public static String brand() {
         LocalPlayer player = OfflineClient.MC.player;
         return player == null ? null : player.connection.serverBrand();
+    }
+
+    // True on Paper and Spigot and the servers built on them. They answer some things
+    // differently from vanilla. A proxy keeps the name of the server behind it.
+    public static boolean runsPaper() {
+        String brand = brand();
+        return brand != null && PAPER_FAMILY.matcher(brand).find();
     }
 
     public static int online() {

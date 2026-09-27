@@ -1,6 +1,7 @@
 package com.jellypudding.offlineclient.mixin;
 
 import com.jellypudding.offlineclient.modules.render.ClearView;
+import com.jellypudding.offlineclient.modules.render.Confetti;
 import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.client.particle.Particle;
 import net.minecraft.client.particle.ParticleEngine;
@@ -30,6 +31,17 @@ public class ParticleEngineMixin {
         ClearView clearView = Modules.active(ClearView.class);
         if (clearView != null && clearView.blocksParticle(options.getType())) {
             cir.setReturnValue(null);
+        }
+    }
+
+    // Confetti repaints each totem particle the moment it is made.
+    @Inject(method = "createParticle(Lnet/minecraft/core/particles/ParticleOptions;DDDDDD)"
+        + "Lnet/minecraft/client/particle/Particle;", at = @At("RETURN"))
+    private void onParticleCreated(ParticleOptions options, double x, double y, double z,
+                                   double dx, double dy, double dz, CallbackInfoReturnable<Particle> cir) {
+        Confetti confetti = Modules.active(Confetti.class);
+        if (confetti != null) {
+            confetti.paint(cir.getReturnValue());
         }
     }
 }

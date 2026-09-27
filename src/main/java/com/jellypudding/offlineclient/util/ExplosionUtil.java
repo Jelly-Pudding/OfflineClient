@@ -5,10 +5,12 @@ import com.jellypudding.offlineclient.OfflineClient;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.util.Mth;
 import net.minecraft.world.attribute.EnvironmentAttributes;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BedPart;
@@ -30,6 +32,9 @@ public final class ExplosionUtil {
     // A respawn anchor and a bed both explode with power five.
     public static final float RESPAWN_BLOCK_POWER = 5f;
 
+    // Lit TNT blows with power four.
+    public static final float TNT_POWER = 4f;
+
     private ExplosionUtil() {
     }
 
@@ -42,13 +47,10 @@ public final class ExplosionUtil {
         return !MC.level.environmentAttributes().getValue(EnvironmentAttributes.RESPAWN_ANCHOR_WORKS, pos);
     }
 
-    // A bed that sets a spawn point never goes off.
+    // The bed rule never reaches the client. Beds blow up in the Nether and the End.
     public static boolean bedsExplodeHere() {
-        return bedsExplodeAt(MC.player.blockPosition());
-    }
-
-    public static boolean bedsExplodeAt(BlockPos pos) {
-        return MC.level.environmentAttributes().getValue(EnvironmentAttributes.BED_RULE, pos).destroyOnUse();
+        ResourceKey<Level> dimension = MC.level.dimension();
+        return dimension == Level.NETHER || dimension == Level.END;
     }
 
     public static float crystalDamage(LivingEntity target, Vec3 source) {

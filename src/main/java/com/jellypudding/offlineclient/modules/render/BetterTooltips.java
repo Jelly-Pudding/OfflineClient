@@ -455,7 +455,7 @@ public final class BetterTooltips extends Module {
             return null;
         }
         String count = pages == 1 ? " (1 page)" : " (" + pages + " pages)";
-        return new BookPreview(first.copy().append(Component.literal(count).withStyle(ChatFormatting.GRAY)));
+        return new BookPreview(BookPreview.head(first).append(Component.literal(count).withStyle(ChatFormatting.GRAY)));
     }
 
     private static ClientTooltipComponent bannerPreview(ItemStack stack) {
@@ -530,7 +530,7 @@ public final class BetterTooltips extends Module {
     }
 
     // A chest screen closes for good because the server owns it. Your own
-    // inventory and another peek window come back when this one shuts.
+    // inventory and another peek window return once this one shuts.
     private void open(ItemStack stack, List<ItemStack> items, int tint) {
         Screen current = mc.gui.screen();
         Screen parent = current instanceof InventoryScreen || current instanceof PeekScreen ? current : null;

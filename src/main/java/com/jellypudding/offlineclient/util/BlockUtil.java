@@ -5,7 +5,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.Identifier;
-import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -16,6 +15,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.attribute.EnvironmentAttributes;
 import net.minecraft.world.effect.MobEffectUtil;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.tags.FluidTags;
@@ -23,12 +23,16 @@ import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.EmptyBlockGetter;
 import net.minecraft.world.level.block.AnvilBlock;
 import net.minecraft.world.level.block.BaseEntityBlock;
+import net.minecraft.world.level.block.BaseFireBlock;
 import net.minecraft.world.level.block.BasePressurePlateBlock;
 import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.ButtonBlock;
+import net.minecraft.world.level.block.CactusBlock;
 import net.minecraft.world.level.block.CakeBlock;
+import net.minecraft.world.level.block.CampfireBlock;
+import net.minecraft.world.level.block.ChestBlock;
 import net.minecraft.world.level.block.CartographyTableBlock;
 import net.minecraft.world.level.block.ComparatorBlock;
 import net.minecraft.world.level.block.CraftingTableBlock;
@@ -40,13 +44,19 @@ import net.minecraft.world.level.block.FlowerPotBlock;
 import net.minecraft.world.level.block.GrindstoneBlock;
 import net.minecraft.world.level.block.LeverBlock;
 import net.minecraft.world.level.block.LoomBlock;
+import net.minecraft.world.level.block.MagmaBlock;
 import net.minecraft.world.level.block.NoteBlock;
+import net.minecraft.world.level.block.PowderSnowBlock;
 import net.minecraft.world.level.block.RepeaterBlock;
 import net.minecraft.world.level.block.RespawnAnchorBlock;
 import net.minecraft.world.level.block.StonecutterBlock;
+import net.minecraft.world.level.block.SweetBerryBushBlock;
 import net.minecraft.world.level.block.TorchBlock;
 import net.minecraft.world.level.block.TrapDoorBlock;
+import net.minecraft.world.level.block.WitherRoseBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.ChestType;
+import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
@@ -72,6 +82,10 @@ public final class BlockUtil {
     private static final double MAX_SCAN_RANGE = 16;
 
     private static final AABB FULL_CUBE = new AABB(0, 0, 0, 1, 1, 1);
+
+    // The neighbours a block is built up from. Below first and then the four sides.
+    public static final List<Direction> BELOW_THEN_SIDES = List.of(
+        Direction.DOWN, Direction.NORTH, Direction.SOUTH, Direction.WEST, Direction.EAST);
 
     // The vanilla break time formula. Off the ground mines five times slower and
     // the wrong tool takes over three times as long.
@@ -104,6 +118,18 @@ public final class BlockUtil {
     public static boolean blocksMotion(BlockState state) {
         return state.isSolid()
             && !state.is(Blocks.COBWEB) && !state.is(Blocks.BAMBOO_SAPLING);
+    }
+
+    // Standing in or on one of these hurts or traps the player.
+    public static boolean harmful(BlockState state) {
+        Block block = state.getBlock();
+        return block instanceof BaseFireBlock
+            || block instanceof MagmaBlock
+            || block instanceof CactusBlock
+            || block instanceof SweetBerryBushBlock
+            || block instanceof PowderSnowBlock
+            || block instanceof CampfireBlock
+            || block instanceof WitherRoseBlock;
     }
 
     public static boolean isBreakable(BlockPos pos) {
@@ -192,6 +218,12 @@ public final class BlockUtil {
     // The block under the crosshair or null when it rests on anything else.
     public static BlockHitResult aimedBlock() {
         return MC.hitResult instanceof BlockHitResult hit && hit.getType() == HitResult.Type.BLOCK ? hit : null;
+    }
+
+    // The space a block placed by this click fills. A replaceable block is filled itself.
+    public static BlockPos placeSpot(BlockHitResult hit) {
+        BlockPos clicked = hit.getBlockPos();
+        return isReplaceable(clicked) ? clicked : clicked.relative(hit.getDirection());
     }
 
     // True whilst any part of the box is inside a cobweb. As in vanilla a web that
@@ -308,8 +340,13 @@ public final class BlockUtil {
     }
 
     public static void centerPlayer() {
-        double x = Mth.floor(MC.player.getX()) + 0.5;
-        double z = Mth.floor(MC.player.getZ()) + 0.5;
+        centerPlayer(MC.player.blockPosition());
+    }
+
+    // Moves the player level to the middle of the column the block stands in.
+    public static void centerPlayer(BlockPos block) {
+        double x = block.getX() + 0.5;
+        double z = block.getZ() + 0.5;
         if (Math.abs(MC.player.getX() - x) < 0.01 && Math.abs(MC.player.getZ() - z) < 0.01) {
             return;
         }
@@ -382,6 +419,22 @@ public final class BlockUtil {
         return best;
     }
 
+    // An end crystal only goes down on obsidian or bedrock.
+    public static boolean crystalBase(BlockState state) {
+        return state.is(Blocks.OBSIDIAN) || state.is(Blocks.BEDROCK);
+    }
+
+    // The server refuses a crystal whilst any entity touches its block or the one above.
+    public static AABB crystalSpace(BlockPos crystal) {
+        return new AABB(crystal.getX(), crystal.getY(), crystal.getZ(),
+            crystal.getX() + 1, crystal.getY() + 2, crystal.getZ() + 1);
+    }
+
+    // The click on top of the base that places a crystal.
+    public static BlockHitResult crystalClick(BlockPos base) {
+        return new BlockHitResult(Vec3.atCenterOf(base).add(0, 0.5, 0), Direction.UP, base, false);
+    }
+
     // How well a block shields whoever stands beside it from a blast.
     public enum Wall {
         OPEN, WEAK, BLAST_PROOF, UNBREAKABLE;
@@ -401,10 +454,13 @@ public final class BlockUtil {
         return isBlastProof(state) ? Wall.BLAST_PROOF : Wall.WEAK;
     }
 
-    // True whilst the player stands in a hole walled with blast proof blocks.
-    // A two block hole counts when its second block is walled on its own.
     public static boolean playerInHole() {
-        BlockPos feet = MC.player.blockPosition();
+        return inHole(MC.player.blockPosition());
+    }
+
+    // True when feet at this block stand in a hole walled with blast proof blocks.
+    // A two block hole counts when its second block is walled on its own.
+    public static boolean inHole(BlockPos feet) {
         if (!isBlastProof(feet.below())) {
             return false;
         }
@@ -499,6 +555,14 @@ public final class BlockUtil {
         return isReplaceable(pos) && unobstructed(pos);
     }
 
+    // A standing torch would go in here. It has no collision and nobody standing in the spot stops it.
+    // A floor that opens on a click would open instead of taking the torch.
+    public static boolean torchStands(BlockPos pos) {
+        BlockPos floor = pos.below();
+        return isReplaceable(pos) && Block.canSupportCenter(MC.level, floor, Direction.UP)
+            && !opensOnClick(state(floor));
+    }
+
     // A plain or soul or copper torch standing or on a wall. Redstone torches are not lights.
     public static boolean isTorch(Block block) {
         return block instanceof TorchBlock;
@@ -508,19 +572,19 @@ public final class BlockUtil {
         return findBlockSlot(BlockUtil::isTorch);
     }
 
+    // Turns the way the face mode says towards the nearest face and clicks it.
+    public static boolean interact(BlockPos pos, FaceMode face) {
+        Direction side = facingSide(pos);
+        face.face(hitPoint(pos, side), RotationPriority.PLACE);
+        return interact(pos, side);
+    }
+
     // Clicks a block face. Vanilla skips a block interaction whilst the player sneaks.
     // The sneak is dropped for the click and put back straight after.
     public static boolean interact(BlockPos pos, Direction side) {
-        boolean sneaking = MC.player.isShiftKeyDown();
-        if (sneaking) {
-            MC.player.setShiftKeyDown(false);
-        }
         BlockHitResult result = new BlockHitResult(hitPoint(pos, side), side, pos, false);
-        boolean used = MC.gameMode
-            .useItemOn(MC.player, InteractionHand.MAIN_HAND, result).consumesAction();
-        if (sneaking) {
-            MC.player.setShiftKeyDown(true);
-        }
+        boolean used = InputUtil.whileStanding(() -> MC.gameMode
+            .useItemOn(MC.player, InteractionHand.MAIN_HAND, result).consumesAction());
         if (used) {
             SwingMode.swingArm(InteractionHand.MAIN_HAND);
         }
@@ -616,6 +680,11 @@ public final class BlockUtil {
         return canSee(aim) ? range : wallsRange;
     }
 
+    // Near enough to the eyes for a click on the block.
+    public static boolean inReach(BlockPos pos) {
+        return distanceTo(pos) <= MC.player.blockInteractionRange();
+    }
+
     public static boolean inReach(BlockPos pos, double range, double wallsRange) {
         return distanceTo(pos) <= reachFor(Vec3.atCenterOf(pos), range, wallsRange);
     }
@@ -644,6 +713,23 @@ public final class BlockUtil {
             faceVector(hit);
         }
         return click(new BlockHitResult(hit, side, pos, false), swing);
+    }
+
+    public static boolean isWaterSource(BlockPos pos) {
+        return MC.level.getFluidState(pos).isSourceOfType(Fluids.WATER);
+    }
+
+    // Water poured here boils away as it does in the Nether.
+    public static boolean waterEvaporates(BlockPos pos) {
+        return MC.level.environmentAttributes().getValue(EnvironmentAttributes.WATER_EVAPORATES, pos);
+    }
+
+    // The other half of a double chest. Null for a single chest or any other block.
+    public static BlockPos otherChestHalf(BlockPos pos, BlockState state) {
+        if (!state.hasProperty(ChestBlock.TYPE) || state.getValue(ChestBlock.TYPE) == ChestType.SINGLE) {
+            return null;
+        }
+        return pos.relative(ChestBlock.getConnectedDirection(state));
     }
 
     public static boolean isStandingOn(BlockPos pos) {

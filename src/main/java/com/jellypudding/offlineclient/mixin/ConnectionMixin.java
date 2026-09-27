@@ -4,8 +4,8 @@ import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.events.PacketReceiveEvent;
 import com.jellypudding.offlineclient.event.events.PacketSendEvent;
 import com.jellypudding.offlineclient.modules.misc.AntiPacketKick;
-import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.Modules;
+import com.jellypudding.offlineclient.util.PacketNotice;
 import com.jellypudding.offlineclient.util.PacketUtil;
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
@@ -87,9 +87,7 @@ public abstract class ConnectionMixin extends SimpleChannelInboundHandler<Packet
             return;
         }
         if (module.logsErrors()) {
-            // Fired on the netty thread. Chat is only safe on the client thread.
-            OfflineClient.MC.schedule(() ->
-                ChatUtil.error("Dropped a packet the client could not read. " + cause));
+            PacketNotice.report(cause.getClass().getName(), "Dropped a packet the client could not read. " + cause);
         }
         ci.cancel();
     }

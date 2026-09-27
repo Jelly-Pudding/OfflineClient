@@ -127,12 +127,13 @@ public final class AutoClicker extends Module {
     }
 
     // Swings on every full cooldown whilst the button is held and lands the hit
-    // only on a living target that is not a friend.
+    // only on a living target that is not a friend or a bot.
     private void hitCrosshair() {
         if (!mc.options.keyAttack.isDown()) {
             return;
         }
-        if (mc.player.isUsingItem() || mc.gameMode.isDestroying() || Modules.feedersPauseCombat()) {
+        if (mc.player.isUsingItem() || mc.gameMode.isDestroying() || Modules.feedersPauseCombat()
+            || Modules.maceComboAirborne()) {
             return;
         }
         if (mc.player.getAttackStrengthScale(0.5f) < 1) {
@@ -143,7 +144,7 @@ public final class AutoClicker extends Module {
             && hit.getEntity() instanceof LivingEntity living && living.isAlive()) {
             target = living;
         }
-        if (target != null && !EntityUtil.isFriend(target)) {
+        if (target != null && !EntityUtil.isFriend(target) && !Modules.isBot(target)) {
             mc.gameMode.attack(mc.player, target);
         }
         SwingMode.swingArm(InteractionHand.MAIN_HAND);

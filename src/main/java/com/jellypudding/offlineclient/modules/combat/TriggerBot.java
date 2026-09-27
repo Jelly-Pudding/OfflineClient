@@ -23,9 +23,6 @@ import java.util.List;
 
 public final class TriggerBot extends Module {
 
-    // Hitbox reach is shorter than the centre distance. The scan runs wider.
-    private static final double SCAN_MARGIN = 4;
-
     private final NumberSetting range = new NumberSetting("Range",
         "Maximum reach in blocks.", 4.2, 1, 10, 0.05);
     private final NumberSetting fov = new NumberSetting("FOV",
@@ -65,7 +62,8 @@ public final class TriggerBot extends Module {
             return;
         }
         boolean blocking = whilstBlocking.isOn() && mc.player.isBlocking();
-        if ((mc.player.isUsingItem() && !blocking) || mc.gameMode.isDestroying() || Modules.feedersPauseCombat()) {
+        if ((mc.player.isUsingItem() && !blocking) || mc.gameMode.isDestroying()
+            || Modules.feedersPauseCombat() || Modules.maceComboAirborne()) {
             return;
         }
         if (onlyOnClick.isOn() && !mc.options.keyAttack.isDown()) {
@@ -74,8 +72,7 @@ public final class TriggerBot extends Module {
         if (mc.player.getAttackStrengthScale(0.5f) < 1 || !timer.ready()) {
             return;
         }
-        Entity target = EntityUtil.best(range.getValue() + SCAN_MARGIN, priority.getValue(),
-            this::attackable);
+        Entity target = EntityUtil.bestInReach(range.getValue(), priority.getValue(), this::attackable);
         if (target == null) {
             return;
         }
@@ -87,13 +84,7 @@ public final class TriggerBot extends Module {
     }
 
     private boolean attackable(Entity entity) {
-        if (!targets.attackable(entity, filter)) {
-            return false;
-        }
-        // The crosshair reaches further than the server allows a hit.
-        if (EntityUtil.reachDistance(mc.player, entity) > range.getValue()) {
-            return false;
-        }
-        return fov.getValue() >= 360 || EntityUtil.lookAngleTo(entity) <= fov.getValue() / 2;
+        return targets.attackable(entity, filter)
+            && (fov.getValue() >= 360 || EntityUtil.lookAngleTo(entity) <= fov.getValue() / 2);
     }
 }

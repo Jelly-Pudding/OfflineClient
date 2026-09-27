@@ -12,7 +12,8 @@ import net.minecraft.util.Mth;
 
 import java.util.Locale;
 
-// A strip of the compass that slides past as you turn.
+// A strip of the compass that slides past as you turn. Stretching it wider lengthens
+// the strip and leaves the letters their shape.
 public final class CompassElement extends HudElement {
 
     private static final String[] POINTS = {"S", "SW", "W", "NW", "N", "NE", "E", "SE"};
@@ -20,11 +21,12 @@ public final class CompassElement extends HudElement {
     // Degrees between the marks on the strip.
     private static final int STEP = 45;
 
+    // The strip before any stretch.
+    private static final int LENGTH = 160;
+
     private static final int TICK_HEIGHT = 3;
     private static final int GAP = 2;
 
-    private final NumberSetting span = new NumberSetting("Compass width",
-        "How wide the strip is in pixels.", 160, 60, 400, 10, " px").min(40);
     private final NumberSetting field = new NumberSetting("Compass field",
         "How many degrees fit across the strip.", 180, 60, 360, 10, " degrees").min(30);
     private final BoolSetting showYaw = new BoolSetting("Show yaw",
@@ -36,17 +38,17 @@ public final class CompassElement extends HudElement {
 
     public CompassElement() {
         super("Compass", "A sliding strip of the compass points.", false, 50, 8);
-        add(span, field, showYaw, color, northColor);
+        add(field, showYaw, color, northColor);
     }
 
     // Where a heading lands on the strip or minus one whilst it is off the end.
-    private double screenX(float yaw, double heading) {
+    private double stripX(float yaw, double heading) {
         double offset = Mth.wrapDegrees(heading - yaw);
         double half = field.getValue() / 2.0;
         if (Math.abs(offset) > half) {
             return -1;
         }
-        return (offset + half) / field.getValue() * span.getValue();
+        return (offset + half) / field.getValue() * LENGTH;
     }
 
     @Override
@@ -56,10 +58,9 @@ public final class CompassElement extends HudElement {
             return;
         }
         float yaw = player.getYRot();
-        int wide = span.getInt();
-        context.fill(0, 0, wide, 1, 0x50FFFFFF);
+        context.fill(0, 0, LENGTH, 1, 0x50FFFFFF);
         for (int i = 0; i < POINTS.length; i++) {
-            double x = screenX(yaw, i * STEP);
+            double x = stripX(yaw, i * STEP);
             if (x < 0) {
                 continue;
             }
@@ -67,19 +68,28 @@ public final class CompassElement extends HudElement {
             int tint = point.equals("N") ? northColor.getColor() : color.getColor();
             int left = (int) Math.round(x);
             context.fill(left, 1, left + 1, 1 + TICK_HEIGHT, tint);
-            context.text(font, point, left - font.width(point) / 2, 1 + TICK_HEIGHT + GAP,
-                tint, true);
+            label(context, font, point, left, 1 + TICK_HEIGHT + GAP, tint);
         }
         if (showYaw.isOn()) {
             String heading = String.format(Locale.ROOT, "%.0f", Mth.wrapDegrees(yaw + 180));
-            context.text(font, heading, (wide - font.width(heading)) / 2,
-                1 + TICK_HEIGHT + GAP + font.lineHeight, color.getColor(), true);
+            label(context, font, heading, LENGTH / 2, 1 + TICK_HEIGHT + GAP + font.lineHeight,
+                color.getColor());
         }
+    }
+
+    // Centred on x. The pose undoes the extra width a stretch gave the strip.
+    private void label(GuiGraphicsExtractor context, Font font, String text, int x, int y, int tint) {
+        float squeeze = (float) (scaleY() / scaleX());
+        context.pose().pushMatrix();
+        context.pose().translate(x - font.width(text) * squeeze / 2, y);
+        context.pose().scale(squeeze, 1);
+        context.text(font, text, 0, 0, tint, true);
+        context.pose().popMatrix();
     }
 
     @Override
     public int width(Font font) {
-        return span.getInt();
+        return LENGTH;
     }
 
     @Override

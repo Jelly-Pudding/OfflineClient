@@ -1,6 +1,7 @@
 package com.jellypudding.offlineclient.mixin;
 
 import com.jellypudding.offlineclient.modules.player.AutoRespawn;
+import com.jellypudding.offlineclient.modules.player.Ghost;
 import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.DeathScreen;
@@ -12,7 +13,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-// A button under the vanilla pair that switches AutoRespawn on from the death screen.
+// Buttons under the vanilla pair that switch AutoRespawn or Ghost on from the death screen.
 @Mixin(DeathScreen.class)
 public abstract class DeathScreenMixin extends Screen {
 
@@ -20,19 +21,32 @@ public abstract class DeathScreenMixin extends Screen {
     @Unique
     private static final int BUTTON_TOP = 120;
 
+    // The vanilla pair sit this far apart.
+    @Unique
+    private static final int BUTTON_GAP = 24;
+
     private DeathScreenMixin(Component title) {
         super(title);
     }
 
     @Inject(method = "init", at = @At("TAIL"))
     private void onInit(CallbackInfo ci) {
-        AutoRespawn module = Modules.get(AutoRespawn.class);
-        if (module == null || module.isEnabled() || !module.showsButton()) {
-            return;
+        int top = height / 4 + BUTTON_TOP;
+        AutoRespawn respawn = Modules.get(AutoRespawn.class);
+        if (respawn != null && !respawn.isEnabled() && respawn.showsButton()) {
+            offlineclient$addButton("Turn AutoRespawn on", top, () -> respawn.setEnabled(true));
+            top += BUTTON_GAP;
         }
-        addRenderableWidget(Button.builder(Component.literal("Turn AutoRespawn on"),
-                button -> module.setEnabled(true))
-            .bounds((width - Button.BIG_WIDTH) / 2, height / 4 + BUTTON_TOP, Button.BIG_WIDTH, Button.DEFAULT_HEIGHT)
+        Ghost ghost = Modules.get(Ghost.class);
+        if (ghost != null && !ghost.isEnabled() && ghost.showsButton()) {
+            offlineclient$addButton("Turn Ghost on", top, () -> ghost.setEnabled(true));
+        }
+    }
+
+    @Unique
+    private void offlineclient$addButton(String text, int top, Runnable press) {
+        addRenderableWidget(Button.builder(Component.literal(text), button -> press.run())
+            .bounds((width - Button.BIG_WIDTH) / 2, top, Button.BIG_WIDTH, Button.DEFAULT_HEIGHT)
             .build());
     }
 }

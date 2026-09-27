@@ -4,6 +4,7 @@ import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.events.ClientTickEvent;
 import com.jellypudding.offlineclient.event.events.LeftClickEvent;
 import com.jellypudding.offlineclient.event.events.RightClickEvent;
+import com.jellypudding.offlineclient.modules.player.Ghost;
 import com.jellypudding.offlineclient.modules.player.InventoryTweaks;
 import com.jellypudding.offlineclient.modules.player.Multitask;
 import com.jellypudding.offlineclient.modules.player.NoInteract;
@@ -95,7 +96,7 @@ public abstract class MinecraftMixin {
     // restarts it on whatever the crosshair hits.
     @Inject(method = "continueAttack(Z)V", at = @At("HEAD"), cancellable = true)
     private void onContinueAttack(CallbackInfo ci) {
-        if (BlockMiner.isActive() || offlineclient$freecamBlocks()) {
+        if (BlockMiner.isActive() || offlineclient$clicksBlocked()) {
             ci.cancel();
             return;
         }
@@ -109,7 +110,7 @@ public abstract class MinecraftMixin {
     @Inject(method = "startAttack()Z", at = @At("HEAD"), cancellable = true)
     private void onStartAttack(CallbackInfoReturnable<Boolean> cir) {
         if (OfflineClient.INSTANCE.getEventBus().post(new LeftClickEvent()).isCancelled()
-            || offlineclient$freecamBlocks()) {
+            || offlineclient$clicksBlocked()) {
             cir.setReturnValue(false);
             return;
         }
@@ -120,10 +121,15 @@ public abstract class MinecraftMixin {
         }
     }
 
+    // Freecam can hold the clicks back and a ghost's clicks never reach the world.
     @Unique
-    private static boolean offlineclient$freecamBlocks() {
+    private static boolean offlineclient$clicksBlocked() {
         Freecam freecam = Modules.get(Freecam.class);
-        return freecam != null && freecam.blocksClicks();
+        if (freecam != null && freecam.blocksClicks()) {
+            return true;
+        }
+        Ghost ghost = Modules.get(Ghost.class);
+        return ghost != null && ghost.walking();
     }
 
     // Blanks the crosshair target whilst a feeder holds the use key. A chest

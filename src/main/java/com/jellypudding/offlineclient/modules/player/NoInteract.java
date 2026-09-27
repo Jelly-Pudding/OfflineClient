@@ -121,7 +121,7 @@ public final class NoInteract extends Module {
             return false;
         }
         if (block instanceof BedBlock) {
-            return ExplosionUtil.bedsExplodeAt(pos);
+            return ExplosionUtil.bedsExplodeHere();
         }
         return block instanceof RespawnAnchorBlock && anchorDetonates(state, pos);
     }

@@ -7,6 +7,7 @@ import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.WindLaunch;
 import net.minecraft.network.protocol.game.ClientboundExplodePacket;
 import net.minecraft.world.phys.Vec3;
 
@@ -67,10 +68,11 @@ public final class NoKnockback extends Module {
     }
 
     // Explosions push the player through their own packet instead of the usual knockback path.
+    // A wind charge thrown at your own feet is meant to lift you.
     @Subscribe
     private void onPacketReceive(PacketReceiveEvent event) {
         if (!(event.getPacket() instanceof ClientboundExplodePacket packet)
-            || packet.playerKnockback().isEmpty()) {
+            || packet.playerKnockback().isEmpty() || WindLaunch.ownBlast(packet)) {
             return;
         }
         double h = (separateExplosions.isOn() ? explosionHorizontal : horizontal).getValue() / 100.0;

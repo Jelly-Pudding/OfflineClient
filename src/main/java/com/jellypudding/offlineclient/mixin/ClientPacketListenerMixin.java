@@ -3,14 +3,20 @@ package com.jellypudding.offlineclient.mixin;
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.events.ChunkDataEvent;
 import com.jellypudding.offlineclient.event.events.EntityAddedEvent;
+import com.jellypudding.offlineclient.event.events.EntityDamageEvent;
+import com.jellypudding.offlineclient.event.events.EntityDeathEvent;
 import com.jellypudding.offlineclient.modules.player.NoRotate;
 import com.jellypudding.offlineclient.modules.render.NoRender;
 import com.jellypudding.offlineclient.util.Modules;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityEvent;
 import net.minecraft.network.protocol.game.ClientboundAddEntityPacket;
+import net.minecraft.network.protocol.game.ClientboundDamageEventPacket;
+import net.minecraft.network.protocol.game.ClientboundEntityEventPacket;
 import net.minecraft.world.level.chunk.LevelChunk;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
@@ -124,6 +130,33 @@ public abstract class ClientPacketListenerMixin {
     private void onRotatePlayerReturn(CallbackInfo ci) {
         if (offlineclient$noRotateActive()) {
             offlineclient$restoreRotation();
+        }
+    }
+
+    // Only the main thread run reads the world. A player who died is still in it here.
+    @Inject(method = "handleEntityEvent(Lnet/minecraft/network/protocol/game/ClientboundEntityEventPacket;)V",
+        at = @At("HEAD"))
+    private void onEntityEvent(ClientboundEntityEventPacket packet, CallbackInfo ci) {
+        ClientLevel level = OfflineClient.MC.level;
+        if (packet.getEventId() != EntityEvent.DEATH || !OfflineClient.MC.isSameThread() || level == null) {
+            return;
+        }
+        Entity entity = packet.getEntity(level);
+        if (entity != null) {
+            OfflineClient.INSTANCE.getEventBus().post(new EntityDeathEvent(entity));
+        }
+    }
+
+    @Inject(method = "handleDamageEvent(Lnet/minecraft/network/protocol/game/ClientboundDamageEventPacket;)V",
+        at = @At("HEAD"))
+    private void onDamageEvent(ClientboundDamageEventPacket packet, CallbackInfo ci) {
+        ClientLevel level = OfflineClient.MC.level;
+        if (!OfflineClient.MC.isSameThread() || level == null) {
+            return;
+        }
+        Entity entity = level.getEntity(packet.entityId());
+        if (entity != null) {
+            OfflineClient.INSTANCE.getEventBus().post(new EntityDamageEvent(entity, packet.getSource(level)));
         }
     }
 }

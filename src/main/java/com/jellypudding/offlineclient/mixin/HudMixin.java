@@ -2,14 +2,20 @@ package com.jellypudding.offlineclient.mixin;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.events.Render2DEvent;
+import com.jellypudding.offlineclient.gui.HudEditorScreen;
+import com.jellypudding.offlineclient.hud.GamePart;
 import com.jellypudding.offlineclient.modules.misc.HudModule;
 import com.jellypudding.offlineclient.modules.render.Blur;
 import com.jellypudding.offlineclient.modules.render.ClearView;
 import com.jellypudding.offlineclient.modules.render.ItemHighlight;
 import com.jellypudding.offlineclient.util.Modules;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import net.minecraft.client.DeltaTracker;
+import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.Hud;
+import net.minecraft.client.gui.contextualbar.ContextualBar;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -88,12 +94,118 @@ public class HudMixin {
         }
     }
 
-    // The inventory element can take the hotbar's place. Hearts and hunger still draw.
-    @Inject(method = "extractItemHotbar", at = @At("HEAD"), cancellable = true)
-    private void onItemHotbar(CallbackInfo ci) {
-        HudModule hud = Modules.active(HudModule.class);
-        if (hud != null && hud.hidesGameHotbar()) {
-            ci.cancel();
+    // The HUD editor draws the hotbar group itself above its shade.
+    @WrapOperation(
+        method = "extractRenderState(Lnet/minecraft/client/gui/GuiGraphicsExtractor;Lnet/minecraft/client/DeltaTracker;)V",
+        at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/client/gui/Hud;extractHotbarAndDecorations(Lnet/minecraft/client/gui/GuiGraphicsExtractor;Lnet/minecraft/client/DeltaTracker;)V"))
+    private void onHotbarGroup(Hud hud, GuiGraphicsExtractor context, DeltaTracker delta,
+                               Operation<Void> original) {
+        if (!(OfflineClient.MC.gui.screen() instanceof HudEditorScreen)) {
+            original.call(hud, context, delta);
+        }
+    }
+
+    // Each part of the game's own HUD is drawn where its HUD element sits.
+    @WrapOperation(
+        method = "extractHotbarAndDecorations(Lnet/minecraft/client/gui/GuiGraphicsExtractor;Lnet/minecraft/client/DeltaTracker;)V",
+        at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/client/gui/Hud;extractItemHotbar(Lnet/minecraft/client/gui/GuiGraphicsExtractor;Lnet/minecraft/client/DeltaTracker;)V"))
+    private void placeHotbar(Hud hud, GuiGraphicsExtractor context, DeltaTracker delta,
+                             Operation<Void> original) {
+        offlineclient$place(GamePart.HOTBAR, context, () -> original.call(hud, context, delta));
+    }
+
+    // A mount's hearts take the place of the hunger bar.
+    @WrapOperation(
+        method = "extractHotbarAndDecorations(Lnet/minecraft/client/gui/GuiGraphicsExtractor;Lnet/minecraft/client/DeltaTracker;)V",
+        at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/client/gui/Hud;extractVehicleHealth(Lnet/minecraft/client/gui/GuiGraphicsExtractor;)V"))
+    private void placeMountHealth(Hud hud, GuiGraphicsExtractor context, Operation<Void> original) {
+        offlineclient$place(GamePart.HUNGER, context, () -> original.call(hud, context));
+    }
+
+    @WrapOperation(
+        method = "extractHotbarAndDecorations(Lnet/minecraft/client/gui/GuiGraphicsExtractor;Lnet/minecraft/client/DeltaTracker;)V",
+        at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/client/gui/contextualbar/ContextualBar;extractBackground(Lnet/minecraft/client/gui/GuiGraphicsExtractor;Lnet/minecraft/client/DeltaTracker;)V"))
+    private void placeBarBackground(ContextualBar bar, GuiGraphicsExtractor context, DeltaTracker delta,
+                                    Operation<Void> original) {
+        offlineclient$place(GamePart.EXPERIENCE, context, () -> original.call(bar, context, delta));
+    }
+
+    @WrapOperation(
+        method = "extractHotbarAndDecorations(Lnet/minecraft/client/gui/GuiGraphicsExtractor;Lnet/minecraft/client/DeltaTracker;)V",
+        at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/client/gui/contextualbar/ContextualBar;extractExperienceLevel(Lnet/minecraft/client/gui/GuiGraphicsExtractor;Lnet/minecraft/client/gui/Font;I)V"))
+    private void placeLevel(GuiGraphicsExtractor context, Font font, int level, Operation<Void> original) {
+        offlineclient$place(GamePart.EXPERIENCE, context, () -> original.call(context, font, level));
+    }
+
+    @WrapOperation(
+        method = "extractHotbarAndDecorations(Lnet/minecraft/client/gui/GuiGraphicsExtractor;Lnet/minecraft/client/DeltaTracker;)V",
+        at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/client/gui/contextualbar/ContextualBar;extractRenderState(Lnet/minecraft/client/gui/GuiGraphicsExtractor;Lnet/minecraft/client/DeltaTracker;)V"))
+    private void placeBar(ContextualBar bar, GuiGraphicsExtractor context, DeltaTracker delta,
+                          Operation<Void> original) {
+        offlineclient$place(GamePart.EXPERIENCE, context, () -> original.call(bar, context, delta));
+    }
+
+    @WrapOperation(
+        method = "extractHotbarAndDecorations(Lnet/minecraft/client/gui/GuiGraphicsExtractor;Lnet/minecraft/client/DeltaTracker;)V",
+        at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/client/gui/Hud;extractSelectedItemName(Lnet/minecraft/client/gui/GuiGraphicsExtractor;)V"))
+    private void placeItemName(Hud hud, GuiGraphicsExtractor context, Operation<Void> original) {
+        offlineclient$place(GamePart.ITEM_NAME, context, () -> original.call(hud, context));
+    }
+
+    @WrapOperation(
+        method = "extractPlayerHealth(Lnet/minecraft/client/gui/GuiGraphicsExtractor;)V",
+        at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/client/gui/Hud;extractArmor(Lnet/minecraft/client/gui/GuiGraphicsExtractor;Lnet/minecraft/world/entity/player/Player;IIII)V"))
+    private void placeArmour(GuiGraphicsExtractor context, Player player, int top, int rows, int rowHeight,
+                             int left, Operation<Void> original) {
+        offlineclient$place(GamePart.ARMOUR, context,
+            () -> original.call(context, player, top, rows, rowHeight, left));
+    }
+
+    @WrapOperation(
+        method = "extractPlayerHealth(Lnet/minecraft/client/gui/GuiGraphicsExtractor;)V",
+        at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/client/gui/Hud;extractHearts(Lnet/minecraft/client/gui/GuiGraphicsExtractor;Lnet/minecraft/world/entity/player/Player;IIIIFIIIZ)V"))
+    private void placeHearts(Hud hud, GuiGraphicsExtractor context, Player player, int left, int top,
+                             int rowHeight, int regenerating, float maxHealth, int health, int shownHealth,
+                             int absorption, boolean blinking, Operation<Void> original) {
+        offlineclient$place(GamePart.HEARTS, context, () -> original.call(hud, context, player, left, top,
+            rowHeight, regenerating, maxHealth, health, shownHealth, absorption, blinking));
+    }
+
+    @WrapOperation(
+        method = "extractPlayerHealth(Lnet/minecraft/client/gui/GuiGraphicsExtractor;)V",
+        at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/client/gui/Hud;extractFood(Lnet/minecraft/client/gui/GuiGraphicsExtractor;Lnet/minecraft/world/entity/player/Player;II)V"))
+    private void placeHunger(Hud hud, GuiGraphicsExtractor context, Player player, int top, int right,
+                             Operation<Void> original) {
+        offlineclient$place(GamePart.HUNGER, context, () -> original.call(hud, context, player, top, right));
+    }
+
+    @WrapOperation(
+        method = "extractPlayerHealth(Lnet/minecraft/client/gui/GuiGraphicsExtractor;)V",
+        at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/client/gui/Hud;extractAirBubbles(Lnet/minecraft/client/gui/GuiGraphicsExtractor;Lnet/minecraft/world/entity/player/Player;III)V"))
+    private void placeAir(Hud hud, GuiGraphicsExtractor context, Player player, int mountHearts, int top,
+                          int right, Operation<Void> original) {
+        offlineclient$place(GamePart.AIR, context,
+            () -> original.call(hud, context, player, mountHearts, top, right));
+    }
+
+    @Unique
+    private static void offlineclient$place(GamePart part, GuiGraphicsExtractor context, Runnable draw) {
+        HudModule hud = Modules.get(HudModule.class);
+        if (hud != null && hud.placesGameParts()) {
+            hud.getManager().drawGamePart(part, context, OfflineClient.MC.font, draw);
+        } else {
+            draw.run();
         }
     }
 

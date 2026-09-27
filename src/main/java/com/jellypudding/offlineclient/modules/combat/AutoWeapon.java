@@ -12,8 +12,10 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.WeaponUtil;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.item.MaceItem;
 import net.minecraft.world.phys.EntityHitResult;
 
 public final class AutoWeapon extends Module {
@@ -31,6 +33,9 @@ public final class AutoWeapon extends Module {
     private final NumberSetting threshold = new NumberSetting("Threshold",
         "How much more damage the other kind must deal after their armour to win.", 2, 0, 10, 0.5)
         .under(prefer, Prefer.SWORD, Prefer.AXE);
+    private final BoolSetting shieldBreaker = new BoolSetting("Shield breaker",
+        "Takes up an axe for a hit on a raised shield. The axe knocks the shield down for five seconds.",
+        true);
     private final BoolSetting antiBreak = new BoolSetting("Anti break",
         "Skip weapons that are about to break.", true);
     private final BoolSetting switchBack = new BoolSetting("Switch back",
@@ -44,7 +49,7 @@ public final class AutoWeapon extends Module {
 
     public AutoWeapon() {
         super("AutoWeapon", "Switches to your strongest sword or axe when you attack.", Category.COMBAT);
-        addSettings(prefer, threshold, hover, antiBreak, switchBack, releaseTime);
+        addSettings(prefer, threshold, hover, shieldBreaker, antiBreak, switchBack, releaseTime);
         searchTags("auto sword", "auto axe", "weapon switch");
     }
 
@@ -75,7 +80,7 @@ public final class AutoWeapon extends Module {
 
     @Subscribe
     private void onAttack(AttackEntityEvent event) {
-        if (!inGame() || mc.player.isSpectator() || mc.player.isDeadOrDying()) {
+        if (!inGame() || mc.player.isSpectator() || mc.player.isDeadOrDying() || smashDue()) {
             return;
         }
         if (!(event.getTarget() instanceof LivingEntity target)) {
@@ -85,23 +90,35 @@ public final class AutoWeapon extends Module {
         arm(target);
     }
 
+    // The axe only holds whilst the shield is up. The next hit takes the best weapon again.
     private void arm(LivingEntity target) {
-        int best = bestSlot(target, InventoryUtil.HOTBAR_SIZE);
+        int best = shieldBreaker.isOn() && target.isBlocking()
+            ? WeaponUtil.bestAxeSlot(target, antiBreak.isOn(), InventoryUtil.HOTBAR_SIZE) : -1;
+        if (best == -1) {
+            best = bestSlot(target, InventoryUtil.HOTBAR_SIZE);
+        }
         if (best != -1 && best != InventoryUtil.selectedSlot()) {
             slots.select(best);
         }
         timer = releaseTime.getInt();
     }
 
+    // Hands stay off whilst a mace smash is coming. It outhits any sword and only the mace
+    // ends the fall. MaceCombo holds its mace from the launch on.
+    private boolean smashDue() {
+        return Modules.maceComboAirborne()
+            || (mc.player.getMainHandItem().getItem() instanceof MaceItem && MaceItem.canSmashAttack(mc.player));
+    }
+
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame()) {
+        if (!inGame() || smashDue()) {
             return;
         }
         if (hover.isOn() && !mc.player.isDeadOrDying()
             && mc.hitResult instanceof EntityHitResult hit
             && hit.getEntity() instanceof LivingEntity target && target.isAlive()
-            && !EntityUtil.isFriend(target)) {
+            && !EntityUtil.isFriend(target) && !Modules.isBot(target)) {
             arm(target);
             return;
         }

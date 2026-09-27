@@ -103,6 +103,11 @@ public final class Criticals extends Module {
         sprintPause.resume();
     }
 
+    // Read by Knockback. True whilst a hit held back for a critical goes out.
+    public boolean releasing() {
+        return held.releasing();
+    }
+
     @Subscribe
     private void onPacketSend(PacketSendEvent event) {
         if (held.releasing() || !inGame() || mc.player.isSpectator()) {
@@ -118,8 +123,9 @@ public final class Criticals extends Module {
             return;
         }
         if (mace.isOn() && mc.player.getMainHandItem().is(Items.MACE)) {
-            if (!mc.player.isFallFlying() && !mc.player.isInWater() && !mc.player.isInLava()
-                && startSmash()) {
+            // MaceCombo smashes on a real fall and puts the mace away in the same tick.
+            if (!Modules.maceComboAirborne() && !mc.player.isFallFlying() && !mc.player.isInWater()
+                && !mc.player.isInLava() && startSmash()) {
                 held.hold(event, attack);
             }
             return;

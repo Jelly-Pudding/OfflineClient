@@ -15,6 +15,7 @@ import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.FaceMode;
+import com.jellypudding.offlineclient.util.HeldKey;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.ItemUtil;
@@ -26,7 +27,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.network.protocol.game.ServerboundSelectTradePacket;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.InteractionHand;
@@ -57,8 +57,6 @@ public final class AutoLibrarian extends Module {
     private static final int VILLAGER_COLOR = 0xFF30E030;
     private static final int LECTERN_COLOR = 0xFF40C0FF;
     private static final int SPENT_COLOR = 0xFFE03030;
-
-    private static final int RESULT_SLOT = 2;
 
     private enum Stage { FIND_VILLAGER, FIND_LECTERN, OPEN_TRADE, READ_TRADE, BREAK_LECTERN, PLACE_LECTERN }
 
@@ -95,8 +93,8 @@ public final class AutoLibrarian extends Module {
     private BlockPos lectern;
     private final Set<Integer> spent = new HashSet<>();
     private final InventoryUtil.HotbarLoan loan = new InventoryUtil.HotbarLoan();
+    private final HeldKey sneakKey = new HeldKey(options -> options.keyShift);
     private int cooldown;
-    private boolean sneaking;
 
     public AutoLibrarian() {
         super("AutoLibrarian", "Rerolls a librarian until it sells a book you want.", Category.WORLD);
@@ -136,7 +134,7 @@ public final class AutoLibrarian extends Module {
     protected void onDisable() {
         BlockMiner.release();
         loan.giveBack();
-        stopSneaking();
+        sneakKey.letGo();
         villager = null;
         lectern = null;
     }
@@ -151,7 +149,7 @@ public final class AutoLibrarian extends Module {
             return;
         }
         if (stage != Stage.PLACE_LECTERN) {
-            stopSneaking();
+            sneakKey.letGo();
         }
         switch (stage) {
             case FIND_VILLAGER -> findVillager();
@@ -317,10 +315,8 @@ public final class AutoLibrarian extends Module {
         ChatUtil.message("§bAutoLibrarian §7found §f" + book.getHoverName().getString() + "§7.");
         if (lockIn.isOn()) {
             // Buying once fixes the offers for good.
-            menu.setSelectionHint(index);
-            menu.tryMoveItems(index);
-            mc.player.connection.send(new ServerboundSelectTradePacket(index));
-            MenuClicks.quickMove(menu, RESULT_SLOT);
+            MenuClicks.selectTrade(menu, index);
+            MenuClicks.quickMove(menu, MenuClicks.TRADE_RESULT_SLOT);
         }
         updateWanted(wish, price);
         closeTrade();
@@ -385,7 +381,7 @@ public final class AutoLibrarian extends Module {
             return;
         }
         if (BlockUtil.state(lectern).is(Blocks.LECTERN)) {
-            stopSneaking();
+            sneakKey.letGo();
             loan.giveBack();
             // The villager needs a moment to take the new job site up.
             cooldown = 20;
@@ -409,8 +405,7 @@ public final class AutoLibrarian extends Module {
             return;
         }
         // Sneaking stops the click opening a chest or a trapdoor underneath.
-        InputUtil.hold(mc.options.keyShift);
-        sneaking = true;
+        sneakKey.hold();
         if (!mc.player.isShiftKeyDown()) {
             return;
         }
@@ -419,13 +414,6 @@ public final class AutoLibrarian extends Module {
             RotationPriority.PLACE);
         if (BlockUtil.place(lectern, support, false, false)) {
             swing.getValue().swing(InteractionHand.MAIN_HAND);
-        }
-    }
-
-    private void stopSneaking() {
-        if (sneaking) {
-            InputUtil.release(mc.options.keyShift);
-            sneaking = false;
         }
     }
 

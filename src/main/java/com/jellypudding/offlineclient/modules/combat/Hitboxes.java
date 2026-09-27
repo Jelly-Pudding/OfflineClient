@@ -6,6 +6,7 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.WeaponKinds;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.entity.Entity;
@@ -47,7 +48,7 @@ public final class Hitboxes extends Module {
         if (!isEnabled() || entity == mc.player || !holdingWeapon()) {
             return 0;
         }
-        if (ignoreFriends.isOn() && EntityUtil.isFriend(entity)) {
+        if (ignoreFriends.isOn() && EntityUtil.isFriend(entity) || Modules.isBot(entity)) {
             return 0;
         }
         return entities.contains(entity.getType()) ? expand.getValue() : 0;

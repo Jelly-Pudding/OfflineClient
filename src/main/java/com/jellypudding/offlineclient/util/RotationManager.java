@@ -11,6 +11,8 @@ import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 
+import java.util.function.BooleanSupplier;
+
 // The one owner of the rotation the server sees. Exactly one rotation rides
 // the vanilla movement packet each tick and the player's own view never moves.
 public final class RotationManager {
@@ -129,6 +131,22 @@ public final class RotationManager {
         double dz = point.z - eye.z;
         double horizontal = Math.sqrt(dx * dx + dz * dz);
         return clampPitch((float) -Math.toDegrees(Math.atan2(point.y - eye.y, horizontal)));
+    }
+
+    // Turns the view for one call and back. An item used inside raycasts from
+    // that angle and its packet carries it to the server.
+    public static boolean whileFacing(float yaw, float pitch, BooleanSupplier action) {
+        LocalPlayer player = MC.player;
+        float oldYaw = player.getYRot();
+        float oldPitch = player.getXRot();
+        player.setYRot(yaw);
+        player.setXRot(pitch);
+        try {
+            return action.getAsBoolean();
+        } finally {
+            player.setYRot(oldYaw);
+            player.setXRot(oldPitch);
+        }
     }
 
     // Turns the real view towards the point by at most the step on each axis.

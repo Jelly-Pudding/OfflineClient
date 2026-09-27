@@ -144,8 +144,13 @@ public abstract class GuiScreenBase extends Screen {
         return super.mouseDragged(event, dragX, dragY);
     }
 
+    // Nothing scrolls whilst the left button is held. The rows would slide out from
+    // under whatever it holds.
     @Override
     public final boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        if (OfflineClient.MC.mouseHandler.isLeftPressed()) {
+            return true;
+        }
         return scrollGui(toView(mouseX), toView(mouseY), scrollY)
             || super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
     }

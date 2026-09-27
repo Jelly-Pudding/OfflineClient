@@ -13,14 +13,19 @@ import java.util.List;
 // and the ClickGUI need to know nothing about elements.
 public abstract class HudElement {
 
+    // The narrowest and widest an element can be stretched either way.
+    public static final double MIN_STRETCH = 0.25;
+    public static final double MAX_STRETCH = 4;
+
     private final String name;
     private final String description;
     private final List<Setting<?>> settings = new ArrayList<>();
 
     protected final BoolSetting active;
-    protected final NumberSetting scale;
     private final NumberSetting x;
     private final NumberSetting y;
+    private final NumberSetting across;
+    private final NumberSetting down;
 
     private int boxLeft;
     private int boxTop;
@@ -37,21 +42,26 @@ public abstract class HudElement {
     // A few elements are wordy enough to ship smaller than the rest.
     @SuppressWarnings("this-escape")
     protected HudElement(String name, String description, boolean on,
-                         double startX, double startY, double startScale) {
+                         double startX, double startY, double startSize) {
         this.name = name;
         this.description = description;
         // Fifteen elements with five or more options each would swamp the HUD panel.
         active = new BoolSetting(name, description, on).startFolded();
         x = percent(" x", "How far across the screen it sits.", startX);
         y = percent(" y", "How far down the screen it sits.", startY);
-        scale = new NumberSetting(name + " scale", "How big it is drawn.",
-            startScale, 0.25, 2, 0.05, "x").min(0.25).max(4);
-        add(x, y, scale);
+        across = stretch(" width scale", "How wide it is drawn next to its normal size.", startSize);
+        down = stretch(" height scale", "How tall it is drawn next to its normal size.", startSize);
+        add(x, y, across, down);
     }
 
     private NumberSetting percent(String suffix, String description, double start) {
         return new NumberSetting(name + suffix, description, start, 0, 100, 0.5, "%")
             .min(0).max(100);
+    }
+
+    private NumberSetting stretch(String suffix, String description, double start) {
+        return new NumberSetting(name + suffix, description, start, MIN_STRETCH, 2, 0.05, "x")
+            .min(MIN_STRETCH).max(MAX_STRETCH);
     }
 
     // Files settings in display order. Anything not already a sub option of
@@ -87,8 +97,12 @@ public abstract class HudElement {
         return all;
     }
 
-    public final float scale() {
-        return scale.getFloat();
+    public final double scaleX() {
+        return across.getValue();
+    }
+
+    public final double scaleY() {
+        return down.getValue();
     }
 
     // Where this element landed on screen. A picture in picture draw such as
@@ -116,13 +130,19 @@ public abstract class HudElement {
         return boxHeight;
     }
 
-    // Clamped to the setting's own limits.
-    public final void setScale(double value) {
-        scale.setValue(value);
+    // Clamped to the settings' own limits.
+    public final void setSize(double wide, double tall) {
+        across.setValue(wide);
+        down.setValue(tall);
     }
 
-    public final void resetScale() {
-        scale.reset();
+    public final boolean sizeIsDefault() {
+        return across.isDefault() && down.isDefault();
+    }
+
+    public final void resetSize() {
+        across.reset();
+        down.reset();
     }
 
     public final double xPercent() {
@@ -136,6 +156,27 @@ public abstract class HudElement {
     public final void moveTo(double xPercent, double yPercent) {
         x.setValue(xPercent);
         y.setValue(yPercent);
+    }
+
+    public final boolean positionIsDefault() {
+        return x.isDefault() && y.isDefault();
+    }
+
+    public final void resetPosition() {
+        x.reset();
+        y.reset();
+    }
+
+    // Where the element sits until the player moves it. Null for an element placed
+    // by its anchor alone.
+    public Box home(int screenWidth, int screenHeight) {
+        return null;
+    }
+
+    // How the element lines up against its anchor. Nought is the left edge and one
+    // the right edge and a half the middle.
+    protected final double alignment() {
+        return HudManager.align(x.getValue() / 100);
     }
 
     // True whilst the element is switched on even if it has nothing to say.

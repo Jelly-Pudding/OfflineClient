@@ -27,13 +27,13 @@ import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.HotbarLoan;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.ItemUtil;
+import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.RenderUtil;
 import com.jellypudding.offlineclient.util.RotationManager;
 import com.jellypudding.offlineclient.util.RotationPriority;
 import com.jellypudding.offlineclient.util.SwingMode;
 import com.jellypudding.offlineclient.util.TickRate;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.protocol.game.ServerboundAttackPacket;
 import net.minecraft.network.protocol.game.ServerboundSetCarriedItemPacket;
@@ -49,8 +49,6 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.BowItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
@@ -460,6 +458,9 @@ public final class CrystalAura extends Module {
         if (pauseHealth.getValue() > 0 && EntityUtil.totalHealth(mc.player) <= pauseHealth.getFloat()) {
             return "(low health)";
         }
+        if (Modules.pistonFiring()) {
+            return "(PistonAura)";
+        }
         for (String name : pauseModules.getValue()) {
             Module module = OfflineClient.INSTANCE.getModuleManager().get(name);
             if (module != null && module.isEnabled()) {
@@ -662,15 +663,14 @@ public final class CrystalAura extends Module {
         if (hand == null) {
             return;
         }
-        Vec3 hit = Vec3.atCenterOf(base).add(0, 0.5, 0);
+        BlockHitResult click = BlockUtil.crystalClick(base);
         float step = yawStepsMode.is(YawSteps.ALL) ? yawSteps.getFloat() : RotationManager.NO_STEP;
-        if (rotate.isOn() && !RotationManager.look(hit, RotationPriority.AURA,
+        if (rotate.isOn() && !RotationManager.look(click.getLocation(), RotationPriority.AURA,
             RotationManager.BLOCK_TOLERANCE, step)) {
             status = "(turning)";
             return;
         }
-        BlockHitResult result = new BlockHitResult(hit, Direction.UP, base, false);
-        if (mc.gameMode.useItemOn(mc.player, hand, result).consumesAction()) {
+        if (mc.gameMode.useItemOn(mc.player, hand, click).consumesAction()) {
             swing.getValue().swing(hand);
             ownSpots.put(base.above().immutable(), OWN_MEMORY);
             placeTimer = placeDelay.getInt();
@@ -694,8 +694,7 @@ public final class CrystalAura extends Module {
             if (eye.distanceTo(crystalPos) > furthest || !BlockUtil.state(above).isAir()) {
                 continue;
             }
-            Block block = BlockUtil.state(base).getBlock();
-            if (block != Blocks.OBSIDIAN && block != Blocks.BEDROCK) {
+            if (!BlockUtil.crystalBase(BlockUtil.state(base))) {
                 continue;
             }
             if (oldPlacement.isOn() && !BlockUtil.state(above.above()).isAir()) {
@@ -706,7 +705,7 @@ public final class CrystalAura extends Module {
                 continue;
             }
             // The crystal model needs its whole space free of entities.
-            if (entityBlocks(crystalSpace(above)) || !selfSafe(crystalPos)) {
+            if (entityBlocks(BlockUtil.crystalSpace(above)) || !selfSafe(crystalPos)) {
                 continue;
             }
             float damage = scoreOf(crystalPos);
@@ -719,11 +718,6 @@ public final class CrystalAura extends Module {
             preview(best, bestDamage);
         }
         return best;
-    }
-
-    private static AABB crystalSpace(BlockPos above) {
-        return new AABB(above.getX(), above.getY(), above.getZ(),
-            above.getX() + 1, above.getY() + 2, above.getZ() + 1);
     }
 
     // The damage a crystal here deals to every target added up. Zero when no

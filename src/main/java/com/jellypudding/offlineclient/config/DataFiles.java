@@ -14,6 +14,7 @@ import java.nio.file.StandardCopyOption;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Function;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 // Everything the client saves lives in the offlineclient folder of the game directory.
@@ -21,7 +22,15 @@ public final class DataFiles {
 
     private static final String FOLDER = "offlineclient";
     private static final String JSON = ".json";
+    private static final String TEMP = ".tmp";
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    private static final Pattern UNSAFE = Pattern.compile("[^a-zA-Z0-9_.-]");
+
+    // Fills the file it is handed.
+    @FunctionalInterface
+    public interface Contents {
+        void writeTo(Path file) throws IOException;
+    }
 
     private DataFiles() {
     }
@@ -37,6 +46,11 @@ public final class DataFiles {
 
     public static Path jsonFile(Path folder, String name) {
         return folder.resolve(name + JSON);
+    }
+
+    // Anything a file name could not hold on every system becomes an underscore.
+    public static String safeName(String name) {
+        return UNSAFE.matcher(name).replaceAll("_");
     }
 
     // The names of the json files in a folder from A to Z. Empty when the folder is missing.
@@ -70,13 +84,17 @@ public final class DataFiles {
         }
     }
 
-    // Written to a temporary copy first. A crash mid write cannot corrupt the saved file.
-    // False when the file could not be written.
     public static boolean writeJson(Path path, JsonElement root) {
-        Path temp = path.resolveSibling(path.getFileName() + ".tmp");
+        return writeSafely(path, temp -> Files.writeString(temp, GSON.toJson(root)));
+    }
+
+    // Fills a file beside the target that then takes its place. A crash mid write cannot
+    // corrupt the saved file. False after logging why the file could not be written.
+    public static boolean writeSafely(Path path, Contents contents) {
+        Path temp = path.resolveSibling(path.getFileName() + TEMP);
         try {
             Files.createDirectories(path.getParent());
-            Files.writeString(temp, GSON.toJson(root));
+            contents.writeTo(temp);
             Files.move(temp, path, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
             return true;
         } catch (IOException e) {

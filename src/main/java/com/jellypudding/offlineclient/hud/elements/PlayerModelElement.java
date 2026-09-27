@@ -21,9 +21,9 @@ public final class PlayerModelElement extends HudElement {
     private static final float NARROW = 49f / 70f;
     // Lifts the feet clear of the bottom edge the way the inventory does.
     private static final float FOOTING = 0.0625f;
+    // The height of the box before any stretch.
+    private static final int SIZE = 60;
 
-    private final NumberSetting size = new NumberSetting("Model size",
-        "How big the box round your body is.", 60, 30, 160, 5, " px").min(20);
     private final BoolSetting follow = new BoolSetting("Model follows you",
         "The body turns as you turn. Off holds a fixed angle.", true);
     private final NumberSetting angle = new NumberSetting("Model angle",
@@ -36,7 +36,7 @@ public final class PlayerModelElement extends HudElement {
 
     public PlayerModelElement() {
         super("Player model", "Your own body drawn on the screen.", false, 4, 55);
-        add(size, follow, angle, background, backgroundColor);
+        add(follow, angle, background, backgroundColor);
     }
 
     @Override
@@ -81,11 +81,11 @@ public final class PlayerModelElement extends HudElement {
 
     @Override
     public int width(Font font) {
-        return Math.round(size.getInt() * NARROW);
+        return Math.round(SIZE * NARROW);
     }
 
     @Override
     public int height(Font font) {
-        return size.getInt();
+        return SIZE;
     }
 }

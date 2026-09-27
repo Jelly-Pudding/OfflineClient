@@ -19,7 +19,6 @@ import com.jellypudding.offlineclient.util.RotationManager;
 import com.jellypudding.offlineclient.util.TargetFilter;
 import com.jellypudding.offlineclient.util.TargetPriority;
 
-import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.BowItem;
 import net.minecraft.world.item.CrossbowItem;
@@ -34,9 +33,6 @@ import java.util.List;
 
 // The pitch comes from the real arrow physics and the flight time leads the target.
 public final class BowAimbot extends Module {
-
-    // Pixels below the middle of the screen the readout sits.
-    private static final int CROSSHAIR_GAP = 12;
 
     private final EntityFilter filter = EntityFilter.living("Aim at", "aimed at", true,
         EntityFilter.Pick.NONE, List.of());
@@ -292,12 +288,8 @@ public final class BowAimbot extends Module {
         }
         String line = charge >= 1 ? "Target locked"
             : "Charging " + Math.round(charge * 100) + "%";
-        GuiGraphicsExtractor context = event.getContext();
-        int x = (context.guiWidth() - mc.font.width(line)) / 2;
-        int y = context.guiHeight() / 2 + CROSSHAIR_GAP;
-        context.guiRenderState.up();
-        context.text(mc.font, line, x, y,
-            charge >= 1 ? highlightColor.getColor() : RenderUtil.MUTED_TEXT, true);
+        RenderUtil.underCrosshair(event.getContext(), mc.font, line,
+            charge >= 1 ? highlightColor.getColor() : RenderUtil.MUTED_TEXT);
     }
 
     @Subscribe

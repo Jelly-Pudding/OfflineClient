@@ -1,14 +1,10 @@
 package com.jellypudding.offlineclient.modules.world;
 
-import com.jellypudding.offlineclient.event.Subscribe;
-import com.jellypudding.offlineclient.event.events.TickEvent;
-import com.jellypudding.offlineclient.module.Category;
-import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.module.StationModule;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.MenuClicks;
-import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceKey;
@@ -23,10 +19,10 @@ import net.minecraft.world.item.crafting.RecipePropertySet;
 import java.util.List;
 
 // Keeps a furnace fed whilst its screen is open and takes what comes out.
-public final class AutoSmelter extends Module {
+public final class AutoSmelter extends StationModule<AbstractFurnaceMenu> {
 
     // Ticks between two rounds of clicks.
-    private static final int INTERVAL = 10;
+    private static final int PACE = 10;
 
     private final RegistryListSetting<Item> fuels = new RegistryListSetting<>("Fuel",
         "Items that may be burnt.", BuiltInRegistries.ITEM,
@@ -45,7 +41,8 @@ public final class AutoSmelter extends Module {
     private int taken;
 
     public AutoSmelter() {
-        super("AutoSmelter", "Feeds an open furnace from your inventory and empties it.", Category.WORLD);
+        super("AutoSmelter", "Feeds an open furnace from your inventory and empties it.",
+            AbstractFurnaceMenu.class, PACE);
         addSettings(fuels, fuelPerRefill, inputs, stopWhenEmpty, closeScreen);
         searchTags("furnace", "smelt", "blast furnace", "smoker");
     }
@@ -57,18 +54,12 @@ public final class AutoSmelter extends Module {
 
     @Override
     protected void onEnable() {
+        super.onEnable();
         taken = 0;
     }
 
-    @Subscribe
-    private void onTick(TickEvent event) {
-        if (!(mc.gui.screen() instanceof AbstractContainerScreen<?> screen)
-            || !(screen.getMenu() instanceof AbstractFurnaceMenu furnace)) {
-            return;
-        }
-        if (mc.player.tickCount % INTERVAL != 0 || !furnace.getCarried().isEmpty()) {
-            return;
-        }
+    @Override
+    protected void work(AbstractFurnaceMenu furnace) {
         takeOutput(furnace);
         if (!isEnabled()) {
             return;
@@ -89,18 +80,16 @@ public final class AutoSmelter extends Module {
             return;
         }
         int count = output.getCount();
-        if (!MenuClicks.quickMoved(furnace, AbstractFurnaceMenu.RESULT_SLOT)) {
-            disable("No room in the inventory for what came out.");
-            return;
+        if (moveOut(furnace, AbstractFurnaceMenu.RESULT_SLOT, "for what came out.")) {
+            taken += count;
         }
-        taken += count;
     }
 
     private void refuel(AbstractFurnaceMenu furnace) {
         if (furnace.getLitProgress() > 0 || !furnace.slots.get(AbstractFurnaceMenu.FUEL_SLOT).getItem().isEmpty()) {
             return;
         }
-        int slot = MenuClicks.firstSlot(furnace, AbstractFurnaceMenu.SLOT_COUNT,
+        int slot = MenuClicks.firstInventorySlot(furnace,
             stack -> fuels.contains(stack.getItem()) && stack.has(DataComponents.COOKING_FUEL));
         if (slot == -1) {
             giveUp("Out of fuel.");
@@ -116,7 +105,7 @@ public final class AutoSmelter extends Module {
             return;
         }
         ResourceKey<RecipePropertySet> recipes = recipesFor(furnace);
-        int slot = MenuClicks.firstSlot(furnace, AbstractFurnaceMenu.SLOT_COUNT,
+        int slot = MenuClicks.firstInventorySlot(furnace,
             stack -> inputs.contains(stack.getItem()) && mc.level.recipeAccess().propertySet(recipes).test(stack));
         if (slot == -1) {
             // The last item may still be cooking.

@@ -198,4 +198,8 @@ public final class ModuleRow {
     public void mouseReleased() {
         drag.release();
     }
+
+    public void cancelDrag() {
+        drag.cancel();
+    }
 }

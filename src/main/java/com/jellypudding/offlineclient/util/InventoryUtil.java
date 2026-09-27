@@ -11,6 +11,7 @@ import net.minecraft.client.gui.screens.inventory.HopperScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.client.gui.screens.inventory.ShulkerBoxScreen;
 import net.minecraft.tags.ItemTags;
+import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -40,6 +41,9 @@ public final class InventoryUtil {
     }
 
     public static int networkSlot(int inventoryIndex) {
+        if (inventoryIndex == Inventory.SLOT_OFFHAND) {
+            return OFFHAND_SLOT;
+        }
         return inventoryIndex < HOTBAR_SIZE ? HOTBAR_START + inventoryIndex : inventoryIndex;
     }
 
@@ -148,10 +152,14 @@ public final class InventoryUtil {
 
     // How many of an item the first slots up to the limit hold between them.
     public static int count(Item item, int limit) {
+        return count(stack -> stack.is(item), limit);
+    }
+
+    public static int count(Predicate<ItemStack> test, int limit) {
         int total = 0;
         for (int i = 0; i < limit; i++) {
             ItemStack stack = MC.player.getInventory().getItem(i);
-            if (stack.is(item)) {
+            if (test.test(stack)) {
                 total += stack.getCount();
             }
         }
@@ -241,6 +249,14 @@ public final class InventoryUtil {
             return true;
         }
 
+        // Puts the item in the main hand from the slots below the limit. True once it is there.
+        public boolean hold(Item item, int limit) {
+            if (MC.player == null) {
+                return false;
+            }
+            return MC.player.getMainHandItem().is(item) || select(findSlot(item, limit));
+        }
+
         // True whilst the player is still on the slot the loan picked.
         public boolean stillMine() {
             return chosen != -1 && MC.player != null && selectedSlot() == chosen;
@@ -263,6 +279,19 @@ public final class InventoryUtil {
             }
             previousSlot = -1;
             chosen = -1;
+        }
+
+        // Gives the loan back unless the player is dying. Respawn hands out a fresh inventory.
+        public void release() {
+            release(true);
+        }
+
+        public void release(boolean reselect) {
+            if (MC.player != null && MC.player.isDeadOrDying()) {
+                forget();
+            } else {
+                giveBack(reselect);
+            }
         }
 
         // False when the swap could not be sent. The loan then stays open.

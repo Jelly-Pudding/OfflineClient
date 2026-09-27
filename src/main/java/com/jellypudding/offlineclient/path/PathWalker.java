@@ -2,6 +2,7 @@ package com.jellypudding.offlineclient.path;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.util.BlockMiner;
+import com.jellypudding.offlineclient.util.DamageUtil;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.RotationManager;
 import net.minecraft.client.KeyMapping;
@@ -21,9 +22,6 @@ public final class PathWalker {
     public enum Turn { CLIENT, NONE }
 
     private static final Minecraft MC = OfflineClient.MC;
-
-    // A drop this deep or shallower is walked off without a care.
-    private static final int SAFE_FALL = 3;
 
     // How far ahead a node may be and still count as the one the player is on.
     private static final int LOOK_AHEAD = 8;
@@ -241,7 +239,7 @@ public final class PathWalker {
     }
 
     private boolean deepDrop(PathFinder.Rules rules, BlockPos pos) {
-        for (int drop = 1; drop <= SAFE_FALL; drop++) {
+        for (int drop = 1; drop <= DamageUtil.SAFE_FALL; drop++) {
             if (rules.canStand(pos.below(drop))) {
                 return false;
             }

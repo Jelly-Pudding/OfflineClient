@@ -8,9 +8,10 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.render.BoxStyle;
 import com.jellypudding.offlineclient.render.DrawBatch;
 import com.jellypudding.offlineclient.setting.BoolSetting;
+import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.BoundedMap;
 import com.jellypudding.offlineclient.util.ChatUtil;
-import com.jellypudding.offlineclient.util.ServerInfo;
+import com.jellypudding.offlineclient.util.ServerWatch;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
@@ -74,9 +75,10 @@ public final class SpawnerFinder extends Module {
     private final BoolSetting chat = new BoolSetting("Chat",
         "Posts the coordinates of each new find in chat.", true);
 
-    // Whilst on the finds stay for every dimension of the current server.
+    // The finds and the spawners already read in every dimension of the current server. They
+    // outlast a toggle. Forgetting what was read would report your own visit as a stranger's.
     private final Map<ResourceKey<Level>, Store> stores = new HashMap<>();
-    private String server;
+    private final ServerWatch server = new ServerWatch();
 
     public SpawnerFinder() {
         super("SpawnerFinder", "Finds spawners players have been near in chunks that load whilst this is on.",
@@ -100,29 +102,22 @@ public final class SpawnerFinder extends Module {
         return count(shown);
     }
 
-    @Override
-    protected void onDisable() {
-        stores.clear();
-        server = null;
-    }
-
     // Null until a chunk of this dimension has arrived on this server.
     private Store current() {
-        if (mc.level == null || !ServerInfo.key().equals(server)) {
-            return null;
-        }
-        return stores.get(mc.level.dimension());
+        return mc.level == null ? null : serverStores().get(mc.level.dimension());
     }
 
     private Store storeFor(ResourceKey<Level> dimension) {
-        String here = ServerInfo.key();
-        if (!here.equals(server)) {
+        return serverStores().computeIfAbsent(dimension, key -> new Store(new LinkedHashMap<>(),
+            Collections.newSetFromMap(new BoundedMap<>(MAX_READ))));
+    }
+
+    private Map<ResourceKey<Level>, Store> serverStores() {
+        if (server.changed()) {
             // Two servers share their dimension names.
             stores.clear();
-            server = here;
         }
-        return stores.computeIfAbsent(dimension, key -> new Store(new LinkedHashMap<>(),
-            Collections.newSetFromMap(new BoundedMap<>(MAX_READ))));
+        return stores;
     }
 
     @Subscribe
@@ -216,9 +211,7 @@ public final class SpawnerFinder extends Module {
         if (!chat.isOn() || !shows(find)) {
             return;
         }
-        BlockPos pos = find.pos();
-        ChatUtil.message("§bSpawnerFinder §7found " + find.what() + " at §f" + pos.getX() + " "
-            + pos.getY() + " " + pos.getZ() + "§7.");
+        ChatUtil.message("§bSpawnerFinder §7found " + find.what() + " at §f" + BlockUtil.text(find.pos()) + "§7.");
     }
 
     @Subscribe

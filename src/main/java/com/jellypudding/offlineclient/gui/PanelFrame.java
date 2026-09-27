@@ -447,8 +447,13 @@ public abstract class PanelFrame {
         releaseContent();
     }
 
-    // Leaves the drag and resize state alone.
+    // Leaves the drag and resize state alone. A press still held is dropped
+    // rather than finished because the screen is going away.
     public final void releaseDrags() {
+        cancelContent();
+    }
+
+    protected void cancelContent() {
         releaseContent();
     }
 }

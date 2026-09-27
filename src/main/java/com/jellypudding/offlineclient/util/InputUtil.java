@@ -4,9 +4,13 @@ import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.events.PacketSendEvent;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.KeyMapping;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.protocol.game.ServerboundPlayerInputPacket;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.player.Input;
+
+import java.util.function.BooleanSupplier;
 
 // The real state of input devices. A module forcing a mapping down is ignored here.
 public final class InputUtil {
@@ -100,5 +104,45 @@ public final class InputUtil {
             player.connection.send(new ServerboundPlayerInputPacket(
                 withShift(player.getLastSentInput(), shift)));
         }
+    }
+
+    // Runs an action as a sneaking player on both sides and lets go straight after.
+    // The server handles all three packets before the player ticks and never crouches.
+    public static boolean whileSneaking(BooleanSupplier action) {
+        return withSneak(true, action);
+    }
+
+    // Runs an action standing up on both sides whilst the player holds sneak. A sneaking
+    // player with something in hand uses the item against a block instead of the block.
+    public static boolean whileStanding(BooleanSupplier action) {
+        return withSneak(false, action);
+    }
+
+    private static boolean withSneak(boolean shift, BooleanSupplier action) {
+        LocalPlayer player = OfflineClient.MC.player;
+        Input held = player.input.keyPresses;
+        boolean told = player.getLastSentInput().shift();
+        if (told != shift) {
+            sendShift(shift);
+        }
+        player.input.keyPresses = withShift(held, shift);
+        try {
+            return action.getAsBoolean();
+        } finally {
+            player.input.keyPresses = held;
+            if (told != shift) {
+                sendShift(told);
+            }
+        }
+    }
+
+    // Uses the item in the main hand. The arm swings when the game takes the use.
+    public static boolean useMainHand() {
+        Minecraft mc = OfflineClient.MC;
+        if (!mc.gameMode.useItem(mc.player, InteractionHand.MAIN_HAND).consumesAction()) {
+            return false;
+        }
+        SwingMode.swingArm(InteractionHand.MAIN_HAND);
+        return true;
     }
 }

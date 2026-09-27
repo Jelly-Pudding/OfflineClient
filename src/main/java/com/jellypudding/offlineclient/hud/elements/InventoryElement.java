@@ -34,9 +34,8 @@ public final class InventoryElement extends HudElement {
     private final BoolSetting offhand = new BoolSetting("Show offhand",
         "Add what you hold in your other hand to the top row.", false);
     private final BoolSetting hotbar = new BoolSetting("Show hotbar",
-        "Add the row you carry in hand below the bag.", false);
-    private final BoolSetting hideGameHotbar = new BoolSetting("Hide game hotbar",
-        "Hide the game's own hotbar. This one takes its place.", false).under(hotbar);
+        "Add the row you carry in hand below the bag. Switch off the Hotbar element to hide"
+            + " the game's own.", false);
     private final BoolSetting background = new BoolSetting("Inventory background",
         "Draw a panel behind the slots.", true);
     private final ColorSetting backgroundColor = new ColorSetting("Inventory background colour",
@@ -47,12 +46,7 @@ public final class InventoryElement extends HudElement {
 
     public InventoryElement() {
         super("Inventory", "Your inventory on screen without opening it.", false, 4, 30);
-        add(armour, offhand, hotbar, hideGameHotbar, background, backgroundColor);
-    }
-
-    // True whilst this stands in for the game's hotbar.
-    public boolean hidesGameHotbar() {
-        return isActive() && hotbar.isOn() && hideGameHotbar.isOn();
+        add(armour, offhand, hotbar, background, backgroundColor);
     }
 
     @Override

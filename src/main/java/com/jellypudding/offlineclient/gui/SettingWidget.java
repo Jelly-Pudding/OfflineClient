@@ -90,9 +90,10 @@ public final class SettingWidget {
         private int channel;
 
         private RankSetting<?> rank;
-        private int rankStart;
         private int rankIndex;
         private double pressY;
+        // The top of the held list's first choice on screen.
+        private double firstTop;
         // A press that never travels is a click.
         private boolean travelled;
 
@@ -103,11 +104,11 @@ public final class SettingWidget {
             return slider != null || color != null || rank != null;
         }
 
-        private void grab(RankSetting<?> setting, int index, double mouseY) {
+        private void grab(RankSetting<?> setting, int index, double mouseY, int top) {
             rank = setting;
-            rankStart = index;
             rankIndex = index;
             pressY = mouseY;
+            firstTop = top;
             travelled = false;
         }
 
@@ -124,18 +125,23 @@ public final class SettingWidget {
             }
         }
 
-        // The held choice swaps places with each row it passes.
+        // The held choice moves into whichever row the pointer is over.
         private void followRank(int mouseY) {
-            double travel = mouseY - pressY;
-            travelled |= Math.abs(travel) > DRAG_SLOP;
+            travelled |= Math.abs(mouseY - pressY) > DRAG_SLOP;
             if (!travelled) {
                 return;
             }
-            int target = Math.clamp(rankStart + Math.round(travel / ENTRY_HEIGHT), 0, rank.size() - 1);
+            int target = Math.clamp((int) Math.floor((mouseY - firstTop) / ENTRY_HEIGHT), 0, rank.size() - 1);
             if (target != rankIndex) {
                 rank.move(rankIndex, target);
                 rankIndex = target;
             }
+        }
+
+        // Ends a hold without acting on the press. A screen closing mid press does this.
+        public void cancel() {
+            rank = null;
+            release();
         }
 
         public void release() {
@@ -696,7 +702,7 @@ public final class SettingWidget {
                     return;
                 }
                 if (InputUtil.isLeft(button)) {
-                    drag.grab(r, index, my);
+                    drag.grab(r, index, my, entryTop(y, 0));
                     return;
                 }
                 r.toggle(index);

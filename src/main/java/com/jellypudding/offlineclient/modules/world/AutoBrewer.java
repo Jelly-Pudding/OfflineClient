@@ -1,13 +1,9 @@
 package com.jellypudding.offlineclient.modules.world;
 
-import com.jellypudding.offlineclient.event.Subscribe;
-import com.jellypudding.offlineclient.event.events.TickEvent;
-import com.jellypudding.offlineclient.module.Category;
-import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.module.StationModule;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.MenuClicks;
-import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -26,18 +22,17 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-public final class AutoBrewer extends Module {
+public final class AutoBrewer extends StationModule<BrewingStandMenu> {
 
     public enum Form { DRINKABLE, SPLASH, LINGERING }
 
-    // Stand slots. Everything after these is the player's inventory.
+    // The three bottle slots come first and then the ingredient and the fuel.
     private static final int BOTTLE_SLOTS = 3;
     private static final int INGREDIENT_SLOT = 3;
     private static final int FUEL_SLOT = 4;
-    private static final int FIRST_PLAYER_SLOT = 5;
 
     // Ticks between two actions. The server gets time to answer the last one.
-    private static final int SETTLE_TICKS = 5;
+    private static final int PACE = 6;
 
     // Water goes through at most three ingredients and then the two forms.
     private static final int MAX_STEPS = 6;
@@ -127,11 +122,11 @@ public final class AutoBrewer extends Module {
     private Stage stage;
     private List<Item> plan;
     private int planIndex;
-    private int settle;
     private int brewed;
 
     public AutoBrewer() {
-        super("AutoBrewer", "Brews the potion you pick whilst a brewing stand is open.", Category.WORLD);
+        super("AutoBrewer", "Brews the potion you pick whilst a brewing stand is open.",
+            BrewingStandMenu.class, PACE);
         addSettings(potion, form);
         searchTags("potion", "brewing stand");
     }
@@ -143,31 +138,25 @@ public final class AutoBrewer extends Module {
 
     @Override
     protected void onEnable() {
-        stage = null;
-        plan = null;
+        super.onEnable();
         brewed = 0;
     }
 
-    @Subscribe
-    private void onTick(TickEvent event) {
-        if (!(mc.gui.screen() instanceof AbstractContainerScreen<?> screen)
-            || !(screen.getMenu() instanceof BrewingStandMenu stand)) {
-            stage = null;
-            return;
-        }
+    @Override
+    protected void closed() {
+        stage = null;
+    }
+
+    @Override
+    protected void work(BrewingStandMenu stand) {
         if (stage == null) {
             stage = Stage.TAKE;
             planIndex = 0;
-            settle = 0;
             plan = buildPlan();
             if (plan == null) {
                 disable("That potion cannot be brewed from water on this server.");
                 return;
             }
-        }
-        if (settle > 0) {
-            settle--;
-            return;
         }
         if (stand.getBrewingTicks() != 0) {
             return;
@@ -177,7 +166,6 @@ public final class AutoBrewer extends Module {
             case FILL -> fillWater(stand);
             case BREW -> brew(stand);
         }
-        settle = SETTLE_TICKS;
     }
 
     // Whatever sits in the bottle slots goes to the inventory first.
@@ -189,8 +177,7 @@ public final class AutoBrewer extends Module {
             if (!isWaterBottle(stand.slots.get(i).getItem())) {
                 brewed++;
             }
-            if (!MenuClicks.quickMoved(stand, i)) {
-                disable("No room in the inventory for the finished potions.");
+            if (!moveOut(stand, i, "for the finished potions.")) {
                 return;
             }
         }
@@ -202,7 +189,7 @@ public final class AutoBrewer extends Module {
             if (!stand.slots.get(i).getItem().isEmpty()) {
                 continue;
             }
-            int slot = MenuClicks.firstSlot(stand, FIRST_PLAYER_SLOT, AutoBrewer::isWaterBottle);
+            int slot = MenuClicks.firstInventorySlot(stand, AutoBrewer::isWaterBottle);
             if (slot == -1) {
                 disable("Out of water bottles.");
                 return;
@@ -216,9 +203,7 @@ public final class AutoBrewer extends Module {
     private void brew(BrewingStandMenu stand) {
         // The leftover of the last ingredient goes home before the next one.
         if (!stand.slots.get(INGREDIENT_SLOT).getItem().isEmpty()) {
-            if (!MenuClicks.quickMoved(stand, INGREDIENT_SLOT)) {
-                disable("No room in the inventory for the leftover ingredient.");
-            }
+            moveOut(stand, INGREDIENT_SLOT, "for the leftover ingredient.");
             return;
         }
         if (planIndex >= plan.size()) {
@@ -226,7 +211,7 @@ public final class AutoBrewer extends Module {
             return;
         }
         if (stand.getFuel() == 0) {
-            int fuel = MenuClicks.firstSlot(stand, FIRST_PLAYER_SLOT, stack -> stack.is(Items.BLAZE_POWDER));
+            int fuel = MenuClicks.firstInventorySlot(stand, stack -> stack.is(Items.BLAZE_POWDER));
             if (fuel == -1) {
                 disable("Out of blaze powder.");
                 return;
@@ -235,7 +220,7 @@ public final class AutoBrewer extends Module {
             return;
         }
         Item ingredient = plan.get(planIndex);
-        int slot = MenuClicks.firstSlot(stand, FIRST_PLAYER_SLOT, stack -> stack.is(ingredient));
+        int slot = MenuClicks.firstInventorySlot(stand, stack -> stack.is(ingredient));
         if (slot == -1) {
             disable("Out of " + ingredient.getName(ingredient.getDefaultInstance()).getString() + ".");
             return;

@@ -59,7 +59,7 @@ public final class SetCommand extends Command {
             return;
         }
 
-        // Text settings take the rest of the line. Everything else takes one word.
+        // Text settings and ranked lists take the rest of the line. Everything else takes one word.
         apply(module, setting, String.join(" ", Arrays.copyOfRange(args, 2, args.length)));
     }
 

@@ -45,3 +45,12 @@ accessible class net/minecraft/world/waypoints/TrackedWaypoint$ChunkWaypoint
 accessible field net/minecraft/world/waypoints/TrackedWaypoint$ChunkWaypoint chunkPos Lnet/minecraft/world/level/ChunkPos;
 accessible class net/minecraft/world/waypoints/TrackedWaypoint$Vec3iWaypoint
 accessible field net/minecraft/world/waypoints/TrackedWaypoint$Vec3iWaypoint vector Lnet/minecraft/core/Vec3i;
+accessible method net/minecraft/client/gui/Hud extractHotbarAndDecorations (Lnet/minecraft/client/gui/GuiGraphicsExtractor;Lnet/minecraft/client/DeltaTracker;)V
+accessible field net/minecraft/client/multiplayer/ClientPacketListener serverChunkRadius I
+accessible field net/minecraft/world/level/block/entity/SignBlockEntity allowOpFeatures Z
+accessible method net/minecraft/world/level/block/TrapDoorBlock getType ()Lnet/minecraft/world/level/block/state/properties/BlockSetType;
+accessible field net/minecraft/world/entity/LivingEntity noJumpDelay I
+accessible field net/minecraft/client/multiplayer/ClientPacketListener serverSimulationDistance I
+accessible method net/minecraft/client/multiplayer/ClientLevel getAllMapData ()Ljava/util/Map;
+accessible method net/minecraft/world/level/gameevent/vibrations/VibrationSystem$Listener isOccluded (Lnet/minecraft/world/level/Level;Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/phys/Vec3;)Z
+accessible field net/minecraft/world/entity/projectile/Projectile leftOwner Z

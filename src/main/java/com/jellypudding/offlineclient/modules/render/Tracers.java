@@ -5,6 +5,7 @@ import com.jellypudding.offlineclient.event.events.Render2DEvent;
 import com.jellypudding.offlineclient.event.events.Render3DEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.modules.combat.AntiBot;
 import com.jellypudding.offlineclient.render.DrawBatch;
 import com.jellypudding.offlineclient.render.WorldToScreen;
 import com.jellypudding.offlineclient.setting.BoolSetting;
@@ -78,7 +79,7 @@ public final class Tracers extends Module {
             if (!selfInFreecam.isOn() || !filter.wantsPlayers() || !Modules.enabled(Freecam.class)) {
                 return false;
             }
-        } else if (!filter.matches(entity)) {
+        } else if (!filter.matches(entity) || Modules.hidesBot(AntiBot.View.TRACERS, entity)) {
             return false;
         }
         if (ignoreFriends.isOn() && EntityUtil.isFriend(entity)) {

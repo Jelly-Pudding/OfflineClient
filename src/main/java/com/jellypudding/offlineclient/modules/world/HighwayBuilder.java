@@ -580,7 +580,7 @@ public final class HighwayBuilder extends Module {
             if (sent >= breaksPerTick.getInt()) {
                 break;
             }
-            if (!needsClearing(pos) || BlockUtil.distanceTo(pos) > mc.player.blockInteractionRange()) {
+            if (!needsClearing(pos) || !BlockUtil.inReach(pos)) {
                 continue;
             }
             if (!BlockUtil.canInstantBreak(pos)) {
@@ -628,7 +628,7 @@ public final class HighwayBuilder extends Module {
         if (spare == null) {
             return;
         }
-        if (!needsClearing(spare.pos) || BlockUtil.distanceTo(spare.pos) > mc.player.blockInteractionRange()) {
+        if (!needsClearing(spare.pos) || !BlockUtil.inReach(spare.pos)) {
             spare = null;
             return;
         }

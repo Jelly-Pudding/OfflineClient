@@ -4,6 +4,7 @@ import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.Render2DEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.modules.combat.AntiBot;
 import com.jellypudding.offlineclient.render.WorldToScreen;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ChoiceListSetting;
@@ -15,6 +16,7 @@ import com.jellypudding.offlineclient.util.EntityFilter;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.ItemUtil;
 import com.jellypudding.offlineclient.util.Modules;
+import com.jellypudding.offlineclient.util.Mounts;
 import com.jellypudding.offlineclient.util.RenderUtil;
 import net.minecraft.SharedConstants;
 import net.minecraft.client.gui.Font;
@@ -26,6 +28,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.animal.equine.Llama;
 import net.minecraft.world.entity.decoration.ItemFrame;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.item.PrimedTnt;
@@ -85,14 +88,15 @@ public final class Nametags extends Module {
         "Tag yourself whilst in third person or Freecam.", true);
     private final BoolSetting ignoreFriends = new BoolSetting("Ignore friends",
         "Friends get no tag.", false);
-    private final BoolSetting ignoreBots = new BoolSetting("Ignore bots",
-        "Players missing from the tab list get no tag. Off labels them as bots.", true);
     private final BoolSetting displayName = new BoolSetting("Display name",
         "Show the server display name with any team prefix instead of the account name.", false);
     private final BoolSetting gameMode = new BoolSetting("Game mode",
         "Put the player's game mode in front of the name.", false);
     private final BoolSetting health = new BoolSetting("Health",
         "Show hearts left including absorption.", true);
+    private final BoolSetting mountStats = new BoolSetting("Mount stats",
+        "Tags every mount with its full health and top speed and jump height or a llama's strength."
+            + " Red marks the worst a wild horse spawns with and green the best.", false);
     private final BoolSetting ping = new BoolSetting("Ping",
         "Show the player's latency.", true);
     private final BoolSetting pingByLatency = new BoolSetting("Ping by latency",
@@ -153,7 +157,7 @@ public final class Nametags extends Module {
             Category.RENDER);
         addSettings(scale, range, limit);
         addSettings(filter.settings());
-        addSettings(self, ignoreFriends, ignoreBots, displayName, gameMode, health, ping, pingByLatency,
+        addSettings(self, ignoreFriends, displayName, gameMode, health, mountStats, ping, pingByLatency,
             pingColor, distance, distanceColor, flatDistanceColor, items, armor, itemSpacing, ignoreEmpty,
             durability, showCount, enchantments, shownEnchantments, enchantPosition, enchantLetters,
             enchantScale, nameColor, gameModeColor, background, backgroundOpacity);
@@ -205,7 +209,10 @@ public final class Nametags extends Module {
             if (ignoreFriends.isOn() && EntityUtil.isFriend(player)) {
                 return false;
             }
-            return !ignoreBots.isOn() || tabEntry(player) != null;
+            return !Modules.hidesBot(AntiBot.View.NAMETAGS, player);
+        }
+        if (mountStats.isOn() && Mounts.isMount(entity) && entity.isAlive()) {
+            return true;
         }
         return filter.matches(entity);
     }
@@ -214,15 +221,24 @@ public final class Nametags extends Module {
         return self.isOn() && Freecam.ownBodyVisible();
     }
 
+    // The size of the tag over an entity or nought when it has none. EntityOwner stacks its label on it.
+    public float tagScale(Entity entity, double distance) {
+        return isEnabled() && distance <= range.getValue() && wanted(entity) ? factor(distance) : 0;
+    }
+
+    // Shrinks with distance down to half size.
+    private float factor(double distance) {
+        return (float) (scale.getValue() * Math.clamp(1 - distance / 100.0, 0.5, 1));
+    }
+
     // Items sit low and their tag hugs them. Everything else gets a little headroom.
-    private static double tagHeight(Entity entity) {
+    public static double tagHeight(Entity entity) {
         boolean item = entity instanceof ItemEntity || entity instanceof ItemFrame;
         return entity.getEyeHeight() + (item ? 0.2 : 0.5);
     }
 
     private void drawTag(GuiGraphicsExtractor context, Tag tag) {
-        // Shrink with distance down to half size.
-        float factor = (float) (scale.getValue() * Math.clamp(1 - tag.distance() / 100.0, 0.5, 1));
+        float factor = factor(tag.distance());
         switch (tag.entity()) {
             case Player player -> drawPlayer(context, tag, player, factor);
             case ItemEntity item -> drawItem(context, tag, item.getItem(), factor);
@@ -238,8 +254,10 @@ public final class Nametags extends Module {
         List<String> parts = new ArrayList<>();
         List<Integer> colors = new ArrayList<>();
 
-        if (gameMode.isOn()) {
-            parts.add("[" + gameModeText(player) + "] ");
+        // A bot AntiBot leaves in is always marked.
+        boolean bot = Modules.isBot(player);
+        if (gameMode.isOn() || bot) {
+            parts.add("[" + (bot ? "BOT" : gameModeText(player)) + "] ");
             colors.add(gameModeColor.getColor());
         }
         parts.add(nameText(player));
@@ -271,6 +289,9 @@ public final class Nametags extends Module {
         parts.add(typeName(living));
         colors.add(nameColor.getColor());
         addHealth(parts, colors, living);
+        if (mountStats.isOn() && Mounts.isMount(living)) {
+            addMountStats(parts, colors, living);
+        }
         label(context, tag, factor, parts, colors);
     }
 
@@ -305,6 +326,27 @@ public final class Nametags extends Module {
         colors.add(ColorUtil.health(EntityUtil.healthShare(living)));
     }
 
+    // Full health then speed and jump each coloured by how it compares with wild horses.
+    private static void addMountStats(List<String> parts, List<Integer> colors, LivingEntity mount) {
+        float maxHealth = mount.getMaxHealth();
+        parts.add(String.format(Locale.ROOT, "/%.0f", maxHealth));
+        colors.add(ColorUtil.redToGreen(Mounts.healthShare(maxHealth)));
+        double speed = Mounts.topSpeed(mount);
+        if (!Double.isNaN(speed)) {
+            parts.add(String.format(Locale.ROOT, " %.1f m/s", speed));
+            colors.add(ColorUtil.redToGreen(Mounts.speedShare(speed)));
+        }
+        double jump = Mounts.jumpHeight(mount);
+        if (!Double.isNaN(jump)) {
+            parts.add(String.format(Locale.ROOT, " jumps %.1f m", jump));
+            colors.add(ColorUtil.redToGreen(Mounts.jumpShare(jump)));
+        }
+        if (mount instanceof Llama llama) {
+            parts.add(" strength " + llama.getStrength());
+            colors.add(ColorUtil.redToGreen(Mounts.strengthShare(llama.getStrength())));
+        }
+    }
+
     private String nameText(Player player) {
         if (player != mc.player && displayName.isOn()) {
             return player.getDisplayName().getString();
@@ -321,10 +363,7 @@ public final class Nametags extends Module {
 
     private String gameModeText(Player player) {
         PlayerInfo info = tabEntry(player);
-        if (info == null) {
-            return "BOT";
-        }
-        return EntityUtil.gameModeLetter(info.getGameMode());
+        return EntityUtil.gameModeLetter(info == null ? null : info.getGameMode());
     }
 
     private static String typeName(Entity entity) {

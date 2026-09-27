@@ -3,6 +3,7 @@ package com.jellypudding.offlineclient.modules.player;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
+import com.jellypudding.offlineclient.module.ExclusivityGroup;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.modules.render.Waypoints;
@@ -17,6 +18,11 @@ public final class AutoRespawn extends Module {
     public AutoRespawn() {
         super("AutoRespawn", "Instantly respawns you after dying.", Category.PLAYER);
         addSettings(deathButton);
+    }
+
+    @Override
+    public ExclusivityGroup getExclusivityGroup() {
+        return ExclusivityGroup.RESPAWN;
     }
 
     // Read by DeathScreenMixin whilst the module is off.

@@ -126,7 +126,7 @@ public final class WindowGuiScreen extends GuiScreenBase {
 
     @Override
     protected void releaseDrags() {
-        drag.release();
+        drag.cancel();
         scrollBar.release();
     }
 

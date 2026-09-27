@@ -38,7 +38,7 @@ public final class DamageUtil {
     public static final double BLAST_RANGE = 8;
 
     // Blocks a player can drop without being hurt.
-    private static final double SAFE_FALL = 3;
+    public static final double SAFE_FALL = 3;
 
     private DamageUtil() {
     }
@@ -155,9 +155,14 @@ public final class DamageUtil {
 
     // Vanilla only crits a falling attacker who is off the ground and not sprinting.
     private static boolean canCrit(LivingEntity attacker) {
+        return critFall(attacker) && !attacker.isSprinting();
+    }
+
+    // Everything the server asks of a critical hit apart from the sprint.
+    public static boolean critFall(LivingEntity attacker) {
         return attacker.fallDistance > 0 && !attacker.onGround() && !attacker.onClimbable()
             && !attacker.isInWater() && !attacker.hasEffect(MobEffects.BLINDNESS)
-            && !attacker.isPassenger() && !attacker.isSprinting();
+            && !attacker.isPassenger();
     }
 
     // Damage the fall the entity is in would deal on landing. The drop still to come is
@@ -206,9 +211,12 @@ public final class DamageUtil {
             }
         }
 
-        float armor = (float) Math.floor(target.getAttributeValue(Attributes.ARMOR));
-        float toughness = (float) target.getAttributeValue(Attributes.ARMOR_TOUGHNESS);
-        damage = CombatRules.getDamageAfterAbsorb(target, damage, source, armor, toughness);
+        // Falls and pearls and magic go straight through armour.
+        if (!source.is(DamageTypeTags.BYPASSES_ARMOR)) {
+            float armor = (float) Math.floor(target.getAttributeValue(Attributes.ARMOR));
+            float toughness = (float) target.getAttributeValue(Attributes.ARMOR_TOUGHNESS);
+            damage = CombatRules.getDamageAfterAbsorb(target, damage, source, armor, toughness);
+        }
 
         MobEffectInstance resistance = target.getEffect(MobEffects.RESISTANCE);
         if (resistance != null) {

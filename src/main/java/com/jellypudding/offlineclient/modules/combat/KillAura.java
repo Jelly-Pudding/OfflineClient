@@ -137,7 +137,7 @@ public final class KillAura extends Module {
     private final EnumSetting<Shields> shields = new EnumSetting<>("Shields",
         "What to do about a raised shield.", Shields.BREAK)
         .describe(Shields.NONE, "Hits the shield like anything else.")
-        .describe(Shields.BREAK, "Reaches for an axe to knock the shield down.")
+        .describe(Shields.BREAK, "Takes up an axe to knock the shield down then goes back to your weapon.")
         .describe(Shields.IGNORE, "Leaves anyone blocking alone.");
     private final BoolSetting onlyWithWeapon = new BoolSetting("Only with weapon",
         "Only swings whilst one of the ticked weapons is in your main hand.", false);
@@ -256,6 +256,10 @@ public final class KillAura extends Module {
         if (pauseOnLag.isOn() && TickRate.INSTANCE.lagging(LAG_MILLIS)) {
             return true;
         }
+        // The smash MaceCombo is falling towards hurts far more than a sword.
+        if (Modules.maceComboAirborne()) {
+            return true;
+        }
         // Crystals hurt far more than a sword.
         return Modules.feedersPauseCombat() || (pauseOnCrystals.isOn() && Modules.crystalsActing());
     }
@@ -308,14 +312,15 @@ public final class KillAura extends Module {
         if (blocking && shields.is(Shields.IGNORE)) {
             return false;
         }
-        if (!autoWeapon.isOn()) {
-            return true;
-        }
-        int limit = weaponFromInventory.isOn() ? InventoryUtil.WHOLE_INVENTORY : InventoryUtil.HOTBAR_SIZE;
+        int limit = autoWeapon.isOn() && weaponFromInventory.isOn()
+            ? InventoryUtil.WHOLE_INVENTORY : InventoryUtil.HOTBAR_SIZE;
         // An axe staggers a raised shield whilst a sword bounces off it.
-        int best = -1;
-        if (blocking && shields.is(Shields.BREAK)) {
-            best = WeaponUtil.bestAxeSlot(target, true, limit);
+        int best = blocking && shields.is(Shields.BREAK) ? WeaponUtil.bestAxeSlot(target, true, limit) : -1;
+        if (best == -1 && !autoWeapon.isOn()) {
+            // Without Auto weapon an axe is only borrowed whilst the shield is up.
+            int held = InventoryUtil.selectedSlot();
+            loan.giveBack(loan.stillMine());
+            return InventoryUtil.selectedSlot() == held;
         }
         if (best == -1) {
             AutoWeapon chooser = Modules.active(AutoWeapon.class);
@@ -327,15 +332,10 @@ public final class KillAura extends Module {
         return !loan.select(best);
     }
 
-    // A borrowed weapon always goes home. The old slot only comes back when the
-    // player has not picked another since.
+    // A borrowed weapon always goes home. The slot held before is taken up again unless the
+    // player has picked another since. An axe taken for a shield alone always goes back.
     private void putWeaponAway() {
-        if (!inGame() || mc.player.isDeadOrDying()) {
-            // Respawn hands out a fresh inventory.
-            loan.forget();
-        } else {
-            loan.giveBack(weaponSwapBack.isOn() && loan.stillMine());
-        }
+        loan.release((weaponSwapBack.isOn() || !autoWeapon.isOn()) && loan.stillMine());
     }
 
     private List<LivingEntity> pickTargets() {

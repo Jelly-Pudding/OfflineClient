@@ -12,36 +12,40 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-// The panel in the HUD editor. Every piece of the overlay with a switch
-// beside it and its own settings underneath.
+// A panel in the HUD editor. Every piece it lists has a switch beside it and its
+// own settings underneath.
 public final class HudElementList extends PanelFrame {
 
     private static final int PILL_WIDTH = 16;
     private static final int PILL_HEIGHT = 7;
     private static final int ARROW_ZONE = 12;
     private static final int PAD = 5;
-    private static final String STATE_KEY = "hudList";
+    private static final int TOP = 6;
 
     private final List<HudElement> elements;
+    // Where the panel keeps its place and its open rows between visits.
+    private final String stateKey;
     private final Set<String> expanded = new HashSet<>();
     private final SettingWidget.Host host;
     private final SettingWidget.Drag drag = new SettingWidget.Drag();
 
     private HudElement hovered;
 
-    public HudElementList(List<HudElement> elements, SettingWidget.Host host) {
-        super("Overlay", 6, 6, GuiTheme.PANEL_WIDTH);
+    public HudElementList(String title, int x, String stateKey, List<HudElement> elements,
+                          SettingWidget.Host host) {
+        super(title, x, TOP, GuiTheme.PANEL_WIDTH);
         this.elements = elements;
+        this.stateKey = stateKey;
         this.host = host;
         restore();
     }
 
     private void restore() {
         JsonObject gui = OfflineClient.INSTANCE.getConfigManager().getGuiState();
-        if (!gui.has(STATE_KEY) || !gui.get(STATE_KEY).isJsonObject()) {
+        if (!gui.has(stateKey) || !gui.get(stateKey).isJsonObject()) {
             return;
         }
-        JsonObject state = gui.getAsJsonObject(STATE_KEY);
+        JsonObject state = gui.getAsJsonObject(stateKey);
         readFrame(state);
         if (state.has("open")) {
             for (var name : state.getAsJsonArray("open")) {
@@ -56,7 +60,7 @@ public final class HudElementList extends PanelFrame {
         JsonArray open = new JsonArray();
         expanded.forEach(open::add);
         state.add("open", open);
-        OfflineClient.INSTANCE.getConfigManager().getGuiState().add(STATE_KEY, state);
+        OfflineClient.INSTANCE.getConfigManager().getGuiState().add(stateKey, state);
     }
 
     // The element the pointer is over. Null whenever it is over none.
@@ -167,5 +171,10 @@ public final class HudElementList extends PanelFrame {
     @Override
     protected void releaseContent() {
         drag.release();
+    }
+
+    @Override
+    protected void cancelContent() {
+        drag.cancel();
     }
 }

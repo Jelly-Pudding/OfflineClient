@@ -79,7 +79,7 @@ public final class EChestFarmer extends Module {
         if (target == null && !pickTarget()) {
             return;
         }
-        if (BlockUtil.distanceTo(target) > mc.player.blockInteractionRange()) {
+        if (!BlockUtil.inReach(target)) {
             ChatUtil.error("The chest spot is out of reach.");
             target = null;
             return;

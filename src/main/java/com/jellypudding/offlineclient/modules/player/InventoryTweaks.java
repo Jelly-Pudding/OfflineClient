@@ -203,20 +203,16 @@ public final class InventoryTweaks extends Module {
     }
 
     private boolean stealerBusy() {
-        return Modules.enabled(ChestStealer.class);
+        ChestStealer stealer = Modules.get(ChestStealer.class);
+        return stealer != null && stealer.busy();
     }
 
     private List<Integer> playerSlots(AbstractContainerMenu menu, boolean withHotbar) {
         List<Integer> found = new ArrayList<>();
         for (int i = 0; i < menu.slots.size(); i++) {
             Slot slot = menu.slots.get(i);
-            if (slot.container != mc.player.getInventory()) {
-                continue;
-            }
-            int index = slot.getContainerSlot();
-            if (index >= InventoryUtil.MAIN_START && index < InventoryUtil.WHOLE_INVENTORY) {
-                found.add(i);
-            } else if (withHotbar && index < InventoryUtil.MAIN_START) {
+            if (MenuClicks.isInventorySlot(slot)
+                && (withHotbar || slot.getContainerSlot() >= InventoryUtil.MAIN_START)) {
                 found.add(i);
             }
         }
@@ -249,11 +245,7 @@ public final class InventoryTweaks extends Module {
     private boolean dumpJunk(AbstractContainerMenu menu) {
         for (int i = 0; i < menu.slots.size(); i++) {
             Slot slot = menu.slots.get(i);
-            if (slot.container != mc.player.getInventory()) {
-                continue;
-            }
-            int index = slot.getContainerSlot();
-            if (index < InventoryUtil.MAIN_START || index >= InventoryUtil.WHOLE_INVENTORY) {
+            if (!MenuClicks.isInventorySlot(slot) || slot.getContainerSlot() < InventoryUtil.MAIN_START) {
                 continue;
             }
             ItemStack stack = slot.getItem();
@@ -311,21 +303,10 @@ public final class InventoryTweaks extends Module {
             if (best == i) {
                 continue;
             }
-            swap(menu, region.get(i), region.get(best));
+            MenuClicks.swap(menu, region.get(i), region.get(best));
             return true;
         }
         return false;
-    }
-
-    // Trades two slots with three pickup clicks.
-    private void swap(AbstractContainerMenu menu, int from, int to) {
-        MenuClicks.click(menu, from, 0, ContainerInput.PICKUP);
-        MenuClicks.click(menu, to, 0, ContainerInput.PICKUP);
-        MenuClicks.click(menu, from, 0, ContainerInput.PICKUP);
-        // Never leave a stack stuck to the cursor.
-        if (!menu.getCarried().isEmpty()) {
-            MenuClicks.click(menu, to, 0, ContainerInput.PICKUP);
-        }
     }
 
     // Empty slots sink to the end and everything else goes by id then size.

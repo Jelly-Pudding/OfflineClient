@@ -4,6 +4,8 @@ import com.jellypudding.offlineclient.OfflineClient;
 import net.minecraft.client.multiplayer.ClientChunkCache;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
+import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
@@ -63,6 +65,16 @@ public final class ChunkWindow {
         return new ChunkWindow(null, chunks, originX, originZ, side, level.getMinY(), level.getMaxY());
     }
 
+    // True once every chunk of a captured window has arrived.
+    public boolean complete() {
+        for (LevelChunk chunk : chunks) {
+            if (chunk == null) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     public int minY() {
         return minY;
     }
@@ -88,6 +100,11 @@ public final class ChunkWindow {
             return AIR;
         }
         return section.getBlockState(x & 15, y & 15, z & 15);
+    }
+
+    // The stored biome at quarter block coordinates. The chunk holding them must be in the window.
+    public Holder<Biome> noiseBiome(int quartX, int quartY, int quartZ) {
+        return chunkAt(quartX >> 2, quartZ >> 2).getNoiseBiome(quartX, quartY, quartZ);
     }
 
     private LevelChunk chunkAt(int x, int z) {

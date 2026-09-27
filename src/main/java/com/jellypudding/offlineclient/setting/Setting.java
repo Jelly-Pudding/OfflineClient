@@ -4,6 +4,7 @@ import com.google.gson.JsonElement;
 
 import java.util.HashSet;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Supplier;
 
@@ -61,6 +62,11 @@ public abstract class Setting<T> {
 
     public void reset() {
         value = defaultValue;
+    }
+
+    // True whilst the value is still the one it started with.
+    public boolean isDefault() {
+        return Objects.equals(value, defaultValue);
     }
 
     // Hides this setting in the GUI whilst the supplier returns false.

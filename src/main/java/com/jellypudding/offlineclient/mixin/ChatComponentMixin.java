@@ -3,6 +3,7 @@ package com.jellypudding.offlineclient.mixin;
 import com.jellypudding.offlineclient.modules.misc.AntiSpam;
 import com.jellypudding.offlineclient.modules.misc.BetterChat;
 import com.jellypudding.offlineclient.modules.misc.NameProtect;
+import com.jellypudding.offlineclient.modules.misc.SecretChat;
 import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.client.gui.components.ChatComponent;
 import net.minecraft.client.multiplayer.chat.GuiMessageSource;
@@ -43,6 +44,10 @@ public abstract class ChatComponentMixin {
 
     @ModifyVariable(method = ADD_MESSAGE, at = @At("HEAD"), argsOnly = true)
     private Component rewriteMessage(Component message) {
+        SecretChat secretChat = Modules.get(SecretChat.class);
+        if (secretChat != null) {
+            message = secretChat.reveal(message);
+        }
         NameProtect nameProtect = Modules.get(NameProtect.class);
         if (nameProtect != null) {
             message = nameProtect.filter(message);

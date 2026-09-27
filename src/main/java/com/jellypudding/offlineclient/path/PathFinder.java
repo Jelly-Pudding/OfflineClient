@@ -7,19 +7,12 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.level.block.BaseFireBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.CactusBlock;
-import net.minecraft.world.level.block.CampfireBlock;
 import net.minecraft.world.level.block.FenceBlock;
 import net.minecraft.world.level.block.FenceGateBlock;
-import net.minecraft.world.level.block.MagmaBlock;
-import net.minecraft.world.level.block.PowderSnowBlock;
-import net.minecraft.world.level.block.SweetBerryBushBlock;
 import net.minecraft.world.level.block.WallBlock;
 import net.minecraft.world.level.block.WebBlock;
-import net.minecraft.world.level.block.WitherRoseBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.FluidState;
 
@@ -307,7 +300,7 @@ public final class PathFinder {
         // Minus one when the player cannot move through the block.
         private double spaceCost(BlockPos pos, boolean mine) {
             BlockState state = view.get(pos);
-            if (unknown(state) || harmful(state)) {
+            if (unknown(state) || BlockUtil.harmful(state)) {
                 return -1;
             }
             if (BlockUtil.blocksMotion(state) && !climbable(state)) {
@@ -334,7 +327,7 @@ public final class PathFinder {
 
     // A fence or a wall stands a block and a half high. Nothing hops onto it.
     private static boolean solidFloor(BlockState state) {
-        if (unknown(state) || harmful(state) || climbable(state)) {
+        if (unknown(state) || BlockUtil.harmful(state) || climbable(state)) {
             return false;
         }
         Block block = state.getBlock();
@@ -343,17 +336,6 @@ public final class PathFinder {
             return false;
         }
         return BlockUtil.blocksMotion(state);
-    }
-
-    private static boolean harmful(BlockState state) {
-        Block block = state.getBlock();
-        return block instanceof BaseFireBlock
-            || block instanceof MagmaBlock
-            || block instanceof CactusBlock
-            || block instanceof SweetBerryBushBlock
-            || block instanceof PowderSnowBlock
-            || block instanceof CampfireBlock
-            || block instanceof WitherRoseBlock;
     }
 
     private record Node(long key, double score) {

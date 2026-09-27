@@ -5,6 +5,7 @@ import com.jellypudding.offlineclient.event.events.PacketSendEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
+import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.PacketUtil;
 import net.minecraft.client.multiplayer.MultiPlayerGameMode;
 import net.minecraft.client.player.LocalPlayer;
@@ -36,7 +37,9 @@ public final class AntiHunger extends Module {
             return;
         }
         if (event.getPacket() instanceof ServerboundPlayerCommandPacket command) {
-            if (sprint.isOn() && command.getAction() == ServerboundPlayerCommandPacket.Action.START_SPRINTING) {
+            // The start Knockback sends for a hit ends with that hit.
+            if (sprint.isOn() && command.getAction() == ServerboundPlayerCommandPacket.Action.START_SPRINTING
+                && !Modules.renewingSprint()) {
                 event.cancel();
             }
             return;

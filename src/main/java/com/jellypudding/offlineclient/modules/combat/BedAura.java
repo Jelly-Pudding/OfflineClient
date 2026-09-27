@@ -147,14 +147,9 @@ public final class BedAura extends RespawnBlockAura {
 
     private boolean layBed(Spot spot) {
         // The bed follows the yaw the client holds when the placement runs.
-        float heldYaw = mc.player.getYRot();
-        mc.player.setYRot(spot.facing().toYRot());
-        try {
-            // The rotation has already been asked for. Placing must not ask again.
-            return BlockUtil.placeAny(spot.foot(), false, false);
-        } finally {
-            mc.player.setYRot(heldYaw);
-        }
+        // The rotation has already been asked for. Placing must not ask again.
+        return RotationManager.whileFacing(spot.facing().toYRot(), mc.player.getXRot(),
+            () -> BlockUtil.placeAny(spot.foot(), false, false));
     }
 
     // Vanilla blows a bed up from the head half.

@@ -5,6 +5,7 @@ import com.jellypudding.offlineclient.event.events.Render2DEvent;
 import com.jellypudding.offlineclient.event.events.Render3DEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.modules.combat.AntiBot;
 import com.jellypudding.offlineclient.modules.combat.Hitboxes;
 import com.jellypudding.offlineclient.render.BoxStyle;
 import com.jellypudding.offlineclient.render.DrawBatch;
@@ -236,6 +237,9 @@ public final class Esp extends Module {
         }
         if (entity == mc.player) {
             return self.isOn() && Freecam.ownBodyVisible();
+        }
+        if (Modules.hidesBot(AntiBot.View.ESP, entity)) {
+            return false;
         }
         if (ignoreInvisible.isOn() && entity.isInvisible()) {
             return false;

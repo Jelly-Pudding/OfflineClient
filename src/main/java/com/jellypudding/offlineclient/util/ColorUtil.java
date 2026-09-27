@@ -2,6 +2,8 @@ package com.jellypudding.offlineclient.util;
 
 import net.minecraft.util.ARGB;
 
+import java.util.concurrent.ThreadLocalRandom;
+
 public final class ColorUtil {
 
     private ColorUtil() {
@@ -29,6 +31,11 @@ public final class ColorUtil {
             default -> { r = v; g = p; b = q; }
         }
         return 0xFF000000 | channel(r) << 16 | channel(g) << 8 | channel(b);
+    }
+
+    // A vivid colour of any hue picked at random.
+    public static int randomBright() {
+        return hsv(ThreadLocalRandom.current().nextFloat(360f), 0.85f, 1f);
     }
 
     private static int channel(float share) {
@@ -105,7 +112,7 @@ public final class ColorUtil {
     }
 
     // Hue in degrees then saturation then value each from nought to one.
-    private static float[] hsvOf(int color) {
+    public static float[] hsvOf(int color) {
         float red = (color >> 16 & 0xFF) / 255f;
         float green = (color >> 8 & 0xFF) / 255f;
         float blue = (color & 0xFF) / 255f;

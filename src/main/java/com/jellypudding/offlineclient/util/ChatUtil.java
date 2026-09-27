@@ -2,11 +2,14 @@ package com.jellypudding.offlineclient.util;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.module.Module;
+import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.components.ChatComponent;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.multiplayer.chat.GuiMessage;
+import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
 
+import java.nio.file.Path;
 import java.util.List;
 import java.util.function.Predicate;
 
@@ -61,6 +64,23 @@ public final class ChatUtil {
         } else {
             connection.sendChat(text);
         }
+    }
+
+    // A saved file named from the game folder. Clicking it opens the folder that holds it.
+    public static Component fileLink(Path file) {
+        return pathLink(file, file.getParent());
+    }
+
+    // A folder named from the game folder. Clicking it opens that folder.
+    public static Component folderLink(Path folder) {
+        return pathLink(folder, folder);
+    }
+
+    private static Component pathLink(Path shown, Path opens) {
+        Path game = OfflineClient.MC.gameDirectory.toPath();
+        return Component.literal(game.relativize(shown).toString().replace('\\', '/'))
+            .withStyle(style -> style.withColor(ChatFormatting.WHITE)
+                .withClickEvent(new ClickEvent.OpenFile(opens)));
     }
 
     public static void toggled(Module module) {

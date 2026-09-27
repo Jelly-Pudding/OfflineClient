@@ -11,6 +11,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.NeutralMob;
+import net.minecraft.world.entity.OwnableEntity;
 import net.minecraft.world.entity.TamableAnimal;
 import net.minecraft.world.entity.ambient.AmbientCreature;
 import net.minecraft.world.entity.animal.allay.Allay;
@@ -29,6 +30,7 @@ import net.minecraft.world.entity.monster.piglin.AbstractPiglin;
 import net.minecraft.world.entity.monster.zombie.ZombieVillager;
 import net.minecraft.world.entity.npc.villager.AbstractVillager;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.EntityHitResult;
@@ -54,6 +56,12 @@ public final class EntityUtil {
 
     // Blocks at which a player reads as far away. Closer fades towards red.
     private static final float FADE_DISTANCE = 20;
+
+    // Stands in for a thrower the client never saw.
+    public static final String UNKNOWN_THROWER = "Someone";
+
+    // Hitbox reach is shorter than the centre distance. A reach scan runs this much wider.
+    private static final double REACH_SCAN_MARGIN = 4;
 
     // The server counts entity ids up from one. Ours count down from the top
     // of the range and the two never meet.
@@ -115,6 +123,19 @@ public final class EntityUtil {
         return mob.isSaddled();
     }
 
+    // Your own pets and the mounts you ride or have ridden.
+    public static boolean isYours(Mob mob) {
+        Player player = OfflineClient.MC.player;
+        if (player == null) {
+            return false;
+        }
+        if (mob == player.getVehicle() || Ridden.has(mob)) {
+            return true;
+        }
+        return mob instanceof OwnableEntity pet && pet.getOwnerReference() != null
+            && pet.getOwnerReference().matches(player);
+    }
+
     // A mob that only fights once provoked.
     public static boolean isNeutral(Mob mob) {
         return mob instanceof NeutralMob || mob instanceof AbstractPiglin || mob instanceof Pufferfish;
@@ -135,7 +156,11 @@ public final class EntityUtil {
 
     // The name to draw for a player. NameProtect may swap it for an alias.
     public static String displayNameOf(Player player) {
-        String name = nameOf(player);
+        return displayName(nameOf(player));
+    }
+
+    // The same for an account name remembered without the player.
+    public static String displayName(String name) {
         NameProtect nameProtect = Modules.get(NameProtect.class);
         return nameProtect == null || name == null ? name : nameProtect.display(name);
     }
@@ -158,10 +183,17 @@ public final class EntityUtil {
             && OfflineClient.INSTANCE.getFriendManager().isFriend(nameOf(player));
     }
 
-    // A living player who is not a friend and not watching from spectator.
+    // A living player who is not a friend and not watching from spectator. AntiBot
+    // takes fake players out.
     public static boolean isEnemy(Entity entity) {
         return entity instanceof Player player && player.isAlive() && !player.isSpectator()
-            && !isFriend(player);
+            && !isFriend(player) && !Modules.isBot(player);
+    }
+
+    // Who threw or shot a projectile. The client only knows whilst the thrower is in sight.
+    public static String throwerName(Projectile projectile) {
+        Entity owner = projectile.getOwner();
+        return owner == null ? UNKNOWN_THROWER : owner.getName().getString();
     }
 
     // The broad families the filters in the render modules work with.
@@ -344,6 +376,12 @@ public final class EntityUtil {
             }
         }
         return best;
+    }
+
+    // The entity within hitting reach the priority likes best or null.
+    public static Entity bestInReach(double reach, TargetPriority priority, Predicate<Entity> test) {
+        return best(reach + REACH_SCAN_MARGIN, priority,
+            entity -> test.test(entity) && reachDistance(OfflineClient.MC.player, entity) <= reach);
     }
 
     public static Player bestEnemy(double range, TargetPriority priority) {

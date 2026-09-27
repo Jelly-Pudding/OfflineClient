@@ -11,23 +11,19 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.ItemUtil;
+import com.jellypudding.offlineclient.util.ProjectilePath;
+import com.jellypudding.offlineclient.util.ProjectilePath.Launch;
+import com.jellypudding.offlineclient.util.ProjectilePath.Path;
+import com.jellypudding.offlineclient.util.ProjectilePath.Shot;
 import com.jellypudding.offlineclient.util.ProjectileUtil;
-import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.tags.FluidTags;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.entity.projectile.arrow.AbstractArrow;
-import net.minecraft.world.entity.projectile.arrow.ThrownTrident;
-import net.minecraft.world.entity.projectile.hurtingprojectile.AbstractHurtingProjectile;
 import net.minecraft.world.entity.projectile.hurtingprojectile.WitherSkull;
-import net.minecraft.world.entity.projectile.hurtingprojectile.windcharge.AbstractWindCharge;
-import net.minecraft.world.entity.projectile.throwableitemprojectile.AbstractThrownPotion;
-import net.minecraft.world.entity.projectile.throwableitemprojectile.ThrowableItemProjectile;
-import net.minecraft.world.entity.projectile.throwableitemprojectile.ThrownExperienceBottle;
 import net.minecraft.world.item.BowItem;
 import net.minecraft.world.item.CrossbowItem;
 import net.minecraft.world.item.EggItem;
@@ -44,10 +40,8 @@ import net.minecraft.world.item.TridentItem;
 import net.minecraft.world.item.WindChargeItem;
 import net.minecraft.world.item.component.ChargedProjectiles;
 import net.minecraft.world.item.enchantment.Enchantments;
-import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
-import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
@@ -57,46 +51,10 @@ import java.util.List;
 // Uses the same launch speed and gravity and drag as the real projectile.
 public final class Trajectories extends Module {
 
-    // How the game moves a projectile each tick. The order matters.
-    private enum Motion {
-        // Arrows and tridents. Move first and then slow down and fall.
-        ARROW,
-        // Thrown items. Fall and slow down first and then move.
-        THROWN,
-        // Fireballs and wind charges. Fall then move then slow down.
-        HURTING,
-        // Fishing bobbers. Fall then move then slow down.
-        BOBBER
-    }
-
-    private record Launch(double power, double gravity, double airDrag, double waterDrag,
-                          double pitchOffset, Motion motion, boolean stopsInWater) {
-
-        private Launch withPower(double newPower) {
-            return new Launch(newPower, gravity, airDrag, waterDrag, pitchOffset, motion, stopsInWater);
-        }
-
-        private Launch weightless() {
-            return new Launch(power, 0, airDrag, waterDrag, pitchOffset, motion, stopsInWater);
-        }
-    }
-
-    private static final Launch ARROW = new Launch(ProjectileUtil.BOW_SPEED, ProjectileUtil.ARROW_GRAVITY,
-        ProjectileUtil.AIR_DRAG, 0.6, 0, Motion.ARROW, false);
-    private static final Launch CROSSBOW_ARROW = new Launch(ProjectileUtil.CROSSBOW_SPEED,
-        ProjectileUtil.ARROW_GRAVITY, ProjectileUtil.AIR_DRAG, 0.6, 0, Motion.ARROW, false);
-    private static final Launch FIREWORK = new Launch(1.6, 0, 1, 1, 0, Motion.ARROW, false);
-    private static final Launch TRIDENT = new Launch(2.5, ProjectileUtil.ARROW_GRAVITY, ProjectileUtil.AIR_DRAG,
-        0.99, 0, Motion.ARROW, false);
-    private static final Launch THROWABLE = new Launch(1.5, ProjectileUtil.THROWN_GRAVITY, ProjectileUtil.AIR_DRAG,
-        0.8, 0, Motion.THROWN, false);
-    private static final Launch POTION = new Launch(0.5, 0.05, ProjectileUtil.AIR_DRAG,
-        0.8, -20, Motion.THROWN, false);
-    private static final Launch XP_BOTTLE = new Launch(0.7, 0.07, ProjectileUtil.AIR_DRAG,
-        0.8, -20, Motion.THROWN, false);
-    private static final Launch WIND_CHARGE = new Launch(1.5, 0, 1, 1, 0, Motion.HURTING, false);
-    private static final Launch EXPLOSIVE = new Launch(0, 0, 0.95, 0.8, 0, Motion.HURTING, false);
-    private static final Launch BOBBER = new Launch(0, 0.03, 0.92, 0, 0, Motion.BOBBER, true);
+    // Launches only a held item makes. ProjectilePath knows the rest.
+    private static final Launch CROSSBOW_ARROW = ProjectilePath.ARROW.withPower(ProjectileUtil.CROSSBOW_SPEED);
+    private static final Launch FIREWORK = new Launch(1.6, 0, 1, 1, 0, ProjectilePath.Motion.ARROW, false);
+    private static final Launch BOBBER = new Launch(0, 0.03, 0.92, 0, 0, ProjectilePath.Motion.BOBBER, true);
 
     private static final int COLOR_BLOCK = 0xFF40FF60;
     private static final int COLOR_ENTITY = 0xFFFF4040;
@@ -108,13 +66,6 @@ public final class Trajectories extends Module {
     private static final double MARKER_DEPTH = 0.005;
     // Other players further off than this get no arc.
     private static final double OTHER_RANGE_SQ = 64 * 64;
-
-    private record Path(List<Vec3> points, HitResult.Type type, List<Entity> hits, BlockHitResult landing) {
-    }
-
-    // Where a projectile is at one moment in its flight.
-    private record Shot(Vec3 pos, Vec3 velocity) {
-    }
 
     private final RegistryListSetting<Item> items = new RegistryListSetting<>("Items",
         "Which held items get an arc.", BuiltInRegistries.ITEM, throwableItems());
@@ -199,12 +150,12 @@ public final class Trajectories extends Module {
         int skip = player == mc.player ? skipFirstTicks.getInt() : 0;
         int pierce = stack.getItem() instanceof ProjectileWeaponItem
             ? ItemUtil.enchantLevel(Enchantments.PIERCING, stack) : 0;
-        drawPath(batch, fly(player, launch, leaveHand(player, launch, partialTicks, 0), pierce),
-            partialTicks, skip);
+        drawPath(batch, ProjectilePath.fly(player, launch, leaveHand(player, launch, partialTicks, 0), pierce,
+            steps.getInt()), partialTicks, skip);
         if (stack.getItem() instanceof CrossbowItem && ItemUtil.enchantLevel(Enchantments.MULTISHOT, stack) > 0) {
             for (double angle : new double[] {MULTISHOT_ANGLE, -MULTISHOT_ANGLE}) {
-                drawPath(batch, fly(player, launch, leaveHand(player, launch, partialTicks, angle), pierce),
-                    partialTicks, skip);
+                drawPath(batch, ProjectilePath.fly(player, launch, leaveHand(player, launch, partialTicks, angle),
+                    pierce, steps.getInt()), partialTicks, skip);
             }
         }
     }
@@ -217,18 +168,12 @@ public final class Trajectories extends Module {
         if (projectile instanceof AbstractArrow arrow && (arrow.isNoPhysics() || arrow.isInGround())) {
             return;
         }
-        Launch launch = launchFor(projectile);
-        if (launch == null) {
+        Path path = ProjectilePath.of(projectile, steps.getInt());
+        if (path == null) {
             return;
         }
-        if (projectile.isNoGravity()) {
-            launch = launch.weightless();
-        }
-        int pierce = projectile instanceof AbstractArrow arrow ? arrow.getPierceLevel() : 0;
-        Vec3 start = projectile.getPosition(partialTicks);
-        Path path = fly(projectile, launch, new Shot(projectile.position(), projectile.getDeltaMovement()), pierce);
         if (!path.points().isEmpty()) {
-            path.points().set(0, start);
+            path.points().set(0, projectile.getPosition(partialTicks));
         }
         drawPath(batch, path, partialTicks, 0);
     }
@@ -286,7 +231,7 @@ public final class Trajectories extends Module {
                     return null;
                 }
             }
-            return ARROW.withPower(charge * ARROW.power());
+            return ProjectilePath.ARROW.withPower(charge * ProjectilePath.ARROW.power());
         }
         if (item instanceof CrossbowItem) {
             if (!CrossbowItem.isCharged(stack)) {
@@ -299,19 +244,19 @@ public final class Trajectories extends Module {
             return CROSSBOW_ARROW;
         }
         if (item instanceof TridentItem) {
-            return TRIDENT;
+            return ProjectilePath.TRIDENT;
         }
         if (item instanceof SnowballItem || item instanceof EggItem || item instanceof EnderpearlItem) {
-            return THROWABLE;
+            return ProjectilePath.THROWABLE;
         }
         if (item instanceof ExperienceBottleItem) {
-            return XP_BOTTLE;
+            return ProjectilePath.XP_BOTTLE;
         }
         if (item instanceof ThrowablePotionItem) {
-            return POTION;
+            return ProjectilePath.POTION;
         }
         if (item instanceof WindChargeItem) {
-            return WIND_CHARGE;
+            return ProjectilePath.WIND_CHARGE;
         }
         if (item instanceof FishingRodItem) {
             return BOBBER;
@@ -319,146 +264,9 @@ public final class Trajectories extends Module {
         return null;
     }
 
-    // The physics of a projectile already in the air. Null for kinds that are not predicted.
-    private static Launch launchFor(Projectile projectile) {
-        if (projectile instanceof ThrownTrident) {
-            return TRIDENT;
-        }
-        if (projectile instanceof AbstractArrow) {
-            return ARROW;
-        }
-        if (projectile instanceof ThrownExperienceBottle) {
-            return XP_BOTTLE;
-        }
-        if (projectile instanceof AbstractThrownPotion) {
-            return POTION;
-        }
-        if (projectile instanceof ThrowableItemProjectile) {
-            return THROWABLE;
-        }
-        if (projectile instanceof AbstractWindCharge) {
-            return WIND_CHARGE;
-        }
-        if (projectile instanceof AbstractHurtingProjectile) {
-            return EXPLOSIVE;
-        }
-        return null;
-    }
-
     // The position and speed the projectile starts with. The angle turns the aim left or right.
-    private Shot leaveHand(Player shooter, Launch launch, float partialTicks, double angle) {
-        double yaw = shooter.getYRot(partialTicks) + angle;
-        double pitch = shooter.getXRot(partialTicks);
-        Vec3 origin = shooter.getPosition(partialTicks);
-        Vec3 pos;
-        Vec3 velocity;
-
-        if (launch.motion() == Motion.BOBBER) {
-            double sinYaw = Math.sin(Math.toRadians(-yaw) - Math.PI);
-            double cosYaw = Math.cos(Math.toRadians(-yaw) - Math.PI);
-            double cosPitch = -Math.cos(Math.toRadians(-pitch));
-            double sinPitch = Math.sin(Math.toRadians(-pitch));
-            pos = origin.add(-sinYaw * 0.3, shooter.getEyeHeight(), -cosYaw * 0.3);
-            velocity = new Vec3(-sinYaw, Math.clamp(-(sinPitch / cosPitch), -5, 5), -cosYaw);
-            double length = velocity.length();
-            velocity = velocity.scale(0.6 / length + 0.5);
-        } else {
-            pos = origin.add(0, shooter.getEyeHeight() - 0.1, 0);
-            double radYaw = Math.toRadians(yaw);
-            double radPitch = Math.toRadians(pitch);
-            double x = -Math.sin(radYaw) * Math.cos(radPitch);
-            double y = -Math.sin(Math.toRadians(pitch + launch.pitchOffset()));
-            double z = Math.cos(radYaw) * Math.cos(radPitch);
-            velocity = new Vec3(x, y, z).normalize().scale(launch.power());
-            // The game adds the thrower's own movement to the projectile.
-            Vec3 movement = shooter.getKnownMovement();
-            velocity = velocity.add(movement.x, shooter.onGround() ? 0 : movement.y, movement.z);
-        }
-        return new Shot(pos, velocity);
-    }
-
-    // Steps the projectile forward until it lands or the step budget runs out.
-    // A piercing arrow passes through that many entities before it stops.
-    private Path fly(Entity shooter, Launch launch, Shot shot, int pierce) {
-        Vec3 pos = shot.pos();
-        Vec3 velocity = shot.velocity();
-
-        List<Vec3> points = new ArrayList<>();
-        List<Entity> hits = new ArrayList<>();
-        points.add(pos);
-        HitResult.Type type = HitResult.Type.MISS;
-        BlockHitResult landing = null;
-        int minY = mc.level.getMinY();
-        int maxSteps = steps.getInt();
-        int piercesLeft = pierce;
-
-        for (int i = 0; i < maxSteps; i++) {
-            Vec3 previous = pos;
-            boolean inWater = mc.level.getFluidState(BlockPos.containing(pos)).is(FluidTags.WATER);
-            double drag = inWater ? launch.waterDrag() : launch.airDrag();
-
-            Shot next = advance(launch, pos, velocity, drag);
-            pos = next.pos();
-            velocity = next.velocity();
-
-            if (pos.y < minY) {
-                points.add(pos);
-                break;
-            }
-
-            BlockHitResult blockHit = mc.level.clip(new ClipContext(previous, pos,
-                ClipContext.Block.COLLIDER,
-                launch.stopsInWater() ? ClipContext.Fluid.ANY : ClipContext.Fluid.NONE, shooter));
-            Vec3 end = blockHit.getType() == HitResult.Type.MISS ? pos : blockHit.getLocation();
-
-            boolean stopped = false;
-            for (EntityHitResult entityHit : net.minecraft.world.entity.projectile.ProjectileUtil
-                .getManyEntityHitResult(mc.level, shooter, previous, end,
-                new AABB(previous, end).inflate(1),
-                entity -> entity != shooter && !entity.isSpectator() && entity.isAlive()
-                    && entity.isPickable(), false, false)) {
-                if (hits.contains(entityHit.getEntity())) {
-                    continue;
-                }
-                hits.add(entityHit.getEntity());
-                if (piercesLeft <= 0) {
-                    points.add(entityHit.getLocation());
-                    type = HitResult.Type.ENTITY;
-                    stopped = true;
-                    break;
-                }
-                piercesLeft--;
-            }
-            if (stopped) {
-                break;
-            }
-            if (blockHit.getType() != HitResult.Type.MISS) {
-                points.add(blockHit.getLocation());
-                type = HitResult.Type.BLOCK;
-                landing = blockHit;
-                break;
-            }
-            points.add(pos);
-            if (velocity.lengthSqr() < 1.0E-6) {
-                break;
-            }
-        }
-        return new Path(points, type, hits, landing);
-    }
-
-    // One tick of motion. Each projectile applies drag and gravity in its own order.
-    private static Shot advance(Launch launch, Vec3 pos, Vec3 velocity, double drag) {
-        return switch (launch.motion()) {
-            case ARROW -> new Shot(pos.add(velocity),
-                velocity.scale(drag).subtract(0, launch.gravity(), 0));
-            case THROWN -> {
-                Vec3 moved = velocity.subtract(0, launch.gravity(), 0).scale(drag);
-                yield new Shot(pos.add(moved), moved);
-            }
-            case HURTING, BOBBER -> {
-                Vec3 fallen = velocity.subtract(0, launch.gravity(), 0);
-                yield new Shot(pos.add(fallen), fallen.scale(drag));
-            }
-        };
+    private static Shot leaveHand(Player shooter, Launch launch, float partialTicks, double angle) {
+        return ProjectilePath.leaveHand(shooter, launch, shooter.getPosition(partialTicks),
+            shooter.getYRot(partialTicks) + angle, shooter.getXRot(partialTicks));
     }
 }

@@ -13,8 +13,10 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.phys.Vec3;
 
+import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.regex.Pattern;
 
 // Any text you like with a handful of words swapped in for live values.
 public final class TextElement extends HudElement {
@@ -25,9 +27,13 @@ public final class TextElement extends HudElement {
     private static final long SIX_AM = 6 * HOUR_TICKS;
     private static final long MINUTES_PER_HOUR = 60;
 
+    // A text box has no enter key of its own. A typed backslash and n breaks the line.
+    private static final String NEW_LINE = "\\n";
+    private static final int LINE_GAP = 1;
+
     private final TextSetting text = new TextSetting("Text",
-        "What it says. You can use {fps} {tps} {ping} {x} {y} {z} {dimension} {direction}"
-            + " {speed} {health} {server} {time} and {username}.",
+        "What it says. Type \\n to start a new line. You can use {fps} {tps} {ping} {x} {y} {z}"
+            + " {dimension} {direction} {speed} {health} {server} {time} and {username}.",
         "Hello {username}");
     private final ColorSetting color = new ColorSetting("Text colour",
         "Colour of the text.", 190, false);
@@ -45,18 +51,25 @@ public final class TextElement extends HudElement {
         return isActive() && !text.getValue().isBlank();
     }
 
-    private String line() {
+    private List<String> lines() {
         String out = text.getValue();
-        if (out.indexOf('{') < 0) {
-            return out;
-        }
-        for (String key : KEYS) {
-            String token = "{" + key + "}";
-            if (out.contains(token)) {
-                out = out.replace(token, valueOf(key));
+        if (out.indexOf('{') >= 0) {
+            for (String key : KEYS) {
+                String token = "{" + key + "}";
+                if (out.contains(token)) {
+                    out = out.replace(token, valueOf(key));
+                }
             }
         }
-        return out;
+        return List.of(out.split(Pattern.quote(NEW_LINE)));
+    }
+
+    private static int widest(Font font, List<String> lines) {
+        int widest = 0;
+        for (String line : lines) {
+            widest = Math.max(widest, font.width(line));
+        }
+        return widest;
     }
 
     private static final String[] KEYS = {
@@ -96,18 +109,28 @@ public final class TextElement extends HudElement {
             ticks % HOUR_TICKS * MINUTES_PER_HOUR / HOUR_TICKS);
     }
 
+    // Each line lines up with the side of the screen the element is anchored to.
     @Override
     public void render(GuiGraphicsExtractor context, Font font) {
-        context.text(font, line(), 0, 0, color.getColor(), shadow.isOn());
+        List<String> lines = lines();
+        int widest = widest(font, lines);
+        int y = 0;
+        for (String line : lines) {
+            int x = (int) Math.round((widest - font.width(line)) * alignment());
+            context.text(font, line, x, y, color.getColor(), shadow.isOn());
+            y += font.lineHeight + LINE_GAP;
+        }
     }
 
     @Override
     public int width(Font font) {
-        return Math.max(1, font.width(line()));
+        return Math.max(1, widest(font, lines()));
     }
 
     @Override
     public int height(Font font) {
-        return font.lineHeight;
+        // Text made only of breaks splits into nothing and still takes a line.
+        int count = Math.max(1, lines().size());
+        return count * font.lineHeight + (count - 1) * LINE_GAP;
     }
 }

@@ -3,11 +3,17 @@ package com.jellypudding.offlineclient.util;
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.module.ModuleManager;
+import com.jellypudding.offlineclient.modules.combat.AntiBot;
 import com.jellypudding.offlineclient.modules.combat.CrystalAura;
+import com.jellypudding.offlineclient.modules.combat.Knockback;
+import com.jellypudding.offlineclient.modules.combat.MaceCombo;
+import com.jellypudding.offlineclient.modules.combat.PistonAura;
 import com.jellypudding.offlineclient.modules.movement.Sneak;
 import com.jellypudding.offlineclient.modules.player.AutoEat;
+import com.jellypudding.offlineclient.modules.player.AutoExtinguish;
 import com.jellypudding.offlineclient.modules.player.AutoGap;
 import com.jellypudding.offlineclient.modules.player.AutoPotion;
+import net.minecraft.world.entity.Entity;
 
 import java.util.Map;
 import java.util.Set;
@@ -65,7 +71,11 @@ public final class Modules {
             return true;
         }
         AutoPotion potion = get(AutoPotion.class);
-        return potion != null && potion != asker && potion.isBusy();
+        if (potion != null && potion != asker && potion.isBusy()) {
+            return true;
+        }
+        AutoExtinguish extinguish = get(AutoExtinguish.class);
+        return extinguish != null && extinguish != asker && extinguish.isBusy();
     }
 
     // True whilst AutoEat or AutoGap is eating with Pause combat on.
@@ -84,9 +94,39 @@ public final class Modules {
         return crystals != null && crystals.isActing();
     }
 
+    // True whilst PistonAura turns for a piston or waits on the crystal it pushes.
+    public static boolean pistonFiring() {
+        PistonAura piston = active(PistonAura.class);
+        return piston != null && piston.isFiring();
+    }
+
+    // True whilst MaceCombo is between its throw and its smash.
+    public static boolean maceComboAirborne() {
+        MaceCombo combo = active(MaceCombo.class);
+        return combo != null && combo.isAirborne();
+    }
+
+    // True whilst Knockback sends the sprint start that earns a hit its knockback.
+    public static boolean renewingSprint() {
+        Knockback knockback = active(Knockback.class);
+        return knockback != null && knockback.sendingStart();
+    }
+
     // The sneak key held or Sneak keeping the player down.
     public static boolean sneaking() {
         return OfflineClient.MC.player.isShiftKeyDown() || enabled(Sneak.class);
+    }
+
+    // True whilst AntiBot is on and takes the entity for a fake player.
+    public static boolean isBot(Entity entity) {
+        AntiBot antiBot = active(AntiBot.class);
+        return antiBot != null && antiBot.isBot(entity);
+    }
+
+    // True whilst AntiBot leaves this bot out of the given render module.
+    public static boolean hidesBot(AntiBot.View view, Entity entity) {
+        AntiBot antiBot = active(AntiBot.class);
+        return antiBot != null && antiBot.hides(view, entity);
     }
 
     // The module only whilst it is switched on. Null otherwise.

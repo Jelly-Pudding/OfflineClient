@@ -39,8 +39,7 @@ public class SplashManagerMixin {
     private void onGetSplash(CallbackInfoReturnable<SplashRenderer> cir) {
         ThreadLocalRandom random = ThreadLocalRandom.current();
         String line = OFFLINE_SPLASHES.get(random.nextInt(OFFLINE_SPLASHES.size()));
-        int color = ColorUtil.hsv(
-            random.nextFloat(360f), 0.85f, 1f) & 0xFFFFFF;
+        int color = ColorUtil.randomBright() & 0xFFFFFF;
         cir.setReturnValue(new SplashRenderer(Component.literal(line).withColor(color)));
     }
 }

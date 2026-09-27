@@ -12,6 +12,7 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.HeldKey;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.RotationManager;
@@ -88,7 +89,7 @@ public final class AntiAfk extends Module {
         .under(sendMessages);
 
     private int sneakTimer;
-    private boolean crouching;
+    private final HeldKey crouch = new HeldKey(options -> options.keyShift);
     private int strafeTimer;
     private boolean strafeLeft;
     private boolean strafing;
@@ -147,7 +148,7 @@ public final class AntiAfk extends Module {
     @Override
     protected void onDisable() {
         stopStrafe();
-        standUp();
+        crouch.letGo();
         stopWander();
     }
 
@@ -311,25 +312,17 @@ public final class AntiAfk extends Module {
     // Holds the crouch for the set ticks then waits a random moment before the next.
     private void tickSneak() {
         if (!sneak.isOn() || wandering()) {
-            standUp();
+            crouch.letGo();
             return;
         }
         if (sneakTimer < sneakTime.getInt()) {
             sneakTimer++;
-            InputUtil.hold(mc.options.keyShift);
-            crouching = true;
+            crouch.hold();
             return;
         }
-        standUp();
+        crouch.letGo();
         if (chance()) {
             sneakTimer = 0;
-        }
-    }
-
-    private void standUp() {
-        if (crouching) {
-            InputUtil.release(mc.options.keyShift);
-            crouching = false;
         }
     }
 

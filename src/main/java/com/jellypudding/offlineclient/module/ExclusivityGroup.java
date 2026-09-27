@@ -13,5 +13,8 @@ public enum ExclusivityGroup {
     FALL_CONTROL,
 
     // Decides what happens at the lip of a block. One jumps off it and the other stops there.
-    EDGE
+    EDGE,
+
+    // Decides what happens after a death. One respawns at once and the other stays behind as a ghost.
+    RESPAWN
 }

@@ -13,12 +13,11 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
-import com.jellypudding.offlineclient.util.BoundedMap;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.EntityColors;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.RenderUtil;
-import com.jellypudding.offlineclient.util.WorldWatch;
+import com.jellypudding.offlineclient.util.Sightings;
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponents;
@@ -39,15 +38,10 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
-import java.util.Set;
-import java.util.UUID;
 
-// Mobs spawn with leather up to diamond armour and a few fixed weapons. Their enchantments
-// never include treasure ones and nothing they spawn with carries a custom name. Mobs pick
-// up dropped items and anything past that came from a player. Villagers are left out
-// because they hold up whatever they are trading.
+// Mobs spawn with at most diamond armour and a few fixed weapons with no names and no
+// treasure enchantments. Anything past that was picked up where a player had been.
 public final class GearedMobs extends Module {
 
     // What gave a mob away. The verb says whether it is held or worn.
@@ -55,13 +49,13 @@ public final class GearedMobs extends Module {
     }
 
     private static final String NETHERITE = "netherite";
-
-    private static final int MAX_ANNOUNCED = 1024;
+    private static final String PICKAXE = "_pickaxe";
 
     private static final double LABEL_LIFT = 0.5;
 
     private final RegistryListSetting<Item> items = new RegistryListSetting<>("Items",
-        "Items no mob ever spawns with. A mob holding or wearing one took it from a player. Click to pick them.",
+        "Items no mob spawns with. A mob holding or wearing one picked it up where a player had been."
+            + " Click to pick them.",
         BuiltInRegistries.ITEM, playerItems());
     private final BoolSetting named = new BoolSetting("Named gear",
         "Flags gear renamed at an anvil. Nothing a mob spawns with has a name.", true);
@@ -82,11 +76,10 @@ public final class GearedMobs extends Module {
 
     // Rebuilt once a tick.
     private List<Clue> found = List.of();
-    private final Set<UUID> announced = Collections.newSetFromMap(new BoundedMap<>(MAX_ANNOUNCED));
-    private final WorldWatch world = new WorldWatch();
+    private final Sightings sightings = new Sightings();
 
     public GearedMobs() {
-        super("GearedMobs", "Highlights mobs carrying gear they can only have taken from a player.",
+        super("GearedMobs", "Highlights mobs carrying gear that only players bring into the world.",
             Category.HUNTING);
         addSettings(items, named, treasure, allays);
         addSettings(shape.settings());
@@ -95,16 +88,19 @@ public final class GearedMobs extends Module {
         searchTags("mob gear", "zombie", "netherite", "base");
     }
 
-    // Nothing spawns holding or wearing any of these. Netherite and shulker boxes are
-    // gathered from the registry.
+    // Nothing spawns holding or wearing any of these. Netherite and pickaxes and shulker
+    // boxes are gathered by name because tags are not loaded when this runs.
     private static List<Item> playerItems() {
         List<Item> picked = new ArrayList<>(List.of(Items.ELYTRA, Items.TOTEM_OF_UNDYING,
             Items.PLAYER_HEAD, Items.MACE, Items.END_CRYSTAL, Items.ENDER_CHEST, Items.RESPAWN_ANCHOR,
             Items.BEACON, Items.NETHER_STAR, Items.DRAGON_EGG, Items.TURTLE_HELMET, Items.WOLF_ARMOR,
-            Items.CONDUIT, Items.RECOVERY_COMPASS, Items.FIREWORK_ROCKET));
+            Items.CONDUIT, Items.RECOVERY_COMPASS, Items.FIREWORK_ROCKET, Items.SHIELD));
         BuiltInRegistries.ITEM.stream()
-            .filter(item -> BuiltInRegistries.ITEM.getKey(item).getPath().startsWith(NETHERITE)
-                || Block.byItem(item) instanceof ShulkerBoxBlock)
+            .filter(item -> {
+                String path = BuiltInRegistries.ITEM.getKey(item).getPath();
+                return path.startsWith(NETHERITE) || path.endsWith(PICKAXE)
+                    || Block.byItem(item) instanceof ShulkerBoxBlock;
+            })
             .forEach(picked::add);
         return picked;
     }
@@ -117,17 +113,13 @@ public final class GearedMobs extends Module {
     @Override
     protected void onEnable() {
         found = List.of();
-        announced.clear();
-        if (inGame()) {
-            world.accept();
-        }
+        sightings.clear();
     }
 
     @Override
     protected void onDisable() {
         found = List.of();
-        announced.clear();
-        world.forget();
+        sightings.clear();
     }
 
     @Subscribe
@@ -135,12 +127,9 @@ public final class GearedMobs extends Module {
         if (!inGame()) {
             return;
         }
-        if (world.changed()) {
-            announced.clear();
-        }
         List<Clue> clues = new ArrayList<>();
         for (Entity entity : mc.level.entitiesForRendering()) {
-            if (!(entity instanceof Mob mob) || entity instanceof AbstractVillager) {
+            if (!(entity instanceof Mob mob) || ignored(mob)) {
                 continue;
             }
             Clue clue = clueOf(mob);
@@ -148,12 +137,17 @@ public final class GearedMobs extends Module {
                 continue;
             }
             clues.add(clue);
-            if (chat.isOn() && announced.add(mob.getUUID())) {
+            if (chat.isOn() && sightings.firstTime(mob)) {
                 ChatUtil.message("§bGearedMobs §f" + mob.getType().getDescription().getString() + " §7at §f"
                     + BlockUtil.text(mob.blockPosition()) + " §7is " + clue.verb() + " §f" + clue.what() + "§7.");
             }
         }
         found = clues;
+    }
+
+    // Villagers hold up whatever they trade. Your own pets and mount wear what you gave them.
+    private boolean ignored(Mob mob) {
+        return mob instanceof AbstractVillager || EntityUtil.isYours(mob);
     }
 
     private Clue clueOf(Mob mob) {
@@ -172,17 +166,17 @@ public final class GearedMobs extends Module {
 
     // What marks the stack as a player's or null when nothing does.
     private String playerSign(ItemStack stack) {
-        String item = stack.getItemName().getString();
         if (items.contains(stack.getItem())) {
-            return item;
+            return stack.getItemName().getString();
         }
         if (named.isOn() && stack.has(DataComponents.CUSTOM_NAME)) {
-            return item + " named " + stack.getHoverName().getString();
+            return stack.getItemName().getString() + " named " + stack.getHoverName().getString();
         }
         if (treasure.isOn()) {
             for (Object2IntMap.Entry<Holder<Enchantment>> entry : stack.getEnchantments().entrySet()) {
                 if (entry.getKey().is(EnchantmentTags.TREASURE)) {
-                    return item + " with " + Enchantment.getFullname(entry.getKey(), entry.getIntValue()).getString();
+                    return stack.getItemName().getString() + " with "
+                        + Enchantment.getFullname(entry.getKey(), entry.getIntValue()).getString();
                 }
             }
         }

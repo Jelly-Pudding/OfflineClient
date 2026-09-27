@@ -42,6 +42,11 @@ public final class TextLines {
 
     // The defaults fill the first rows and set how many rows start open.
     public TextLines(String countName, String countDescription, String lineDescription, String... defaults) {
+        this(Order.SEQUENCE, countName, countDescription, lineDescription, defaults);
+    }
+
+    public TextLines(Order startOrder, String countName, String countDescription, String lineDescription,
+                     String... defaults) {
         count = new NumberSetting(countName, countDescription,
             Math.max(1, defaults.length), 1, 30, 1).max(SLOTS)
             .visibleWhen(() -> gate.get());
@@ -51,7 +56,7 @@ public final class TextLines {
                 i < defaults.length ? defaults[i] : "")
                 .under(count, () -> gate.get() && slot < count.getInt());
         }
-        order = new EnumSetting<>("Order", "How the lines are picked.", Order.SEQUENCE)
+        order = new EnumSetting<>("Order", "How the lines are picked.", startOrder)
             .describe(Order.SEQUENCE, "Sends the lines top to bottom and starts over.")
             .describe(Order.RANDOM, "Picks a random line each time.")
             .under(count, () -> rotates && gate.get() && count.getInt() > 1);

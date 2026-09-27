@@ -152,13 +152,7 @@ public final class Breadcrumbs extends Module {
         for (Vec3 point : trail) {
             text.append(point.x).append(' ').append(point.y).append(' ').append(point.z).append('\n');
         }
-        try {
-            Path file = fileFor(world);
-            Files.createDirectories(file.getParent());
-            Files.writeString(file, text.toString());
-        } catch (IOException e) {
-            OfflineClient.LOG.error("Failed to save trail", e);
-        }
+        DataFiles.writeSafely(fileFor(world), temp -> Files.writeString(temp, text.toString()));
     }
 
     private void load() {
@@ -189,6 +183,6 @@ public final class Breadcrumbs extends Module {
     }
 
     private static Path fileFor(String world) {
-        return DataFiles.path("trails", world.replaceAll("[^a-zA-Z0-9_.-]", "_") + ".txt");
+        return DataFiles.path("trails", DataFiles.safeName(world) + ".txt");
     }
 }

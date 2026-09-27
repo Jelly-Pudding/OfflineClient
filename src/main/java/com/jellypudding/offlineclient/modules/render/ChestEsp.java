@@ -14,6 +14,7 @@ import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.WorldWatch;
 import com.mojang.blaze3d.platform.InputConstants;
@@ -216,18 +217,10 @@ public final class ChestEsp extends Module {
             return;
         }
         opened.add(pos);
-        BlockPos other = otherHalf(pos, blockEntity.getBlockState());
+        BlockPos other = BlockUtil.otherChestHalf(pos, blockEntity.getBlockState());
         if (other != null) {
             opened.add(other);
         }
-    }
-
-    // Null unless the state is one half of a double chest.
-    private static BlockPos otherHalf(BlockPos pos, BlockState state) {
-        if (!state.hasProperty(ChestBlock.TYPE) || state.getValue(ChestBlock.TYPE) == ChestType.SINGLE) {
-            return null;
-        }
-        return pos.relative(ChestBlock.getConnectedDirection(state));
     }
 
     @Subscribe
@@ -273,7 +266,7 @@ public final class ChestEsp extends Module {
                 continue;
             }
             map.put(target.pos(), target.color());
-            BlockPos other = otherHalf(target.pos(), mc.level.getBlockState(target.pos()));
+            BlockPos other = BlockUtil.otherChestHalf(target.pos(), mc.level.getBlockState(target.pos()));
             if (other != null) {
                 map.put(other, target.color());
             }
@@ -300,7 +293,7 @@ public final class ChestEsp extends Module {
             AABB box = chestShape ? chestBox(pos) : DrawBatch.blockBox(pos);
             // A double chest is one container drawn from its right half.
             BlockState state = blockEntity.getBlockState();
-            BlockPos other = otherHalf(pos, state);
+            BlockPos other = BlockUtil.otherChestHalf(pos, state);
             if (other != null) {
                 if (state.getValue(ChestBlock.TYPE) == ChestType.LEFT) {
                     continue;

@@ -4,6 +4,8 @@ import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.Render2DEvent;
 import com.jellypudding.offlineclient.gui.HudEditorScreen;
 import com.jellypudding.offlineclient.gui.WindowGuiScreen;
+import com.jellypudding.offlineclient.hud.GamePart;
+import com.jellypudding.offlineclient.hud.GamePartElement;
 import com.jellypudding.offlineclient.hud.HudElement;
 import com.jellypudding.offlineclient.hud.HudManager;
 import com.jellypudding.offlineclient.hud.elements.ArmourElement;
@@ -13,6 +15,7 @@ import com.jellypudding.offlineclient.hud.elements.HoleElement;
 import com.jellypudding.offlineclient.hud.elements.InfoBarElement;
 import com.jellypudding.offlineclient.hud.elements.InventoryElement;
 import com.jellypudding.offlineclient.hud.elements.ItemCounterElement;
+import com.jellypudding.offlineclient.hud.elements.KillStatsElement;
 import com.jellypudding.offlineclient.hud.elements.LagNotifierElement;
 import com.jellypudding.offlineclient.hud.elements.ModuleListElement;
 import com.jellypudding.offlineclient.hud.elements.PlayerListElement;
@@ -31,19 +34,22 @@ public final class HudModule extends Module {
 
     private final HudManager manager = new HudManager();
     private final WatermarkElement watermark = new WatermarkElement();
-    private final InventoryElement inventory = new InventoryElement();
 
     // addSettings is final and files the settings away without handing out the module.
     @SuppressWarnings("this-escape")
     public HudModule() {
-        super("HUD", "The overlay you see whilst playing. Drag the pieces about with .hud edit.",
-            Category.MISC);
+        super("HUD", "The overlay you see whilst playing and the game's own bars. Drag the pieces"
+            + " about with .hud edit.", Category.MISC);
         add(watermark, new ModuleListElement(), new InfoBarElement(),
             new ArmourElement(), new PotionTimersElement(), new ItemCounterElement(),
-            new TextElement(), new CombatElement(), new LagNotifierElement(),
+            new TextElement(), new CombatElement(), new KillStatsElement(), new LagNotifierElement(),
             new CompassElement(), new PlayerListElement(), new ServerInfoElement(),
-            inventory, new PlayerModelElement(), new HoleElement());
-        searchTags("overlay", "watermark", "module list", "info", "hud editor");
+            new InventoryElement(), new PlayerModelElement(), new HoleElement());
+        for (GamePart part : GamePart.values()) {
+            add(new GamePartElement(part));
+        }
+        searchTags("overlay", "watermark", "module list", "info", "hud editor", "hotbar", "hearts",
+            "hunger", "armour", "experience");
     }
 
     private void add(HudElement... elements) {
@@ -62,8 +68,10 @@ public final class HudModule extends Module {
         return manager;
     }
 
-    public boolean hidesGameHotbar() {
-        return inventory.hidesGameHotbar();
+    // The game's own bars follow their elements whilst the HUD is on and always in
+    // the editor where they are being placed.
+    public boolean placesGameParts() {
+        return isEnabled() || mc.gui.screen() instanceof HudEditorScreen;
     }
 
     // A key on the HUD opens the editor. The switch in the GUI still turns it all off.

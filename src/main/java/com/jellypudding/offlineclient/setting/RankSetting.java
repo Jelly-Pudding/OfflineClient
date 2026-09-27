@@ -3,6 +3,7 @@ package com.jellypudding.offlineclient.setting;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonPrimitive;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
@@ -135,9 +136,9 @@ public final class RankSetting<E extends Enum<E>> extends Setting<List<RankSetti
                 continue;
             }
             JsonObject object = element.getAsJsonObject();
-            E choice = object.has("choice") ? choiceNamed(object.get("choice").getAsString()) : null;
+            E choice = object.get("choice") instanceof JsonPrimitive name ? choiceNamed(name.getAsString()) : null;
             if (choice != null && order.stream().noneMatch(entry -> entry.choice() == choice)) {
-                boolean on = !object.has("on") || object.get("on").getAsBoolean();
+                boolean on = !(object.get("on") instanceof JsonPrimitive flag) || flag.getAsBoolean();
                 order.add(new Entry<>(choice, on));
             }
         }

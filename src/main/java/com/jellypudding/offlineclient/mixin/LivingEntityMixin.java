@@ -6,6 +6,7 @@ import com.jellypudding.offlineclient.modules.movement.ElytraFly;
 import com.jellypudding.offlineclient.modules.movement.NoSlowdown;
 import com.jellypudding.offlineclient.modules.movement.Slippy;
 import com.jellypudding.offlineclient.modules.movement.Sprint;
+import com.jellypudding.offlineclient.modules.player.Ghost;
 import com.jellypudding.offlineclient.modules.render.ClearView;
 import com.jellypudding.offlineclient.modules.render.HandView;
 import com.jellypudding.offlineclient.util.Modules;
@@ -22,6 +23,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(LivingEntity.class)
 public abstract class LivingEntityMixin {
@@ -35,6 +37,18 @@ public abstract class LivingEntityMixin {
         }
         HandView handView = Modules.get(HandView.class);
         return handView == null ? hand : handView.swingHand(hand);
+    }
+
+    // A dead body stands still. Ghost lets yours walk.
+    @Inject(method = "isImmobile()Z", at = @At("HEAD"), cancellable = true)
+    private void onIsImmobile(CallbackInfoReturnable<Boolean> cir) {
+        if ((Object) this != OfflineClient.MC.player) {
+            return;
+        }
+        Ghost ghost = Modules.get(Ghost.class);
+        if (ghost != null && ghost.walking()) {
+            cir.setReturnValue(false);
+        }
     }
 
     // Crumbs fly for food only. A drunk potion or a thrown egg keeps its particles.

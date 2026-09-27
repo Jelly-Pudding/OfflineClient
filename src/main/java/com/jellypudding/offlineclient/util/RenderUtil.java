@@ -316,7 +316,10 @@ public final class RenderUtil {
     }
 
     // Behind a world label. Text over bright terrain is unreadable without it.
-    private static final int LABEL_BACKGROUND = 0x90000000;
+    public static final int LABEL_BACKGROUND = 0x90000000;
+
+    // How far the background of a label reaches past its text.
+    private static final int LABEL_PAD = 2;
 
     private static final int TOOLTIP_BORDER = 0x50FFFFFF;
 
@@ -339,7 +342,7 @@ public final class RenderUtil {
         pose.translate((float) screenX, (float) screenY);
         pose.scale(scale, scale);
         int half = width / 2;
-        context.fill(-half - 2, -2, half + 2, font.lineHeight, background);
+        context.fill(-half - LABEL_PAD, -LABEL_PAD, half + LABEL_PAD, font.lineHeight, background);
         context.guiRenderState.up();
         int x = -half;
         for (int i = 0; i < parts.size(); i++) {
@@ -348,6 +351,22 @@ public final class RenderUtil {
             x += font.width(part);
         }
         pose.popMatrix();
+    }
+
+    // Where a label of the given scale sits to rest right on top of a label anchored at y.
+    public static double labelAbove(Font font, double y, float belowScale, float scale) {
+        return y - LABEL_PAD * belowScale - font.lineHeight * scale;
+    }
+
+    // Pixels below the middle of the screen a crosshair readout sits.
+    private static final int CROSSHAIR_GAP = 12;
+
+    // One line of text centred just under the crosshair.
+    public static void underCrosshair(GuiGraphicsExtractor context, Font font, String text, int color) {
+        int x = (context.guiWidth() - font.width(text)) / 2;
+        int y = context.guiHeight() / 2 + CROSSHAIR_GAP;
+        context.guiRenderState.up();
+        context.text(font, text, x, y, color, true);
     }
 
     // Paints where a box laps over anything already drawn. Writing under a

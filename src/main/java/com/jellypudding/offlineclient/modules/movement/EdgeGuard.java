@@ -8,7 +8,7 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
-import com.jellypudding.offlineclient.util.InputUtil;
+import com.jellypudding.offlineclient.util.HeldKey;
 import com.jellypudding.offlineclient.util.MovementUtil;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.phys.AABB;
@@ -50,7 +50,7 @@ public final class EdgeGuard extends Module {
         "How much of your feet is still on the block when the sneak starts.", 0.3, 0, 0.3, 0.01, " blocks")
         .min(0).max(0.3).under(mode, Mode.SNEAK);
 
-    private boolean sneaking;
+    private final HeldKey sneakKey = new HeldKey(options -> options.keyShift);
 
     public EdgeGuard() {
         super("EdgeGuard", "Stops you from going over edges without the sneak slowdown.",
@@ -72,7 +72,7 @@ public final class EdgeGuard extends Module {
 
     @Override
     protected void onDisable() {
-        letGoOfSneak();
+        sneakKey.letGo();
     }
 
     // True when the run ahead ends in a drop deeper than allowed.
@@ -91,26 +91,18 @@ public final class EdgeGuard extends Module {
     @Subscribe
     private void onTick(TickEvent event) {
         if (!inGame() || !mode.is(Mode.SNEAK) || sprintOverrides()) {
-            letGoOfSneak();
+            sneakKey.letGo();
             return;
         }
         if (mc.player.onGround() && dropUnder(edgeBox())) {
-            InputUtil.hold(mc.options.keyShift);
-            sneaking = true;
+            sneakKey.hold();
         } else {
-            letGoOfSneak();
+            sneakKey.letGo();
         }
     }
 
     private boolean sprintOverrides() {
         return !sneakWhenSprinting.isOn() && mc.options.keySprint.isDown();
-    }
-
-    private void letGoOfSneak() {
-        if (sneaking) {
-            InputUtil.release(mc.options.keyShift);
-            sneaking = false;
-        }
     }
 
     // The player box pulled in from the sides. Standing with only the rim of the

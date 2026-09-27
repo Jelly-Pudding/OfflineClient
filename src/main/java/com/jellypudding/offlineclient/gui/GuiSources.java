@@ -76,8 +76,9 @@ public final class GuiSources {
                 List<TabView.Entry> rows = new ArrayList<>();
                 for (MacroStore.Macro macro : MacroStore.get().all()) {
                     if (matches(macro.name(), query)) {
+                        String join = macro.joinText() == null ? "" : " " + macro.joinText();
                         rows.add(new TabView.Entry(macro.name(), keyName(macro.key()),
-                            "Runs " + String.join(" then ", macro.lines())));
+                            "Runs " + String.join(" then ", macro.lines()) + join));
                     }
                 }
                 for (Module module : bindable(query)) {
@@ -151,8 +152,9 @@ public final class GuiSources {
                     return;
                 }
                 MacroStore.Macro existing = MacroStore.get().find(name);
-                int key = existing == null ? KeybindSetting.UNBOUND : existing.key();
-                MacroStore.get().add(new MacroStore.Macro(name, key, List.of(line)));
+                MacroStore.get().add(existing == null
+                    ? new MacroStore.Macro(name, KeybindSetting.UNBOUND, List.of(line))
+                    : existing.withLines(List.of(line)));
             }
 
             @Override

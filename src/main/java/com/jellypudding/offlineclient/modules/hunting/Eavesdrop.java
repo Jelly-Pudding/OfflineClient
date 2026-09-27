@@ -18,9 +18,13 @@ import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.PositionHistory;
 import com.jellypudding.offlineclient.util.RenderUtil;
+import com.jellypudding.offlineclient.util.ServerInfo;
 import com.jellypudding.offlineclient.util.WorldWatch;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.SectionPos;
 import net.minecraft.network.protocol.game.ClientboundLevelEventPacket;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.LevelEvent;
 import net.minecraft.world.phys.Vec3;
 
@@ -29,26 +33,37 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.TimeUnit;
 
-// A global event goes to every player on the server. One within 32 blocks arrives at
-// its true block. One further away arrives 32 blocks from you in its direction and
-// one in another dimension arrives on your own block.
+// A global event reaches every player on the server. Vanilla sends one within 32 blocks
+// at its true block and one further away 32 blocks from you in its direction. Paper sends
+// the true block within the server's view distance and otherwise a point that far away
+// across the ground at the event's own height. Vanilla puts an event in another dimension
+// on your own block. Paper measures it from where you stand as if it were beside you.
 public final class Eavesdrop extends Module {
 
-    // The global events worth hearing with the level event id the server sends.
+    // The global events worth hearing with the level event id the server sends. A dragon
+    // only dies in the End and a survival portal only opens in the Overworld.
     private enum Heard {
-        WITHER(LevelEvent.SOUND_WITHER_BOSS_SPAWN, "Wither", "A wither was spawned"),
-        DRAGON(LevelEvent.SOUND_DRAGON_DEATH, "Dragon death", "The ender dragon died"),
-        PORTAL(LevelEvent.SOUND_END_PORTAL_SPAWN, "End portal", "An end portal was opened");
+        WITHER(LevelEvent.SOUND_WITHER_BOSS_SPAWN, "Wither", "A wither was spawned", null, null),
+        DRAGON(LevelEvent.SOUND_DRAGON_DEATH, "Dragon death", "The ender dragon died",
+            Level.END, "in the End"),
+        PORTAL(LevelEvent.SOUND_END_PORTAL_SPAWN, "End portal", "An end portal was opened",
+            Level.OVERWORLD, "in the Overworld");
 
         private final int id;
         private final String label;
         private final String news;
+        // Null for an event that can happen in any dimension.
+        private final ResourceKey<Level> home;
+        private final String away;
 
-        Heard(int id, String label, String news) {
+        Heard(int id, String label, String news, ResourceKey<Level> home, String away) {
             this.id = id;
             this.label = label;
             this.news = news;
+            this.home = home;
+            this.away = away;
         }
 
         private static Heard of(int id) {
@@ -65,22 +80,21 @@ public final class Eavesdrop extends Module {
     private record Mark(String label, Vec3 at, Bearing bearing, long made) {
     }
 
-    // A global event this close arrives at its true block.
-    private static final double TRUE_RANGE = 32;
+    // Vanilla sends a far event this far from you.
+    private static final double VANILLA_RELAY = 32;
 
-    // Room for rounding to a block and for how well your own spot is known.
-    private static final double SLACK = 1.5;
+    // Room for rounding to a block and for how well the server knew where you stood.
+    private static final double RELAY_SLACK = 2.5;
 
-    // An event in another dimension arrives on your own block. Where the server saw you
-    // is only known to a block or two whilst you fly fast.
-    private static final double OWN_SPOT = 4;
+    // An event on any block you stood on in the last second landed on your own spot.
+    private static final double OWN_SPOT = 1;
+    private static final int OWN_TICKS = 20;
 
     // Nearer than this across the ground there is no telling which way it lies.
     private static final double LEVEL_MIN = 1;
 
-    private static final double LINE_LENGTH = 4096;
-
-    private static final double LINE_LIFT = 0.1;
+    // Where along a direction line its name sits.
+    private static final double LABEL_ALONG = 32;
 
     private static final double BEAM = 64;
 
@@ -88,10 +102,9 @@ public final class Eavesdrop extends Module {
 
     private static final int MAX_MARKS = 64;
 
-    private static final long MINUTE_MS = 60_000;
-
     private final BoolSetting withers = new BoolSetting("Wither spawns",
-        "Reports a wither being spawned anywhere on the server.", true);
+        "Reports a wither being spawned anywhere on the server. Paper sends one from another"
+            + " dimension as if it were in yours.", true);
     private final BoolSetting dragons = new BoolSetting("Dragon deaths",
         "Reports the ender dragon dying.", true);
     private final BoolSetting portals = new BoolSetting("End portals",
@@ -165,7 +178,8 @@ public final class Eavesdrop extends Module {
         while ((packet = heard.poll()) != null) {
             hear(packet);
         }
-        long oldest = System.currentTimeMillis() - Math.round(markTime.getValue() * MINUTE_MS);
+        long oldest = System.currentTimeMillis()
+            - Math.round(markTime.getValue() * TimeUnit.MINUTES.toMillis(1));
         marks.removeIf(mark -> mark.made() < oldest);
     }
 
@@ -185,27 +199,48 @@ public final class Eavesdrop extends Module {
         }
         BlockPos pos = packet.getPos();
         Vec3 heardAt = Vec3.atCenterOf(pos);
-        double away = heardAt.distanceTo(me);
-        if (away < OWN_SPOT) {
+        if (inAnotherDimension(kind, heardAt)) {
             if (elsewhere.isOn()) {
-                say("§f" + kind.news + " §7in another dimension.");
+                say("§f" + kind.news + " §7" + (kind.away != null ? kind.away : "in another dimension") + ".");
             }
             return;
         }
-        if (away < TRUE_RANGE - SLACK) {
+        double across = Math.hypot(heardAt.x - me.x, heardAt.z - me.z);
+        // A far event lands at a fixed distance. Anything nearer is its true block.
+        boolean paper = ServerInfo.runsPaper();
+        boolean relayed = paper ? across >= serverViewBlocks() - RELAY_SLACK
+            : heardAt.distanceTo(me) >= VANILLA_RELAY - RELAY_SLACK;
+        if (!relayed) {
             add(new Mark(kind.label, heardAt, null, System.currentTimeMillis()));
             say("§f" + kind.news + " §7at §f" + BlockUtil.text(pos) + "§7.");
             return;
         }
         String from = BlockUtil.text(BlockPos.containing(me));
-        if (Math.hypot(heardAt.x - me.x, heardAt.z - me.z) < LEVEL_MIN) {
+        if (across < LEVEL_MIN) {
             say("§f" + kind.news + " §7straight above or below §f" + from + "§7.");
             return;
         }
         Bearing bearing = Bearing.between(me, heardAt);
         add(new Mark(kind.label, me, bearing, System.currentTimeMillis()));
+        // Paper keeps the event's own height on the far point.
+        String height = paper ? " §7at height §f" + pos.getY() : "";
         say("§f" + kind.news + " §7to the §f" + bearing.compass() + " §7of §f" + from + " §7along yaw §f"
-            + String.format(Locale.ROOT, "%.1f", bearing.degrees()) + "§7.");
+            + String.format(Locale.ROOT, "%.1f", bearing.degrees()) + height + "§7.");
+    }
+
+    // A dragon or a portal is known to be elsewhere by the dimension you are in. A wither
+    // elsewhere lands on a block you stood on. The server may have seen you a moment ago.
+    private boolean inAnotherDimension(Heard kind, Vec3 heardAt) {
+        if (kind.home != null) {
+            return !mc.level.dimension().equals(kind.home);
+        }
+        return history.wasNear(heardAt, OWN_SPOT, OWN_TICKS);
+    }
+
+    // How far the server sends chunks to you. Paper relays a far event at its own view
+    // distance and that is never nearer.
+    private int serverViewBlocks() {
+        return SectionPos.sectionToBlockCoord(mc.player.connection.serverChunkRadius);
     }
 
     private void add(Mark mark) {
@@ -235,8 +270,7 @@ public final class Eavesdrop extends Module {
             if (bearing == null) {
                 FarShapes.line(batch, at, at.add(0, BEAM, 0), shade);
             } else {
-                double y = at.y + LINE_LIFT;
-                FarShapes.line(batch, bearing.along(0, y), bearing.along(LINE_LENGTH, y), shade);
+                FarShapes.ray(batch, bearing, at.y, shade);
             }
         }
     }
@@ -249,9 +283,8 @@ public final class Eavesdrop extends Module {
         Vec3 camera = WorldToScreen.cameraPos();
         for (Mark mark : marks) {
             Bearing bearing = mark.bearing();
-            // A direction is labelled where the server put the sound for you.
             Vec3 spot = bearing == null ? mark.at().add(0, LABEL_LIFT, 0)
-                : bearing.along(TRUE_RANGE, mark.at().y + LABEL_LIFT);
+                : bearing.along(LABEL_ALONG, mark.at().y + LABEL_LIFT);
             Vec3 screen = WorldToScreen.project(spot);
             if (screen == null) {
                 continue;

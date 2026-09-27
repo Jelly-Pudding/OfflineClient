@@ -13,9 +13,7 @@ import com.jellypudding.offlineclient.setting.ChoiceListSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.PacketNames;
-import net.minecraft.ChatFormatting;
 import net.minecraft.SharedConstants;
-import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.Packet;
 
@@ -228,11 +226,7 @@ public final class PacketLogger extends Module {
 
     // Says which file is being written. Clicking the line opens the folder.
     private static void announce(Path file) {
-        Path game = OfflineClient.MC.gameDirectory.toPath();
-        Component where = Component.literal(game.relativize(file).toString().replace('\\', '/'))
-            .withStyle(style -> style.withColor(ChatFormatting.WHITE)
-                .withClickEvent(new ClickEvent.OpenFile(file.getParent())));
-        ChatUtil.component(Component.literal("§bPacketLogger §7is writing to ").append(where));
+        ChatUtil.component(Component.literal("§bPacketLogger §7is writing to ").append(ChatUtil.fileLink(file)));
     }
 
     private static Path folder() {

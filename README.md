@@ -25,15 +25,18 @@ The latest jar is on the [releases page](https://github.com/Jelly-Pudding/Offlin
 - Chat commands use the `.` prefix. `.help` lists them. Typing just a module name toggles it and adding a setting name and value edits that setting. For example you can just do `.step height 2`.
 - Press **TAB** whilst typing a command to autocomplete it.
 - Middle click a setting in the ClickGUI to put it back to its default. `.reset <module>` does the whole module.
-- `.macro add <name> <lines>` saves a list of chat lines or commands and `.macro key <name> <key>` puts it on a key.
-- `.hud` toggles the overlay and `.hud edit` opens the editor. `.xray <block>` adds a block to XRay and `.xray this` adds the one you point at.
+- `.macro add <name> <lines>` saves a list of chat lines or commands and `.macro key <name> <key>` puts it on a key. `.macro join <name> here` runs it each time you join this server.
+- `.autologin set <password>` answers the server's login prompt for you from then on.
+- `.seed set <seed>` lets OreSight show the ores of a server whose seed you know.
+- `.hud` toggles the overlay and `.hud edit` opens the editor. Drag a piece to move it and pull an edge or a corner to resize it. The game's own hotbar and hearts and hunger and experience bar move the same way.
+- `.xray <block>` adds a block to XRay and `.xray this` adds the one you point at.
 - Everything is saved to `.minecraft/offlineclient/config.json` automatically.
 - The title screen has a Recovery button that puts settings back to default.
 
 ## Modules
 
 <details>
-<summary><b>Combat</b> (36)</summary>
+<summary><b>Combat</b> (46)</summary>
 
 | Module | What it does |
 | --- | --- |
@@ -41,27 +44,35 @@ The latest jar is on the [releases page](https://github.com/Jelly-Pudding/Offlin
 | TriggerBot | Swings at whatever your crosshair is on. |
 | AimAssist | Nudges your view towards whatever you are fighting. |
 | Criticals | Makes every melee hit a critical hit. |
+| Knockback | Renews your sprint before each hit to knock the target back as far as a sprinting hit. |
 | AutoWeapon | Switches to your strongest sword or axe when you attack. |
 | AttributeSwap | Swaps to your best item for the hit the moment you attack. |
 | Hitboxes | Makes entities easier to hit by growing their hitboxes. |
 | AutoClicker | Clicks the mouse buttons for you. |
+| MaceCombo | Launches you off a wind charge and lands a mace smash on the target as you fall. |
 | TpAura | Teleports around a target whilst hitting it. |
+| AntiBot | Spots fake players the server spawns and keeps every combat module off them. |
 | AutoTotem | Keeps a totem of undying in your offhand. |
 | Offhand | Keeps a chosen item in your offhand. |
 | AutoArmor | Automatically wears the best armour you have. |
 | CrystalAura | Places end crystals near enemies and blows them up. |
 | AnchorAura | Places respawn anchors near enemies and sets them off. |
 | BedAura | Places beds near enemies and sets them off. |
+| TntAura | Places lit TNT on enemies or where you click. |
 | AutoCity | Mines the block guarding an enemy in a hole. |
+| PistonAura | Fires pistons at an enemy in a hole to push a crystal into them or shove them out. |
 | Surround | Places blast proof blocks around your feet to stop crystals. |
+| Blocker | Fills the spots around your hole that crystals and pistons would use. |
 | HoleFiller | Seals the holes around an enemy before they can hide in one. |
 | AutoTrap | Places blocks around an enemy to trap them. |
 | SelfTrap | Places blocks above your head to stop crystals. |
 | Burrow | Places a blast proof block inside your own hitbox. |
+| AutoPearl | Throws ender pearls to escape a fight or to phase into a wall. |
 | AutoWeb | Throws cobwebs at an enemy to lock them in place. |
 | SelfWeb | Webs your own block to stop knockback. |
 | AutoAnvil | Drops anvils on an enemy to break their helmet. |
 | SelfAnvil | Places an anvil above you to keep others out of your hole. |
+| LavaAura | Pours lava on enemies near you. |
 | AntiAnvil | Puts a block over your head when an anvil is dropped on you. |
 | AntiBed | Breaks an enemy bed placed next to you. |
 | AntiAnchor | Breaks an enemy respawn anchor placed next to you. |
@@ -73,11 +84,13 @@ The latest jar is on the [releases page](https://github.com/Jelly-Pudding/Offlin
 | ArrowDamage | Makes your arrows fly faster and hit harder. |
 | FightBot | Runs after a target and fights it for you. |
 | Protect | Follows a friend about and fights off whatever comes near. |
+| Confuse | Runs round the target whilst you fight to be hard to hit. |
+| KillMessage | Says something in chat when you kill a player. |
 
 </details>
 
 <details>
-<summary><b>Movement</b> (32)</summary>
+<summary><b>Movement</b> (35)</summary>
 
 | Module | What it does |
 | --- | --- |
@@ -94,13 +107,16 @@ The latest jar is on the [releases page](https://github.com/Jelly-Pudding/Offlin
 | AutoWasp | Flies you straight at a player on your elytra. |
 | Glide | Slows your fall into a controlled drift. |
 | AutoJump | Jumps for you whenever you are on the ground. |
+| NoJumpDelay | Jumps again the moment you land whilst you hold jump. |
 | HighJump | Jump higher than normal. |
+| WindJump | Throws a wind charge at your feet and jumps with it to fly as high as a charge can send you. |
 | LongJump | Jump much further than normal. |
+| Boost | Press the bind to dash the way you move or straight ahead. |
 | AirJump | Lets you jump again whilst in the air. |
 | Parkour | Jumps for you at the edge of blocks. |
 | FastFall | Pulls you to the ground faster when you are falling. |
 | Jesus | Walk on water and lava. |
-| Spider | Climb up any wall like a spider. |
+| Spider | Climb up and down any wall like a spider. |
 | QuickClimb | Climb ladders and vines and powder snow much faster. |
 | Slippy | Makes the ground as slippery as ice or worse. |
 | Sneak | Keeps you sneaking. |
@@ -117,7 +133,7 @@ The latest jar is on the [releases page](https://github.com/Jelly-Pudding/Offlin
 </details>
 
 <details>
-<summary><b>Render</b> (51)</summary>
+<summary><b>Render</b> (56)</summary>
 
 | Module | What it does |
 | --- | --- |
@@ -125,19 +141,23 @@ The latest jar is on the [releases page](https://github.com/Jelly-Pudding/Offlin
 | Chams | Draws player and mob models through walls. |
 | Nametags | Shows health and ping and gear above players and names above other things. |
 | Tracers | Draws lines from you to entities around you. |
+| Skeletons | Draws players and mobs built like them as stick figures through walls. |
 | ItemESP | See dropped items through walls. |
 | TrueSight | Renders invisible entities. |
 | PopChams | Flashes a copy of a player where their totem popped. |
+| Confetti | Turns totem pops into bursts of colourful confetti that only you see. |
 | EntityOwner | Shows who owns the projectiles and pets around you. |
 | LogoutSpots | Marks where players logged out. |
 | ChestESP | See containers through walls. |
 | BlockESP | Highlights chosen blocks through walls. |
 | XRay | See ores through the ground. |
+| OreSight | Shows the ores the world seed placed even where anti xray hides them. |
 | WallHack | Makes the blocks you choose see through. |
 | HoleESP | Highlights safe holes to stand in. |
+| FeetESP | Marks the block each nearby player stands in and whether it is a safe hole. |
 | CityESP | Highlights the block that would open up a surrounded enemy. |
 | SpawnESP | Marks the dark floor where mobs can appear. |
-| BaseFinder | Lights up every block a player put down near you. |
+| SculkRange | Shows how far sculk sensors and shriekers hear and warns before a step sets one off. |
 | Fullbright | See in the dark without torches. |
 | NoRender | Leaves out things in the world you do not need drawn. |
 | AntiBlind | Ignores effects that ruin your view. |
@@ -156,11 +176,12 @@ The latest jar is on the [releases page](https://github.com/Jelly-Pudding/Offlin
 | Breadcrumbs | Draws a trail behind you to lead you back. |
 | Trail | Leaves a trail of particles behind you. |
 | Radar | Draws a small map of nearby entities on your screen. |
-| NewChunks | Marks fresh and old chunks that load whilst this is on. |
-| TunnelESP | Highlights hand dug tunnels underground. |
+| Highways | Draws the highways and ring roads round 0 0 out to the horizon. |
+| ChunkBorders | Outlines the chunk you stand in and the chunks and region around it. |
 | VoidESP | Shows holes in the bedrock that lead to the void. |
 | Portals | Highlights portals through walls. |
 | Trajectories | Shows the path a thrown or shot item will take. |
+| PearlTracker | Shows where other players' ender pearls will land and who threw them. |
 | BreakIndicators | Shows blocks other players are mining. |
 | OpenWaterESP | Shows whether your bobber sits in open water. |
 | BetterTooltips | Previews and extra facts in item tooltips. |
@@ -176,15 +197,18 @@ The latest jar is on the [releases page](https://github.com/Jelly-Pudding/Offlin
 </details>
 
 <details>
-<summary><b>Player</b> (34)</summary>
+<summary><b>Player</b> (40)</summary>
 
 | Module | What it does |
 | --- | --- |
 | AutoEat | Eats for you when you get hungry or hurt. |
 | AutoGap | Eats golden apples to hold your buffs and your health up. |
 | AutoPotion | Drinks a potion when you are hurt or burning or running low. |
+| AutoExtinguish | Puts you out when you catch fire. |
 | AutoMend | Repairs your mending gear with experience. |
 | AutoRespawn | Instantly respawns you after dying. |
+| Ghost | Lets you walk and look around after you die whilst the server still sees you dead. |
+| AutoSleep | Sleeps in a bed near you at night and gets up in the morning. |
 | AntiHunger | Slows down how fast you get hungry. |
 | PotionSaver | Stops your effect timers whilst you stand still. |
 | NoStatusEffects | Hides your chosen effects on your client whilst the server keeps them. |
@@ -203,7 +227,9 @@ The latest jar is on the [releases page](https://github.com/Jelly-Pudding/Offlin
 | Throw | Fires a whole stack of throwables in one click. |
 | InventoryTweaks | Sorts and merges your inventory whilst it is open. |
 | AutoReplenish | Refills your hotbar stacks from your inventory. |
+| Loadouts | Puts your inventory back into a layout saved with the loadout command. |
 | ChestStealer | Takes everything out of containers for you. |
+| ChestAura | Opens the containers around you and empties or fills them. |
 | ChestSwap | Swaps an elytra and a chestplate on one key. |
 | AutoDrop | Throws away junk items as they enter your inventory. |
 | AutoSwitch | Cycles through your hotbar slots on their own. |
@@ -213,21 +239,25 @@ The latest jar is on the [releases page](https://github.com/Jelly-Pudding/Offlin
 | Rotation | Locks your view to a chosen angle. |
 | NoRotate | Stops the server from turning your head on teleports. |
 | Follow | Walks after another player. |
+| AutoDoors | Opens doors and gates in your way and shuts them behind you. |
 | AutoFish | Casts and reels the fishing rod for you. |
 
 </details>
 
 <details>
-<summary><b>World</b> (33)</summary>
+<summary><b>World</b> (48)</summary>
 
 | Module | What it does |
 | --- | --- |
 | Scaffold | Places blocks under you as you walk. |
+| Staircase | Builds a staircase up or down as you walk. |
 | AirPlace | Places blocks in mid air where your crosshair points. |
 | NoGhostBlocks | Waits for the server instead of guessing what a click did. |
 | AutoBuild | Builds a saved shape where you right click. |
+| AutoWither | Builds and spawns a wither. |
 | TemplateTool | Saves a build as a shape AutoBuild can put up again. |
 | BuildRandom | Places your held block at random spots around you. |
+| TrailMaker | Places a block behind you as you walk. |
 | InstantBunker | Builds a small bunker round you in one jump. |
 | BuildHeight | Lets you place blocks against the world height limit. |
 | Nuker | Breaks all blocks around you. |
@@ -238,36 +268,71 @@ The latest jar is on the [releases page](https://github.com/Jelly-Pudding/Offlin
 | HighwayBuilder | Digs and builds a highway along one line at a fixed height. |
 | InfinityMiner | Mines ore for ever and lets Mending heal the pickaxe on the way. |
 | LiquidFiller | Fills the water and lava around you with solid blocks. |
+| LavaCast | Pours lava then water from a tower to cast a cobblestone mountain. |
 | SpawnProofer | Lights up or fills the spots mobs would spawn in. |
+| Painter | Covers every open face of the chosen blocks in reach with a block from your hotbar. |
 | Kaboom | Blows a hole around you in one go. |
 | Collisions | Turns fire and webs and other soft blocks into walls. |
 | AutoFarm | Harvests the ripe crops in reach and replants them. |
 | TillAura | Tills the dirt around you with the hoe in your hand. |
 | BonemealAura | Feeds bone meal to the plants around you. |
+| TreeAura | Plants saplings around you and grows them with bone meal. |
+| WaxAura | Waxes the copper around you with honeycomb from the hotbar. |
 | AutoBreed | Breeds the animals around you with the food you hold. |
 | AutoShearer | Shears every sheep that comes near you. |
+| AxolotlHunter | Marks axolotls of the colours you pick and can catch them in a bucket. |
 | Flamethrower | Sets fire to nearby animals for cooked meat. |
 | AutoMount | Climbs onto the nearest rideable mob or vehicle. |
 | AutoNametag | Names every chosen mob near you with the tag you carry. |
 | EndermanLook | Keeps your gaze off endermen or puts it right on them. |
 | EChestFarmer | Places and breaks ender chests to farm obsidian. |
+| AutoCraft | Crafts the items you pick whilst a crafting table or your inventory is open. |
 | AutoSmelter | Feeds an open furnace from your inventory and empties it. |
 | AutoBrewer | Brews the potion you pick whilst a brewing stand is open. |
+| AutoEnchant | Enchants the items you pick whilst an enchanting table is open. |
+| Grinder | Grinds the enchantments off the items you pick whilst a grindstone is open. |
+| AutoSmith | Upgrades your diamond gear to netherite whilst a smithing table is open. |
+| AutoMason | Cuts stone into the shapes you pick whilst a stonecutter is open. |
+| AutoRename | Gives the items you pick a name whilst an anvil is open. |
+| AutoTrade | Buys and sells the trades you pick whilst a trading screen is open. |
 | AutoLibrarian | Rerolls a librarian until it sells a book you want. |
 | AutoSign | Writes your set text onto every sign you place. |
 
 </details>
 
 <details>
-<summary><b>Misc</b> (28)</summary>
+<summary><b>Hunting</b> (13)</summary>
+
+| Module | What it does |
+| --- | --- |
+| NewChunks | Marks fresh and old chunks that load whilst this is on. |
+| StashFinder | Points out chunks packed with containers as you travel. |
+| BaseFinder | Lights up every block a player put down near you. |
+| SpawnerFinder | Finds spawners players have been near in chunks that load whilst this is on. |
+| SignReader | Shows the text of nearby signs through walls and lists new ones in chat. |
+| TunnelESP | Highlights hand dug tunnels underground. |
+| Locator | Finds other players through the locator bar unless the server turns it off. |
+| Eavesdrop | Points to wither spawns and end portals and dragon deaths anywhere on the server. |
+| Earshot | Marks where the sounds you pick come from through walls. |
+| GearedMobs | Highlights mobs carrying gear that only players bring into the world. |
+| Collectibles | Marks the rare items you choose wherever they show in the world. |
+| ItemCoords | Marks the lodestones compasses point to and the flowers that bees in hive items fed from. |
+| MapArt | Marks item frames holding maps and saves every map you see as a picture. |
+
+</details>
+
+<details>
+<summary><b>Misc</b> (34)</summary>
 
 | Module | What it does |
 | --- | --- |
 | ClickGUI | Opens the GUI and sets its accent colour. |
-| HUD | The overlay you see whilst playing. Drag the pieces about with .hud edit. |
+| HUD | The overlay you see whilst playing and the game's own bars. Drag the pieces about with .hud edit. |
 | TabGUI | A module list on screen you steer with the arrow keys. No menu to open. |
 | Panic | Turns every enabled module off at once. |
+| Triggers | Switches modules on or off by rules such as low health or a player coming near. |
 | AutoReconnect | Rejoins the server after you get disconnected. |
+| AutoLogin | Answers the login prompt of an offline server with the password saved for it. |
 | AutoLog | Logs you out when your health gets low. |
 | AntiAFK | Keeps you from being kicked for idling. |
 | Timer | Speeds up or slows down the whole game client side. |
@@ -276,19 +341,23 @@ The latest jar is on the [releases page](https://github.com/Jelly-Pudding/Offlin
 | BetterTab | Ping numbers and friend colours in the player list. |
 | AntiSpam | Stacks repeated chat lines into one. |
 | NameProtect | Hides your own name and renames other players on your screen. |
+| SecretChat | Chats in public in a code that anyone with your key can read. |
 | Notifier | Chat messages when players come and go and when totems pop. |
+| ChatAlerts | Plays a sound and shows a toast when chat mentions you or a word you pick. |
 | Spam | Sends chat messages on a timer. |
+| ChatBot | Replies to other players when their chat holds a phrase you pick. |
 | MessageAura | Sends a private message to every player who comes into view. |
 | MassTPA | Sends a teleport request to every player on the server. |
-| StashFinder | Points out chunks packed with containers as you travel. |
 | BetterBeacons | Offers every beacon effect whatever the pyramid is worth. |
 | SoundBlocker | Mutes the sounds you pick. |
 | BookBot | Writes book after book for you. |
 | Notebot | Plays songs on the note blocks around you. |
+| Honker | Blows a goat horn from your offhand or hotbar when another player comes near. |
 | SkinDerp | Makes your skin layers blink on and off for everyone to see. |
 | Derp | Makes you look ridiculous to everyone else. |
 | ServerSpoof | Reports a plain client to the server. |
 | AntiPacketKick | Spreads packet bursts out and keeps the server from dropping you. |
+| AntiCrash | Stops packets that would crash or freeze the game. |
 | PacketCanceller | Drops the kinds of packet you pick. Hides an action from the server or ignores what it sends. |
 | PacketLogger | Writes the packets you pick to chat or to a file. |
 

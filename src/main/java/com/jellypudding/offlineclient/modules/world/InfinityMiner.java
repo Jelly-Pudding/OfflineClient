@@ -159,7 +159,7 @@ public final class InfinityMiner extends Module {
         if (target == null && !scan()) {
             return;
         }
-        if (BlockUtil.distanceTo(target) <= mc.player.blockInteractionRange()) {
+        if (BlockUtil.inReach(target)) {
             trip.stop();
             BlockMiner.mine(target, rotate.isOn());
             return;

@@ -14,6 +14,7 @@ import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.EntityFilter;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
+import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.SwingMode;
 import com.jellypudding.offlineclient.util.TargetFilter;
 import net.minecraft.world.InteractionHand;
@@ -98,7 +99,7 @@ public final class Protect extends Module {
     private LivingEntity pickFriend() {
         String wanted = friendName.getValue().trim();
         Entity found = EntityUtil.nearest(STRAY * 4, entity -> entity instanceof Player player
-            && player != mc.player && player.isAlive()
+            && player != mc.player && player.isAlive() && !Modules.isBot(player)
             && (friendChoice.is(Friend.NEAREST) || player.getName().getString().equalsIgnoreCase(wanted)));
         return found instanceof LivingEntity living ? living : null;
     }

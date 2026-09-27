@@ -35,11 +35,14 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
-// The server picks one of three waypoints for every other player. Past 332 blocks it
-// sends only the yaw from you to them. Outside your view distance it sends their chunk.
-// Otherwise it sends the block they stand on. A yaw is exact for the moment the server
-// sends it and a new one arrives each time the angle drifts half a degree.
+// The server links you to every other player in one of three ways. Past 332 blocks it
+// sends only the yaw from you to them. Out of your view it sends their chunk. Otherwise it
+// sends the block they stand in. A block or chunk link only changes when the player moves
+// fast or comes into view and a slow player keeps it at any range. A yaw becomes one of
+// those once they come within 332 blocks. It is exact for the moment the server sends it
+// and a new one arrives each time it drifts half a degree.
 public final class Locator extends Module {
 
     private enum Kind { EXACT, CHUNK, BEARING }
@@ -57,8 +60,9 @@ public final class Locator extends Module {
         // Oldest first with one reading for each spot you stood on.
         private final List<Bearing> bearings = new ArrayList<>();
         private BearingFix fix;
-        // The estimate last posted in chat.
+        // The estimate last posted in chat and when.
         private BearingFix posted;
+        private long postedAt;
         private long lastSeen;
 
         private Target(UUID uuid) {
@@ -82,16 +86,18 @@ public final class Locator extends Module {
     // A reading taken this close to the last one replaces it.
     private static final double SAME_SPOT = 4;
 
+    // A new yaw whilst you stand this still can only come from the player moving. Past 332
+    // blocks your own step turns the line less than the half degree the server waits for.
+    private static final double STILL = 2;
+
     // Enough for a long walk sideways to a far player.
     private static final int MAX_BEARINGS = 64;
 
     // An estimate that moves less than this is a refinement and stays out of chat.
     private static final double REPOST = 64;
 
-    private static final double LINE_LENGTH = 4096;
-
-    // A bearing line runs along the ground just above your feet.
-    private static final double LINE_LIFT = 0.1;
+    // A player on the move is posted at most this often.
+    private static final long REPOST_MS = TimeUnit.MINUTES.toMillis(1);
 
     // Where along a bearing line its name sits.
     private static final double LINE_LABEL = 24;
@@ -112,23 +118,22 @@ public final class Locator extends Module {
 
     private static final long LIVE_MS = 1000;
 
-    private static final long MINUTE_MS = 60_000;
-
     private static final int SHORT_ID = 8;
 
     private final BoolSetting exact = new BoolSetting("Exact",
-        "Marks the block of players the server places exactly. They are inside your view distance.",
-        true);
+        "Marks the block a player stands in when the server sends it exactly.", true);
     private final BoolSetting chunks = new BoolSetting("Chunks",
-        "Marks the chunk column of players just past your view distance.", true);
+        "Marks the chunk column a player stands in when the server sends only that.", true);
     private final BoolSetting estimates = new BoolSetting("Estimates",
-        "Marks where far players probably are by crossing bearings taken from different spots. Travel sideways to a player to gather them.",
+        "Marks where far players probably are by crossing bearings taken from different spots."
+            + " Travel sideways to a player to gather them. Only a player who stays put gives a true estimate.",
         true);
     private final NumberSetting spread = new NumberSetting("Minimum spread",
         "How far apart two bearings must point before they are crossed. More gives a surer first estimate.",
         5, 1, 30, 0.5, " degrees").min(0.1).under(estimates);
     private final BoolSetting announce = new BoolSetting("Chat",
-        "Posts the coordinates in chat when an estimate first appears.", true).under(estimates);
+        "Posts the coordinates in chat when an estimate appears and at most once a minute as it moves.",
+        true).under(estimates);
     private final BoolSetting lines = new BoolSetting("Bearing lines",
         "Draws a line along the ground from you towards each far player.", true);
     private final BoolSetting hideSeen = new BoolSetting("Hide seen players",
@@ -155,7 +160,7 @@ public final class Locator extends Module {
     private boolean listening;
 
     public Locator() {
-        super("Locator", "Finds other players through the locator bar which the server must have switched on.",
+        super("Locator", "Finds other players through the locator bar unless the server turns it off.",
             Category.HUNTING);
         addSettings(exact, chunks, estimates, spread, announce, lines, hideSeen, forget,
             exactColor, chunkColor, farColor, scale);
@@ -198,13 +203,13 @@ public final class Locator extends Module {
         history.record(mc.player.position());
         long now = System.currentTimeMillis();
         mc.player.connection.getWaypointManager().forEachWaypoint(mc.player, waypoint -> read(waypoint, now));
-        long keep = Math.round(forget.getValue() * MINUTE_MS);
+        long keep = Math.round(forget.getValue() * TimeUnit.MINUTES.toMillis(1));
         targets.values().removeIf(target -> now - target.lastSeen > keep);
         double least = Math.toRadians(spread.getValue());
         for (Target target : targets.values()) {
             if (target.kind == Kind.BEARING) {
                 target.fix = BearingFix.cross(target.bearings, least);
-                post(target);
+                post(target, now);
             }
         }
         listening = true;
@@ -259,7 +264,9 @@ public final class Locator extends Module {
     private void take(Target target, Bearing bearing) {
         List<Bearing> bearings = target.bearings;
         // A reading that cannot point at a well founded estimate means the player moved on.
-        if (target.fix != null && bearings.size() > 2 && target.fix.missedBy(bearing)) {
+        // Any new reading whilst you stand still means the same.
+        if ((!bearings.isEmpty() && bearings.getLast().originDistance(bearing) < STILL)
+            || (target.fix != null && bearings.size() > 2 && target.fix.missedBy(bearing))) {
             bearings.clear();
         }
         if (!bearings.isEmpty() && bearings.getLast().originDistance(bearing) < SAME_SPOT) {
@@ -275,20 +282,23 @@ public final class Locator extends Module {
         }
     }
 
-    // Once for each new estimate. A refinement inside the posted radius stays quiet.
-    private void post(Target target) {
+    // Once for each new estimate. A refinement inside the posted radius stays quiet and a
+    // player on the move is posted once a minute at most.
+    private void post(Target target, long now) {
         BearingFix fix = target.fix;
         if (fix == null || !estimates.isOn() || !announce.isOn()) {
             return;
         }
         BearingFix last = target.posted;
-        if (last != null && Math.hypot(fix.x() - last.x(), fix.z() - last.z())
-            < Math.max(last.radius(), REPOST)) {
+        if (last != null && (now - target.postedAt < REPOST_MS
+            || Math.hypot(fix.x() - last.x(), fix.z() - last.z()) < Math.max(last.radius(), REPOST))) {
             return;
         }
         target.posted = fix;
+        target.postedAt = now;
         ChatUtil.message("§bLocator §f" + target.name + " §7is around §f" + Math.round(fix.x())
-            + " " + Math.round(fix.z()) + " §7give or take §f" + Math.round(fix.radius()) + " §7blocks.");
+            + " " + Math.round(fix.z()) + " §7give or take §f" + Math.round(fix.radius())
+            + " §7blocks if they stayed put.");
     }
 
     private boolean seen(Target target) {
@@ -342,9 +352,8 @@ public final class Locator extends Module {
 
     private void drawFar(DrawBatch batch, Target target, Vec3 feet, int color) {
         if (lines.isOn() && !Float.isNaN(target.angle)) {
-            Bearing now = new Bearing(feet.x, feet.z, target.angle);
-            double y = feet.y + LINE_LIFT;
-            FarShapes.line(batch, now.along(0, y), now.along(LINE_LENGTH, y), ColorUtil.fade(color, LINE_SHARE));
+            FarShapes.ray(batch, new Bearing(feet.x, feet.z, target.angle), feet.y,
+                ColorUtil.fade(color, LINE_SHARE));
         }
         BearingFix fix = target.fix;
         if (!estimates.isOn() || fix == null) {
@@ -396,7 +405,7 @@ public final class Locator extends Module {
                 }
                 Vec3 feet = mc.player.getPosition(partial);
                 Bearing now = new Bearing(feet.x, feet.z, target.angle);
-                return new Label(now.along(LINE_LABEL, feet.y + LINE_LIFT), "to the " + now.compass(),
+                return new Label(now.along(LINE_LABEL, feet.y), "to the " + now.compass(),
                     farColor.getColor(), false);
             }
         }

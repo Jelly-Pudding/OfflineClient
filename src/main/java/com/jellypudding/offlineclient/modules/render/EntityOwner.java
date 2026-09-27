@@ -11,6 +11,7 @@ import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.render.WorldToScreen;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.RenderUtil;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.multiplayer.PlayerInfo;
@@ -35,7 +36,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public final class EntityOwner extends Module {
 
-    private record Label(String name, int color, Vec3 screen, double distance) {
+    private record Label(String name, int color, Vec3 screen, float scale, double distance) {
     }
 
     private static final String SESSION_SERVER = "https://sessionserver.mojang.com/session/minecraft/profile/";
@@ -70,6 +71,7 @@ public final class EntityOwner extends Module {
         Vec3 camera = WorldToScreen.cameraPos();
         double maxDistance = range.getValue();
         List<Label> labels = new ArrayList<>();
+        Nametags nametags = Modules.get(Nametags.class);
 
         for (Entity entity : mc.level.entitiesForRendering()) {
             String owner = ownerOf(entity);
@@ -81,11 +83,18 @@ public final class EntityOwner extends Module {
             if (distance > maxDistance) {
                 continue;
             }
-            Vec3 head = feet.add(0, entity.getBbHeight() + 0.5, 0);
-            Vec3 screen = WorldToScreen.project(head);
-            if (screen != null) {
-                labels.add(new Label(owner, colorFor(owner), screen, distance));
+            float size = (float) (scale.getValue() * Math.clamp(1 - distance / 80.0, 0.5, 1));
+            // A pet with a name tag of its own wears the owner on top of it.
+            float tagScale = nametags.tagScale(entity, distance);
+            double height = tagScale > 0 ? Nametags.tagHeight(entity) : entity.getBbHeight() + 0.5;
+            Vec3 screen = WorldToScreen.project(feet.add(0, height, 0));
+            if (screen == null) {
+                continue;
             }
+            if (tagScale > 0) {
+                screen = new Vec3(screen.x, RenderUtil.labelAbove(mc.font, screen.y, tagScale, size), screen.z);
+            }
+            labels.add(new Label(owner, colorFor(owner), screen, size, distance));
         }
 
         // Far labels draw first.
@@ -186,8 +195,7 @@ public final class EntityOwner extends Module {
     }
 
     private void draw(GuiGraphicsExtractor context, Label label) {
-        float factor = (float) (scale.getValue() * Math.clamp(1 - label.distance() / 80.0, 0.5, 1));
-        RenderUtil.label(context, mc.font, label.screen().x, label.screen().y, factor,
+        RenderUtil.label(context, mc.font, label.screen().x, label.screen().y, label.scale(),
             List.of(label.name()), List.of(label.color()));
     }
 }

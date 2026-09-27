@@ -49,7 +49,7 @@ public final class AntiPacketKick extends Module {
     private final BoolSetting catchErrors = new BoolSetting("Catch errors",
         "Throws away a packet the client cannot read instead of disconnecting.", false);
     private final BoolSetting logErrors = new BoolSetting("Log errors",
-        "Prints each caught error to chat.", true)
+        "Prints caught errors to chat. The same kind is said at most once in a few seconds.", true)
         .under(catchErrors);
 
     // Filled from the netty thread and drained on the main thread.

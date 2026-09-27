@@ -35,9 +35,6 @@ import java.util.List;
 // position and where the speed puts the player over the next few ticks.
 public final class Scaffold extends Module {
 
-    private static final Direction[] BRIDGE_SIDES = {
-        Direction.DOWN, Direction.NORTH, Direction.SOUTH, Direction.WEST, Direction.EAST
-    };
     private static final int MAX_PLACES_PER_TICK = 2;
 
     // How far from the eyes a support face may sit for the click to land.
@@ -233,7 +230,7 @@ public final class Scaffold extends Module {
             return placeWith(target, support);
         }
         // Nothing solid touches the target. A supported neighbour is filled first.
-        for (Direction side : BRIDGE_SIDES) {
+        for (Direction side : BlockUtil.BELOW_THEN_SIDES) {
             BlockPos helper = target.relative(side);
             if (!BlockUtil.isReplaceable(helper) || occupied(helper)) {
                 continue;

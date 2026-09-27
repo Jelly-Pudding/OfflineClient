@@ -82,7 +82,7 @@ public final class TargetFilter {
     }
 
     public boolean allows(Entity entity) {
-        if (invisible.isOn() && entity.isInvisible()) {
+        if (Modules.isBot(entity) || invisible.isOn() && entity.isInvisible()) {
             return false;
         }
         if (entity instanceof Player player) {

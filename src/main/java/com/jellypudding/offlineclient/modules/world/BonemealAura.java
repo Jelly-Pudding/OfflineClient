@@ -110,7 +110,7 @@ public final class BonemealAura extends Module {
             loan.giveBack();
             return;
         }
-        if (!holdBoneMeal()) {
+        if (!loan.hold(Items.BONE_MEAL, takeFrom.getValue().limit())) {
             loan.giveBack();
             return;
         }
@@ -133,16 +133,6 @@ public final class BonemealAura extends Module {
             fed++;
             mc.rightClickDelay = InputUtil.USE_DELAY;
         }
-    }
-
-    // True once bone meal is in the main hand.
-    private boolean holdBoneMeal() {
-        if (mc.player.getMainHandItem().is(Items.BONE_MEAL)) {
-            return true;
-        }
-        int limit = takeFrom.getValue().limit();
-        int slot = InventoryUtil.findSlot(Items.BONE_MEAL, limit);
-        return slot != -1 && loan.select(slot);
     }
 
     // Nearest first.

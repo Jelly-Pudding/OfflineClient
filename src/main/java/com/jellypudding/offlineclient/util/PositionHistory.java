@@ -11,8 +11,8 @@ public final class PositionHistory {
     // Five seconds of ticks covers any ping worth playing on.
     private static final int KEPT = 100;
 
-    // Further than this in one tick is a teleport. The server knew the new spot at
-    // once and every older spot is no answer any more.
+    // Further than this in one tick is a teleport. The server learnt the new spot at
+    // once and the spots before it tell nothing.
     private static final double JUMP = 16;
 
     private final Vec3[] ring = new Vec3[KEPT];
@@ -44,9 +44,19 @@ public final class PositionHistory {
         return ring[Math.floorMod(next - 1 - back, KEPT)];
     }
 
-    // Where the server saw you when it sent a packet that arrives this tick. That is
-    // your ping plus the tick the server waits before it handles a move.
+    // Where the server saw you when it built a packet that arrives this tick. That was
+    // about one round trip ago.
     public Vec3 asServerSaw() {
-        return ticksAgo(Math.round((ServerInfo.ping() + TICK_MS) / (float) TICK_MS));
+        return ticksAgo(Math.round(ServerInfo.ping() / (float) TICK_MS));
+    }
+
+    // True when you stood within reach of the spot at any point in the last few ticks.
+    public boolean wasNear(Vec3 spot, double reach, int ticks) {
+        for (int back = 0; back < Math.min(ticks, size); back++) {
+            if (ticksAgo(back).distanceTo(spot) <= reach) {
+                return true;
+            }
+        }
+        return false;
     }
 }

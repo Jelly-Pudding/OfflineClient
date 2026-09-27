@@ -18,11 +18,12 @@ import com.jellypudding.offlineclient.setting.Setting;
 import com.jellypudding.offlineclient.util.ChunkScanner;
 import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.NearestCut;
+import com.jellypudding.offlineclient.worldgen.OreKind;
+import com.jellypudding.offlineclient.worldgen.OreTables;
 import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ChunkMap;
@@ -43,38 +44,19 @@ import java.util.Set;
 // It is scanned again only when the server sends a change for it.
 public final class BlockEsp extends Module {
 
-    private static final Direction[] SIDES = Direction.values();
-
     // Built on the scanner thread.
     private record Target(int x, int y, int z, Block block) {
     }
 
-    // Hand tuned colours for the usual targets.
+    // Hand tuned colours for the usual targets. Ores take the colour of their kind.
     private static final Map<Block, Integer> PRESET_COLORS = Map.ofEntries(
-        Map.entry(Blocks.DIAMOND_ORE, 0xFF40E0FF),
-        Map.entry(Blocks.DEEPSLATE_DIAMOND_ORE, 0xFF40E0FF),
-        Map.entry(Blocks.ANCIENT_DEBRIS, 0xFFB08060),
-        Map.entry(Blocks.EMERALD_ORE, 0xFF40FF80),
-        Map.entry(Blocks.DEEPSLATE_EMERALD_ORE, 0xFF40FF80),
-        Map.entry(Blocks.GOLD_ORE, 0xFFFFD040),
-        Map.entry(Blocks.DEEPSLATE_GOLD_ORE, 0xFFFFD040),
-        Map.entry(Blocks.NETHER_GOLD_ORE, 0xFFFFD040),
-        Map.entry(Blocks.IRON_ORE, 0xFFD8C0A8),
-        Map.entry(Blocks.DEEPSLATE_IRON_ORE, 0xFFD8C0A8),
-        Map.entry(Blocks.REDSTONE_ORE, 0xFFFF4040),
-        Map.entry(Blocks.DEEPSLATE_REDSTONE_ORE, 0xFFFF4040),
-        Map.entry(Blocks.LAPIS_ORE, 0xFF4060FF),
-        Map.entry(Blocks.DEEPSLATE_LAPIS_ORE, 0xFF4060FF),
-        Map.entry(Blocks.COAL_ORE, 0xFF909090),
-        Map.entry(Blocks.DEEPSLATE_COAL_ORE, 0xFF909090),
-        Map.entry(Blocks.COPPER_ORE, 0xFFFF8050),
-        Map.entry(Blocks.DEEPSLATE_COPPER_ORE, 0xFFFF8050),
-        Map.entry(Blocks.NETHER_QUARTZ_ORE, 0xFFF0F0E0),
         Map.entry(Blocks.SPAWNER, 0xFFC050FF),
         Map.entry(Blocks.TRIAL_SPAWNER, 0xFFC050FF),
         Map.entry(Blocks.END_PORTAL_FRAME, 0xFF60FFC0),
         Map.entry(Blocks.BEACON, 0xFF80D0FF),
-        Map.entry(Blocks.ENCHANTING_TABLE, 0xFFE070FF));
+        Map.entry(Blocks.ENCHANTING_TABLE, 0xFFE070FF),
+        Map.entry(Blocks.SUSPICIOUS_SAND, 0xFFFFE8A0),
+        Map.entry(Blocks.SUSPICIOUS_GRAVEL, 0xFFB0A8C8));
 
     private final NumberSetting range = new NumberSetting("Range",
         "Chunk radius to scan around you.", 4, 1, 8, 1, " chunks").max(ChunkMap.MAX_VIEW_DISTANCE);
@@ -85,7 +67,8 @@ public final class BlockEsp extends Module {
         List.of(Blocks.DIAMOND_ORE, Blocks.DEEPSLATE_DIAMOND_ORE, Blocks.ANCIENT_DEBRIS,
             Blocks.EMERALD_ORE, Blocks.DEEPSLATE_EMERALD_ORE,
             Blocks.SPAWNER, Blocks.TRIAL_SPAWNER, Blocks.END_PORTAL_FRAME,
-            Blocks.BEACON, Blocks.ENCHANTING_TABLE));
+            Blocks.BEACON, Blocks.ENCHANTING_TABLE,
+            Blocks.SUSPICIOUS_SAND, Blocks.SUSPICIOUS_GRAVEL));
     private final BoolSetting automatic = new BoolSetting("Automatic colours",
         "Blocks with no look of their own take a colour worked out from the block.", true);
     private final BoxStyle defaultStyle = new BoxStyle("Default", BoxStyle.Shape.LINES, 167);
@@ -151,7 +134,7 @@ public final class BlockEsp extends Module {
         addSettings(range, limit, blocks, automatic);
         addSettings(defaultStyle.settings());
         addSettings(defaultTracer, defaultTracerColor, store);
-        searchTags("search", "block search", "ore esp");
+        searchTags("search", "block search", "ore esp", "archaeology", "suspicious sand", "suspicious gravel");
         blocks.onChange(() -> listChanged = true);
         groupOf.defaultReturnValue(-1);
     }
@@ -212,6 +195,10 @@ public final class BlockEsp extends Module {
 
     // A hue derived from the id stays stable between sessions.
     private static int autoColor(Block block) {
+        OreKind ore = OreTables.kindOf(block);
+        if (ore != null) {
+            return ore.colour();
+        }
         Integer preset = PRESET_COLORS.get(block);
         if (preset != null) {
             return preset;
@@ -321,7 +308,7 @@ public final class BlockEsp extends Module {
             BoxStyle style = own ? look.style() : defaultStyle;
             AABB box = new AABB(target.x(), target.y(), target.z(),
                 target.x() + 1, target.y() + 1, target.z() + 1);
-            int hidden = sharedSides(target);
+            int hidden = DrawBatch.sharedSides(blockAt, key(target.x(), target.y(), target.z()), target.block());
             if (own || !automatic.isOn()) {
                 style.drawJoined(batch, box, hidden, true);
             } else {
@@ -344,18 +331,6 @@ public final class BlockEsp extends Module {
             return look.tracerColor();
         }
         return automatic.isOn() ? autoColor(block) : defaultTracerColor.getColor();
-    }
-
-    // A bit for every side another block of the same kind is pressed against.
-    private int sharedSides(Target target) {
-        long key = key(target.x(), target.y(), target.z());
-        int hidden = 0;
-        for (Direction side : SIDES) {
-            if (blockAt.get(BlockPos.offset(key, side)) == target.block()) {
-                hidden |= DrawBatch.sideBit(side);
-            }
-        }
-        return hidden;
     }
 
     // The look of one block. Its own rows show whilst the toggle is ticked.
