@@ -85,7 +85,7 @@ public final class InputUtil {
     }
 
     // A copy of an input record with only the sneak flag changed.
-    private static Input withShift(Input input, boolean shift) {
+    static Input withShift(Input input, boolean shift) {
         return new Input(input.forward(), input.backward(), input.left(), input.right(),
             input.jump(), shift, input.sprint());
     }

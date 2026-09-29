@@ -6,14 +6,16 @@ import net.minecraft.world.phys.Vec3;
 // you was worked out where the server last saw you and that was a round trip ago.
 public final class PositionHistory {
 
-    private static final int TICK_MS = 50;
-
     // Five seconds of ticks covers any ping worth playing on.
     private static final int KEPT = 100;
 
     // Further than this in one tick is a teleport. The server learnt the new spot at
     // once and the spots before it tell nothing.
     private static final double JUMP = 16;
+
+    // The round trip the tab list gives is an average the server sends every half minute and
+    // a packet can wait a tick at either end. The true delay can be this many ticks either way.
+    private static final int ROUND_TRIP_DOUBT = 3;
 
     private final Vec3[] ring = new Vec3[KEPT];
     private int next;
@@ -47,7 +49,22 @@ public final class PositionHistory {
     // Where the server saw you when it built a packet that arrives this tick. That was
     // about one round trip ago.
     public Vec3 asServerSaw() {
-        return ticksAgo(Math.round(ServerInfo.ping() / (float) TICK_MS));
+        return ticksAgo(ServerInfo.pingTicks());
+    }
+
+    // How far asServerSaw may be from the truth. The farthest you stood from it within the
+    // doubt of the round trip. Nought before any record.
+    public double serverSawSlack() {
+        int back = ServerInfo.pingTicks();
+        Vec3 at = ticksAgo(back);
+        if (at == null) {
+            return 0;
+        }
+        double farthest = 0;
+        for (int doubt = -ROUND_TRIP_DOUBT; doubt <= ROUND_TRIP_DOUBT; doubt++) {
+            farthest = Math.max(farthest, at.distanceTo(ticksAgo(back + doubt)));
+        }
+        return farthest;
     }
 
     // True when you stood within reach of the spot at any point in the last few ticks.

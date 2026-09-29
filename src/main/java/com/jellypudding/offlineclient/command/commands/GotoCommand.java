@@ -3,10 +3,7 @@ package com.jellypudding.offlineclient.command.commands;
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.command.Command;
 import com.jellypudding.offlineclient.command.CommandManager;
-import com.jellypudding.offlineclient.event.Subscribe;
-import com.jellypudding.offlineclient.event.events.TickEvent;
-import com.jellypudding.offlineclient.path.PathWalker;
-import com.jellypudding.offlineclient.path.Trip;
+import com.jellypudding.offlineclient.path.Travel;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import net.minecraft.client.player.LocalPlayer;
@@ -21,8 +18,6 @@ import java.util.List;
 // until goto stop is typed.
 public final class GotoCommand extends Command {
 
-    private final Trip trip = new Trip();
-
     public GotoCommand() {
         super("goto", "Walks to a spot or to the block you are pointing at.",
             "goto [x y z] or goto stop", "walkto");
@@ -35,27 +30,18 @@ public final class GotoCommand extends Command {
             return;
         }
         if (args.length == 1 && args[0].equalsIgnoreCase("stop")) {
-            if (!trip.active()) {
+            if (!Travel.walking()) {
                 ChatUtil.error("You are not walking anywhere.");
             } else {
-                stop();
+                Travel.stop();
                 ChatUtil.message("§bGoto §7stopped.");
             }
             return;
         }
         BlockPos target = args.length == 0 ? pointedAt() : parse(args, player);
-        if (target == null) {
-            return;
+        if (target != null) {
+            Travel.to(target);
         }
-        stop();
-        trip.walker().turn(PathWalker.Turn.CLIENT);
-        if (!trip.start(target, 0)) {
-            trip.stop();
-            ChatUtil.error("Could not start the search.");
-            return;
-        }
-        OfflineClient.INSTANCE.getEventBus().register(this);
-        ChatUtil.message("§bGoto §7walking to §f" + BlockUtil.text(target) + "§7.");
     }
 
     private BlockPos pointedAt() {
@@ -74,27 +60,6 @@ public final class GotoCommand extends Command {
         }
         Vec3 spot = coordinates(args, 0, Vec3.atLowerCornerOf(player.blockPosition()));
         return spot == null ? null : BlockPos.containing(spot);
-    }
-
-    private void stop() {
-        trip.stop();
-        OfflineClient.INSTANCE.getEventBus().unregister(this);
-    }
-
-    private void finish(String message) {
-        stop();
-        ChatUtil.message("§bGoto §7" + message);
-    }
-
-    @Subscribe
-    private void onTick(TickEvent event) {
-        switch (trip.tick()) {
-            case ARRIVED -> finish("got there.");
-            case FAILED -> finish("could not find a way there.");
-            case IDLE -> stop();
-            case WALKING -> {
-            }
-        }
     }
 
     @Override

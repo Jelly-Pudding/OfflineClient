@@ -21,9 +21,11 @@ public final class HoverDip {
     }
 
     // Runs every tick whilst hovering. Sinks for the dip ticks then climbs back
-    // over as many. The height is unchanged once the dip is over.
+    // over as many. The height is unchanged once the dip is over. A trip by packet
+    // leaves the server's own count ahead of this one and the dip comes early.
     public void tick(int interval, int dipTicks) {
-        if (ticks >= Math.max(interval, dipTicks * 2)) {
+        boolean climbed = ticks >= dipTicks * 2;
+        if (climbed && (ticks >= interval || MoveGate.floatingTicks(false) >= interval)) {
             ticks = 0;
         }
         double nudge = 0;

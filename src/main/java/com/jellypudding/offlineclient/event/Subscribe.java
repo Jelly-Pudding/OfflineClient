@@ -6,9 +6,13 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 // The method must take exactly one parameter whose type extends Event.
-// Higher priority runs first.
+// Higher priority runs first. Handlers that share a priority run in the order they registered.
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.METHOD)
 public @interface Subscribe {
+
+    int FIRST = Integer.MAX_VALUE;
+    int LAST = Integer.MIN_VALUE;
+
     int priority() default 0;
 }

@@ -1,10 +1,10 @@
 package com.jellypudding.offlineclient.hud.elements;
 
 import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.hud.Backdrop;
 import com.jellypudding.offlineclient.hud.HudElement;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.modules.misc.HudModule;
-import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import net.minecraft.client.gui.Font;
@@ -35,15 +35,12 @@ public final class ModuleListElement extends HudElement {
         "Colour of the extra word after a name such as the mode it is in.", 0, 0, 0.67f, false);
     private final ColorSetting bracketColor = new ColorSetting("Bracket colour",
         "Colour of the brackets round that word.", 0, 0, 0.67f, false);
-    private final BoolSetting background = new BoolSetting("List background",
-        "Draws a panel behind the rows.", false);
-    private final ColorSetting backgroundColor = new ColorSetting("List background colour",
-        "Colour of that panel.", 240, 0.3f, 0.1f, false);
+    private final Backdrop backdrop = new Backdrop("List", "the rows", false);
 
     public ModuleListElement() {
         super("Module list", "Enabled modules listed one to a line.", false, 100, 0, 0.5);
-        backgroundColor.under(background);
-        add(sort, color, suffixColor, bracketColor, background, backgroundColor);
+        add(sort, color, suffixColor, bracketColor);
+        add(backdrop.settings());
     }
 
     // Where each row is drawn right now. A row that changes place glides there.
@@ -86,9 +83,7 @@ public final class ModuleListElement extends HudElement {
     public void render(GuiGraphicsExtractor context, Font font) {
         List<Module> enabled = sorted(font);
         int widest = width(font);
-        if (background.isOn()) {
-            context.fill(-2, -1, widest + 2, enabled.size() * LINE + 1, backgroundColor.getColor());
-        }
+        backdrop.draw(context, -2, -1, widest + 2, enabled.size() * LINE + 1);
         int tint = color.getColor();
         int suffixTint = suffixColor.getColor();
         int bracketTint = bracketColor.getColor();

@@ -66,7 +66,7 @@ public final class Blocker extends Module {
         "Puts a block in front of any piston aimed into your hole.", true);
     private final NumberSetting placeRange = new NumberSetting("Place range",
         "How far you can reach to place.", 4.5, 1, 6, 0.1, " blocks");
-    private final NumberSetting perTick = new NumberSetting("Blocks per tick",
+    private final NumberSetting perRound = new NumberSetting("Blocks per round",
         "How many blocks to place in one round.", 2, 1, 4, 1);
     private final NumberSetting delay = new NumberSetting("Delay",
         "Ticks to wait between placing rounds.", 0, 0, 10, 1, " ticks");
@@ -85,7 +85,7 @@ public final class Blocker extends Module {
         super("Blocker", "Fills the spots around your hole that crystals and pistons would use.",
             Category.COMBAT);
         addSettings(blocks, onlyInHole, crystals, minDamage, radius, enemyRange, pistons, placeRange,
-            perTick, delay, rotate, swing, render);
+            perRound, delay, rotate, swing, render);
         addSettings(style.settings());
         searchTags("anti crystal", "anti piston", "face place", "hole");
     }
@@ -143,7 +143,7 @@ public final class Blocker extends Module {
         int placed = 0;
         boolean turned = false;
         for (BlockPos pos : pending) {
-            if (placed >= perTick.getInt()) {
+            if (placed >= perRound.getInt()) {
                 break;
             }
             // The rotation manager keeps the first turn of a tick.

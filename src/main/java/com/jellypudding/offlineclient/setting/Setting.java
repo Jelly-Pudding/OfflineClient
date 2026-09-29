@@ -23,6 +23,9 @@ public abstract class Setting<T> {
     private boolean folded;
     private boolean foldedByDefault;
 
+    // Saved with the config but never shown or offered to the player.
+    private boolean internal;
+
     protected Setting(String name, String description, T defaultValue) {
         this.name = name;
         this.description = description;
@@ -41,6 +44,13 @@ public abstract class Setting<T> {
 
     public String id() {
         return idFor(name);
+    }
+
+    // A row name for a holder of several settings. The prefix Safe gives Safe shape and
+    // an empty prefix gives Shape.
+    public static String prefixed(String prefix, String noun) {
+        String name = prefix.isEmpty() ? noun : prefix + " " + noun;
+        return Character.toUpperCase(name.charAt(0)) + name.substring(1);
     }
 
     public String getDescription() {
@@ -105,7 +115,18 @@ public abstract class Setting<T> {
 
     // A sub option only shows whilst its parent does.
     public boolean isVisible() {
-        return visibility.get() && (parent == null || parent.isVisible());
+        return !internal && visibility.get() && (parent == null || parent.isVisible());
+    }
+
+    // Keeps the setting out of the GUI and the commands and the module search.
+    @SuppressWarnings("unchecked")
+    public <S extends Setting<T>> S internal() {
+        internal = true;
+        return (S) this;
+    }
+
+    public boolean isInternal() {
+        return internal;
     }
 
     public Setting<?> getParent() {

@@ -1,6 +1,7 @@
 package com.jellypudding.offlineclient.modules.combat;
 
 import com.jellypudding.offlineclient.event.Subscribe;
+import com.jellypudding.offlineclient.event.events.PostMotionEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
@@ -10,6 +11,7 @@ import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
+import com.jellypudding.offlineclient.util.UseBudget;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.BowItem;
@@ -24,6 +26,10 @@ public final class BowSpam extends Module {
 
     // A bow discards anything under power 0.1 which is everything below three ticks.
     private static final int MIN_CHARGE = 3;
+
+    // Ticks past a full crossbow draw before a use finds it loaded. The count read after the
+    // movement packet already takes in this tick and the server loads after it reads packets.
+    private static final int FIRST_SHOT_LAG = 2;
 
     private final NumberSetting charge = new NumberSetting("Charge",
         "Ticks to draw the bow before letting go.", 5, 3, 20, 1, " ticks");
@@ -40,8 +46,16 @@ public final class BowSpam extends Module {
     private final BoolSetting crossbows = new BoolSetting("Crossbows",
         "Fire every loaded crossbow in your hotbar as well. Each one is picked up and fired and put back.", true);
     private final NumberSetting crossbowDelay = new NumberSetting("Crossbow delay",
-        "Ticks to wait between crossbow shots.", 10, 0, 20, 1, " ticks")
+        "Ticks to wait between firing one loaded crossbow and the next.", 10, 0, 20, 1, " ticks")
         .under(crossbows);
+    private final BoolSetting rapidFire = new BoolSetting("Rapid fire",
+        "Keeps a drawn crossbow up whilst you hold use. The server loads it again every tick and each"
+            + " shot goes out with no fresh draw.", true)
+        .under(crossbows);
+    private final NumberSetting rapidInterval = new NumberSetting("Rapid interval",
+        "Ticks from one rapid fire shot to the next. One fires every tick. A single target only takes"
+            + " full damage from one arrow every ten ticks.", 1, 1, 20, 1, " ticks")
+        .under(rapidFire);
     private final BoolSetting searchInventory = new BoolSetting("Search inventory",
         "Also fetch loaded crossbows from the rest of your inventory into a hotbar slot that is empty or holds a crossbow or arrows.", true)
         .under(crossbows);
@@ -52,7 +66,7 @@ public final class BowSpam extends Module {
     public BowSpam() {
         super("BowSpam", "Fires your bow or crossbow as fast as it will go.", Category.COMBAT);
         addSettings(charge, holdingUse, onlyWithTarget, targetRange, viewAngle,
-            crossbows, crossbowDelay, searchInventory);
+            crossbows, crossbowDelay, rapidFire, rapidInterval, searchInventory);
         searchTags("auto bow", "crossbow", "rapid fire");
     }
 
@@ -84,7 +98,8 @@ public final class BowSpam extends Module {
         }
 
         if (mc.player.isUsingItem()) {
-            if (mc.player.getTicksUsingItem() >= drawTicks()) {
+            // Rapid fire keeps the draw up and shoots after the movement packet.
+            if (!rapidFiring() && mc.player.getTicksUsingItem() >= drawTicks()) {
                 mc.gameMode.releaseUsingItem(mc.player);
             }
             return;
@@ -114,6 +129,35 @@ public final class BowSpam extends Module {
             return;
         }
         mc.gameMode.useItem(mc.player, hand);
+    }
+
+    // The shot leaves after the tick's movement packet. It flies from where you stand
+    // and along the aim any aimbot set this tick.
+    @Subscribe
+    private void onPostMotion(PostMotionEvent event) {
+        if (!inGame() || mc.player.isSpectator() || mc.player.containerMenu != mc.player.inventoryMenu
+            || crossbowTimer > 0 || !rapidFiring()) {
+            return;
+        }
+        if (mc.player.getTicksUsingItem() < drawTicks() + FIRST_SHOT_LAG || UseBudget.remaining() == 0) {
+            return;
+        }
+        if (onlyWithTarget.isOn() && !targetInView()) {
+            return;
+        }
+        // Both sides refuse to start a draw that is already up. The use only fires what is loaded.
+        mc.gameMode.useItem(mc.player, mc.player.getUsedItemHand());
+        crossbowTimer = rapidInterval.getInt();
+    }
+
+    // True whilst a drawn crossbow is held up for rapid fire. Past a full draw the server
+    // loads it again on every tick and each use fires it. Vanilla keeps the draw up for
+    // exactly as long as use is down which a toggled use key counts as.
+    private boolean rapidFiring() {
+        return crossbows.isOn() && rapidFire.isOn() && mc.player.isUsingItem()
+            && mc.player.getUseItem().getItem() instanceof CrossbowItem
+            && mc.options.keyUse.isDown()
+            && hasAmmo(mc.player.getUsedItemHand());
     }
 
     // Ticks the item in hand has to be held before letting go.

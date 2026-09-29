@@ -12,18 +12,16 @@ import com.jellypudding.offlineclient.render.DrawBatch;
 import com.jellypudding.offlineclient.render.WorldToScreen;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
-import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.BoundedMap;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.ProjectilePath;
 import com.jellypudding.offlineclient.util.ProjectilePath.Path;
+import com.jellypudding.offlineclient.util.ProjectileUtil;
 import com.jellypudding.offlineclient.util.RenderUtil;
 import com.jellypudding.offlineclient.util.WorldWatch;
-import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.projectile.throwableitemprojectile.ThrownEnderpearl;
-import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
@@ -102,7 +100,8 @@ public final class PearlTracker extends Module {
             throwers.clear();
         }
         for (Entity entity : mc.level.entitiesForRendering()) {
-            if (!(entity instanceof ThrownEnderpearl pearl) || !pearl.isAlive() || onBubbles(pearl)) {
+            if (!(entity instanceof ThrownEnderpearl pearl) || !pearl.isAlive()
+                || ProjectileUtil.inBubbles(pearl)) {
                 continue;
             }
             Thrower thrower = throwers.computeIfAbsent(pearl.getId(), id -> throwerOf(pearl));
@@ -119,12 +118,6 @@ public final class PearlTracker extends Module {
 
     private Thrower throwerOf(ThrownEnderpearl pearl) {
         return new Thrower(EntityUtil.throwerName(pearl), pearl.getOwner() == mc.player);
-    }
-
-    // A bubble column holds a pearl up in a stasis chamber. It never lands.
-    private static boolean onBubbles(ThrownEnderpearl pearl) {
-        BlockPos pos = pearl.blockPosition();
-        return BlockUtil.state(pos).is(Blocks.BUBBLE_COLUMN) || BlockUtil.state(pos.below()).is(Blocks.BUBBLE_COLUMN);
     }
 
     // A pearl that runs out of flight or falls out of the world never lands.

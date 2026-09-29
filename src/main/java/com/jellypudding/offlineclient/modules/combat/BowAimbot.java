@@ -121,27 +121,26 @@ public final class BowAimbot extends Module {
     }
 
     // Speed the arrow would leave with right now or zero when no ranged weapon is ready.
+    // A crossbow counts whilst it is drawn too. BowSpam's rapid fire holds one drawn and
+    // the client seldom sees it loaded.
     private double launchSpeed() {
-        ItemStack held = mc.player.getMainHandItem();
-        if (held.getItem() instanceof BowItem) {
-            if (!mc.player.isUsingItem() || !(mc.player.getUseItem().getItem() instanceof BowItem)) {
-                return 0;
+        if (mc.player.isUsingItem()) {
+            ItemStack using = mc.player.getUseItem();
+            if (using.getItem() instanceof BowItem) {
+                charge = BowItem.getPowerForTime(mc.player.getTicksUsingItem());
+                return Math.max(charge, 0.1f) * ProjectileUtil.BOW_SPEED;
             }
-            charge = BowItem.getPowerForTime(mc.player.getTicksUsingItem());
-            return Math.max(charge, 0.1f) * ProjectileUtil.BOW_SPEED;
+            if (using.getItem() instanceof CrossbowItem) {
+                charge = Math.min(1, (float) mc.player.getTicksUsingItem()
+                    / CrossbowItem.getChargeDuration(using, mc.player));
+                return ProjectileUtil.CROSSBOW_SPEED;
+            }
         }
-        if (held.getItem() instanceof CrossbowItem) {
-            if (!CrossbowItem.isCharged(held) || !mc.options.keyUse.isDown()) {
-                return 0;
-            }
+        ItemStack held = mc.player.getMainHandItem();
+        if (held.getItem() instanceof CrossbowItem && CrossbowItem.isCharged(held)
+            && mc.options.keyUse.isDown()) {
             charge = 1;
             return ProjectileUtil.CROSSBOW_SPEED;
-        }
-        ItemStack offhand = mc.player.getOffhandItem();
-        if (offhand.getItem() instanceof BowItem && mc.player.isUsingItem()
-            && mc.player.getUseItem().getItem() instanceof BowItem) {
-            charge = BowItem.getPowerForTime(mc.player.getTicksUsingItem());
-            return Math.max(charge, 0.1f) * ProjectileUtil.BOW_SPEED;
         }
         return 0;
     }

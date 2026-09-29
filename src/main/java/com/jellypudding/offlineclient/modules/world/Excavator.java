@@ -47,9 +47,9 @@ public final class Excavator extends Module {
     private final EnumSetting<Speed> speed = new EnumSetting<>("Speed",
         "How the blocks come down.", Speed.LEGIT)
         .describe(Speed.LEGIT, "One block at a time like a held click.")
-        .describe(Speed.INSTANT, "Fires the break packets for several one hit blocks at once.");
+        .describe(Speed.INSTANT, "Fires the break packets for every block a single tick breaks.");
     private final NumberSetting perTick = new NumberSetting("Blocks per tick",
-        "How many one hit blocks to break each tick in Instant mode.", 4, 1, 16, 1)
+        "The most blocks Instant mode breaks in one tick.", 4, 1, 16, 1)
         .min(1).under(speed, Speed.INSTANT);
     private final BoolSetting rotate = new BoolSetting("Rotate",
         "Turn towards each block on the server side.", true);
@@ -257,8 +257,8 @@ public final class Excavator extends Module {
         walker.stop();
     }
 
-    // Sends the break packets for the one hit blocks in reach. True when any
-    // went out. Slower blocks fall through to the held click path.
+    // Sends the break packets for the blocks in reach a single tick breaks. True when
+    // any went out. Slower blocks fall through to the held click path.
     private boolean breakInstantly() {
         breaker.tick();
         int sent = 0;

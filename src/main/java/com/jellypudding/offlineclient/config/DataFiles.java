@@ -8,11 +8,20 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeFormatterBuilder;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.function.Function;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
@@ -25,6 +34,11 @@ public final class DataFiles {
     private static final String TEMP = ".tmp";
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Pattern UNSAFE = Pattern.compile("[^a-zA-Z0-9_.-]");
+    // How much of a key's hash tells two keys with the same safe name apart.
+    private static final int KEY_HASH_DIGITS = 8;
+    private static final DateTimeFormatter TIMESTAMP = new DateTimeFormatterBuilder()
+        .append(DateTimeFormatter.ISO_LOCAL_DATE).appendLiteral(' ').append(DateTimeFormatter.ISO_LOCAL_TIME)
+        .toFormatter();
 
     // Fills the file it is handed.
     @FunctionalInterface
@@ -51,6 +65,18 @@ public final class DataFiles {
     // Anything a file name could not hold on every system becomes an underscore.
     public static String safeName(String name) {
         return UNSAFE.matcher(name).replaceAll("_");
+    }
+
+    // The folder or file name for a server or world key. A key the safe name changed gets a
+    // short hash of itself as well. Two worlds whose names differ only in such signs then
+    // keep files of their own.
+    public static String keyName(String key) {
+        String safe = safeName(key);
+        if (safe.equals(key)) {
+            return safe;
+        }
+        String hash = UUID.nameUUIDFromBytes(key.getBytes(StandardCharsets.UTF_8)).toString();
+        return safe + "-" + hash.substring(0, KEY_HASH_DIGITS);
     }
 
     // The names of the json files in a folder from A to Z. Empty when the folder is missing.
@@ -86,6 +112,30 @@ public final class DataFiles {
 
     public static boolean writeJson(Path path, JsonElement root) {
         return writeSafely(path, temp -> Files.writeString(temp, GSON.toJson(root)));
+    }
+
+    // The date and time to the second. A line added to a text file starts with it.
+    public static String timestamp() {
+        return timestamp(System.currentTimeMillis());
+    }
+
+    // The same for a moment in milliseconds.
+    public static String timestamp(long millis) {
+        return LocalDateTime.ofInstant(Instant.ofEpochMilli(millis), ZoneId.systemDefault())
+            .truncatedTo(ChronoUnit.SECONDS).format(TIMESTAMP);
+    }
+
+    // Adds the lines to the end of a text file. The file and its folders are made when missing.
+    // False after logging why the lines could not be written.
+    public static boolean appendLines(Path path, List<String> lines) {
+        try {
+            Files.createDirectories(path.getParent());
+            Files.write(path, lines, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+            return true;
+        } catch (IOException e) {
+            OfflineClient.LOG.error("Failed to add to {}", path.getFileName(), e);
+            return false;
+        }
     }
 
     // Fills a file beside the target that then takes its place. A crash mid write cannot

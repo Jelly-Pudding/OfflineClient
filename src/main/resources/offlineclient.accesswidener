@@ -14,7 +14,6 @@ accessible field net/minecraft/world/entity/projectile/FishingHook biting Z
 accessible field net/minecraft/network/protocol/game/ClientboundEntityEventPacket entityId I
 accessible field net/minecraft/client/gui/components/ChatComponent allMessages Ljava/util/List;
 accessible method net/minecraft/client/gui/components/ChatComponent refreshTrimmedMessages ()V
-accessible field net/minecraft/client/gui/screens/inventory/AbstractSignEditScreen messages [Ljava/lang/String;
 accessible method net/minecraft/client/multiplayer/MultiPlayerGameMode ensureHasSentCarriedItem ()V
 accessible field net/minecraft/world/entity/LivingEntity DATA_EFFECT_PARTICLES Lnet/minecraft/network/syncher/EntityDataAccessor;
 accessible method net/minecraft/world/entity/projectile/FishingHook calculateOpenWater (Lnet/minecraft/core/BlockPos;)Z
@@ -39,6 +38,8 @@ accessible class net/minecraft/world/level/chunk/PalettedContainer$Data
 accessible field net/minecraft/world/level/chunk/PalettedContainer data Lnet/minecraft/world/level/chunk/PalettedContainer$Data;
 accessible field net/minecraft/world/level/BaseSpawner spawnDelay I
 accessible field net/minecraft/world/level/BaseSpawner nextSpawnData Lnet/minecraft/world/level/SpawnData;
+accessible field net/minecraft/world/level/BaseSpawner requiredPlayerRange I
+accessible field net/minecraft/world/level/BaseSpawner spawnRange I
 accessible class net/minecraft/world/waypoints/TrackedWaypoint$AzimuthWaypoint
 accessible field net/minecraft/world/waypoints/TrackedWaypoint$AzimuthWaypoint angle F
 accessible class net/minecraft/world/waypoints/TrackedWaypoint$ChunkWaypoint
@@ -54,3 +55,7 @@ accessible field net/minecraft/client/multiplayer/ClientPacketListener serverSim
 accessible method net/minecraft/client/multiplayer/ClientLevel getAllMapData ()Ljava/util/Map;
 accessible method net/minecraft/world/level/gameevent/vibrations/VibrationSystem$Listener isOccluded (Lnet/minecraft/world/level/Level;Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/phys/Vec3;)Z
 accessible field net/minecraft/world/entity/projectile/Projectile leftOwner Z
+accessible field net/minecraft/server/MinecraftServer storageSource Lnet/minecraft/world/level/storage/LevelStorageSource$LevelStorageAccess;
+accessible field net/minecraft/stats/StatsCounter stats Lit/unimi/dsi/fastutil/objects/Object2IntMap;
+accessible method net/minecraft/world/entity/player/Player printPlayerPermissions (Lnet/minecraft/server/permissions/PermissionSet;)Ljava/lang/String;
+accessible field net/minecraft/client/ClientClockManager$ClientClockInstance totalTicks J

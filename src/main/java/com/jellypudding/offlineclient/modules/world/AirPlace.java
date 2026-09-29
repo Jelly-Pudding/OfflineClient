@@ -25,7 +25,6 @@ import net.minecraft.world.item.FireworkRocketItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.SpawnEggItem;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
@@ -73,9 +72,10 @@ public final class AirPlace extends Module {
         target = findSpot();
     }
 
-    @Subscribe
+    // Runs last. AutoBuild and anything else that takes the click for itself go first.
+    @Subscribe(priority = -10)
     private void onRightClick(RightClickEvent event) {
-        if (!inGame() || mc.player.isSpectator() || mc.gameMode.isDestroying()) {
+        if (event.isCancelled() || !inGame() || mc.player.isSpectator() || mc.gameMode.isDestroying()) {
             return;
         }
         // Swallowing the click whilst the hands are busy would eat a normal use.
@@ -111,19 +111,13 @@ public final class AirPlace extends Module {
         style.draw(event.getBatch(), target, false);
     }
 
+    // A spot past the server's reach would only be refused. Nothing is drawn or clicked there.
     private BlockPos findSpot() {
         if (mc.hitResult != null && mc.hitResult.getType() != HitResult.Type.MISS) {
             return null;
         }
-        HitResult reach = mc.player.pick(range.getValue(), 0, false);
-        if (reach.getType() != HitResult.Type.MISS || !(reach instanceof BlockHitResult blockHit)) {
-            return null;
-        }
-        BlockPos pos = blockHit.getBlockPos();
-        if (!Level.isInSpawnableBounds(pos) || !BlockUtil.isReplaceable(pos)) {
-            return null;
-        }
-        if (BlockUtil.intersectsPlayer(pos)) {
+        BlockPos pos = BlockUtil.airSpot(range.getValue());
+        if (pos == null || BlockUtil.intersectsPlayer(pos) || !BlockUtil.serverReaches(pos)) {
             return null;
         }
         return pos;

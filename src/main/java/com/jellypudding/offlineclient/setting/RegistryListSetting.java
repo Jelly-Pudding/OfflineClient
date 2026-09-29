@@ -2,6 +2,7 @@ package com.jellypudding.offlineclient.setting;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
+import com.jellypudding.offlineclient.util.ChatUtil;
 import net.minecraft.core.DefaultedRegistry;
 import net.minecraft.core.Holder;
 import net.minecraft.core.Registry;
@@ -24,6 +25,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Predicate;
 
 // An ordered list of registry entries such as blocks or items. Ids are
 // stored in the config and a resolved set is rebuilt on change.
@@ -61,6 +63,9 @@ public final class RegistryListSetting<T> extends Setting<Set<Identifier>> imple
 
     private Runnable onChange;
 
+    // Which entries the picker offers. Every one unless narrowed.
+    private Predicate<T> offered = entry -> true;
+
     public RegistryListSetting(String name, String description, Registry<T> registry,
                                Collection<? extends T> defaults) {
         super(name, description, toIds(registry, defaults));
@@ -80,6 +85,12 @@ public final class RegistryListSetting<T> extends Setting<Set<Identifier>> imple
         return Collections.unmodifiableSet(ids);
     }
 
+    // Narrows the picker to the entries that pass such as only the signs among the items.
+    public RegistryListSetting<T> only(Predicate<T> offered) {
+        this.offered = offered;
+        return this;
+    }
+
     // The default entry of a defaulted registry stands for nothing and is left out.
     @Override
     public Collection<T> options() {
@@ -88,7 +99,7 @@ public final class RegistryListSetting<T> extends Setting<Set<Identifier>> imple
         List<T> all = new ArrayList<>();
         registry.stream().forEach(entry -> {
             Identifier id = registry.getKey(entry);
-            if (id != null && !id.equals(defaultKey)) {
+            if (id != null && !id.equals(defaultKey) && offered.test(entry)) {
                 all.add(entry);
             }
         });
@@ -189,8 +200,7 @@ public final class RegistryListSetting<T> extends Setting<Set<Identifier>> imple
         if (entry instanceof MobEffect effect) {
             return effect.getDisplayName().getString();
         }
-        Identifier id = registry.getKey(entry);
-        return id == null ? "unknown" : id.getPath().replace('_', ' ');
+        return ChatUtil.words(registry.getKey(entry));
     }
 
     // Empty when the entry has no item form.

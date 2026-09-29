@@ -1,9 +1,9 @@
 package com.jellypudding.offlineclient.hud.elements;
 
 import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.hud.Backdrop;
 import com.jellypudding.offlineclient.hud.HudElement;
 import com.jellypudding.offlineclient.setting.BoolSetting;
-import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.ItemUtil;
 import net.minecraft.client.gui.Font;
@@ -36,17 +36,15 @@ public final class InventoryElement extends HudElement {
     private final BoolSetting hotbar = new BoolSetting("Show hotbar",
         "Add the row you carry in hand below the bag. Switch off the Hotbar element to hide"
             + " the game's own.", false);
-    private final BoolSetting background = new BoolSetting("Inventory background",
-        "Draw a panel behind the slots.", true);
-    private final ColorSetting backgroundColor = new ColorSetting("Inventory background colour",
-        "Colour of that panel.", 240, 0.3f, 0.12f, false).under(background);
+    private final Backdrop backdrop = new Backdrop("Inventory", "the slots", true);
 
     private record Cell(ItemStack stack, int x, int y, boolean selected) {
     }
 
     public InventoryElement() {
         super("Inventory", "Your inventory on screen without opening it.", false, 4, 30);
-        add(armour, offhand, hotbar, background, backgroundColor);
+        add(armour, offhand, hotbar);
+        add(backdrop.settings());
     }
 
     @Override
@@ -98,9 +96,7 @@ public final class InventoryElement extends HudElement {
     @Override
     public void render(GuiGraphicsExtractor context, Font font) {
         List<Cell> cells = cells();
-        if (background.isOn()) {
-            context.fill(0, 0, width(font), height(font), backgroundColor.getColor());
-        }
+        backdrop.draw(context, 0, 0, width(font), height(font));
         for (Cell cell : cells) {
             context.fill(cell.x(), cell.y(), cell.x() + SLOT - 1, cell.y() + SLOT - 1,
                 cell.selected() ? SELECTED : CELL);

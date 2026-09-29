@@ -114,7 +114,7 @@ public final class BlockEsp extends Module {
         public void reset() {
             looks.clear();
         }
-    }.visibleWhen(() -> false);
+    }.internal();
 
     // Read from the scanner thread and replaced whole.
     private volatile Set<Block> wanted = Set.of();

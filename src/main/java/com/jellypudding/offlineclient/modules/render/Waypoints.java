@@ -8,6 +8,7 @@ import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.render.DrawBatch;
+import com.jellypudding.offlineclient.render.NearFade;
 import com.jellypudding.offlineclient.render.WorldToScreen;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
@@ -16,7 +17,6 @@ import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.RenderUtil;
-import com.jellypudding.offlineclient.util.ServerInfo;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.player.LocalPlayer;
@@ -56,9 +56,7 @@ public final class Waypoints extends Module {
     private final BoolSetting acrossDimensions = new BoolSetting("Across dimensions",
         "Shows overworld markers in the nether and the other way round with the coordinates scaled by eight.",
         true);
-    private final NumberSetting hideWithin = new NumberSetting("Hide within",
-        "Markers this close fade out. Zero keeps them.",
-        0, 0, 32, 1, " blocks").min(0);
+    private final NearFade fade = new NearFade(0);
     private final BoolSetting autoColor = new BoolSetting("Automatic colours",
         "Each new waypoint takes a colour from its name. Off gives it the colour below.", true);
     private final ColorSetting nextColor = new ColorSetting("Next colour",
@@ -83,7 +81,7 @@ public final class Waypoints extends Module {
     public Waypoints() {
         super("Waypoints", "Marks the coordinates you saved in the world.", Category.RENDER);
         addSettings(beam, beamHeight, box, label, distance, coordinates, scale, range,
-            acrossDimensions, hideWithin, autoColor, nextColor, markDeaths, deathsKept, deathChat);
+            acrossDimensions, fade.setting(), autoColor, nextColor, markDeaths, deathsKept, deathChat);
         searchTags("waypoint", "marker", "coords");
     }
 
@@ -119,15 +117,6 @@ public final class Waypoints extends Module {
         return all;
     }
 
-    // How solid a marker draws. Close ones fade and do not fill the screen.
-    private float strength(double away) {
-        double limit = hideWithin.getValue();
-        if (limit <= 0) {
-            return 1;
-        }
-        return (float) Math.clamp((away - limit / 2) / (limit / 2), 0, 1);
-    }
-
     // Saves a marker on the spot of a death. AutoRespawn calls this before it
     // respawns and the tick above catches a death without it. Once per death.
     public void markDeath(Vec3 position) {
@@ -137,8 +126,7 @@ public final class Waypoints extends Module {
         marked = mc.player;
         BlockPos at = BlockPos.containing(position);
         String name = DEATH_PREFIX + LocalTime.now().format(DEATH_TIME);
-        WaypointStore.get().add(new WaypointStore.Waypoint(name, at.getX(), at.getY(), at.getZ(),
-            WaypointStore.currentDimension(), ServerInfo.key(), DEATH_HUE));
+        WaypointStore.get().mark(name, at, DEATH_HUE);
         dropOldDeaths();
         if (deathChat.isOn()) {
             ChatUtil.message("§cYou died at §f" + BlockUtil.text(at) + "§c.");
@@ -189,7 +177,7 @@ public final class Waypoints extends Module {
             if (limit > 0 && eye.distanceTo(middle) > limit) {
                 continue;
             }
-            float strength = strength(eye.distanceTo(middle));
+            float strength = fade.strengthAt(middle);
             if (strength <= 0) {
                 continue;
             }
@@ -228,7 +216,7 @@ public final class Waypoints extends Module {
                 continue;
             }
             Vec3 screen = WorldToScreen.project(middle);
-            if (screen == null || strength(away) < 1) {
+            if (screen == null || fade.strengthAt(middle) < 1) {
                 continue;
             }
 

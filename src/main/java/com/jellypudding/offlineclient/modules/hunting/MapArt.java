@@ -9,8 +9,10 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.render.BoxStyle;
 import com.jellypudding.offlineclient.render.DrawBatch;
 import com.jellypudding.offlineclient.setting.BoolSetting;
+import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.Notice;
 import com.jellypudding.offlineclient.util.ServerInfo;
 import com.jellypudding.offlineclient.util.ServerWatch;
 import com.mojang.blaze3d.platform.NativeImage;
@@ -49,8 +51,9 @@ public final class MapArt extends Module {
     private final BoolSetting save = new BoolSetting("Save images",
         "Saves each map the server sends you as a picture in the maps folder of offlineclient."
             + " Each map is saved once.", true);
-    private final BoolSetting chat = new BoolSetting("Chat",
-        "Posts a line in chat with a link to the folder whenever new maps are saved.", true).under(save);
+    private final EnumSetting<Notice.Where> messages = Notice.row(
+        "Where it posts a line with a link to the folder whenever new maps are saved.", Notice.Where.CHAT)
+        .under(save);
 
     // The maps of the current server already on disk or on their way there.
     private final Set<Integer> saved = new HashSet<>();
@@ -63,7 +66,7 @@ public final class MapArt extends Module {
             Category.HUNTING);
         addSettings(frames);
         addSettings(style.settings());
-        addSettings(tracers, save, chat);
+        addSettings(tracers, save, messages);
         searchTags("map art", "maps", "item frame", "map saver", "picture");
     }
 
@@ -96,7 +99,7 @@ public final class MapArt extends Module {
             // Two servers hand out the same map numbers.
             saved.clear();
         }
-        Path folder = DataFiles.path(FOLDER, DataFiles.safeName(ServerInfo.key()));
+        Path folder = DataFiles.path(FOLDER, DataFiles.keyName(ServerInfo.key()));
         int fresh = 0;
         for (Map.Entry<MapId, MapItemSavedData> entry : mc.level.getAllMapData().entrySet()) {
             int id = entry.getKey().id();
@@ -113,8 +116,8 @@ public final class MapArt extends Module {
             Util.ioPool().execute(() -> write(file, copy));
             fresh++;
         }
-        if (fresh > 0 && chat.isOn()) {
-            ChatUtil.component(Component.literal("§bMapArt §7saved §f" + fresh + " §7new "
+        if (fresh > 0) {
+            Notice.post(messages, this, Component.literal("§7saved §f" + fresh + " §7new "
                     + (fresh == 1 ? "map" : "maps") + " to ")
                 .append(ChatUtil.folderLink(folder))
                 .append(Component.literal("§7.")));

@@ -11,19 +11,23 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
+import com.jellypudding.offlineclient.util.ChatWarning;
 import com.jellypudding.offlineclient.util.HeldPacket;
+import com.jellypudding.offlineclient.util.Hop;
+import com.jellypudding.offlineclient.util.MaceSmash;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.MoveGate;
 import com.jellypudding.offlineclient.util.SprintPause;
 import net.minecraft.network.protocol.game.ServerboundAttackPacket;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.phys.Vec3;
 
-// A critical hit needs the server to believe the player is falling. The packet
-// modes lower the tick's movement packet and hold the hit back one tick. The
-// jump modes really jump.
+// A critical hit needs the server to believe the player is falling. The packet modes
+// lower the tick's movement packet and hold the hit back one tick. The jump modes really
+// jump. A mace smash rides a lift and a drop by packet and lands the hit at the bottom.
 public final class Criticals extends Module {
 
     // The smallest drop the server rebuilds any fall distance from.
@@ -31,17 +35,12 @@ public final class Criticals extends Module {
 
     private static final double SUBTLE_DIP = 0.0000008;
 
-    private static final int SMASH_FILLERS = 4;
-
-    // Twenty blocks of fall is the vanilla cap on the smash bonus.
-    private static final double MACE_LIFT = 19.9;
-
     private static final double MINI_JUMP_SPEED = 0.25;
     private static final int MINI_JUMP_TICKS = 4;
 
     private static final int GIVE_UP_TICKS = 10;
 
-    private enum Stage { IDLE, DIP, LIFT, RETURN, READY, JUMP }
+    private enum Stage { IDLE, DIP, READY, JUMP, SMASH }
 
     public enum Mode { NONE, PACKET, SUBTLE, MINI_JUMP, FULL_JUMP }
 
@@ -60,15 +59,30 @@ public final class Criticals extends Module {
     private final BoolSetting mace = new BoolSetting("Mace smash",
         "Fakes a long fall whilst holding a mace to land every swing as a smash attack.", false);
 
-    private final NumberSetting extraHeight = new NumberSetting("Extra height",
-        "Extra fall on top of the twenty blocks vanilla allows. Only looser servers accept more.",
-        0, 0, 100, 1, " blocks").under(mace);
+    private final NumberSetting height = new NumberSetting("Height",
+        "How far the faked fall is. Each block past eight adds one damage.",
+        20, 2, 100, 1, " blocks").min(2).under(mace);
+
+    private final BoolSetting skipShields = new BoolSetting("Skip shields",
+        "Hits normally when the target holds up a shield or plays in creative.", true).under(mace);
+
+    private final BoolSetting totemBypass = new BoolSetting("Totem bypass",
+        "Lands more smashes whilst the target is still hurt. A totem only saves them from the first.",
+        false).under(mace);
+
+    private final NumberSetting hits = new NumberSetting("Hits",
+        "How many smashes land one after another.", 3, 2, 5, 1).min(2).under(totemBypass);
+
+    private final NumberSetting heightStep = new NumberSetting("Height step",
+        "How much further each smash after the first falls. It has to hit harder than the last.",
+        9, 1, 30, 1, " blocks").min(1).under(totemBypass);
 
     private final BoolSetting stopSprint = new BoolSetting("Stop sprinting",
         "Drops sprint for the hit and takes it straight back. A sprinting player cannot crit.",
         true);
 
     private final SprintPause sprintPause = new SprintPause();
+    private final ChatWarning warning = new ChatWarning();
 
     private final HeldPacket<ServerboundAttackPacket> held = new HeldPacket<>();
     private Stage stage = Stage.IDLE;
@@ -80,9 +94,15 @@ public final class Criticals extends Module {
     private double offset;
     private int waited;
 
+    // The smash under way. Hits after the first go out as fresh attacks on the target.
+    private int smashTarget;
+    private boolean struck;
+    private boolean followingUp;
+
     public Criticals() {
         super("Criticals", "Makes every melee hit a critical hit.", Category.COMBAT);
-        addSettings(mode, onlyKillAura, mace, extraHeight, stopSprint);
+        addSettings(mode, onlyKillAura, mace, height, skipShields, totemBypass, hits, heightStep,
+            stopSprint);
         searchTags("crit", "mace", "smash");
     }
 
@@ -94,6 +114,7 @@ public final class Criticals extends Module {
     @Override
     protected void onEnable() {
         clearHeld();
+        warning.clear();
     }
 
     @Override
@@ -105,12 +126,12 @@ public final class Criticals extends Module {
 
     // Read by Knockback. True whilst a hit held back for a critical goes out.
     public boolean releasing() {
-        return held.releasing();
+        return held.releasing() || followingUp;
     }
 
     @Subscribe
     private void onPacketSend(PacketSendEvent event) {
-        if (held.releasing() || !inGame() || mc.player.isSpectator()) {
+        if (releasing() || !inGame() || mc.player.isSpectator()) {
             return;
         }
         if (event.getPacket() instanceof ServerboundAttackPacket attack) {
@@ -123,10 +144,8 @@ public final class Criticals extends Module {
             return;
         }
         if (mace.isOn() && mc.player.getMainHandItem().is(Items.MACE)) {
-            // MaceCombo smashes on a real fall and puts the mace away in the same tick.
-            if (!Modules.maceComboAirborne() && !mc.player.isFallFlying() && !mc.player.isInWater()
-                && !mc.player.isInLava() && startSmash()) {
-                held.hold(event, attack);
+            if (canSmash() && smashable(attack.entityId())) {
+                smash(event, attack);
             }
             return;
         }
@@ -149,18 +168,82 @@ public final class Criticals extends Module {
         }
     }
 
-    // A shorter lift is taken where the room above runs out.
-    private boolean startSmash() {
-        double wanted = MACE_LIFT + extraHeight.getValue();
-        for (int i = 0; i < 4; i++) {
-            double lift = wanted * (4 - i) / 4;
-            if (mc.level.noCollision(mc.player, mc.player.getBoundingBox().move(0, lift, 0))) {
-                offset = lift;
-                stage = Stage.LIFT;
-                return true;
-            }
+    // MaceCombo smashes on a real fall and puts the mace away in the same tick. A rider's
+    // own position never reaches the server and neither does one Latency holds.
+    private boolean canSmash() {
+        return !Modules.maceComboAirborne() && !mc.player.isFallFlying() && !mc.player.isInWater()
+            && !mc.player.isInLava() && !mc.player.isPassenger() && !Hop.travelling()
+            && !MoveGate.held(false);
+    }
+
+    // Only a living target the hit can hurt pays for a smash. A missed smash leaves the
+    // server holding the whole fall until it is wiped.
+    private boolean smashable(int entityId) {
+        Entity target = mc.level.getEntity(entityId);
+        if (!(target instanceof LivingEntity living) || !living.isAlive()) {
+            return false;
         }
-        return false;
+        if (!skipShields.isOn()) {
+            return true;
+        }
+        boolean untouchable = living instanceof Player player && (player.isCreative() || player.isSpectator());
+        return !living.isBlocking() && !untouchable;
+    }
+
+    // Plans every lift and drop at once. Without room above the click goes out as it was.
+    private void smash(PacketSendEvent event, ServerboundAttackPacket attack) {
+        int wanted = totemBypass.isOn() ? hits.getInt() : 1;
+        Hop.Plan plan = Hop.plan();
+        MaceSmash.Smash smash = MaceSmash.append(plan, mc.player.position(), height.getValue(), wanted,
+            heightStep.getValue(), this::strike);
+        if (smash.hits() == 0) {
+            return;
+        }
+        if (smash.hits() < wanted && smash.outOfTime()) {
+            warning.say("Totem bypass needs " + smash.followTicks() + " ticks but the hurt window lasts ten. Only "
+                + smash.hits() + " hits go out.");
+        }
+        held.hold(event, attack);
+        smashTarget = attack.entityId();
+        struck = false;
+        stage = Stage.SMASH;
+        plan.go(this::smashFinished);
+    }
+
+    // The first hit is the one the player swung. Later ones go out fresh whilst the mace
+    // is still in hand.
+    private void strike(int hit) {
+        if (stage != Stage.SMASH || !inGame()) {
+            return;
+        }
+        struck = true;
+        if (hit == 0) {
+            held.release(this::dropSprint);
+            return;
+        }
+        if (!mc.player.getMainHandItem().is(Items.MACE)) {
+            return;
+        }
+        followingUp = true;
+        try {
+            mc.player.connection.send(new ServerboundAttackPacket(smashTarget));
+        } finally {
+            followingUp = false;
+        }
+    }
+
+    // A smash cut short still lands the swing as a plain hit. A player who left takes
+    // nothing along.
+    private void smashFinished(Hop.Result result) {
+        if (stage != Stage.SMASH) {
+            return;
+        }
+        if (result == Hop.Result.LEFT) {
+            held.drop();
+        } else if (!struck) {
+            held.release(this::dropSprint);
+        }
+        resetStage();
     }
 
     private boolean wantsCrit(int entityId) {
@@ -175,10 +258,11 @@ public final class Criticals extends Module {
         return killAura != null && target == killAura.getTarget();
     }
 
-    // A jump cannot start from a ladder or a web. The packet modes only need solid ground.
+    // A jump cannot start from a ladder or a web. The packet modes need solid ground and a dip
+    // that goes out at once.
     private boolean skipCrit() {
         if (!mc.player.onGround() || mc.player.isInWater() || mc.player.isInLava()
-            || mc.player.onClimbable()) {
+            || mc.player.onClimbable() || mode.isAny(Mode.PACKET, Mode.SUBTLE) && MoveGate.held(false)) {
             return true;
         }
         return mode.isAny(Mode.MINI_JUMP, Mode.FULL_JUMP) && BlockUtil.inCobweb(mc.player);
@@ -196,27 +280,22 @@ public final class Criticals extends Module {
         }
     }
 
-    // The fall the hit needs rides on the one position packet this tick allows.
-    // A lift has to come back down before the server counts it as a fall.
+    // The dip the hit needs rides on the one position packet this tick allows.
     @Subscribe
     private void onPreMotion(PreMotionEvent event) {
         if (!inGame()) {
             clearHeld();
             return;
         }
-        if (stage != Stage.DIP && stage != Stage.LIFT && stage != Stage.RETURN) {
+        if (stage != Stage.DIP) {
             return;
         }
         if (++waited > GIVE_UP_TICKS) {
             stage = Stage.READY;
             return;
         }
-        if (stage != Stage.DIP) {
-            MoveGate.fillers(SMASH_FILLERS);
-        }
-        double height = mc.player.getY() + (stage == Stage.RETURN ? 0 : offset);
-        if (MoveGate.send(mc.player.getX(), height, mc.player.getZ(), false)) {
-            stage = stage == Stage.LIFT ? Stage.RETURN : Stage.READY;
+        if (MoveGate.send(mc.player.getX(), mc.player.getY() + offset, mc.player.getZ(), false)) {
+            stage = Stage.READY;
             waited = 0;
         }
     }
@@ -226,13 +305,15 @@ public final class Criticals extends Module {
         if (stage == Stage.IDLE || !inGame()) {
             return;
         }
-        if (stage == Stage.READY) {
-            release();
-            return;
+        switch (stage) {
+            case READY -> release();
+            case JUMP -> jumpTick();
+            default -> {
+            }
         }
-        if (stage != Stage.JUMP) {
-            return;
-        }
+    }
+
+    private void jumpTick() {
         if (waitingForPeak) {
             double y = mc.player.getY();
             // The first tick that fails to climb is the peak.

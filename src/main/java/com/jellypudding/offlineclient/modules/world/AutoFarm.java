@@ -439,15 +439,8 @@ public final class AutoFarm extends Module {
         if (slot != -1) {
             return loan.select(slot) && mc.player.getMainHandItem().is(seed);
         }
-        if (!mc.player.getAbilities().instabuild) {
-            return false;
-        }
-        int free = InventoryUtil.freeHotbarSlot(InventoryUtil.selectedSlot());
-        ItemStack stack = new ItemStack(seed);
-        mc.player.getInventory().setSelectedSlot(free);
-        mc.player.getInventory().setItem(free, stack);
-        mc.gameMode.handleCreativeModeItemAdd(stack, InventoryUtil.networkSlot(free));
-        return true;
+        // The seed stays in hand for the next spot. A full hotbar would lose the held item to it.
+        return InventoryUtil.freeHotbarSlot() != -1 && InventoryUtil.conjure(new ItemStack(seed)) != null;
     }
 
     private void feedTick(List<BlockPos> scan, int now) {

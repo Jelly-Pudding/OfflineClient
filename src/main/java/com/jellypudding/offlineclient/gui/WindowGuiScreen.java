@@ -22,16 +22,7 @@ import java.util.Set;
 // other half of the ClickGUI style setting.
 public final class WindowGuiScreen extends GuiScreenBase {
 
-    private static final int MAX_WIDTH = 640;
-    private static final int MAX_HEIGHT = 400;
-    private static final int MIN_WIDTH = 300;
-    private static final int MIN_HEIGHT = 180;
-    private static final int TITLE_HEIGHT = 22;
-    private static final int DESC_HEIGHT = 18;
-    private static final int SIDEBAR_WIDTH = 108;
-    private static final int MARGIN = 6;
-    private static final int SIDE_ROW = 18;
-    private static final int SIDE_ROW_MIN = 12;
+    private static final int MARGIN = WindowParts.MARGIN;
     private static final int MODULE_ROW = 18;
     // Click zones on the left and right of a module row.
     private static final int FAV_ZONE = 20;
@@ -141,11 +132,11 @@ public final class WindowGuiScreen extends GuiScreenBase {
     }
 
     private int windowWidth() {
-        return Math.clamp(viewWidth() - 20, MIN_WIDTH, MAX_WIDTH);
+        return WindowParts.width(viewWidth());
     }
 
     private int windowHeight() {
-        return Math.clamp(viewHeight() - 20, MIN_HEIGHT, MAX_HEIGHT);
+        return WindowParts.height(viewHeight());
     }
 
     private int windowX() {
@@ -157,7 +148,7 @@ public final class WindowGuiScreen extends GuiScreenBase {
     }
 
     private int searchY() {
-        return windowY() + TITLE_HEIGHT + 5;
+        return windowY() + WindowParts.TITLE_HEIGHT + 5;
     }
 
     private int contentTop() {
@@ -170,7 +161,7 @@ public final class WindowGuiScreen extends GuiScreenBase {
 
     // The bar at the foot of the window goes away with the hover help.
     private int descHeight() {
-        return hoverHelp() ? DESC_HEIGHT : 0;
+        return hoverHelp() ? WindowParts.FOOT_HEIGHT : 0;
     }
 
     private int contentHeight() {
@@ -178,20 +169,11 @@ public final class WindowGuiScreen extends GuiScreenBase {
     }
 
     private int listX() {
-        return windowX() + SIDEBAR_WIDTH;
+        return windowX() + WindowParts.SIDEBAR_WIDTH;
     }
 
     private int listWidth() {
-        return windowWidth() - SIDEBAR_WIDTH - MARGIN;
-    }
-
-    private int sidebarWidth() {
-        return SIDEBAR_WIDTH - MARGIN - 4;
-    }
-
-    // Sidebar rows tighten up on a short window. Every tab stays in sight.
-    private int sideRow() {
-        return Math.clamp(contentHeight() / tabs.size(), SIDE_ROW_MIN, SIDE_ROW);
+        return windowWidth() - WindowParts.SIDEBAR_WIDTH - MARGIN;
     }
 
     // A query that has not changed keeps the order it already has.
@@ -279,25 +261,22 @@ public final class WindowGuiScreen extends GuiScreenBase {
         refreshListed();
         refreshCounts();
 
-        RenderUtil.roundedBorderedRect(context, wx, wy, wx + ww, wy + wh,
-            GuiTheme.CORNER + 2, GuiTheme.bgWindow(), GuiTheme.edge());
-        context.guiRenderState.up();
-
+        WindowParts.frame(context, wx, wy, ww, wh);
         renderTitle(context, font, wx, wy, ww);
         renderSearchBox(context, font, wx + MARGIN, searchY(), ww - 2 * MARGIN,
             mouseX, mouseY, isSearching() ? listed.size() : -1);
-        renderSidebar(context, font, mouseX, mouseY);
+        WindowParts.tabs(context, font, wx + MARGIN, contentTop(), WindowParts.tabWidth(), contentHeight(),
+            tabs, i -> String.valueOf(tabCounts[i]), tabs.indexOf(tab), mouseX, mouseY);
         renderList(context, font, mouseX, mouseY);
         if (hoverHelp()) {
-            renderDescription(context, font, wx, wy, ww, wh);
+            boolean empty = description == null || description.isEmpty();
+            WindowParts.footer(context, font, wx, wy, ww, wh, empty ? HINT : description,
+                empty ? GuiTheme.textFaint() : GuiTheme.text());
         }
     }
 
     private void renderTitle(GuiGraphicsExtractor context, Font font, int wx, int wy, int ww) {
-        RenderUtil.roundedRect(context, wx + 1, wy + 1, wx + ww - 1, wy + TITLE_HEIGHT,
-            GuiTheme.CORNER + 1, GuiTheme.bgHeader(), true, false);
-        context.guiRenderState.up();
-        int titleY = GuiTheme.textY(wy, TITLE_HEIGHT - 2);
+        int titleY = WindowParts.titleY(wy);
         ClickGuiModule gui = OfflineClient.INSTANCE.getModuleManager().get(ClickGuiModule.class);
         context.text(font, OfflineClient.NAME, wx + 10, titleY, gui.titleColor(), false);
         context.text(font, "v" + OfflineClient.VERSION,
@@ -306,40 +285,6 @@ public final class WindowGuiScreen extends GuiScreenBase {
         String tally = on + " enabled";
         context.text(font, tally, wx + ww - 10 - font.width(tally), titleY,
             on > 0 ? GuiTheme.accentText() : GuiTheme.textFaint(), false);
-        context.fill(wx + 1, wy + TITLE_HEIGHT - 1, wx + ww - 1, wy + TITLE_HEIGHT + 1,
-            GuiTheme.accent());
-    }
-
-    private void renderSidebar(GuiGraphicsExtractor context, Font font, int mouseX, int mouseY) {
-        int x = windowX() + MARGIN;
-        int w = sidebarWidth();
-        int top = contentTop();
-        int pitch = sideRow();
-        int h = pitch - 2;
-        int y = top;
-        context.enableScissor(x, top, x + w, top + contentHeight());
-        for (int i = 0; i < tabs.size(); i++) {
-            String name = tabs.get(i);
-            boolean selected = name.equals(tab);
-            boolean hovered = SettingWidget.isOver(mouseX, mouseY, x, y, w, h);
-            if (selected || hovered) {
-                RenderUtil.roundedRect(context, x, y, x + w, y + h, GuiTheme.CORNER,
-                    selected ? GuiTheme.accentOn(GuiTheme.bgRow(), 0.35f) : GuiTheme.bgRowHover());
-                context.guiRenderState.up();
-            }
-            if (selected) {
-                RenderUtil.roundedRect(context, x, y + 2, x + 2, y + h - 2, 1, GuiTheme.accent());
-            }
-            int ty = GuiTheme.textY(y, h);
-            String tally = String.valueOf(tabCounts[i]);
-            int tallyX = x + w - MARGIN - font.width(tally);
-            context.text(font, SettingWidget.trimEnd(font, name, tallyX - x - 12), x + 8, ty,
-                selected || hovered ? GuiTheme.text() : GuiTheme.textDim(), false);
-            context.text(font, tally, tallyX, ty,
-                selected ? GuiTheme.textDim() : GuiTheme.textFaint(), false);
-            y += pitch;
-        }
-        context.disableScissor();
     }
 
     private void renderList(GuiGraphicsExtractor context, Font font, int mouseX, int mouseY) {
@@ -439,20 +384,6 @@ public final class WindowGuiScreen extends GuiScreenBase {
         }
     }
 
-    private void renderDescription(GuiGraphicsExtractor context, Font font,
-                                   int wx, int wy, int ww, int wh) {
-        int x = wx + 1;
-        int y = wy + wh - DESC_HEIGHT - 1;
-        RenderUtil.roundedRect(context, x, y, x + ww - 2, y + DESC_HEIGHT,
-            GuiTheme.CORNER + 1, GuiTheme.bgHeader(), false, true);
-        context.fill(x, y, x + ww - 2, y + 1, GuiTheme.edge());
-        context.guiRenderState.up();
-        boolean empty = description == null || description.isEmpty();
-        String text = empty ? HINT : description;
-        context.text(font, SettingWidget.trimEnd(font, text, ww - 20), x + 9,
-            GuiTheme.textY(y + 1, DESC_HEIGHT), empty ? GuiTheme.textFaint() : GuiTheme.text(), false);
-    }
-
     @Override
     public void setTooltip(String tooltip) {
         description = tooltip;
@@ -467,27 +398,18 @@ public final class WindowGuiScreen extends GuiScreenBase {
     }
 
     private boolean clickSidebar(double mx, double my) {
-        int x = windowX() + MARGIN;
-        int w = sidebarWidth();
-        int pitch = sideRow();
-        int y = contentTop();
-        int bottom = y + contentHeight();
-        for (String name : tabs) {
-            if (y >= bottom) {
-                break;
-            }
-            if (SettingWidget.isOver(mx, my, x, y, w, pitch - 2)) {
-                tab = name;
-                if (isSearching()) {
-                    searchBar.clear();
-                }
-                searchBar.setFocused(false);
-                scrollBar.setOffset(0);
-                return true;
-            }
-            y += pitch;
+        int index = WindowParts.tabAt(mx, my, windowX() + MARGIN, contentTop(), WindowParts.tabWidth(),
+            contentHeight(), tabs.size());
+        if (index < 0) {
+            return false;
         }
-        return false;
+        tab = tabs.get(index);
+        if (isSearching()) {
+            searchBar.clear();
+        }
+        searchBar.setFocused(false);
+        scrollBar.setOffset(0);
+        return true;
     }
 
     private boolean clickList(double mx, double my, int button) {

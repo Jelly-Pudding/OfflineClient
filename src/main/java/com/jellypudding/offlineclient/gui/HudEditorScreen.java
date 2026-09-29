@@ -513,7 +513,7 @@ public final class HudEditorScreen extends Screen {
         if (grip.corner()) {
             // The longer pull wins and neither way may leave the allowed sizes.
             double least = HudElement.MIN_STRETCH / Math.min(startScaleX, startScaleY);
-            double most = HudElement.MAX_STRETCH / Math.max(startScaleX, startScaleY);
+            double most = held.mostStretch() / Math.max(startScaleX, startScaleY);
             double stretch = Math.clamp(Math.max(across, down), least, most);
             held.setSize(step(startScaleX * stretch, free), step(startScaleY * stretch, free));
         } else if (grip.dx != 0) {
@@ -541,7 +541,7 @@ public final class HudEditorScreen extends Screen {
             return;
         }
         element.moveTo(HudManager.shareOf(left, wide, width) * 100,
-            HudManager.shareOf(top, tall, height) * 100);
+            HudManager.shareOf(top, tall, height) * 100, width, height);
     }
 
     // Sticks to the nearest of the screen edges and middle and the edges of the other elements.

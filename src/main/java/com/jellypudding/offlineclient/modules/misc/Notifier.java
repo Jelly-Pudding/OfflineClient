@@ -7,6 +7,7 @@ import com.jellypudding.offlineclient.event.events.PacketReceiveEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.setting.ActionSetting;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
@@ -15,10 +16,13 @@ import com.jellypudding.offlineclient.util.BoundedMap;
 import com.jellypudding.offlineclient.util.ChatSender;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.Modules;
+import com.jellypudding.offlineclient.util.PlayerAlarm;
 import com.jellypudding.offlineclient.util.WorldWatch;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.multiplayer.PlayerInfo;
+import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -49,10 +53,12 @@ import java.util.Collections;
 import java.util.Deque;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.LinkedBlockingQueue;
 
@@ -78,7 +84,8 @@ public final class Notifier extends Module {
     private record TotemPop(int entityId) implements Pending {
     }
 
-    private record JoinLeave(String name, boolean joined) implements Pending {
+    // Unlisted entries are mostly server made figures such as NPCs showing a skin.
+    private record JoinLeave(String name, boolean joined, boolean listed) implements Pending {
     }
 
     private record ModeChange(String name, GameType mode) implements Pending {
@@ -107,7 +114,7 @@ public final class Notifier extends Module {
     }
 
     // How many tab changes one way came with a line and how many without.
-    private static final class Tally {
+    private static final class ChangeCounts {
 
         private int announced;
         private int silent;
@@ -159,6 +166,16 @@ public final class Notifier extends Module {
     // A deep tone that stands apart from the soft ping.
     private static final float WARNING_PITCH = 0.5f;
 
+    // A join is worth several rings to wake a player who stepped away. Someone walking
+    // into view is closer and needs fewer.
+    private static final int JOIN_RINGS = 5;
+    private static final int SIGHT_RINGS = 2;
+
+    // Minutes before the same player sets an alarm off again. A player who drops out and
+    // reconnects is not news twice.
+    private static final int JOIN_QUIET_MINUTES = 5;
+    private static final int SIGHT_QUIET_MINUTES = 10;
+
     private final BoolSetting visualRange = new BoolSetting("Visual range",
         "Say when something enters or leaves your render distance.", true);
     private final EnumSetting<Report> report = new EnumSetting<>("Report",
@@ -207,6 +224,16 @@ public final class Notifier extends Module {
     private final BoolSetting simpleNotifications = new BoolSetting("Simple notifications",
         "Short join and leave lines with no client prefix.", true)
         .under(joinsLeaves, JoinsLeaves.JOINS, JoinsLeaves.LEAVES, JoinsLeaves.BOTH);
+
+    private final PlayerAlarm joinAlarm = new PlayerAlarm("Join",
+        "Rings when a player joins the server. The players already online when you join never ring it.",
+        SoundEvents.BELL_BLOCK, JOIN_RINGS, JOIN_QUIET_MINUTES);
+    private final PlayerAlarm sightAlarm = new PlayerAlarm("Sight",
+        "Rings when a player enters your render distance. Anyone already there when you join or switch it on"
+            + " rings it too.", SoundEvents.ANVIL_DESTROY, SIGHT_RINGS, SIGHT_QUIET_MINUTES);
+    private final ActionSetting forgetAlarms = new ActionSetting("Forget alarmed players",
+        "Lets every player set off the join and sight alarms again straight away.", this::forgetAlarms)
+        .visibleWhen(() -> joinAlarm.isOn() || sightAlarm.isOn());
     private final BoolSetting vanish = new BoolSetting("Vanish",
         "Says when a player drops off the tab list without a leave message or comes back without a join message. "
             + "It stays quiet on a server that never announces them.", true);
@@ -244,20 +271,27 @@ public final class Notifier extends Module {
     private final Map<UUID, TabEntry> tab = Collections.synchronizedMap(new BoundedMap<>(MAX_TRACKED));
     private final Deque<Seen> serverLines = new ArrayDeque<>();
     private final List<Unannounced> unannounced = new ArrayList<>();
-    private final Tally joins = new Tally();
-    private final Tally leaves = new Tally();
+    private final ChangeCounts joins = new ChangeCounts();
+    private final ChangeCounts leaves = new ChangeCounts();
+    // The players in the world with you last tick whilst the sight alarm is on.
+    private final Set<UUID> inSight = new HashSet<>();
     private final WorldWatch world = new WorldWatch();
     private volatile long burstUntil;
     private int delayTimer;
     private int clock;
 
     public Notifier() {
-        super("Notifier", "Chat messages when players come and go and when totems pop.", Category.MISC);
+        super("Notifier", "Chat messages and alarms when players come and go and when totems pop.",
+            Category.MISC);
         addSettings(visualRange, report, entities, totemPops, ownTotems, ignoreOthers,
             distanceCheck, playerRadius, pearls, ownPearls, joinsLeaves, notificationDelay,
-            simpleNotifications, vanish, gameModes, badEffects, warnEffects, ignoreFriends, sound);
+            simpleNotifications);
+        addSettings(joinAlarm.settings());
+        addSettings(sightAlarm.settings());
+        addSettings(forgetAlarms, vanish, gameModes, badEffects, warnEffects, ignoreFriends, sound);
         searchTags("visual range", "totem pop", "alert", "pearl", "join", "leave", "vanish",
-            "game mode", "weakness", "poison", "wither", "effect");
+            "game mode", "weakness", "poison", "wither", "effect", "alarm", "render distance",
+            "watch list");
     }
 
     @Override
@@ -273,6 +307,8 @@ public final class Notifier extends Module {
     @Override
     protected void onDisable() {
         reset();
+        joinAlarm.stop();
+        sightAlarm.stop();
     }
 
     private void reset() {
@@ -284,10 +320,17 @@ public final class Notifier extends Module {
         popLines.clear();
         effectLevels.clear();
         tab.clear();
+        inSight.clear();
+        forgetAlarms();
         forgetServer();
         world.forget();
         burstUntil = 0;
         delayTimer = 0;
+    }
+
+    private void forgetAlarms() {
+        joinAlarm.forget();
+        sightAlarm.forget();
     }
 
     private void forgetServer() {
@@ -350,9 +393,7 @@ public final class Notifier extends Module {
         if (burst) {
             return;
         }
-        if (wants(JoinsLeaves.JOINS)) {
-            queue.offer(new JoinLeave(name, true));
-        }
+        queue.offer(new JoinLeave(name, true, listed));
         if (vanish.isOn() && listed) {
             queue.offer(new Presence(true, name, entry.displayName()));
         }
@@ -387,9 +428,7 @@ public final class Notifier extends Module {
             if (gone == null) {
                 continue;
             }
-            if (wants(JoinsLeaves.LEAVES)) {
-                queue.offer(new JoinLeave(gone.name(), false));
-            }
+            queue.offer(new JoinLeave(gone.name(), false, gone.listed()));
             // A player already off the list was reported when they were taken off it.
             if (vanish.isOn() && gone.listed()) {
                 queue.offer(new Presence(false, gone.name(), gone.tabName()));
@@ -443,7 +482,7 @@ public final class Notifier extends Module {
         while ((pending = queue.poll()) != null) {
             switch (pending) {
                 case TotemPop pop -> handleTotem(pop.entityId());
-                case JoinLeave change -> joinLeaveQueue.addLast(joinLine(change.name(), change.joined()));
+                case JoinLeave change -> onJoinLeave(change);
                 case ModeChange change -> reportMode(change);
                 case Presence change -> onPresence(change);
                 case ServerLine line -> onServerLine(line.packet());
@@ -452,12 +491,46 @@ public final class Notifier extends Module {
         }
         expireUnannounced();
         drainJoinLeave();
+        watchSight();
         sweepWatched();
         sweepPearls();
         if (totemPops.isOn()) {
             checkDeaths();
         }
         checkEffects();
+    }
+
+    // The line goes out whilst that half is reported. A player joining the tab list also
+    // sounds the join alarm.
+    private void onJoinLeave(JoinLeave change) {
+        if (wants(change.joined() ? JoinsLeaves.JOINS : JoinsLeaves.LEAVES)) {
+            joinLeaveQueue.addLast(joinLine(change.name(), change.joined()));
+        }
+        if (change.joined() && change.listed() && !isSelf(change.name()) && !skip(change.name())) {
+            joinAlarm.ring(change.name());
+        }
+    }
+
+    // A player arrives on the first tick they share the world with you. Anyone already there
+    // when you join or switch the sight alarm on arrives at once.
+    private void watchSight() {
+        if (!sightAlarm.isOn()) {
+            inSight.clear();
+            return;
+        }
+        Set<UUID> present = new HashSet<>();
+        for (AbstractClientPlayer player : mc.level.players()) {
+            if (player == mc.player || Modules.isLocalBody(player)) {
+                continue;
+            }
+            present.add(player.getUUID());
+            String name = player.getGameProfile().name();
+            if (!inSight.contains(player.getUUID()) && !skip(name) && !Modules.isBot(player)) {
+                sightAlarm.ring(name);
+            }
+        }
+        inSight.clear();
+        inSight.addAll(present);
     }
 
     // Warns once when an effect is gained or grows stronger. The first ticks of a new
@@ -563,7 +636,7 @@ public final class Notifier extends Module {
             }
             it.remove();
             Presence change = waiting.change();
-            Tally tally = tally(change);
+            ChangeCounts tally = tally(change);
             boolean trusted = tally.trusted();
             tally.silent++;
             if (!trusted || !vanish.isOn() || isSelf(change.name()) || skip(change.name())) {
@@ -574,7 +647,7 @@ public final class Notifier extends Module {
         }
     }
 
-    private Tally tally(Presence change) {
+    private ChangeCounts tally(Presence change) {
         return change.shown() ? joins : leaves;
     }
 

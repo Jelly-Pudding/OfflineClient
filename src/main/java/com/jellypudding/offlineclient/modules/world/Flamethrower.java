@@ -7,25 +7,18 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
-import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
-import com.jellypudding.offlineclient.util.InventoryUtil;
+import com.jellypudding.offlineclient.util.Ignition;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
-import com.jellypudding.offlineclient.util.ItemUtil;
-import com.jellypudding.offlineclient.util.SwingMode;
+import com.jellypudding.offlineclient.util.UseBudget;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.item.Items;
-import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
-import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
 
@@ -45,12 +38,11 @@ public final class Flamethrower extends Module {
         "Ticks between one light and the next.", 5, 1, 20, 1, " ticks").min(1);
     private final BoolSetting babies = new BoolSetting("Babies",
         "Also sets fire to young animals.", false);
-    private final BoolSetting antiBreak = new BoolSetting("Anti break",
-        "Leaves a flint and steel that is about to snap alone.", false);
+    private final Ignition ignition = new Ignition();
     private final BoolSetting saveDrops = new BoolSetting("Save drops",
         "Puts the fire out on a nearly dead animal to save its drops.", true);
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Turn towards the animal on the server side.", true);
+        "Turn towards the fire on the server side.", true);
 
     private final SlotSwap slots = new SlotSwap();
     private int ticks;
@@ -58,7 +50,9 @@ public final class Flamethrower extends Module {
 
     public Flamethrower() {
         super("Flamethrower", "Sets fire to nearby animals for cooked meat.", Category.WORLD);
-        addSettings(entities, range, interval, babies, antiBreak, saveDrops, rotate);
+        addSettings(entities, range, interval, babies);
+        addSettings(ignition.settings());
+        addSettings(saveDrops, rotate);
         searchTags("cook", "flint and steel", "burn", "roast");
     }
 
@@ -90,48 +84,23 @@ public final class Flamethrower extends Module {
             return;
         }
         BlockPos feet = target.blockPosition();
-        BlockPos below = feet.below();
-        BlockState standing = BlockUtil.state(feet);
-        BlockState floor = BlockUtil.state(below);
-        // Fire never takes on wet ground or on a worn path.
-        if (!standing.getFluidState().isEmpty() || !floor.getFluidState().isEmpty()
-            || floor.is(Blocks.DIRT_PATH)) {
-            slots.restoreIfMine();
-            return;
-        }
-        if (rotate.isOn()) {
-            BlockUtil.faceVector(Vec3.atCenterOf(below));
-        }
         if (saveDrops.isOn() && target instanceof LivingEntity living
             && living.getHealth() < SAVE_DROPS_HEALTH) {
             putOut(feet);
             slots.restoreIfMine();
             return;
         }
-        // Tall grass in the way has to come out before the fire will sit there.
-        if (standing.is(Blocks.SHORT_GRASS) || standing.is(Blocks.TALL_GRASS)) {
-            mc.gameMode.startDestroyBlock(feet, Direction.DOWN);
-        }
-        if (ticks < interval.getInt() || target.isOnFire()) {
+        if (Ignition.clear(feet) || ticks < interval.getInt() || target.isOnFire()
+            || !Ignition.fireFits(feet) || UseBudget.remaining() == 0) {
             slots.restoreIfMine();
             return;
         }
-        light(below);
+        light(feet);
     }
 
-    private void light(BlockPos below) {
-        int slot = InventoryUtil.hotbarSlot(stack ->
-            (stack.is(Items.FLINT_AND_STEEL) || stack.is(Items.FIRE_CHARGE))
-                && (!antiBreak.isOn() || !ItemUtil.nearlyBroken(stack)));
-        if (slot == -1) {
-            slots.restoreIfMine();
-            return;
-        }
-        slots.select(slot);
-        BlockHitResult hit = new BlockHitResult(
-            Vec3.atCenterOf(below).add(0, 0.5, 0), Direction.UP, below, false);
-        if (mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND, hit).consumesAction()) {
-            SwingMode.swingArm(InteractionHand.MAIN_HAND);
+    private void light(BlockPos feet) {
+        BlockHitResult hit = Ignition.fireClick(feet, Direction.DOWN);
+        if (ignition.use(slots, hand -> Ignition.strike(hit, hand, rotate.isOn()))) {
             burnt++;
         }
         ticks = 0;
@@ -139,10 +108,10 @@ public final class Flamethrower extends Module {
     }
 
     // Punching the fire out beats waiting for the animal to burn its own drops.
-    private void putOut(BlockPos feet) {
-        mc.gameMode.startDestroyBlock(feet, Direction.DOWN);
+    private static void putOut(BlockPos feet) {
+        Ignition.putOut(feet);
         for (Direction side : Direction.Plane.HORIZONTAL) {
-            mc.gameMode.startDestroyBlock(feet.relative(side), Direction.DOWN);
+            Ignition.putOut(feet.relative(side));
         }
     }
 

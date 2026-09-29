@@ -20,7 +20,7 @@ public abstract class RespawnBlockBreaker extends Module {
 
     protected final NumberSetting range;
     protected final BoolSetting onlyDangerous;
-    private final BoolSetting switchTool;
+    private final BoolSetting autoTool;
     protected final BoolSetting rotate;
     protected final BoolSetting render;
 
@@ -35,13 +35,13 @@ public abstract class RespawnBlockBreaker extends Module {
             "How far around you to watch for " + noun + ".", 4.5, 1, 6, 0.1).min(1);
         onlyDangerous = new BoolSetting("Only dangerous",
             "Ignore " + noun + " too far away to hurt you.", true);
-        switchTool = new BoolSetting("Switch tool",
-            "Swap to your fastest hotbar tool first.", true);
+        autoTool = new BoolSetting("Auto tool",
+            "Holds the tool AutoTool would pick or else your fastest one.", true);
         rotate = new BoolSetting("Rotate",
             "Turn towards the block on the server side.", true);
         render = new BoolSetting("Show target",
             "Outline the block being broken.", true);
-        addSettings(range, onlyDangerous, switchTool, rotate, render);
+        addSettings(range, onlyDangerous, autoTool, rotate, render);
     }
 
     // True when a blast here would reach the player. Distance only matters when asked.
@@ -94,7 +94,7 @@ public abstract class RespawnBlockBreaker extends Module {
         if (current == null) {
             return;
         }
-        if (switchTool.isOn()) {
+        if (autoTool.isOn()) {
             ItemUtil.selectBestTool(BlockUtil.state(current), slots);
         }
         if (!BlockMiner.mine(current, rotate.isOn())) {

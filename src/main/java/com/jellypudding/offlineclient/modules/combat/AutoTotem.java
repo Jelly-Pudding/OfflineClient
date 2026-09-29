@@ -92,19 +92,16 @@ public final class AutoTotem extends Module {
             timer = delay.getInt();
             hadTotem = false;
         }
-        int totemSlot = findTotem();
+        int totemSlot = InventoryUtil.findSlot(Items.TOTEM_OF_UNDYING, InventoryUtil.WHOLE_INVENTORY);
         if (totemSlot == -1 || !locked) {
             return;
         }
 
-        if (!InventoryUtil.cursorFree()) {
-            return;
-        }
         if (timer > 0) {
             timer--;
             return;
         }
-        cursor.swap(totemSlot, InventoryUtil.OFFHAND_SLOT);
+        InventoryUtil.toOffhand(totemSlot, cursor);
     }
 
     // True when the health line is already crossed or something already in the world
@@ -123,11 +120,5 @@ public final class AutoTotem extends Module {
         int offhand = mc.player.getOffhandItem().is(Items.TOTEM_OF_UNDYING)
             ? mc.player.getOffhandItem().getCount() : 0;
         return offhand + InventoryUtil.count(Items.TOTEM_OF_UNDYING, InventoryUtil.WHOLE_INVENTORY);
-    }
-
-    // Network slot of the first totem in the inventory. Minus one when there is none.
-    private int findTotem() {
-        int slot = InventoryUtil.findSlot(Items.TOTEM_OF_UNDYING, InventoryUtil.WHOLE_INVENTORY);
-        return slot == -1 ? -1 : InventoryUtil.networkSlot(slot);
     }
 }

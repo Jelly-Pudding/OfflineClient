@@ -2,6 +2,7 @@ package com.jellypudding.offlineclient.command.commands;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.command.Command;
+import com.jellypudding.offlineclient.util.Hop;
 import net.minecraft.client.player.LocalPlayer;
 
 import java.util.OptionalDouble;
@@ -21,7 +22,8 @@ public final class VClipCommand extends Command {
         }
         OptionalDouble blocks = number(args[0]);
         if (blocks.isPresent()) {
-            hopTo(player.position().add(0, blocks.getAsDouble(), 0), "§7Moved §b" + args[0] + " §7blocks.");
+            hopTo(Hop.mover(player).position().add(0, blocks.getAsDouble(), 0),
+                "§7Moved §b" + args[0] + " §7blocks.");
         }
     }
 }

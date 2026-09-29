@@ -2,9 +2,10 @@ package com.jellypudding.offlineclient.command.commands;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.command.Command;
+import com.jellypudding.offlineclient.command.CommandManager;
 import com.jellypudding.offlineclient.config.WaypointStore;
 import com.jellypudding.offlineclient.config.WaypointStore.Waypoint;
-import com.jellypudding.offlineclient.modules.render.Waypoints;
+import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.core.BlockPos;
@@ -12,8 +13,6 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
 import java.util.Locale;
-import com.jellypudding.offlineclient.command.CommandManager;
-import com.jellypudding.offlineclient.util.ServerInfo;
 
 public final class WaypointCommand extends Command {
 
@@ -59,15 +58,9 @@ public final class WaypointCommand extends Command {
             }
             pos = BlockPos.containing(spot);
         }
-        int x = pos.getX();
-        int y = pos.getY();
-        int z = pos.getZ();
         String name = args[1];
-        Waypoints module = Modules.get(Waypoints.class);
-        int hue = module == null ? Waypoint.AUTO_HUE : module.nextHue();
-        WaypointStore.get().add(new Waypoint(name, x, y, z,
-            WaypointStore.currentDimension(), ServerInfo.key(), hue));
-        ChatUtil.message("§aSaved §b" + name + " §7at §f" + x + " " + y + " " + z);
+        WaypointStore.get().mark(name, pos, Modules.nextWaypointHue());
+        ChatUtil.message("§aSaved §b" + name + " §7at §f" + BlockUtil.text(pos));
     }
 
     private void remove(String[] args) {

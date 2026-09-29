@@ -6,6 +6,7 @@ import com.jellypudding.offlineclient.modules.misc.ClickGuiModule;
 import com.jellypudding.offlineclient.modules.render.Blur;
 import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.Modules;
+import com.jellypudding.offlineclient.util.Tally;
 import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.blaze3d.platform.Window;
 import net.minecraft.client.gui.Font;
@@ -215,8 +216,7 @@ public abstract class GuiScreenBase extends Screen {
     // A match count below zero leaves the tally off.
     public final void renderSearchBox(GuiGraphicsExtractor context, Font font, int x, int y,
                                       int w, int mouseX, int mouseY, int matches) {
-        String tally = matches >= 0 && isSearching()
-            ? matches + (matches == 1 ? " match" : " matches") : null;
+        String tally = matches >= 0 && isSearching() ? Tally.counted(matches, "match") : null;
         searchBar.render(context, font, x, y, w, mouseX, mouseY, tally);
     }
 

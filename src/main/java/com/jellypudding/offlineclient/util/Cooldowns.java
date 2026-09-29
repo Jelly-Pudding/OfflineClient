@@ -4,6 +4,7 @@ import com.jellypudding.offlineclient.OfflineClient;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Predicate;
 
 // Keys held back for a number of ticks on the player's clock. That clock starts again
 // at zero on a respawn and every entry is dropped when it does.
@@ -31,6 +32,11 @@ public final class Cooldowns<K> {
 
     public boolean contains(K key) {
         return until.containsKey(key);
+    }
+
+    // Lets every key the test picks go before its time is up.
+    public void releaseIf(Predicate<K> test) {
+        until.keySet().removeIf(test);
     }
 
     public void clear() {

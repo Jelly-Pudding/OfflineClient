@@ -32,6 +32,12 @@ public final class DrawBatch {
     // Direction.values allocates a fresh array on every call.
     private static final Direction[] SIDES = Direction.values();
 
+    private static final int SPHERE_SEGMENTS = 32;
+    // The rings of a wire ball in degrees. Latitudes run up from the equator and
+    // longitudes turn round the upright axis.
+    private static final double[] LATITUDES = {-60, -30, 0, 30, 60};
+    private static final double[] LONGITUDES = {0, 45, 90, 135};
+
     // A batch is built every frame and most have nothing to draw.
     private StagedVertexBuffer buffer;
     private final List<StagedVertexBuffer.Draw> draws = new ArrayList<>();
@@ -78,6 +84,21 @@ public final class DrawBatch {
             Vec3 point = centre.add(first.scale(Math.cos(turn))).add(second.scale(Math.sin(turn)));
             line(last, point, color, throughWalls);
             last = point;
+        }
+    }
+
+    // A wire ball of rings of latitude and longitude round the centre.
+    public void sphere(Vec3 centre, double radius, int color, boolean throughWalls) {
+        for (double latitude : LATITUDES) {
+            double lift = Math.toRadians(latitude);
+            double across = Math.cos(lift) * radius;
+            circle(centre.add(0, Math.sin(lift) * radius, 0), new Vec3(across, 0, 0), new Vec3(0, 0, across),
+                SPHERE_SEGMENTS, color, throughWalls);
+        }
+        for (double longitude : LONGITUDES) {
+            double heading = Math.toRadians(longitude);
+            circle(centre, new Vec3(Math.cos(heading) * radius, 0, Math.sin(heading) * radius),
+                new Vec3(0, radius, 0), SPHERE_SEGMENTS, color, throughWalls);
         }
     }
 

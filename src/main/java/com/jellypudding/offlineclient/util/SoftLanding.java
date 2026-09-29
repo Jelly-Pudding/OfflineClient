@@ -95,7 +95,7 @@ public final class SoftLanding {
     public void fall(List<Kind> ranked, double fallen, boolean anchor) {
         LocalPlayer player = MC.player;
         double drop = Math.max(0, -player.getDeltaMovement().y);
-        double reach = player.blockInteractionRange() - REACH_MARGIN;
+        double reach = BlockUtil.serverBlockReach() - REACH_MARGIN;
         BlockHitResult ground = groundBelow(reach + drop);
         if (ground == null || alreadySoft(ground)) {
             loan.giveBack(loan.stillMine());

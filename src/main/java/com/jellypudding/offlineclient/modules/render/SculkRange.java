@@ -89,9 +89,6 @@ public final class SculkRange extends Module {
     private static final double GROUND_PROBE = 1.0E-5;
     // How far above the floor a ring is drawn.
     private static final double LIFT = 0.02;
-    private static final int SPHERE_SEGMENTS = 32;
-    private static final double[] LATITUDES = {-60, -30, 0, 30, 60};
-    private static final double[] LONGITUDES = {0, 45, 90, 135};
 
     private final NumberSetting range = new NumberSetting("Range",
         "Chunk radius to scan around you.", 3, 1, 8, 1, " chunks").max(ChunkMap.MAX_VIEW_DISTANCE);
@@ -367,7 +364,7 @@ public final class SculkRange extends Module {
         }
         if (shape.is(Shape.SPHERES)) {
             for (Listener listener : all) {
-                sphere(batch, Vec3.atCenterOf(listener.pos()), listener.kind().radius, colorOf(listener.kind()));
+                batch.sphere(Vec3.atCenterOf(listener.pos()), listener.kind().radius, colorOf(listener.kind()), true);
             }
             return;
         }
@@ -377,21 +374,6 @@ public final class SculkRange extends Module {
             for (Edge edge : entry.getValue()) {
                 batch.line(new Vec3(edge.x1(), y, edge.z1()), new Vec3(edge.x2(), y, edge.z2()), color, true);
             }
-        }
-    }
-
-    // Circles of latitude and longitude around the centre.
-    private static void sphere(DrawBatch batch, Vec3 centre, double radius, int color) {
-        for (double latitude : LATITUDES) {
-            double lift = Math.toRadians(latitude);
-            double across = Math.cos(lift) * radius;
-            batch.circle(centre.add(0, Math.sin(lift) * radius, 0), new Vec3(across, 0, 0), new Vec3(0, 0, across),
-                SPHERE_SEGMENTS, color, true);
-        }
-        for (double longitude : LONGITUDES) {
-            double heading = Math.toRadians(longitude);
-            batch.circle(centre, new Vec3(Math.cos(heading) * radius, 0, Math.sin(heading) * radius),
-                new Vec3(0, radius, 0), SPHERE_SEGMENTS, color, true);
         }
     }
 

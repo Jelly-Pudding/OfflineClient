@@ -16,12 +16,12 @@ import com.jellypudding.offlineclient.util.PacketNames;
 import net.minecraft.SharedConstants;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.PacketType;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
@@ -29,6 +29,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -45,9 +46,11 @@ public final class PacketLogger extends Module {
     private static final int MAX_PENDING = 8192;
 
     private final ChoiceListSetting incoming = new ChoiceListSetting("Incoming",
-        "Kinds of packet from the server to log. Click to pick them.", PacketNames::incoming);
+        "Kinds of packet from the server to log. Click to pick them.", PacketNames::incoming)
+        .onChange(this::resolve);
     private final ChoiceListSetting outgoing = new ChoiceListSetting("Outgoing",
-        "Kinds of packet to the server to log. Click to pick them.", PacketNames::outgoing);
+        "Kinds of packet to the server to log. Click to pick them.", PacketNames::outgoing)
+        .onChange(this::resolve);
     private final BoolSetting timestamp = new BoolSetting("Timestamp",
         "Puts the time in front of every line.", true);
     private final BoolSetting showData = new BoolSetting("Show data",
@@ -70,6 +73,10 @@ public final class PacketLogger extends Module {
         "The oldest files are deleted once the folder gets bigger.", 50, 1, 500, 1, " MB")
         .min(1)
         .under(toFile);
+
+    // The picked names resolved to types. Read from the netty thread and replaced whole.
+    private volatile Set<PacketType<?>> logIncoming = Set.of();
+    private volatile Set<PacketType<?>> logOutgoing = Set.of();
 
     // Filled from the netty thread and drained on the main thread.
     private final ConcurrentLinkedQueue<String> pending = new ConcurrentLinkedQueue<>();
@@ -99,6 +106,7 @@ public final class PacketLogger extends Module {
 
     @Override
     protected void onEnable() {
+        resolve();
         pending.clear();
         held.set(0);
         counts.clear();
@@ -131,22 +139,27 @@ public final class PacketLogger extends Module {
         }
     }
 
+    private void resolve() {
+        logIncoming = PacketNames.incomingTypes(incoming.getValue());
+        logOutgoing = PacketNames.outgoingTypes(outgoing.getValue());
+    }
+
     @Subscribe
     private void onPacketReceive(PacketReceiveEvent event) {
-        record(event.getPacket(), incoming, "in");
+        record(event.getPacket(), logIncoming, "in");
     }
 
     @Subscribe
     private void onPacketSend(PacketSendEvent event) {
-        record(event.getPacket(), outgoing, "out");
+        record(event.getPacket(), logOutgoing, "out");
     }
 
     // Fired on the netty thread. Only the line is built here.
-    private void record(Packet<?> packet, ChoiceListSetting picked, String direction) {
-        String name = packet.type().id().toString();
-        if (!picked.contains(name)) {
+    private void record(Packet<?> packet, Set<PacketType<?>> picked, String direction) {
+        if (!picked.contains(packet.type())) {
             return;
         }
+        String name = packet.type().id().toString();
         int count = counts.computeIfAbsent(direction + " " + name, key -> new AtomicInteger())
             .incrementAndGet();
         StringBuilder line = new StringBuilder();
@@ -203,21 +216,17 @@ public final class PacketLogger extends Module {
     }
 
     private void write(List<String> lines) {
-        StringBuilder text = new StringBuilder();
-        for (String line : lines) {
-            text.append(line).append(System.lineSeparator());
-        }
+        Path folder = folder();
         try {
-            Path folder = folder();
-            Files.createDirectories(folder);
             if (file == null || written > maxFileSize.getInt() * (long) MEGABYTE) {
                 file = nextFile(folder);
                 written = 0;
                 announce(file);
             }
-            byte[] bytes = text.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
-            Files.write(file, bytes, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
-            written += bytes.length;
+            if (!DataFiles.appendLines(file, lines)) {
+                return;
+            }
+            written = Files.size(file);
             prune(folder);
         } catch (IOException | UncheckedIOException error) {
             OfflineClient.LOG.error("Failed to write the packet log", error);

@@ -1,30 +1,25 @@
 package com.jellypudding.offlineclient.modules.hunting;
 
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.jellypudding.offlineclient.config.DataFiles;
+import com.jellypudding.offlineclient.config.FindLog;
+import com.jellypudding.offlineclient.config.FindSource;
 import com.jellypudding.offlineclient.event.Subscribe;
-import com.jellypudding.offlineclient.event.events.KeyPressEvent;
 import com.jellypudding.offlineclient.event.events.Render3DEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
+import com.jellypudding.offlineclient.gui.FindsScreen;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
-import com.jellypudding.offlineclient.setting.BoolSetting;
+import com.jellypudding.offlineclient.render.FindLines;
 import com.jellypudding.offlineclient.setting.ColorSetting;
-import com.jellypudding.offlineclient.setting.EnumSetting;
-import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
+import com.jellypudding.offlineclient.util.AlertSound;
 import com.jellypudding.offlineclient.util.ChatUtil;
-import com.jellypudding.offlineclient.util.ServerInfo;
+import com.jellypudding.offlineclient.util.Notice;
+import com.jellypudding.offlineclient.util.Tally;
 import com.jellypudding.offlineclient.util.WorldWatch;
-import com.mojang.blaze3d.platform.InputConstants;
-import net.minecraft.client.gui.components.toasts.SystemToast;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
+import net.minecraft.sounds.SoundEvents;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -33,37 +28,18 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.entity.BlockEntityTypes;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
-import net.minecraft.world.phys.Vec3;
 
-import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-public final class StashFinder extends Module {
+public final class StashFinder extends Module implements FindSource {
 
-    public enum Notify { CHAT, TOAST, BOTH }
+    // What every find of this module is called in messages and waypoints.
+    private static final String KIND = "stash";
 
-    // The server is part of the identity. Two servers share their dimension keys.
-    private record Stash(String server, String dimension, int x, int z,
-                         Map<String, Integer> counts, boolean tracer) {
-
-        int total() {
-            int sum = 0;
-            for (int count : counts.values()) {
-                sum += count;
-            }
-            return sum;
-        }
-
-        boolean sameChunk(String server, String dimension, int x, int z) {
-            return this.server.equals(server) && this.dimension.equals(dimension)
-                && this.x == x && this.z == z;
-        }
-    }
-
+    // The fewest chunks looked at each tick. A long view distance needs more.
     private static final int SCANS_PER_TICK = 4;
 
     // Ticks before a chunk is looked at again. Chests placed after the first
@@ -73,8 +49,6 @@ public final class StashFinder extends Module {
     private static final int MAX_SCANNED = 20_000;
 
     private static final int DROP_PER_TRIM = 4_000;
-
-    private static final int MAX_STASHES = 1024;
 
     private final NumberSetting minimum = new NumberSetting("Minimum",
         "How many containers a chunk needs before it counts as a stash.", 6, 2, 64, 1)
@@ -95,73 +69,45 @@ public final class StashFinder extends Module {
     private final NumberSetting minimumDistance = new NumberSetting("Minimum distance",
         "Chunks closer than this to the world origin are never recorded.",
         0, 0, 10000, 100, " blocks").min(0);
-    private final BoolSetting notify = new BoolSetting("Notify",
-        "Say something when a stash is found.", true);
-    private final EnumSetting<Notify> notifyMode = new EnumSetting<>("Notify mode",
-        "Where the message goes.", Notify.BOTH)
-        .describe(Notify.CHAT, "A chat line only.")
-        .describe(Notify.TOAST, "A toast in the corner only.")
-        .describe(Notify.BOTH, "Both a chat line and a toast.")
-        .under(notify);
-    private final BoolSetting tracers = new BoolSetting("Tracers",
-        "Draws a line to every recorded chunk.", true);
-    private final ColorSetting tracerColor = new ColorSetting("Tracer colour",
-        "Colour of those lines.", 48, 1f, 1f, false)
-        .under(tracers);
-    private final NumberSetting tracerHide = new NumberSetting("Hide within",
-        "A tracer is dropped once you are this close to the chunk.", 16, 1, 50, 1, " blocks")
-        .min(1)
-        .under(tracers);
-    private final NumberSetting tracerRange = new NumberSetting("Tracer range",
-        "Chunks further away than this get no tracer.", 2000, 50, 10000, 50, " blocks")
-        .min(10)
-        .under(tracers);
-    private final BoolSetting columns = new BoolSetting("Chunk columns",
-        "Draws four tall lines at the centre of every recorded chunk.", false);
-    private final ColorSetting columnColor = new ColorSetting("Column colour",
-        "Colour of those lines.", 48, 1f, 1f, false)
-        .under(columns);
-    private final KeybindSetting clearKey = new KeybindSetting("Clear key",
-        "Press to drop every tracer.", KeybindSetting.UNBOUND);
-
-    // Kept for the whole session even whilst turned off and saved to disk.
-    private final List<Stash> stashes = new ArrayList<>();
+    private final FindLog finds = FindLog.byChunk(this);
+    private final Notice notice = new Notice(this, Notice.Where.BOTH);
+    private final AlertSound alarm = new AlertSound("Rings when a new stash is found.", SoundEvents.BELL_BLOCK);
+    private final FindLines marks = new FindLines(finds, true);
+    private final ColorSetting color = new ColorSetting("Colour",
+        "Colour of the lines and columns that point at stashes.", 48, 1f, 1f, false);
 
     // When each chunk in the current dimension was last counted. Oldest first.
     private final Map<Long, Integer> scanned = new LinkedHashMap<>();
     private int tick;
-
-    private String dimension = "";
-    private boolean loaded;
-    private boolean dirty;
+    // Where the walk over the square around you stopped. The next tick carries on from there.
+    private int cursor;
 
     private final WorldWatch world = new WorldWatch();
 
     public StashFinder() {
         super("StashFinder", "Points out chunks packed with containers as you travel.", Category.HUNTING);
-        addSettings(minimum, containers, ignoredSupports, minimumDistance, notify, notifyMode,
-            tracers, tracerColor, tracerHide, tracerRange, columns, columnColor, clearKey);
+        addSettings(minimum, containers, ignoredSupports, minimumDistance);
+        addSettings(notice.settings());
+        addSettings(alarm.settings());
+        addSettings(marks.settings());
+        addSettings(color);
+        addSettings(FindsScreen.settingsFor(finds));
         searchTags("stash", "base finder", "chests", "loot");
     }
 
     @Override
-    public String getSuffix() {
-        return count(stashes.size());
+    public FindLog findLog() {
+        return finds;
     }
 
-    @Subscribe
-    private void onKeyPress(KeyPressEvent event) {
-        if (event.getAction() != InputConstants.PRESS || mc.gui.screen() != null
-            || !clearKey.isBound() || event.getKey() != clearKey.getValue()) {
-            return;
-        }
-        for (int i = 0; i < stashes.size(); i++) {
-            Stash stash = stashes.get(i);
-            stashes.set(i, new Stash(stash.server(), stash.dimension(), stash.x(), stash.z(),
-                stash.counts(), false));
-        }
-        dirty = true;
-        ChatUtil.message("§bStashFinder §7dropped every tracer.");
+    @Override
+    public String getSuffix() {
+        return count(finds.count());
+    }
+
+    @Override
+    protected void onDisable() {
+        alarm.stop();
     }
 
     @Subscribe
@@ -169,48 +115,41 @@ public final class StashFinder extends Module {
         if (!inGame()) {
             return;
         }
-        if (!loaded) {
-            loaded = true;
-            load();
-        }
         if (world.changed()) {
             // Chunk coordinates mean something different in every world.
-            dimension = mc.level.dimension().identifier().toString();
             scanned.clear();
         }
 
         tick++;
         int radius = mc.options.getEffectiveRenderDistance();
+        int side = 2 * radius + 1;
+        int area = side * side;
         int centerX = mc.player.chunkPosition().x();
         int centerZ = mc.player.chunkPosition().z();
-        int budget = SCANS_PER_TICK;
+        // Enough looks to get round the whole square within the rescan time.
+        int budget = Math.max(SCANS_PER_TICK, area / RESCAN_TICKS + 1);
 
-        for (int dx = -radius; dx <= radius && budget > 0; dx++) {
-            for (int dz = -radius; dz <= radius && budget > 0; dz++) {
-                int x = centerX + dx;
-                int z = centerZ + dz;
-                long key = ChunkPos.pack(x, z);
-                Integer last = scanned.get(key);
-                if (last != null && tick - last < RESCAN_TICKS) {
-                    continue;
-                }
-                LevelChunk chunk = mc.level.getChunkSource()
-                    .getChunk(x, z, ChunkStatus.FULL, false);
-                if (chunk == null) {
-                    continue;
-                }
-                // Back to the end of the queue. The trim drops the stalest first.
-                scanned.remove(key);
-                scanned.put(key, tick);
-                budget--;
-                check(new ChunkPos(x, z), chunk);
+        for (int walked = 0; walked < area && budget > 0; walked++) {
+            cursor = (cursor + 1) % area;
+            int x = centerX - radius + cursor / side;
+            int z = centerZ - radius + cursor % side;
+            long key = ChunkPos.pack(x, z);
+            Integer last = scanned.get(key);
+            if (last != null && tick - last < RESCAN_TICKS) {
+                continue;
             }
+            LevelChunk chunk = mc.level.getChunkSource()
+                .getChunk(x, z, ChunkStatus.FULL, false);
+            if (chunk == null) {
+                continue;
+            }
+            // Back to the end of the queue. The trim drops the stalest first.
+            scanned.remove(key);
+            scanned.put(key, tick);
+            budget--;
+            check(new ChunkPos(x, z), chunk);
         }
         trim();
-        if (dirty) {
-            dirty = false;
-            save();
-        }
     }
 
     private void trim() {
@@ -231,44 +170,45 @@ public final class StashFinder extends Module {
             < minimumDistance.getValue()) {
             return;
         }
-        Map<String, Integer> counts = new LinkedHashMap<>();
+        Tally counts = new Tally();
+        BlockPos where = null;
         for (BlockEntity blockEntity : chunk.getBlockEntities().values()) {
             if (!counts(blockEntity)) {
                 continue;
             }
-            Identifier id = BuiltInRegistries.BLOCK_ENTITY_TYPE.getKey(blockEntity.getType());
-            counts.merge(id == null ? "unknown" : id.getPath(), 1, Integer::sum);
+            counts.add(ChatUtil.words(BuiltInRegistries.BLOCK_ENTITY_TYPE.getKey(blockEntity.getType())));
+            where = nearerMiddle(where, blockEntity.getBlockPos(), middleX, middleZ);
         }
-        int total = 0;
-        for (int each : counts.values()) {
-            total += each;
-        }
-        if (total < minimum.getInt()) {
+        if (counts.total() < minimum.getInt()) {
             return;
         }
 
-        String server = ServerInfo.key();
-        Stash fresh = new Stash(server, dimension, middleX, middleZ, counts, true);
-        for (int i = 0; i < stashes.size(); i++) {
-            Stash old = stashes.get(i);
-            if (!old.sameChunk(server, dimension, middleX, middleZ)) {
-                continue;
-            }
-            // Only a changed haul is worth saying again.
-            if (old.counts().equals(counts)) {
-                return;
-            }
-            stashes.set(i, new Stash(server, dimension, middleX, middleZ, counts, old.tracer()));
-            dirty = true;
-            report(fresh);
+        String detail = counts.words();
+        FindLog.Find old = finds.at(where);
+        // Only a changed haul is worth saying again.
+        if (old != null && old.detail().equals(detail)) {
             return;
         }
-        stashes.add(fresh);
-        if (stashes.size() > MAX_STASHES) {
-            stashes.removeFirst();
+        if (finds.add(where, KIND, detail)) {
+            alarm.ring();
         }
-        dirty = true;
-        report(fresh);
+        notice.tell(KIND, detail, where);
+    }
+
+    // The counted container nearest the middle of the chunk stands for the stash. Walking
+    // there leads to the containers and the columns rise over them.
+    private static BlockPos nearerMiddle(BlockPos best, BlockPos candidate, int middleX, int middleZ) {
+        if (best == null) {
+            return candidate.immutable();
+        }
+        return offMiddle(candidate, middleX, middleZ) < offMiddle(best, middleX, middleZ)
+            ? candidate.immutable() : best;
+    }
+
+    private static int offMiddle(BlockPos pos, int middleX, int middleZ) {
+        int dx = pos.getX() - middleX;
+        int dz = pos.getZ() - middleZ;
+        return dx * dx + dz * dz;
     }
 
     // A container resting on a listed block belongs to a generated structure.
@@ -280,116 +220,10 @@ public final class StashFinder extends Module {
         return !ignoredSupports.contains(mc.level.getBlockState(below).getBlock());
     }
 
-    private void report(Stash stash) {
-        if (!notify.isOn()) {
-            return;
-        }
-        int distance = (int) Math.sqrt(mc.player.distanceToSqr(stash.x(), mc.player.getY(), stash.z()));
-        String where = stash.x() + " " + stash.z();
-        if (!notifyMode.is(Notify.TOAST)) {
-            ChatUtil.message("§bStashFinder §7found §f" + describe(stash) + "§7 at §f" + where
-                + "§7 in " + shortName(stash.dimension()) + " and that is §f" + distance
-                + "§7 blocks away.");
-        }
-        if (!notifyMode.is(Notify.CHAT)) {
-            mc.gui.toastManager().addToast(new SystemToast(
-                SystemToast.SystemToastId.PERIODIC_NOTIFICATION,
-                Component.literal("Found stash"),
-                Component.literal(stash.total() + " containers at " + where)));
-        }
-    }
-
-    // The types found with a count each such as "12 chest 3 barrel".
-    private static String describe(Stash stash) {
-        StringBuilder text = new StringBuilder();
-        for (Map.Entry<String, Integer> entry : stash.counts().entrySet()) {
-            text.append(text.isEmpty() ? "" : " ").append(entry.getValue()).append(" ")
-                .append(entry.getKey().replace('_', ' '));
-        }
-        return text.toString();
-    }
-
-    private static String shortName(String dimension) {
-        int colon = dimension.indexOf(':');
-        return colon == -1 ? dimension : dimension.substring(colon + 1);
-    }
-
     @Subscribe
     private void onRender3D(Render3DEvent event) {
-        if (!inGame() || (!tracers.isOn() && !columns.isOn())) {
-            return;
+        if (inGame()) {
+            marks.draw(event.getBatch(), find -> color.getColor());
         }
-        String server = ServerInfo.key();
-        double eye = mc.player.getEyeY();
-        for (Stash stash : stashes) {
-            if (!stash.tracer() || !stash.server().equals(server)
-                || !stash.dimension().equals(dimension)) {
-                continue;
-            }
-            double away = Math.sqrt(mc.player.distanceToSqr(stash.x(), mc.player.getY(), stash.z()));
-            if (away < tracerHide.getValue() || away > tracerRange.getValue()) {
-                continue;
-            }
-            if (tracers.isOn()) {
-                event.getBatch().tracer(new Vec3(stash.x() + 0.5, eye, stash.z() + 0.5),
-                    tracerColor.getColor(), true);
-            }
-            if (columns.isOn()) {
-                drawColumn(event, stash);
-            }
-        }
-    }
-
-    private void drawColumn(Render3DEvent event, Stash stash) {
-        double bottom = mc.level.getMinY();
-        double top = mc.level.getMaxY();
-        int colour = columnColor.getColor();
-        for (int corner = 0; corner < 4; corner++) {
-            double x = stash.x() + (corner < 2 ? 0 : 1);
-            double z = stash.z() + (corner % 2 == 0 ? 0 : 1);
-            event.getBatch().line(new Vec3(x, bottom, z), new Vec3(x, top, z), colour, true);
-        }
-    }
-
-    private static Path file() {
-        return DataFiles.path("stashes.json");
-    }
-
-    private void load() {
-        DataFiles.readJson(file(), StashFinder::decode).ifPresent(stashes::addAll);
-    }
-
-    private static List<Stash> decode(JsonElement root) {
-        List<Stash> decoded = new ArrayList<>();
-        for (JsonElement element : root.getAsJsonArray()) {
-            JsonObject object = element.getAsJsonObject();
-            Map<String, Integer> counts = new LinkedHashMap<>();
-            for (Map.Entry<String, JsonElement> entry : object.getAsJsonObject("counts").entrySet()) {
-                counts.put(entry.getKey(), entry.getValue().getAsInt());
-            }
-            decoded.add(new Stash(object.get("server").getAsString(),
-                object.get("dimension").getAsString(), object.get("x").getAsInt(),
-                object.get("z").getAsInt(), counts, object.get("tracer").getAsBoolean()));
-        }
-        return decoded;
-    }
-
-    private void save() {
-        JsonArray array = new JsonArray();
-        for (Stash stash : stashes) {
-            JsonObject object = new JsonObject();
-            object.addProperty("server", stash.server());
-            object.addProperty("dimension", stash.dimension());
-            object.addProperty("x", stash.x());
-            object.addProperty("z", stash.z());
-            object.addProperty("tracer", stash.tracer());
-            JsonObject counts = new JsonObject();
-            for (Map.Entry<String, Integer> entry : stash.counts().entrySet()) {
-                counts.addProperty(entry.getKey(), entry.getValue());
-            }
-            object.add("counts", counts);
-            array.add(object);
-        }
-        DataFiles.writeJson(file(), array);
     }
 }

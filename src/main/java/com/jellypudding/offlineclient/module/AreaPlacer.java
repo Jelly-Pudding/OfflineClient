@@ -9,6 +9,7 @@ import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
+import com.jellypudding.offlineclient.util.UseBudget;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.level.block.Block;
@@ -26,7 +27,7 @@ public abstract class AreaPlacer extends Module {
     protected final NumberSetting range;
     protected final NumberSetting wallsRange;
     protected final RegistryListSetting<Block> blocks;
-    protected final NumberSetting perTick;
+    protected final NumberSetting perRound;
     protected final NumberSetting delay;
     protected final BoolSetting rotate;
     protected final BoolSetting render;
@@ -49,7 +50,7 @@ public abstract class AreaPlacer extends Module {
             "How far to place with no clear view from your eyes.", 4.5, 0, 6, 0.1).min(0);
         blocks = new RegistryListSetting<>("Blocks", blocksDescription,
             BuiltInRegistries.BLOCK, defaultBlocks);
-        perTick = new NumberSetting("Blocks per tick",
+        perRound = new NumberSetting("Blocks per round",
             "How many blocks to place in one round.", 1, 1, 8, 1).min(1);
         delay = new NumberSetting("Delay",
             "Ticks to wait between placing rounds.", defaultDelay, 0, 20, 1, " ticks");
@@ -84,7 +85,7 @@ public abstract class AreaPlacer extends Module {
 
     // How many blocks go down this round. A subclass may cap it lower.
     protected int roundSize() {
-        return perTick.getInt();
+        return perRound.getInt();
     }
 
     @Override
@@ -120,6 +121,11 @@ public abstract class AreaPlacer extends Module {
             timer--;
             return;
         }
+        // Paper drops use packets past its limit. The rest of the round waits for a later tick.
+        int round = Math.min(roundSize(), UseBudget.remaining());
+        if (round == 0) {
+            return;
+        }
 
         int slot = BlockUtil.findBlockSlot(this::allowed);
         if (slot == -1) {
@@ -129,7 +135,6 @@ public abstract class AreaPlacer extends Module {
         slots.select(slot);
 
         int placed = 0;
-        int round = roundSize();
         for (BlockPos pos : targets) {
             if (placed >= round) {
                 break;

@@ -26,7 +26,7 @@ public final class Painter extends AreaPlacer {
             "The blocks to cover them with. A block on both lists is never used. Click to pick them.",
             List.of(Blocks.COBBLESTONE, Blocks.COBBLED_DEEPSLATE, Blocks.STONE, Blocks.DEEPSLATE),
             "Outline the spots waiting to be filled.", 1, TARGET_COLOR);
-        addSettings(cover, blocks, range, wallsRange, perTick, delay, rotate, render);
+        addSettings(cover, blocks, range, wallsRange, perRound, delay, rotate, render);
         searchTags("cover", "coat", "skin", "replace faces");
     }
 

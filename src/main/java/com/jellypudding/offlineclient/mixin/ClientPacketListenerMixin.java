@@ -8,6 +8,7 @@ import com.jellypudding.offlineclient.event.events.EntityDeathEvent;
 import com.jellypudding.offlineclient.modules.player.NoRotate;
 import com.jellypudding.offlineclient.modules.render.NoRender;
 import com.jellypudding.offlineclient.util.Modules;
+import com.jellypudding.offlineclient.util.PlayerStats;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.multiplayer.ClientPacketListener;
@@ -26,6 +27,13 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(ClientPacketListener.class)
 public abstract class ClientPacketListenerMixin {
+
+    // Only the main thread run reaches the end. By then the numbers are in the player's counter.
+    @Inject(method = "handleAwardStats(Lnet/minecraft/network/protocol/game/ClientboundAwardStatsPacket;)V",
+        at = @At("TAIL"))
+    private void onAwardStats(CallbackInfo ci) {
+        PlayerStats.INSTANCE.onAnswer();
+    }
 
     // Dropped on the network thread before the packet is handed to the main thread.
     @Inject(method = "handleAddEntity(Lnet/minecraft/network/protocol/game/ClientboundAddEntityPacket;)V",

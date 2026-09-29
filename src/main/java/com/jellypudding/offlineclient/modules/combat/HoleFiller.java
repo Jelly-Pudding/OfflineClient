@@ -62,7 +62,7 @@ public final class HoleFiller extends Module {
         .under(nearEnemies);
     private final KeybindSetting fillKey = new KeybindSetting("Fill key",
         "Fills every hole in range whilst this key is held.", KeybindSetting.UNBOUND);
-    private final NumberSetting perTick = new NumberSetting("Blocks per tick",
+    private final NumberSetting perRound = new NumberSetting("Blocks per round",
         "How many blocks to place in one round.", 2, 1, 4, 1);
     private final NumberSetting delay = new NumberSetting("Delay",
         "Ticks to wait between placing rounds.", 1, 0, 10, 1, " ticks");
@@ -92,7 +92,7 @@ public final class HoleFiller extends Module {
     public HoleFiller() {
         super("HoleFiller", "Seals the holes around an enemy before they can hide in one.", Category.COMBAT);
         addSettings(range, wallsRange, searchRadius, blocks, nearEnemies, targetRange, predict,
-            leadTicks, ignoreSafe, onlyMoving, fillKey, perTick, delay, genuineOnly, doubles,
+            leadTicks, ignoreSafe, onlyMoving, fillKey, perRound, delay, genuineOnly, doubles,
             ownHole, rotate, swing, render);
         addSettings(boxStyle.settings());
         addSettings(nextColor, laterColor);
@@ -151,7 +151,7 @@ public final class HoleFiller extends Module {
 
         int placed = 0;
         for (BlockPos pos : holes) {
-            if (placed >= perTick.getInt()) {
+            if (placed >= perRound.getInt()) {
                 break;
             }
             if (BlockUtil.placeAny(pos, rotate.isOn(), false)) {
@@ -308,7 +308,7 @@ public final class HoleFiller extends Module {
             return;
         }
         DrawBatch batch = event.getBatch();
-        int next = perTick.getInt();
+        int next = perRound.getInt();
         for (int i = 0; i < holes.size(); i++) {
             int color = i < next ? nextColor.getColor() : laterColor.getColor();
             boxStyle.draw(batch, holes.get(i), color, false);

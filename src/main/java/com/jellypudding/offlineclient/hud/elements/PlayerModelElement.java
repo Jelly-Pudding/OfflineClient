@@ -1,10 +1,10 @@
 package com.jellypudding.offlineclient.hud.elements;
 
 import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.hud.Backdrop;
 import com.jellypudding.offlineclient.hud.HudElement;
 import com.jellypudding.offlineclient.render.EntityPreview;
 import com.jellypudding.offlineclient.setting.BoolSetting;
-import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -29,14 +29,12 @@ public final class PlayerModelElement extends HudElement {
     private final NumberSetting angle = new NumberSetting("Model angle",
         "The angle it holds whilst it does not follow you.", 20, -180, 180, 5, " degrees")
         .min(-180).max(180).unless(follow);
-    private final BoolSetting background = new BoolSetting("Model background",
-        "Draw a panel behind it.", false);
-    private final ColorSetting backgroundColor = new ColorSetting("Model background colour",
-        "Colour of that panel.", 240, 0.3f, 0.1f, false).under(background);
+    private final Backdrop backdrop = new Backdrop("Model", "the body", false);
 
     public PlayerModelElement() {
         super("Player model", "Your own body drawn on the screen.", false, 4, 55);
-        add(follow, angle, background, backgroundColor);
+        add(follow, angle);
+        add(backdrop.settings());
     }
 
     @Override
@@ -50,9 +48,7 @@ public final class PlayerModelElement extends HudElement {
         if (player == null) {
             return;
         }
-        if (background.isOn()) {
-            context.fill(0, 0, width(font), height(font), backgroundColor.getColor());
-        }
+        backdrop.draw(context, 0, 0, width(font), height(font));
         LivingEntityRenderState state = EntityPreview.flatState(player,
             OfflineClient.MC.getDeltaTracker().getGameTimeDeltaPartialTick(true));
         if (state == null) {

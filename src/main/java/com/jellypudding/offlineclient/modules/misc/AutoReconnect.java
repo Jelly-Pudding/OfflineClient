@@ -9,6 +9,8 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import net.minecraft.SharedConstants;
 import net.minecraft.client.gui.screens.ConnectScreen;
 import net.minecraft.client.gui.screens.DisconnectedScreen;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.client.multiplayer.resolver.ServerAddress;
 
@@ -18,6 +20,8 @@ public final class AutoReconnect extends Module {
         "Seconds to wait before reconnecting.", 5, 0, 60, 0.1, "s").min(0);
     private final BoolSetting buttons = new BoolSetting("Buttons",
         "Adds a reconnect button and a switch to the disconnected screen.", true);
+    private final BoolSetting loadingButtons = new BoolSetting("Loading buttons",
+        "Adds disconnect and reconnect buttons to the loading screen for a join that never finishes.", true);
 
     // The last server joined. Kept even whilst the module is off. Switched on
     // after a disconnect it still knows where to go.
@@ -27,8 +31,8 @@ public final class AutoReconnect extends Module {
 
     public AutoReconnect() {
         super("AutoReconnect", "Rejoins the server after you get disconnected.", Category.MISC);
-        addSettings(delay, buttons);
-        searchTags("rejoin", "reconnect");
+        addSettings(delay, buttons, loadingButtons);
+        searchTags("rejoin", "reconnect", "stuck loading", "loading terrain", "cancel loading");
     }
 
     // Called from the connect screen whatever the module is doing.
@@ -42,6 +46,10 @@ public final class AutoReconnect extends Module {
         return buttons.isOn();
     }
 
+    public boolean showsLoadingButtons() {
+        return loadingButtons.isOn();
+    }
+
     // Seconds left rounded to one place. Below zero whilst nothing is counting.
     public double secondsLeft() {
         return countdown < 0 ? -1 : Math.round(countdown / 2f) / 10.0;
@@ -49,6 +57,22 @@ public final class AutoReconnect extends Module {
 
     public static boolean canReconnect() {
         return lastServer != null;
+    }
+
+    // True whilst you play on a server there is a way back to.
+    public static boolean canRejoin() {
+        return canReconnect() && !mc.isLocalServer();
+    }
+
+    // Leaves the world the way the pause menu does. A single player world is saved first.
+    public static void leave() {
+        mc.disconnectFromWorld(ClientLevel.DEFAULT_QUIT_MESSAGE);
+    }
+
+    // Leaves the server and joins it again straight away.
+    public static void rejoin() {
+        leave();
+        connect();
     }
 
     public void reconnectNow() {
@@ -87,12 +111,13 @@ public final class AutoReconnect extends Module {
         connect();
     }
 
-    private void connect() {
-        if (lastServer == null || mc.gui.screen() == null) {
+    // Cancelling the connection goes back to the screen that was open.
+    private static void connect() {
+        Screen parent = mc.gui.screen();
+        if (lastServer == null || parent == null) {
             return;
         }
-        ConnectScreen.startConnecting(mc.gui.screen(), mc,
-            ServerAddress.parseString(lastServer.ip), lastServer, false, null);
+        ConnectScreen.startConnecting(parent, mc, ServerAddress.parseString(lastServer.ip), lastServer, false, null);
     }
 
     @Override

@@ -1,6 +1,7 @@
 package com.jellypudding.offlineclient.gui;
 
 import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.setting.CountedPickList;
 import com.jellypudding.offlineclient.setting.PickList;
 import com.jellypudding.offlineclient.util.RenderUtil;
 import com.jellypudding.offlineclient.util.SearchRank;
@@ -20,7 +21,8 @@ import java.util.List;
 import java.util.Map;
 
 // Two column picker for a list setting. Clicking an entry moves it across.
-// The left column holds what is on offer and the right what is picked.
+// The left column holds what is on offer and the right what is picked. A list
+// with a count per entry shows it at the end of each picked row.
 public final class ListPickerScreen<T> extends Screen {
 
     private record Entry<T>(T value, String name, String label, String id, ItemStack icon) {
@@ -39,9 +41,19 @@ public final class ListPickerScreen<T> extends Screen {
     private static final int BUTTON_HEIGHT = 16;
     private static final int BUTTON_GAP = 8;
     private static final int FOOTER = 34;
+    // Space between a count and the name or the row edge.
+    private static final int COUNT_GAP = 4;
+    // An empty count box still needs something to aim at.
+    private static final int MIN_COUNT_WIDTH = 6;
+    // More digits than this overflow a whole number and no count comes near them.
+    private static final int MAX_DIGITS = 9;
+    private static final TextField.Filter DIGITS = c -> c >= '0' && c <= '9';
+    private static final String COUNT_HELP = "Click the number to type how many. Enter keeps it.";
 
     private final Screen parent;
     private final PickList<T> setting;
+    // Null for a list without counts.
+    private final CountedPickList<T> counted;
 
     // Every entry on offer sorted by name. Built once.
     private final List<Entry<T>> all = new ArrayList<>();
@@ -54,12 +66,16 @@ public final class ListPickerScreen<T> extends Screen {
 
     private final SearchField search = SearchField.sticky("type to search", this::refresh);
     private final TextInput textInput = new TextInput(this);
+    private final TextField countField = new TextField();
+    // The picked entry whose count is being typed. Null whilst none is.
+    private T editing;
     private String tooltip;
 
     public ListPickerScreen(Screen parent, PickList<T> setting) {
         super(Component.literal(setting.getName()));
         this.parent = parent;
         this.setting = setting;
+        this.counted = setting instanceof CountedPickList<T> list ? list : null;
 
         Font font = OfflineClient.MC.font;
         // Names are trimmed once for the narrowest a column gets. A list of
@@ -95,6 +111,9 @@ public final class ListPickerScreen<T> extends Screen {
             }
         }
         chosen.clear();
+        if (editing != null && !setting.isChosen(editing)) {
+            editing = null;
+        }
         for (T value : setting.chosen()) {
             Entry<T> entry = byValue.get(value);
             if (entry != null) {
@@ -171,8 +190,8 @@ public final class ListPickerScreen<T> extends Screen {
         search.render(context, font, width / 2 - SEARCH_WIDTH / 2, SEARCH_TOP, SEARCH_WIDTH,
             mouseX, mouseY, null);
 
-        renderColumn(context, font, leftX(), "available", available, leftBar, mouseX, mouseY);
-        renderColumn(context, font, rightX(), "chosen", chosen, rightBar, mouseX, mouseY);
+        renderColumn(context, font, leftX(), "available", available, leftBar, mouseX, mouseY, false);
+        renderColumn(context, font, rightX(), "chosen", chosen, rightBar, mouseX, mouseY, true);
 
         boolean overDone = overButton(mouseX, mouseY, doneX());
         boolean overAddAll = overButton(mouseX, mouseY, addAllX());
@@ -200,7 +219,8 @@ public final class ListPickerScreen<T> extends Screen {
     }
 
     private void renderColumn(GuiGraphicsExtractor context, Font font, int x, String header,
-                              List<Entry<T>> list, ScrollBar bar, int mouseX, int mouseY) {
+                              List<Entry<T>> list, ScrollBar bar, int mouseX, int mouseY,
+                              boolean picked) {
         int top = LIST_TOP;
         int h = listHeight();
         int total = list.size() * ROW_HEIGHT;
@@ -222,9 +242,11 @@ public final class ListPickerScreen<T> extends Screen {
         for (Entry<T> entry : list) {
             if (rowY + ROW_HEIGHT > top && rowY < top + h) {
                 boolean hovered = mouseInside && mouseY >= rowY && mouseY < rowY + ROW_HEIGHT;
+                boolean counts = picked && counted != null;
+                int countLeft = counts ? countLeft(font, entry.value(), x + rowW) : x + rowW;
                 if (hovered) {
                     context.fill(x, rowY, x + rowW, rowY + ROW_HEIGHT, GuiTheme.bgRowHover());
-                    tooltip = entry.id();
+                    tooltip = counts && mouseX >= countLeft ? COUNT_HELP : entry.id();
                 }
                 context.fill(x, rowY + ROW_HEIGHT - 1, x + rowW, rowY + ROW_HEIGHT, GuiTheme.RULE);
                 context.guiRenderState.up();
@@ -232,7 +254,13 @@ public final class ListPickerScreen<T> extends Screen {
                     context.item(entry.icon(), x + 3, rowY + 1);
                 }
                 context.guiRenderState.up();
-                context.text(font, entry.label(), x + LABEL_X, GuiTheme.textY(rowY, ROW_HEIGHT - 1),
+                String label = entry.label();
+                if (counts) {
+                    renderCount(context, font, entry.value(), countLeft, x + rowW, rowY,
+                        hovered && mouseX >= countLeft);
+                    label = SettingWidget.trimEnd(font, entry.name(), countLeft - COUNT_GAP - x - LABEL_X);
+                }
+                context.text(font, label, x + LABEL_X, GuiTheme.textY(rowY, ROW_HEIGHT - 1),
                     hovered ? GuiTheme.accentText() : GuiTheme.text(), false);
             }
             rowY += ROW_HEIGHT;
@@ -250,10 +278,54 @@ public final class ListPickerScreen<T> extends Screen {
         }
     }
 
+    // The count at the end of a picked row or the number being typed there.
+    private String countText(T value) {
+        return value.equals(editing) ? countField.get() : GuiTheme.CROSS + counted.count(value);
+    }
+
+    // Where a picked row's count starts. It ends a gap in from the row's right edge.
+    private int countLeft(Font font, T value, int rowRight) {
+        return rowRight - COUNT_GAP - Math.max(MIN_COUNT_WIDTH, font.width(countText(value)));
+    }
+
+    private void renderCount(GuiGraphicsExtractor context, Font font, T value, int left, int rowRight,
+                             int rowY, boolean hovered) {
+        int textY = GuiTheme.textY(rowY, ROW_HEIGHT - 1);
+        int right = rowRight - COUNT_GAP;
+        if (value.equals(editing)) {
+            countField.render(context, font, left, textY, right - left, GuiTheme.accentText(), true);
+        } else {
+            context.text(font, countText(value), left, textY,
+                hovered ? GuiTheme.accentText() : GuiTheme.textDim(), false);
+        }
+        context.fill(left, textY + GuiTheme.TEXT_HEIGHT + 1, right, textY + GuiTheme.TEXT_HEIGHT + 2,
+            value.equals(editing) || hovered ? GuiTheme.accentText() : GuiTheme.scrollThumb());
+    }
+
+    private void startCount(T value) {
+        editing = value;
+        countField.set(String.valueOf(counted.count(value)));
+        countField.selectAll();
+    }
+
+    // An empty box keeps the count it had.
+    private void commitCount() {
+        if (editing == null) {
+            return;
+        }
+        String typed = countField.get();
+        if (!typed.isEmpty()) {
+            counted.setCount(editing, typed.length() > MAX_DIGITS ? Integer.MAX_VALUE : Integer.parseInt(typed));
+            OfflineClient.INSTANCE.getConfigManager().saveSoon();
+        }
+        editing = null;
+    }
+
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
         double mx = event.x();
         double my = event.y();
+        commitCount();
 
         if (overButton(mx, my, doneX())) {
             onClose();
@@ -302,6 +374,11 @@ public final class ListPickerScreen<T> extends Screen {
         int index = (int) ((my - LIST_TOP + bar.getOffset()) / ROW_HEIGHT);
         if (index >= 0 && index < list.size()) {
             Entry<T> entry = list.get(index);
+            int rowRight = x + ScrollBar.rowWidth(COL_WIDTH, total, h);
+            if (!adding && counted != null && mx >= countLeft(OfflineClient.MC.font, entry.value(), rowRight)) {
+                startCount(entry.value());
+                return true;
+            }
             if (adding) {
                 setting.add(entry.value());
             } else {
@@ -345,6 +422,16 @@ public final class ListPickerScreen<T> extends Screen {
     @Override
     public boolean keyPressed(KeyEvent event) {
         int key = event.key();
+        if (editing != null) {
+            if (key == InputConstants.KEY_RETURN || key == InputConstants.KEY_NUMPADENTER) {
+                commitCount();
+            } else if (key == InputConstants.KEY_ESCAPE) {
+                editing = null;
+            } else {
+                countField.keyPressed(event, DIGITS);
+            }
+            return true;
+        }
         if (key == InputConstants.KEY_ESCAPE) {
             onClose();
             return true;
@@ -354,6 +441,10 @@ public final class ListPickerScreen<T> extends Screen {
 
     @Override
     public boolean charTyped(CharacterEvent event) {
+        if (editing != null) {
+            countField.charTyped((char) event.codepoint(), DIGITS);
+            return true;
+        }
         return search.charTyped((char) event.codepoint()) || super.charTyped(event);
     }
 
@@ -373,6 +464,7 @@ public final class ListPickerScreen<T> extends Screen {
     // The same ClickGUI instance is kept with its panel positions.
     @Override
     public void onClose() {
+        commitCount();
         OfflineClient.INSTANCE.getConfigManager().saveNow();
         OfflineClient.MC.gui.setScreen(parent);
     }

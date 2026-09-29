@@ -8,14 +8,19 @@ import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.render.BoxStyle;
 import com.jellypudding.offlineclient.render.DrawBatch;
+import com.jellypudding.offlineclient.render.NearFade;
 import com.jellypudding.offlineclient.render.WorldToScreen;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
-import com.jellypudding.offlineclient.util.BlockUtil;
+import com.jellypudding.offlineclient.util.Carried;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.EntityColors;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.GearRule;
+import com.jellypudding.offlineclient.util.ItemUtil;
+import com.jellypudding.offlineclient.util.Notice;
 import com.jellypudding.offlineclient.util.RenderUtil;
 import com.jellypudding.offlineclient.util.Sightings;
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
@@ -24,7 +29,6 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.tags.EnchantmentTags;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.animal.allay.Allay;
 import net.minecraft.world.entity.npc.villager.AbstractVillager;
@@ -32,8 +36,6 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.Enchantment;
-import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.ShulkerBoxBlock;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
@@ -44,9 +46,12 @@ import java.util.List;
 // treasure enchantments. Anything past that was picked up where a player had been.
 public final class GearedMobs extends Module {
 
-    // What gave a mob away. The verb says whether it is held or worn.
-    private record Clue(Mob mob, String verb, String what) {
+    // A mob with every piece that gave it away.
+    private record Suspect(Mob mob, List<Carried.Piece> pieces) {
     }
+
+    // What every message of this module is about. One quiet time covers them all.
+    private static final String KIND = "mob";
 
     private static final String NETHERITE = "netherite";
     private static final String PICKAXE = "_pickaxe";
@@ -61,6 +66,7 @@ public final class GearedMobs extends Module {
         "Flags gear renamed at an anvil. Nothing a mob spawns with has a name.", true);
     private final BoolSetting treasure = new BoolSetting("Treasure enchantments",
         "Flags gear with Mending or another enchantment that spawned gear never gets.", true);
+    private final GearRule enchantments = GearRule.clue();
     private final BoolSetting allays = new BoolSetting("Allays",
         "Flags an allay carrying anything. Only a player can hand an allay its first item.", true);
     private final BoxStyle shape = BoxStyle.shapeOnly(BoxStyle.Shape.BOTH);
@@ -70,26 +76,31 @@ public final class GearedMobs extends Module {
         "Writes what gave each mob away above its head.", true);
     private final NumberSetting scale = new NumberSetting("Scale",
         "Size of the labels.", 1, 0.5, 3, 0.1).min(0.1).under(labels);
-    private final BoolSetting chat = new BoolSetting("Chat",
-        "Posts each mob in chat with where it stands the first time you see it.", true);
+    private final Notice notice = new Notice(this, Notice.Where.CHAT);
     private final EntityColors colors = new EntityColors(EntityColors.Mode.SINGLE);
+    // A mob walking up to you would hide behind its own box.
+    private final NearFade fade = new NearFade(3);
 
     // Rebuilt once a tick.
-    private List<Clue> found = List.of();
+    private List<Suspect> found = List.of();
     private final Sightings sightings = new Sightings();
 
     public GearedMobs() {
         super("GearedMobs", "Highlights mobs carrying gear that only players bring into the world.",
             Category.HUNTING);
-        addSettings(items, named, treasure, allays);
+        addSettings(items, named, treasure);
+        addSettings(enchantments.settings());
+        addSettings(allays);
         addSettings(shape.settings());
-        addSettings(tracers, labels, scale, chat);
+        addSettings(tracers, labels, scale);
+        addSettings(notice.settings());
         addSettings(colors.settings());
-        searchTags("mob gear", "zombie", "netherite", "base");
+        addSettings(fade.setting());
+        searchTags("mob gear", "zombie", "netherite", "enchanted", "base");
     }
 
-    // Nothing spawns holding or wearing any of these. Netherite and pickaxes and shulker
-    // boxes are gathered by name because tags are not loaded when this runs.
+    // Nothing spawns holding or wearing any of these. Netherite and pickaxes are gathered by
+    // name and shulker boxes by their block because tags are not loaded when this runs.
     private static List<Item> playerItems() {
         List<Item> picked = new ArrayList<>(List.of(Items.ELYTRA, Items.TOTEM_OF_UNDYING,
             Items.PLAYER_HEAD, Items.MACE, Items.END_CRYSTAL, Items.ENDER_CHEST, Items.RESPAWN_ANCHOR,
@@ -98,8 +109,7 @@ public final class GearedMobs extends Module {
         BuiltInRegistries.ITEM.stream()
             .filter(item -> {
                 String path = BuiltInRegistries.ITEM.getKey(item).getPath();
-                return path.startsWith(NETHERITE) || path.endsWith(PICKAXE)
-                    || Block.byItem(item) instanceof ShulkerBoxBlock;
+                return path.startsWith(NETHERITE) || path.endsWith(PICKAXE) || ItemUtil.isShulkerBox(item);
             })
             .forEach(picked::add);
         return picked;
@@ -127,22 +137,22 @@ public final class GearedMobs extends Module {
         if (!inGame()) {
             return;
         }
-        List<Clue> clues = new ArrayList<>();
+        List<Suspect> suspects = new ArrayList<>();
         for (Entity entity : mc.level.entitiesForRendering()) {
             if (!(entity instanceof Mob mob) || ignored(mob)) {
                 continue;
             }
-            Clue clue = clueOf(mob);
-            if (clue == null) {
+            List<Carried.Piece> pieces = piecesOf(mob);
+            if (pieces.isEmpty()) {
                 continue;
             }
-            clues.add(clue);
-            if (chat.isOn() && sightings.firstTime(mob)) {
-                ChatUtil.message("§bGearedMobs §f" + mob.getType().getDescription().getString() + " §7at §f"
-                    + BlockUtil.text(mob.blockPosition()) + " §7is " + clue.verb() + " §f" + clue.what() + "§7.");
+            suspects.add(new Suspect(mob, pieces));
+            if (sightings.firstTime(mob)) {
+                notice.tell(KIND, ChatUtil.withArticle(ChatUtil.words(mob.getType())) + " "
+                    + Carried.describe(pieces), mob.blockPosition());
             }
         }
-        found = clues;
+        found = suspects;
     }
 
     // Villagers hold up whatever they trade. Your own pets and mount wear what you gave them.
@@ -150,37 +160,31 @@ public final class GearedMobs extends Module {
         return mob instanceof AbstractVillager || EntityUtil.isYours(mob);
     }
 
-    private Clue clueOf(Mob mob) {
+    private List<Carried.Piece> piecesOf(Mob mob) {
         if (allays.isOn() && mob instanceof Allay allay && allay.hasItemInHand()) {
-            return new Clue(mob, "carrying", allay.getMainHandItem().getHoverName().getString());
+            return List.of(new Carried.Piece("carrying", ChatUtil.words(allay.getMainHandItem().getItem())));
         }
-        for (EquipmentSlot slot : EquipmentSlot.VALUES) {
-            ItemStack stack = mob.getItemBySlot(slot);
-            String sign = stack.isEmpty() ? null : playerSign(stack);
-            if (sign != null) {
-                return new Clue(mob, slot.getType() == EquipmentSlot.Type.HAND ? "holding" : "wearing", sign);
-            }
-        }
-        return null;
+        return Carried.pieces(mob, this::playerSign);
     }
 
     // What marks the stack as a player's or null when nothing does.
     private String playerSign(ItemStack stack) {
+        String name = ChatUtil.words(stack.getItem());
         if (items.contains(stack.getItem())) {
-            return stack.getItemName().getString();
+            return name;
         }
         if (named.isOn() && stack.has(DataComponents.CUSTOM_NAME)) {
-            return stack.getItemName().getString() + " named " + stack.getHoverName().getString();
+            return name + " named " + stack.getHoverName().getString();
         }
         if (treasure.isOn()) {
             for (Object2IntMap.Entry<Holder<Enchantment>> entry : stack.getEnchantments().entrySet()) {
                 if (entry.getKey().is(EnchantmentTags.TREASURE)) {
-                    return stack.getItemName().getString() + " with "
-                        + Enchantment.getFullname(entry.getKey(), entry.getIntValue()).getString();
+                    return name + " with " + Enchantment.getFullname(entry.getKey(), entry.getIntValue()).getString();
                 }
             }
         }
-        return null;
+        String picked = enchantments.carried(stack);
+        return picked == null ? null : name + " with " + picked;
     }
 
     @Subscribe
@@ -189,13 +193,17 @@ public final class GearedMobs extends Module {
             return;
         }
         DrawBatch batch = event.getBatch();
-        for (Clue clue : found) {
-            Mob mob = clue.mob();
+        for (Suspect suspect : found) {
+            Mob mob = suspect.mob();
             if (mob.isRemoved()) {
                 continue;
             }
             AABB box = EntityUtil.lerpedBox(mob, event.getPartialTicks());
-            int color = colors.colorOf(mob);
+            float strength = fade.strengthAt(box.getCenter());
+            if (strength <= 0) {
+                continue;
+            }
+            int color = ColorUtil.fade(colors.colorOf(mob), strength);
             shape.draw(batch, box, color, true);
             if (tracers.isOn()) {
                 batch.tracer(box.getCenter(), color, true);
@@ -208,8 +216,8 @@ public final class GearedMobs extends Module {
         if (!labels.isOn() || !inGame() || found.isEmpty() || !WorldToScreen.update()) {
             return;
         }
-        for (Clue clue : found) {
-            Mob mob = clue.mob();
+        for (Suspect suspect : found) {
+            Mob mob = suspect.mob();
             if (mob.isRemoved()) {
                 continue;
             }
@@ -218,7 +226,7 @@ public final class GearedMobs extends Module {
             Vec3 screen = WorldToScreen.project(top);
             if (screen != null) {
                 RenderUtil.label(event.getContext(), mc.font, screen.x, screen.y, scale.getFloat(),
-                    List.of(clue.what()), List.of(colors.colorOf(mob)));
+                    List.of(Carried.label(suspect.pieces())), List.of(colors.colorOf(mob)));
             }
         }
     }

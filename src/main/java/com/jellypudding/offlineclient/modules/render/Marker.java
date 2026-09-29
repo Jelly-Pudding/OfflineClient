@@ -87,7 +87,7 @@ public final class Marker extends Module {
         public void reset() {
             entries.clear();
         }
-    }.visibleWhen(() -> false);
+    }.internal();
 
     public Marker() {
         super("Marker", "Draws shapes you place yourself to build against.", Category.RENDER);
@@ -280,8 +280,8 @@ public final class Marker extends Module {
         }
 
         private void drawCuboid(DrawBatch batch, boolean through) {
-            BlockPos one = parse(first.getValue());
-            BlockPos two = parse(second.getValue());
+            BlockPos one = BlockUtil.parse(first.getValue());
+            BlockPos two = BlockUtil.parse(second.getValue());
             if (one == null || two == null) {
                 return;
             }
@@ -292,7 +292,7 @@ public final class Marker extends Module {
         }
 
         private void drawSphere(DrawBatch batch, boolean through) {
-            BlockPos centre = parse(first.getValue());
+            BlockPos centre = BlockUtil.parse(first.getValue());
             if (centre == null) {
                 return;
             }
@@ -390,20 +390,6 @@ public final class Marker extends Module {
             }
             if (o.has("style")) {
                 style.fromJson(o.get("style"));
-            }
-        }
-
-        // Null when the text is not three whole numbers.
-        private static BlockPos parse(String text) {
-            String[] parts = text.trim().split("\\s+");
-            if (parts.length != 3) {
-                return null;
-            }
-            try {
-                return new BlockPos(Integer.parseInt(parts[0]), Integer.parseInt(parts[1]),
-                    Integer.parseInt(parts[2]));
-            } catch (NumberFormatException e) {
-                return null;
             }
         }
     }

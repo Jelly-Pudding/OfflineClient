@@ -2,10 +2,13 @@ package com.jellypudding.offlineclient.command;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.setting.ActionSetting;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.Hop;
+import net.minecraft.client.multiplayer.chat.GuiMessage;
 import net.minecraft.world.phys.Vec3;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.OptionalDouble;
 import java.util.OptionalInt;
@@ -43,6 +46,11 @@ public abstract class Command {
     // Shows the player how to type one form of the command.
     protected void usage(String form) {
         ChatUtil.error("Type " + OfflineClient.INSTANCE.getCommandManager().getPrefix() + form);
+    }
+
+    // The arguments from this one on joined back into the text as it was typed.
+    protected static String words(String[] args, int from) {
+        return String.join(" ", Arrays.copyOfRange(args, from, args.length));
     }
 
     // Empty after telling the player the text is not a number.
@@ -99,6 +107,21 @@ public abstract class Command {
                 ChatUtil.error(result.problem());
             }
         });
+    }
+
+    // Runs an action named in a command. One that throws work away wants the command a
+    // second time. What it did goes in chat unless it wrote a line of its own.
+    protected static void press(ActionSetting action) {
+        GuiMessage before = ChatUtil.newestLine();
+        if (!action.press()) {
+            ChatUtil.message("§7Send it again within §f" + ActionSetting.CONFIRM_SECONDS
+                + "§7 seconds to " + action.confirmWords() + ".");
+            return;
+        }
+        String result = action.result();
+        if (result != null && ChatUtil.newestLine() == before) {
+            ChatUtil.message("§7" + result + ".");
+        }
     }
 
     // Null after telling the player there is no module with that name.

@@ -27,7 +27,8 @@ public final class KillStatsElement extends HudElement {
         "Colour of the row names. The numbers stay white.", 190, 0.15f, 0.85f, false);
 
     public KillStatsElement() {
-        super("Kill stats", "Your kills and deaths on this server.", false, 0, 45);
+        super("Kill stats", "Your kills and deaths on this server this session as the client counts them.", false,
+            0, 45);
         add(deaths, ratio, streaks, color);
     }
 

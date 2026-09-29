@@ -1,14 +1,18 @@
 package com.jellypudding.offlineclient.modules.hunting;
 
+import com.jellypudding.offlineclient.config.FindLog;
+import com.jellypudding.offlineclient.config.FindSource;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.Render2DEvent;
 import com.jellypudding.offlineclient.event.events.Render3DEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
+import com.jellypudding.offlineclient.gui.FindsScreen;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.render.BoxStyle;
 import com.jellypudding.offlineclient.render.DrawBatch;
 import com.jellypudding.offlineclient.render.FarShapes;
+import com.jellypudding.offlineclient.render.FindLines;
 import com.jellypudding.offlineclient.render.WorldToScreen;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
@@ -17,12 +21,14 @@ import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.BoundedMap;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.Leak;
+import com.jellypudding.offlineclient.util.Modules;
+import com.jellypudding.offlineclient.util.Notice;
 import com.jellypudding.offlineclient.util.RenderUtil;
 import com.jellypudding.offlineclient.util.ServerWatch;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.core.component.DataComponents;
-import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
@@ -42,10 +48,10 @@ import net.minecraft.world.item.component.ItemContainerContents;
 import net.minecraft.world.item.component.LodestoneTracker;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BeehiveBlockEntity;
-import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -55,18 +61,28 @@ import java.util.Map;
 // inventory loses its target once the server finds the lodestone gone. A beehive or bee
 // nest taken with Silk Touch keeps its bees and the flower each one last fed from. Bees
 // keep to flowers near their hive and the item carries no dimension. The Overworld is assumed.
-public final class ItemCoords extends Module {
+public final class ItemCoords extends Module implements FindSource, Leak.Source {
 
     private enum Kind {
-        LODESTONE("Lodestone", "compass"),
-        FLOWERS("Flowers", "hive");
+        LODESTONE("Lodestone", "lodestone", "compass", "a lodestone"),
+        FLOWERS("Flowers", "flowers", "hive", "flowers bees fed from");
 
         private final String title;
+        // What a find of this kind is called in the finds.
+        private final String name;
         private final String item;
+        private final String news;
 
-        Kind(String title, String item) {
+        Kind(String title, String name, String item, String news) {
             this.title = title;
+            this.name = name;
             this.item = item;
+            this.news = news;
+        }
+
+        // Anything but flowers counts as a lodestone.
+        private static Kind named(String name) {
+            return FLOWERS.name.equals(name) ? FLOWERS : LODESTONE;
         }
     }
 
@@ -81,9 +97,14 @@ public final class ItemCoords extends Module {
 
     // A spot an item points to.
     private record Pointer(GlobalPos spot, Kind kind) {
+
+        String dimension() {
+            return spot.dimension().identifier().toString();
+        }
     }
 
-    private record Find(Pointer pointer, Carrier carrier) {
+    // A find told about since the module was switched on and when.
+    private record Told(Carrier carrier, long time) {
     }
 
     private static final Carrier YOURS = new Carrier("your inventory", "a ", " in your inventory");
@@ -93,7 +114,10 @@ public final class ItemCoords extends Module {
     private static final int MAX_DEPTH = 4;
 
     // Far more finds than a session meets. It only bounds the memory.
-    private static final int MAX_FINDS = 1024;
+    private static final int MAX_TOLD = 1024;
+
+    // The newest finds the leaks list shows. Older ones stay in the finds.
+    private static final int MAX_LEAKS = 64;
 
     private static final double LABEL_LIFT = 1.5;
 
@@ -106,17 +130,20 @@ public final class ItemCoords extends Module {
     private final BoolSetting yours = new BoolSetting("Your items",
         "Also marks what the compasses and hives in your own inventory point to.", true);
     private final BoxStyle style = new BoxStyle(BoxStyle.Shape.BOTH, 180);
-    private final BoolSetting tracers = new BoolSetting("Tracers",
-        "Draws a line to every find in your dimension.", false);
     private final BoolSetting labels = new BoolSetting("Labels",
         "Writes above each find what it is and where the item was.", true);
     private final NumberSetting scale = new NumberSetting("Scale",
         "Size of the labels.", 1, 0.5, 3, 0.1).min(0.1).under(labels);
-    private final BoolSetting chat = new BoolSetting("Chat",
-        "Posts each new find in chat and says where its item was.", true);
+    private final BoolSetting waypoints = new BoolSetting("Waypoints",
+        "Saves a waypoint at each lodestone and each flower bees fed from the first time it is found.", false);
+    private final FindLog finds = new FindLog(this);
+    private final Notice notice = new Notice(this, Notice.Where.CHAT);
+    private final FindLines marks = new FindLines(finds, false);
 
-    // Everything found on the current server. A toggle or another server forgets it.
-    private final Map<Pointer, Find> finds = new BoundedMap<>(MAX_FINDS);
+    // What was told since the module was switched on. A toggle tells it all again.
+    private final Map<Pointer, Told> told = new BoundedMap<>(MAX_TOLD);
+    // The newest of them as the leaks list shows them. Rebuilt every tick.
+    private final List<Leak> leaks = new ArrayList<>();
     // The spots the item being looked at points to. Reused for every item.
     private final List<Pointer> pointed = new ArrayList<>();
     private final ServerWatch server = new ServerWatch();
@@ -126,13 +153,28 @@ public final class ItemCoords extends Module {
             Category.HUNTING);
         addSettings(hives, flowerColor, yours);
         addSettings(style.settings());
-        addSettings(tracers, labels, scale, chat);
-        searchTags("lodestone", "lodestone finder", "compass", "base", "coords", "bee", "beehive", "bee nest", "flower");
+        addSettings(labels, scale);
+        addSettings(notice.settings());
+        addSettings(marks.settings());
+        addSettings(waypoints);
+        addSettings(FindsScreen.settingsFor(finds));
+        searchTags("lodestone", "lodestone finder", "compass", "base", "coords", "bee", "beehive", "bee nest",
+            "flower");
+    }
+
+    @Override
+    public FindLog findLog() {
+        return finds;
+    }
+
+    @Override
+    public List<Leak> leaks() {
+        return Collections.unmodifiableList(leaks);
     }
 
     @Override
     public String getSuffix() {
-        return count(finds.size());
+        return count(finds.count());
     }
 
     @Override
@@ -146,7 +188,8 @@ public final class ItemCoords extends Module {
     }
 
     private void forget() {
-        finds.clear();
+        told.clear();
+        leaks.clear();
         server.forget();
     }
 
@@ -156,11 +199,11 @@ public final class ItemCoords extends Module {
             return;
         }
         if (server.changed()) {
-            // Two servers share their dimension names.
-            finds.clear();
+            told.clear();
         }
+        // A copy Blink or FakePlayer puts down carries your own gear.
         for (Entity entity : mc.level.entitiesForRendering()) {
-            if (entity != mc.player) {
+            if (entity != mc.player && !Modules.isLocalBody(entity)) {
                 look(entity);
             }
         }
@@ -172,6 +215,13 @@ public final class ItemCoords extends Module {
                 }
             }
         }
+        lookInOpenedContainer();
+        leaks.clear();
+        told.entrySet().stream().skip(Math.max(0, told.size() - MAX_LEAKS))
+            .forEach(entry -> leaks.add(leakOf(entry.getKey(), entry.getValue())));
+    }
+
+    private void lookInOpenedContainer() {
         AbstractContainerMenu menu = mc.player.containerMenu;
         if (menu == mc.player.inventoryMenu) {
             return;
@@ -213,7 +263,7 @@ public final class ItemCoords extends Module {
             String name = EntityUtil.displayNameOf(player);
             return new Carrier(name, "the ", " §f" + name + " §7carries");
         }
-        String type = entity.getType().getDescription().getString();
+        String type = ChatUtil.words(entity.getType());
         if (entity instanceof ItemFrame) {
             return new Carrier(type, "the ", " in the §f" + type + " §7at §f" + BlockUtil.text(entity.blockPosition()));
         }
@@ -259,81 +309,77 @@ public final class ItemCoords extends Module {
         }
     }
 
+    // Every spot goes in the finds. Each is told once since the module was switched on and
+    // a spot new to the finds takes a waypoint.
     private void note(Carrier carrier) {
+        long now = System.currentTimeMillis();
         for (Pointer pointer : pointed) {
-            if (finds.containsKey(pointer)) {
+            if (told.containsKey(pointer)) {
                 continue;
             }
-            finds.put(pointer, new Find(pointer, carrier));
-            if (chat.isOn()) {
-                ResourceKey<Level> dimension = pointer.spot().dimension();
-                String away = dimension.equals(mc.level.dimension()) ? "" : " in " + dimensionName(dimension);
-                String what = pointer.kind() == Kind.LODESTONE ? "a lodestone" : "flowers bees fed from";
-                ChatUtil.message("§bItemCoords §7found " + what + " at §f" + BlockUtil.text(pointer.spot().pos())
-                    + "§7" + away + " from " + carrier.phrase(pointer.kind()) + "§7.");
+            Kind kind = pointer.kind();
+            BlockPos pos = pointer.spot().pos();
+            String dimension = pointer.dimension();
+            boolean fresh = finds.add(dimension, pos, kind.name, carrier.label());
+            Told seen = new Told(carrier, now);
+            told.put(pointer, seen);
+            notice.tell(kind.name, kind.news + " §7from " + carrier.phrase(kind), pos, dimension);
+            if (fresh && waypoints.isOn()) {
+                leakOf(pointer, seen).saveFresh(kind.title, dimension);
             }
         }
     }
 
-    private static String dimensionName(ResourceKey<Level> dimension) {
-        if (dimension.equals(Level.OVERWORLD)) {
-            return "the Overworld";
-        }
-        if (dimension.equals(Level.NETHER)) {
-            return "the Nether";
-        }
-        return dimension.equals(Level.END) ? "the End" : dimension.identifier().getPath();
+    private Leak leakOf(Pointer pointer, Told seen) {
+        return new Leak(pointer.kind().title, "via " + seen.carrier().label(), pointer.spot().pos(), true,
+            pointer.dimension(), seen.time(), colorOf(pointer.kind()));
     }
 
-    private boolean here(Find find) {
-        return find.pointer().spot().dimension().equals(mc.level.dimension());
+    private int colorOf(Kind kind) {
+        return kind == Kind.FLOWERS ? flowerColor.getColor() : style.lineColor();
     }
 
-    private int colorOf(Find find) {
-        return find.pointer().kind() == Kind.FLOWERS ? flowerColor.getColor() : style.lineColor();
+    private int colorOf(FindLog.Find find) {
+        return colorOf(Kind.named(find.kind()));
     }
 
     @Subscribe
     private void onRender3D(Render3DEvent event) {
-        if (!inGame() || finds.isEmpty()) {
+        if (!inGame() || finds.count() == 0) {
             return;
         }
         DrawBatch batch = event.getBatch();
-        for (Find find : finds.values()) {
-            if (!here(find)) {
+        for (FindLog.Find find : finds.here()) {
+            if (!marks.inDrawRange(find)) {
                 continue;
             }
-            BlockPos pos = find.pointer().spot().pos();
-            AABB box = FarShapes.pullIn(DrawBatch.blockBox(pos));
-            if (find.pointer().kind() == Kind.FLOWERS) {
-                style.draw(batch, box, flowerColor.getColor(), true);
+            if (Kind.named(find.kind()) == Kind.FLOWERS) {
+                style.draw(batch, FarShapes.pullIn(DrawBatch.blockBox(find.pos())), flowerColor.getColor(), true);
             } else {
-                style.draw(batch, box, true);
-            }
-            if (tracers.isOn()) {
-                batch.tracer(FarShapes.pullIn(Vec3.atCenterOf(pos)), colorOf(find), true);
+                style.draw(batch, FarShapes.pullIn(DrawBatch.blockBox(find.pos())), true);
             }
         }
+        marks.draw(batch, this::colorOf);
     }
 
     @Subscribe
     private void onRender2D(Render2DEvent event) {
-        if (!labels.isOn() || !inGame() || finds.isEmpty() || !WorldToScreen.update()) {
+        if (!labels.isOn() || !inGame() || finds.count() == 0 || !WorldToScreen.update()) {
             return;
         }
         Vec3 camera = WorldToScreen.cameraPos();
-        for (Find find : finds.values()) {
-            if (!here(find)) {
+        for (FindLog.Find find : finds.here()) {
+            if (!marks.inDrawRange(find)) {
                 continue;
             }
-            Vec3 spot = Vec3.atCenterOf(find.pointer().spot().pos()).add(0, LABEL_LIFT, 0);
+            Vec3 spot = Vec3.atCenterOf(find.pos()).add(0, LABEL_LIFT, 0);
             Vec3 screen = WorldToScreen.project(spot);
             if (screen == null) {
                 continue;
             }
             String distance = String.format(Locale.ROOT, " %dm", Math.round(camera.distanceTo(spot)));
             RenderUtil.label(event.getContext(), mc.font, screen.x, screen.y, scale.getFloat(),
-                List.of(find.pointer().kind().title, " via " + find.carrier().label(), distance),
+                List.of(Kind.named(find.kind()).title, " via " + find.detail(), distance),
                 List.of(colorOf(find), RenderUtil.MUTED_TEXT, RenderUtil.MUTED_TEXT));
         }
     }

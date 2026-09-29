@@ -11,14 +11,14 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.render.DrawBatch;
 import com.jellypudding.offlineclient.render.FarShapes;
 import com.jellypudding.offlineclient.render.WorldToScreen;
-import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
+import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.Bearing;
 import com.jellypudding.offlineclient.util.BlockUtil;
-import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.ColorUtil;
+import com.jellypudding.offlineclient.util.Notice;
 import com.jellypudding.offlineclient.util.RenderUtil;
 import com.jellypudding.offlineclient.util.WorldWatch;
 import net.minecraft.client.sounds.WeighedSoundEvents;
@@ -89,8 +89,8 @@ public final class Earshot extends Module {
         8, 0, 32, 1, " blocks").min(0);
     private final NumberSetting markTime = new NumberSetting("Mark time",
         "How long a mark takes to fade away.", 30, 5, 120, 5, " seconds").min(1);
-    private final BoolSetting chat = new BoolSetting("Chat",
-        "Posts each new spot in chat with how far away it is.", false);
+    private final EnumSetting<Notice.Where> messages = Notice.row(
+        "Where it posts each new spot with how far away it is.", Notice.Where.OFF);
     private final ColorSetting color = new ColorSetting("Colour",
         "Colour of the marks.", 45, false);
     private final NumberSetting scale = new NumberSetting("Scale",
@@ -105,7 +105,7 @@ public final class Earshot extends Module {
 
     public Earshot() {
         super("Earshot", "Marks where the sounds you pick come from through walls.", Category.HUNTING);
-        addSettings(sounds, ignoreWithin, markTime, chat, color, scale);
+        addSettings(sounds, ignoreWithin, markTime, messages, color, scale);
         searchTags("sound locator", "sound esp", "hearing", "mining", "chest");
     }
 
@@ -252,9 +252,7 @@ public final class Earshot extends Module {
         if (marks.size() > MAX_MARKS) {
             marks.removeFirst();
         }
-        if (chat.isOn()) {
-            say(name, at);
-        }
+        say(name, at);
     }
 
     // A sound sent without its registry entry is matched by name.
@@ -271,8 +269,9 @@ public final class Earshot extends Module {
 
     private void say(String name, Vec3 at) {
         Vec3 me = mc.player.position();
-        ChatUtil.message("§bEarshot §f" + name + " §7" + Math.round(me.distanceTo(at)) + " blocks "
-            + Bearing.between(me, at).compass() + " at §f" + BlockUtil.text(BlockPos.containing(at)) + "§7.");
+        Notice.post(messages, this, Component.literal("§f" + name + " §7" + Math.round(me.distanceTo(at))
+            + " blocks " + Bearing.between(me, at).compass() + " at §f" + BlockUtil.text(BlockPos.containing(at))
+            + "§7."));
     }
 
     private long lifeMillis() {

@@ -11,6 +11,7 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.ListMode;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.render.BoxStyle;
+import com.jellypudding.offlineclient.render.BreakTrail;
 import com.jellypudding.offlineclient.render.DrawBatch;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
@@ -20,8 +21,10 @@ import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.BlockMiner;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.ItemUtil;
+import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.PacketBreaker;
 import com.jellypudding.offlineclient.util.RotationPriority;
 import com.jellypudding.offlineclient.util.SwingMode;
@@ -29,6 +32,10 @@ import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.world.Clearable;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.BaseFireBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
@@ -38,9 +45,11 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
 // Legit mode mines one block at a time like a held click.
@@ -49,7 +58,7 @@ public final class Nuker extends Module {
 
     public enum Shape { SPHERE, UNIFORM_CUBE, CUBE }
 
-    public enum Mode { ALL, SELECTED, LIST }
+    public enum Mode { ALL, SELECTED, LIST, REDSTONE }
 
     public enum Speed { LEGIT, INSTANT }
 
@@ -81,20 +90,24 @@ public final class Nuker extends Module {
         "Which blocks the module is allowed to break.", Mode.ALL)
         .describe(Mode.ALL, "Every block in range.")
         .describe(Mode.SELECTED, "Only the block type you click.")
-        .describe(Mode.LIST, "Whatever the list below allows.");
+        .describe(Mode.LIST, "Whatever the list below allows.")
+        .describe(Mode.REDSTONE, "Redstone parts with fire and tripwire but never a block that holds items.");
     private final RegistryListSetting<Block> blocks = new RegistryListSetting<>("Blocks",
         "The blocks the list applies to. Click to pick them.", BuiltInRegistries.BLOCK,
         List.of(Blocks.BEDROCK, Blocks.BARRIER, Blocks.REINFORCED_DEEPSLATE,
             Blocks.SPAWNER, Blocks.TRIAL_SPAWNER, Blocks.VAULT, Blocks.END_PORTAL_FRAME,
             Blocks.CHEST, Blocks.TRAPPED_CHEST, Blocks.ENDER_CHEST,
             Blocks.BARREL, Blocks.SHULKER_BOX))
-        .under(mode, Mode.LIST);
+        .under(mode, Mode.LIST, Mode.REDSTONE);
     private final EnumSetting<ListMode> listMode = ListMode.setting("List mode", ListMode.BLACKLIST,
         "The list is what gets broken.", "The list is what gets left alone.")
-        .under(mode, Mode.LIST);
+        .under(mode, Mode.LIST, Mode.REDSTONE);
     private final KeybindSetting selectBind = new KeybindSetting("Select block bind",
         "Adds or removes the block under your crosshair from the list.", KeybindSetting.UNBOUND)
-        .under(mode, Mode.LIST);
+        .under(mode, Mode.LIST, Mode.REDSTONE);
+    private final BoolSetting onlyWithTnt = new BoolSetting("Only with TNT",
+        "Only clears redstone whilst TNT sits in your hotbar or offhand.", false)
+        .under(mode, Mode.REDSTONE);
     private final BoolSetting lockTarget = new BoolSetting("Lock target",
         "Keeps the block you picked instead of following your next click.", false)
         .under(mode, Mode.SELECTED);
@@ -103,7 +116,7 @@ public final class Nuker extends Module {
     private final BoolSetting smash = new BoolSetting("Smash",
         "Only breaks blocks with no hardness such as plants and torches.", false);
     private final BoolSetting suitableTools = new BoolSetting("Suitable tools only",
-        "Skips blocks your held item is the wrong tool for.", false);
+        "Skips blocks the tool in your hand is the wrong kind for such as dirt for a pickaxe.", false);
     private final BoolSetting interact = new BoolSetting("Interact",
         "Right clicks each matching block once instead of breaking it.", false);
     private final EnumSetting<Speed> speed = new EnumSetting<>("Speed",
@@ -112,12 +125,15 @@ public final class Nuker extends Module {
         .describe(Speed.INSTANT, "Fires the break packets for several at once.")
         .unless(interact);
     private final NumberSetting perTick = new NumberSetting("Blocks per tick",
-        "How many one hit blocks to break each tick in Instant mode.", 4, 1, 16, 1)
+        "The most blocks Instant mode breaks in one tick.", 4, 1, 16, 1)
         .min(1).under(speed, () -> !interact.isOn() && speed.is(Speed.INSTANT));
+    private final BoolSetting instantOnly = new BoolSetting("Instant only",
+        "Leaves alone any block the server cannot break within one tick.", false)
+        .under(speed, () -> !interact.isOn() && speed.is(Speed.INSTANT));
     private final NumberSetting delay = new NumberSetting("Delay",
         "Ticks to wait before starting on a new block.", 0, 0, 20, 1, " ticks").min(0);
     private final BoolSetting autoTool = new BoolSetting("Auto tool",
-        "Holds your fastest tool before the break packets go out.", true)
+        "Holds the tool AutoTool would pick or else your fastest one.", true)
         .under(speed, () -> !interact.isOn() && speed.is(Speed.INSTANT));
     private final BoolSetting rotate = new BoolSetting("Rotate",
         "Turn towards the block on the server side.", true);
@@ -136,6 +152,7 @@ public final class Nuker extends Module {
         .under(shape, Shape.UNIFORM_CUBE, Shape.CUBE);
     private final BoxStyle regionStyle = new BoxStyle("Region", BoxStyle.Shape.BOTH, 192)
         .under(boundingBox);
+    private final BreakTrail trail = new BreakTrail();
 
     private Block selected;
     private BlockPos current;
@@ -149,18 +166,23 @@ public final class Nuker extends Module {
     // Filled once a tick and read by the renderer.
     private final List<BlockPos> candidates = new ArrayList<>();
 
+    // The stack Auto tool would hold for each kind of block. Worked out once a tick.
+    private final Map<BlockState, ItemStack> toolFor = new HashMap<>();
+
     // The drawn cube for the two box shapes. Null whilst the shape is a sphere.
     private AABB region;
 
     public Nuker() {
         super("Nuker", "Breaks all blocks around you.", Category.WORLD);
         addSettings(shape, range, up, down, left, right, forward, back, wallsRange,
-            mode, blocks, listMode, selectBind, lockTarget, flat, smash, suitableTools,
-            interact, speed, perTick, delay, autoTool, rotate, order, swing);
+            mode, blocks, listMode, selectBind, onlyWithTnt, lockTarget, flat, smash, suitableTools,
+            interact, speed, perTick, instantOnly, delay, autoTool, rotate, order, swing);
         addSettings(blockStyle.settings());
         addSettings(highlightStrength, boundingBox);
         addSettings(regionStyle.settings());
-        searchTags("dig", "excavate", "break blocks");
+        addSettings(trail.settings());
+        searchTags("dig", "excavate", "break blocks", "instant break", "one tick", "redstone",
+            "disarm traps");
     }
 
     private static NumberSetting sideSetting(String name, String where) {
@@ -175,6 +197,9 @@ public final class Nuker extends Module {
         }
         if (mode.is(Mode.LIST)) {
             return listMode.getValueString();
+        }
+        if (mode.is(Mode.REDSTONE)) {
+            return mode.getValueString();
         }
         return shape.is(Shape.CUBE) ? "Cube" : range.getValueString();
     }
@@ -207,6 +232,7 @@ public final class Nuker extends Module {
         lastChosen = null;
         waitTicks = 0;
         region = null;
+        trail.clear();
     }
 
     private void selectLookedAtBlock() {
@@ -246,7 +272,7 @@ public final class Nuker extends Module {
         if (!selectBind.isBound() || event.getKey() != selectBind.getValue()) {
             return;
         }
-        if (!inGame() || !mode.is(Mode.LIST)) {
+        if (!inGame() || !mode.isAny(Mode.LIST, Mode.REDSTONE)) {
             return;
         }
         BlockHitResult hit = BlockUtil.aimedBlock();
@@ -268,7 +294,9 @@ public final class Nuker extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
+        trail.tick();
         candidates.clear();
+        toolFor.clear();
         region = null;
         if (!inGame() || mc.player.isSpectator()) {
             current = null;
@@ -281,7 +309,9 @@ public final class Nuker extends Module {
             slots.restoreIfMine();
             return;
         }
-        if (mode.is(Mode.SELECTED) && selected == null) {
+        if ((mode.is(Mode.SELECTED) && selected == null)
+            || (mode.is(Mode.REDSTONE) && onlyWithTnt.isOn() && !carriesTnt())) {
+            current = null;
             slots.restoreIfMine();
             return;
         }
@@ -381,6 +411,9 @@ public final class Nuker extends Module {
         if (current == null) {
             current = candidates.getFirst();
         }
+        // Every tick keeps the block in the trail before the game clears it. A slow block is
+        // not forgotten half way.
+        trail.add(current);
         if (!BlockMiner.mine(current, rotate.isOn(), swing.getValue())) {
             current = null;
         }
@@ -401,18 +434,47 @@ public final class Nuker extends Module {
             if (sent >= perTick.getInt()) {
                 break;
             }
-            if (!breaker.canSend(pos)) {
+            if (!canSend(pos)) {
                 continue;
             }
             if (rotate.isOn()) {
                 BlockUtil.faceVector(Vec3.atCenterOf(pos), RotationPriority.MINE);
             }
             breaker.send(pos);
+            trail.add(pos);
             sent++;
         }
         if (sent > 0) {
             swing.getValue().swing();
         }
+    }
+
+    // Instant only never leaves a block for the server to finish. A block that is left breaks
+    // with whatever is in hand when the server gets to it. Auto tool puts its own tool in first.
+    private boolean canSend(BlockPos pos) {
+        if (instantOnly.isOn()) {
+            return breaker.canSendInstant(pos);
+        }
+        if (!breaker.canSend(pos)) {
+            return false;
+        }
+        if (autoTool.isOn() && !BlockUtil.breaksInOneTick(pos)) {
+            holdTool(pos);
+            return breaker.canSend(pos);
+        }
+        return true;
+    }
+
+    // Judged with the tool Auto tool would put in hand for the block.
+    private boolean breaksInOneTick(BlockPos pos, BlockState state) {
+        if (!autoTool.isOn() || mc.player.getAbilities().instabuild) {
+            return BlockUtil.breaksInOneTick(pos);
+        }
+        ItemStack tool = toolFor.computeIfAbsent(state, kind -> {
+            int slot = Modules.toolSlot(kind);
+            return slot == -1 ? mc.player.getMainHandItem() : mc.player.getInventory().getItem(slot);
+        });
+        return BlockUtil.breakDelta(tool, state, pos) >= BlockUtil.SERVER_ACCEPTS;
     }
 
     // Instant mode never reaches the vanilla mining call and AutoTool never sees
@@ -439,7 +501,11 @@ public final class Nuker extends Module {
         if (mode.is(Mode.SELECTED) && state.getBlock() != selected) {
             return false;
         }
-        if (mode.is(Mode.LIST) && !listMode.getValue().admits(blocks.contains(state.getBlock()))) {
+        if (mode.isAny(Mode.LIST, Mode.REDSTONE)
+            && !listMode.getValue().admits(blocks.contains(state.getBlock()))) {
+            return false;
+        }
+        if (mode.is(Mode.REDSTONE) && !redstonePart(pos, state)) {
             return false;
         }
         if (smash.isOn() && state.getDestroySpeed(mc.level, pos) != 0) {
@@ -449,7 +515,11 @@ public final class Nuker extends Module {
             return false;
         }
         if (suitableTools.isOn() && !interact.isOn()
-            && !mc.player.getMainHandItem().isCorrectToolForDrops(state)) {
+            && !ItemUtil.suits(mc.player.getMainHandItem(), state)) {
+            return false;
+        }
+        if (instantOnly.isOn() && !interact.isOn() && speed.is(Speed.INSTANT)
+            && !breaksInOneTick(pos, state)) {
             return false;
         }
         if (interact.isOn() && interacted.contains(pos)) {
@@ -461,12 +531,25 @@ public final class Nuker extends Module {
         return inReach(pos);
     }
 
+    // Anything that can power a circuit plus fire and tripwire. A trapped chest or a lectern or
+    // a jukebox holds items and breaking it would spill them.
+    private boolean redstonePart(BlockPos pos, BlockState state) {
+        boolean part = state.isSignalSource() || state.getBlock() instanceof BaseFireBlock
+            || state.is(Blocks.TRIPWIRE);
+        return part && !(mc.level.getBlockEntity(pos) instanceof Clearable);
+    }
+
+    private boolean carriesTnt() {
+        return mc.player.getOffhandItem().is(Items.TNT)
+            || InventoryUtil.hotbarSlot(stack -> stack.is(Items.TNT)) != -1;
+    }
+
     // The server refuses anything past the interaction range whatever the region says.
     private boolean inReach(BlockPos pos) {
-        double distance = BlockUtil.distanceTo(pos);
-        if (distance > mc.player.blockInteractionRange() + 1) {
+        if (!BlockUtil.serverReaches(pos)) {
             return false;
         }
+        double distance = BlockUtil.distanceTo(pos);
         if (shape.is(Shape.SPHERE) && distance > range.getValue()) {
             return false;
         }
@@ -475,6 +558,7 @@ public final class Nuker extends Module {
 
     @Subscribe
     private void onRender3D(Render3DEvent event) {
+        trail.draw(event.getBatch(), event.getPartialTicks());
         if (region != null && boundingBox.isOn()) {
             regionStyle.draw(event.getBatch(), region, false);
         }

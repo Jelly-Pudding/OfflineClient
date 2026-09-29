@@ -13,6 +13,8 @@ import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.display.RecipeDisplayId;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.Predicate;
 
 // Clicks on the slots of an open container menu. InventoryUtil covers the player's own inventory.
@@ -54,6 +56,77 @@ public final class MenuClicks {
     public static boolean isInventorySlot(Slot slot) {
         return slot.container == MC.player.getInventory()
             && slot.getContainerSlot() < InventoryUtil.WHOLE_INVENTORY;
+    }
+
+    // A slot of whatever the menu was opened on. A crafter's result is only shown and never counts.
+    public static boolean isContainerSlot(Slot slot) {
+        return slot.container != MC.player.getInventory() && !slot.isFake();
+    }
+
+    // Indexes of the slots that belong to whatever the menu was opened on.
+    public static List<Integer> containerSlots(AbstractContainerMenu menu) {
+        return slotsWhere(menu, MenuClicks::isContainerSlot);
+    }
+
+    // Indexes of the player's own backpack and hotbar slots in the menu.
+    public static List<Integer> inventorySlots(AbstractContainerMenu menu) {
+        return slotsWhere(menu, MenuClicks::isInventorySlot);
+    }
+
+    private static List<Integer> slotsWhere(AbstractContainerMenu menu, Predicate<Slot> test) {
+        List<Integer> found = new ArrayList<>();
+        for (Slot slot : menu.slots) {
+            if (test.test(slot)) {
+                found.add(slot.index);
+            }
+        }
+        return found;
+    }
+
+    // How many more of the stack the slots could take between them. A shift click fills the
+    // same stacks first and then the empty slots that accept the item.
+    public static int room(AbstractContainerMenu menu, List<Integer> slots, ItemStack stack) {
+        int room = 0;
+        for (int index : slots) {
+            Slot slot = menu.slots.get(index);
+            ItemStack there = slot.getItem();
+            if (there.isEmpty()) {
+                room += slot.mayPlace(stack) ? slot.getMaxStackSize(stack) : 0;
+            } else if (ItemStack.isSameItemSameComponents(there, stack)) {
+                room += Math.max(0, slot.getMaxStackSize(stack) - there.getCount());
+            }
+        }
+        return room;
+    }
+
+    // A slot holding the same item with room left or else an empty one that takes it. Minus one
+    // when none of them can.
+    public static int landing(AbstractContainerMenu menu, List<Integer> slots, ItemStack stack) {
+        int empty = -1;
+        for (int index : slots) {
+            Slot slot = menu.slots.get(index);
+            ItemStack there = slot.getItem();
+            if (there.isEmpty()) {
+                if (empty == -1 && slot.mayPlace(stack)) {
+                    empty = index;
+                }
+            } else if (ItemStack.isSameItemSameComponents(there, stack)
+                && there.getCount() < slot.getMaxStackSize(stack)) {
+                return index;
+            }
+        }
+        return empty;
+    }
+
+    // The menu slot that shows an index of the player's inventory. Minus one when the menu
+    // has none such as armour in a chest.
+    public static int slotOf(AbstractContainerMenu menu, int inventoryIndex) {
+        for (Slot slot : menu.slots) {
+            if (slot.container == MC.player.getInventory() && slot.getContainerSlot() == inventoryIndex) {
+                return slot.index;
+            }
+        }
+        return -1;
     }
 
     // Trades two slots. A slot of your own hotbar or offhand trades in one number key

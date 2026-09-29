@@ -10,13 +10,18 @@ import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.ClientTickEvent;
 import com.jellypudding.offlineclient.friend.FriendManager;
 import com.jellypudding.offlineclient.module.ModuleManager;
+import com.jellypudding.offlineclient.util.BreakSlots;
 import com.jellypudding.offlineclient.util.Hop;
 import com.jellypudding.offlineclient.util.KillTracker;
 import com.jellypudding.offlineclient.util.Lagback;
 import com.jellypudding.offlineclient.util.MoveGate;
+import com.jellypudding.offlineclient.util.OwnDigs;
+import com.jellypudding.offlineclient.util.PlayerStats;
 import com.jellypudding.offlineclient.util.Ridden;
 import com.jellypudding.offlineclient.util.RotationManager;
 import com.jellypudding.offlineclient.util.TickRate;
+import com.jellypudding.offlineclient.util.UseBudget;
+import com.jellypudding.offlineclient.util.UseClick;
 import net.minecraft.client.Minecraft;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -63,7 +68,12 @@ public enum OfflineClient {
         eventBus.register(TickRate.INSTANCE);
         eventBus.register(Lagback.INSTANCE);
         eventBus.register(KillTracker.INSTANCE);
+        eventBus.register(PlayerStats.INSTANCE);
         eventBus.register(Ridden.INSTANCE);
+        eventBus.register(UseBudget.INSTANCE);
+        eventBus.register(BreakSlots.INSTANCE);
+        eventBus.register(OwnDigs.INSTANCE);
+        eventBus.register(UseClick.INSTANCE);
         // Loading the macros puts their key handler on the bus.
         MacroStore.get();
     }

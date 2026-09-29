@@ -10,10 +10,8 @@ import com.jellypudding.offlineclient.util.PacketNames;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.PacketType;
 
-import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Function;
 
 // Both lists offer every packet kind the game knows. Login and configuration
 // packets can be dropped before a world exists.
@@ -59,20 +57,8 @@ public final class PacketCanceller extends Module {
     }
 
     private void resolve() {
-        dropOutgoing = resolve(outgoing.getValue(), PacketNames::outgoing);
-        dropIncoming = resolve(incoming.getValue(), PacketNames::incoming);
-    }
-
-    private static Set<PacketType<?>> resolve(Set<String> names,
-                                              Function<String, PacketType<?>> lookup) {
-        Set<PacketType<?>> types = new HashSet<>();
-        for (String name : names) {
-            PacketType<?> type = lookup.apply(name);
-            if (type != null) {
-                types.add(type);
-            }
-        }
-        return Set.copyOf(types);
+        dropOutgoing = PacketNames.outgoingTypes(outgoing.getValue());
+        dropIncoming = PacketNames.incomingTypes(incoming.getValue());
     }
 
     @Subscribe(priority = 200)

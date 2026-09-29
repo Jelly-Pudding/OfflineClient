@@ -2,9 +2,11 @@ package com.jellypudding.offlineclient.gui;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.setting.ActionSetting;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
+import com.jellypudding.offlineclient.setting.GridSetting;
 import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.PickList;
@@ -54,10 +56,25 @@ public final class SettingWidget {
     // Laid over the item of a choice that is switched off.
     private static final int OFF_VEIL = 0xB0;
 
+    // A painted grid keeps within this span. Small sizes get roomier cells up to the cap.
+    private static final int GRID_SPAN = 72;
+    private static final int MAX_CELL_PITCH = 12;
+    private static final int CELL_GAP = 1;
+    private static final int GRID_MARGIN = 3;
+    // The dot that marks the middle cell.
+    private static final int MIDDLE_DOT = 2;
+
+    // Ends an action row. It runs something rather than holding a value.
+    private static final String PRESS_MARK = "»";
+    // The tick in front of what an action did and the gap after it.
+    private static final int TICK_ROOM = 9;
+
     private static final String BIND_HELP =
         "Click here and then press a key. DELETE unbinds. ESC cancels.";
     private static final String RANK_HELP =
         "Drag a row up or down to change the order. Click it to switch it on or off.";
+    private static final String GRID_HELP =
+        "Click or drag to paint cells. Right click rubs them out.";
 
     private SettingWidget() {
     }
@@ -82,7 +99,7 @@ public final class SettingWidget {
     }
 
     // A slider or colour bar keeps following the mouse even when it leaves the row.
-    // A choice in a ranked list follows it up and down.
+    // A choice in a ranked list follows it up and down. A press on a grid paints a stroke.
     public static final class Drag {
 
         private NumberSetting slider;
@@ -97,11 +114,17 @@ public final class SettingWidget {
         // A press that never travels is a click.
         private boolean travelled;
 
+        private GridSetting grid;
+        private GridBox gridBox;
+        private boolean paint;
+        // Null whilst the pointer is off the grid.
+        private GridSetting.Cell lastCell;
+
         // How far the row being dragged sits in from the block edge.
         private int indent;
 
         private boolean isActive() {
-            return slider != null || color != null || rank != null;
+            return slider != null || color != null || rank != null || grid != null;
         }
 
         private void grab(RankSetting<?> setting, int index, double mouseY, int top) {
@@ -110,6 +133,13 @@ public final class SettingWidget {
             pressY = mouseY;
             firstTop = top;
             travelled = false;
+        }
+
+        private void paint(GridSetting setting, GridBox box, GridSetting.Cell cell, boolean on) {
+            grid = setting;
+            gridBox = box;
+            paint = on;
+            lastCell = cell;
         }
 
         // Called every frame with the geometry of the settings block.
@@ -123,6 +153,27 @@ public final class SettingWidget {
             if (rank != null) {
                 followRank(mouseY);
             }
+            if (grid != null) {
+                followGrid(mouseX, mouseY);
+            }
+        }
+
+        // Paints the cells between the last frame and this one. A quick stroke leaves no gaps.
+        private void followGrid(int mouseX, int mouseY) {
+            GridSetting.Cell cell = gridBox.cellAt(mouseX, mouseY);
+            if (cell == null || cell.equals(lastCell)) {
+                lastCell = cell;
+                return;
+            }
+            GridSetting.Cell from = lastCell == null ? cell : lastCell;
+            int steps = Math.max(1,
+                Math.max(Math.abs(cell.column() - from.column()), Math.abs(cell.row() - from.row())));
+            for (int step = 1; step <= steps; step++) {
+                float share = (float) step / steps;
+                grid.set(Math.round(from.column() + (cell.column() - from.column()) * share),
+                    Math.round(from.row() + (cell.row() - from.row()) * share), paint);
+            }
+            lastCell = cell;
         }
 
         // The held choice moves into whichever row the pointer is over.
@@ -157,17 +208,51 @@ public final class SettingWidget {
             slider = null;
             color = null;
             rank = null;
+            grid = null;
+            gridBox = null;
+            lastCell = null;
         }
     }
 
     // A colour row needs room under the hue bar for the two extra bars. A ranked list
-    // needs a row for each choice under its name.
+    // needs a row for each choice under its name and a grid its cells.
     private static int rowHeight(Setting<?> setting) {
         return switch (setting) {
             case ColorSetting ignored -> GuiTheme.SETTING_HEIGHT + (COLOR_BARS - 1) * BAR_PITCH;
             case RankSetting<?> rank -> GuiTheme.SETTING_HEIGHT + rank.size() * ENTRY_HEIGHT;
+            case GridSetting grid -> GuiTheme.SETTING_HEIGHT + grid.size() * cellPitch(grid.size()) + GRID_MARGIN;
             default -> GuiTheme.SETTING_HEIGHT;
         };
+    }
+
+    // The rows below the name light up one part at a time.
+    private static boolean litInParts(Setting<?> setting) {
+        return setting instanceof RankSetting || setting instanceof GridSetting;
+    }
+
+    private static int cellPitch(int size) {
+        return Math.min(MAX_CELL_PITCH, GRID_SPAN / size);
+    }
+
+    // Where the cells of a grid sit on screen. A narrow panel shrinks the cells to fit.
+    private record GridBox(int left, int top, int pitch, int size) {
+
+        private static GridBox of(GridSetting grid, int x, int y, int w) {
+            int size = grid.size();
+            int full = cellPitch(size);
+            int pitch = Math.max(1, Math.min(full, (w - 2 * PAD) / size));
+            int span = pitch * size;
+            return new GridBox(x + (w - span) / 2, y + GuiTheme.SETTING_HEIGHT + (full * size - span) / 2,
+                pitch, size);
+        }
+
+        // Null off the grid.
+        private GridSetting.Cell cellAt(double mx, double my) {
+            int column = (int) Math.floor((mx - left) / pitch);
+            int row = (int) Math.floor((my - top) / pitch);
+            return column >= 0 && column < size && row >= 0 && row < size
+                ? new GridSetting.Cell(column, row) : null;
+        }
     }
 
     private static int entryTop(int y, int index) {
@@ -181,11 +266,12 @@ public final class SettingWidget {
     }
 
     // A bind row wants the help text and not the description of the key. The choices
-    // of a ranked list explain how to move them.
+    // of a ranked list explain how to move them and the cells of a grid how to paint.
     private static String tooltipOf(Setting<?> setting, double my, int y) {
         return switch (setting) {
             case KeybindSetting ignored -> BIND_HELP;
             case RankSetting<?> rank when entryAt(rank, my, y) >= 0 -> RANK_HELP;
+            case GridSetting ignored when my >= y + GuiTheme.SETTING_HEIGHT -> GRID_HELP;
             default -> setting.getDescription();
         };
     }
@@ -218,8 +304,7 @@ public final class SettingWidget {
         boolean hovered = hoverAllowed && isOver(mouseX, mouseY, x, y, w, h);
         if (hovered) {
             host.setTooltip(tooltipOf(setting, mouseY, y));
-            // The choices of a ranked list light up one at a time.
-            int washed = setting instanceof RankSetting ? GuiTheme.SETTING_HEIGHT : h;
+            int washed = litInParts(setting) ? GuiTheme.SETTING_HEIGHT : h;
             if (mouseY < y + washed) {
                 context.fill(x, y, x + w, y + washed, GuiTheme.HOVER_WASH);
                 context.guiRenderState.up();
@@ -268,8 +353,63 @@ public final class SettingWidget {
                 context.text(font, trimEnd(font, r.getName(), w - 2 * PAD), x + PAD, ty, nameColor, false);
                 renderRank(context, font, r, x, y, w, mouseX, mouseY, hoverAllowed);
             }
+            case GridSetting g -> {
+                String size = g.size() + GuiTheme.CROSS + g.size();
+                context.text(font, trimEnd(font, g.getName(), w - 2 * PAD - font.width(size) - 6),
+                    x + PAD, ty, nameColor, false);
+                context.text(font, size, x + w - PAD - font.width(size), ty, GuiTheme.accentText(), false);
+                renderGrid(context, g, x, y, w, mouseX, mouseY, hoverAllowed);
+            }
+            case ActionSetting a -> renderAction(context, font, a, x, w, ty, nameColor, hovered);
             default -> context.text(font, setting.getName(), x + PAD, ty, nameColor, false);
         }
+    }
+
+    // Painted cells take the accent and the rest the row shade. The cell under the pointer
+    // lights up and a dot marks the middle one.
+    private static void renderGrid(GuiGraphicsExtractor context, GridSetting grid, int x, int y, int w,
+                                   int mouseX, int mouseY, boolean hoverAllowed) {
+        GridBox box = GridBox.of(grid, x, y, w);
+        GridSetting.Cell over = hoverAllowed ? box.cellAt(mouseX, mouseY) : null;
+        int cell = Math.max(1, box.pitch() - CELL_GAP);
+        for (int row = 0; row < grid.size(); row++) {
+            for (int column = 0; column < grid.size(); column++) {
+                int left = box.left() + column * box.pitch();
+                int top = box.top() + row * box.pitch();
+                boolean lit = over != null && over.column() == column && over.row() == row;
+                int colour = grid.isOn(column, row)
+                    ? (lit ? GuiTheme.accentText() : GuiTheme.accent())
+                    : (lit ? GuiTheme.bgRowHover() : GuiTheme.bgRow());
+                RenderUtil.roundedRect(context, left, top, left + cell, top + cell, 1, colour);
+            }
+        }
+        context.guiRenderState.up();
+        int middle = grid.size() / 2;
+        int dotX = box.left() + middle * box.pitch() + (cell - MIDDLE_DOT) / 2;
+        int dotY = box.top() + middle * box.pitch() + (cell - MIDDLE_DOT) / 2;
+        context.fill(dotX, dotY, dotX + MIDDLE_DOT, dotY + MIDDLE_DOT,
+            grid.isOn(middle, middle) ? GuiTheme.contrastText(GuiTheme.accent()) : GuiTheme.textFaint());
+    }
+
+    // The name with a mark that says the row can be pressed. An armed row asks for the
+    // second click in red and afterwards the row shows what the action did for a moment.
+    private static void renderAction(GuiGraphicsExtractor context, Font font, ActionSetting action,
+                                     int x, int w, int ty, int nameColor, boolean hovered) {
+        boolean armed = action.isArmed();
+        int room = w - 2 * PAD - font.width(PRESS_MARK) - 4;
+        String result = action.result();
+        if (result != null) {
+            float strength = action.resultStrength();
+            RenderUtil.tick(context, x + PAD, ty + 1, ColorUtil.fade(GuiTheme.GREEN, strength));
+            context.text(font, trimEnd(font, result, room - TICK_ROOM), x + PAD + TICK_ROOM, ty,
+                ColorUtil.lerp(nameColor, GuiTheme.GREEN, strength), false);
+        } else {
+            String label = armed ? "Click again to " + action.confirmWords() : action.getName();
+            context.text(font, trimEnd(font, label, room), x + PAD, ty,
+                armed ? GuiTheme.RED_TEXT : nameColor, false);
+        }
+        int markColor = armed ? GuiTheme.RED_TEXT : hovered ? GuiTheme.accentText() : GuiTheme.textFaint();
+        context.text(font, PRESS_MARK, x + w - PAD - font.width(PRESS_MARK), ty, markColor, false);
     }
 
     // Each choice reads grip then item then name with its box on the right. A choice
@@ -706,6 +846,28 @@ public final class SettingWidget {
                     return;
                 }
                 r.toggle(index);
+            }
+            // The name row cycles the size like a choice. A left press on a cell paints the
+            // opposite of what it lands on and a right press rubs out. Release saves the stroke.
+            case GridSetting g -> {
+                if (my < y + GuiTheme.SETTING_HEIGHT) {
+                    g.cycleSize(InputUtil.isLeft(button));
+                } else {
+                    GridBox box = GridBox.of(g, x, y, width);
+                    GridSetting.Cell cell = box.cellAt(mx, my);
+                    if (cell == null) {
+                        return;
+                    }
+                    boolean paint = InputUtil.isLeft(button) && !g.isOn(cell.column(), cell.row());
+                    g.set(cell.column(), cell.row(), paint);
+                    drag.paint(g, box, cell, paint);
+                    return;
+                }
+            }
+            // Whatever the action changes saves itself. The row holds nothing.
+            case ActionSetting a -> {
+                a.press();
+                return;
             }
             default -> {
             }

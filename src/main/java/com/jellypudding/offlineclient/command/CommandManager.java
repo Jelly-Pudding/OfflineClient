@@ -12,7 +12,9 @@ import com.jellypudding.offlineclient.command.commands.DismountCommand;
 import com.jellypudding.offlineclient.command.commands.DropCommand;
 import com.jellypudding.offlineclient.command.commands.EnderChestCommand;
 import com.jellypudding.offlineclient.command.commands.ExportCommand;
+import com.jellypudding.offlineclient.command.commands.FindsCommand;
 import com.jellypudding.offlineclient.command.commands.FloorCommand;
+import com.jellypudding.offlineclient.command.commands.FlowTimeCommand;
 import com.jellypudding.offlineclient.command.commands.FovCommand;
 import com.jellypudding.offlineclient.command.commands.FriendCommand;
 import com.jellypudding.offlineclient.command.commands.GetPosCommand;
@@ -25,8 +27,10 @@ import com.jellypudding.offlineclient.command.commands.JumpCommand;
 import com.jellypudding.offlineclient.command.commands.LoadoutCommand;
 import com.jellypudding.offlineclient.command.commands.TpCommand;
 import com.jellypudding.offlineclient.command.commands.HelpCommand;
+import com.jellypudding.offlineclient.command.commands.HologramCommand;
 import com.jellypudding.offlineclient.command.commands.HudCommand;
 import com.jellypudding.offlineclient.command.commands.MacroCommand;
+import com.jellypudding.offlineclient.command.commands.MemoryCommand;
 import com.jellypudding.offlineclient.command.commands.ModulesCommand;
 import com.jellypudding.offlineclient.command.commands.NbtCommand;
 import com.jellypudding.offlineclient.command.commands.PeekCommand;
@@ -43,6 +47,7 @@ import com.jellypudding.offlineclient.command.commands.ToggleCommand;
 import com.jellypudding.offlineclient.command.commands.VClipCommand;
 import com.jellypudding.offlineclient.command.commands.VelocityCommand;
 import com.jellypudding.offlineclient.command.commands.WaypointCommand;
+import com.jellypudding.offlineclient.command.commands.WorldCommand;
 import com.jellypudding.offlineclient.command.commands.XRayCommand;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.ChatSendEvent;
@@ -68,26 +73,31 @@ public final class CommandManager {
         new PrefixCommand(),
         new ProfileCommand(),
         new WaypointCommand(),
+        new FindsCommand(),
         new ModulesCommand(),
         new BindsCommand(),
         new ResetCommand(),
         new SayCommand(),
         new ServerCommand(),
+        new WorldCommand(),
         new AutoLoginCommand(),
         new GetPosCommand(),
         new GotoCommand(),
         new VClipCommand(),
         FloorCommand.up(),
         FloorCommand.down(),
+        FloorCommand.top(),
         new HClipCommand(),
         new CenterCommand(),
         new DropCommand(),
         new DismountCommand(),
         new FovCommand(),
         new ClearCommand(),
+        new MemoryCommand(),
         new DisconnectCommand(),
         new PeekCommand(),
         new NbtCommand(),
+        new HologramCommand(),
         new SaveSkinCommand(),
         new ExportCommand(),
         new XRayCommand(),
@@ -101,6 +111,7 @@ public final class CommandManager {
         new HudCommand(),
         new TpCommand(),
         ChunkDistanceCommand.simulation(),
+        new FlowTimeCommand(),
         new JumpCommand(),
         new VelocityCommand(),
         new AuthorCommand()

@@ -10,6 +10,7 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.NeutralMob;
 import net.minecraft.world.entity.OwnableEntity;
 import net.minecraft.world.entity.TamableAnimal;
@@ -36,6 +37,9 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.Vec3;
 
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 import java.util.function.Predicate;
 
 public final class EntityUtil {
@@ -261,6 +265,11 @@ public final class EntityUtil {
         return eye.distanceTo(closest);
     }
 
+    // The entity reach the server measures with. Reach grows the client's own figure.
+    public static double serverEntityReach() {
+        return OfflineClient.MC.player.getAttributeValue(Attributes.ENTITY_INTERACTION_RANGE);
+    }
+
     // Faster than a fiftieth of a block a tick along the ground. Slower is standing still.
     public static boolean isMoving(Vec3 velocity) {
         return velocity.horizontalDistanceSqr() > MOVING_SQR;
@@ -376,6 +385,23 @@ public final class EntityUtil {
             }
         }
         return best;
+    }
+
+    // Every entity in range that passes the test with the one the priority likes best first.
+    // For a module that deals with several at once.
+    public static List<Entity> ranked(double range, TargetPriority priority, Predicate<Entity> test) {
+        Minecraft mc = OfflineClient.MC;
+        List<Entity> found = new ArrayList<>();
+        if (mc.player == null || mc.level == null) {
+            return found;
+        }
+        for (Entity entity : mc.level.entitiesForRendering()) {
+            if (entity != mc.player && mc.player.distanceTo(entity) <= range && test.test(entity)) {
+                found.add(entity);
+            }
+        }
+        found.sort(Comparator.comparingDouble(priority::score));
+        return found;
     }
 
     // The entity within hitting reach the priority likes best or null.

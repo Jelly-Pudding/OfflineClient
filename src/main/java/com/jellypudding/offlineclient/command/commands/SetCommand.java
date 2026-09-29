@@ -4,9 +4,11 @@ import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.command.Command;
 import com.jellypudding.offlineclient.command.CommandManager;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.setting.ActionSetting;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
+import com.jellypudding.offlineclient.setting.GridSetting;
 import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RankSetting;
@@ -14,13 +16,15 @@ import com.jellypudding.offlineclient.setting.Setting;
 import com.jellypudding.offlineclient.setting.TextSetting;
 import com.jellypudding.offlineclient.util.ChatUtil;
 
-import java.util.Arrays;
 import java.util.Locale;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.OptionalDouble;
 
 public final class SetCommand extends Command {
+
+    private static final String GRID_HINT = "§7Type one word for each row with §f#§7 for on and §f.§7 for off"
+        + " such as §f.#. ### .#.§7. Three five seven or nine rows.";
 
     public SetCommand() {
         super("set", "Lists or changes a module's settings.", "set <module> [setting] [value]", "settings");
@@ -45,8 +49,8 @@ public final class SetCommand extends Command {
         Setting<?> setting = module.getSetting(args[1]);
         if (setting == null) {
             // The setting name may be left out when the module has only one.
-            if (args.length == 2 && module.getSettings().size() == 1) {
-                apply(module, module.getSettings().get(0), args[1]);
+            if (args.length == 2 && module.playerSettings().size() == 1) {
+                apply(module, module.playerSettings().getFirst(), args[1]);
                 return;
             }
             ChatUtil.error("§f" + module.getName() + "§c has no setting called §f" + args[1]
@@ -55,23 +59,30 @@ public final class SetCommand extends Command {
         }
 
         if (args.length == 2) {
-            describe(setting);
+            if (setting instanceof ActionSetting action) {
+                press(action);
+            } else {
+                describe(setting);
+            }
             return;
         }
 
-        // Text settings and ranked lists take the rest of the line. Everything else takes one word.
-        apply(module, setting, String.join(" ", Arrays.copyOfRange(args, 2, args.length)));
+        // Text settings and ranked lists and grids take the rest of the line. Everything else takes one word.
+        apply(module, setting, words(args, 2));
     }
 
     private static void listSettings(Module module) {
-        if (module.getSettings().isEmpty()) {
+        List<Setting<?>> settings = module.playerSettings();
+        if (settings.isEmpty()) {
             ChatUtil.message("§b" + module.getName() + "§7 has no settings.");
             return;
         }
         ChatUtil.message("§3" + module.getName() + " settings");
-        for (Setting<?> setting : module.getSettings()) {
-            ChatUtil.message("§b" + setting.id() + " §7= §f"
-                + valueString(setting) + rangeHint(setting));
+        for (Setting<?> setting : settings) {
+            // An action has no value. What it does is the useful part.
+            ChatUtil.message(setting instanceof ActionSetting
+                ? "§b" + setting.id() + " §8» §7" + setting.getDescription()
+                : "§b" + setting.id() + " §7= §f" + valueString(setting) + rangeHint(setting));
         }
     }
 
@@ -84,10 +95,13 @@ public final class SetCommand extends Command {
         if (setting instanceof RankSetting<?> r) {
             ChatUtil.message("§7Name the ones you want in order from §f" + rankOptions(r));
         }
+        if (setting instanceof GridSetting) {
+            ChatUtil.message(GRID_HINT);
+        }
     }
 
     private static String optionsHint(Module module) {
-        if (module.getSettings().isEmpty()) {
+        if (module.playerSettings().isEmpty()) {
             return "It has no settings.";
         }
         return "Its settings are §f" + String.join("§c/§f", module.settingIds()) + "§c.";
@@ -141,6 +155,13 @@ public final class SetCommand extends Command {
                     return;
                 }
             }
+            case GridSetting g -> {
+                if (!g.setFromWords(value)) {
+                    ChatUtil.error("§f" + value + "§c is not a square of rows.");
+                    ChatUtil.message(GRID_HINT);
+                    return;
+                }
+            }
             case KeybindSetting k -> {
                 int key = KeybindSetting.keyFromName(value);
                 if (key == KeybindSetting.UNKNOWN) {
@@ -148,6 +169,10 @@ public final class SetCommand extends Command {
                     return;
                 }
                 k.setValue(key);
+            }
+            case ActionSetting ignored -> {
+                ChatUtil.error("§f" + setting.id() + "§c takes no value. Name it on its own to run it.");
+                return;
             }
             default -> {
                 ChatUtil.error("This setting can only be changed in the ClickGUI.");

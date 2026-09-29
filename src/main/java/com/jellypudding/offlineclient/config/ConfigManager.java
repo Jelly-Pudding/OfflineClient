@@ -4,6 +4,7 @@ import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.command.CommandManager;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.module.ModuleManager;
+import com.jellypudding.offlineclient.setting.ActionSetting;
 import com.jellypudding.offlineclient.setting.Setting;
 
 import com.google.gson.JsonArray;
@@ -83,6 +84,9 @@ public final class ConfigManager {
             JsonObject settings = new JsonObject();
             JsonObject folds = new JsonObject();
             for (Setting<?> setting : module.getSettings()) {
+                if (setting instanceof ActionSetting) {
+                    continue;
+                }
                 settings.add(setting.getName(), setting.toJson());
                 if (setting.foldChanged()) {
                     folds.addProperty(setting.getName(), setting.isFolded());
@@ -138,6 +142,9 @@ public final class ConfigManager {
                 JsonObject settings = m.getAsJsonObject("settings");
                 JsonObject folds = m.has("folds") ? m.getAsJsonObject("folds") : new JsonObject();
                 for (Setting<?> setting : module.getSettings()) {
+                    if (setting instanceof ActionSetting) {
+                        continue;
+                    }
                     if (settings.has(setting.getName())) {
                         setting.fromJson(settings.get(setting.getName()));
                     }

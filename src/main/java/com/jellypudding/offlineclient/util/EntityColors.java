@@ -16,6 +16,9 @@ public final class EntityColors {
 
     public enum Mode { TYPE, DISTANCE, HEALTH, SINGLE }
 
+    // The single colour starts red unless a module picks another hue.
+    private static final float RED_HUE = 0;
+
     private final EnumSetting<Mode> mode;
     private final ColorSetting playerColor;
     private final ColorSetting hostileColor;
@@ -24,14 +27,21 @@ public final class EntityColors {
     private final ColorSetting ambientColor;
     private final ColorSetting itemColor;
     private final ColorSetting otherColor;
-    private final NumberSetting fadeDistance;
+    private final ColorSetting nearColor;
+    private final ColorSetting farColor;
+    private final NumberSetting farDistance;
     private final ColorSetting singleColor;
     private final BoolSetting friendColor;
 
     public EntityColors(Mode defaultMode) {
+        this(defaultMode, RED_HUE);
+    }
+
+    // A module whose marks already have a colour of their own keeps it as the single colour.
+    public EntityColors(Mode defaultMode, float singleHue) {
         mode = new EnumSetting<>("Colour mode", "How the colour is chosen.", defaultMode)
             .describe(Mode.TYPE, "Each kind of entity has its own colour.")
-            .describe(Mode.DISTANCE, "Red up close through yellow to green far away.")
+            .describe(Mode.DISTANCE, "The near colour up close blending into the far colour further away.")
             .describe(Mode.HEALTH, "Green at full health down to red near death. Things without health keep their kind's colour.")
             .describe(Mode.SINGLE, "One colour for everything.");
         playerColor = new ColorSetting("Player colour", "Colour of other players.", 0, false)
@@ -48,17 +58,21 @@ public final class EntityColors {
             .under(mode, Mode.TYPE);
         otherColor = new ColorSetting("Other colour", "Colour of everything else such as crystals and boats.", 28, 0.87f, 1f, false)
             .under(mode, Mode.TYPE);
-        fadeDistance = new NumberSetting("Fade distance",
-            "Blocks away at which the colour has gone fully green.", 32, 8, 128, 1, " blocks").min(1)
+        nearColor = new ColorSetting("Near colour", "Colour of whatever stands right beside you.",
+            RED_HUE, ColorUtil.RAMP_SATURATION, 1f, false).under(mode, Mode.DISTANCE);
+        farColor = new ColorSetting("Far colour", "Colour of whatever stands at the far distance or beyond.",
+            ColorUtil.GREEN_HUE, ColorUtil.RAMP_SATURATION, 1f, false).under(mode, Mode.DISTANCE);
+        farDistance = new NumberSetting("Far distance",
+            "Blocks away at which the colour has blended fully into the far colour.", 32, 8, 128, 1, " blocks").min(1)
             .under(mode, Mode.DISTANCE);
-        singleColor = new ColorSetting("Colour", "The colour everything gets.", 0, false)
+        singleColor = new ColorSetting("Colour", "The colour everything gets.", singleHue, false)
             .under(mode, Mode.SINGLE);
         friendColor = new BoolSetting("Friend colour", "Paint friends blue whatever the mode.", true);
     }
 
     public Setting<?>[] settings() {
         return new Setting<?>[] {mode, playerColor, hostileColor, passiveColor, waterColor, ambientColor,
-            itemColor, otherColor, fadeDistance, singleColor, friendColor};
+            itemColor, otherColor, nearColor, farColor, farDistance, singleColor, friendColor};
     }
 
     public int colorOf(Entity entity) {
@@ -87,12 +101,13 @@ public final class EntityColors {
         };
     }
 
-    // Red at the feet and green at the fade distance with yellow half way.
+    // The near colour at the feet and the far colour at the far distance. Red and green
+    // blend round the colour wheel through yellow.
     private int distanceColor(Entity entity) {
         Player self = OfflineClient.MC.player;
-        double away = self == null ? fadeDistance.getValue() : self.distanceTo(entity);
-        float share = (float) Math.clamp(away / fadeDistance.getValue(), 0, 1);
-        return ColorUtil.redToGreen(share);
+        double away = self == null ? farDistance.getValue() : self.distanceTo(entity);
+        float share = (float) Math.clamp(away / farDistance.getValue(), 0, 1);
+        return ColorUtil.lerpHue(nearColor.getColor(), farColor.getColor(), share);
     }
 
     private static int healthColor(LivingEntity living) {

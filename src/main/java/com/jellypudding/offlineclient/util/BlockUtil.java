@@ -18,9 +18,11 @@ import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.attribute.EnvironmentAttributes;
 import net.minecraft.world.effect.MobEffectUtil;
 import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.EmptyBlockGetter;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.AnvilBlock;
 import net.minecraft.world.level.block.BaseEntityBlock;
 import net.minecraft.world.level.block.BaseFireBlock;
@@ -83,6 +85,9 @@ public final class BlockUtil {
 
     private static final AABB FULL_CUBE = new AABB(0, 0, 0, 1, 1, 1);
 
+    // The server takes a click on a block up to one block past the player's reach.
+    private static final double SERVER_REACH_SLACK = 1;
+
     // The neighbours a block is built up from. Below first and then the four sides.
     public static final List<Direction> BELOW_THEN_SIDES = List.of(
         Direction.DOWN, Direction.NORTH, Direction.SOUTH, Direction.WEST, Direction.EAST);
@@ -94,6 +99,8 @@ public final class BlockUtil {
     public static final float SERVER_ACCEPTS = 0.7f;
     private static final int RIGHT_TOOL_DIVISOR = 30;
     private static final int WRONG_TOOL_DIVISOR = 100;
+    // Each level of Mining Fatigue multiplies the speed by this once more.
+    private static final double FATIGUE_BASE = 0.3;
 
     private BlockUtil() {
     }
@@ -140,6 +147,19 @@ public final class BlockUtil {
     // The three coordinates with spaces between.
     public static String text(BlockPos pos) {
         return pos.getX() + " " + pos.getY() + " " + pos.getZ();
+    }
+
+    // Reads back a position that text wrote. Null when the text is not three whole numbers.
+    public static BlockPos parse(String text) {
+        String[] parts = text.trim().split("\\s+");
+        if (parts.length != 3) {
+            return null;
+        }
+        try {
+            return new BlockPos(Integer.parseInt(parts[0]), Integer.parseInt(parts[1]), Integer.parseInt(parts[2]));
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     public static double distanceTo(BlockPos pos) {
@@ -220,6 +240,36 @@ public final class BlockUtil {
         return MC.hitResult instanceof BlockHitResult hit && hit.getType() == HitResult.Type.BLOCK ? hit : null;
     }
 
+    // Where a look straight ahead from the eyes ends within the range. A miss names the empty
+    // block at the far end. The camera plays no part and Freecam cannot move it. The look
+    // starts from the eyes and view of this moment as the crosshair does.
+    public static BlockHitResult look(double range) {
+        return (BlockHitResult) MC.player.pick(range, 1, false);
+    }
+
+    // The empty block the eyes look into at the end of the range. Null when the look meets a
+    // block first or the spot is outside the world or cannot take a block.
+    public static BlockPos airSpot(double range) {
+        BlockHitResult hit = look(range);
+        if (hit.getType() != HitResult.Type.MISS) {
+            return null;
+        }
+        BlockPos pos = hit.getBlockPos();
+        return Level.isInSpawnableBounds(pos) && isReplaceable(pos) ? pos : null;
+    }
+
+    // The reach the server measures with. Reach and AirPlace grow the client's own figure.
+    public static double serverBlockReach() {
+        return MC.player.getAttributeValue(Attributes.BLOCK_INTERACTION_RANGE);
+    }
+
+    // True when the server takes a click on this block. It measures from the eyes to the
+    // nearest point of the block.
+    public static boolean serverReaches(BlockPos pos) {
+        double reach = serverBlockReach() + SERVER_REACH_SLACK;
+        return new AABB(pos).distanceToSqr(MC.player.getEyePosition()) < reach * reach;
+    }
+
     // The space a block placed by this click fills. A replaceable block is filled itself.
     public static BlockPos placeSpot(BlockHitResult hit) {
         BlockPos clicked = hit.getBlockPos();
@@ -233,8 +283,23 @@ public final class BlockUtil {
             .anyMatch(state -> state.is(Blocks.COBWEB));
     }
 
+    // True when any block the box reaches into holds lava.
+    public static boolean touchesLava(Level level, AABB box) {
+        return level.getBlockStates(box).anyMatch(state -> state.getFluidState().is(FluidTags.LAVA));
+    }
+
+    // Powder snow only holds up someone in leather boots. Anyone else sinks into it.
+    public static boolean touchesPowderSnow(Level level, AABB box) {
+        return level.getBlockStates(box).anyMatch(state -> state.is(Blocks.POWDER_SNOW));
+    }
+
     // Places against the neighbour in the support direction. True when the click was taken.
     public static boolean place(BlockPos target, Direction support, boolean rotate, boolean swing) {
+        return place(target, support, rotate, swing, InteractionHand.MAIN_HAND);
+    }
+
+    public static boolean place(BlockPos target, Direction support, boolean rotate, boolean swing,
+                                InteractionHand hand) {
         BlockPos against = target.relative(support);
         Direction face = support.getOpposite();
         Vec3 hit = Vec3.atCenterOf(against).add(
@@ -244,34 +309,51 @@ public final class BlockUtil {
             faceVector(hit);
         }
 
-        return click(new BlockHitResult(hit, face, against, false), swing);
+        return click(new BlockHitResult(hit, face, against, false), swing, hand);
     }
 
     // Right clicks a face. True when the game accepted the click.
-    private static boolean click(BlockHitResult hit, boolean swing) {
-        InteractionResult outcome = MC.gameMode.useItemOn(MC.player, InteractionHand.MAIN_HAND, hit);
+    private static boolean click(BlockHitResult hit, boolean swing, InteractionHand hand) {
+        InteractionResult outcome = MC.gameMode.useItemOn(MC.player, hand, hit);
         if (!outcome.consumesAction()) {
             return false;
         }
         if (swing) {
-            SwingMode.swingArm(InteractionHand.MAIN_HAND);
+            SwingMode.swingArm(hand);
         }
         return true;
     }
 
-    // A neighbour face to click for a placement at pos.
+    // A click that places at pos. A null support clicks the empty spot itself.
     public record Placement(BlockPos pos, Direction support, Vec3 hit) {
 
         // Turns the way the face mode says then clicks and swings. False when nothing went down.
         public boolean place(FaceMode face, SwingMode swing) {
             face.face(hit, RotationPriority.PLACE);
-            if (!BlockUtil.place(pos, support, false, false)) {
+            boolean placed = support == null
+                ? placeDirect(pos, hit, false, false)
+                : BlockUtil.place(pos, support, false, false);
+            if (!placed) {
                 return false;
             }
             swing.swing(InteractionHand.MAIN_HAND);
             MC.rightClickDelay = InputUtil.USE_DELAY;
             return true;
         }
+    }
+
+    // A click the server takes that puts a block at the spot. Against a neighbour face when one
+    // is in reach and straight into the empty spot otherwise. Null when neither would land.
+    public static Placement reachablePlacement(BlockPos pos, double range, boolean needSight) {
+        Placement leaning = placementInReach(pos, range, needSight);
+        if (leaning != null && serverReaches(pos.relative(leaning.support()))) {
+            return leaning;
+        }
+        Vec3 centre = Vec3.atCenterOf(pos);
+        if (MC.player.getEyePosition().distanceToSqr(centre) > range * range || !serverReaches(pos)) {
+            return null;
+        }
+        return needSight && !canSee(centre) ? null : new Placement(pos, null, centre);
     }
 
     // Null unless a neighbour face sits within range of the eyes and in sight when that is asked for.
@@ -321,13 +403,18 @@ public final class BlockUtil {
 
     // The hit point decides which half a slab or a stair lands in.
     public static boolean placeDirect(BlockPos target, Vec3 hit, boolean rotate, boolean swing) {
+        return placeDirect(target, hit, rotate, swing, InteractionHand.MAIN_HAND);
+    }
+
+    public static boolean placeDirect(BlockPos target, Vec3 hit, boolean rotate, boolean swing,
+                                      InteractionHand hand) {
         if (!isReplaceable(target)) {
             return false;
         }
         if (rotate) {
             faceVector(hit);
         }
-        return click(new BlockHitResult(hit, facingSide(target), target, false), swing);
+        return click(new BlockHitResult(hit, facingSide(target), target, false), swing, hand);
     }
 
     // Looks at a point without moving the view.
@@ -495,6 +582,30 @@ public final class BlockUtil {
             stack.getItem() instanceof BlockItem item && filter.test(item.getBlock()));
     }
 
+    // The hotbar slot holding whichever allowed block stands up best to a blast. Blast
+    // resistance decides and the time it takes to break settles a tie. Minus one when none is there.
+    public static int findStrongestBlockSlot(Predicate<Block> allowed) {
+        int best = -1;
+        float bestResistance = -1;
+        float bestHardness = -1;
+        for (int i = 0; i < InventoryUtil.HOTBAR_SIZE; i++) {
+            ItemStack stack = MC.player.getInventory().getItem(i);
+            if (!(stack.getItem() instanceof BlockItem item) || !allowed.test(item.getBlock())) {
+                continue;
+            }
+            Block block = item.getBlock();
+            float resistance = block.getExplosionResistance();
+            // A block that never breaks outlasts every other.
+            float hardness = block.defaultDestroyTime() < 0 ? Float.MAX_VALUE : block.defaultDestroyTime();
+            if (resistance > bestResistance || (resistance == bestResistance && hardness > bestHardness)) {
+                best = i;
+                bestResistance = resistance;
+                bestHardness = hardness;
+            }
+        }
+        return best;
+    }
+
     // The hotbar slot holding whichever allowed block sits highest up the list.
     public static int findRankedBlockSlot(Collection<Identifier> preferred, Predicate<Block> allowed) {
         int best = -1;
@@ -582,13 +693,23 @@ public final class BlockUtil {
     // Clicks a block face. Vanilla skips a block interaction whilst the player sneaks.
     // The sneak is dropped for the click and put back straight after.
     public static boolean interact(BlockPos pos, Direction side) {
+        return interact(pos, side, InteractionHand.MAIN_HAND);
+    }
+
+    public static boolean interact(BlockPos pos, Direction side, InteractionHand hand) {
         BlockHitResult result = new BlockHitResult(hitPoint(pos, side), side, pos, false);
         boolean used = InputUtil.whileStanding(() -> MC.gameMode
-            .useItemOn(MC.player, InteractionHand.MAIN_HAND, result).consumesAction());
+            .useItemOn(MC.player, hand, result).consumesAction());
         if (used) {
-            SwingMode.swingArm(InteractionHand.MAIN_HAND);
+            SwingMode.swingArm(hand);
         }
         return used;
+    }
+
+    // A plain building block that also stays where it is put. A chorus flower is a full cube
+    // and still breaks away from end stone.
+    public static boolean buildsAt(Block block, BlockPos target) {
+        return isBuildingBlock(block, target) && block.defaultBlockState().canSurvive(MC.level, target);
     }
 
     // True for a plain full standable cube.
@@ -682,7 +803,7 @@ public final class BlockUtil {
 
     // Near enough to the eyes for a click on the block.
     public static boolean inReach(BlockPos pos) {
-        return distanceTo(pos) <= MC.player.blockInteractionRange();
+        return distanceTo(pos) <= serverBlockReach();
     }
 
     public static boolean inReach(BlockPos pos, double range, double wallsRange) {
@@ -712,7 +833,7 @@ public final class BlockUtil {
         if (rotate) {
             faceVector(hit);
         }
-        return click(new BlockHitResult(hit, side, pos, false), swing);
+        return click(new BlockHitResult(hit, side, pos, false), swing, InteractionHand.MAIN_HAND);
     }
 
     public static boolean isWaterSource(BlockPos pos) {
@@ -749,10 +870,31 @@ public final class BlockUtil {
         return state(pos).getDestroyProgress(MC.player, MC.level, pos) >= 1;
     }
 
+    // Grass or a flower or snow or anything else in the way that one hit clears. Flowers
+    // cannot be built over like grass but still break in one hit.
+    public static boolean clearsInOneHit(BlockPos pos) {
+        BlockState state = state(pos);
+        return !state.isAir() && (state.canBeReplaced() || state.is(BlockTags.FLOWERS))
+            && state.getFluidState().isEmpty() && canInstantBreak(pos);
+    }
+
+    // True when a start and a stop sent together break the block. The server finishes it on
+    // the stop once a single tick of progress reaches its threshold.
+    public static boolean breaksInOneTick(BlockPos pos) {
+        if (MC.player.getAbilities().instabuild) {
+            return true;
+        }
+        return state(pos).getDestroyProgress(MC.player, MC.level, pos) >= SERVER_ACCEPTS;
+    }
+
     // Progress one tick of mining with this tool would make by the vanilla dig speed maths.
     // The tool need not be held and a packet miner can time one it swapped away.
     public static float breakDelta(ItemStack tool, BlockPos pos) {
-        BlockState state = state(pos);
+        return breakDelta(tool, state(pos), pos);
+    }
+
+    // The same for a block the client has already cleared whilst the server still holds it.
+    public static float breakDelta(ItemStack tool, BlockState state, BlockPos pos) {
         float hardness = state.getDestroySpeed(MC.level, pos);
         if (hardness < 0) {
             return 0;
@@ -767,12 +909,7 @@ public final class BlockUtil {
         }
         MobEffectInstance fatigue = player.getEffect(MobEffects.MINING_FATIGUE);
         if (fatigue != null) {
-            speed *= switch (fatigue.getAmplifier()) {
-                case 0 -> 0.3f;
-                case 1 -> 0.09f;
-                case 2 -> 0.0027f;
-                default -> 8.1E-4f;
-            };
+            speed *= (float) Math.pow(FATIGUE_BASE, fatigue.getAmplifier() + 1);
         }
         speed *= (float) player.getAttributeValue(Attributes.BLOCK_BREAK_SPEED);
         if (player.isEyeInFluid(FluidTags.WATER)) {
@@ -781,8 +918,7 @@ public final class BlockUtil {
         if (!player.onGround()) {
             speed /= AIR_PENALTY;
         }
-        boolean rightTool = !state.requiresCorrectToolForDrops() || tool.isCorrectToolForDrops(state);
-        return speed / breakDivisor(hardness, rightTool);
+        return speed / breakDivisor(hardness, ItemUtil.getsDrops(tool, state));
     }
 
     // The break speed over this is the share of the block mined each tick.

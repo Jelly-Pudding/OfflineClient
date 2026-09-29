@@ -47,6 +47,8 @@ public final class HelpCommand extends Command {
             + "help <command>§7 says the same.");
         ChatUtil.message("§7A module name on its own toggles it. §f" + prefix
             + "step§7 toggles Step and §f" + prefix + "step height 2§7 changes a setting.");
+        ChatUtil.message("§7A setting marked with §8»§7 in the ClickGUI runs when named. §f" + prefix
+            + "stashfinder openfinds§7 opens the list of stashes.");
 
         String key = OfflineClient.INSTANCE.getModuleManager()
             .get(ClickGuiModule.class).getKeybind().getKeyName();

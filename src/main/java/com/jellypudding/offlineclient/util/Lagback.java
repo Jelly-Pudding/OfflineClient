@@ -2,6 +2,7 @@ package com.jellypudding.offlineclient.util;
 
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.PacketReceiveEvent;
+import net.minecraft.network.protocol.game.ClientboundMoveVehiclePacket;
 import net.minecraft.network.protocol.game.ClientboundPlayerPositionPacket;
 
 import java.util.concurrent.atomic.AtomicInteger;
@@ -11,23 +12,42 @@ import java.util.concurrent.atomic.AtomicInteger;
 public enum Lagback {
     INSTANCE;
 
-    private static final AtomicInteger pulls = new AtomicInteger();
+    private static final AtomicInteger playerPulls = new AtomicInteger();
+    // The server only sends a vehicle its place when it refuses a move the rider sent.
+    private static final AtomicInteger vehiclePulls = new AtomicInteger();
 
     @Subscribe
     private void onPacketReceive(PacketReceiveEvent event) {
         if (event.getPacket() instanceof ClientboundPlayerPositionPacket) {
-            pulls.incrementAndGet();
+            playerPulls.incrementAndGet();
+        } else if (event.getPacket() instanceof ClientboundMoveVehiclePacket) {
+            vehiclePulls.incrementAndGet();
         }
     }
 
     // Each module keeps its own and sees every pull back once.
     public static final class Watcher {
 
-        private int seen = pulls.get();
+        private final boolean vehicles;
+        private int seen;
+
+        public Watcher() {
+            this(false);
+        }
+
+        private Watcher(boolean vehicles) {
+            this.vehicles = vehicles;
+            seen = pulls();
+        }
+
+        // Also sees the vehicle the player steers pulled back.
+        public static Watcher withVehicles() {
+            return new Watcher(true);
+        }
 
         // True once when the server has pulled the player back since the last call.
         public boolean happened() {
-            int now = pulls.get();
+            int now = pulls();
             boolean fresh = now != seen;
             seen = now;
             return fresh;
@@ -35,7 +55,11 @@ public enum Lagback {
 
         // Forgets any pull back that came whilst the module was off.
         public void sync() {
-            seen = pulls.get();
+            seen = pulls();
+        }
+
+        private int pulls() {
+            return playerPulls.get() + (vehicles ? vehiclePulls.get() : 0);
         }
     }
 }

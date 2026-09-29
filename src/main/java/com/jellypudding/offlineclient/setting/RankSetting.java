@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
 // Choices in the order the player prefers them. Each one can be switched off. The
 // ClickGUI draws every choice as a row to drag into place and click on or off.
@@ -27,8 +28,14 @@ public final class RankSetting<E extends Enum<E>> extends Setting<List<RankSetti
 
     // Every constant of the enum in its declared order and switched on.
     public RankSetting(String name, String description, Class<E> type, Function<E, ItemStack> icon) {
+        this(name, description, type, icon, choice -> true);
+    }
+
+    // Every constant in its declared order. Only the ones the test picks start switched on.
+    public RankSetting(String name, String description, Class<E> type, Function<E, ItemStack> icon,
+                       Predicate<E> startsOn) {
         super(name, description, Arrays.stream(type.getEnumConstants())
-            .map(choice -> new Entry<>(choice, true)).toList());
+            .map(choice -> new Entry<>(choice, startsOn.test(choice))).toList());
         this.type = type;
         this.icon = icon;
         this.icons = new EnumMap<>(type);
@@ -124,7 +131,7 @@ public final class RankSetting<E extends Enum<E>> extends Setting<List<RankSetti
         return array;
     }
 
-    // A choice the save does not know yet joins the end switched on.
+    // A choice the save does not know yet joins the end as it starts.
     @Override
     public void fromJson(JsonElement json) {
         if (!json.isJsonArray()) {

@@ -16,6 +16,7 @@ import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.ItemUtil;
+import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.SwingMode;
 import com.jellypudding.offlineclient.util.TargetPriority;
 import net.minecraft.core.BlockPos;
@@ -43,8 +44,8 @@ public final class AutoCity extends Module {
         .describe(Mode.HOLD, "Mine it like a held left click with the tool in hand throughout.")
         .describe(Mode.PACKET, "Send the start and stop at once and keep the tool out whilst the server counts.")
         .describe(Mode.SILENT, "Send the start and stop at once and put the tool away until the last packet.");
-    private final BoolSetting switchTool = new BoolSetting("Switch tool",
-        "Swap to your fastest hotbar tool first.", true);
+    private final BoolSetting autoTool = new BoolSetting("Auto tool",
+        "Holds the tool AutoTool would pick or else your fastest one.", true);
     private final EnumSetting<SwingMode> swing = SwingMode.setting(SwingMode.BOTH);
     private final BoolSetting support = new BoolSetting("Support",
         "Fill the empty block under the city block to give a crystal a base.", true);
@@ -67,7 +68,7 @@ public final class AutoCity extends Module {
 
     public AutoCity() {
         super("AutoCity", "Mines the block guarding an enemy in a hole.", Category.COMBAT);
-        addSettings(targetRange, priority, breakRange, placeRange, mode, switchTool, swing, support,
+        addSettings(targetRange, priority, breakRange, placeRange, mode, autoTool, swing, support,
             chatInfo, rotate, toggleOff, render);
         addSettings(style.settings());
         searchTags("city", "surround", "obsidian");
@@ -147,7 +148,7 @@ public final class AutoCity extends Module {
     }
 
     private void holdMine() {
-        if (switchTool.isOn()) {
+        if (autoTool.isOn()) {
             ItemUtil.selectBestTool(BlockUtil.state(current), slots);
         }
         if (!BlockMiner.mine(current, rotate.isOn())) {
@@ -159,7 +160,7 @@ public final class AutoCity extends Module {
     // The final stop only has to arrive once the client reckons the count is done.
     private void packetMine() {
         BlockState state = BlockUtil.state(current);
-        int tool = switchTool.isOn() ? ItemUtil.bestToolSlot(state) : -1;
+        int tool = autoTool.isOn() ? Modules.toolSlot(state) : -1;
         ItemStack toolStack = tool == -1
             ? mc.player.getMainHandItem() : mc.player.getInventory().getItem(tool);
         if (!sent) {

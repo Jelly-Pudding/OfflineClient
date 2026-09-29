@@ -72,8 +72,11 @@ public final class ColorUtil {
     private static final float HURT = 0.3f;
 
     // Hue nought is red and hue a hundred and twenty is green.
-    private static final float GREEN_HUE = 120;
-    private static final float RAMP_SATURATION = 0.85f;
+    public static final float GREEN_HUE = 120;
+    public static final float RAMP_SATURATION = 0.85f;
+
+    // Half a turn of the colour wheel in degrees.
+    private static final float HALF_TURN = 180;
 
     // A smooth red to green ramp for a share from nought to one.
     public static int redToGreen(float share) {
@@ -134,5 +137,21 @@ public final class ColorUtil {
 
     public static int lerp(int from, int to, float t) {
         return ARGB.srgbLerp(Math.clamp(t, 0f, 1f), from, to);
+    }
+
+    // Blends two colours the short way round the colour wheel. Red to green passes through
+    // yellow where a straight blend passes through brown. An end with no colour takes the hue
+    // of the other.
+    public static int lerpHue(int from, int to, float t) {
+        float share = Math.clamp(t, 0f, 1f);
+        float[] start = hsvOf(from);
+        float[] end = hsvOf(to);
+        float startHue = start[1] <= 0 ? end[0] : start[0];
+        float endHue = end[1] <= 0 ? start[0] : end[0];
+        float turn = ((endHue - startHue + 3 * HALF_TURN) % (2 * HALF_TURN)) - HALF_TURN;
+        int blended = hsv(startHue + turn * share, start[1] + (end[1] - start[1]) * share,
+            start[2] + (end[2] - start[2]) * share);
+        int alpha = from >>> 24;
+        return withAlpha(blended, Math.round(alpha + ((to >>> 24) - alpha) * share));
     }
 }

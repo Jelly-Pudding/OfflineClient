@@ -9,7 +9,6 @@ import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.ServerInfo;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.OptionalInt;
@@ -63,7 +62,7 @@ public final class MacroCommand extends KeyedCommand<Macro> {
             usage("macro add <name> <lines>");
             return;
         }
-        String text = String.join(" ", Arrays.copyOfRange(args, 2, args.length));
+        String text = words(args, 2);
         List<String> lines = new ArrayList<>();
         for (String line : text.split(SPLIT)) {
             if (!line.isBlank()) {

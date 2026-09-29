@@ -3,6 +3,7 @@ package com.jellypudding.offlineclient.modules.world;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.Render3DEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
+import com.jellypudding.offlineclient.mixin.MultiPlayerGameModeAccessor;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.ExclusivityGroup;
 import com.jellypudding.offlineclient.module.Module;
@@ -27,16 +28,17 @@ import com.jellypudding.offlineclient.util.ItemUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.MenuClicks;
 import com.jellypudding.offlineclient.util.Modules;
+import com.jellypudding.offlineclient.util.PacketBreaker;
 import com.jellypudding.offlineclient.util.ProjectileUtil;
 import com.jellypudding.offlineclient.util.RotationManager;
 import com.jellypudding.offlineclient.util.RotationPriority;
 import com.jellypudding.offlineclient.util.TickRate;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.client.multiplayer.MultiPlayerGameMode;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.boss.enderdragon.EndCrystal;
@@ -168,9 +170,6 @@ public final class HighwayBuilder extends Module {
         1, 1, 16, 1).min(1);
     private final BoolSetting doubleMine = new BoolSetting("Double mine",
         "Breaks a second block with packets whilst the first is mined by hand.", true);
-    private final BoolSetting fastBreak = new BoolSetting("Fast break",
-        "Sends the second block its stop packet early instead of waiting for full progress.", true)
-        .under(doubleMine);
     private final NumberSetting savePickaxes = new NumberSetting("Save pickaxes",
         "Turns the module off once you are down to this many pickaxes. Zero never stops.",
         1, 0, 36, 1).min(0).max(36);
@@ -252,7 +251,8 @@ public final class HighwayBuilder extends Module {
     // The block the hand was on last tick. Used only to count what really broke.
     private BlockPos wasMining;
 
-    private PacketDig spare;
+    // Second blocks taken down with packets whilst the hand works the first.
+    private final PacketBreaker spares = new PacketBreaker();
 
     private Stage stage = Stage.NONE;
     private BlockPos shulkerPos;
@@ -269,25 +269,12 @@ public final class HighwayBuilder extends Module {
     // Every block of the shell around the player this tick.
     private final List<BlockPos> stretch = new ArrayList<>();
 
-    // A second block taken down with packets whilst the hand works the first.
-    private static final class PacketDig {
-
-        private final BlockPos pos;
-        private final Direction side;
-        private float progress;
-
-        private PacketDig(BlockPos pos, Direction side) {
-            this.pos = pos;
-            this.side = side;
-        }
-    }
-
     public HighwayBuilder() {
         super("HighwayBuilder", "Digs and builds a highway along one line at a fixed height.", Category.WORLD);
         addSettings(width, height, diagonal, movement, freeLook, skipUnreachable, reLevel,
             pauseOnLag, blocks, floor, replaceFloor, walls, wallHeight, replaceWalls,
             mineAboveWalls, ceiling, replaceCeiling, fillLiquids, torches, torchSpacing,
-            torchHeight, rotation, breakDelay, breaksPerTick, doubleMine, fastBreak,
+            torchHeight, rotation, breakDelay, breaksPerTick, doubleMine,
             savePickaxes, placeRange, placeDelay, placementsPerTick, restock, inventoryDelay,
             searchShulkers, searchEnderChest, mineEnderChests, saveEnderChests, grindAmount,
             grindBlockade, ejectShulkers, emptySlots, throwTrash, trash,
@@ -324,7 +311,7 @@ public final class HighwayBuilder extends Module {
         slots.forget();
         mineTarget = null;
         placeTarget = null;
-        spare = null;
+        spares.reset();
         crystal = null;
         drawing = false;
         ignoredCrystals.clear();
@@ -350,7 +337,7 @@ public final class HighwayBuilder extends Module {
         walker.clear();
         mineTarget = null;
         placeTarget = null;
-        spare = null;
+        spares.reset();
         stage = Stage.NONE;
         shulkerPos = null;
         stretch.clear();
@@ -417,7 +404,7 @@ public final class HighwayBuilder extends Module {
             stopWalking();
             return;
         }
-        driveSpare();
+        spares.tick(this::needsClearing);
         if (work()) {
             if (auto) {
                 stopWalking();
@@ -561,15 +548,15 @@ public final class HighwayBuilder extends Module {
         if (!rotatesToMine()) {
             return packetMine();
         }
+        if (doubleMine.isOn()) {
+            takeSpare(dig);
+        }
         if (!BlockMiner.mine(dig, true)) {
             mineTarget = null;
             return false;
         }
         wasMining = dig;
         sinceBreak = 0;
-        if (doubleMine.isOn() && spare == null) {
-            takeSpare(dig);
-        }
         return true;
     }
 
@@ -599,48 +586,32 @@ public final class HighwayBuilder extends Module {
         return sent > 0;
     }
 
-    // Picks a second block for the packet miner. The one the hand is on is skipped.
+    // Sends a second block its start and stop at once. The server parks a slow one and finishes
+    // it on its next tick. Every start restarts the server's count and a slow one takes its
+    // target. A spare only goes out whilst the hand is between blocks with its own start to come.
     private void takeSpare(BlockPos busy) {
-        double reach = mc.player.blockInteractionRange();
+        MultiPlayerGameMode game = mc.gameMode;
+        // The hand takes up its last block again without a start of its own.
+        BlockPos last = ((MultiPlayerGameModeAccessor) game).offlineclient$destroyBlockPos();
+        if (game.isDestroying() || busy.equals(last)) {
+            return;
+        }
         BlockPos best = null;
         double bestDistance = Double.MAX_VALUE;
         for (BlockPos pos : stretch) {
-            if (pos.equals(busy) || !needsClearing(pos)) {
+            if (pos.equals(busy) || !needsClearing(pos) || !BlockUtil.inReach(pos) || !spares.canSend(pos)) {
                 continue;
             }
             double distance = BlockUtil.distanceTo(pos);
-            if (distance <= reach && distance < bestDistance) {
+            if (distance < bestDistance) {
                 bestDistance = distance;
                 best = pos;
             }
         }
-        if (best == null) {
-            return;
+        if (best != null) {
+            spares.send(best);
+            blocksBroken++;
         }
-        Direction side = BlockUtil.facingSide(best);
-        mc.player.connection.send(new ServerboundPlayerActionPacket(
-            ServerboundPlayerActionPacket.Action.START_DESTROY_BLOCK, best, side));
-        spare = new PacketDig(best, side);
-    }
-
-    // Feeds the second block its progress and stops it once it is due.
-    private void driveSpare() {
-        if (spare == null) {
-            return;
-        }
-        if (!needsClearing(spare.pos) || !BlockUtil.inReach(spare.pos)) {
-            spare = null;
-            return;
-        }
-        spare.progress += BlockUtil.breakDelta(mc.player.getMainHandItem(), spare.pos);
-        float due = fastBreak.isOn() ? BlockUtil.SERVER_ACCEPTS : 1f;
-        if (spare.progress < due) {
-            return;
-        }
-        mc.player.connection.send(new ServerboundPlayerActionPacket(
-            ServerboundPlayerActionPacket.Action.STOP_DESTROY_BLOCK, spare.pos, spare.side));
-        blocksBroken++;
-        spare = null;
     }
 
     private BlockPos nearest(Predicate<BlockPos> wanted, double reach) {

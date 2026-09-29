@@ -28,7 +28,7 @@ import java.util.List;
 public final class ProjectilePath {
 
     // A thrown item spawns this far below the eyes of whoever threw it.
-    private static final double BELOW_EYES = 0.1;
+    public static final double BELOW_EYES = 0.1;
 
     // How the game moves a projectile each tick. The order matters.
     public enum Motion {

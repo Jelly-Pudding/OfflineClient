@@ -28,7 +28,6 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.animal.equine.Llama;
 import net.minecraft.world.entity.decoration.ItemFrame;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.item.PrimedTnt;
@@ -328,22 +327,14 @@ public final class Nametags extends Module {
 
     // Full health then speed and jump each coloured by how it compares with wild horses.
     private static void addMountStats(List<String> parts, List<Integer> colors, LivingEntity mount) {
-        float maxHealth = mount.getMaxHealth();
-        parts.add(String.format(Locale.ROOT, "/%.0f", maxHealth));
-        colors.add(ColorUtil.redToGreen(Mounts.healthShare(maxHealth)));
-        double speed = Mounts.topSpeed(mount);
-        if (!Double.isNaN(speed)) {
-            parts.add(String.format(Locale.ROOT, " %.1f m/s", speed));
-            colors.add(ColorUtil.redToGreen(Mounts.speedShare(speed)));
-        }
-        double jump = Mounts.jumpHeight(mount);
-        if (!Double.isNaN(jump)) {
-            parts.add(String.format(Locale.ROOT, " jumps %.1f m", jump));
-            colors.add(ColorUtil.redToGreen(Mounts.jumpShare(jump)));
-        }
-        if (mount instanceof Llama llama) {
-            parts.add(" strength " + llama.getStrength());
-            colors.add(ColorUtil.redToGreen(Mounts.strengthShare(llama.getStrength())));
+        for (Mounts.Figure figure : Mounts.figures(mount)) {
+            parts.add(switch (figure.measure()) {
+                case HEALTH -> "/" + figure.value();
+                case SPEED -> " " + figure.value();
+                case JUMP -> " jumps " + figure.value();
+                case STRENGTH -> " strength " + figure.value();
+            });
+            colors.add(ColorUtil.redToGreen(figure.share()));
         }
     }
 

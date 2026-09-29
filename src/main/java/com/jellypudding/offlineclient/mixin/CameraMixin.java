@@ -1,5 +1,6 @@
 package com.jellypudding.offlineclient.mixin;
 
+import com.jellypudding.offlineclient.modules.combat.AimAssist;
 import com.jellypudding.offlineclient.modules.render.CameraTweaks;
 import com.jellypudding.offlineclient.modules.render.FreeLook;
 import com.jellypudding.offlineclient.modules.render.Freecam;
@@ -34,11 +35,16 @@ public abstract class CameraMixin {
     protected abstract void setRotation(float yaw, float pitch);
 
     // The world and the hand each read the field of view. One ease a frame keeps them level.
+    // AimAssist turns the view here after the mouse and before the frame reads the angle.
     @Inject(method = "update(Lnet/minecraft/client/DeltaTracker;)V", at = @At("HEAD"))
-    private void onCameraUpdate(CallbackInfo ci) {
+    private void onCameraUpdate(DeltaTracker deltaTracker, CallbackInfo ci) {
         Zoom zoom = Modules.get(Zoom.class);
         if (zoom != null) {
             zoom.advance();
+        }
+        AimAssist aim = Modules.active(AimAssist.class);
+        if (aim != null) {
+            aim.onFrame(deltaTracker);
         }
     }
 

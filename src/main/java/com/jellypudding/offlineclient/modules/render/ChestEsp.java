@@ -9,6 +9,7 @@ import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.render.BoxStyle;
 import com.jellypudding.offlineclient.render.DrawBatch;
+import com.jellypudding.offlineclient.render.NearFade;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
@@ -62,8 +63,6 @@ public final class ChestEsp extends Module {
 
     // One sixteenth of a block. Chest models sit this far in from the block edge.
     private static final double PIXEL = 1.0 / 16;
-    // Below this share of full strength a faded box is not worth drawing.
-    private static final float FAINT = 0.075f;
 
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode", "How containers are marked.", Mode.BOX)
         .describe(Mode.BOX, "A box around each container.")
@@ -135,8 +134,7 @@ public final class ChestEsp extends Module {
         "Colour of chest boats.", 34, 0.65f, 0.85f, false).under(chestBoats);
     private final BoolSetting tracers = new BoolSetting("Tracers",
         "Draw a line from you to each container.", false);
-    private final NumberSetting fadeDistance = new NumberSetting("Fade distance",
-        "Containers closer than this fade out.", 6, 0, 12, 0.5, " blocks");
+    private final NearFade fade = new NearFade(6);
     private final BoolSetting hideOpened = new BoolSetting("Hide opened",
         "Containers you have opened are no longer drawn.", false);
     private final BoolSetting recolourOpened = new BoolSetting("Recolour opened",
@@ -169,7 +167,7 @@ public final class ChestEsp extends Module {
             droppers, dropperColor, crafters, crafterColor, brewingStands, brewingColor,
             bookshelves, bookshelfColor, pots, potColor,
             chestCarts, chestCartColor, hopperCarts, hopperCartColor, chestBoats, chestBoatColor,
-            tracers, fadeDistance, hideOpened, recolourOpened,
+            tracers, fade.setting(), hideOpened, recolourOpened,
             openedColor, forgetKey, radius);
         searchTags("storage esp", "container esp");
     }
@@ -381,22 +379,12 @@ public final class ChestEsp extends Module {
             ? potColor.getColor() : 0;
     }
 
-    // Full strength beyond the fade distance and the square of the share inside it.
-    private float strengthAt(AABB box) {
-        double fade = fadeDistance.getValue();
-        if (fade <= 0 || mc.player == null) {
-            return 1;
-        }
-        double away = mc.player.distanceToSqr(box.getCenter());
-        return away >= fade * fade ? 1 : (float) (away / (fade * fade));
-    }
-
     @Subscribe
     private void onRender3D(Render3DEvent event) {
         DrawBatch batch = event.getBatch();
         for (Target target : targets) {
-            float strength = strengthAt(target.box());
-            if (strength < FAINT) {
+            float strength = fade.strengthAt(target.box().getCenter());
+            if (strength <= 0) {
                 continue;
             }
             int color = ColorUtil.fade(target.color(), strength);

@@ -75,6 +75,10 @@ public abstract class MultiPlayerGameModeMixin {
     private void onStartDestroyBlock(BlockPos pos, Direction direction,
                                      CallbackInfoReturnable<Boolean> cir) {
         OfflineClient.INSTANCE.getEventBus().post(new BlockBreakEvent(pos));
+        if (Modules.toolHeldBack()) {
+            cir.setReturnValue(false);
+            return;
+        }
         FastBreak fastBreak = Modules.active(FastBreak.class);
         if (fastBreak == null || minecraft.level == null) {
             return;
@@ -113,12 +117,16 @@ public abstract class MultiPlayerGameModeMixin {
         return fastBreak.adjustProgress(state, destroyProgress, original);
     }
 
+    // AutoTool stops a break that would snap the only tool to hand.
     @Inject(
         method = "continueDestroyBlock(Lnet/minecraft/core/BlockPos;Lnet/minecraft/core/Direction;)Z",
-        at = @At("HEAD"))
+        at = @At("HEAD"), cancellable = true)
     private void onContinueDestroyBlock(BlockPos pos, Direction direction,
                                         CallbackInfoReturnable<Boolean> cir) {
         OfflineClient.INSTANCE.getEventBus().post(new BlockBreakEvent(pos));
+        if (Modules.toolHeldBack()) {
+            cir.setReturnValue(false);
+        }
     }
 
     // ElytraBoost swaps a real rocket for a client side one before it is spent.

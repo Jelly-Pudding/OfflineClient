@@ -50,6 +50,11 @@ public final class BuildTemplate {
         this.entries = List.copyOf(entries);
     }
 
+    // A shape that never touches a file such as a painted pattern. Null when it has no blocks.
+    public static BuildTemplate of(String name, List<Entry> entries) {
+        return entries.isEmpty() ? null : new BuildTemplate(name, entries);
+    }
+
     public String name() {
         return name;
     }
@@ -135,11 +140,17 @@ public final class BuildTemplate {
     // Every block of the shape laid out from the origin in the facing given.
     // Insertion order is kept. A template is built in the order it was written.
     public Map<BlockPos, Block> layOut(BlockPos origin, Direction front) {
+        return layOut(origin, front, false);
+    }
+
+    // Laid flat the shape tips away from you. Its up runs ahead and its forward runs up.
+    public Map<BlockPos, Block> layOut(BlockPos origin, Direction front, boolean flat) {
         Direction left = front.getCounterClockWise();
         Map<BlockPos, Block> placed = new LinkedHashMap<>();
         for (Entry entry : entries) {
-            BlockPos pos = origin.relative(front, entry.z()).relative(left, entry.x()).above(entry.y());
-            placed.put(pos, entry.block());
+            int ahead = flat ? entry.y() : entry.z();
+            int up = flat ? entry.z() : entry.y();
+            placed.put(origin.relative(front, ahead).relative(left, entry.x()).above(up), entry.block());
         }
         return placed;
     }

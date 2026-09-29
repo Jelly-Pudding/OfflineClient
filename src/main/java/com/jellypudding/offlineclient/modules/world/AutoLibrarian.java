@@ -26,9 +26,6 @@ import net.minecraft.client.gui.screens.inventory.MerchantScreen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.Holder;
-import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.Identifier;
-import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.npc.villager.Villager;
@@ -274,41 +271,17 @@ public final class AutoLibrarian extends Module {
         return null;
     }
 
-    // The wanted list parsed against the enchantment registry of this world.
+    // The wanted list read against the enchantment registry of this world. The first number
+    // after a name is the level and a second one is the price.
     private List<Wish> wishes() {
         List<Wish> result = new ArrayList<>();
-        var registry = mc.level.registryAccess().lookupOrThrow(Registries.ENCHANTMENT);
         for (String token : wanted.getValue().toLowerCase(Locale.ROOT).split("\\s+")) {
-            if (token.isBlank()) {
-                continue;
+            ItemUtil.EnchantmentEntry entry = token.isBlank() ? null : ItemUtil.enchantmentEntry(token);
+            if (entry != null) {
+                result.add(new Wish(token, entry.enchantment(), entry.level(), entry.number(1, maxPrice.getInt())));
             }
-            List<String> parts = new ArrayList<>(List.of(token.split(":")));
-            // A trailing number is the level and two of them are the level then the price.
-            int price = maxPrice.getInt();
-            int level = 1;
-            if (parts.size() > 1 && isNumber(parts.get(parts.size() - 1))) {
-                int last = Integer.parseInt(parts.remove(parts.size() - 1));
-                if (parts.size() > 1 && isNumber(parts.get(parts.size() - 1))) {
-                    price = last;
-                    level = Integer.parseInt(parts.remove(parts.size() - 1));
-                } else {
-                    level = last;
-                }
-            }
-            Identifier id = Identifier.tryParse(String.join(":", parts));
-            if (id == null) {
-                continue;
-            }
-            int wantedLevel = level;
-            int wantedPrice = price;
-            registry.get(ResourceKey.create(Registries.ENCHANTMENT, id))
-                .ifPresent(holder -> result.add(new Wish(token, holder, wantedLevel, wantedPrice)));
         }
         return result;
-    }
-
-    private static boolean isNumber(String text) {
-        return !text.isEmpty() && text.chars().allMatch(Character::isDigit);
     }
 
     private void accept(MerchantMenu menu, int index, ItemStack book, Wish wish, int price) {

@@ -48,7 +48,7 @@ public final class LiquidFiller extends AreaPlacer {
                 Blocks.DEEPSLATE, Blocks.NETHERRACK, Blocks.ANDESITE, Blocks.DIORITE, Blocks.GRANITE),
             "Outline the liquid waiting to be filled.", 1, TARGET_COLOR);
         addSettings(shape, range, wallsRange, water, lava, flowing, blocks, listMode,
-            order, perTick, delay, rotate, render);
+            order, perRound, delay, rotate, render);
         searchTags("lava", "water", "fill");
     }
 

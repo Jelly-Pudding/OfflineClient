@@ -11,7 +11,8 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 // A Subscribe method on a registered listener becomes a handler for its event type.
-// Registering the same listener twice does nothing.
+// Registering the same listener twice does nothing. A cancelled event goes no further
+// than the handler that cancelled it.
 public final class EventBus {
 
     private static final class Handler {
@@ -86,6 +87,10 @@ public final class EventBus {
         List<Handler> list = handlers.get(event.getClass());
         if (list != null) {
             for (Handler handler : list) {
+                // A packet held back reaches the rest when it really moves. One dropped never does.
+                if (event.isCancelled()) {
+                    break;
+                }
                 handler.invoke(event);
             }
         }

@@ -60,10 +60,9 @@ public final class HudManager {
         }
         int width = scaledWidth(element, font);
         int height = scaledHeight(element, font);
-        // A part of the game's own HUD may sit flush with the edge as it does at home.
-        int margin = element.home(screenWidth, screenHeight) == null ? MARGIN : 0;
-        return new Placement(element, corner(element.xPercent(), screenWidth, width, margin),
-            corner(element.yPercent(), screenHeight, height, margin), width, height);
+        int margin = element.touchesEdges() ? 0 : MARGIN;
+        return new Placement(element, corner(element.xPercent(), element.placedWidth(), screenWidth, width, margin),
+            corner(element.yPercent(), element.placedHeight(), screenHeight, height, margin), width, height);
     }
 
     // Where an element sits at home at its present size. It grows away from the screen
@@ -90,11 +89,14 @@ public final class HudManager {
         return (int) Math.max(1, Math.round(element.height(font) * element.scaleY()));
     }
 
-    // The top or left edge for an anchor given as a share of the screen.
-    private static int corner(double percent, int room, int size, int margin) {
+    // The top or left edge for an anchor given as a share of the screen. A pinned element reads
+    // its share on the screen it was placed on. Nought for placed means the screen it is on.
+    private static int corner(double percent, double placed, int room, int size, int margin) {
         double share = Math.clamp(percent / 100.0, 0, 1);
-        double anchor = share * room;
-        double edge = anchor - align(share) * size;
+        double line = align(share);
+        double measured = placed > 0 ? placed : room;
+        double anchor = line * room + (share - line) * measured;
+        double edge = anchor - line * size;
         return (int) Math.round(Math.clamp(edge, margin, Math.max(margin, room - size - margin)));
     }
 
@@ -115,11 +117,27 @@ public final class HudManager {
         return Math.clamp((edge + align(middle) * size) / room, 0, 1);
     }
 
+    // The overlay drawn along with the game's own HUD. Elements that sit on top of
+    // everything wait for renderOnTop.
     public void render(GuiGraphicsExtractor context, Font font) {
-        int screenWidth = context.guiWidth();
-        int screenHeight = context.guiHeight();
-        for (Placement placement : layout(font, screenWidth, screenHeight, false)) {
-            draw(context, font, placement);
+        for (HudElement element : elements) {
+            if (!element.drawsOnTop() && element.visible()) {
+                draw(context, font, placement(element, font, context.guiWidth(), context.guiHeight()));
+            }
+        }
+    }
+
+    // Once the game has drawn the rest of the frame. These elements get a stratum of their
+    // own above everything already drawn.
+    public void renderOnTop(GuiGraphicsExtractor context, Font font) {
+        List<HudElement> onTop = elements.stream().filter(element -> element.drawsOnTop() && element.visible())
+            .toList();
+        if (onTop.isEmpty()) {
+            return;
+        }
+        context.nextStratum();
+        for (HudElement element : onTop) {
+            draw(context, font, placement(element, font, context.guiWidth(), context.guiHeight()));
         }
     }
 

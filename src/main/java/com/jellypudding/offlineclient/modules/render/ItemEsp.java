@@ -6,16 +6,20 @@ import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.render.BoxStyle;
 import com.jellypudding.offlineclient.render.DrawBatch;
+import com.jellypudding.offlineclient.render.NearFade;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
+import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.GearRule;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.phys.AABB;
 
@@ -56,6 +60,9 @@ public final class ItemEsp extends Module {
         List.of(Items.DIAMOND, Items.NETHERITE_INGOT, Items.ENCHANTED_GOLDEN_APPLE,
             Items.ELYTRA, Items.TOTEM_OF_UNDYING, Items.SHULKER_BOX))
         .unless(everything);
+    private final GearRule gear = GearRule.filter();
+    // An item at your feet would hide under its own box.
+    private final NearFade fade = new NearFade(3);
 
     private int count;
 
@@ -64,7 +71,9 @@ public final class ItemEsp extends Module {
         addSettings(boxes);
         addSettings(style.settings());
         addSettings(size, tracers, tracerColor, steadyView, limitRange, range, everything, items);
-        searchTags("item tracers", "drops");
+        addSettings(gear.settings());
+        addSettings(fade.setting());
+        searchTags("item tracers", "drops", "enchanted gear");
     }
 
     @Override
@@ -94,7 +103,8 @@ public final class ItemEsp extends Module {
             if (!(entity instanceof ItemEntity item)) {
                 continue;
             }
-            if (filter && !items.contains(item.getItem().getItem())) {
+            ItemStack stack = item.getItem();
+            if (filter && !items.contains(stack.getItem()) || !gear.passes(stack)) {
                 continue;
             }
             if (limitRange.isOn() && mc.player.distanceTo(item) > range.getValue()) {
@@ -102,11 +112,15 @@ public final class ItemEsp extends Module {
             }
             found++;
             AABB box = shown(EntityUtil.lerpedBox(item, event.getPartialTicks()));
+            float strength = fade.strengthAt(box.getCenter());
+            if (strength <= 0) {
+                continue;
+            }
             if (boxes.isOn()) {
-                style.draw(batch, box, true);
+                style.drawFading(batch, box, strength, true);
             }
             if (tracers.isOn()) {
-                batch.tracer(box.getCenter(), tracerColor.getColor(), true);
+                batch.tracer(box.getCenter(), ColorUtil.fade(tracerColor.getColor(), strength), true);
             }
         }
         count = found;

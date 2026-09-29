@@ -8,6 +8,7 @@ import com.jellypudding.offlineclient.event.events.PreMotionEvent;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
+import net.minecraft.network.protocol.game.ServerboundUseItemPacket;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 
@@ -54,6 +55,22 @@ public final class RotationManager {
     private volatile float serverYaw;
     private volatile float serverPitch;
     private volatile boolean rotationSent;
+
+    // The ground and wall flags the server last heard. A look packet sent from here repeats
+    // them and changes nothing but the angle. A crit Criticals set up survives it.
+    private volatile boolean sentOnGround;
+    private volatile boolean sentCollision;
+
+    // True only whilst a glance packet goes out. The hook lets that one through as it is.
+    private volatile boolean glancing;
+
+    // A glance left the server facing away from the view. The next rotation sent clears it. A
+    // glance held back by another module gets its look back queued behind it.
+    private volatile boolean lookBackDue;
+
+    // A use packet turned the server to face along it. The next tick checks it against
+    // the view once any module has turned the view back.
+    private volatile boolean turnedByUse;
 
     // The player the server angle was last seeded from.
     private LocalPlayer seededFor;
@@ -114,8 +131,7 @@ public final class RotationManager {
     }
 
     public static float yawTo(Vec3 point) {
-        Vec3 eye = MC.player.getEyePosition();
-        return (float) Math.toDegrees(Math.atan2(point.z - eye.z, point.x - eye.x)) - 90f;
+        return yawBetween(MC.player.getEyePosition(), point);
     }
 
     // Looking straight at the feet. The steepest pitch the game allows either way.
@@ -126,11 +142,18 @@ public final class RotationManager {
     }
 
     public static float pitchTo(Vec3 point) {
-        Vec3 eye = MC.player.getEyePosition();
-        double dx = point.x - eye.x;
-        double dz = point.z - eye.z;
+        return pitchBetween(MC.player.getEyePosition(), point);
+    }
+
+    private static float yawBetween(Vec3 from, Vec3 to) {
+        return (float) Math.toDegrees(Math.atan2(to.z - from.z, to.x - from.x)) - 90f;
+    }
+
+    private static float pitchBetween(Vec3 from, Vec3 to) {
+        double dx = to.x - from.x;
+        double dz = to.z - from.z;
         double horizontal = Math.sqrt(dx * dx + dz * dz);
-        return clampPitch((float) -Math.toDegrees(Math.atan2(point.y - eye.y, horizontal)));
+        return clampPitch((float) -Math.toDegrees(Math.atan2(to.y - from.y, horizontal)));
     }
 
     // Turns the view for one call and back. An item used inside raycasts from
@@ -156,6 +179,33 @@ public final class RotationManager {
         player.setXRot(clampPitch(Mth.approach(player.getXRot(), pitchTo(point), step)));
     }
 
+    // Turns the view within a frame the way the mouse does. The frame being drawn shows the
+    // new angle at once where turnCamera eases into it over the next tick.
+    public static void turnFrame(Vec3 point, float partialTicks, float step) {
+        LocalPlayer player = MC.player;
+        Vec3 eye = player.getEyePosition(partialTicks);
+        float yawTurn = Math.clamp(
+            Mth.wrapDegrees(yawBetween(eye, point) - player.getViewYRot(partialTicks)), -step, step);
+        float pitchTurn = Math.clamp(pitchBetween(eye, point) - player.getViewXRot(partialTicks), -step, step);
+        player.turn(yawTurn / InputUtil.MOUSE_TURN, pitchTurn / InputUtil.MOUSE_TURN);
+    }
+
+    // Faces the server one way for the packets that follow without moving the view. The angle
+    // it should hold goes back out on the next movement packet or at the end of the tick.
+    public static void glance(float yaw, float pitch) {
+        LocalPlayer player = MC.player;
+        if (player == null) {
+            return;
+        }
+        INSTANCE.glancing = true;
+        try {
+            INSTANCE.sendLook(player, Mth.wrapDegrees(yaw), clampPitch(pitch));
+        } finally {
+            INSTANCE.glancing = false;
+        }
+        INSTANCE.lookBackDue = true;
+    }
+
     // Ties go to the first caller.
     private void take(float yaw, float pitch, RotationPriority asked, float step) {
         if (MC.player == null || (priority != null && !asked.beats(priority))) {
@@ -172,44 +222,56 @@ public final class RotationManager {
     }
 
     // Settles who owns the view for this tick. Runs after every request.
-    @Subscribe(priority = Integer.MIN_VALUE)
+    @Subscribe(priority = Subscribe.LAST)
     private void onPreMotion(PreMotionEvent event) {
         if (MC.player != seededFor) {
             // A fresh player has sent nothing yet. Its view is what the server assumes.
             seededFor = MC.player;
             serverYaw = MC.player.getYRot();
             serverPitch = MC.player.getXRot();
+            sentOnGround = MC.player.onGround();
+            sentCollision = MC.player.horizontalCollision;
+            lookBackDue = false;
         }
         boolean wasHolding = holding;
         holding = priority != null;
         rotationSent = false;
+        if (turnedByUse) {
+            turnedByUse = false;
+            lookBackDue |= !facesView();
+        }
 
         if (holding) {
             held = new Angle(projectedYaw, projectedPitch);
-        } else if (wasHolding) {
-            // The hold ended. The server is told where the view really points.
-            held = new Angle(MC.player.getYRot(), MC.player.getXRot());
+        } else if (wasHolding || lookBackDue) {
+            // The hold ended or a glance looked away. The server hears where the view points.
+            held = viewAngle();
         }
 
-        writeRotation = holding || wasHolding;
+        writeRotation = holding || wasHolding || lookBackDue;
         priority = null;
         projected = false;
     }
 
-    // Puts the held angle on the movement packet vanilla was going to send
-    // anyway. Runs last and takes over only the angle.
-    @Subscribe(priority = Integer.MIN_VALUE)
+    // Puts the held angle on the movement packet vanilla was going to send anyway. Runs last
+    // and takes over only the angle. A packet another module held back or dropped never gets
+    // here and the angle then goes out on its own after the movement packet.
+    @Subscribe(priority = Subscribe.LAST)
     private void onPacketSend(PacketSendEvent event) {
-        if (!(event.getPacket() instanceof ServerboundMovePlayerPacket move)) {
-            return;
-        }
-        if (event.isCancelled()) {
-            // A module is holding the movement packets back.
-            rotationSent = true;
+        if (event.getPacket() instanceof ServerboundUseItemPacket use) {
+            // The server faces along every use packet it takes.
+            serverYaw = use.yRot();
+            serverPitch = use.xRot();
+            turnedByUse = true;
             return;
         }
         LocalPlayer player = MC.player;
-        if (player == null) {
+        if (!(event.getPacket() instanceof ServerboundMovePlayerPacket move) || player == null) {
+            return;
+        }
+        if (glancing) {
+            // A glance goes out as it is.
+            note(move, player);
             return;
         }
         Angle angle = held;
@@ -217,22 +279,46 @@ public final class RotationManager {
             move = PacketUtil.withRotation(move, player, angle.yaw(), angle.pitch());
             event.setPacket(move);
         }
+        note(move, player);
         if (move.hasRotation()) {
-            serverYaw = move.getYRot(player.getYRot());
-            serverPitch = move.getXRot(player.getXRot());
             rotationSent = true;
+            lookBackDue = false;
         }
     }
 
-    // Sends the angle on its own for ticks where vanilla sent nothing.
-    @Subscribe(priority = Integer.MIN_VALUE)
+    // Sends the angle on its own for ticks where the movement packet did not carry it and after
+    // a glance that came once the movement packet had gone. When the gate cut the tick's own
+    // packet after a burst the look waits for a tick with room for it.
+    @Subscribe(priority = Subscribe.LAST)
     private void onPostMotion(PostMotionEvent event) {
-        if (writeRotation && !rotationSent && MC.player != null) {
-            Angle angle = held;
-            MC.player.connection.send(new ServerboundMovePlayerPacket.Rot(
-                angle.yaw(), angle.pitch(), MC.player.onGround(), MC.player.horizontalCollision));
+        if (MC.player != null && !MoveGate.droppedThisTick() && (writeRotation && !rotationSent || lookBackDue)) {
+            Angle angle = holding ? held : viewAngle();
+            sendLook(MC.player, angle.yaw(), angle.pitch());
+            lookBackDue = false;
         }
         writeRotation = false;
+    }
+
+    private void sendLook(LocalPlayer player, float yaw, float pitch) {
+        player.connection.send(new ServerboundMovePlayerPacket.Rot(yaw, pitch, sentOnGround, sentCollision));
+    }
+
+    // Keeps what the server holds. A packet without a rotation leaves the angle alone.
+    private void note(ServerboundMovePlayerPacket move, LocalPlayer player) {
+        sentOnGround = move.isOnGround();
+        sentCollision = move.horizontalCollision();
+        if (move.hasRotation()) {
+            serverYaw = move.getYRot(player.getYRot());
+            serverPitch = move.getXRot(player.getXRot());
+        }
+    }
+
+    private static Angle viewAngle() {
+        return new Angle(MC.player.getYRot(), MC.player.getXRot());
+    }
+
+    private boolean facesView() {
+        return Mth.degreesDifferenceAbs(serverYaw, MC.player.getYRot()) == 0 && serverPitch == MC.player.getXRot();
     }
 
     private static boolean carries(ServerboundMovePlayerPacket move, float yaw, float pitch) {

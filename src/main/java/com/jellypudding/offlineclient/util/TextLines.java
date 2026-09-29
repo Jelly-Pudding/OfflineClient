@@ -47,12 +47,17 @@ public final class TextLines {
 
     public TextLines(Order startOrder, String countName, String countDescription, String lineDescription,
                      String... defaults) {
+        this(startOrder, countName, "Line", countDescription, lineDescription, defaults);
+    }
+
+    private TextLines(Order startOrder, String countName, String rowName, String countDescription,
+                      String lineDescription, String[] defaults) {
         count = new NumberSetting(countName, countDescription,
             Math.max(1, defaults.length), 1, 30, 1).max(SLOTS)
             .visibleWhen(() -> gate.get());
         for (int i = 0; i < SLOTS; i++) {
             int slot = i;
-            lines[i] = new TextSetting("Line " + (i + 1), lineDescription,
+            lines[i] = new TextSetting(rowName + " " + (i + 1), lineDescription,
                 i < defaults.length ? defaults[i] : "")
                 .under(count, () -> gate.get() && slot < count.getInt());
         }
@@ -62,6 +67,14 @@ public final class TextLines {
             .under(count, () -> rotates && gate.get() && count.getInt() > 1);
         skipRepeats = new BoolSetting("Skip repeats", "Never sends the same line twice in a row.", true)
             .under(order, () -> rotates && gate.get() && count.getInt() > 1 && order.is(Order.RANDOM));
+    }
+
+    // A plain list whose rows carry its own name such as Join name 1. Two of them can
+    // then sit in one module.
+    public static TextLines named(String countName, String rowName, String countDescription,
+                                  String lineDescription) {
+        return new TextLines(Order.SEQUENCE, countName, rowName, countDescription, lineDescription,
+            new String[0]).plain();
     }
 
     // Every row is used at once. The pick order rows are pointless.
@@ -77,14 +90,17 @@ public final class TextLines {
         return this;
     }
 
+    // A plain list leaves out the pick order rows. They would never show.
     public Setting<?>[] settings() {
         List<Setting<?>> all = new ArrayList<>(SLOTS + 3);
         all.add(count);
         for (int i = 0; i < SLOTS; i++) {
             all.add(lines[i]);
         }
-        all.add(order);
-        all.add(skipRepeats);
+        if (rotates) {
+            all.add(order);
+            all.add(skipRepeats);
+        }
         return all.toArray(new Setting<?>[0]);
     }
 

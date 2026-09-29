@@ -113,6 +113,12 @@ public final class MovementUtil {
     // Vec3.ZERO whilst none of them is held.
     public static Vec3 inputDirection() {
         LocalPlayer player = OfflineClient.MC.player;
+        return player == null ? Vec3.ZERO : inputDirection(player.getYRot());
+    }
+
+    // The same for a player turned to the given yaw.
+    public static Vec3 inputDirection(float facing) {
+        LocalPlayer player = OfflineClient.MC.player;
         if (player == null) {
             return Vec3.ZERO;
         }
@@ -120,7 +126,7 @@ public final class MovementUtil {
         if (move.x == 0 && move.y == 0) {
             return Vec3.ZERO;
         }
-        double yaw = Math.toRadians(player.getYRot());
+        double yaw = Math.toRadians(facing);
         double sin = Math.sin(yaw);
         double cos = Math.cos(yaw);
         // The x of the move vector strafes. The y of it drives forward.

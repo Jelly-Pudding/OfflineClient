@@ -7,7 +7,6 @@ import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.ServerInfo;
 import net.minecraft.world.level.levelgen.WorldOptions;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.OptionalLong;
@@ -44,7 +43,7 @@ public final class SeedCommand extends Command {
             ChatUtil.error("A single player world already knows its seed.");
             return;
         }
-        OptionalLong seed = WorldOptions.parseSeed(String.join(" ", Arrays.copyOfRange(args, 1, args.length)));
+        OptionalLong seed = WorldOptions.parseSeed(words(args, 1));
         if (seed.isEmpty()) {
             usage("seed set <seed>");
             return;

@@ -4,6 +4,7 @@ import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.command.Command;
 import com.jellypudding.offlineclient.command.CommandManager;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.setting.ActionSetting;
 import com.jellypudding.offlineclient.setting.Setting;
 import com.jellypudding.offlineclient.util.ChatUtil;
 
@@ -37,6 +38,10 @@ public final class ResetCommand extends Command {
                 ChatUtil.error(module.getName() + " has no setting called " + args[1] + ".");
                 return;
             }
+            if (setting instanceof ActionSetting) {
+                ChatUtil.error(setting.getName() + " runs something and has nothing to reset.");
+                return;
+            }
             setting.reset();
             ChatUtil.message("§b" + setting.getName() + " §7is back to its default.");
         }
@@ -55,6 +60,8 @@ public final class ResetCommand extends Command {
         if (module == null) {
             return List.of();
         }
-        return CommandManager.filter(current, module.settingIds());
+        List<String> resettable = module.playerSettings().stream()
+            .filter(setting -> !(setting instanceof ActionSetting)).map(Setting::id).toList();
+        return CommandManager.filter(current, resettable);
     }
 }

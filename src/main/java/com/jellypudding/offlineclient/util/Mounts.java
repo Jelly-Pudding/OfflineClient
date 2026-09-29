@@ -12,10 +12,21 @@ import net.minecraft.world.entity.animal.nautilus.AbstractNautilus;
 import net.minecraft.world.entity.animal.pig.Pig;
 import net.minecraft.world.entity.monster.Strider;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+
 // What a rider gets out of a mount. Worked out from the attributes the server sends every
 // client the way the game moves a ridden mount. Speeds are the steady top speed on flat
 // ground in blocks a second and jumps are the height a full charge reaches.
 public final class Mounts {
+
+    // What a figure measures.
+    public enum Measure { HEALTH, SPEED, JUMP, STRENGTH }
+
+    // One figure with where it sits from the worst wild horse at nought to the best at one.
+    public record Figure(Measure measure, String value, float share) {
+    }
 
     // The forward key after the game trims it.
     private static final double RIDER_INPUT = 0.98;
@@ -72,8 +83,30 @@ public final class Mounts {
             || entity instanceof HappyGhast || entity instanceof AbstractNautilus;
     }
 
+    // Full health then top speed and jump height and a llama's strength. A figure the
+    // mount does not have is left out. The value carries its unit.
+    public static List<Figure> figures(LivingEntity mount) {
+        List<Figure> figures = new ArrayList<>(Measure.values().length);
+        float maxHealth = mount.getMaxHealth();
+        figures.add(new Figure(Measure.HEALTH, String.format(Locale.ROOT, "%.0f", maxHealth),
+            healthShare(maxHealth)));
+        double speed = topSpeed(mount);
+        if (!Double.isNaN(speed)) {
+            figures.add(new Figure(Measure.SPEED, String.format(Locale.ROOT, "%.1f m/s", speed), speedShare(speed)));
+        }
+        double jump = jumpHeight(mount);
+        if (!Double.isNaN(jump)) {
+            figures.add(new Figure(Measure.JUMP, String.format(Locale.ROOT, "%.1f m", jump), jumpShare(jump)));
+        }
+        if (mount instanceof Llama llama) {
+            figures.add(new Figure(Measure.STRENGTH, String.valueOf(llama.getStrength()),
+                strengthShare(llama.getStrength())));
+        }
+        return figures;
+    }
+
     // Blocks a second at full speed. NaN for a mount nobody can steer.
-    public static double topSpeed(LivingEntity mount) {
+    private static double topSpeed(LivingEntity mount) {
         double speed = mount.getAttributeValue(Attributes.MOVEMENT_SPEED);
         return switch (mount) {
             case Llama _ -> Double.NaN;
@@ -88,7 +121,7 @@ public final class Mounts {
     }
 
     // Blocks a full charge lifts the mount. NaN for one that cannot jump on command.
-    public static double jumpHeight(LivingEntity mount) {
+    private static double jumpHeight(LivingEntity mount) {
         if (!(mount instanceof AbstractHorse) || mount instanceof Llama) {
             return Double.NaN;
         }
@@ -101,19 +134,19 @@ public final class Mounts {
     }
 
     // Where a figure sits from the worst wild horse at nought to the best at one.
-    public static float speedShare(double blocksPerSecond) {
+    private static float speedShare(double blocksPerSecond) {
         return share(blocksPerSecond, SLOWEST, FASTEST);
     }
 
-    public static float jumpShare(double height) {
+    private static float jumpShare(double height) {
         return share(height, LOWEST, HIGHEST);
     }
 
-    public static float healthShare(double maxHealth) {
+    private static float healthShare(double maxHealth) {
         return share(maxHealth, WORST_HEALTH, BEST_HEALTH);
     }
 
-    public static float strengthShare(int strength) {
+    private static float strengthShare(int strength) {
         return share(strength, WORST_STRENGTH, BEST_STRENGTH);
     }
 

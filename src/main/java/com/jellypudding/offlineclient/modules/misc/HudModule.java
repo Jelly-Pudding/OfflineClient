@@ -11,22 +11,27 @@ import com.jellypudding.offlineclient.hud.HudManager;
 import com.jellypudding.offlineclient.hud.elements.ArmourElement;
 import com.jellypudding.offlineclient.hud.elements.CombatElement;
 import com.jellypudding.offlineclient.hud.elements.CompassElement;
+import com.jellypudding.offlineclient.hud.elements.CoverElement;
 import com.jellypudding.offlineclient.hud.elements.HoleElement;
 import com.jellypudding.offlineclient.hud.elements.InfoBarElement;
 import com.jellypudding.offlineclient.hud.elements.InventoryElement;
 import com.jellypudding.offlineclient.hud.elements.ItemCounterElement;
 import com.jellypudding.offlineclient.hud.elements.KillStatsElement;
 import com.jellypudding.offlineclient.hud.elements.LagNotifierElement;
+import com.jellypudding.offlineclient.hud.elements.LeaksElement;
 import com.jellypudding.offlineclient.hud.elements.ModuleListElement;
+import com.jellypudding.offlineclient.hud.elements.MountElement;
 import com.jellypudding.offlineclient.hud.elements.PlayerListElement;
 import com.jellypudding.offlineclient.hud.elements.PlayerModelElement;
 import com.jellypudding.offlineclient.hud.elements.PotionTimersElement;
 import com.jellypudding.offlineclient.hud.elements.ServerInfoElement;
+import com.jellypudding.offlineclient.hud.elements.StatsElement;
 import com.jellypudding.offlineclient.hud.elements.TextElement;
 import com.jellypudding.offlineclient.hud.elements.WatermarkElement;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.Setting;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 
 // The overlay itself lives in the hud package. The elements belong to this module.
 // Their settings save and show in the ClickGUI like any other.
@@ -42,14 +47,20 @@ public final class HudModule extends Module {
             + " about with .hud edit.", Category.MISC);
         add(watermark, new ModuleListElement(), new InfoBarElement(),
             new ArmourElement(), new PotionTimersElement(), new ItemCounterElement(),
-            new TextElement(), new CombatElement(), new KillStatsElement(), new LagNotifierElement(),
-            new CompassElement(), new PlayerListElement(), new ServerInfoElement(),
-            new InventoryElement(), new PlayerModelElement(), new HoleElement());
+            new TextElement(), new CombatElement(), new KillStatsElement(), new StatsElement(),
+            new LagNotifierElement(), new CompassElement(), new PlayerListElement(), new LeaksElement(),
+            new ServerInfoElement(), new InventoryElement(), new PlayerModelElement(), new HoleElement(),
+            new MountElement());
+        // Covers come after every other element and sit over all of them.
+        for (int number = 1; number <= CoverElement.COUNT; number++) {
+            add(new CoverElement(number));
+        }
         for (GamePart part : GamePart.values()) {
             add(new GamePartElement(part));
         }
         searchTags("overlay", "watermark", "module list", "info", "hud editor", "hotbar", "hearts",
-            "hunger", "armour", "experience");
+            "hunger", "armour", "experience", "statistics", "stats", "play time", "cover", "censor",
+            "streamer", "hide coordinates", "horse", "mount", "elytra", "coordinate leaks");
     }
 
     private void add(HudElement... elements) {
@@ -92,5 +103,17 @@ public final class HudModule extends Module {
             return;
         }
         manager.render(event.getContext(), mc.font);
+    }
+
+    // The last draw of each frame. The debug text still draws over a hidden HUD whilst a
+    // screen is open and the covers stay with it. The editor draws them itself.
+    public void renderOnTop(GuiGraphicsExtractor context) {
+        if (!isEnabled() || mc.level == null || mc.gui.screen() instanceof HudEditorScreen) {
+            return;
+        }
+        if (mc.gui.hud.isHidden() && mc.gui.screen() == null) {
+            return;
+        }
+        manager.renderOnTop(context, mc.font);
     }
 }

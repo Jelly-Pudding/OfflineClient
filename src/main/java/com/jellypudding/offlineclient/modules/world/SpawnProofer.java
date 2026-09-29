@@ -33,7 +33,7 @@ public final class SpawnProofer extends AreaPlacer {
             "What to place on a dark spot. Click to pick.",
             List.of(Blocks.TORCH, Blocks.SOUL_TORCH),
             "Outline the spots waiting to be blocked off.", 2, TARGET_COLOR);
-        addSettings(range, wallsRange, light, mode, blocks, perTick, delay, rotate, render);
+        addSettings(range, wallsRange, light, mode, blocks, perRound, delay, rotate, render);
         searchTags("torch", "spawn proof", "light");
     }
 

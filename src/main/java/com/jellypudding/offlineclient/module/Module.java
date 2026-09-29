@@ -63,7 +63,8 @@ public abstract class Module {
     // description. Only the strongest tag counts. Setting names are searched as well and a
     // half remembered setting still finds its module.
     public int searchScore(String query) {
-        List<String> settingNames = settings.stream().map(Setting::getName).toList();
+        List<String> settingNames = settings.stream().filter(setting -> !setting.isInternal())
+            .map(Setting::getName).toList();
         return SearchRank.best(query, name, SearchRank.strongest(query, List.of(tags)), description,
             SearchRank.strongest(query, settingNames));
     }
@@ -72,15 +73,20 @@ public abstract class Module {
         return settingsView;
     }
 
-    public List<String> settingIds() {
-        return settings.stream().map(Setting::id).toList();
+    // The settings the player can list and type. The config still saves the internal ones.
+    public List<Setting<?>> playerSettings() {
+        return getSettings().stream().filter(setting -> !setting.isInternal()).toList();
     }
 
-    // Spaces and case are ignored.
+    public List<String> settingIds() {
+        return settings.stream().filter(setting -> !setting.isInternal()).map(Setting::id).toList();
+    }
+
+    // Spaces and case are ignored. An internal setting is never found.
     public Setting<?> getSetting(String settingName) {
         String wanted = Setting.idFor(settingName);
         for (Setting<?> setting : settings) {
-            if (setting.id().equals(wanted)) {
+            if (!setting.isInternal() && setting.id().equals(wanted)) {
                 return setting;
             }
         }

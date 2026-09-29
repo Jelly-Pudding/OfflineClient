@@ -13,19 +13,27 @@ import java.util.List;
 // and the ClickGUI need to know nothing about elements.
 public abstract class HudElement {
 
-    // The narrowest and widest an element can be stretched either way.
+    // The narrowest any element can be stretched either way and the widest most can.
     public static final double MIN_STRETCH = 0.25;
-    public static final double MAX_STRETCH = 4;
+    private static final double MAX_STRETCH = 4;
+
+    // Where the stretch sliders stop. A typed or dragged size goes further.
+    private static final double SLIDER_STRETCH = 2;
 
     private final String name;
     private final String description;
     private final List<Setting<?>> settings = new ArrayList<>();
 
     protected final BoolSetting active;
+    private final double mostStretch;
     private final NumberSetting x;
     private final NumberSetting y;
     private final NumberSetting across;
     private final NumberSetting down;
+    // The size in GUI pixels of the screen a pinned element was last placed on. Null for an
+    // element that is not pinned.
+    private NumberSetting placedWidth;
+    private NumberSetting placedHeight;
 
     private int boxLeft;
     private int boxTop;
@@ -43,8 +51,16 @@ public abstract class HudElement {
     @SuppressWarnings("this-escape")
     protected HudElement(String name, String description, boolean on,
                          double startX, double startY, double startSize) {
+        this(name, description, on, startX, startY, startSize, MAX_STRETCH);
+    }
+
+    // An element that has to reach across any screen such as a cover sets how far it stretches.
+    @SuppressWarnings("this-escape")
+    protected HudElement(String name, String description, boolean on,
+                         double startX, double startY, double startSize, double mostStretch) {
         this.name = name;
         this.description = description;
+        this.mostStretch = mostStretch;
         // Fifteen elements with five or more options each would swamp the HUD panel.
         active = new BoolSetting(name, description, on).startFolded();
         x = percent(" x", "How far across the screen it sits.", startX);
@@ -60,8 +76,8 @@ public abstract class HudElement {
     }
 
     private NumberSetting stretch(String suffix, String description, double start) {
-        return new NumberSetting(name + suffix, description, start, MIN_STRETCH, 2, 0.05, "x")
-            .min(MIN_STRETCH).max(MAX_STRETCH);
+        return new NumberSetting(name + suffix, description, start, MIN_STRETCH, SLIDER_STRETCH, 0.05, "x")
+            .min(MIN_STRETCH).max(mostStretch);
     }
 
     // Files settings in display order. Anything not already a sub option of
@@ -74,6 +90,20 @@ public abstract class HudElement {
             }
             settings.add(setting);
         }
+    }
+
+    // Keeps the element as many GUI pixels from the side or the middle its share is nearest
+    // when the screen changes size. The size of the screen it was placed on saves unseen.
+    protected final void pin() {
+        placedWidth = placedSize(" screen width", "width");
+        placedHeight = placedSize(" screen height", "height");
+        settings.add(placedWidth);
+        settings.add(placedHeight);
+    }
+
+    private NumberSetting placedSize(String suffix, String side) {
+        return new NumberSetting(name + suffix, "The " + side + " of the screen it was last placed on in GUI pixels.",
+            0, 0, 1, 1).min(0).internal();
     }
 
     public final String getName() {
@@ -103,6 +133,11 @@ public abstract class HudElement {
 
     public final double scaleY() {
         return down.getValue();
+    }
+
+    // The widest this element may be stretched either way.
+    public final double mostStretch() {
+        return mostStretch;
     }
 
     // Where this element landed on screen. A picture in picture draw such as
@@ -153,9 +188,23 @@ public abstract class HudElement {
         return y.getValue();
     }
 
-    public final void moveTo(double xPercent, double yPercent) {
+    // The screen a pinned element was last placed on. Nought for any other and before then.
+    public final double placedWidth() {
+        return placedWidth == null ? 0 : placedWidth.getValue();
+    }
+
+    public final double placedHeight() {
+        return placedHeight == null ? 0 : placedHeight.getValue();
+    }
+
+    // The anchor as a share of a screen of this size.
+    public final void moveTo(double xPercent, double yPercent, int screenWidth, int screenHeight) {
         x.setValue(xPercent);
         y.setValue(yPercent);
+        if (placedWidth != null) {
+            placedWidth.setValue((double) screenWidth);
+            placedHeight.setValue((double) screenHeight);
+        }
     }
 
     public final boolean positionIsDefault() {
@@ -165,12 +214,28 @@ public abstract class HudElement {
     public final void resetPosition() {
         x.reset();
         y.reset();
+        if (placedWidth != null) {
+            placedWidth.reset();
+            placedHeight.reset();
+        }
     }
 
     // Where the element sits until the player moves it. Null for an element placed
     // by its anchor alone.
     public Box home(int screenWidth, int screenHeight) {
         return null;
+    }
+
+    // True for an element that may sit flush with the screen edge. Everything else keeps
+    // a small margin.
+    public boolean touchesEdges() {
+        return false;
+    }
+
+    // True for an element drawn once the game has drawn everything else. The rest of the
+    // overlay sits under the tab list and any open screen.
+    public boolean drawsOnTop() {
+        return false;
     }
 
     // How the element lines up against its anchor. Nought is the left edge and one

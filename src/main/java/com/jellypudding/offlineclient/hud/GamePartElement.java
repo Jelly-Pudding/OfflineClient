@@ -23,6 +23,12 @@ public final class GamePartElement extends HudElement {
         return part.home(screenWidth, screenHeight);
     }
 
+    // It may sit flush with the edge as it does at home.
+    @Override
+    public boolean touchesEdges() {
+        return true;
+    }
+
     // The game draws it through HudManager.drawGamePart.
     @Override
     public void render(GuiGraphicsExtractor context, Font font) {

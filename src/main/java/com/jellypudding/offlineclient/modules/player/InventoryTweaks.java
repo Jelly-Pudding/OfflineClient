@@ -37,6 +37,7 @@ public final class InventoryTweaks extends Module {
     public enum DumpFilter {
         WHITELIST,
         BLACKLIST,
+        UNLISTED,
         EVERYTHING
     }
 
@@ -67,12 +68,13 @@ public final class InventoryTweaks extends Module {
         "What the junk list means.", DumpFilter.WHITELIST)
         .describe(DumpFilter.WHITELIST, "Dumps only the listed items.")
         .describe(DumpFilter.BLACKLIST, "Dumps everything except the listed items.")
+        .describe(DumpFilter.UNLISTED, "Dumps everything the ChestStealer list or limits turn away.")
         .describe(DumpFilter.EVERYTHING, "Dumps the whole inventory.")
         .under(dump);
     private final RegistryListSetting<Item> junk = new RegistryListSetting<>("Junk",
         "Items the dump filter applies to. Click to pick them.", BuiltInRegistries.ITEM,
         ItemUtil.JUNK)
-        .under(dump, () -> dump.isOn() && !dumpFilter.is(DumpFilter.EVERYTHING));
+        .under(dump, () -> dump.isOn() && dumpFilter.isAny(DumpFilter.WHITELIST, DumpFilter.BLACKLIST));
     private final NumberSetting delay = new NumberSetting("Delay",
         "Ticks between clicks.", 2, 0, 20, 1, " ticks").min(0);
     private final BoolSetting dragMove = new BoolSetting("Drag move",
@@ -190,7 +192,7 @@ public final class InventoryTweaks extends Module {
             timer = delay.getInt();
             return;
         }
-        if (container && sortContainer.isOn() && sortStep(menu, containerSlots(menu))) {
+        if (container && sortContainer.isOn() && sortStep(menu, MenuClicks.containerSlots(menu))) {
             timer = delay.getInt();
         }
     }
@@ -207,23 +209,17 @@ public final class InventoryTweaks extends Module {
         return stealer != null && stealer.busy();
     }
 
+    private static boolean stealerTurnsAway(ItemStack stack) {
+        ChestStealer stealer = Modules.get(ChestStealer.class);
+        return stealer != null && stealer.turnsAway(stack);
+    }
+
     private List<Integer> playerSlots(AbstractContainerMenu menu, boolean withHotbar) {
         List<Integer> found = new ArrayList<>();
         for (int i = 0; i < menu.slots.size(); i++) {
             Slot slot = menu.slots.get(i);
             if (MenuClicks.isInventorySlot(slot)
                 && (withHotbar || slot.getContainerSlot() >= InventoryUtil.MAIN_START)) {
-                found.add(i);
-            }
-        }
-        return found;
-    }
-
-    private List<Integer> containerSlots(AbstractContainerMenu menu) {
-        List<Integer> found = new ArrayList<>();
-        for (int i = 0; i < menu.slots.size(); i++) {
-            Slot slot = menu.slots.get(i);
-            if (slot.container != mc.player.getInventory() && !slot.isFake()) {
                 found.add(i);
             }
         }
@@ -238,6 +234,7 @@ public final class InventoryTweaks extends Module {
         return switch (dumpFilter.getValue()) {
             case WHITELIST -> junk.contains(stack.getItem());
             case BLACKLIST -> !junk.contains(stack.getItem());
+            case UNLISTED -> stealerTurnsAway(stack);
             case EVERYTHING -> true;
         };
     }

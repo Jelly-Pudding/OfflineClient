@@ -5,15 +5,16 @@ import net.minecraft.core.BlockPos;
 
 import java.util.function.Predicate;
 
-// Break packets for many blocks a tick. A one hit block goes straight out and is tried
-// again after a pause if it is still there. A slower block goes one at a time and holds
-// the rest back until its break time has run out.
+// Break packets for many blocks a tick that keep to the server's two break slots. A block a
+// single tick finishes goes out whenever it is due. A slower block is parked in the delayed
+// slot and only one waits there at a time. Nothing that would move the server's target goes
+// out whilst the game is breaking another block. See BreakSlots.
 public final class PacketBreaker {
 
-    // Ticks before the same one hit block is sent again.
+    // Ticks before a block that should have gone at once is sent for again.
     private static final int RETRY_TICKS = 10;
 
-    // Ticks a slower block gets on top of its break time before it is given up on.
+    // Ticks a slower block gets on top of its break time before it is sent for again.
     private static final int SLOW_GRACE_TICKS = 20;
 
     private final Cooldowns<BlockPos> sent = new Cooldowns<>();
@@ -25,36 +26,53 @@ public final class PacketBreaker {
         return tick(pos -> true);
     }
 
-    // A slower block the test no longer wants is given up on as well.
+    // A slower block the test turns down is given up on as well.
     public boolean tick(Predicate<BlockPos> stillWanted) {
         boolean restarted = sent.tick();
-        if (slow != null && (restarted || clock() >= slowUntil || !stillWanted.test(slow))) {
+        // A block that went may be put back and is fair game again at once.
+        sent.releaseIf(pos -> BlockUtil.state(pos).isAir());
+        if (slow != null && (restarted || clock() >= slowUntil || !stillWanted.test(slow)
+            || BlockUtil.state(slow).isAir())) {
             slow = null;
         }
+        finishSlow();
         return restarted;
     }
 
-    // One hit blocks only whilst a slower block is on its way.
-    public boolean canSend(BlockPos pos) {
-        return !sent.contains(pos) && (slow == null || BlockUtil.canInstantBreak(pos));
+    // A stop on its own breaks the slow block as soon as the server's count allows. It also
+    // parks the block if its first stop found the delayed slot taken.
+    private void finishSlow() {
+        if (slow != null && BreakSlots.isTarget(slow) && BreakSlots.stopFinishes(progress(slow))) {
+            BlockMiner.sendStop(slow);
+        }
     }
 
-    // Instant blocks alone never queue behind a slower one.
+    // Blocks a tick finishes are always due. A slower one waits for the delayed slot.
+    public boolean canSend(BlockPos pos) {
+        if (BlockUtil.breaksInOneTick(pos)) {
+            return canSendInstant(pos);
+        }
+        return !sent.contains(pos) && slow == null && BreakSlots.parkingFree()
+            && !BreakSlots.busyElsewhere(pos);
+    }
+
+    // Only blocks a single tick finishes. One hit blocks never move the server's target.
     public boolean canSendInstant(BlockPos pos) {
-        return !sent.contains(pos) && BlockUtil.canInstantBreak(pos);
+        if (sent.contains(pos) || !BlockUtil.breaksInOneTick(pos)) {
+            return false;
+        }
+        return BlockUtil.canInstantBreak(pos) || !BreakSlots.busyElsewhere(pos);
     }
 
     public void send(BlockPos pos) {
-        boolean instant = BlockUtil.canInstantBreak(pos);
+        boolean quick = BlockUtil.breaksInOneTick(pos);
+        int ticks = quick ? RETRY_TICKS : BlockUtil.breakTicks(pos) + SLOW_GRACE_TICKS;
         BlockMiner.breakInstantly(pos);
-        if (instant) {
-            sent.put(pos, RETRY_TICKS);
-            return;
+        sent.put(pos.immutable(), ticks);
+        if (!quick) {
+            slow = pos.immutable();
+            slowUntil = clock() + ticks;
         }
-        int ticks = BlockUtil.breakTicks(pos) + SLOW_GRACE_TICKS;
-        slow = pos;
-        slowUntil = clock() + ticks;
-        sent.put(pos, ticks);
     }
 
     // The slower block being broken or null.
@@ -65,6 +83,10 @@ public final class PacketBreaker {
     public void reset() {
         sent.clear();
         slow = null;
+    }
+
+    private static float progress(BlockPos pos) {
+        return BlockUtil.state(pos).getDestroyProgress(OfflineClient.MC.player, OfflineClient.MC.level, pos);
     }
 
     private static int clock() {

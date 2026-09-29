@@ -11,7 +11,6 @@ import com.jellypudding.offlineclient.util.DamageUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
-import com.jellypudding.offlineclient.util.InventoryUtil.Swap;
 import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.tags.ItemTags;
@@ -124,9 +123,6 @@ public final class Offhand extends Module {
             return;
         }
 
-        if (!InventoryUtil.cursorFree()) {
-            return;
-        }
         if (timer > 0) {
             timer--;
             return;
@@ -137,7 +133,7 @@ public final class Offhand extends Module {
             return;
         }
 
-        if (cursor.swap(slot, InventoryUtil.OFFHAND_SLOT) != Swap.REFUSED) {
+        if (InventoryUtil.toOffhand(slot, cursor)) {
             timer = delay.getInt();
         }
     }
@@ -202,12 +198,12 @@ public final class Offhand extends Module {
         return mc.player.getOffhandItem().is(item) || findSlot(item) != -1;
     }
 
-    // Network slot of the first stack of the item. Minus one when absent.
+    // Inventory index of the first stack of the item. Minus one when absent.
     private int findSlot(Item wanted) {
         int first = hotbar.isOn() ? 0 : InventoryUtil.HOTBAR_SIZE;
         for (int i = first; i < InventoryUtil.WHOLE_INVENTORY; i++) {
             if (mc.player.getInventory().getItem(i).is(wanted)) {
-                return InventoryUtil.networkSlot(i);
+                return i;
             }
         }
         return -1;

@@ -4,18 +4,18 @@ import com.jellypudding.offlineclient.OfflineClient;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
-import net.minecraft.client.gui.screens.inventory.ContainerScreen;
 import net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen;
-import net.minecraft.client.gui.screens.inventory.DispenserScreen;
-import net.minecraft.client.gui.screens.inventory.HopperScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
-import net.minecraft.client.gui.screens.inventory.ShulkerBoxScreen;
+import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
+import java.util.Set;
 import java.util.function.Predicate;
 
 public final class InventoryUtil {
@@ -36,6 +36,15 @@ public final class InventoryUtil {
     public static final int ARMOR_START = 5;
     public static final int CHEST_SLOT = ARMOR_START + 1;
     public static final int OFFHAND_SLOT = 45;
+
+    // Containers that keep whatever goes in. A hopper passes it on and a dropper or a
+    // dispenser throws it out at the next redstone pulse.
+    private static final Set<MenuType<?>> KEEPERS = Set.of(MenuType.GENERIC_9x1, MenuType.GENERIC_9x2,
+        MenuType.GENERIC_9x3, MenuType.GENERIC_9x4, MenuType.GENERIC_9x5, MenuType.GENERIC_9x6,
+        MenuType.SHULKER_BOX);
+
+    // The game names every ender chest screen with this key.
+    private static final String ENDER_TITLE = "container.enderchest";
 
     private InventoryUtil() {
     }
@@ -66,6 +75,44 @@ public final class InventoryUtil {
             || MC.gui.screen() instanceof InventoryScreen;
     }
 
+    // True whilst a container stays open with no screen showing it. ChestLink keeps one that way.
+    // The server then drops every click on the survival inventory and the kept menu takes them.
+    public static boolean menuKept() {
+        AbstractContainerMenu live = MC.player.containerMenu;
+        return live != MC.player.inventoryMenu
+            && !(MC.gui.screen() instanceof AbstractContainerScreen<?> shown && shown.getMenu() == live);
+    }
+
+    // Moves the stack at an inventory index into the offhand. An open container takes the swap
+    // key in its own menu whether its screen shows or not. The survival inventory goes by cursor
+    // clicks the stranded stack can put right. False when nothing moved.
+    public static boolean toOffhand(int inventoryIndex, StrandedStack cursor) {
+        if (MC.player.containerMenu != MC.player.inventoryMenu) {
+            return swapToOffhand(inventoryIndex);
+        }
+        return cursorFree() && cursor.swap(networkSlot(inventoryIndex), OFFHAND_SLOT) != Swap.REFUSED;
+    }
+
+    // Any container menu reaches the offhand with the swap key. False when the menu shows no
+    // such slot or something sits on the cursor.
+    private static boolean swapToOffhand(int inventoryIndex) {
+        AbstractContainerMenu live = openContainer();
+        int slot = live == null ? -1 : MenuClicks.slotOf(live, inventoryIndex);
+        if (slot == -1 || !live.getCarried().isEmpty()) {
+            return false;
+        }
+        MenuClicks.click(live, slot, Inventory.SLOT_OFFHAND, ContainerInput.SWAP);
+        return true;
+    }
+
+    // The live menu whilst it is a container the server has open. The creative screen swaps in
+    // a menu of its own whose slot numbers the server reads as other slots. Null otherwise.
+    private static AbstractContainerMenu openContainer() {
+        AbstractContainerMenu live = MC.player.containerMenu;
+        return live == MC.player.inventoryMenu || MC.gui.screen() instanceof CreativeModeInventoryScreen
+            ? null : live;
+    }
+
     // True when the survival inventory is up with nothing on the cursor.
     // Slot swaps and container clicks only land then.
     public static boolean inventoryFree() {
@@ -82,13 +129,29 @@ public final class InventoryUtil {
             && !(screen instanceof CreativeModeInventoryScreen);
     }
 
-    // Plain storage only. Crafting and anvil and trade and mount screens put
-    // their own slots first and refuse a click into them.
+    // Plain storage only. A shift click there moves an inventory stack straight into the
+    // container. Crafting and anvil and trade and mount screens put their own slots first.
     public static boolean isStorage(Screen screen) {
-        return screen instanceof ContainerScreen
-            || screen instanceof ShulkerBoxScreen
-            || screen instanceof HopperScreen
-            || screen instanceof DispenserScreen;
+        return screen instanceof AbstractContainerScreen<?> shown && isStorage(shown.getMenu());
+    }
+
+    public static boolean isStorage(AbstractContainerMenu menu) {
+        return keeps(menu) || menu.menuType == MenuType.HOPPER || menu.menuType == MenuType.GENERIC_3x3;
+    }
+
+    // Plain storage that keeps what it is given. Only these take items a module puts away.
+    public static boolean keeps(AbstractContainerMenu menu) {
+        return keeps(menu.menuType);
+    }
+
+    // A menu built without a type such as your own inventory is no container.
+    public static boolean keeps(MenuType<?> type) {
+        return type != null && KEEPERS.contains(type);
+    }
+
+    public static boolean isEnderChest(Screen screen) {
+        return screen.getTitle().getContents() instanceof TranslatableContents title
+            && ENDER_TITLE.equals(title.getKey());
     }
 
     public static ItemStack carried() {
@@ -130,6 +193,22 @@ public final class InventoryUtil {
     // Button one throws the whole stack in one click.
     public static void throwStack(int networkSlot) {
         MenuClicks.click(MC.player.inventoryMenu, networkSlot, 1, ContainerInput.THROW);
+    }
+
+    // Throws the whole stack at an inventory index through the menu that is live. A chest or a
+    // furnace shows the hotbar as well. False whilst no menu can take the click.
+    public static boolean throwFrom(int inventoryIndex) {
+        if (cursorFree()) {
+            throwStack(networkSlot(inventoryIndex));
+            return true;
+        }
+        AbstractContainerMenu live = openContainer();
+        int slot = live == null ? -1 : MenuClicks.slotOf(live, inventoryIndex);
+        if (slot == -1 || !live.getCarried().isEmpty()) {
+            return false;
+        }
+        MenuClicks.click(live, slot, 1, ContainerInput.THROW);
+        return true;
     }
 
     public static int selectedSlot() {
@@ -201,6 +280,39 @@ public final class InventoryUtil {
             }
         }
         return whenFull;
+    }
+
+    // Creative only. Puts a copy of the stack in an empty hotbar slot and holds it. A full hotbar
+    // lends the held slot. Null outside creative.
+    public static Conjured conjure(ItemStack stack) {
+        if (MC.player == null || MC.gameMode == null || !MC.player.hasInfiniteMaterials()) {
+            return null;
+        }
+        int held = selectedSlot();
+        int slot = freeHotbarSlot(held);
+        ItemStack before = MC.player.getInventory().getItem(slot).copy();
+        setCreativeSlot(slot, stack.copy());
+        MC.player.getInventory().setSelectedSlot(slot);
+        return new Conjured(slot, before, held);
+    }
+
+    // The creative screen fills a slot the same way. The server takes any stack from a creative player.
+    private static void setCreativeSlot(int slot, ItemStack stack) {
+        MC.player.getInventory().setItem(slot, stack);
+        MC.gameMode.handleCreativeModeItemAdd(stack, networkSlot(slot));
+    }
+
+    // A stack conjured into a hotbar slot. What the slot held before comes back on request.
+    public record Conjured(int slot, ItemStack before, int held) {
+
+        // Puts back what the slot held and the slot you had in hand.
+        public void giveBack() {
+            if (MC.player == null || MC.gameMode == null) {
+                return;
+            }
+            setCreativeSlot(slot, before);
+            MC.player.getInventory().setSelectedSlot(held);
+        }
     }
 
     // Holds an item from anywhere in the inventory. A stack outside the hotbar

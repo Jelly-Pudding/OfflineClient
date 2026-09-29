@@ -13,13 +13,15 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(KeyboardHandler.class)
 public class KeyboardHandlerMixin {
 
-    @Inject(method = "keyPress(JILnet/minecraft/client/input/KeyEvent;)V", at = @At("HEAD"))
+    // A handler that takes the key keeps it from the open screen and from the game's own keys.
+    @Inject(method = "keyPress(JILnet/minecraft/client/input/KeyEvent;)V", at = @At("HEAD"), cancellable = true)
     private void onKeyPress(long windowHandle, int action, KeyEvent event, CallbackInfo ci) {
         // An unbound keybind holds this same value.
         if (event.key() == KeybindSetting.UNBOUND) {
             return;
         }
-        OfflineClient.INSTANCE.getEventBus()
-            .post(new KeyPressEvent(event.key(), action));
+        if (OfflineClient.INSTANCE.getEventBus().post(new KeyPressEvent(event.key(), action)).isCancelled()) {
+            ci.cancel();
+        }
     }
 }

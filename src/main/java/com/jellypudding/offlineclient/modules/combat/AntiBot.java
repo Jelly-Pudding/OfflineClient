@@ -4,9 +4,9 @@ import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.PacketReceiveEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
-import com.jellypudding.offlineclient.modules.misc.FakePlayer;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.util.BoundedMap;
+import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.network.protocol.game.ClientboundLoginPacket;
@@ -76,7 +76,7 @@ public final class AntiBot extends Module {
 
     // Our own FakePlayer bodies have no tab entry either. They stay fair game for practice.
     public boolean isBot(Entity entity) {
-        if (!(entity instanceof Player player) || player == mc.player || player instanceof FakePlayer.Body) {
+        if (!(entity instanceof Player player) || player == mc.player || Modules.isLocalBody(player)) {
             return false;
         }
         ClientPacketListener connection = mc.getConnection();

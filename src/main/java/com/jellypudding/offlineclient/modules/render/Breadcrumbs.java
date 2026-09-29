@@ -67,7 +67,7 @@ public final class Breadcrumbs extends Module {
         if (persist.isOn() && inGame()) {
             // A trail kept from another world would be drawn at the wrong coordinates
             // and then saved over this world.
-            String here = currentWorld();
+            String here = ServerInfo.worldKey();
             if (!here.equals(world)) {
                 trail.clear();
             }
@@ -90,7 +90,7 @@ public final class Breadcrumbs extends Module {
         if (!inGame()) {
             return;
         }
-        String here = currentWorld();
+        String here = ServerInfo.worldKey();
         if (!here.equals(world)) {
             if (persist.isOn() && world != null) {
                 save();
@@ -178,11 +178,7 @@ public final class Breadcrumbs extends Module {
         }
     }
 
-    private String currentWorld() {
-        return ServerInfo.key() + "_" + mc.level.dimension().identifier();
-    }
-
     private static Path fileFor(String world) {
-        return DataFiles.path("trails", DataFiles.safeName(world) + ".txt");
+        return DataFiles.path("trails", DataFiles.keyName(world) + ".txt");
     }
 }

@@ -6,6 +6,7 @@ import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.ExclusivityGroup;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.path.MiningTrip;
 import com.jellypudding.offlineclient.path.PathWalker;
 import com.jellypudding.offlineclient.path.Trip;
 import com.jellypudding.offlineclient.render.BoxStyle;
@@ -13,10 +14,8 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
-import com.jellypudding.offlineclient.util.BlockMiner;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
-import com.jellypudding.offlineclient.util.Cooldowns;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.ItemUtil;
@@ -39,9 +38,6 @@ public final class InfinityMiner extends Module {
     public enum WhenFull { STOP, WALK_HOME, LOG_OUT, WALK_HOME_AND_LOG_OUT }
 
     private static final int SCAN_TICKS = 40;
-    // Ticks a spot the walker could not reach is left alone.
-    private static final int SHUN_TICKS = 1200;
-    private static final double GOAL_RADIUS = 3;
 
     private final RegistryListSetting<Block> targetBlocks = new RegistryListSetting<>("Target blocks",
         "The ore mined whilst the pickaxe is healthy. Click to pick it.", BuiltInRegistries.BLOCK,
@@ -60,6 +56,10 @@ public final class InfinityMiner extends Module {
         "Pickaxe durability that ends the repair.", 70, 1, 99, 1, "%").min(1).max(99);
     private final NumberSetting scanRange = new NumberSetting("Scan range",
         "How far around you ore is looked for.", 16, 4, 48, 1, " blocks").min(2);
+    private final EnumSetting<MiningTrip.Movement> movement = MiningTrip.movementSetting();
+    private final BoolSetting collectDrops = new BoolSetting("Collect drops",
+        "Walks over what each ore dropped before it moves on.", true)
+        .under(movement, MiningTrip.Movement.WALK);
     private final EnumSetting<WhenFull> whenFull = new EnumSetting<>("When full",
         "What happens once the bag is full.", WhenFull.STOP)
         .describe(WhenFull.STOP, "Switches off where you stand.")
@@ -72,12 +72,11 @@ public final class InfinityMiner extends Module {
         "Outlines the block being walked to.", true);
     private final BoxStyle targetBox = new BoxStyle(BoxStyle.Shape.BOTH, 180).under(render);
 
-    private final Trip trip = new Trip();
+    private final MiningTrip miner = new MiningTrip();
+    private final Trip homeTrip = new Trip();
     private final SlotSwap slots = new SlotSwap();
-    private final Cooldowns<BlockPos> shunned = new Cooldowns<>();
 
     private BlockPos home;
-    private BlockPos target;
     private boolean repairing;
     private boolean headingHome;
     private int scanTimer;
@@ -85,10 +84,12 @@ public final class InfinityMiner extends Module {
     public InfinityMiner() {
         super("InfinityMiner", "Mines ore for ever and lets Mending heal the pickaxe on the way.",
             Category.WORLD);
-        addSettings(targetBlocks, targetItems, repairBlocks, repairAt, mineAt, scanRange, whenFull,
-            rotate, render);
+        addSettings(targetBlocks, targetItems, repairBlocks, repairAt, mineAt, scanRange, movement,
+            collectDrops, whenFull, rotate, render);
         addSettings(targetBox.settings());
         searchTags("infinity miner", "auto mine", "mending", "ore bot");
+        homeTrip.finder().breakBlocks(true);
+        homeTrip.walker().turn(PathWalker.Turn.CLIENT);
     }
 
     @Override
@@ -111,28 +112,28 @@ public final class InfinityMiner extends Module {
 
     @Override
     protected void onEnable() {
-        target = null;
         repairing = false;
         headingHome = false;
         scanTimer = 0;
-        shunned.clear();
+        miner.reset();
         home = inGame() ? mc.player.blockPosition() : null;
-        trip.finder().breakBlocks(true);
-        trip.walker().turn(PathWalker.Turn.CLIENT);
     }
 
     @Override
     protected void onDisable() {
-        trip.stop();
-        BlockMiner.release();
+        miner.stop();
+        homeTrip.stop();
         slots.restoreIfMine();
-        target = null;
     }
 
     @Subscribe
     private void onTick(TickEvent event) {
         if (!inGame() || mc.player.isSpectator() || mc.gui.screen() != null) {
             return;
+        }
+        // Switched on from the menu before a world was open.
+        if (home == null) {
+            home = mc.player.blockPosition();
         }
         if (headingHome) {
             walkHome();
@@ -151,42 +152,21 @@ public final class InfinityMiner extends Module {
             return;
         }
         updateRepairing();
-        shunned.tick();
-        if (target != null && !wanted(target)) {
-            target = null;
-            trip.stop();
-        }
-        if (target == null && !scan()) {
-            return;
-        }
-        if (BlockUtil.inReach(target)) {
-            trip.stop();
-            BlockMiner.mine(target, rotate.isOn());
-            return;
-        }
-        BlockMiner.release();
-        if (!trip.active()) {
-            trip.start(target, GOAL_RADIUS);
-        }
-        // A walk that ends short of reach has run into something the walker cannot pass.
-        Trip.State state = trip.tick();
-        if (state == Trip.State.FAILED || state == Trip.State.ARRIVED) {
-            shunned.put(target, SHUN_TICKS);
-            target = null;
-        }
+        boolean walk = movement.is(MiningTrip.Movement.WALK);
+        miner.collect(collectDrops.isOn())
+            .tick(this::wanted, walk ? this::scan : () -> miner.nearestInReach(this::wanted), rotate.isOn(), walk);
     }
 
-    // A worn pickaxe swaps the target to experience ore until it is healthy again.
+    // A worn pickaxe swaps the target to experience ore until it is healthy again. The block
+    // it was on then fails the test and is let go.
     private void updateRepairing() {
         ItemStack pick = mc.player.getMainHandItem();
         double left = ItemUtil.durabilityPercent(pick);
         if (!repairing && left <= repairAt.getValue()) {
             repairing = true;
-            target = null;
             ChatUtil.message("The pickaxe is worn. Mining for experience now.");
         } else if (repairing && left >= mineAt.getValue()) {
             repairing = false;
-            target = null;
             ChatUtil.message("The pickaxe has healed. Back to the ore.");
         }
     }
@@ -197,18 +177,17 @@ public final class InfinityMiner extends Module {
     }
 
     // The nearest wanted ore in range. A scan is not cheap and only runs now and then.
-    private boolean scan() {
+    private BlockPos scan() {
         if (scanTimer-- > 0) {
-            return false;
+            return null;
         }
         scanTimer = SCAN_TICKS;
         for (BlockPos pos : BlockUtil.positionsWithin(scanRange.getValue())) {
-            if (wanted(pos) && !shunned.contains(pos)) {
-                target = pos.immutable();
-                return true;
+            if (wanted(pos) && !miner.shuns(pos)) {
+                return pos.immutable();
             }
         }
-        return false;
+        return null;
     }
 
     private boolean holdPickaxe() {
@@ -237,7 +216,7 @@ public final class InfinityMiner extends Module {
     }
 
     private void onFull() {
-        BlockMiner.release();
+        miner.stop();
         switch (whenFull.getValue()) {
             case STOP -> {
                 ChatUtil.message("The bag is full.");
@@ -246,15 +225,14 @@ public final class InfinityMiner extends Module {
             case LOG_OUT -> logOut();
             case WALK_HOME, WALK_HOME_AND_LOG_OUT -> {
                 headingHome = true;
-                target = null;
-                trip.start(home, 0);
+                homeTrip.start(home, 0);
                 ChatUtil.message("The bag is full. Walking home.");
             }
         }
     }
 
     private void walkHome() {
-        switch (trip.tick()) {
+        switch (homeTrip.tick()) {
             case ARRIVED -> {
                 if (whenFull.is(WhenFull.WALK_HOME_AND_LOG_OUT)) {
                     logOut();
@@ -278,6 +256,7 @@ public final class InfinityMiner extends Module {
 
     @Subscribe
     private void onRender3D(Render3DEvent event) {
+        BlockPos target = miner.target();
         if (render.isOn() && target != null) {
             targetBox.draw(event.getBatch(), target, true);
         }

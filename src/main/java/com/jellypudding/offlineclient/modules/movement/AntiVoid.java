@@ -140,13 +140,9 @@ public final class AntiVoid extends Module {
     }
 
     private void stopFlight() {
-        if (!flightStarted) {
-            return;
-        }
-        flightStarted = false;
-        Flight flight = Modules.get(Flight.class);
-        if (flight != null) {
-            flight.setEnabled(false);
+        if (flightStarted) {
+            flightStarted = false;
+            Modules.stopFlight();
         }
     }
 

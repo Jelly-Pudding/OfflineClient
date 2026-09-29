@@ -62,7 +62,7 @@ public final class ContainerMarks {
     }
 
     private static String key(BlockPos pos) {
-        return ServerInfo.key() + " " + WaypointStore.currentDimension() + " " + BlockUtil.text(pos);
+        return ServerInfo.key() + " " + ServerInfo.dimension() + " " + BlockUtil.text(pos);
     }
 
     private static List<String> decode(JsonElement root) {

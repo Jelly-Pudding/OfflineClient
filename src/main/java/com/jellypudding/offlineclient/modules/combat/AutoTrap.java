@@ -62,7 +62,7 @@ public final class AutoTrap extends Module {
         .describe(Bottom.NONE, "Places nothing at their feet.");
     private final NumberSetting delay = new NumberSetting("Delay",
         "Ticks to wait between placing rounds.", 1, 0, 5, 1, " ticks");
-    private final NumberSetting perTick = new NumberSetting("Blocks per tick",
+    private final NumberSetting perRound = new NumberSetting("Blocks per round",
         "How many blocks to place in one round.", 2, 1, 4, 1);
     private final BoolSetting rotate = new BoolSetting("Rotate",
         "Send a look packet towards each block.", true);
@@ -84,7 +84,7 @@ public final class AutoTrap extends Module {
     public AutoTrap() {
         super("AutoTrap", "Places blocks around an enemy to trap them.", Category.COMBAT);
         addSettings(targetRange, priority, placeRange, wallsRange, blocks, top, bottom, delay,
-            perTick, rotate, toggleOff, render);
+            perRound, rotate, toggleOff, render);
         addSettings(style.settings());
         addSettings(nextStyle.settings());
         searchTags("obsidian", "trap", "box");
@@ -148,7 +148,7 @@ public final class AutoTrap extends Module {
         int done = 0;
         boolean rotated = false;
         for (BlockPos pos : missing) {
-            if (done >= perTick.getInt()) {
+            if (done >= perRound.getInt()) {
                 break;
             }
             boolean turn = rotate.isOn() && !rotated;
@@ -224,7 +224,7 @@ public final class AutoTrap extends Module {
             return;
         }
         for (int i = 0; i < pending.size(); i++) {
-            BoxStyle chosen = i < perTick.getInt() ? nextStyle : style;
+            BoxStyle chosen = i < perRound.getInt() ? nextStyle : style;
             chosen.draw(event.getBatch(), pending.get(i), false);
         }
     }

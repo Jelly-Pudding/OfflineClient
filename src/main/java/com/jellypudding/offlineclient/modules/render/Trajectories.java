@@ -234,14 +234,7 @@ public final class Trajectories extends Module {
             return ProjectilePath.ARROW.withPower(charge * ProjectilePath.ARROW.power());
         }
         if (item instanceof CrossbowItem) {
-            if (!CrossbowItem.isCharged(stack)) {
-                return null;
-            }
-            ChargedProjectiles loaded = stack.get(DataComponents.CHARGED_PROJECTILES);
-            if (loaded != null && loaded.contains(Items.FIREWORK_ROCKET)) {
-                return FIREWORK;
-            }
-            return CROSSBOW_ARROW;
+            return crossbowLaunch(player, stack);
         }
         if (item instanceof TridentItem) {
             return ProjectilePath.TRIDENT;
@@ -262,6 +255,21 @@ public final class Trajectories extends Module {
             return BOBBER;
         }
         return null;
+    }
+
+    // A loaded crossbow fires what it holds. A draw held past full is loaded again by the server
+    // on every tick and fires what the player would load. BowSpam's rapid fire keeps one up.
+    private static Launch crossbowLaunch(Player player, ItemStack stack) {
+        if (CrossbowItem.isCharged(stack)) {
+            ChargedProjectiles loaded = stack.get(DataComponents.CHARGED_PROJECTILES);
+            return loaded != null && loaded.contains(Items.FIREWORK_ROCKET) ? FIREWORK : CROSSBOW_ARROW;
+        }
+        boolean drawn = player.isUsingItem() && player.getUseItem() == stack
+            && player.getTicksUsingItem() >= CrossbowItem.getChargeDuration(stack, player);
+        if (!drawn) {
+            return null;
+        }
+        return player.getProjectile(stack).is(Items.FIREWORK_ROCKET) ? FIREWORK : CROSSBOW_ARROW;
     }
 
     // The position and speed the projectile starts with. The angle turns the aim left or right.

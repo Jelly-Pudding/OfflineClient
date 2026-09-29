@@ -44,6 +44,8 @@ public final class AntiPacketKick extends Module {
         200, 20, 1000, 10, " packets").min(1);
     private final BoolSetting notify = new BoolSetting("Notify",
         "Say in chat the first time a burst gets paced.", true);
+    private final BoolSetting spreadTeleports = new BoolSetting("Spread teleports",
+        "Makes every teleport take one step a tick. Some servers kick for more.", true);
     private final BoolSetting acceptHuge = new BoolSetting("Accept huge packets",
         "Reads incoming packets of any size instead of dropping the connection.", true);
     private final BoolSetting catchErrors = new BoolSetting("Catch errors",
@@ -66,8 +68,12 @@ public final class AntiPacketKick extends Module {
     public AntiPacketKick() {
         super("AntiPacketKick", "Spreads packet bursts out and keeps the server from dropping you.",
             Category.MISC);
-        addSettings(limit, queueSize, notify, acceptHuge, catchErrors, logErrors);
-        searchTags("flood", "throttle", "rate limit");
+        addSettings(limit, queueSize, notify, spreadTeleports, acceptHuge, catchErrors, logErrors);
+        searchTags("flood", "throttle", "rate limit", "tick end");
+    }
+
+    public boolean spreadsTeleports() {
+        return spreadTeleports.isOn();
     }
 
     // Read from the netty thread whilst a packet is being decoded.

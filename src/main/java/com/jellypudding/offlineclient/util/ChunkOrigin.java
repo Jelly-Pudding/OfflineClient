@@ -17,14 +17,9 @@ import net.minecraft.world.level.chunk.Palette;
 import net.minecraft.world.level.chunk.PalettedContainer;
 import net.minecraft.world.level.chunk.PalettedContainerRO;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
-// Reads what a chunk from the server gives away about its past. Generation grows every
+// Reads what a chunk from the server gives away about its age. Generation grows every
 // palette from an empty section. A save rebuilds each palette from the cells in order.
 // Only the game thread may call this and only as the chunk arrives. A resize later on
 // rebuilds the order.
@@ -38,20 +33,22 @@ public final class ChunkOrigin {
 
     private static final BlockState AIR = Blocks.AIR.defaultBlockState();
 
-    // Wider block palettes fall back to the global one which keeps no order.
-    private static final int MAX_LISTED_BLOCK_BITS = 8;
     // Biome palettes fall back to the global one past eight entries.
     private static final int MAX_LISTED_BIOME_BITS = 3;
     // Biomes sit on a grid four cells wide inside a section.
     private static final int BIOME_CELLS = 4;
-    // One section holds sixteen cubed cells. Reused as every palette is read.
-    private static final int[] CELLS = new int[SectionPos.SECTION_SIZE * SectionPos.SECTION_SIZE
-        * SectionPos.SECTION_SIZE];
+    // One section holds sixteen cubed cells.
+    private static final int SECTION_CELLS = SectionPos.SECTION_SIZE * SectionPos.SECTION_SIZE
+        * SectionPos.SECTION_SIZE;
     // Without a lead from the lowest section this many sections must agree.
     private static final int MIN_VOTES = 2;
 
-    // Since 1.18 stone turns to deepslate at random below y 8. Upgrading an older chunk only
-    // swaps its old bedrock at y 0 to 4 for deepslate. Stone from y 5 to 7 stays stone.
+    // Loading a chunk from before 1.18 swaps its bedrock at y 0 to 4 for deepslate. The
+    // palette of that section lists the bedrock until the chunk is saved again.
+    private static final int OLD_FLOOR_Y = 0;
+
+    // Since 1.18 stone turns to deepslate at random below y 8. Upgrading a chunk from before
+    // then only swaps its bedrock at y 0 to 4 for deepslate. Stone from y 5 to 7 stays stone.
     private static final int BAND_BOTTOM = 5;
     private static final int BAND_TOP = 7;
     // Native terrain would show deepslate among this much stone all but surely.
@@ -81,26 +78,57 @@ public final class ChunkOrigin {
     // gives the outer island biomes it has had since 1.13.
     private static final long CENTRE_CHUNKS_SQUARED = 64 * 64;
 
-    // Paper anti xray adds these to every low section it loads in its hiding mode.
-    private static final Set<Block> ANTI_XRAY_FILLERS = Set.of(Blocks.STONE, Blocks.DEEPSLATE,
-        Blocks.NETHERRACK, Blocks.END_STONE);
-    // In its other modes it adds its whole hidden list to every low section instead. A block
-    // left over in this many sections of one chunk is taken for that list.
-    private static final int ANTI_XRAY_SECTIONS = 3;
-    // The blocks Paper anti xray hides by default and the nether ores servers add to it. It
-    // swaps a buried one for a filler in the packet and leaves its palette entry unused.
-    private static final Set<Block> ANTI_XRAY_HIDDEN = Set.of(Blocks.COAL_ORE, Blocks.DEEPSLATE_COAL_ORE,
-        Blocks.IRON_ORE, Blocks.DEEPSLATE_IRON_ORE, Blocks.COPPER_ORE, Blocks.DEEPSLATE_COPPER_ORE,
-        Blocks.GOLD_ORE, Blocks.DEEPSLATE_GOLD_ORE, Blocks.REDSTONE_ORE, Blocks.DEEPSLATE_REDSTONE_ORE,
-        Blocks.LAPIS_ORE, Blocks.DEEPSLATE_LAPIS_ORE, Blocks.DIAMOND_ORE, Blocks.DEEPSLATE_DIAMOND_ORE,
-        Blocks.EMERALD_ORE, Blocks.DEEPSLATE_EMERALD_ORE, Blocks.RAW_IRON_BLOCK, Blocks.RAW_COPPER_BLOCK,
-        Blocks.MOSSY_COBBLESTONE, Blocks.OBSIDIAN, Blocks.CHEST, Blocks.ENDER_CHEST, Blocks.CLAY,
-        Blocks.OAK_PLANKS, Blocks.ANCIENT_DEBRIS, Blocks.NETHER_GOLD_ORE, Blocks.NETHER_QUARTZ_ORE);
-    // Players rarely leave two of these gone from one chunk at once. Anti xray does it to
-    // nearly every chunk underground.
-    private static final int ANTI_XRAY_SIGNS = 2;
-
     private ChunkOrigin() {
+    }
+
+    // The index of a section showing that the chunk is loaded for the first time since the
+    // server moved to a newer game version or minus one. Vanilla lists a palette entry twice
+    // when it converts a save made before 1.18. Upgrading an overworld chunk from before 1.18
+    // leaves its bedrock floor listed with no cell on vanilla and Paper alike. Every load of
+    // such a save relights the chunk and the server saves it again after. Either sign is gone
+    // from then on.
+    public static int dormantSection(LevelChunk chunk) {
+        LevelChunkSection[] sections = chunk.getSections();
+        for (int i = 0; i < sections.length; i++) {
+            Palette<BlockState> palette = PaletteCells.listedBlocks(sections[i]);
+            if (palette != null && PaletteCells.repeats(palette)) {
+                return i;
+            }
+        }
+        return chunk.getLevel().dimension() == Level.OVERWORLD ? bedrockLeftover(chunk) : -1;
+    }
+
+    // The section at y 0 when it lists bedrock that no cell holds and no other section does
+    // the same. A server that hides bedrock with anti xray lists it in every low section.
+    private static int bedrockLeftover(LevelChunk chunk) {
+        if (chunk.getMinY() > OLD_FLOOR_Y || chunk.getMaxY() < OLD_FLOOR_Y) {
+            return -1;
+        }
+        LevelChunkSection[] sections = chunk.getSections();
+        int floor = chunk.getSectionIndex(OLD_FLOOR_Y);
+        if (!listsBedrockUnused(sections[floor])) {
+            return -1;
+        }
+        for (int i = 0; i < sections.length; i++) {
+            if (i != floor && listsBedrockUnused(sections[i])) {
+                return -1;
+            }
+        }
+        return floor;
+    }
+
+    private static boolean listsBedrockUnused(LevelChunkSection section) {
+        Palette<BlockState> palette = PaletteCells.listedBlocks(section);
+        if (palette == null || !section.maybeHas(state -> state.is(Blocks.BEDROCK))) {
+            return false;
+        }
+        boolean[] used = PaletteCells.usedBlocks(section);
+        for (int id = 0; id < used.length; id++) {
+            if (used[id] && palette.valueFor(id).is(Blocks.BEDROCK)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     // Null when the palettes say nothing either way. Biomes settle it whenever a section
@@ -128,12 +156,21 @@ public final class ChunkOrigin {
             // The server saves chunks it only got as far as biomes with. Terrain built on
             // them this session still starts every block palette with air.
             int lowest = lowestWithBlocks(sections);
-            if (lowest >= 0 && blockAge(sections[lowest]) == Age.FRESH) {
+            if (lowest >= 0 && blockAge(sections[lowest]) == Age.FRESH && !savedBefore118(sections[lowest])) {
                 return new Finding(Age.FRESH, lowest);
             }
             return new Finding(Age.OLD, old);
         }
         return readBlocks(sections);
+    }
+
+    // A game from 1.13 to 1.17 saved every block palette with air first and the rest in the
+    // order the cells show them. Paper converts such a save without the repeats vanilla adds
+    // and its biomes read old like any save.
+    private static boolean savedBefore118(LevelChunkSection section) {
+        Palette<BlockState> palette = PaletteCells.listedBlocks(section);
+        return palette != null && palette.valueFor(0) == AIR
+            && PaletteCells.inCellOrder(palette, section.getStates().data.storage(), 1);
     }
 
     private static int lowestWithBlocks(LevelChunkSection[] sections) {
@@ -160,7 +197,7 @@ public final class ChunkOrigin {
         if (bits > MAX_LISTED_BIOME_BITS) {
             return null;
         }
-        if (!inCellOrder(palette, data.storage())) {
+        if (!PaletteCells.inCellOrder(palette, data.storage())) {
             return Age.FRESH;
         }
         return holdsPlains(palette) ? null : Age.OLD;
@@ -216,102 +253,19 @@ public final class ChunkOrigin {
 
     // Generation starts every section as air. A save starts the palette with the block in
     // the first cell. A section that grew past its palette during generation also starts
-    // with that block which is why the order has to hold as well.
+    // with that block which is why the order has to hold as well. A palette that lists an
+    // entry twice was converted from a save made before 1.18 and says nothing.
     private static Age blockAge(LevelChunkSection section) {
-        PalettedContainer.Data<BlockState> data = section.getStates().data;
-        BitStorage storage = data.storage();
-        int bits = storage.getBits();
-        if (bits == 0 || bits > MAX_LISTED_BLOCK_BITS) {
+        Palette<BlockState> palette = PaletteCells.listedBlocks(section);
+        if (palette == null || PaletteCells.repeats(palette)) {
             return null;
         }
-        Palette<BlockState> palette = data.palette();
+        BitStorage storage = section.getStates().data.storage();
         if (palette.valueFor(0) == AIR) {
             // Air heads the palette yet the first cell holds a block. Only generation does that.
             return storage.get(0) != 0 ? Age.FRESH : null;
         }
-        return inCellOrder(palette, storage) ? Age.OLD : null;
-    }
-
-    // True when the palette lists just the entries in use in the order the cells first show
-    // them. A section read back from a save always does.
-    private static boolean inCellOrder(Palette<?> palette, BitStorage storage) {
-        int size = storage.getSize();
-        storage.unpack(CELLS);
-        int next = 0;
-        for (int i = 0; i < size; i++) {
-            int id = CELLS[i];
-            if (id == next) {
-                next++;
-            } else if (id > next) {
-                return false;
-            }
-        }
-        return next == palette.getSize();
-    }
-
-    // The index of a section whose palette still lists a block that no cell holds or minus
-    // one. Only means something for a chunk the palettes call old. The server keeps a loaded
-    // palette as it is until the chunk is saved and unloaded. A block gone from every cell
-    // was broken or replaced since the chunk loaded. A block that only changed its state
-    // still fills a cell and does not count.
-    public static int changedSection(LevelChunk chunk) {
-        LevelChunkSection[] sections = chunk.getSections();
-        List<Set<Block>> gone = new ArrayList<>(sections.length);
-        Map<Block, Integer> sectionsMissing = new HashMap<>();
-        int hiddenGone = 0;
-        for (LevelChunkSection section : sections) {
-            Set<Block> missing = goneBlocks(section);
-            gone.add(missing);
-            for (Block block : missing) {
-                sectionsMissing.merge(block, 1, Integer::sum);
-                if (ANTI_XRAY_HIDDEN.contains(block)) {
-                    hiddenGone++;
-                }
-            }
-        }
-        boolean obfuscated = hiddenGone >= ANTI_XRAY_SIGNS;
-        for (int i = 0; i < gone.size(); i++) {
-            for (Block block : gone.get(i)) {
-                if (sectionsMissing.get(block) < ANTI_XRAY_SECTIONS
-                    && !(obfuscated && ANTI_XRAY_HIDDEN.contains(block))) {
-                    return i;
-                }
-            }
-        }
-        return -1;
-    }
-
-    // The blocks a section's palette lists with no cell of any of their states left.
-    private static Set<Block> goneBlocks(LevelChunkSection section) {
-        PalettedContainer.Data<BlockState> data = section.getStates().data;
-        BitStorage storage = data.storage();
-        int bits = storage.getBits();
-        if (bits == 0 || bits > MAX_LISTED_BLOCK_BITS) {
-            return Set.of();
-        }
-        Palette<BlockState> palette = data.palette();
-        boolean[] used = new boolean[palette.getSize()];
-        storage.unpack(CELLS);
-        for (int i = 0; i < storage.getSize(); i++) {
-            if (CELLS[i] < used.length) {
-                used[CELLS[i]] = true;
-            }
-        }
-        Set<Block> inUse = new HashSet<>();
-        for (int id = 0; id < used.length; id++) {
-            if (used[id]) {
-                inUse.add(palette.valueFor(id).getBlock());
-            }
-        }
-        Set<Block> missing = new HashSet<>();
-        for (int id = 0; id < used.length; id++) {
-            BlockState state = palette.valueFor(id);
-            if (!used[id] && !state.isAir() && !inUse.contains(state.getBlock())
-                && !ANTI_XRAY_FILLERS.contains(state.getBlock())) {
-                missing.add(state.getBlock());
-            }
-        }
-        return missing;
+        return PaletteCells.inCellOrder(palette, storage) ? Age.OLD : null;
     }
 
     // The index of a section showing the chunk was first generated before the terrain of its
@@ -394,7 +348,7 @@ public final class ChunkOrigin {
                 }
             });
         }
-        return netherrack[0] / (double) ((ORE_SECTION_HIGH - ORE_SECTION_LOW + 1) * CELLS.length);
+        return netherrack[0] / (double) ((ORE_SECTION_HIGH - ORE_SECTION_LOW + 1) * SECTION_CELLS);
     }
 
     private static int endBefore113(LevelChunk chunk) {

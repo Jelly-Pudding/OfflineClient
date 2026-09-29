@@ -18,25 +18,21 @@ public final class ServerCommand extends Command {
             ChatUtil.error("You are not on a server.");
             return;
         }
-        row("Address", address);
+        ChatUtil.row("Address", address);
         Component motd = ServerInfo.motd();
         if (motd != null) {
-            ChatUtil.component(Component.literal("§7MOTD §r").append(motd));
+            ChatUtil.row("MOTD", motd);
         }
         String brand = ServerInfo.brand();
         if (brand != null) {
-            row("Software", brand);
+            ChatUtil.row("Software", brand);
         }
-        row("Players", ServerInfo.online() + " online");
-        row("Ping", ServerInfo.ping() + " ms");
-        row("TPS", ServerInfo.tps());
+        ChatUtil.row("Players", ServerInfo.online() + " online");
+        ChatUtil.row("Ping", ServerInfo.ping() + " ms");
+        ChatUtil.row("TPS", ServerInfo.tps());
         String saved = ServerInfo.savedName();
         if (saved != null) {
-            row("Saved as", saved);
+            ChatUtil.row("Saved as", saved);
         }
-    }
-
-    private static void row(String label, String value) {
-        ChatUtil.message("§7" + label + " §b" + value);
     }
 }

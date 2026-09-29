@@ -9,6 +9,7 @@ import com.jellypudding.offlineclient.util.ColorUtil;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -48,24 +49,30 @@ public final class BoxStyle {
 
     // A shape and opacity with no colours of its own for a module that colours each box itself.
     public static BoxStyle shapeOnly(Shape defaultShape) {
-        return new BoxStyle("", defaultShape, 0, DEFAULT_SATURATION, false);
+        return shapeOnly("", defaultShape);
+    }
+
+    // The same with a prefix such as Box that gives Box shape and Box fill opacity.
+    public static BoxStyle shapeOnly(String prefix, Shape defaultShape) {
+        return new BoxStyle(prefix, defaultShape, 0, DEFAULT_SATURATION, false);
     }
 
     private BoxStyle(String prefix, Shape defaultShape, float hue, float saturation, boolean ownColours) {
-        String lead = prefix.isEmpty() ? "" : prefix + " ";
-        shape = new EnumSetting<>(cap(lead + "shape"), "How the box is drawn.", defaultShape)
+        shape = new EnumSetting<>(Setting.prefixed(prefix, "shape"), "How the box is drawn.", defaultShape)
             .describe(Shape.LINES, "An outline of the edges.")
             .describe(Shape.SIDES, "Tinted faces with no edges.")
             .describe(Shape.BOTH, "Edges and tinted faces.");
         lineColor = ownColours
-            ? new ColorSetting(cap(lead + "line colour"), "Colour of the edges.", hue, saturation, 1f, false)
+            ? new ColorSetting(Setting.prefixed(prefix, "line colour"), "Colour of the edges.", hue, saturation,
+                1f, false)
                 .under(shape, () -> gate.get() && shape.isAny(Shape.LINES, Shape.BOTH))
             : null;
         fillColor = ownColours
-            ? new ColorSetting(cap(lead + "fill colour"), "Colour of the faces.", hue, saturation, 1f, false)
+            ? new ColorSetting(Setting.prefixed(prefix, "fill colour"), "Colour of the faces.", hue, saturation,
+                1f, false)
                 .under(shape, () -> gate.get() && shape.isAny(Shape.SIDES, Shape.BOTH))
             : null;
-        fillOpacity = new NumberSetting(cap(lead + "fill opacity"), "How solid the faces are.",
+        fillOpacity = new NumberSetting(Setting.prefixed(prefix, "fill opacity"), "How solid the faces are.",
             25, 5, 100, 5, "%").min(1).max(100)
             .under(shape, () -> gate.get() && shape.isAny(Shape.SIDES, Shape.BOTH));
     }
@@ -77,12 +84,10 @@ public final class BoxStyle {
         return this;
     }
 
-    // Makes every row of the style a sub option of one or more choices of an enum.
-    @SafeVarargs
-    @SuppressWarnings("varargs")
-    public final <E extends Enum<E>> BoxStyle under(EnumSetting<E> parent, E... values) {
-        shape.under(parent, values);
-        gate = () -> parent.isAny(values);
+    // Makes every row of the style a sub option of one choice of an enum.
+    public <E extends Enum<E>> BoxStyle under(EnumSetting<E> parent, E value) {
+        shape.under(parent, value);
+        gate = () -> parent.is(value);
         return this;
     }
 
@@ -98,10 +103,6 @@ public final class BoxStyle {
 
     public int fillColor() {
         return ColorUtil.fade(fillColor.getColor(), fillShare());
-    }
-
-    private static String cap(String text) {
-        return Character.toUpperCase(text.charAt(0)) + text.substring(1);
     }
 
     public Setting<?>[] settings() {
@@ -209,6 +210,16 @@ public final class BoxStyle {
         }
         if (drawsSides()) {
             batch.solidBox(box, ColorUtil.fade(fill, fillShare()), throughWalls);
+        }
+    }
+
+    // A flat face between four corners in order round its edge such as the cloth of a banner.
+    public void drawQuad(DrawBatch batch, Vec3 a, Vec3 b, Vec3 c, Vec3 d, int color, boolean throughWalls) {
+        if (drawsLines()) {
+            batch.outlineQuad(a, b, c, d, color, throughWalls);
+        }
+        if (drawsSides()) {
+            batch.quad(a, b, c, d, ColorUtil.fade(color, fillShare()), throughWalls);
         }
     }
 }

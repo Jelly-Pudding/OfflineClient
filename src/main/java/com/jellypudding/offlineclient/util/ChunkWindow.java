@@ -12,6 +12,8 @@ import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
 
+import java.util.function.Predicate;
+
 // A read only window on the world. A captured window holds its chunks and a worker
 // thread can read it without touching the live chunk map. Reads outside it come
 // back as void air.
@@ -19,6 +21,7 @@ public final class ChunkWindow {
 
     private static final BlockState OUTSIDE = Blocks.VOID_AIR.defaultBlockState();
     private static final BlockState AIR = Blocks.AIR.defaultBlockState();
+    private static final Predicate<BlockState> NOT_PLAIN_AIR = state -> !state.is(Blocks.AIR);
 
     private final ClientChunkCache source;
     private final LevelChunk[] chunks;
@@ -96,7 +99,8 @@ public final class ChunkWindow {
             return OUTSIDE;
         }
         LevelChunkSection section = chunk.getSections()[chunk.getSectionIndex(y)];
-        if (section == null || section.hasOnlyAir()) {
+        // The section count takes cave air for air. Only a palette of plain air skips the read.
+        if (section == null || section.hasOnlyAir() && !section.maybeHas(NOT_PLAIN_AIR)) {
             return AIR;
         }
         return section.getBlockState(x & 15, y & 15, z & 15);

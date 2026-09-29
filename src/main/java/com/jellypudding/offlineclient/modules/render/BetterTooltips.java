@@ -14,6 +14,7 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.ChatFormatting;
 import net.minecraft.SharedConstants;
@@ -59,7 +60,6 @@ import net.minecraft.world.item.component.SuspiciousStewEffects;
 import net.minecraft.world.item.component.WritableBookContent;
 import net.minecraft.world.item.component.WrittenBookContent;
 import net.minecraft.world.item.consume_effects.ApplyStatusEffectsConsumeEffect;
-import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BannerPattern;
 import net.minecraft.world.level.block.entity.BannerPatternLayers;
 import net.minecraft.world.level.saveddata.maps.MapId;
@@ -179,7 +179,7 @@ public final class BetterTooltips extends Module {
         if (!enderChest.isOn() || !(mc.gui.screen() instanceof ContainerScreen screen)) {
             return;
         }
-        if (!screen.getTitle().getString().equals(Blocks.ENDER_CHEST.getName().getString())) {
+        if (!InventoryUtil.isEnderChest(screen)) {
             return;
         }
         ChestMenu menu = screen.getMenu();

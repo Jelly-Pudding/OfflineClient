@@ -6,6 +6,7 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.block.LiquidBlockContainer;
@@ -68,8 +69,7 @@ public final class Buckets {
     // Puts a bucket of the kind in hand through the loan and uses it once looking at the aim.
     // The loan stays open and the bucket the use leaves behind waits in the lent slot.
     public static boolean useHeld(InventoryUtil.HotbarLoan loan, Item bucket, Vec3 aim) {
-        return loan.hold(bucket, InventoryUtil.WHOLE_INVENTORY)
-            && RotationManager.whileFacing(RotationManager.yawTo(aim), RotationManager.pitchTo(aim), InputUtil::useMainHand);
+        return loan.hold(bucket, InventoryUtil.WHOLE_INVENTORY) && useFacing(aim);
     }
 
     // Borrows a bucket of the kind and uses it once looking at the aim. True when the game took the use.
@@ -77,6 +77,26 @@ public final class Buckets {
         boolean used = useHeld(loan, bucket, aim);
         loan.giveBack();
         return used;
+    }
+
+    // Borrows an empty bucket and fills it once looking at the aim. A lone bucket fills
+    // where it stands. One taken from a stack needs a free slot or the fill is dropped.
+    // True when the game took the use.
+    public static boolean fill(InventoryUtil.HotbarLoan loan, Vec3 aim) {
+        int slot = InventoryUtil.findSlot(stack -> stack.is(Items.BUCKET) && stack.getCount() == 1,
+            InventoryUtil.WHOLE_INVENTORY);
+        if (slot == -1 && InventoryUtil.findSlot(ItemStack::isEmpty, InventoryUtil.WHOLE_INVENTORY) != -1) {
+            slot = InventoryUtil.findSlot(Items.BUCKET, InventoryUtil.WHOLE_INVENTORY);
+        }
+        boolean used = slot != -1 && loan.select(slot) && useFacing(aim);
+        loan.giveBack();
+        return used;
+    }
+
+    // Uses the held item with the view turned to the aim for the one call.
+    private static boolean useFacing(Vec3 aim) {
+        return RotationManager.whileFacing(RotationManager.yawTo(aim), RotationManager.pitchTo(aim),
+            InputUtil::useMainHand);
     }
 
     // Fills an empty bucket from the water or powder snow at the spot. The bucket in hand
@@ -122,11 +142,11 @@ public final class Buckets {
         return ray(RotationManager.yawTo(aim), RotationManager.pitchTo(aim), fluids);
     }
 
-    // The ray a bucket casts with the view at these angles. Null when it meets nothing.
+    // The ray a bucket casts on the server with the view at these angles. Null when it meets nothing.
     public static BlockHitResult ray(float yaw, float pitch, ClipContext.Fluid fluids) {
         LocalPlayer player = MC.player;
         Vec3 eye = player.getEyePosition();
-        Vec3 end = eye.add(Vec3.directionFromRotation(pitch, yaw).scale(player.blockInteractionRange()));
+        Vec3 end = eye.add(Vec3.directionFromRotation(pitch, yaw).scale(BlockUtil.serverBlockReach()));
         BlockHitResult hit = MC.level.clip(new ClipContext(eye, end, ClipContext.Block.OUTLINE, fluids, player));
         return hit.getType() == HitResult.Type.BLOCK ? hit : null;
     }

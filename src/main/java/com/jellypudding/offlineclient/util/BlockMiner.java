@@ -52,16 +52,27 @@ public final class BlockMiner {
     }
 
     // Sends the start and stop packets for a block in one go.
-    // The server queues anything slower than one hit and holds only one at a time.
+    // The server parks anything slower than one tick and holds only one at a time.
     public static void breakInstantly(BlockPos pos) {
+        sendStart(pos);
+        sendStop(pos);
+    }
+
+    // A start on its own. It makes the block the server's target unless it breaks in one hit.
+    public static void sendStart(BlockPos pos) {
+        send(ServerboundPlayerActionPacket.Action.START_DESTROY_BLOCK, pos);
+    }
+
+    // A stop on its own. The server only takes it for its target and counts from the last start.
+    public static void sendStop(BlockPos pos) {
+        send(ServerboundPlayerActionPacket.Action.STOP_DESTROY_BLOCK, pos);
+    }
+
+    private static void send(ServerboundPlayerActionPacket.Action action, BlockPos pos) {
         if (MC.player == null || MC.level == null) {
             return;
         }
-        Direction side = BlockUtil.facingSide(pos);
-        MC.player.connection.send(new ServerboundPlayerActionPacket(
-            ServerboundPlayerActionPacket.Action.START_DESTROY_BLOCK, pos, side));
-        MC.player.connection.send(new ServerboundPlayerActionPacket(
-            ServerboundPlayerActionPacket.Action.STOP_DESTROY_BLOCK, pos, side));
+        MC.player.connection.send(new ServerboundPlayerActionPacket(action, pos, BlockUtil.facingSide(pos)));
     }
 
     // Keeps vanilla mining suppressed for another tick without touching a block.
