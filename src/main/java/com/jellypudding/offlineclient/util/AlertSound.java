@@ -52,7 +52,12 @@ public final class AlertSound {
 
     // An alarm meant to wake a player who stepped away starts with several rings.
     public AlertSound(String prefix, String description, SoundEvent defaultSound, int defaultRings) {
-        enabled = new BoolSetting(Setting.prefixed(prefix, "alarm"), description, false);
+        this(prefix, description, defaultSound, defaultRings, false);
+    }
+
+    // An alarm that is the whole point of its module starts switched on.
+    public AlertSound(String prefix, String description, SoundEvent defaultSound, int defaultRings, boolean on) {
+        enabled = new BoolSetting(Setting.prefixed(prefix, "alarm"), description, on);
         sounds = new RegistryListSetting<>(Setting.prefixed(prefix, "sounds"),
             "The sounds the alarm plays. Each ring plays the next one. Click to pick them.",
             BuiltInRegistries.SOUND_EVENT, List.of(defaultSound)).under(enabled);

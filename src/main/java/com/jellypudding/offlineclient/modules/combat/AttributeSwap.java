@@ -24,6 +24,7 @@ import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -31,12 +32,15 @@ import net.minecraft.world.item.MaceItem;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
 public final class AttributeSwap extends Module {
 
     public enum Mode { SIMPLE, SMART }
+
+    public enum Against { ANYONE, PLAYERS, MOBS }
 
     // How far a spear swing is looked along for something to reach.
     private static final double SPEAR_LOOK = 7;
@@ -136,6 +140,11 @@ public final class AttributeSwap extends Module {
         "Count the extra damage from Impaling against sea creatures.", true)
         .under(others);
 
+    private final EnumSetting<Against> against = new EnumSetting<>("Swap against",
+        "What a hit has to land on before it swaps.", Against.ANYONE)
+        .describe(Against.ANYONE, "Any target.")
+        .describe(Against.PLAYERS, "Only other players.")
+        .describe(Against.MOBS, "Only mobs.");
     private final BoolSetting onlyWithKillAura = new BoolSetting("Only with KillAura",
         "Stay put unless KillAura is on.", false);
     private final BoolSetting onlyOnWeapon = new BoolSetting("Only on weapon",
@@ -154,7 +163,7 @@ public final class AttributeSwap extends Module {
             maces, regularMace, density, breach, windBurst,
             spears, lunge, reach, keepLungeSpear,
             others, impaling,
-            onlyWithKillAura, onlyOnWeapon);
+            against, onlyWithKillAura, onlyOnWeapon);
         addSettings(weaponKinds.settings());
         searchTags("attribute", "damage swap", "hotbar", "spear", "mace");
     }
@@ -181,6 +190,9 @@ public final class AttributeSwap extends Module {
         if (!canSwap() || mc.hitResult == null || mc.hitResult.getType() == HitResult.Type.BLOCK) {
             return;
         }
+        if (mc.hitResult instanceof EntityHitResult aimed && !swapsAgainst(aimed.getEntity())) {
+            return;
+        }
         if (mode.is(Mode.SIMPLE)) {
             if (swapOnMiss.isOn()) {
                 swapTo(targetSlot.getInt() - 1);
@@ -192,7 +204,7 @@ public final class AttributeSwap extends Module {
         }
         Entity far = reach.isOn() ? spearTarget() : null;
         if (far != null) {
-            if (mc.player.distanceTo(far) <= mc.player.entityInteractionRange() + REACH_SLACK) {
+            if (!swapsAgainst(far) || mc.player.distanceTo(far) <= mc.player.entityInteractionRange() + REACH_SLACK) {
                 return;
             }
             int spear = spearSlot(false);
@@ -208,7 +220,7 @@ public final class AttributeSwap extends Module {
 
     @Subscribe
     private void onAttack(AttackEntityEvent event) {
-        if (!canSwap()) {
+        if (!canSwap() || !swapsAgainst(event.getTarget())) {
             return;
         }
         if (mode.is(Mode.SIMPLE)) {
@@ -247,6 +259,14 @@ public final class AttributeSwap extends Module {
             return false;
         }
         return !onlyOnWeapon.isOn() || weaponKinds.matches(mc.player.getMainHandItem());
+    }
+
+    private boolean swapsAgainst(Entity target) {
+        return switch (against.getValue()) {
+            case ANYONE -> true;
+            case PLAYERS -> target instanceof Player;
+            case MOBS -> target instanceof Mob;
+        };
     }
 
     // The slot packet leaves before the attack packet.

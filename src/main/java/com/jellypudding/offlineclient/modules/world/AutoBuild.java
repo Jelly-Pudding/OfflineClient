@@ -14,6 +14,8 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.GridSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
+import com.jellypudding.offlineclient.setting.TextSetting;
+import com.jellypudding.offlineclient.util.BlockLetters;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.ChatWarning;
@@ -44,11 +46,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Predicate;
 
-// Builds a painted pattern or a saved template where you aim. One press of the use key starts
-// a build and the next stops it. A block the server turns down is tried again.
+// Builds a painted pattern or a saved template or text where you aim. One press of the use key
+// starts a build and the next stops it. A block the server turns down is tried again.
 public final class AutoBuild extends Module {
 
-    public enum Source { PATTERN, TEMPLATE }
+    public enum Source { PATTERN, TEMPLATE, TEXT }
 
     public enum Orientation { AUTO, UPRIGHT, FLAT }
 
@@ -58,20 +60,25 @@ public final class AutoBuild extends Module {
 
     private final EnumSetting<Source> source = new EnumSetting<>("Source", "What gets built.", Source.PATTERN)
         .describe(Source.PATTERN, "The pattern painted below. It stands up as a wall or lies flat as a floor.")
-        .describe(Source.TEMPLATE, "A saved template. Files live in offlineclient/templates.");
+        .describe(Source.TEMPLATE, "A saved template. Files live in offlineclient/templates.")
+        .describe(Source.TEXT, "The text below written in blocks.");
     private final GridSetting pattern = new GridSetting("Pattern",
         "The cells to fill. The dotted middle cell goes where you aim and a pattern that would cut into the"
             + " block you look at moves out to rest on it. Click the size to change it.",
         "#####", "#####", "#####", "#####", "#####")
         .under(source, Source.PATTERN);
+    private final TextSetting text = new TextSetting("Text", "The words to build. Click to type it.", "HELLO")
+        .under(source, Source.TEXT);
+    private final NumberSetting letterHeight = new NumberSetting("Letter height",
+        "How many blocks tall each letter stands.", 7, 7, 35, 1, " blocks").min(7).under(source, Source.TEXT);
     private final EnumSetting<Orientation> orientation = new EnumSetting<>("Orientation",
-        "Whether the pattern stands up or lies flat.", Orientation.AUTO)
+        "Whether the pattern or the text stands up or lies flat.", Orientation.AUTO)
         .describe(Orientation.AUTO, "Stands up whilst you look ahead and lies flat once you look far up or down.")
         .describe(Orientation.UPRIGHT, "Always stands up like a wall facing you.")
         .describe(Orientation.FLAT, "Always lies flat like a floor with the top row on the far side.")
-        .under(source, Source.PATTERN);
+        .under(source, Source.PATTERN, Source.TEXT);
     private final NumberSetting tilt = new NumberSetting("Tilt",
-        "How far you look up or down before the pattern lies flat.", 40, 10, 80, 5, " degrees")
+        "How far you look up or down before the pattern or the text lies flat.", 40, 10, 80, 5, " degrees")
         .min(0).max(90).under(orientation, Orientation.AUTO);
     private final ChoiceListSetting template = new ChoiceListSetting("Template",
         "Which template to build. The first one picked wins.", BuildTemplate::names)
@@ -107,6 +114,10 @@ public final class AutoBuild extends Module {
     private final WorldWatch world = new WorldWatch();
     private BuildTemplate loaded;
 
+    // The text as a shape and the words and height it was written for.
+    private BuildTemplate written;
+    private String writtenFor;
+
     // A template that failed to load. It is read again only for a new pick or a switch on or a use press.
     private String unreadable;
 
@@ -129,11 +140,12 @@ public final class AutoBuild extends Module {
     private boolean ownsHold;
 
     public AutoBuild() {
-        super("AutoBuild", "Builds a painted pattern or a saved template where you aim.", Category.WORLD);
-        addSettings(source, pattern, orientation, tilt, template, savedBlocks, skip, distance, range,
-            blocksPerTick, delay, attempts, lineOfSight, strictOrder, faceTarget, swing, show);
+        super("AutoBuild", "Builds a painted pattern or a saved template or text where you aim.", Category.WORLD);
+        addSettings(source, pattern, text, letterHeight, orientation, tilt, template, savedBlocks, skip, distance,
+            range, blocksPerTick, delay, attempts, lineOfSight, strictOrder, faceTarget, swing, show);
         addSettings(style.settings());
-        searchTags("insta build", "template", "pattern", "grid", "wall", "floor", "structure");
+        searchTags("insta build", "template", "pattern", "grid", "wall", "floor", "structure", "text", "letters",
+            "words");
     }
 
     @Override
@@ -179,15 +191,32 @@ public final class AutoBuild extends Module {
     }
 
     private String shapeName() {
-        return source.is(Source.TEMPLATE) ? loaded.name() : PATTERN_NAME;
+        return switch (source.getValue()) {
+            case TEMPLATE -> loaded.name();
+            case TEXT -> writtenShape().name();
+            case PATTERN -> PATTERN_NAME;
+        };
     }
 
     // Why there is nothing to build. Null once there is.
     private String missingShape() {
-        if (source.is(Source.TEMPLATE)) {
-            return loadChosen() ? null : "Pick a template for AutoBuild first.";
+        return switch (source.getValue()) {
+            case TEMPLATE -> loadChosen() ? null : "Pick a template for AutoBuild first.";
+            case TEXT -> writtenShape() == null ? "Type some letters or digits for AutoBuild first." : null;
+            case PATTERN -> pattern.cellsOn().isEmpty()
+                ? "Paint at least one cell of the AutoBuild pattern first." : null;
+        };
+    }
+
+    // Written again only once the words or the height change. Null for text with nothing to draw.
+    private BuildTemplate writtenShape() {
+        String wanted = letterHeight.getInt() + " " + text.getValue();
+        if (!wanted.equals(writtenFor)) {
+            writtenFor = wanted;
+            written = BuildTemplate.of(text.getValue().trim(),
+                BlockLetters.cells(text.getValue(), letterHeight.getInt()));
         }
-        return pattern.cellsOn().isEmpty() ? "Paint at least one cell of the AutoBuild pattern first." : null;
+        return written;
     }
 
     // A fresh pick in the list swaps the template between builds.
@@ -285,7 +314,7 @@ public final class AutoBuild extends Module {
             return loaded.layOut(anchor, front);
         }
         boolean flat = liesFlat();
-        BuildTemplate painted = paintedShape();
+        BuildTemplate painted = source.is(Source.TEXT) ? writtenShape() : paintedShape();
         Map<BlockPos, Block> laid = painted.layOut(anchor, front, flat);
         if (onBlock) {
             laid = painted.layOut(rested(laid.keySet(), anchor, look.getDirection(), front, flat), front, flat);

@@ -59,6 +59,9 @@ public final class GuiTheme {
     public static final int HUD_TEXT = DEFAULT_TEXT;
     public static final int BAR_TRACK = 0xC0202020;
     public static final int SCROLL_TRACK = 0x50000000;
+    // A background brighter than this takes dark writing.
+    private static final float LIGHT_BACKGROUND = 0.55f;
+    private static final int DARK_TEXT = 0xFF10121A;
 
     private GuiTheme() {
     }
@@ -183,7 +186,12 @@ public final class GuiTheme {
     }
 
     public static int contrastText(int background) {
-        return ColorUtil.luminance(background) > 0.55f ? 0xFF10121A : text();
+        return contrastText(background, text());
+    }
+
+    // Dark writing on a light background and the given light writing on anything darker.
+    public static int contrastText(int background, int light) {
+        return ColorUtil.luminance(background) > LIGHT_BACKGROUND ? DARK_TEXT : light;
     }
 
     // A rounded button with its label in the middle. A button that is not live greys out.

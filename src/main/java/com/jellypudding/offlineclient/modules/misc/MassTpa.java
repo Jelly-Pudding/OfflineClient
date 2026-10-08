@@ -1,5 +1,6 @@
 package com.jellypudding.offlineclient.modules.misc;
 
+import com.jellypudding.offlineclient.config.NameStore;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.PacketReceiveEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
@@ -58,7 +59,7 @@ public final class MassTpa extends Module {
             setEnabled(false);
             return;
         }
-        String own = mc.getUser().getName();
+        String own = NameStore.ownName();
         for (PlayerInfo info : mc.getConnection().getOnlinePlayers()) {
             String name = info.getProfile().name();
             if (!name.equalsIgnoreCase(own)) {

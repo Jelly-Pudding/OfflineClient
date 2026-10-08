@@ -2,6 +2,8 @@ package com.jellypudding.offlineclient.util;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.modules.misc.NameProtect;
+import com.jellypudding.offlineclient.modules.misc.Timer;
+import net.minecraft.SharedConstants;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.tags.TagKey;
@@ -32,6 +34,7 @@ import net.minecraft.world.entity.monster.zombie.ZombieVillager;
 import net.minecraft.world.entity.npc.villager.AbstractVillager;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.Projectile;
+import net.minecraft.world.entity.projectile.throwableitemprojectile.ThrownEnderpearl;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.EntityHitResult;
@@ -40,6 +43,7 @@ import net.minecraft.world.phys.Vec3;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.function.Predicate;
 
 public final class EntityUtil {
@@ -105,6 +109,11 @@ public final class EntityUtil {
         return totalHealth(player) <= hearts * HEART;
     }
 
+    // Health in hearts for chat such as 3.5 hearts.
+    public static String hearts(float health) {
+        return String.format(Locale.ROOT, "%.1f", health / HEART) + " hearts";
+    }
+
     // The holder on EntityType itself is deprecated. The lookup goes via the registry.
     public static boolean typeIs(Entity entity, TagKey<EntityType<?>> tag) {
         return BuiltInRegistries.ENTITY_TYPE.wrapAsHolder(entity.getType()).is(tag);
@@ -163,6 +172,11 @@ public final class EntityUtil {
         return displayName(nameOf(player));
     }
 
+    // The name to show for any entity. A player goes through NameProtect.
+    public static String displayNameOf(Entity entity) {
+        return entity instanceof Player player ? displayNameOf(player) : entity.getName().getString();
+    }
+
     // The same for an account name remembered without the player.
     public static String displayName(String name) {
         NameProtect nameProtect = Modules.get(NameProtect.class);
@@ -194,10 +208,30 @@ public final class EntityUtil {
             && !isFriend(player) && !Modules.isBot(player);
     }
 
-    // Who threw or shot a projectile. The client only knows whilst the thrower is in sight.
+    // Someone else in view. You and the bodies only this client puts down never count.
+    public static boolean isOtherPlayer(Entity entity) {
+        return entity instanceof Player && entity != OfflineClient.MC.player && !Modules.isLocalBody(entity);
+    }
+
+    // Someone else in view whom AntiBot does not take for a fake player.
+    public static boolean isRealPlayer(Entity entity) {
+        return isOtherPlayer(entity) && !Modules.isBot(entity);
+    }
+
+    // Who threw or shot a projectile. Someone stands in for a thrower nobody can name.
     public static String throwerName(Projectile projectile) {
+        String name = knownThrower(projectile);
+        return name == null ? UNKNOWN_THROWER : name;
+    }
+
+    // The same or null. The client only fills the thrower in whilst they are in sight. A pearl
+    // can be named after that too.
+    public static String knownThrower(Projectile projectile) {
         Entity owner = projectile.getOwner();
-        return owner == null ? UNKNOWN_THROWER : owner.getName().getString();
+        if (owner != null) {
+            return owner.getName().getString();
+        }
+        return projectile instanceof ThrownEnderpearl pearl ? PearlOwners.INSTANCE.nameOf(pearl) : null;
     }
 
     // The broad families the filters in the render modules work with.
@@ -281,18 +315,29 @@ public final class EntityUtil {
             entity.getZ() - entity.zOld);
     }
 
-    // Degrees between where the player looks and the middle of the target.
+    // Your speed along the ground in blocks a second. It reads how far you moved on the last
+    // tick since a rider has no motion of their own. Timer fits more ticks into each second.
+    public static double ownSpeed() {
+        Player player = OfflineClient.MC.player;
+        return player == null ? 0
+            : velocityOf(player).horizontalDistance() * SharedConstants.TICKS_PER_SECOND * Timer.current();
+    }
+
+    // Degrees between where you look and the middle of the target.
     public static double lookAngleTo(Entity target) {
         Player player = OfflineClient.MC.player;
-        if (player == null) {
-            return 180;
-        }
-        Vec3 toTarget = target.getBoundingBox().getCenter().subtract(player.getEyePosition());
+        return player == null ? 180 : lookAngle(player, target);
+    }
+
+    // Degrees between where the viewer looks and the middle of the target. Another player
+    // looks where their head turns.
+    public static double lookAngle(Entity viewer, Entity target) {
+        Vec3 toTarget = target.getBoundingBox().getCenter().subtract(viewer.getEyePosition());
         double length = toTarget.length();
         if (length < 1.0E-4) {
             return 0;
         }
-        double cosine = Math.clamp(player.getLookAngle().dot(toTarget) / length, -1, 1);
+        double cosine = Math.clamp(viewer.getViewVector(1).dot(toTarget) / length, -1, 1);
         return Math.toDegrees(Math.acos(cosine));
     }
 

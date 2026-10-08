@@ -1,8 +1,8 @@
 package com.jellypudding.offlineclient.hud.elements;
 
 import com.jellypudding.offlineclient.OfflineClient;
-import com.jellypudding.offlineclient.hud.Backdrop;
 import com.jellypudding.offlineclient.hud.HudElement;
+import com.jellypudding.offlineclient.render.BodyPicture;
 import com.jellypudding.offlineclient.render.EntityPreview;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
@@ -27,14 +27,15 @@ public final class PlayerModelElement extends HudElement {
     private final BoolSetting follow = new BoolSetting("Model follows you",
         "The body turns as you turn. Off holds a fixed angle.", true);
     private final NumberSetting angle = new NumberSetting("Model angle",
-        "The angle it holds whilst it does not follow you.", 20, -180, 180, 5, " degrees")
+        "How far it turns from facing you whilst it does not follow you.", 20, -180, 180, 5, " degrees")
         .min(-180).max(180).unless(follow);
-    private final Backdrop backdrop = new Backdrop("Model", "the body", false);
+    private final NumberSetting pitch = new NumberSetting("Model pitch",
+        "How far it looks down whilst it does not follow you. Below nought it looks up.",
+        0, -90, 90, 5, " degrees").min(-90).max(90).unless(follow);
 
     public PlayerModelElement() {
         super("Player model", "Your own body drawn on the screen.", false, 4, 55);
-        add(follow, angle);
-        add(backdrop.settings());
+        add(follow, angle, pitch);
     }
 
     @Override
@@ -48,7 +49,6 @@ public final class PlayerModelElement extends HudElement {
         if (player == null) {
             return;
         }
-        backdrop.draw(context, 0, 0, width(font), height(font));
         LivingEntityRenderState state = EntityPreview.flatState(player,
             OfflineClient.MC.getDeltaTracker().getGameTimeDeltaPartialTick(true));
         if (state == null) {
@@ -56,11 +56,11 @@ public final class PlayerModelElement extends HudElement {
         }
         // Facing south faces the screen. The state already turns the head on top of the body.
         if (follow.isOn()) {
-            state.bodyRot += 180;
+            state.bodyRot += EntityPreview.FACING_YOU;
         } else {
-            state.bodyRot = angle.getFloat();
+            state.bodyRot = EntityPreview.FACING_YOU + angle.getFloat();
             state.yRot = 0;
-            state.xRot = 0;
+            state.xRot = pitch.getFloat();
         }
         // A body scaled by a potion has to be measured at its normal size.
         state.boundingBoxWidth /= state.scale;
@@ -70,7 +70,7 @@ public final class PlayerModelElement extends HudElement {
         // The box is given in screen pixels because this draw ignores the pose.
         int left = boxLeft();
         int top = boxTop();
-        EntityPreview.draw(context, state, boxHeight() * FIT,
+        EntityPreview.draw(context, BodyPicture.PlayerModel::new, state, boxHeight() * FIT,
             new Vector3f(0, state.boundingBoxHeight / 2 + FOOTING, 0),
             left, top, left + boxWidth(), top + boxHeight());
     }

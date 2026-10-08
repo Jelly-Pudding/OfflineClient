@@ -1,6 +1,6 @@
 package com.jellypudding.offlineclient.modules.player;
 
-import com.jellypudding.offlineclient.config.ContainerMarks;
+import com.jellypudding.offlineclient.config.BlockMarks;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.KeyPressEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
@@ -13,15 +13,17 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.FaceMode;
+import com.jellypudding.offlineclient.util.FrameLabels;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.JoinWatch;
 import com.jellypudding.offlineclient.util.Modules;
+import com.jellypudding.offlineclient.util.PlacedBox;
 import com.jellypudding.offlineclient.util.RotationPriority;
 import com.jellypudding.offlineclient.util.SwingMode;
 import com.jellypudding.offlineclient.util.WorldWatch;
-import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.core.BlockPos;
@@ -32,6 +34,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.vehicle.ContainerEntity;
 import net.minecraft.world.entity.vehicle.minecart.MinecartHopper;
 import net.minecraft.world.inventory.MenuType;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.block.AbstractFurnaceBlock;
 import net.minecraft.world.level.block.BarrelBlock;
@@ -63,6 +66,7 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.HashSet;
 import java.util.Set;
+import java.util.function.Predicate;
 
 // Opens the containers around you one at a time. ChestStealer's rules decide what
 // comes out and InventoryTweaks' dump filter decides what goes in.
@@ -84,6 +88,15 @@ public final class ChestAura extends Module {
         .describe(Mode.TAKE, "Takes out whatever ChestStealer would take.")
         .describe(Mode.STORE, "Puts in whatever the InventoryTweaks dump filter picks.")
         .describe(Mode.BOTH, "Leaves your junk behind and takes what ChestStealer wants.");
+    private final BoolSetting sortByFrames = new BoolSetting("Sort by frames",
+        "Puts each item only into containers whose item frames show it.", false)
+        .under(mode, Mode.STORE, Mode.BOTH);
+    private final BoolSetting wholeKinds = new BoolSetting("Whole kinds",
+        "A framed tool or armour piece stands for every item of its kind.", true)
+        .under(sortByFrames);
+    private final BoolSetting leftovers = new BoolSetting("Leftovers",
+        "Containers with no frame take whatever no framed container wanted.", false)
+        .under(sortByFrames);
     private final NumberSetting range = new NumberSetting("Range",
         "How far from your eyes a container may be.", 4.5, 1, 6, 0.1, " blocks");
     private final NumberSetting rest = new NumberSetting("Rest",
@@ -125,6 +138,7 @@ public final class ChestAura extends Module {
     private final Set<Target> later = new HashSet<>();
     private final WorldWatch world = new WorldWatch();
     private final JoinWatch joins = new JoinWatch();
+    private final FrameLabels labels = new FrameLabels();
 
     // The container clicked last. Null between visits.
     private Target visiting;
@@ -142,8 +156,7 @@ public final class ChestAura extends Module {
     private final Object marker = new Object() {
         @Subscribe
         private void onKeyPress(KeyPressEvent event) {
-            if (event.getAction() == InputConstants.PRESS && markKey.isBound()
-                && event.getKey() == markKey.getValue() && inGame() && mc.gui.screen() == null) {
+            if (event.presses(markKey) && inGame() && mc.gui.screen() == null) {
                 markAimed();
             }
         }
@@ -152,7 +165,8 @@ public final class ChestAura extends Module {
     public ChestAura() {
         super("ChestAura", "Opens the containers around you and empties or fills them.",
             Category.PLAYER);
-        addSettings(mode, range, rest, containers, vehicles, stopWhenFull, offOnLeave, face, markKey);
+        addSettings(mode, sortByFrames, wholeKinds, leftovers, range, rest, containers, vehicles, stopWhenFull,
+            offOnLeave, face, markKey);
         searchTags("chest aura", "loot", "steal", "stash", "container");
         watch(marker);
     }
@@ -200,7 +214,7 @@ public final class ChestAura extends Module {
             later.clear();
         }
         ChestStealer stealer = Modules.get(ChestStealer.class);
-        if (stealer == null || mc.player.isSpectator() || mc.player.isDeadOrDying()) {
+        if (stealer == null || mc.player.isSpectator() || mc.player.isDeadOrDying() || Modules.packing()) {
             endVisit();
             return;
         }
@@ -245,6 +259,10 @@ public final class ChestAura extends Module {
 
     // The nearest block or vehicle in reach that the stealer works and nobody else is using.
     private void open(ChestStealer stealer) {
+        if (sortsByFrames()) {
+            labels.read(pos -> mc.level.getBlockEntity(pos) instanceof BlockEntity entity && menuFor(entity) != null,
+                wholeKinds.isOn());
+        }
         BlockPos block = BlockUtil.nearestWithin(range.getValue(),
             pos -> mc.level.getBlockEntity(pos) instanceof BlockEntity entity && openable(entity, stealer));
         Entity vehicle = vehicles.isOn() ? nearestVehicle(stealer) : null;
@@ -292,7 +310,7 @@ public final class ChestAura extends Module {
             // The items follow the screen in a packet of their own. The menu counts from nought until then.
             if (ownScreen(stealer) && mc.player.containerMenu.getStateId() != 0) {
                 opened = true;
-                stealer.startVisit(!mode.is(Mode.TAKE));
+                stealer.startVisit(!mode.is(Mode.TAKE), takes(visiting));
             } else if (++waited > OPEN_TIMEOUT) {
                 finish(true);
                 return;
@@ -374,6 +392,18 @@ public final class ChestAura extends Module {
         waited = 0;
     }
 
+    private boolean sortsByFrames() {
+        return sortByFrames.isOn() && !mode.is(Mode.TAKE);
+    }
+
+    // With Sort by frames a container takes only what its frames show as read when it was picked.
+    private Predicate<ItemStack> takes(Target target) {
+        if (!sortsByFrames()) {
+            return _ -> true;
+        }
+        return labels.takes(target instanceof BlockTarget(BlockPos pos) ? pos : null, leftovers.isOn());
+    }
+
     private boolean skipped(Target target) {
         return done.contains(target) || later.contains(target);
     }
@@ -386,15 +416,19 @@ public final class ChestAura extends Module {
         }
         BlockPos pos = entity.getBlockPos();
         BlockPos other = BlockUtil.otherChestHalf(pos, entity.getBlockState());
-        if (skipped(new BlockTarget(pos)) || ContainerMarks.get().isMarked(pos)
-            || ContainerMarks.get().isMarked(other)) {
+        if (skipped(new BlockTarget(pos)) || BlockMarks.containers().isMarked(pos)
+            || BlockMarks.containers().isMarked(other)) {
             return false;
         }
-        if (entity instanceof ChestBlockEntity && (ChestBlock.isChestBlockedAt(mc.level, pos)
-            || other != null && ChestBlock.isChestBlockedAt(mc.level, other))) {
+        // A box set down to be packed or emptied belongs to whatever set it down.
+        if (PlacedBox.working(pos)) {
             return false;
         }
-        return !inUse(entity, other) && !watched(pos, other);
+        // Storing alone opens only containers that take something you carry.
+        if (mode.is(Mode.STORE) && !stealer.somethingToStore(takes(new BlockTarget(pos)))) {
+            return false;
+        }
+        return !BlockUtil.keptShut(entity) && !inUse(entity, other) && !watched(pos, other);
     }
 
     // The nearest cart or boat with a container in reach. One another player rides is theirs.
@@ -405,7 +439,7 @@ public final class ChestAura extends Module {
         for (Entity entity : mc.level.entitiesForRendering()) {
             if (!(entity instanceof ContainerEntity) || !entity.isAlive()
                 || skipped(new VehicleTarget(entity.getId())) || !stealer.handles(menuFor(entity))
-                || entity.hasPassenger(rider -> rider instanceof Player && rider != mc.player)) {
+                || entity.hasPassenger(EntityUtil::isOtherPlayer)) {
                 continue;
             }
             double distance = entity.getBoundingBox().distanceToSqr(eye);
@@ -466,7 +500,7 @@ public final class ChestAura extends Module {
     // Another player stands on the container or has their crosshair on it.
     private boolean watched(BlockPos pos, BlockPos other) {
         for (AbstractClientPlayer player : mc.level.players()) {
-            if (player == mc.player) {
+            if (!EntityUtil.isOtherPlayer(player)) {
                 continue;
             }
             if (standsOn(player, pos) || standsOn(player, other) || looksAt(player, pos, other)) {
@@ -504,7 +538,7 @@ public final class ChestAura extends Module {
         }
         BlockPos pos = entity.getBlockPos();
         BlockPos other = BlockUtil.otherChestHalf(pos, entity.getBlockState());
-        if (ContainerMarks.get().toggle(pos, other)) {
+        if (BlockMarks.containers().toggle(pos, other)) {
             ChatUtil.message("ChestAura leaves this container alone.");
         } else {
             ChatUtil.message("ChestAura may open this container again.");

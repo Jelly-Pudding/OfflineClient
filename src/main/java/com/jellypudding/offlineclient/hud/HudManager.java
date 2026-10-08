@@ -20,6 +20,9 @@ public final class HudManager {
     // edge on that spot and the last third keeps its right edge.
     private static final double FIRST_THIRD = 1 / 3.0;
     private static final double LAST_THIRD = 2 / 3.0;
+    // A piece whose middle sits right on a third is stored as a percent and read back a hair
+    // to one side. Within this of a third it keeps the middle either way.
+    private static final double ON_THE_LINE = 1e-9;
 
     public record Placement(HudElement element, int left, int top, int width, int height) {
     }
@@ -38,15 +41,33 @@ public final class HudManager {
         return Collections.unmodifiableList(elements);
     }
 
-    // Where each visible element lands on a screen of the given size.
-    public List<Placement> layout(Font font, int screenWidth, int screenHeight, boolean editing) {
+    // Where each switched on element lands in the editor on a screen of the given size.
+    public List<Placement> layout(Font font, int screenWidth, int screenHeight) {
         List<Placement> placed = new ArrayList<>();
         for (HudElement element : elements) {
-            if (editing ? element.isActive() : element.visible()) {
+            if (element.isActive()) {
                 placed.add(placement(element, font, screenWidth, screenHeight));
             }
         }
         return placed;
+    }
+
+    // Where each element the HUD pass draws sits. Whilst the overlay is hidden only the elements
+    // that stay count.
+    public List<Placement> shown(Font font, int screenWidth, int screenHeight, boolean hidden) {
+        List<Placement> placed = new ArrayList<>();
+        for (HudElement element : elements) {
+            if (drawn(element, hidden)) {
+                placed.add(placement(element, font, screenWidth, screenHeight));
+            }
+        }
+        return placed;
+    }
+
+    // An element hidden with the overlay is never asked whether it has anything to show. Asking
+    // keeps some of them working such as Statistics asking the server for numbers.
+    private static boolean drawn(HudElement element, boolean hidden) {
+        return (!hidden || element.staysWhenHidden()) && element.visible();
     }
 
     // An element with a home sits there until it is moved. Everything else sits where
@@ -60,9 +81,14 @@ public final class HudManager {
         }
         int width = scaledWidth(element, font);
         int height = scaledHeight(element, font);
-        int margin = element.touchesEdges() ? 0 : MARGIN;
+        int margin = margin(element);
         return new Placement(element, corner(element.xPercent(), element.placedWidth(), screenWidth, width, margin),
             corner(element.yPercent(), element.placedHeight(), screenHeight, height, margin), width, height);
+    }
+
+    // How near the screen edge an element may sit.
+    public static int margin(HudElement element) {
+        return element.touchesEdges() ? 0 : MARGIN;
     }
 
     // Where an element sits at home at its present size. It grows away from the screen
@@ -82,11 +108,11 @@ public final class HudManager {
     }
 
     private static int scaledWidth(HudElement element, Font font) {
-        return (int) Math.max(1, Math.round(element.width(font) * element.scaleX()));
+        return (int) Math.max(1, Math.round(element.shownWidth(font) * element.scaleX()));
     }
 
     private static int scaledHeight(HudElement element, Font font) {
-        return (int) Math.max(1, Math.round(element.height(font) * element.scaleY()));
+        return (int) Math.max(1, Math.round(element.shownHeight(font) * element.scaleY()));
     }
 
     // The top or left edge for an anchor given as a share of the screen. A pinned element reads
@@ -102,10 +128,10 @@ public final class HudManager {
 
     // Nought pins the near edge and one the far edge and a half the middle.
     static double align(double share) {
-        if (share < FIRST_THIRD) {
+        if (share < FIRST_THIRD - ON_THE_LINE) {
             return 0;
         }
-        return share > LAST_THIRD ? 1 : 0.5;
+        return share > LAST_THIRD + ON_THE_LINE ? 1 : 0.5;
     }
 
     // The share of the screen an element pinned at this edge would be stored as.
@@ -118,10 +144,11 @@ public final class HudManager {
     }
 
     // The overlay drawn along with the game's own HUD. Elements that sit on top of
-    // everything wait for renderOnTop.
-    public void render(GuiGraphicsExtractor context, Font font) {
+    // everything wait for renderOnTop. Whilst the overlay is hidden only the elements that
+    // stay are drawn.
+    public void render(GuiGraphicsExtractor context, Font font, boolean hidden) {
         for (HudElement element : elements) {
-            if (!element.drawsOnTop() && element.visible()) {
+            if (!element.drawsOnTop() && drawn(element, hidden)) {
                 draw(context, font, placement(element, font, context.guiWidth(), context.guiHeight()));
             }
         }
@@ -141,13 +168,16 @@ public final class HudManager {
         }
     }
 
+    // The background goes on before the stretch. Everything the element draws after it is
+    // stretched with the element.
     public void draw(GuiGraphicsExtractor context, Font font, Placement placement) {
         HudElement element = placement.element();
         element.place(placement.left(), placement.top(), placement.width(), placement.height());
         context.pose().pushMatrix();
         context.pose().translate(placement.left(), placement.top());
+        element.drawBackground(context);
         context.pose().scale((float) element.scaleX(), (float) element.scaleY());
-        element.render(context, font);
+        element.drawContent(context, font);
         context.pose().popMatrix();
     }
 

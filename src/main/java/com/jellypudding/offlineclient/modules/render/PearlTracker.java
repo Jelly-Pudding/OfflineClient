@@ -11,14 +11,13 @@ import com.jellypudding.offlineclient.render.BoxStyle;
 import com.jellypudding.offlineclient.render.DrawBatch;
 import com.jellypudding.offlineclient.render.WorldToScreen;
 import com.jellypudding.offlineclient.setting.BoolSetting;
+import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
-import com.jellypudding.offlineclient.util.BoundedMap;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.ProjectilePath;
 import com.jellypudding.offlineclient.util.ProjectilePath.Path;
 import com.jellypudding.offlineclient.util.ProjectileUtil;
 import com.jellypudding.offlineclient.util.RenderUtil;
-import com.jellypudding.offlineclient.util.WorldWatch;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.projectile.throwableitemprojectile.ThrownEnderpearl;
@@ -28,21 +27,19 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
-// The thrower is read as the pearl appears. The client forgets who threw it once the
-// thrower is out of sight. The box at the landing is the spot the thrower arrives at.
+// The box at the landing is the spot the thrower arrives at. PearlOwners keeps naming the
+// thrower once they are out of sight. A pearl resting in a stasis chamber is marked where it
+// waits.
 public final class PearlTracker extends Module {
 
-    // Who threw a pearl as it was first seen.
-    private record Thrower(String name, boolean own) {
-    }
-
     // A pearl in the air and the rest of its flight. The landing is null until one is found.
-    private record Flight(ThrownEnderpearl pearl, Thrower thrower, List<Vec3> points, Vec3 landing) {
+    private record Flight(ThrownEnderpearl pearl, String thrower, List<Vec3> points, Vec3 landing) {
     }
 
-    private static final int MAX_TRACKED = 256;
+    // A pearl a bubble column holds still and its owner.
+    private record Resting(ThrownEnderpearl pearl, String owner) {
+    }
 
     // Half a minute of flight. A pearl still up after that gets no landing.
     private static final int FLIGHT_TICKS = 600;
@@ -50,7 +47,11 @@ public final class PearlTracker extends Module {
     // The label floats this far over the top of the landing box.
     private static final double LABEL_LIFT = 0.3;
 
+    // A pearl is tiny. Its box is drawn this much wider all round.
+    private static final double RESTING_MARGIN = 0.2;
+
     private static final int NAME_COLOUR = 0xFFFFFFFF;
+    private static final float STASIS_HUE = 190;
 
     private final BoolSetting ownPearls = new BoolSetting("Own pearls",
         "Also track the pearls you throw.", false);
@@ -63,18 +64,25 @@ public final class PearlTracker extends Module {
         "Shows who threw each pearl and how far from you it lands.", true);
     private final NumberSetting scale = new NumberSetting("Scale",
         "Size of the name.", 1, 0.5, 3, 0.1, "").min(0.1).under(names);
+    private final BoolSetting stasis = new BoolSetting("Stasis pearls",
+        "Also marks pearls resting in stasis chambers with the name of their owner.", false);
+    private final ColorSetting stasisColour = new ColorSetting("Stasis colour",
+        "Colour of a pearl resting in a stasis chamber.", STASIS_HUE, false).under(stasis);
+    private final BoolSetting guess = new BoolSetting("Guess owners",
+        "Names a pearl after the player who joined or left the moment it came or went.", true);
+    private final BoolSetting remember = new BoolSetting("Remember owners",
+        "Remembers who owns each stasis pearl for your next visit.", true);
 
-    private final Map<Integer, Thrower> throwers = new BoundedMap<>(MAX_TRACKED);
     private final List<Flight> flights = new ArrayList<>();
-    private final WorldWatch world = new WorldWatch();
+    private final List<Resting> resting = new ArrayList<>();
 
     public PearlTracker() {
         super("PearlTracker", "Shows where other players' ender pearls will land and who threw them.",
             Category.RENDER);
         addSettings(ownPearls, ignoreFriends, path);
         addSettings(style.settings());
-        addSettings(names, scale);
-        searchTags("ender pearl", "pearl", "landing");
+        addSettings(names, scale, stasis, stasisColour, guess, remember);
+        searchTags("ender pearl", "pearl", "landing", "stasis", "pearl owner");
     }
 
     @Override
@@ -82,42 +90,49 @@ public final class PearlTracker extends Module {
         return count(flights.size());
     }
 
+    // Read by PearlOwners through util/Modules.
+    public boolean guessesOwners() {
+        return guess.isOn();
+    }
+
+    public boolean remembersOwners() {
+        return remember.isOn();
+    }
+
     @Override
     protected void onDisable() {
-        throwers.clear();
         flights.clear();
-        world.forget();
+        resting.clear();
     }
 
     @Subscribe
     private void onTick(TickEvent event) {
         flights.clear();
+        resting.clear();
         if (!inGame()) {
             return;
         }
-        // Entity ids start again in a new world.
-        if (world.changed()) {
-            throwers.clear();
-        }
         for (Entity entity : mc.level.entitiesForRendering()) {
-            if (!(entity instanceof ThrownEnderpearl pearl) || !pearl.isAlive()
-                || ProjectileUtil.inBubbles(pearl)) {
+            if (!(entity instanceof ThrownEnderpearl pearl) || !pearl.isAlive()) {
                 continue;
             }
-            Thrower thrower = throwers.computeIfAbsent(pearl.getId(), id -> throwerOf(pearl));
-            if (thrower.own() && !ownPearls.isOn()) {
+            if (pearl.getOwner() == mc.player && !ownPearls.isOn()) {
                 continue;
             }
-            if (ignoreFriends.isOn() && OfflineClient.INSTANCE.getFriendManager().isFriend(thrower.name())) {
+            String thrower = EntityUtil.throwerName(pearl);
+            if (ignoreFriends.isOn() && OfflineClient.INSTANCE.getFriendManager().isFriend(thrower)) {
+                continue;
+            }
+            // A bubble column carries a pearl off its usual path.
+            if (ProjectileUtil.inBubbles(pearl)) {
+                if (stasis.isOn() && ProjectileUtil.inStasis(pearl)) {
+                    resting.add(new Resting(pearl, thrower));
+                }
                 continue;
             }
             Path rest = ProjectilePath.of(pearl, FLIGHT_TICKS);
             flights.add(new Flight(pearl, thrower, rest.points(), landingOf(rest)));
         }
-    }
-
-    private Thrower throwerOf(ThrownEnderpearl pearl) {
-        return new Thrower(EntityUtil.throwerName(pearl), pearl.getOwner() == mc.player);
     }
 
     // A pearl that runs out of flight or falls out of the world never lands.
@@ -131,6 +146,10 @@ public final class PearlTracker extends Module {
     // The box the thrower stands in when the pearl brings them down.
     private static AABB arrival(Vec3 landing) {
         return EntityTypes.PLAYER.getDimensions().makeBoundingBox(landing);
+    }
+
+    private static AABB restingBox(ThrownEnderpearl pearl, float partialTicks) {
+        return EntityUtil.lerpedBox(pearl, partialTicks).inflate(RESTING_MARGIN);
     }
 
     @Subscribe
@@ -149,26 +168,36 @@ public final class PearlTracker extends Module {
                 style.draw(batch, arrival(flight.landing()), true);
             }
         }
+        for (Resting pearl : resting) {
+            style.draw(batch, restingBox(pearl.pearl(), event.getPartialTicks()), stasisColour.getColor(), true);
+        }
     }
 
     @Subscribe
     private void onRender2D(Render2DEvent event) {
-        if (!names.isOn() || flights.isEmpty() || !inGame() || !WorldToScreen.update()) {
+        if (!names.isOn() || flights.isEmpty() && resting.isEmpty() || !inGame() || !WorldToScreen.update()) {
             return;
         }
         for (Flight flight : flights) {
             Vec3 anchor = flight.landing() == null
                 ? flight.pearl().getPosition(event.getPartialTicks())
                 : flight.landing().add(0, arrival(flight.landing()).getYsize() + LABEL_LIFT, 0);
-            Vec3 screen = WorldToScreen.project(anchor);
-            if (screen == null) {
-                continue;
-            }
             String distance = flight.landing() == null ? ""
                 : " " + Math.round(mc.player.position().distanceTo(flight.landing())) + "m";
-            RenderUtil.label(event.getContext(), mc.font, screen.x, screen.y, scale.getFloat(),
-                List.of(EntityUtil.displayName(flight.thrower().name()), distance),
-                List.of(NAME_COLOUR, RenderUtil.MUTED_TEXT));
+            label(event, anchor, flight.thrower(), distance);
         }
+        for (Resting pearl : resting) {
+            AABB box = restingBox(pearl.pearl(), event.getPartialTicks());
+            label(event, box.getBottomCenter().add(0, box.getYsize() + LABEL_LIFT, 0), pearl.owner(), "");
+        }
+    }
+
+    private void label(Render2DEvent event, Vec3 anchor, String name, String detail) {
+        Vec3 screen = WorldToScreen.project(anchor);
+        if (screen == null) {
+            return;
+        }
+        RenderUtil.label(event.getContext(), mc.font, screen.x, screen.y, scale.getFloat(),
+            List.of(EntityUtil.displayName(name), detail), List.of(NAME_COLOUR, RenderUtil.MUTED_TEXT));
     }
 }

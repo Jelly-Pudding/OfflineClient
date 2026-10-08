@@ -2,6 +2,7 @@ package com.jellypudding.offlineclient.hud.elements;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.hud.HudElement;
+import com.jellypudding.offlineclient.hud.TextRow;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.util.KillTracker;
@@ -15,16 +16,14 @@ import java.util.Locale;
 // Your kills and deaths on this server. Each row lines up with the side the element is anchored to.
 public final class KillStatsElement extends HudElement {
 
-    private static final int LINE = 10;
-
     private final BoolSetting deaths = new BoolSetting("Show deaths",
         "Write how many times you have died.", true);
     private final BoolSetting ratio = new BoolSetting("Show kill ratio",
         "Write your kills for each death.", true);
     private final BoolSetting streaks = new BoolSetting("Show streaks",
         "Write your kills since you last died and the most you have managed.", true);
-    private final ColorSetting color = new ColorSetting("Kill stats colour",
-        "Colour of the row names. The numbers stay white.", 190, 0.15f, 0.85f, false);
+    private final ColorSetting color = labelColor("Kill stats colour",
+        "Colour of the row names. The numbers stay white.");
 
     public KillStatsElement() {
         super("Kill stats", "Your kills and deaths on this server this session as the client counts them.", false,
@@ -37,49 +36,43 @@ public final class KillStatsElement extends HudElement {
         return isActive() && OfflineClient.MC.player != null;
     }
 
-    private List<String> rows() {
+    private List<String> lines() {
         KillTracker tracker = KillTracker.INSTANCE;
-        List<String> rows = new ArrayList<>(5);
-        rows.add(row("Kills", String.valueOf(tracker.kills())));
+        List<String> lines = new ArrayList<>(5);
+        lines.add(line("Kills", String.valueOf(tracker.kills())));
         if (deaths.isOn()) {
-            rows.add(row("Deaths", String.valueOf(tracker.deaths())));
+            lines.add(line("Deaths", String.valueOf(tracker.deaths())));
         }
         if (ratio.isOn()) {
-            rows.add(row("K/D", String.format(Locale.ROOT, "%.2f", tracker.ratio())));
+            lines.add(line("K/D", String.format(Locale.ROOT, "%.2f", tracker.ratio())));
         }
         if (streaks.isOn()) {
-            rows.add(row("Streak", String.valueOf(tracker.streak())));
-            rows.add(row("Best streak", String.valueOf(tracker.bestStreak())));
+            lines.add(line("Streak", String.valueOf(tracker.streak())));
+            lines.add(line("Best streak", String.valueOf(tracker.bestStreak())));
         }
-        return rows;
+        return lines;
     }
 
-    private static String row(String name, String value) {
+    private static String line(String name, String value) {
         return name + " §f" + value;
+    }
+
+    private List<TextRow> rows(Font font) {
+        return TextRow.lines(font, lines(), color);
     }
 
     @Override
     public void render(GuiGraphicsExtractor context, Font font) {
-        int widest = width(font);
-        int y = 0;
-        for (String row : rows()) {
-            int x = (int) Math.round((widest - font.width(row)) * alignment());
-            context.text(font, row, x, y, color.getColor(), true);
-            y += LINE;
-        }
+        TextRow.draw(context, font, rows(font), alignment());
     }
 
     @Override
     public int width(Font font) {
-        int widest = 1;
-        for (String row : rows()) {
-            widest = Math.max(widest, font.width(row));
-        }
-        return widest;
+        return TextRow.widest(rows(font));
     }
 
     @Override
     public int height(Font font) {
-        return rows().size() * LINE;
+        return TextRow.height(font, lines().size());
     }
 }

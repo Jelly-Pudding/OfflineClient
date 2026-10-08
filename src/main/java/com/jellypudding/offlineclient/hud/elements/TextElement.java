@@ -1,73 +1,131 @@
 package com.jellypudding.offlineclient.hud.elements;
 
 import com.jellypudding.offlineclient.hud.HudElement;
-import com.jellypudding.offlineclient.setting.BoolSetting;
+import com.jellypudding.offlineclient.hud.RowCache;
+import com.jellypudding.offlineclient.hud.TextRow;
+import com.jellypudding.offlineclient.modules.misc.NameProtect;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.TextSetting;
 import com.jellypudding.offlineclient.util.LiveText;
+import com.jellypudding.offlineclient.util.Modules;
+import com.jellypudding.offlineclient.util.TextMarkup;
+import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.Style;
+import net.minecraft.network.chat.TextColor;
+import net.minecraft.util.ARGB;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
-// Any text you like with a handful of words swapped in for live values.
+// Any text you like with a handful of words swapped in for live values and colour codes read the
+// way holograms read them.
 public final class TextElement extends HudElement {
 
-    private static final int LINE_GAP = 1;
+    // How many custom texts the HUD offers.
+    public static final int COUNT = 3;
 
-    private final TextSetting text = new TextSetting("Text",
-        "What it says. Type \\n to start a new line. You can use " + LiveText.WORDS + ".",
-        "Hello {username}");
-    private final ColorSetting color = new ColorSetting("Text colour",
-        "Colour of the text.", 190, false);
-    private final BoolSetting shadow = new BoolSetting("Text shadow",
-        "Draw a shadow behind it.", true);
+    // Where the texts start out. The first sits at the top in the middle and each one after it
+    // a little lower.
+    private static final double START_X = 50;
+    private static final double START_Y = 4;
+    private static final double START_STEP = 6;
 
-    public TextElement() {
-        super("Custom text", "Any text you type. Words in braces such as {fps} turn into live values.",
-            false, 50, 4);
-        add(text, color, shadow);
+    private static final String GREETING = "Hello {username}";
+
+    private final TextSetting text;
+    private final ColorSetting color;
+    // The lines are measured and drawn several times a frame.
+    private final RowCache<Component> lines = new RowCache<>(this::build);
+
+    public TextElement(int number) {
+        super("Custom text " + number, "Any text you type. Words in braces such as {fps} turn into live values.",
+            false, START_X, START_Y + (number - 1) * START_STEP);
+        String name = getName();
+        text = new TextSetting(name + " text", "What it says. Type \\n to start a new line and & with a colour code"
+            + " such as &6 or &#ff8800 to colour what follows. You can use " + LiveText.WORDS + ".",
+            number == 1 ? GREETING : "");
+        color = new ColorSetting(name + " colour", "Colour of the words that no colour code changes.", 190, false);
+        add(text, color);
     }
 
+    // Live words that fill to nothing and colour codes or spaces alone leave nothing to show.
     @Override
     public boolean visible() {
-        return isActive() && !text.getValue().isBlank();
+        return isActive() && lines.get().stream().anyMatch(line -> !line.getString().isBlank());
     }
 
-    private List<String> lines() {
-        return LiveText.lines(text.getValue());
-    }
-
-    private static int widest(Font font, List<String> lines) {
-        int widest = 0;
-        for (String line : lines) {
-            widest = Math.max(widest, font.width(line));
+    // The live words are filled in after the codes are read. NameProtect then hides names in
+    // them as it does in chat.
+    private List<Component> build() {
+        NameProtect nameProtect = Modules.get(NameProtect.class);
+        List<Component> built = new ArrayList<>();
+        for (Component line : TextMarkup.lines(text.getValue(), LiveText::fill)) {
+            built.add(nameProtect == null ? line : nameProtect.filter(line));
         }
-        return widest;
+        return built;
+    }
+
+    // A rainbow runs down the lines.
+    private List<TextRow> rows(Font font) {
+        List<Component> filled = lines.get();
+        List<TextRow> rows = new ArrayList<>(filled.size());
+        for (int i = 0; i < filled.size(); i++) {
+            rows.add(rowOf(font, filled.get(i), color.rowColor(i)));
+        }
+        return rows;
+    }
+
+    // Each run of one style becomes a part. The font reads the bold and italic and other marks as
+    // codes in front of the words and a run without a colour of its own takes the given one.
+    private static TextRow rowOf(Font font, Component line, int color) {
+        List<String> parts = new ArrayList<>();
+        List<Integer> colors = new ArrayList<>();
+        line.visit((style, words) -> {
+            parts.add(marks(style) + words);
+            TextColor own = style.getColor();
+            colors.add(own == null ? color : ARGB.opaque(own.getValue()));
+            return Optional.empty();
+        }, Style.EMPTY);
+        return TextRow.of(font, parts, colors);
+    }
+
+    private static String marks(Style style) {
+        StringBuilder marks = new StringBuilder();
+        if (style.isBold()) {
+            marks.append(ChatFormatting.BOLD);
+        }
+        if (style.isItalic()) {
+            marks.append(ChatFormatting.ITALIC);
+        }
+        if (style.isUnderlined()) {
+            marks.append(ChatFormatting.UNDERLINE);
+        }
+        if (style.isStrikethrough()) {
+            marks.append(ChatFormatting.STRIKETHROUGH);
+        }
+        if (style.isObfuscated()) {
+            marks.append(ChatFormatting.OBFUSCATED);
+        }
+        return marks.toString();
     }
 
     // Each line lines up with the side of the screen the element is anchored to.
     @Override
     public void render(GuiGraphicsExtractor context, Font font) {
-        List<String> lines = lines();
-        int widest = widest(font, lines);
-        int y = 0;
-        for (String line : lines) {
-            int x = (int) Math.round((widest - font.width(line)) * alignment());
-            context.text(font, line, x, y, color.getColor(), shadow.isOn());
-            y += font.lineHeight + LINE_GAP;
-        }
+        TextRow.draw(context, font, rows(font), alignment());
     }
 
     @Override
     public int width(Font font) {
-        return Math.max(1, widest(font, lines()));
+        return TextRow.widest(rows(font));
     }
 
     @Override
     public int height(Font font) {
-        // Text made only of breaks splits into nothing and still takes a line.
-        int count = Math.max(1, lines().size());
-        return count * font.lineHeight + (count - 1) * LINE_GAP;
+        return TextRow.height(font, rows(font).size());
     }
 }

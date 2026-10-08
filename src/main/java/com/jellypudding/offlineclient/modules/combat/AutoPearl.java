@@ -1,5 +1,6 @@
 package com.jellypudding.offlineclient.modules.combat;
 
+import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.KeyPressEvent;
 import com.jellypudding.offlineclient.event.events.Render3DEvent;
@@ -12,32 +13,38 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
+import com.jellypudding.offlineclient.util.BoundedMap;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.DamageUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.Feeding;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.HotbarLoan;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.ProjectilePath;
 import com.jellypudding.offlineclient.util.ProjectilePath.Aim;
 import com.jellypudding.offlineclient.util.ProjectilePath.Path;
+import com.jellypudding.offlineclient.util.ProjectileUtil;
 import com.jellypudding.offlineclient.util.RotationManager;
+import com.jellypudding.offlineclient.util.SafeDrop;
 import com.jellypudding.offlineclient.util.SwingMode;
-import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.tags.FluidTags;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.throwableitemprojectile.ThrownEnderpearl;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Set;
+import java.util.function.ToDoubleFunction;
 
 // Every throw is flown first with the pearl's own maths. The server puts the thrower
 // where the pearl stood at the start of the tick it struck something.
@@ -52,14 +59,21 @@ public final class AutoPearl extends Module {
     // Ticks of flight followed before a throw counts as lost.
     private static final int FLIGHT_TICKS = 100;
 
-    // The escape tries this many headings and every pitch between the two in steps.
-    private static final int HEADINGS = 24;
-    private static final int HIGHEST_PITCH = -60;
-    private static final int LOWEST_PITCH = 80;
-    private static final int PITCH_STEP = 10;
+    // The escape tries headings this many degrees apart and every pitch between the two in steps.
+    private static final float HEADING_STEP = 15;
+    private static final float HIGHEST_PITCH = -60;
+    private static final float LOWEST_PITCH = 80;
+    private static final float PITCH_STEP = 10;
 
-    // How far under the landing a block that burns or pricks still counts.
-    private static final double GROUND_PROBE = 0.1;
+    // A chase tries every pitch along the bearing and then a finer net round the best of them.
+    private static final float COARSE_PITCH = 2;
+    private static final float FINE_YAW = 3;
+    private static final float FINE_YAW_STEP = 0.5f;
+    private static final float FINE_PITCH = 2;
+    private static final float FINE_PITCH_STEP = 0.25f;
+
+    // Enemy pearls already judged for a chase. Each is chased once.
+    private static final int MAX_JUDGED = 256;
 
     // Enemies this far off still count against a landing.
     private static final double ENEMY_SEARCH = 64;
@@ -79,7 +93,26 @@ public final class AutoPearl extends Module {
     // Ticks the landing stays drawn and a phase waits for the teleport.
     private static final int SHOW_TICKS = 40;
 
+    // Ticks to sit still after a fruit whilst its teleport lands.
+    private static final int FRUIT_SETTLE = 10;
+
     private record Throw(float yaw, float pitch, Vec3 landing) {
+    }
+
+    // Angles from one to another a step apart.
+    private record Sweep(float from, float to, float step) {
+
+        private static Sweep only(float angle) {
+            return new Sweep(angle, angle, 1);
+        }
+
+        private int steps() {
+            return Math.round((to - from) / step);
+        }
+
+        private float at(int index) {
+            return from + index * step;
+        }
     }
 
     private final BoolSetting escape = new BoolSetting("Escape",
@@ -95,6 +128,16 @@ public final class AutoPearl extends Module {
     private final NumberSetting safeDistance = new NumberSetting("Safe distance",
         "The landing has to be at least this far from every enemy.", 12, 2, 48, 1, " blocks")
         .under(escape);
+    private final BoolSetting chorus = new BoolSetting("Chorus fruit",
+        "Eats a chorus fruit to escape when no pearl will do.", true).under(escape);
+    private final BoolSetting counter = new BoolSetting("Counter pearl",
+        "Throws your own pearl to land where an enemy pearl will.", false);
+    private final NumberSetting counterRange = new NumberSetting("Counter range",
+        "How far away an enemy pearl may land and still be chased.", 32, 8, 64, 1, " blocks")
+        .min(1).under(counter);
+    private final NumberSetting landingSpread = new NumberSetting("Landing spread",
+        "How far from the enemy landing your own pearl may come down.", 3, 1, 12, 0.5, " blocks")
+        .min(0.5).under(counter);
     private final KeybindSetting phaseKey = new KeybindSetting("Phase key",
         "Press this whilst the module is on to pearl part way into the blocks beside your feet.",
         KeybindSetting.UNBOUND);
@@ -102,14 +145,16 @@ public final class AutoPearl extends Module {
         "Stops the game pushing you back out of those blocks until you walk away.", true)
         .under(phaseKey, phaseKey::isBound);
     private final BoolSetting fromInventory = new BoolSetting("Take from inventory",
-        "Borrows a pearl from the rest of your inventory when the hotbar has none.", true);
+        "Borrows a pearl or a chorus fruit from the rest of your inventory when the hotbar has none.", true);
     private final EnumSetting<SwingMode> swing = SwingMode.setting(SwingMode.BOTH);
     private final BoolSetting render = new BoolSetting("Show landing",
         "Draws where the last pearl will put you for two seconds.", true);
     private final BoxStyle style = new BoxStyle(BoxStyle.Shape.BOTH, 290).under(render);
 
     private final HotbarLoan loan = new HotbarLoan();
+    private final Feeding feeding = new Feeding();
     private final List<Player> enemies = new ArrayList<>();
+    private final Set<Integer> judged = Collections.newSetFromMap(new BoundedMap<>(MAX_JUDGED));
     private int searchTimer;
     private boolean phaseAsked;
     private Vec3 phaseSpot;
@@ -120,11 +165,12 @@ public final class AutoPearl extends Module {
     private String status;
 
     public AutoPearl() {
-        super("AutoPearl", "Throws ender pearls to escape a fight or to phase into a wall.", Category.COMBAT);
-        addSettings(escape, health, whenTrapped, enemyRange, safeDistance, phaseKey, holdPhase,
-            fromInventory, swing, render);
+        super("AutoPearl", "Throws ender pearls to escape a fight or chase an enemy or phase into a wall.",
+            Category.COMBAT);
+        addSettings(escape, health, whenTrapped, enemyRange, safeDistance, chorus, counter, counterRange,
+            landingSpread, phaseKey, holdPhase, fromInventory, swing, render);
         addSettings(style.settings());
-        searchTags("pearl", "escape", "phase", "clip");
+        searchTags("pearl", "escape", "phase", "clip", "chorus", "counter pearl", "chase");
     }
 
     @Override
@@ -137,6 +183,7 @@ public final class AutoPearl extends Module {
         searchTimer = 0;
         phaseAsked = false;
         forgetPhase();
+        judged.clear();
         landing = null;
         shownTicks = 0;
         status = null;
@@ -145,6 +192,7 @@ public final class AutoPearl extends Module {
     @Override
     protected void onDisable() {
         loan.giveBack();
+        feeding.stop();
         forgetPhase();
         landing = null;
     }
@@ -154,12 +202,17 @@ public final class AutoPearl extends Module {
         return isEnabled() && holdPhase.isOn() && phaseArrived;
     }
 
+    // True whilst a chorus fruit is going down. Other feeders keep their hands off the use key.
+    public boolean isBusy() {
+        return isEnabled() && feeding.isActive();
+    }
+
     @Subscribe
     private void onKeyPress(KeyPressEvent event) {
-        if (event.getAction() != InputConstants.PRESS || mc.gui.screen() != null || !inGame()) {
+        if (mc.gui.screen() != null || !inGame()) {
             return;
         }
-        if (phaseKey.isBound() && event.getKey() == phaseKey.getValue()) {
+        if (event.presses(phaseKey)) {
             phaseAsked = true;
         }
     }
@@ -167,7 +220,13 @@ public final class AutoPearl extends Module {
     @Subscribe
     private void onTick(TickEvent event) {
         status = null;
-        if (!inGame() || mc.player.isSpectator() || mc.player.isDeadOrDying()) {
+        if (!inGame() || mc.player.isSpectator()) {
+            phaseAsked = false;
+            forgetPhase();
+            return;
+        }
+        // A death or the pause whilst a fruit's teleport lands.
+        if (feeding.waiting()) {
             phaseAsked = false;
             forgetPhase();
             return;
@@ -175,6 +234,10 @@ public final class AutoPearl extends Module {
         searchTimer = Math.max(0, searchTimer - 1);
         shownTicks = Math.max(0, shownTicks - 1);
         watchPhase();
+        if (feeding.isActive()) {
+            keepEating();
+            return;
+        }
         if (phaseAsked) {
             phaseAsked = false;
             phase();
@@ -183,8 +246,12 @@ public final class AutoPearl extends Module {
         if (escape.isOn()) {
             escape();
         }
+        if (counter.isOn() && status == null && !feeding.isActive()) {
+            counter();
+        }
     }
 
+    // A pearl first. A pearl cooling down is waited for and the fruit only goes when no pearl will do.
     private void escape() {
         if (EntityUtil.nearestEnemy(enemyRange.getValue()) == null) {
             return;
@@ -194,27 +261,38 @@ public final class AutoPearl extends Module {
             return;
         }
         status = reason;
-        if (!pearlReady() || searchTimer > 0) {
-            return;
-        }
         if (pearlFlying()) {
             status = "(pearl flying)";
             return;
         }
-        searchTimer = SEARCH_GAP;
-        if (pearlKills()) {
+        if (searchTimer > 0 || pearlHand() != null && !pearlReady()) {
+            return;
+        }
+        if (pearlHand() == null) {
+            status = "(no pearls)";
+        } else if (pearlKills()) {
             status = "(too weak)";
+        } else if (throwEscape()) {
             return;
-        }
-        collectEnemies();
-        Throw best = bestEscape();
-        if (best == null) {
+        } else {
             status = "(no way out)";
-            return;
         }
-        if (throwPearl(best.yaw(), best.pitch())) {
-            show(best.landing());
+        if (chorus.isOn()) {
+            eatChorus();
         }
+    }
+
+    // The throw whose landing ends up furthest from the nearest enemy. False when none is safe.
+    private boolean throwEscape() {
+        searchTimer = SEARCH_GAP;
+        collectEnemies();
+        Throw best = search(new Sweep(0, 360 - HEADING_STEP, HEADING_STEP),
+            new Sweep(HIGHEST_PITCH, LOWEST_PITCH, PITCH_STEP), this::escapeScore);
+        if (best == null || !throwPearl(best.yaw(), best.pitch())) {
+            return false;
+        }
+        show(best.landing());
+        return true;
     }
 
     private String trigger() {
@@ -252,59 +330,135 @@ public final class AutoPearl extends Module {
         }
     }
 
-    // The throw whose landing ends up furthest from the nearest enemy.
-    private Throw bestEscape() {
+    // Further from the nearest enemy is better. A landing short of the safe distance is no escape.
+    private double escapeScore(Vec3 settled) {
+        double gap = Double.MAX_VALUE;
+        for (Player enemy : enemies) {
+            gap = Math.min(gap, enemy.position().distanceTo(settled));
+        }
+        return gap < safeDistance.getValue() ? Double.NEGATIVE_INFINITY : gap;
+    }
+
+    // The fruit can always be eaten and throws you somewhere close by at random.
+    private void eatChorus() {
+        if (Modules.feeding(this) || !InventoryUtil.inventoryFree()
+            || mc.player.getCooldowns().isOnCooldown(Items.CHORUS_FRUIT.getDefaultInstance())) {
+            return;
+        }
+        int slot = slotOf(Items.CHORUS_FRUIT);
+        if (slot == -1) {
+            return;
+        }
+        status = "(eating chorus)";
+        feeding.begin(slot);
+    }
+
+    private void keepEating() {
+        status = "(eating chorus)";
+        if (mc.gui.screen() != null || !mc.player.getInventory().getSelectedItem().is(Items.CHORUS_FRUIT)) {
+            feeding.stop();
+            return;
+        }
+        if (!feeding.tick()) {
+            feeding.finish(FRUIT_SETTLE, false);
+        }
+    }
+
+    // Chases the first enemy pearl in sight that lands within range. A pearl is judged once
+    // unless your own pearl was not ready for it.
+    private void counter() {
+        for (Entity entity : mc.level.entitiesForRendering()) {
+            if (!(entity instanceof ThrownEnderpearl pearl) || judged.contains(pearl.getId())) {
+                continue;
+            }
+            Vec3 target = enemyLanding(pearl);
+            if (target == null) {
+                judged.add(pearl.getId());
+                continue;
+            }
+            if (!pearlReady() || pearlFlying() || pearlKills()) {
+                return;
+            }
+            judged.add(pearl.getId());
+            Throw best = bestChase(target);
+            if (best == null) {
+                status = "(cannot follow)";
+                return;
+            }
+            if (throwPearl(best.yaw(), best.pitch())) {
+                show(best.landing());
+            }
+            return;
+        }
+    }
+
+    // Where an enemy pearl puts its thrower. Null for a pearl nobody need chase or one landing
+    // within the spread of where you stand. A thrower out of sight is judged by name.
+    private Vec3 enemyLanding(ThrownEnderpearl pearl) {
+        Entity owner = pearl.getOwner();
+        if (owner != null ? owner == mc.player || !EntityUtil.isEnemy(owner)
+            : !enemyName(EntityUtil.knownThrower(pearl))) {
+            return null;
+        }
+        if (ProjectileUtil.inBubbles(pearl)) {
+            return null;
+        }
+        Path flight = ProjectilePath.of(pearl, FLIGHT_TICKS);
+        if (flight == null || flight.type() != HitResult.Type.BLOCK) {
+            return null;
+        }
+        Vec3 spot = flight.lastStart();
+        double away = spot.distanceTo(mc.player.position());
+        return away > landingSpread.getValue() && away <= counterRange.getValue() ? spot : null;
+    }
+
+    private boolean enemyName(String name) {
+        return name != null && !name.equals(EntityUtil.nameOf(mc.player))
+            && !OfflineClient.INSTANCE.getFriendManager().isFriend(name);
+    }
+
+    // Every pitch along the bearing first and then a finer net round the nearest landing.
+    private Throw bestChase(Vec3 target) {
+        float bearing = RotationManager.yawTo(target);
+        ToDoubleFunction<Vec3> nearest = settled -> -settled.distanceTo(target);
+        Throw rough = search(Sweep.only(bearing), new Sweep(HIGHEST_PITCH, LOWEST_PITCH, COARSE_PITCH), nearest);
+        if (rough == null) {
+            return null;
+        }
+        double spread = landingSpread.getValue();
+        return search(new Sweep(bearing - FINE_YAW, bearing + FINE_YAW, FINE_YAW_STEP),
+            new Sweep(rough.pitch() - FINE_PITCH, rough.pitch() + FINE_PITCH, FINE_PITCH_STEP),
+            settled -> settled.distanceTo(target) <= spread ? -settled.distanceTo(target) : Double.NEGATIVE_INFINITY);
+    }
+
+    // The throw whose safe landing scores highest. Null when none lands safely or every landing
+    // is ruled out.
+    private Throw search(Sweep yaws, Sweep pitches, ToDoubleFunction<Vec3> score) {
         Throw best = null;
-        double bestGap = 0;
+        double bestScore = Double.NEGATIVE_INFINITY;
         Vec3 origin = mc.player.position();
-        for (int heading = 0; heading < HEADINGS; heading++) {
-            float yaw = heading * 360f / HEADINGS;
-            for (int pitch = HIGHEST_PITCH; pitch <= LOWEST_PITCH; pitch += PITCH_STEP) {
+        for (int y = 0; y <= yaws.steps(); y++) {
+            float yaw = yaws.at(y);
+            for (int p = 0; p <= pitches.steps(); p++) {
+                float pitch = RotationManager.clampPitch(pitches.at(p));
                 Path path = ProjectilePath.fly(mc.player, ProjectilePath.THROWABLE,
                     ProjectilePath.leaveHand(mc.player, ProjectilePath.THROWABLE, origin, yaw, pitch),
                     0, FLIGHT_TICKS);
                 if (path.type() != HitResult.Type.BLOCK) {
                     continue;
                 }
-                Vec3 spot = path.lastStart();
-                double gap = enemyGap(spot);
-                if (gap < safeDistance.getValue() || gap <= bestGap) {
+                Vec3 settled = SafeDrop.below(mc.player, path.lastStart());
+                if (settled == null) {
                     continue;
                 }
-                Vec3 settled = safeLanding(spot);
-                if (settled != null) {
+                double value = score.applyAsDouble(settled);
+                if (value > bestScore) {
+                    bestScore = value;
                     best = new Throw(yaw, pitch, settled);
-                    bestGap = gap;
                 }
             }
         }
         return best;
-    }
-
-    private double enemyGap(Vec3 spot) {
-        double nearest = Double.MAX_VALUE;
-        for (Player enemy : enemies) {
-            nearest = Math.min(nearest, enemy.position().distanceTo(spot));
-        }
-        return nearest;
-    }
-
-    // Where you come to rest after the teleport. Null when you would not fit there or the
-    // drop would hurt or the ground burns.
-    private Vec3 safeLanding(Vec3 spot) {
-        AABB box = mc.player.getBoundingBox().move(spot.subtract(mc.player.position()));
-        if (!mc.level.noCollision(mc.player, box)) {
-            return null;
-        }
-        Vec3 fall = Entity.collideBoundingBox(mc.player, new Vec3(0, -(DamageUtil.SAFE_FALL + 1), 0), box,
-            mc.level, List.of());
-        if (-fall.y > DamageUtil.SAFE_FALL) {
-            return null;
-        }
-        AABB landed = box.move(fall);
-        boolean burns = mc.level.getBlockStates(landed.expandTowards(0, -GROUND_PROBE, 0))
-            .anyMatch(state -> BlockUtil.harmful(state) || state.getFluidState().is(FluidTags.LAVA));
-        return burns ? null : spot.add(fall);
     }
 
     // Aims the first tick of flight at the edge or the corner of your block that leans
@@ -464,18 +618,18 @@ public final class AutoPearl extends Module {
         if (mc.player.getOffhandItem().is(Items.ENDER_PEARL)) {
             return InteractionHand.OFF_HAND;
         }
-        return pearlSlot() == -1 ? null : InteractionHand.MAIN_HAND;
+        return slotOf(Items.ENDER_PEARL) == -1 ? null : InteractionHand.MAIN_HAND;
     }
 
-    private int pearlSlot() {
+    private int slotOf(Item item) {
         int limit = fromInventory.isOn() ? InventoryUtil.WHOLE_INVENTORY : InventoryUtil.HOTBAR_SIZE;
-        return InventoryUtil.findSlot(Items.ENDER_PEARL, limit);
+        return InventoryUtil.findSlot(item, limit);
     }
 
     // The use packet carries the angle and the server throws along it.
     private boolean throwPearl(float yaw, float pitch) {
         InteractionHand hand = pearlHand();
-        if (hand == null || hand == InteractionHand.MAIN_HAND && !loan.select(pearlSlot())) {
+        if (hand == null || hand == InteractionHand.MAIN_HAND && !loan.select(slotOf(Items.ENDER_PEARL))) {
             return false;
         }
         boolean thrown = RotationManager.whileFacing(yaw, pitch,
@@ -492,10 +646,12 @@ public final class AutoPearl extends Module {
             >= EntityUtil.totalHealth(mc.player);
     }
 
-    // A pearl already in the air moves you again when it lands.
+    // A pearl already in the air moves you again when it lands. One of yours held in a stasis
+    // chamber waits for you.
     private static boolean pearlFlying() {
         for (Entity entity : mc.level.entitiesForRendering()) {
-            if (entity instanceof ThrownEnderpearl pearl && pearl.getOwner() == mc.player) {
+            if (entity instanceof ThrownEnderpearl pearl && pearl.getOwner() == mc.player
+                && !ProjectileUtil.inBubbles(pearl)) {
                 return true;
             }
         }

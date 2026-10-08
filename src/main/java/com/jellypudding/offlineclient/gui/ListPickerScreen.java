@@ -2,6 +2,7 @@ package com.jellypudding.offlineclient.gui;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.setting.CountedPickList;
+import com.jellypudding.offlineclient.setting.Defaults;
 import com.jellypudding.offlineclient.setting.PickList;
 import com.jellypudding.offlineclient.util.RenderUtil;
 import com.jellypudding.offlineclient.util.SearchRank;
@@ -23,10 +24,13 @@ import java.util.Map;
 // Two column picker for a list setting. Clicking an entry moves it across.
 // The left column holds what is on offer and the right what is picked. A list
 // with a count per entry shows it at the end of each picked row.
-public final class ListPickerScreen<T> extends Screen {
+public final class ListPickerScreen<T> extends Screen implements ClientScreen {
 
     private record Entry<T>(T value, String name, String label, String id, ItemStack icon) {
     }
+
+    // The buttons under the columns from left to right.
+    private enum Button { DONE, ADD, CLEAR, DEFAULTS }
 
     private static final int COL_WIDTH = 156;
     private static final int COL_GAP = 12;
@@ -64,12 +68,16 @@ public final class ListPickerScreen<T> extends Screen {
     private final ScrollBar leftBar = new ScrollBar();
     private final ScrollBar rightBar = new ScrollBar();
 
-    private final SearchField search = SearchField.sticky("type to search", this::refresh);
+    private final SearchField search = SearchField.sticky("type to search", this::searchChanged);
     private final TextInput textInput = new TextInput(this);
     private final TextField countField = new TextField();
     // The picked entry whose count is being typed. Null whilst none is.
     private T editing;
     private String tooltip;
+
+    // A bulk press that changed the list turns its button into undo until the next edit.
+    private Button undoing;
+    private Defaults.Change undo;
 
     public ListPickerScreen(Screen parent, PickList<T> setting) {
         super(Component.literal(setting.getName()));
@@ -100,6 +108,14 @@ public final class ListPickerScreen<T> extends Screen {
             setting.idOf(value), setting.icon(value));
         all.add(entry);
         byValue.put(value, entry);
+    }
+
+    // Add and clear act on what the search shows. Their undo goes once the search changes.
+    private void searchChanged() {
+        if (undoing == Button.ADD || undoing == Button.CLEAR) {
+            stopUndo();
+        }
+        refresh();
     }
 
     private void refresh() {
@@ -154,17 +170,10 @@ public final class ListPickerScreen<T> extends Screen {
         return width / 2 + COL_GAP / 2;
     }
 
-    // Three buttons centred under the columns.
-    private int doneX() {
-        return width / 2 - BUTTON_WIDTH / 2 - BUTTON_GAP - BUTTON_WIDTH;
-    }
-
-    private int addAllX() {
-        return width / 2 - BUTTON_WIDTH / 2;
-    }
-
-    private int clearX() {
-        return width / 2 + BUTTON_WIDTH / 2 + BUTTON_GAP;
+    // The buttons sit in a row centred under the columns.
+    private int buttonX(Button button) {
+        int row = Button.values().length * (BUTTON_WIDTH + BUTTON_GAP) - BUTTON_GAP;
+        return width / 2 - row / 2 + button.ordinal() * (BUTTON_WIDTH + BUTTON_GAP);
     }
 
     private int buttonY() {
@@ -174,6 +183,12 @@ public final class ListPickerScreen<T> extends Screen {
     @Override
     public boolean isPauseScreen() {
         return false;
+    }
+
+    // The search box always takes the keys.
+    @Override
+    public boolean isTyping() {
+        return true;
     }
 
     @Override
@@ -193,15 +208,14 @@ public final class ListPickerScreen<T> extends Screen {
         renderColumn(context, font, leftX(), "available", available, leftBar, mouseX, mouseY, false);
         renderColumn(context, font, rightX(), "chosen", chosen, rightBar, mouseX, mouseY, true);
 
-        boolean overDone = overButton(mouseX, mouseY, doneX());
-        boolean overAddAll = overButton(mouseX, mouseY, addAllX());
-        boolean overClear = overButton(mouseX, mouseY, clearX());
-        button(context, font, doneX(), "done", overDone, true);
-        // Adds what the search left in view. A narrowed list is picked in one go.
-        button(context, font, addAllX(), search.isEmpty() ? "add all" : "add shown", overAddAll,
-            !available.isEmpty());
-        button(context, font, clearX(), search.isEmpty() ? "clear all" : "clear shown", overClear,
-            !chosen.isEmpty());
+        for (Button button : Button.values()) {
+            boolean over = overButton(mouseX, mouseY, button);
+            GuiTheme.button(context, font, buttonX(button), buttonY(), BUTTON_WIDTH, BUTTON_HEIGHT,
+                label(button), over, live(button));
+            if (over && tip(button) != null) {
+                tooltip = tip(button);
+            }
+        }
 
         if (tooltip != null && !tooltip.isEmpty()) {
             RenderUtil.tooltip(context, font, List.of(tooltip), mouseX, mouseY, width, height,
@@ -209,13 +223,76 @@ public final class ListPickerScreen<T> extends Screen {
         }
     }
 
-    private boolean overButton(double mx, double my, int x) {
-        return SettingWidget.isOver(mx, my, x, buttonY(), BUTTON_WIDTH, BUTTON_HEIGHT);
+    private boolean overButton(double mx, double my, Button button) {
+        return SettingWidget.isOver(mx, my, buttonX(button), buttonY(), BUTTON_WIDTH, BUTTON_HEIGHT);
     }
 
-    private void button(GuiGraphicsExtractor context, Font font, int x, String label,
-                        boolean hovered, boolean live) {
-        GuiTheme.button(context, font, x, buttonY(), BUTTON_WIDTH, BUTTON_HEIGHT, label, hovered, live);
+    // Add and clear act on what the search left in view. A narrowed list is picked in one go.
+    private String label(Button button) {
+        if (button == undoing) {
+            return "undo";
+        }
+        return switch (button) {
+            case DONE -> "done";
+            case ADD -> search.isEmpty() ? "add all" : "add shown";
+            case CLEAR -> search.isEmpty() ? "clear all" : "clear shown";
+            case DEFAULTS -> "defaults";
+        };
+    }
+
+    private boolean live(Button button) {
+        return button == undoing || switch (button) {
+            case DONE -> true;
+            case ADD -> !available.isEmpty();
+            case CLEAR -> !chosen.isEmpty();
+            case DEFAULTS -> !setting.asSetting().isDefault();
+        };
+    }
+
+    // Done and the bulk buttons say what they do on their face.
+    private String tip(Button button) {
+        if (button == undoing) {
+            return "Brings back the list you had.";
+        }
+        return button == Button.DEFAULTS ? "Puts the list back to how it started." : null;
+    }
+
+    // Defaults saves every bulk press and can take it back. Only a press that changed the list
+    // turns into undo.
+    private void press(Button button) {
+        if (button == Button.DONE) {
+            onClose();
+            return;
+        }
+        if (button == undoing) {
+            Defaults.undo(undo);
+            stopUndo();
+        } else {
+            Defaults.Change change = switch (button) {
+                case ADD -> Defaults.record(setting.getName(), setting.asSetting(),
+                    () -> setting.addAll(available.stream().map(Entry::value).toList()));
+                case CLEAR -> Defaults.record(setting.getName(), setting.asSetting(), this::clearShown);
+                default -> Defaults.reset(setting.getName(), List.of(setting.asSetting()));
+            };
+            if (change != null) {
+                undoing = button;
+                undo = change;
+            }
+        }
+        refresh();
+    }
+
+    private void clearShown() {
+        if (search.isEmpty()) {
+            setting.clear();
+        } else {
+            chosen.forEach(entry -> setting.remove(entry.value()));
+        }
+    }
+
+    private void stopUndo() {
+        undoing = null;
+        undo = null;
     }
 
     private void renderColumn(GuiGraphicsExtractor context, Font font, int x, String header,
@@ -303,6 +380,7 @@ public final class ListPickerScreen<T> extends Screen {
     }
 
     private void startCount(T value) {
+        stopUndo();
         editing = value;
         countField.set(String.valueOf(counted.count(value)));
         countField.selectAll();
@@ -327,25 +405,11 @@ public final class ListPickerScreen<T> extends Screen {
         double my = event.y();
         commitCount();
 
-        if (overButton(mx, my, doneX())) {
-            onClose();
-            return true;
-        }
-        if (overButton(mx, my, addAllX())) {
-            setting.addAll(available.stream().map(Entry::value).toList());
-            OfflineClient.INSTANCE.getConfigManager().saveSoon();
-            refresh();
-            return true;
-        }
-        if (overButton(mx, my, clearX())) {
-            if (search.isEmpty()) {
-                setting.clear();
-            } else {
-                chosen.forEach(entry -> setting.remove(entry.value()));
+        for (Button button : Button.values()) {
+            if (overButton(mx, my, button)) {
+                press(button);
+                return true;
             }
-            OfflineClient.INSTANCE.getConfigManager().saveSoon();
-            refresh();
-            return true;
         }
         if (search.click(mx, my) != SearchField.Click.MISSED) {
             return true;
@@ -379,6 +443,7 @@ public final class ListPickerScreen<T> extends Screen {
                 startCount(entry.value());
                 return true;
             }
+            stopUndo();
             if (adding) {
                 setting.add(entry.value());
             } else {

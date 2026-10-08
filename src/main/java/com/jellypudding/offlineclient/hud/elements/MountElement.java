@@ -21,6 +21,14 @@ import java.util.Locale;
 // mount. Each row lines up with the side the element is anchored to.
 public final class MountElement extends HudElement {
 
+    // A fast horse that has lost a few hearts stands in whilst the editor is open and you ride
+    // nothing. Each figure carries roughly where it sits against wild horses.
+    private static final List<Mounts.Figure> SAMPLE = List.of(new Mounts.Figure(Mounts.Measure.HEALTH, "30", 1),
+        new Mounts.Figure(Mounts.Measure.SPEED, "12.0 m/s", 0.73f),
+        new Mounts.Figure(Mounts.Measure.JUMP, "4.1 m", 0.71f));
+    private static final float SAMPLE_HEALTH = 24;
+    private static final float SAMPLE_HEALTH_SHARE = 0.8f;
+
     private final BoolSetting health = new BoolSetting("Mount health",
         "Writes its health and the most it can have.", true);
     private final BoolSetting speed = new BoolSetting("Mount speed",
@@ -29,9 +37,8 @@ public final class MountElement extends HudElement {
         "Writes how high a full jump lifts it.", true);
     private final BoolSetting strength = new BoolSetting("Mount strength",
         "Writes a llama's strength. A stronger llama carries more.", true);
-    private final ColorSetting color = new ColorSetting("Mount colour",
-        "Colour of the row names. Each figure runs from red for the worst wild horse to green for the best.",
-        190, 0.15f, 0.85f, false);
+    private final ColorSetting color = labelColor("Mount colour",
+        "Colour of the row names. Each figure runs from red for the worst wild horse to green for the best.");
     private final BoolSetting placeholder = new BoolSetting("Mount placeholder",
         "Writes Not riding whilst you ride nothing.", false);
     private final ColorSetting placeholderColor = new ColorSetting("Mount placeholder colour",
@@ -57,17 +64,22 @@ public final class MountElement extends HudElement {
     }
 
     private List<TextRow> rows(Font font) {
-        List<TextRow> rows = new ArrayList<>(Mounts.Measure.values().length);
         LivingEntity mount = mount();
-        if (mount == null) {
-            if (placeholder.isOn() && OfflineClient.MC.player != null) {
-                rows.add(TextRow.of(font, List.of("Not riding"), List.of(placeholderColor.getColor())));
-            }
-            return rows;
+        if (mount != null) {
+            return rowsOf(font, Mounts.figures(mount), EntityUtil.totalHealth(mount), EntityUtil.healthShare(mount));
         }
-        for (Mounts.Figure figure : Mounts.figures(mount)) {
+        if (placeholder.isOn() && OfflineClient.MC.player != null) {
+            return List.of(TextRow.of(font, "Not riding", placeholderColor.getColor()));
+        }
+        return editing() ? rowsOf(font, SAMPLE, SAMPLE_HEALTH, SAMPLE_HEALTH_SHARE) : List.of();
+    }
+
+    // The figures whose switches are on with the mount's health now and its share of the most.
+    private List<TextRow> rowsOf(Font font, List<Mounts.Figure> figures, float healthNow, float healthShare) {
+        List<TextRow> rows = new ArrayList<>(figures.size());
+        for (Mounts.Figure figure : figures) {
             if (shows(figure.measure())) {
-                rows.add(rowOf(font, mount, figure));
+                rows.add(rowOf(font, figure, healthNow, healthShare, rows.size()));
             }
         }
         return rows;
@@ -92,16 +104,17 @@ public final class MountElement extends HudElement {
     }
 
     // Health now in the colour of how hurt the mount is and the most it can have in the
-    // colour of how that compares with wild horses.
-    private TextRow rowOf(Font font, LivingEntity mount, Mounts.Figure figure) {
+    // colour of how that compares with wild horses. A rainbow name colour runs down the rows.
+    private TextRow rowOf(Font font, Mounts.Figure figure, float healthNow, float healthShare, int row) {
         String label = labelOf(figure.measure()) + " ";
+        int name = color.rowColor(row);
         int tint = ColorUtil.redToGreen(figure.share());
         if (figure.measure() == Mounts.Measure.HEALTH) {
-            String now = String.format(Locale.ROOT, "%.0f", EntityUtil.totalHealth(mount));
+            String now = String.format(Locale.ROOT, "%.0f", healthNow);
             return TextRow.of(font, List.of(label, now, "/" + figure.value()),
-                List.of(color.getColor(), ColorUtil.health(EntityUtil.healthShare(mount)), tint));
+                List.of(name, ColorUtil.health(healthShare), tint));
         }
-        return TextRow.of(font, List.of(label, figure.value()), List.of(color.getColor(), tint));
+        return TextRow.of(font, List.of(label, figure.value()), List.of(name, tint));
     }
 
     @Override
@@ -116,6 +129,6 @@ public final class MountElement extends HudElement {
 
     @Override
     public int height(Font font) {
-        return Math.max(TextRow.LINE, rows(font).size() * TextRow.LINE);
+        return TextRow.height(font, rows(font).size());
     }
 }

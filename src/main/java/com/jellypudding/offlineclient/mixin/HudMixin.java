@@ -4,6 +4,7 @@ import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.events.Render2DEvent;
 import com.jellypudding.offlineclient.gui.HudEditorScreen;
 import com.jellypudding.offlineclient.hud.GamePart;
+import com.jellypudding.offlineclient.modules.misc.Conceal;
 import com.jellypudding.offlineclient.modules.misc.HudModule;
 import com.jellypudding.offlineclient.modules.render.Blur;
 import com.jellypudding.offlineclient.modules.render.ClearView;
@@ -41,11 +42,21 @@ public class HudMixin {
         }
     }
 
+    // Other modules draw nothing here whilst the debug screen is open. The HUD draws only the
+    // elements that stay and the debug text goes over them.
     @Inject(
         method = "extractTabList(Lnet/minecraft/client/gui/GuiGraphicsExtractor;Lnet/minecraft/client/DeltaTracker;)V",
         at = @At("HEAD"))
     private void onRenderHud(GuiGraphicsExtractor context, DeltaTracker tickCounter, CallbackInfo ci) {
+        // HUD covers draw at the end of the frame and stay. What they cover stays out of sight.
+        if (Conceal.hides(Conceal.Part.OVERLAY)) {
+            return;
+        }
         if (OfflineClient.MC.debugEntries.isOverlayVisible()) {
+            HudModule hud = Modules.active(HudModule.class);
+            if (hud != null) {
+                hud.renderOverlay(context);
+            }
             return;
         }
         float tickDelta = tickCounter.getGameTimeDeltaPartialTick(true);
@@ -85,7 +96,7 @@ public class HudMixin {
     private void onExtractSlot(GuiGraphicsExtractor context, int x, int y, DeltaTracker tickCounter,
                                Player player, ItemStack stack, int seed, CallbackInfo ci) {
         ItemHighlight highlight = Modules.get(ItemHighlight.class);
-        if (highlight == null) {
+        if (highlight == null || Conceal.hides(Conceal.Part.OVERLAY)) {
             return;
         }
         int color = highlight.hotbarColorFor(stack);

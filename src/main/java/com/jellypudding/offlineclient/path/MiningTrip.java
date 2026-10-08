@@ -55,6 +55,7 @@ public final class MiningTrip {
     private int miningTicks;
     private ItemEntity drop;
     private boolean collect;
+    private boolean ownTool;
     private boolean warned;
 
     private record Mined(BlockPos pos, int tick) {
@@ -77,6 +78,12 @@ public final class MiningTrip {
     // Walks over the items each mined block dropped before the next block is taken.
     public MiningTrip collect(boolean on) {
         collect = on;
+        return this;
+    }
+
+    // Mines with the tool the caller holds. AutoTool leaves the hand alone.
+    public MiningTrip ownTool(boolean on) {
+        ownTool = on;
         return this;
     }
 
@@ -141,7 +148,11 @@ public final class MiningTrip {
                 giveUp();
                 return true;
             }
-            BlockMiner.mine(target, rotate);
+            if (ownTool) {
+                BlockMiner.mineWithHeld(target, rotate);
+            } else {
+                BlockMiner.mine(target, rotate);
+            }
             return true;
         }
         miningTicks = 0;
@@ -181,13 +192,8 @@ public final class MiningTrip {
 
     // Breaking the block would let lava or water flow in or drop sand or gravel on the player.
     private static boolean unsafe(BlockPos pos) {
-        for (Direction side : Direction.values()) {
-            // A liquid below never flows up into the gap.
-            if (side != Direction.DOWN && !BlockUtil.state(pos.relative(side)).getFluidState().isEmpty()) {
-                return true;
-            }
-        }
-        return BlockUtil.state(pos.above()).getBlock() instanceof FallingBlock && fallsOnPlayer(pos);
+        return BlockUtil.holdsBackLiquid(pos)
+            || BlockUtil.state(pos.above()).getBlock() instanceof FallingBlock && fallsOnPlayer(pos);
     }
 
     // True when the gap and the open blocks below it reach down into the player.

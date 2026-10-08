@@ -7,8 +7,10 @@ import com.jellypudding.offlineclient.event.events.Render3DEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.modules.misc.Conceal;
 import com.jellypudding.offlineclient.render.BoxStyle;
 import com.jellypudding.offlineclient.render.DrawBatch;
+import com.jellypudding.offlineclient.render.HeightBand;
 import com.jellypudding.offlineclient.render.NearFade;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
@@ -16,12 +18,18 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
+import com.jellypudding.offlineclient.util.ChunkWindow;
 import com.jellypudding.offlineclient.util.ColorUtil;
+import com.jellypudding.offlineclient.util.OpenedContainers;
+import com.jellypudding.offlineclient.util.Villages;
 import com.jellypudding.offlineclient.util.WorldWatch;
-import com.mojang.blaze3d.platform.InputConstants;
+import com.jellypudding.offlineclient.worldgen.SeenBlocks;
+import com.jellypudding.offlineclient.worldgen.StructureChests;
+import it.unimi.dsi.fastutil.longs.Long2BooleanOpenHashMap;
 import net.minecraft.core.BlockPos;
-import net.minecraft.network.protocol.game.ServerboundUseItemOnPacket;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.ChestBlock;
 import net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity;
 import net.minecraft.world.level.block.entity.BarrelBlockEntity;
@@ -50,8 +58,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 
 public final class ChestEsp extends Module {
 
@@ -63,6 +69,9 @@ public final class ChestEsp extends Module {
 
     // One sixteenth of a block. Chest models sit this far in from the block edge.
     private static final double PIXEL = 1.0 / 16;
+    // A chest not yet judged natural or placed is looked at once in this many ticks. The chests
+    // take turns and no tick judges them all at once.
+    private static final int JUDGE_TICKS = 20;
 
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode", "How containers are marked.", Mode.BOX)
         .describe(Mode.BOX, "A box around each container.")
@@ -72,6 +81,9 @@ public final class ChestEsp extends Module {
         "Highlight chests.", true);
     private final ColorSetting chestColor = new ColorSetting("Chest colour",
         "Colour of chests.", 38, 1f, 1f, false).under(chests);
+    private final BoolSetting naturalChests = new BoolSetting("Natural chests",
+        "Also marks single chests that dungeons and villages and camps and trial chambers come with.", true)
+        .under(chests);
     private final BoolSetting trappedChests = new BoolSetting("Trapped chests",
         "Highlight trapped chests in their own colour.", true);
     private final ColorSetting trappedColor = new ColorSetting("Trapped chest colour",
@@ -132,6 +144,10 @@ public final class ChestEsp extends Module {
         "Also mark boats with a chest.", true);
     private final ColorSetting chestBoatColor = new ColorSetting("Chest boat colour",
         "Colour of chest boats.", 34, 0.65f, 0.85f, false).under(chestBoats);
+    private final BoolSetting buried = new BoolSetting("Buried",
+        "Marks chests and shulker boxes that cannot be opened in the colour below.", false);
+    private final ColorSetting buriedColor = new ColorSetting("Buried colour",
+        "Colour of containers that cannot be opened.", 0, 0f, 0.35f, false).under(buried);
     private final BoolSetting tracers = new BoolSetting("Tracers",
         "Draw a line from you to each container.", false);
     private final NearFade fade = new NearFade(6);
@@ -146,13 +162,17 @@ public final class ChestEsp extends Module {
         "Press to forget which containers you have opened.", KeybindSetting.UNBOUND);
     private final NumberSetting radius = new NumberSetting("Radius",
         "Chunk radius to scan around you.", 4, 1, 8, 1, " chunks");
+    private final HeightBand band = new HeightBand("containers");
 
     private final List<Target> targets = new ArrayList<>();
-    // Positions you have right clicked. Written from the network thread.
-    private final Set<BlockPos> opened = ConcurrentHashMap.newKeySet();
+    private final OpenedContainers opened = new OpenedContainers();
     // Glow colour by position for the block entity renderer mixin. Replaced whole each tick.
     private volatile Map<BlockPos, Integer> glows = Map.of();
     private final WorldWatch world = new WorldWatch();
+    // Whether each single chest looked at was put down by the world. A chest whose tests still
+    // wait for chunks has no entry yet.
+    private final Long2BooleanOpenHashMap naturalAt = new Long2BooleanOpenHashMap();
+    private int ticks;
 
     // The colour the block entity being drawn should glow in. Zero for none.
     private static int currentGlow;
@@ -161,15 +181,16 @@ public final class ChestEsp extends Module {
         super("ChestESP", "See containers through walls.", Category.RENDER);
         addSettings(mode);
         addSettings(style.settings());
-        addSettings(chests, chestColor, trappedChests, trappedColor, enderChests, enderColor,
+        addSettings(chests, chestColor, naturalChests, trappedChests, trappedColor, enderChests, enderColor,
             shulkers, shulkerColor, barrels, barrelColor,
             furnaces, furnaceColor, hoppers, hopperColor, dispensers, dispenserColor,
             droppers, dropperColor, crafters, crafterColor, brewingStands, brewingColor,
             bookshelves, bookshelfColor, pots, potColor,
             chestCarts, chestCartColor, hopperCarts, hopperCartColor, chestBoats, chestBoatColor,
-            tracers, fade.setting(), hideOpened, recolourOpened,
+            buried, buriedColor, tracers, fade.setting(), hideOpened, recolourOpened,
             openedColor, forgetKey, radius);
-        searchTags("storage esp", "container esp");
+        addSettings(band.settings());
+        searchTags("storage esp", "container esp", "buried chest", "dungeon chest");
     }
 
     @Override
@@ -181,6 +202,7 @@ public final class ChestEsp extends Module {
     protected void onDisable() {
         targets.clear();
         opened.clear();
+        naturalAt.clear();
         glows = Map.of();
     }
 
@@ -195,36 +217,21 @@ public final class ChestEsp extends Module {
 
     // Zero when the block entity there gets no glow.
     public int glowFor(BlockPos pos) {
-        if (!isEnabled() || !mode.is(Mode.GLOW)) {
+        if (!isEnabled() || !mode.is(Mode.GLOW) || Conceal.hides(Conceal.Part.WORLD)) {
             return 0;
         }
         return glows.getOrDefault(pos, 0);
     }
 
+    // Only the containers the settings mark count as opened.
     @Subscribe
     private void onPacketSend(PacketSendEvent event) {
-        if (event.getPacket() instanceof ServerboundUseItemOnPacket packet && mc.level != null) {
-            noteOpened(packet.hitResult().getBlockPos());
-        }
-    }
-
-    // Both halves of a double chest count as opened together.
-    private void noteOpened(BlockPos pos) {
-        BlockEntity blockEntity = mc.level.getBlockEntity(pos);
-        if (blockEntity == null || colorFor(blockEntity) == 0) {
-            return;
-        }
-        opened.add(pos);
-        BlockPos other = BlockUtil.otherChestHalf(pos, blockEntity.getBlockState());
-        if (other != null) {
-            opened.add(other);
-        }
+        opened.noteClick(event.getPacket(), blockEntity -> colorFor(blockEntity) != 0);
     }
 
     @Subscribe
     private void onKeyPress(KeyPressEvent event) {
-        if (event.getAction() == InputConstants.PRESS && mc.gui.screen() == null
-            && forgetKey.isBound() && event.getKey() == forgetKey.getValue()) {
+        if (event.presses(forgetKey) && mc.gui.screen() == null) {
             opened.clear();
         }
     }
@@ -237,7 +244,9 @@ public final class ChestEsp extends Module {
         }
         if (world.changed()) {
             opened.clear();
+            naturalAt.clear();
         }
+        ticks++;
         int r = radius.getInt();
         int centerX = mc.player.chunkPosition().x();
         int centerZ = mc.player.chunkPosition().z();
@@ -279,12 +288,18 @@ public final class ChestEsp extends Module {
                 continue;
             }
             BlockPos pos = blockEntity.getBlockPos();
+            if (!band.contains(pos.getY()) || !naturalChests.isOn() && natural(blockEntity)) {
+                continue;
+            }
             boolean wasOpened = opened.contains(pos);
             if (wasOpened && hideOpened.isOn()) {
                 continue;
             }
             if (wasOpened && recolourOpened.isOn()) {
                 color = openedColor.getColor();
+            }
+            if (buried.isOn() && BlockUtil.keptShut(blockEntity)) {
+                color = buriedColor.getColor();
             }
             boolean chestShape = blockEntity instanceof ChestBlockEntity
                 || blockEntity instanceof EnderChestBlockEntity;
@@ -306,10 +321,45 @@ public final class ChestEsp extends Module {
     private void collectVehicles() {
         for (Entity entity : mc.level.entitiesForRendering()) {
             int color = vehicleColorFor(entity);
-            if (color != 0) {
+            if (color != 0 && band.contains(entity.getY())) {
                 targets.add(new Target(null, entity.getBoundingBox(), color, false));
             }
         }
+    }
+
+    // True for a single chest a dungeon or village or camp or trial chamber put down. Only the
+    // Overworld builds them. A chest with chunks round it still missing counts as placed until
+    // its turn comes again. Only the village test needs the chunks a whole village spans.
+    private boolean natural(BlockEntity blockEntity) {
+        BlockPos pos = blockEntity.getBlockPos();
+        if (!(blockEntity instanceof ChestBlockEntity) || blockEntity instanceof TrappedChestBlockEntity
+            || BlockUtil.otherChestHalf(pos, blockEntity.getBlockState()) != null
+            || !mc.level.dimension().equals(Level.OVERWORLD)) {
+            return false;
+        }
+        long key = pos.asLong();
+        if (naturalAt.containsKey(key)) {
+            return naturalAt.get(key);
+        }
+        if (Math.floorMod(ticks + Long.hashCode(key), JUDGE_TICKS) != 0) {
+            return false;
+        }
+        ChunkWindow around = ChunkWindow.capture(pos, StructureChests.REACH_CHUNKS);
+        if (!around.complete()) {
+            return false;
+        }
+        SeenBlocks seen = around::get;
+        if (StructureChests.inDungeon(seen, pos) || StructureChests.inTrialChamber(seen, pos)
+            || StructureChests.atCamp(seen, pos)) {
+            naturalAt.put(key, true);
+            return true;
+        }
+        if (!Villages.arrived(pos)) {
+            return false;
+        }
+        boolean village = Villages.around(pos, state -> state.is(Blocks.BELL));
+        naturalAt.put(key, village);
+        return village;
     }
 
     // Zero for a vehicle the settings leave out.

@@ -6,11 +6,13 @@ import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
+import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.setting.ListMode;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.ExplosionUtil;
+import com.jellypudding.offlineclient.util.ItemUtil;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.InteractionHand;
@@ -18,16 +20,23 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.OwnableEntity;
+import net.minecraft.world.entity.decoration.ItemFrame;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.DecoratedPotBlock;
 import net.minecraft.world.level.block.RespawnAnchorBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public final class NoInteract extends Module {
@@ -80,13 +89,34 @@ public final class NoInteract extends Module {
     private final EnumSetting<Protect> pets = protect("Pets", "a tamed animal", Protect.HIT);
     private final EnumSetting<Protect> named = protect("Named", "anything wearing a name tag",
         Protect.NONE);
+    private final RegistryListSetting<Item> noDrop = new RegistryListSetting<>("No drop",
+        "Items you can never throw away by hand. Click to pick them.", BuiltInRegistries.ITEM,
+        keptByDefault());
+    private final BoolSetting intoFrames = new BoolSetting("Into frames",
+        "Also keeps those items out of item frames and pots.", true)
+        .under(noDrop, () -> noDrop.size() > 0);
+    private final KeybindSetting throwKey = new KeybindSetting("Throw key",
+        "Holding this key lets a protected item be thrown.", KeybindSetting.UNBOUND)
+        .under(noDrop, () -> noDrop.size() > 0);
 
     public NoInteract() {
-        super("NoInteract", "Stops clicks on the things you choose to protect.", Category.PLAYER);
+        super("NoInteract", "Stops clicks and throws on the things you choose to protect.", Category.PLAYER);
         addSettings(explosives, useBlocks, useBlocksMode, useHand, mineBlocks, mineBlocksMode,
             hitEntities, hitEntitiesMode, useEntities, useEntitiesMode, useEntityHand,
-            friends, babies, pets, named);
-        searchTags("no click", "protect", "anti bed");
+            friends, babies, pets, named, noDrop, intoFrames, throwKey);
+        searchTags("no click", "protect", "anti bed", "anti drop", "no throw");
+    }
+
+    // Diamond and netherite tools and weapons and other gear that is hard to replace. Every
+    // shulker box joins them whatever its colour.
+    private static List<Item> keptByDefault() {
+        List<Item> kept = new ArrayList<>(List.of(Items.DIAMOND_SWORD, Items.DIAMOND_PICKAXE,
+            Items.DIAMOND_AXE, Items.DIAMOND_SHOVEL, Items.DIAMOND_HOE, Items.DIAMOND_SPEAR,
+            Items.NETHERITE_SWORD, Items.NETHERITE_PICKAXE, Items.NETHERITE_AXE, Items.NETHERITE_SHOVEL,
+            Items.NETHERITE_HOE, Items.NETHERITE_SPEAR, Items.MACE, Items.TRIDENT, Items.BOW,
+            Items.CROSSBOW, Items.SHIELD, Items.ELYTRA, Items.TOTEM_OF_UNDYING));
+        BuiltInRegistries.ITEM.stream().filter(ItemUtil::isShulkerBox).forEach(kept::add);
+        return kept;
     }
 
     private static EnumSetting<Protect> protect(String name, String what, Protect defaultValue) {
@@ -144,14 +174,46 @@ public final class NoInteract extends Module {
             || mc.player.getOffhandItem().is(Items.GLOWSTONE);
     }
 
-    // Called from the game mode mixin for each hand that tries a block.
-    public boolean blocksUseWith(InteractionHand hand) {
-        return isEnabled() && covers(useHand.getValue(), hand);
+    // Called from the game mode mixin for each hand that tries a block. A protected item
+    // never goes into a pot.
+    public boolean blocksUseWith(InteractionHand hand, BlockPos pos) {
+        if (!isEnabled()) {
+            return false;
+        }
+        if (covers(useHand.getValue(), hand)) {
+            return true;
+        }
+        return intoFrames.isOn() && mc.level.getBlockState(pos).getBlock() instanceof DecoratedPotBlock
+            && keeps(mc.player.getItemInHand(hand));
     }
 
-    // Called from the game mode mixin for each hand that tries an entity.
-    public boolean blocksEntityUseWith(InteractionHand hand) {
-        return isEnabled() && covers(useEntityHand.getValue(), hand);
+    // Called from the game mode mixin for each hand that tries an entity. A protected item
+    // never goes into an empty item frame. A frame that holds something only turns it.
+    public boolean blocksEntityUseWith(InteractionHand hand, Entity target) {
+        if (!isEnabled()) {
+            return false;
+        }
+        if (covers(useEntityHand.getValue(), hand)) {
+            return true;
+        }
+        return intoFrames.isOn() && target instanceof ItemFrame frame && frame.getItem().isEmpty()
+            && keeps(mc.player.getItemInHand(hand));
+    }
+
+    // True when the stack may not be thrown away. Holding the throw key lets it go.
+    public boolean keeps(ItemStack stack) {
+        return isEnabled() && !stack.isEmpty() && noDrop.contains(stack.getItem()) && !throwKey.isHeld();
+    }
+
+    // True for a menu click that would throw a protected item out of a slot or drop it off the
+    // cursor outside the window.
+    public boolean refusesThrow(AbstractContainerMenu menu, int slot, ContainerInput kind) {
+        if (kind == ContainerInput.THROW) {
+            return slot >= 0 && slot < menu.slots.size() && keeps(menu.getSlot(slot).getItem());
+        }
+        boolean outside = slot == AbstractContainerMenu.SLOT_CLICKED_OUTSIDE
+            && (kind == ContainerInput.PICKUP || kind == ContainerInput.QUICK_MOVE);
+        return outside && keeps(menu.getCarried());
     }
 
     private static boolean covers(Hand chosen, InteractionHand hand) {

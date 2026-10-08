@@ -128,10 +128,12 @@ public final class ClickGuiScreen extends GuiScreenBase {
         panels.sort(Comparator.comparingInt(panel -> layers.getOrDefault(panel, 0)));
         layers.clear();
 
-        views.put(TabStrip.Tab.FRIENDS, new TabView(GuiSources.friends(), settings));
-        views.put(TabStrip.Tab.MACROS, new TabView(GuiSources.macros(), settings));
-        views.put(TabStrip.Tab.PROFILES,
-            new TabView(GuiSources.profiles(this::saveState, this::reopen), settings));
+        for (TabStrip.Tab tab : TabStrip.Tab.values()) {
+            TabView.Source source = GuiSources.of(tab, this::saveState, this::reopen);
+            if (source != null) {
+                views.put(tab, new TabView(source, settings));
+            }
+        }
         restoreTabState(gui);
         restoreSearch();
     }
@@ -498,15 +500,15 @@ public final class ClickGuiScreen extends GuiScreenBase {
         }
     }
 
-    // The overlay is drawn under this screen. Anything the GUI lays over it
-    // gets a solid backing rather than two lots of writing in one place.
+    // The overlay is drawn under this screen. Anything the GUI lays over it gets a solid
+    // backing rather than two lots of writing in one place. Whilst the overlay steps aside
+    // only the game's own bars and the elements that stay are drawn.
     private void coverOverlay() {
         HudModule hud = Modules.active(HudModule.class);
         if (hud == null || OfflineClient.MC.player == null) {
             return;
         }
-        for (Placement placed : hud.getManager().layout(OfflineClient.MC.font,
-            width, height, false)) {
+        for (Placement placed : hud.getManager().shown(OfflineClient.MC.font, width, height, hud.overlayHidden())) {
             covered.add(RenderUtil.scaled(placed.left(), placed.top(),
                 placed.left() + placed.width(), placed.top() + placed.height(), scale()));
         }

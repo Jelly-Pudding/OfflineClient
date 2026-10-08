@@ -22,6 +22,7 @@ import com.jellypudding.offlineclient.util.ItemUtil;
 import com.jellypudding.offlineclient.util.MenuClicks;
 import com.jellypudding.offlineclient.util.RotationPriority;
 import com.jellypudding.offlineclient.util.SwingMode;
+import com.jellypudding.offlineclient.util.Tally;
 import net.minecraft.client.gui.screens.inventory.MerchantScreen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -48,14 +49,20 @@ import java.util.Locale;
 import java.util.Set;
 
 // Rerolls a fresh librarian's book trade by breaking and replacing its
-// lectern until it offers a book from the wanted list.
+// lectern until it offers a book from the wanted list. Hire gives a jobless
+// villager a lectern first.
 public final class AutoLibrarian extends Module {
 
     private static final int VILLAGER_COLOR = 0xFF30E030;
     private static final int LECTERN_COLOR = 0xFF40C0FF;
     private static final int SPENT_COLOR = 0xFFE03030;
 
-    private enum Stage { FIND_VILLAGER, FIND_LECTERN, OPEN_TRADE, READ_TRADE, BREAK_LECTERN, PLACE_LECTERN }
+    private enum Stage { FIND_VILLAGER, FIND_LECTERN, OPEN_TRADE, READ_TRADE, BREAK_LECTERN, PLACE_LECTERN, WAIT_FOR_JOB }
+
+    // A lectern for a hire goes down this many blocks round the villager at most.
+    private static final int HIRE_REACH = 2;
+    // A villager that takes no job in this many ticks is passed over.
+    private static final int HIRE_TICKS = 600;
 
     public enum Update { OFF, REMOVE, PRICE }
 
@@ -77,6 +84,8 @@ public final class AutoLibrarian extends Module {
         .describe(Update.PRICE, "Lowers its price to this deal. The next villager has to beat it.");
     private final BoolSetting lockIn = new BoolSetting("Lock in",
         "Buys the book once and the villager keeps the trade. Needs emeralds and paper or a book.", false);
+    private final BoolSetting hire = new BoolSetting("Hire",
+        "Places a lectern by a jobless villager and waits for it to become a librarian.", false);
     private final NumberSetting range = new NumberSetting("Range",
         "How far the villager and its lectern may be.", 5, 1, 6, 0.1);
     private final NumberSetting spareUses = new NumberSetting("Spare uses",
@@ -92,10 +101,13 @@ public final class AutoLibrarian extends Module {
     private final InventoryUtil.HotbarLoan loan = new InventoryUtil.HotbarLoan();
     private final HeldKey sneakKey = new HeldKey(options -> options.keyShift);
     private int cooldown;
+    // True from choosing a jobless villager until it takes the lectern or is passed over.
+    private boolean hiring;
+    private int waited;
 
     public AutoLibrarian() {
         super("AutoLibrarian", "Rerolls a librarian until it sells a book you want.", Category.WORLD);
-        addSettings(wanted, maxPrice, updateBooks, lockIn, range, spareUses, faceTarget, swing);
+        addSettings(wanted, maxPrice, updateBooks, lockIn, hire, range, spareUses, faceTarget, swing);
         searchTags("villager trainer", "enchanted book", "lectern");
     }
 
@@ -114,7 +126,8 @@ public final class AutoLibrarian extends Module {
         return stage == null ? null : switch (stage) {
             case FIND_VILLAGER, FIND_LECTERN -> "searching";
             case OPEN_TRADE, READ_TRADE -> "checking";
-            case BREAK_LECTERN, PLACE_LECTERN -> "rerolling";
+            case BREAK_LECTERN, PLACE_LECTERN -> hiring ? "hiring" : "rerolling";
+            case WAIT_FOR_JOB -> "hiring";
         };
     }
 
@@ -125,6 +138,7 @@ public final class AutoLibrarian extends Module {
         lectern = null;
         spent.clear();
         cooldown = 0;
+        hiring = false;
     }
 
     @Override
@@ -155,19 +169,109 @@ public final class AutoLibrarian extends Module {
             case READ_TRADE -> readTrade();
             case BREAK_LECTERN -> breakLectern();
             case PLACE_LECTERN -> placeLectern();
+            case WAIT_FOR_JOB -> waitForJob();
         }
     }
 
     // A level one librarian that has not traded yet. Its trades can still change.
     private void findVillager() {
         Villager best = (Villager) EntityUtil.nearest(range.getValue(), this::trainable);
-        if (best == null) {
-            disable("No fresh librarian in reach."
-                + (spent.isEmpty() ? "" : " " + spent.size() + " nearby already traded."));
+        if (best != null) {
+            villager = best;
+            stage = Stage.FIND_LECTERN;
             return;
         }
-        villager = best;
-        stage = Stage.FIND_LECTERN;
+        Villager jobless = hire.isOn() ? (Villager) EntityUtil.nearest(range.getValue(), this::hireable) : null;
+        BlockPos spot = jobless == null ? null : lecternSpot(jobless);
+        if (spot != null) {
+            villager = jobless;
+            lectern = spot;
+            hiring = true;
+            stage = Stage.PLACE_LECTERN;
+            ChatUtil.message("§bAutoLibrarian §7puts a lectern down for a jobless villager.");
+            return;
+        }
+        if (jobless != null) {
+            disable("There is no room for a lectern on solid ground beside the jobless villager.");
+            return;
+        }
+        disable("No fresh librarian in reach." + whyNone());
+    }
+
+    // The villagers in reach that cannot be trained and why.
+    private String whyNone() {
+        Tally near = new Tally();
+        for (Entity entity : mc.level.entitiesForRendering()) {
+            if (entity instanceof Villager other && other.isAlive() && mc.player.distanceTo(other) <= range.getValue()) {
+                near.add(kindOf(other));
+            }
+        }
+        return near.isEmpty() ? "" : " Near you are " + near.words() + ".";
+    }
+
+    // A word for the villager that reads well with a count before it such as 2 nitwit villagers.
+    private static String kindOf(Villager other) {
+        Holder<VillagerProfession> job = other.getVillagerData().profession();
+        if (job.is(VillagerProfession.LIBRARIAN)) {
+            return "traded librarian";
+        }
+        if (other.isBaby()) {
+            return "young villager";
+        }
+        if (job.is(VillagerProfession.NONE)) {
+            return "jobless villager";
+        }
+        return job.unwrapKey().map(key -> ChatUtil.words(key.identifier()) + " villager").orElse("villager");
+    }
+
+    // A grown villager with no job that has not been tried yet. Nitwits never take one.
+    private boolean hireable(Entity entity) {
+        return entity instanceof Villager candidate && candidate.isAlive() && !candidate.isBaby()
+            && !spent.contains(candidate.getId())
+            && candidate.getVillagerData().profession().is(VillagerProfession.NONE);
+    }
+
+    // A free block beside the villager on solid ground that you can reach and place against.
+    // The one nearest the villager wins.
+    private BlockPos lecternSpot(Villager jobless) {
+        BlockPos feet = jobless.blockPosition();
+        BlockPos best = null;
+        double bestDistance = Double.MAX_VALUE;
+        for (BlockPos pos : BlockPos.betweenClosed(feet.offset(-HIRE_REACH, -1, -HIRE_REACH),
+            feet.offset(HIRE_REACH, 1, HIRE_REACH))) {
+            BlockPos floor = pos.below();
+            if (!BlockUtil.blockFits(pos) || !BlockUtil.state(floor).isFaceSturdy(mc.level, floor, Direction.UP)
+                || BlockUtil.distanceTo(pos) > range.getValue() || BlockUtil.findPlaceSupport(pos) == null) {
+                continue;
+            }
+            double distance = jobless.distanceToSqr(Vec3.atCenterOf(pos));
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                best = pos.immutable();
+            }
+        }
+        return best;
+    }
+
+    // The new librarian is trained like any other. One that takes no job is passed over.
+    private void waitForJob() {
+        if (!villager.isAlive()) {
+            hiring = false;
+            stage = Stage.FIND_VILLAGER;
+            return;
+        }
+        if (trainable(villager)) {
+            hiring = false;
+            ChatUtil.message("§bAutoLibrarian §7hired a librarian.");
+            stage = Stage.FIND_LECTERN;
+            return;
+        }
+        if (++waited >= HIRE_TICKS) {
+            hiring = false;
+            spent.add(villager.getId());
+            ChatUtil.message("§bAutoLibrarian §7that villager took no job. Looking for another.");
+            stage = Stage.FIND_VILLAGER;
+        }
     }
 
     private boolean trainable(Entity entity) {
@@ -346,7 +450,7 @@ public final class AutoLibrarian extends Module {
         }
         Direction side = BlockUtil.facingSide(lectern);
         faceTarget.getValue().face(BlockUtil.hitPoint(lectern, side), RotationPriority.MINE);
-        BlockMiner.mine(lectern, false, swing.getValue());
+        BlockMiner.mineWithHeld(lectern, false, swing.getValue());
     }
 
     private void placeLectern() {
@@ -356,18 +460,25 @@ public final class AutoLibrarian extends Module {
         if (BlockUtil.state(lectern).is(Blocks.LECTERN)) {
             sneakKey.letGo();
             loan.giveBack();
+            if (hiring) {
+                waited = 0;
+                stage = Stage.WAIT_FOR_JOB;
+                return;
+            }
             // The villager needs a moment to take the new job site up.
             cooldown = 20;
             stage = Stage.OPEN_TRADE;
             return;
         }
+        // A spot for a hire that something else fills is given up. Only a lectern is ever broken.
         if (!BlockUtil.isReplaceable(lectern)) {
-            stage = Stage.BREAK_LECTERN;
+            stage = hiring ? Stage.FIND_VILLAGER : Stage.BREAK_LECTERN;
+            hiring = false;
             return;
         }
         int slot = InventoryUtil.findSlot(Items.LECTERN, InventoryUtil.WHOLE_INVENTORY);
         if (slot == -1) {
-            disable("No lectern left to put back.");
+            disable(hiring ? "Carry a lectern to hire a villager." : "No lectern left to put back.");
             return;
         }
         Direction support = BlockUtil.findPlaceSupport(lectern);

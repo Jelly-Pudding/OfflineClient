@@ -3,7 +3,10 @@ package com.jellypudding.offlineclient.mixin;
 import com.jellypudding.offlineclient.modules.render.Blur;
 import com.jellypudding.offlineclient.modules.render.ItemEsp;
 import com.jellypudding.offlineclient.modules.render.NoHurtCam;
+import com.jellypudding.offlineclient.render.BodyRenderer;
 import com.jellypudding.offlineclient.util.Modules;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.render.pip.PictureInPictureRenderer;
 import net.minecraft.client.renderer.GameRenderer;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -11,8 +14,25 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+import java.util.ArrayList;
+import java.util.List;
+
 @Mixin(GameRenderer.class)
 public abstract class GameRendererMixin {
+
+    // Each body the client draws gets a picture beside the game's own. Two bodies in one frame
+    // would otherwise share the game's one entity picture.
+    @ModifyArg(method = "<init>(Lnet/minecraft/client/Minecraft;Lnet/minecraft/client/renderer/FirstPersonHandsAndItemsRenderer;"
+        + "Lnet/minecraft/client/resources/model/ModelManager;Lnet/minecraft/client/renderer/item/ItemModelResolver;)V",
+        at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/client/gui/render/GuiRenderer;<init>(Lnet/minecraft/client/renderer/state/gui/GuiRenderState;"
+                + "Lnet/minecraft/client/renderer/feature/FeatureRenderDispatcher;Ljava/util/List;)V"),
+        index = 2)
+    private List<PictureInPictureRenderer<?>> addBodyRenderers(List<PictureInPictureRenderer<?>> renderers) {
+        List<PictureInPictureRenderer<?>> all = new ArrayList<>(renderers);
+        all.addAll(BodyRenderer.forEveryBody(Minecraft.getInstance().getEntityRenderDispatcher()));
+        return all;
+    }
 
     // The whole hurt tilt is one call.
     @Inject(method = "bobHurt(Lnet/minecraft/client/renderer/state/level/CameraRenderState;Lcom/mojang/blaze3d/vertex/PoseStack;)V",

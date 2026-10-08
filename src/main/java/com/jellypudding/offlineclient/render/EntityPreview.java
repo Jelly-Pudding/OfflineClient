@@ -9,16 +9,24 @@ import net.minecraft.client.renderer.entity.state.LivingEntityRenderState;
 import net.minecraft.util.LightCoordsUtil;
 import net.minecraft.world.entity.LivingEntity;
 import org.joml.Quaternionf;
+import org.joml.Quaternionfc;
 import org.joml.Vector3f;
+
+import java.util.function.Function;
 
 // A slowly turning mob drawn inside a tooltip.
 public final class EntityPreview implements ClientTooltipComponent {
+
+    // A body turned this far faces out of the screen.
+    public static final float FACING_YOU = 180;
 
     private static final int WIDTH = 64;
     private static final int HEIGHT = 48;
     private static final int TOP_GAP = 4;
     private static final float SCALE = Math.max(WIDTH, HEIGHT) / 2f * 1.25f;
     private static final float TURN_PER_TICK = 3;
+    // A half turn in the plane of the screen stands the body upright.
+    private static final Quaternionfc UPRIGHT = new Quaternionf().rotateZ((float) Math.PI);
 
     // Shared. Every preview turns together and a fresh tooltip does not reset it.
     private static float spin;
@@ -52,7 +60,8 @@ public final class EntityPreview implements ClientTooltipComponent {
 
         int left = x + (tooltipWidth - WIDTH) / 2;
         int top = y + TOP_GAP;
-        draw(context, state, SCALE, new Vector3f(0, 0.1f, 0), left, top, left + WIDTH, top + HEIGHT);
+        draw(context, BodyPicture.TooltipMob::new, state, SCALE, new Vector3f(0, 0.1f, 0),
+            left, top, left + WIDTH, top + HEIGHT);
         spin += TURN_PER_TICK * OfflineClient.MC.getDeltaTracker().getGameTimeDeltaTicks();
     }
 
@@ -69,10 +78,12 @@ public final class EntityPreview implements ClientTooltipComponent {
         return state;
     }
 
-    // Draws the entity upright inside the box.
-    public static void draw(GuiGraphicsExtractor context, LivingEntityRenderState state, float scale,
-                            Vector3f offset, int left, int top, int right, int bottom) {
-        context.entity(state, scale, offset, new Quaternionf().rotateZ((float) Math.PI), null,
-            left, top, right, bottom);
+    // Draws the entity upright inside the box. Each kind of body has a picture of its own and
+    // two bodies of one kind cannot share a frame.
+    public static void draw(GuiGraphicsExtractor context, Function<BodyPicture.Scene, BodyPicture> kind,
+                            LivingEntityRenderState state, float scale, Vector3f offset,
+                            int left, int top, int right, int bottom) {
+        context.guiRenderState.addPicturesInPictureState(kind.apply(
+            new BodyPicture.Scene(state, offset, UPRIGHT, left, top, right, bottom, scale)));
     }
 }

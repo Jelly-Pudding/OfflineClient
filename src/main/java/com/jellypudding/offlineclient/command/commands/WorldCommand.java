@@ -15,9 +15,7 @@ import net.minecraft.SharedConstants;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.GlobalPos;
-import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.clock.WorldClocks;
 import net.minecraft.world.level.ChunkPos;
@@ -188,10 +186,8 @@ public final class WorldCommand extends Command {
     }
 
     private static Component markLink(String what) {
-        String command = OfflineClient.INSTANCE.getCommandManager().getPrefix() + "world " + MARK + " " + what;
-        return Component.literal("§8[§7waypoint§8]").withStyle(style -> style
-            .withClickEvent(new ClickEvent.RunCommand(command))
-            .withHoverEvent(new HoverEvent.ShowText(Component.literal("Click to save it as a waypoint"))));
+        return ChatUtil.commandLink("§8[§7waypoint§8]", "world " + MARK + " " + what,
+            "Click to save it as a waypoint");
     }
 
     // Whole numbers lose their point. Border edges sit on half blocks when the centre does.

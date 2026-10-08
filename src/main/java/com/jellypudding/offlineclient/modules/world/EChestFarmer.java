@@ -131,7 +131,7 @@ public final class EChestFarmer extends Module {
             return;
         }
         slots.select(slot);
-        BlockMiner.mine(target, rotate.isOn(), swing.getValue());
+        BlockMiner.mineWithHeld(target, rotate.isOn(), swing.getValue());
     }
 
     private void placeChest() {

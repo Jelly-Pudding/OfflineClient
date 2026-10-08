@@ -4,6 +4,7 @@ import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
+import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.client.telemetry.TelemetryEventSender;
 import net.minecraft.client.telemetry.TelemetryEventType;
@@ -16,13 +17,17 @@ public final class Privacy extends Module {
 
     private final BoolSetting logBlocked = new BoolSetting("Log blocked",
         "Writes each blocked report to the game log.", false);
+    private final BoolSetting unsignedChat = new BoolSetting("Unsigned chat",
+        "Sends your chat unsigned where the server allows it to keep it out of chat reports."
+            + " It starts from your next join.", true);
 
     private final AtomicInteger blocked = new AtomicInteger();
 
     public Privacy() {
-        super("Privacy", "Stops the game sending usage data to Mojang.", Category.MISC);
-        addSettings(logBlocked);
-        searchTags("telemetry", "block telemetry", "tracking", "analytics", "usage data", "mojang");
+        super("Privacy", "Stops usage data reaching Mojang and keeps your chat out of reports.", Category.MISC);
+        addSettings(logBlocked, unsignedChat);
+        searchTags("telemetry", "block telemetry", "tracking", "analytics", "usage data", "mojang",
+            "chat reports", "unsigned chat", "signed chat");
     }
 
     // The game sends its first report before the menu ever opens.
@@ -54,6 +59,19 @@ public final class Privacy extends Module {
                 sender.send(type, properties);
             }
         };
+    }
+
+    // Read by ClientPacketListenerMixin as the chat keys arrive after a join. True keeps the
+    // chat session from starting. A server that enforces signed chat would refuse every line.
+    public boolean keepsChatUnsigned(boolean enforced) {
+        if (!isEnabled() || !unsignedChat.isOn()) {
+            return false;
+        }
+        if (enforced) {
+            ChatUtil.message("§7This server only takes signed chat. Yours stays signed here.");
+            return false;
+        }
+        return true;
     }
 
     private void stopped(TelemetryEventType type) {

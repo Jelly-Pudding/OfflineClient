@@ -1,18 +1,24 @@
 package com.jellypudding.offlineclient.gui;
 
 import com.jellypudding.offlineclient.util.RenderUtil;
+import com.jellypudding.offlineclient.util.ServerInfo;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 
 import java.util.List;
 import java.util.function.IntFunction;
 
-// The pieces of a centred window screen. The ClickGUI window and the finds list are both
+// The pieces of a window screen. The ClickGUI window and the list windows and the map are all
 // built from them and look alike.
 final class WindowParts {
 
     static final int TITLE_HEIGHT = 22;
-    static final int FOOT_HEIGHT = 18;
+    // Room either side of the title bar text and between the name and what follows it.
+    static final int TITLE_INSET = 10;
+    static final int TITLE_GAP = 4;
+    // Tall enough for two lines of text.
+    static final int FOOT_HEIGHT = 28;
+    private static final int FOOT_LINES = 2;
     static final int SIDEBAR_WIDTH = 108;
     static final int MARGIN = 6;
 
@@ -59,7 +65,23 @@ final class WindowParts {
         return GuiTheme.textY(y, TITLE_HEIGHT - 2);
     }
 
-    // The bar along the foot of a window with one line of text in it.
+    // The name in the accent colour with what the window shows after it and a tally at the right end.
+    static void title(GuiGraphicsExtractor context, Font font, int x, int y, int w, String name, String under,
+                      String right) {
+        int textY = titleY(y);
+        context.text(font, name, x + TITLE_INSET, textY, GuiTheme.accentText(), false);
+        context.text(font, under, x + TITLE_INSET + font.width(name) + TITLE_GAP, textY, GuiTheme.textFaint(), false);
+        context.text(font, right, x + w - TITLE_INSET - font.width(right), textY, GuiTheme.textDim(), false);
+    }
+
+    // The server a window is about.
+    static String place() {
+        String address = ServerInfo.address();
+        return address == null ? "single player" : address;
+    }
+
+    // The bar along the foot of a window. Its text wraps onto a second line and only the
+    // last line is trimmed. A single line sits in the middle.
     static void footer(GuiGraphicsExtractor context, Font font, int x, int y, int w, int h,
                        String text, int color) {
         int left = x + 1;
@@ -68,8 +90,16 @@ final class WindowParts {
             GuiTheme.bgHeader(), false, true);
         context.fill(left, top, left + w - 2, top + 1, GuiTheme.edge());
         context.guiRenderState.up();
-        context.text(font, SettingWidget.trimEnd(font, text, w - 20), left + 9,
-            GuiTheme.textY(top + 1, FOOT_HEIGHT), color, false);
+        int room = w - 20;
+        int pitch = font.lineHeight + 1;
+        List<String> lines = RenderUtil.wrap(font, text, room);
+        int shown = Math.min(lines.size(), FOOT_LINES);
+        int lineY = GuiTheme.textY(top + 1, FOOT_HEIGHT - (shown - 1) * pitch);
+        for (int i = 0; i < shown; i++) {
+            String line = i < shown - 1 ? lines.get(i) : String.join(" ", lines.subList(i, lines.size()));
+            context.text(font, SettingWidget.trimEnd(font, line, room), left + 9, lineY, color, false);
+            lineY += pitch;
+        }
     }
 
     // Tabs down the side of a window with a tally on each. The chosen one is tinted with a

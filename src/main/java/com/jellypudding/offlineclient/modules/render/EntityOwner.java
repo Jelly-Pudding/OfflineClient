@@ -13,6 +13,7 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.RenderUtil;
+import com.jellypudding.offlineclient.util.Web;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.world.entity.Entity;
@@ -22,12 +23,6 @@ import net.minecraft.world.entity.OwnableEntity;
 import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.phys.Vec3;
 
-import java.io.IOException;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -40,7 +35,6 @@ public final class EntityOwner extends Module {
     }
 
     private static final String SESSION_SERVER = "https://sessionserver.mojang.com/session/minecraft/profile/";
-    private static final HttpClient HTTP = HttpClient.newHttpClient();
 
     // Names fetched for owners who are not online. An empty name is a lookup in flight.
     private final Map<UUID, String> names = new ConcurrentHashMap<>();
@@ -106,17 +100,10 @@ public final class EntityOwner extends Module {
 
     private String ownerOf(Entity entity) {
         if (entity instanceof Projectile projectile) {
-            if (!projectiles.isOn()) {
+            if (!projectiles.isOn() || projectile.getOwner() == mc.player && !self.isOn()) {
                 return null;
             }
-            Entity owner = projectile.getOwner();
-            if (owner == null) {
-                return null;
-            }
-            if (owner == mc.player && !self.isOn()) {
-                return null;
-            }
-            return owner.getName().getString();
+            return EntityUtil.knownThrower(projectile);
         }
         if (entity instanceof OwnableEntity ownable) {
             if (!pets.isOn()) {
@@ -160,7 +147,7 @@ public final class EntityOwner extends Module {
             return known.isEmpty() ? uuid.toString().substring(0, 8) : known;
         }
         names.put(uuid, "");
-        Thread.ofVirtual().name("offlineclient owner lookup").start(() -> {
+        Web.later("owner lookup", () -> {
             String name = fetchName(uuid);
             if (name != null) {
                 names.put(uuid, name);
@@ -170,19 +157,14 @@ public final class EntityOwner extends Module {
     }
 
     private static String fetchName(UUID uuid) {
-        try {
-            HttpRequest request = HttpRequest.newBuilder(URI.create(SESSION_SERVER
-                + uuid.toString().replace("-", ""))).timeout(Duration.ofSeconds(10)).GET().build();
-            HttpResponse<String> response = HTTP.send(request, HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() != 200) {
-                return null;
-            }
-            JsonObject json = JsonParser.parseString(response.body()).getAsJsonObject();
-            return json.has("name") ? json.get("name").getAsString() : null;
-        } catch (IOException | RuntimeException e) {
+        Web.Page page = Web.get(SESSION_SERVER + uuid.toString().replace("-", ""));
+        if (!page.ok()) {
             return null;
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+        }
+        try {
+            JsonObject json = JsonParser.parseString(page.body()).getAsJsonObject();
+            return json.has("name") ? json.get("name").getAsString() : null;
+        } catch (RuntimeException e) {
             return null;
         }
     }

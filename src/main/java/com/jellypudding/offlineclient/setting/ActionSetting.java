@@ -2,6 +2,7 @@ package com.jellypudding.offlineclient.setting;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonNull;
+import com.jellypudding.offlineclient.util.Flash;
 
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
@@ -12,10 +13,6 @@ public final class ActionSetting extends Setting<Void> {
 
     // How long a confirmed action waits for its second press.
     public static final int CONFIRM_SECONDS = 3;
-
-    // How long what the action said stays on its row. The last part eases back.
-    private static final long RESULT_MS = 2500;
-    private static final long FADE_MS = 400;
 
     // Hands back a few words about what happened or null when there is nothing to say. The
     // row shows them and a command naming the row writes them in chat unless the action
@@ -54,7 +51,7 @@ public final class ActionSetting extends Setting<Void> {
         }
         armedUntil = 0;
         result = action.get();
-        resultUntil = now + RESULT_MS;
+        resultUntil = now + Flash.SHOWN_MS;
         return true;
     }
 
@@ -75,7 +72,7 @@ public final class ActionSetting extends Setting<Void> {
 
     // One whilst the result is fresh and down to nought as it goes.
     public float resultStrength() {
-        return Math.clamp((resultUntil - System.currentTimeMillis()) / (float) FADE_MS, 0f, 1f);
+        return Flash.strength(resultUntil);
     }
 
     @Override

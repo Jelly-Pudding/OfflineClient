@@ -7,6 +7,7 @@ import com.jellypudding.offlineclient.setting.PickList;
 import com.jellypudding.offlineclient.setting.Setting;
 import com.jellypudding.offlineclient.setting.TextSetting;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.KeyUse;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
@@ -141,6 +142,7 @@ public final class SettingHost implements SettingWidget.Host {
         int bind = KeybindSetting.fromPress(key);
         if (bind != KeybindSetting.UNKNOWN) {
             bindingTarget.setValue(bind);
+            KeyUse.warn(bind, bindingTarget);
         }
         bindingTarget = null;
         OfflineClient.INSTANCE.getConfigManager().saveSoon();

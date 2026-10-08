@@ -5,6 +5,7 @@ import com.jellypudding.offlineclient.command.Command;
 import com.jellypudding.offlineclient.command.CommandManager;
 import com.jellypudding.offlineclient.config.DataFiles;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.ClientLines;
 import com.mojang.blaze3d.platform.NativeImage;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientPacketListener;
@@ -59,7 +60,8 @@ public final class SaveSkinCommand extends Command {
         // skins. The skin manager hands the skin over once it has arrived.
         mc.getSkinManager().get(info.getProfile()).thenAcceptAsync(skin -> skin.ifPresentOrElse(
             found -> saveAll(name, found),
-            () -> ChatUtil.error("The skin of " + name + " could not be downloaded. The log says why.")), mc);
+            () -> ChatUtil.error("The skin of " + name + " could not be downloaded. The log says why.")),
+            ClientLines::inChatLater);
     }
 
     private static void saveAll(String name, PlayerSkin skin) {

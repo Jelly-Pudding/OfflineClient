@@ -31,7 +31,6 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.EnderChestBlock;
-import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 
 import java.util.ArrayList;
@@ -145,6 +144,16 @@ public final class ChestLink extends Module {
         release();
     }
 
+    // The menu of the ender chest kept open whether its screen shows or not. Null whilst none is.
+    public AbstractContainerMenu keptEnderChest() {
+        AbstractContainerScreen<?> shown = kept;
+        if (shown == null || !InventoryUtil.isEnderChest(shown) || !inGame()
+            || mc.player.containerMenu.containerId != keptId) {
+            return null;
+        }
+        return shown.getMenu();
+    }
+
     // Shows the kept ender chest. False whilst none is kept. A command runs inside the chat
     // screen which shuts itself straight after and the screen has to wait for that.
     public boolean showEnderChest() {
@@ -228,17 +237,13 @@ public final class ChestLink extends Module {
     // How much further you may walk before the link lets go. The server measures from the eyes to
     // the nearest point of the block. A double chest closes once either half is out of reach.
     private double blocksLeft() {
-        double reach = mc.player.blockInteractionRange() + CONTAINER_SLACK - LET_GO;
-        double far = distanceTo(keptAt);
+        double reach = BlockUtil.serverBlockReach() + CONTAINER_SLACK - LET_GO;
+        double far = BlockUtil.reachTo(keptAt);
         BlockPos other = BlockUtil.otherChestHalf(keptAt, BlockUtil.state(keptAt));
         if (other != null) {
-            far = Math.max(far, distanceTo(other));
+            far = Math.max(far, BlockUtil.reachTo(other));
         }
         return reach - far;
-    }
-
-    private double distanceTo(BlockPos pos) {
-        return Math.sqrt(new AABB(pos).distanceToSqr(mc.player.getEyePosition()));
     }
 
     // Keys reach here before the screen does. Taking one keeps the screen from closing the menu.
@@ -260,7 +265,7 @@ public final class ChestLink extends Module {
             }
             return;
         }
-        if (saveKey.isBound() && key == saveKey.getValue() && kept != null) {
+        if (event.presses(saveKey) && kept != null) {
             saveItems();
             return;
         }
@@ -325,7 +330,7 @@ public final class ChestLink extends Module {
     }
 
     // The listed items go in first and with Everything on the rest after them. Each stack goes by one
-    // shift click and only while the container has room for it. A hopper or dropper would pass
+    // shift click and only whilst the container has room for it. A hopper or dropper would pass
     // your gear on and gets none.
     private void saveItems() {
         AbstractContainerMenu menu = mc.player.containerMenu;

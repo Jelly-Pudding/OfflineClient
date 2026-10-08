@@ -82,7 +82,7 @@ public final class ModuleRow {
         if (!expanded) {
             return GuiTheme.ROW_HEIGHT;
         }
-        return GuiTheme.ROW_HEIGHT + SettingWidget.blockHeight(module);
+        return GuiTheme.ROW_HEIGHT + SettingWidget.blockHeight(SettingBlock.of(module));
     }
 
     public void place(int x, int y, int width, int mouseX, int mouseY, boolean hoverAllowed) {
@@ -115,10 +115,16 @@ public final class ModuleRow {
             context.fill(x, y, x + 2, y + h, GuiTheme.accent());
         }
         int textColor = on ? GuiTheme.text() : GuiTheme.textDim();
+        SettingBlock block = SettingBlock.of(module);
+        int changed = ResetMarks.shownChanges(block);
         // A fixed inset keeps the name still when the accent bar appears.
-        int nameRoom = w - 7 - ARROW_ZONE - STAR_ZONE;
-        context.text(font, SettingWidget.trimEnd(font, module.getName(), nameRoom), x + 7,
-            GuiTheme.textY(y, h), textColor, false);
+        int nameRoom = w - 7 - ARROW_ZONE - STAR_ZONE - (changed > 0 ? ResetMarks.MARK_ROOM : 0);
+        String name = SettingWidget.trimEnd(font, module.getName(), nameRoom);
+        int textY = GuiTheme.textY(y, h);
+        context.text(font, name, x + 7, textY, textColor, false);
+        if (changed > 0) {
+            ResetMarks.headerMark(context, x + 7 + font.width(name), textY);
+        }
         RenderUtil.chevron(context, x + w - 11, y + (h - RenderUtil.CHEVRON_HEIGHT) / 2, !expanded,
             hovered ? GuiTheme.text() : GuiTheme.textFaint());
 
@@ -133,12 +139,12 @@ public final class ModuleRow {
         if (hovered) {
             host.setTooltip(overStar
                 ? (starred ? "Take out of your favourites" : "Add to your favourites")
-                : module.getDescription());
+                : ResetMarks.withCount(module.getDescription(), changed));
         }
 
         if (expanded) {
             drag.follow(SettingWidget.blockContentX(x), SettingWidget.blockContentWidth(w), mouseX, mouseY);
-            SettingWidget.renderBlock(context, font, module, x, y + GuiTheme.ROW_HEIGHT, w,
+            SettingWidget.renderBlock(context, font, block, x, y + GuiTheme.ROW_HEIGHT, w,
                 mouseX, mouseY, hoverActive, host);
         }
     }
@@ -191,7 +197,7 @@ public final class ModuleRow {
         if (!expanded) {
             return false;
         }
-        return SettingWidget.clickBlock(module, mx, my, x, y + GuiTheme.ROW_HEIGHT, w,
+        return SettingWidget.clickBlock(SettingBlock.of(module), mx, my, x, y + GuiTheme.ROW_HEIGHT, w,
             button, host, drag);
     }
 

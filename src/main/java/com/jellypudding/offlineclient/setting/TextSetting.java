@@ -14,6 +14,12 @@ public final class TextSetting extends Setting<String> {
         return value.isBlank();
     }
 
+    // Quoted the way it was typed. Nothing at all reads as empty.
+    @Override
+    public String defaultText() {
+        return defaultValue.isEmpty() ? "empty" : "\"" + defaultValue + "\"";
+    }
+
     @Override
     public JsonElement toJson() {
         return new JsonPrimitive(value);

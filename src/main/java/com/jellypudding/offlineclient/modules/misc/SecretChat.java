@@ -1,13 +1,24 @@
 package com.jellypudding.offlineclient.modules.misc;
 
+import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.config.WaypointStore;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.ChatSendEvent;
+import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.setting.ActionSetting;
+import com.jellypudding.offlineclient.setting.BoolSetting;
+import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.TextSetting;
+import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.ServerInfo;
+import com.jellypudding.offlineclient.util.Tally;
 import net.minecraft.ChatFormatting;
 import net.minecraft.SharedConstants;
+import net.minecraft.client.multiplayer.PlayerInfo;
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
@@ -24,7 +35,11 @@ import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
 import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -61,21 +76,56 @@ public final class SecretChat extends Module {
 
     private static final SecureRandom RANDOM = new SecureRandom();
 
+    // Starts the text of a ping that asks for a spot back. Chat never carries a control
+    // character and nothing a player types can pass for a ping.
+    private static final char ASKS = '\u0001';
+    // Starts a spot sent back. Nobody answers it.
+    private static final char ANSWERS = '\u0002';
+    // A dimension id with a namespace and a path. A ping naming anything else is read as text.
+    private static final Pattern DIMENSION = Pattern.compile("[a-z0-9_.-]+:[a-z0-9_./-]+");
+
+    // A server kicks a player who whispers too fast. One a second stays far below that.
+    private static final int WHISPER_GAP_TICKS = SharedConstants.TICKS_PER_SECOND;
+
     private final TextSetting sharedKey = new TextSetting("Key",
         "The secret you share with your friends. Anyone who has it can read every secret line. Click to type it.",
         "");
     private final TextSetting prefix = new TextSetting("Prefix",
         "Messages starting with this go out encrypted without it. When it is empty every message goes out encrypted.",
         "#");
+    private final ActionSetting pingFriends = new ActionSetting("Ping friends",
+        "Whispers your spot in code to every friend online.", () -> ping(null));
+    private final NumberSetting pingEvery = new NumberSetting("Ping every",
+        "Seconds between pings sent on their own. Nought sends none.", 0, 0, 300, 10, " seconds").min(0);
+    private final BoolSetting answerPings = new BoolSetting("Answer pings",
+        "Whispers your own spot back to a friend who pings you.", false);
+    private final BoolSetting markPings = new BoolSetting("Mark pings",
+        "Keeps a waypoint named after each friend where they last pinged from.", true);
 
     private String stretchedFrom;
     private SecretKey stretched;
 
+    // The players waiting for a whisper of your spot. True asks them for theirs back.
+    private final Map<String, Boolean> outgoing = new LinkedHashMap<>();
+    private int whisperGap;
+    private int sinceAutoPing;
+
     public SecretChat() {
         super("SecretChat", "Chats in public in a code that anyone with your key can read.",
             Category.MISC);
-        addSettings(sharedKey, prefix);
-        searchTags("encrypt", "encryption", "private chat", "cipher");
+        addSettings(sharedKey, prefix, pingFriends, pingEvery, answerPings, markPings);
+        searchTags("encrypt", "encryption", "private chat", "cipher", "ping", "share location");
+    }
+
+    @Override
+    protected void onEnable() {
+        sinceAutoPing = 0;
+    }
+
+    @Override
+    protected void onDisable() {
+        outgoing.clear();
+        whisperGap = 0;
     }
 
     // Runs after commands and the coordinate guard. A line either of them took is left alone.
@@ -127,7 +177,7 @@ public final class SecretChat extends Module {
                 }
                 rebuilt.append(Component.literal(part.substring(from, matcher.start())).setStyle(style));
                 rebuilt.append(Component.literal("[Secret] ").withStyle(ChatFormatting.DARK_PURPLE));
-                rebuilt.append(Component.literal(text).setStyle(style.withColor(ChatFormatting.LIGHT_PURPLE)));
+                rebuilt.append(shown(text, style.withColor(ChatFormatting.LIGHT_PURPLE)));
                 from = matcher.end();
                 opened[0] = true;
             }
@@ -135,6 +185,140 @@ public final class SecretChat extends Module {
             return Optional.empty();
         }, Style.EMPTY);
         return opened[0] ? rebuilt : message;
+    }
+
+    // True for text that holds a ping sealed under the key. Nothing is marked or answered.
+    public boolean isPing(String text) {
+        SecretKey opening = isEnabled() ? key() : null;
+        if (opening == null) {
+            return false;
+        }
+        Matcher matcher = SEALED.matcher(text);
+        while (matcher.find()) {
+            String opened = open(opening, matcher.group());
+            if (opened != null && startsPing(opened)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean startsPing(String text) {
+        return !text.isEmpty() && (text.charAt(0) == ASKS || text.charAt(0) == ANSWERS);
+    }
+
+    // A ping reads as the spot it carries. Any other text shows as it was written.
+    private Component shown(String text, Style style) {
+        Spot spot = Spot.read(text);
+        if (spot == null) {
+            return Component.literal(StringUtil.filterText(text)).setStyle(style);
+        }
+        heard(spot);
+        Component at = ChatUtil.walkLink(spot.pos(), spot.dimension());
+        return Component.literal(spot.name() + " is at ").setStyle(style).append(at)
+            .append(Component.literal(" in the " + ServerInfo.dimensionName(spot.dimension()) + ".").setStyle(style));
+    }
+
+    // A friend's ping moves the waypoint named after them and may get your spot back. Your own
+    // whispers come back to you as well and do nothing.
+    private void heard(Spot spot) {
+        if (mc.player == null || spot.name().equalsIgnoreCase(mc.player.getGameProfile().name())
+            || !OfflineClient.INSTANCE.getFriendManager().isFriend(spot.name())) {
+            return;
+        }
+        if (markPings.isOn()) {
+            WaypointStore.get().mark(spot.name(), spot.pos(), spot.dimension(), WaypointStore.Waypoint.AUTO_HUE);
+        }
+        if (answerPings.isOn() && spot.asks()) {
+            queue(spot.name(), false);
+        }
+    }
+
+    // Queues a whisper of your spot to that player or to every friend online when the name is
+    // null. Hands back a few words about it.
+    public String ping(String target) {
+        if (!inGame()) {
+            return "Join a world first";
+        }
+        if (!isEnabled()) {
+            return "Switch SecretChat on first";
+        }
+        if (key() == null) {
+            return "Type a key first";
+        }
+        if (target != null) {
+            if (mc.getConnection().getPlayerInfoIgnoreCase(target) == null) {
+                return target + " is not online";
+            }
+            queue(target, true);
+            return "Pinging " + target;
+        }
+        List<String> friends = onlineFriends();
+        friends.forEach(name -> queue(name, true));
+        return friends.isEmpty() ? "No friends online" : "Pinging " + Tally.counted(friends.size(), "friend");
+    }
+
+    public List<String> onlineFriends() {
+        List<String> online = new ArrayList<>();
+        if (mc.getConnection() == null) {
+            return online;
+        }
+        for (PlayerInfo info : mc.getConnection().getOnlinePlayers()) {
+            String name = info.getProfile().name();
+            if (OfflineClient.INSTANCE.getFriendManager().isFriend(name)) {
+                online.add(name);
+            }
+        }
+        return online;
+    }
+
+    // A ping that asks wins over a plain answer already waiting for the same player.
+    private void queue(String name, boolean asks) {
+        outgoing.merge(name.toLowerCase(Locale.ROOT), asks, Boolean::logicalOr);
+    }
+
+    @Subscribe
+    private void onTick(TickEvent event) {
+        int every = pingEvery.getInt() * SharedConstants.TICKS_PER_SECOND;
+        if (every > 0 && ++sinceAutoPing >= every) {
+            sinceAutoPing = 0;
+            onlineFriends().forEach(name -> queue(name, true));
+        }
+        if (whisperGap > 0) {
+            whisperGap--;
+        } else if (!outgoing.isEmpty()) {
+            whisperNext();
+        }
+    }
+
+    // Sends the first whisper still worth sending. A player who has left is passed over.
+    private void whisperNext() {
+        SecretKey sealing = key();
+        if (sealing == null) {
+            outgoing.clear();
+            return;
+        }
+        Iterator<Map.Entry<String, Boolean>> waiting = outgoing.entrySet().iterator();
+        while (waiting.hasNext()) {
+            Map.Entry<String, Boolean> next = waiting.next();
+            String name = next.getKey();
+            boolean asks = next.getValue();
+            waiting.remove();
+            PlayerInfo info = mc.getConnection().getPlayerInfoIgnoreCase(name);
+            if (info == null) {
+                continue;
+            }
+            String spot = Spot.yours(asks).text();
+            // Only a dimension with a very long name makes a spot too big for one chat line.
+            if (spot.getBytes(StandardCharsets.UTF_8).length > LINE_BYTES) {
+                ChatUtil.error("The name of this dimension is too long for a ping.");
+                outgoing.clear();
+                return;
+            }
+            ChatUtil.say("/msg " + info.getProfile().name() + " " + seal(sealing, spot));
+            whisperGap = WHISPER_GAP_TICKS;
+            return;
+        }
     }
 
     // Null whilst the key is blank. Stretching is slow and runs once for each key typed.
@@ -235,7 +419,7 @@ public final class SecretChat extends Module {
         return new BigInteger(packed).toString(RADIX);
     }
 
-    // Null unless the run was sealed under this key. Colour codes in the text are dropped.
+    // Null unless the run was sealed under this key. The text comes back exactly as it was sealed.
     private static String open(SecretKey opening, String run) {
         byte[] packed = new BigInteger(run, RADIX).toByteArray();
         if (packed.length <= HEADER_BYTES + TAG_BYTES || packed[0] != LEAD) {
@@ -245,9 +429,34 @@ public final class SecretChat extends Module {
             Cipher cipher = Cipher.getInstance(CIPHER);
             cipher.init(Cipher.DECRYPT_MODE, opening, new GCMParameterSpec(TAG_BITS, packed, 1, NONCE_BYTES));
             byte[] text = cipher.doFinal(packed, HEADER_BYTES, packed.length - HEADER_BYTES);
-            return StringUtil.filterText(new String(text, StandardCharsets.UTF_8));
+            return new String(text, StandardCharsets.UTF_8);
         } catch (GeneralSecurityException e) {
             return null;
+        }
+    }
+
+    // What a ping carries. Asks is set when the sender wants a spot back.
+    private record Spot(String name, String dimension, BlockPos pos, boolean asks) {
+
+        static Spot yours(boolean asks) {
+            return new Spot(mc.player.getGameProfile().name(), ServerInfo.dimension(), mc.player.blockPosition(), asks);
+        }
+
+        // Null unless the text is a ping. Colour codes are dropped as in any other secret.
+        static Spot read(String text) {
+            if (!startsPing(text)) {
+                return null;
+            }
+            String[] parts = StringUtil.filterText(text.substring(1)).split(" ", 3);
+            if (parts.length != 3 || !DIMENSION.matcher(parts[1]).matches()) {
+                return null;
+            }
+            BlockPos pos = BlockUtil.parse(parts[2]);
+            return pos == null ? null : new Spot(parts[0], parts[1], pos, text.charAt(0) == ASKS);
+        }
+
+        String text() {
+            return (asks ? ASKS : ANSWERS) + name + " " + dimension + " " + BlockUtil.text(pos);
         }
     }
 }

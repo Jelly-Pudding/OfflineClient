@@ -12,18 +12,25 @@ import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ColorUtil;
+import com.jellypudding.offlineclient.util.EnchantText;
 import com.jellypudding.offlineclient.util.EntityFilter;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.ItemUtil;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.Mounts;
 import com.jellypudding.offlineclient.util.RenderUtil;
+import com.jellypudding.offlineclient.util.SeenEffects;
+import com.jellypudding.offlineclient.util.ServerInfo;
+import com.jellypudding.offlineclient.util.Tally;
+import com.jellypudding.offlineclient.util.Totems;
 import net.minecraft.SharedConstants;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.Hud;
 import net.minecraft.client.multiplayer.PlayerInfo;
+import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.core.Holder;
-import net.minecraft.tags.EnchantmentTags;
+import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -34,9 +41,6 @@ import net.minecraft.world.entity.item.PrimedTnt;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.vehicle.minecart.MinecartTNT;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.enchantment.Enchantment;
-import net.minecraft.world.item.enchantment.EnchantmentHelper;
-import net.minecraft.world.item.enchantment.ItemEnchantments;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix3x2fStack;
 
@@ -54,8 +58,11 @@ public final class Nametags extends Module {
     public enum DistanceColor { GRADIENT, FLAT }
 
     private static final int ITEM_SIZE = 16;
+    // Pixels between the effect icons and at the ends of their row.
+    private static final int EFFECT_GAP = 1;
+    // Enchantments are written at half size before their own scale.
+    private static final float ENCHANT_SIZE = 0.5f;
     private static final int GOLD = 0xFFE8B923;
-    private static final int RED = 0xFFFF4040;
     private static final int TICKS_PER_HOUR = SharedConstants.TICKS_PER_MINUTE * 60;
 
     // The order the six item slots are drawn in.
@@ -64,14 +71,7 @@ public final class Nametags extends Module {
         EquipmentSlot.LEGS, EquipmentSlot.FEET, EquipmentSlot.OFFHAND
     };
 
-    private static final List<String> DEFAULT_ENCHANTMENTS = List.of(
-        "minecraft:protection", "minecraft:blast_protection",
-        "minecraft:fire_protection", "minecraft:projectile_protection");
-
     private record Tag(Entity entity, Vec3 screen, double distance) {
-    }
-
-    private record Enchant(String text, int color) {
     }
 
     private final NumberSetting scale = new NumberSetting("Scale",
@@ -93,6 +93,10 @@ public final class Nametags extends Module {
         "Put the player's game mode in front of the name.", false);
     private final BoolSetting health = new BoolSetting("Health",
         "Show hearts left including absorption.", true);
+    private final BoolSetting pops = new BoolSetting("Totem pops",
+        "Writes how many totems the player has popped since they last died.", true);
+    private final BoolSetting effects = new BoolSetting("Effects",
+        "Shows icons for the potion effects each player is seen to carry.", true);
     private final BoolSetting mountStats = new BoolSetting("Mount stats",
         "Tags every mount with its full health and top speed and jump height or a llama's strength."
             + " Red marks the worst a wild horse spawns with and green the best.", false);
@@ -132,7 +136,7 @@ public final class Nametags extends Module {
         "Write the enchantments of each item by its icon.", false);
     private final ChoiceListSetting shownEnchantments = new ChoiceListSetting("Shown enchantments",
         "Which enchantments are written. Join a world to fill the list.", ItemUtil::enchantmentIds,
-        DEFAULT_ENCHANTMENTS).under(enchantments);
+        EnchantText.PROTECTIONS).under(enchantments);
     private final EnumSetting<EnchantPosition> enchantPosition = new EnumSetting<>("Enchantment position",
         "Where the enchantment text sits.", EnchantPosition.ABOVE)
         .describe(EnchantPosition.ABOVE, "Above the row of icons.")
@@ -156,9 +160,9 @@ public final class Nametags extends Module {
             Category.RENDER);
         addSettings(scale, range, limit);
         addSettings(filter.settings());
-        addSettings(self, ignoreFriends, displayName, gameMode, health, mountStats, ping, pingByLatency,
-            pingColor, distance, distanceColor, flatDistanceColor, items, armor, itemSpacing, ignoreEmpty,
-            durability, showCount, enchantments, shownEnchantments, enchantPosition, enchantLetters,
+        addSettings(self, ignoreFriends, displayName, gameMode, health, pops, effects, mountStats, ping,
+            pingByLatency, pingColor, distance, distanceColor, flatDistanceColor, items, armor, itemSpacing,
+            ignoreEmpty, durability, showCount, enchantments, shownEnchantments, enchantPosition, enchantLetters,
             enchantScale, nameColor, gameModeColor, background, backgroundOpacity);
         searchTags("name tags", "player info");
     }
@@ -265,8 +269,13 @@ public final class Nametags extends Module {
         if (health.isOn()) {
             addHealth(parts, colors, player);
         }
+        int popped = pops.isOn() ? Totems.INSTANCE.popped(player) : 0;
+        if (popped > 0) {
+            parts.add(" " + Tally.counted(popped, "pop"));
+            colors.add(GOLD);
+        }
         if (ping.isOn()) {
-            int latency = latencyOf(player);
+            int latency = ServerInfo.latency(player.getUUID());
             if (latency >= 0) {
                 parts.add(" " + latency + "ms");
                 colors.add(pingByLatency.isOn() ? ColorUtil.ping(latency) : pingColor.getColor());
@@ -279,7 +288,33 @@ public final class Nametags extends Module {
         }
 
         label(context, tag, factor, parts, colors);
+        if (effects.isOn()) {
+            drawEffects(context, tag, player, factor);
+        }
         drawGear(context, tag, player, factor);
+    }
+
+    // A row of icons just under the tag. Each icon stands as tall as a line of text.
+    private void drawEffects(GuiGraphicsExtractor context, Tag tag, Player player, float factor) {
+        List<Holder<MobEffect>> seen = SeenEffects.of(player);
+        if (seen.isEmpty()) {
+            return;
+        }
+        int size = mc.font.lineHeight;
+        int width = seen.size() * (size + EFFECT_GAP) - EFFECT_GAP;
+        int x = -width / 2;
+        int top = size + EFFECT_GAP;
+        Matrix3x2fStack pose = context.pose();
+        pose.pushMatrix();
+        pose.translate((float) tag.screen().x, (float) tag.screen().y);
+        pose.scale(factor, factor);
+        context.fill(x - EFFECT_GAP, size, x + width + EFFECT_GAP, top + size + EFFECT_GAP, backgroundColor());
+        context.guiRenderState.up();
+        for (Holder<MobEffect> effect : seen) {
+            context.blitSprite(RenderPipelines.GUI_TEXTURED, Hud.getMobEffectSprite(effect), x, top, size, size);
+            x += size + EFFECT_GAP;
+        }
+        pose.popMatrix();
     }
 
     private void drawLiving(GuiGraphicsExtractor context, Tag tag, LivingEntity living, float factor) {
@@ -315,8 +350,11 @@ public final class Nametags extends Module {
 
     private void label(GuiGraphicsExtractor context, Tag tag, float factor,
                        List<String> parts, List<Integer> colors) {
-        RenderUtil.label(context, mc.font, tag.screen().x, tag.screen().y, factor, parts, colors,
-            ColorUtil.fade(background.getColor(), backgroundOpacity.getFloat() / 100f));
+        RenderUtil.label(context, mc.font, tag.screen().x, tag.screen().y, factor, parts, colors, backgroundColor());
+    }
+
+    private int backgroundColor() {
+        return ColorUtil.fade(background.getColor(), backgroundOpacity.getFloat() / 100f);
     }
 
     private static void addHealth(List<String> parts, List<Integer> colors, LivingEntity living) {
@@ -379,20 +417,19 @@ public final class Nametags extends Module {
         Font font = mc.font;
         ItemStack[] gear = new ItemStack[SLOTS.length];
         int[] widths = new int[SLOTS.length];
-        List<List<Enchant>> enchants = new ArrayList<>();
+        List<List<EnchantText.Label>> enchants = new ArrayList<>();
         int total = 0;
-        int deepest = 0;
         boolean any = false;
         for (int i = 0; i < SLOTS.length; i++) {
             gear[i] = slotItem(player, SLOTS[i]);
             any |= !gear[i].isEmpty();
-            List<Enchant> list = enchantments.isOn() ? enchantsOf(gear[i]) : List.of();
+            List<EnchantText.Label> list = enchantments.isOn()
+                ? EnchantText.of(gear[i], shownEnchantments::contains, enchantLetters.getInt()) : List.of();
             enchants.add(list);
-            deepest = Math.max(deepest, list.size());
             if (!gear[i].isEmpty() || !ignoreEmpty.isOn()) {
                 widths[i] = ITEM_SIZE + itemSpacing.getInt();
             }
-            for (Enchant enchant : list) {
+            for (EnchantText.Label enchant : list) {
                 widths[i] = Math.max(widths[i], enchantWidth(font, enchant));
             }
             total += widths[i];
@@ -419,7 +456,7 @@ public final class Nametags extends Module {
                 context.item(stack, iconX, y);
                 drawDurability(context, font, stack, iconX, y);
             }
-            drawEnchants(context, font, enchants.get(i), x, y, widths[i], deepest);
+            drawEnchants(context, font, enchants.get(i), x, y, widths[i]);
             x += widths[i];
         }
         pose.popMatrix();
@@ -449,22 +486,18 @@ public final class Nametags extends Module {
         smallText(context, font, text, x, y, 0.75f, ColorUtil.withAlpha(stack.getBarColor(), 255));
     }
 
-    private void drawEnchants(GuiGraphicsExtractor context, Font font, List<Enchant> list,
-                              int x, int y, int width, int deepest) {
+    private void drawEnchants(GuiGraphicsExtractor context, Font font, List<EnchantText.Label> list,
+                              int x, int y, int width) {
         if (list.isEmpty()) {
             return;
         }
-        float size = 0.5f * enchantScale.getFloat();
+        float size = enchantSize();
         float lineHeight = font.lineHeight * size;
         float top = enchantPosition.is(EnchantPosition.ABOVE)
             ? y - (list.size() + 1) * lineHeight
             : y + (ITEM_SIZE - list.size() * lineHeight) / 2;
         context.guiRenderState.up();
-        for (Enchant enchant : list) {
-            float textX = x + (width - font.width(enchant.text()) * size) / 2;
-            smallText(context, font, enchant.text(), textX, top, size, enchant.color());
-            top += lineHeight;
-        }
+        EnchantText.draw(context, font, list, x, top, width, size, true);
     }
 
     private static void smallText(GuiGraphicsExtractor context, Font font, String text,
@@ -477,37 +510,15 @@ public final class Nametags extends Module {
         pose.popMatrix();
     }
 
-    private int enchantWidth(Font font, Enchant enchant) {
-        return Math.round(font.width(enchant.text()) * 0.5f * enchantScale.getFloat());
+    private int enchantWidth(Font font, EnchantText.Label enchant) {
+        return Math.round(font.width(enchant.text()) * enchantSize());
     }
 
-    // The chosen enchantments of a stack with curses in red.
-    private List<Enchant> enchantsOf(ItemStack stack) {
-        if (stack.isEmpty()) {
-            return List.of();
-        }
-        ItemEnchantments all = EnchantmentHelper.getEnchantmentsForCrafting(stack);
-        List<Enchant> list = new ArrayList<>();
-        for (Holder<Enchantment> holder : all.keySet()) {
-            String id = holder.unwrapKey().map(key -> key.identifier().toString()).orElse("");
-            if (!shownEnchantments.contains(id)) {
-                continue;
-            }
-            String name = holder.value().description().getString();
-            String shortName = name.substring(0, Math.min(name.length(), enchantLetters.getInt()));
-            int color = holder.is(EnchantmentTags.CURSE) ? RED : 0xFFFFFFFF;
-            list.add(new Enchant(shortName + " " + all.getLevel(holder), color));
-        }
-        return list;
+    private float enchantSize() {
+        return ENCHANT_SIZE * enchantScale.getFloat();
     }
 
     private PlayerInfo tabEntry(Player player) {
         return mc.getConnection() == null ? null : mc.getConnection().getPlayerInfo(player.getUUID());
-    }
-
-    // Ping from the tab list or minus one if the player is not on it.
-    private int latencyOf(Player player) {
-        PlayerInfo info = tabEntry(player);
-        return info == null ? -1 : info.getLatency();
     }
 }

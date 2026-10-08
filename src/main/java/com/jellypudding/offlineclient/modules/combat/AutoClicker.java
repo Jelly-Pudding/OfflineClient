@@ -1,26 +1,43 @@
 package com.jellypudding.offlineclient.modules.combat;
 
 import com.jellypudding.offlineclient.event.Subscribe;
+import com.jellypudding.offlineclient.event.events.KeyPressEvent;
+import com.jellypudding.offlineclient.event.events.Render3DEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.render.BoxStyle;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
+import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.BlockUtil;
+import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.SwingMode;
+import com.jellypudding.offlineclient.util.WorldWatch;
 import net.minecraft.client.KeyMapping;
+import net.minecraft.core.BlockPos;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.EntityHitResult;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public final class AutoClicker extends Module {
+
+    // Marked blocks are outlined in this hue unless the colour is changed.
+    private static final float MARKED_HUE = 50;
 
     public enum Left { OFF, HOLD, PRESS, CROSSHAIR }
 
     public enum Right { OFF, HOLD, PRESS }
+
+    public enum Target { CROSSHAIR, MARKED }
 
     private final EnumSetting<Left> left = new EnumSetting<>("Left click",
         "What happens to the attack button.", Left.PRESS)
@@ -41,6 +58,19 @@ public final class AutoClicker extends Module {
     private final NumberSetting rightDelay = new NumberSetting("Right delay",
         "Ticks between taps of the use button.", 2, 0, 60, 1, " ticks").min(0)
         .under(right, Right.PRESS);
+    private final EnumSetting<Target> useTarget = new EnumSetting<>("Target",
+        "What the use button clicks.", Target.CROSSHAIR)
+        .describe(Target.CROSSHAIR, "Whatever your crosshair is on.")
+        .describe(Target.MARKED, "The blocks you marked one after another wherever you look.")
+        .under(right, Right.PRESS);
+    private final KeybindSetting markKey = new KeybindSetting("Mark key",
+        "Adds or removes the block you look at from the marked blocks.", KeybindSetting.UNBOUND)
+        .under(useTarget, Target.MARKED);
+    private final BoxStyle markedStyle = new BoxStyle("Marked", BoxStyle.Shape.LINES, MARKED_HUE)
+        .under(useTarget, Target.MARKED);
+    private final NumberSetting stopAfter = new NumberSetting("Stop after",
+        "Switches off after this many clicks. Zero keeps clicking.", 0, 0, 500, 1, " clicks")
+        .visibleWhen(this::tapping);
     private final BoolSetting inScreens = new BoolSetting("In screens",
         "Keeps clicking whilst an inventory or another screen is open.", true);
 
@@ -48,11 +78,39 @@ public final class AutoClicker extends Module {
     private int rightTimer;
     private boolean holdingAttack;
     private boolean holdingUse;
+    private int clicks;
+
+    // The marked blocks in the order they were marked and the one clicked next. They belong to
+    // the world they were marked in.
+    private final List<BlockPos> marked = new ArrayList<>();
+    private int nextMarked;
+    private final WorldWatch world = new WorldWatch();
+
+    // Blocks are marked and outlined whilst the clicker is off too.
+    private final Object marker = new Object() {
+        @Subscribe
+        private void onKeyPress(KeyPressEvent event) {
+            if (event.presses(markKey) && clicksMarked() && inGame() && mc.gui.screen() == null) {
+                markAimed();
+            }
+        }
+
+        @Subscribe
+        private void onRender3D(Render3DEvent event) {
+            if (clicksMarked()) {
+                syncWorld();
+                markedStyle.drawAll(event.getBatch(), marked, false);
+            }
+        }
+    };
 
     public AutoClicker() {
         super("AutoClicker", "Clicks the mouse buttons for you.", Category.COMBAT);
-        addSettings(left, leftDelay, right, rightDelay, inScreens);
+        addSettings(left, leftDelay, right, rightDelay, useTarget, markKey);
+        addSettings(markedStyle.settings());
+        addSettings(stopAfter, inScreens);
         searchTags("auto click", "clicker", "spam click");
+        watch(marker);
     }
 
     @Override
@@ -64,6 +122,7 @@ public final class AutoClicker extends Module {
     protected void onEnable() {
         leftTimer = 0;
         rightTimer = 0;
+        clicks = 0;
     }
 
     @Override
@@ -82,7 +141,10 @@ public final class AutoClicker extends Module {
             return;
         }
         tickLeft();
-        tickRight();
+        // Stop after may have switched the clicker off.
+        if (isEnabled()) {
+            tickRight();
+        }
     }
 
     private void tickLeft() {
@@ -100,6 +162,7 @@ public final class AutoClicker extends Module {
                 if (++leftTimer > leftDelay.getInt()) {
                     leftTimer = 0;
                     mc.startAttack();
+                    counted();
                 }
             }
             case CROSSHAIR -> hitCrosshair();
@@ -120,7 +183,7 @@ public final class AutoClicker extends Module {
             case PRESS -> {
                 if (++rightTimer > rightDelay.getInt()) {
                     rightTimer = 0;
-                    mc.startUseItem();
+                    useOnce();
                 }
             }
         }
@@ -148,6 +211,66 @@ public final class AutoClicker extends Module {
             mc.gameMode.attack(mc.player, target);
         }
         SwingMode.swingArm(InteractionHand.MAIN_HAND);
+        counted();
+    }
+
+    // One tap of the use button on the crosshair or on the next marked block in reach.
+    private void useOnce() {
+        if (useTarget.is(Target.CROSSHAIR)) {
+            mc.startUseItem();
+            counted();
+            return;
+        }
+        syncWorld();
+        for (int tried = 0; tried < marked.size(); tried++) {
+            BlockPos pos = marked.get(nextMarked++ % marked.size());
+            if (BlockUtil.serverReaches(pos)) {
+                BlockUtil.useOn(pos, true, true);
+                counted();
+                return;
+            }
+        }
+    }
+
+    // Switches the clicker off once Stop after is reached.
+    private void counted() {
+        if (stopAfter.getInt() > 0 && ++clicks >= stopAfter.getInt()) {
+            ChatUtil.message("§bAutoClicker §7stopped after §f" + clicks + "§7 clicks.");
+            setEnabled(false);
+        }
+    }
+
+    // Only taps and hits are counted. A held button makes no clicks of its own.
+    private boolean tapping() {
+        return left.isAny(Left.PRESS, Left.CROSSHAIR) || right.is(Right.PRESS);
+    }
+
+    // The use button taps the marked blocks. The Mark key and the outlines only work then.
+    private boolean clicksMarked() {
+        return right.is(Right.PRESS) && useTarget.is(Target.MARKED);
+    }
+
+    private void markAimed() {
+        BlockHitResult hit = BlockUtil.aimedBlock();
+        if (hit == null) {
+            return;
+        }
+        syncWorld();
+        BlockPos pos = hit.getBlockPos().immutable();
+        if (marked.remove(pos)) {
+            ChatUtil.message("§bAutoClicker §7unmarked §f" + BlockUtil.text(pos) + "§7.");
+        } else {
+            marked.add(pos);
+            ChatUtil.message("§bAutoClicker §7marked §f" + BlockUtil.text(pos) + "§7.");
+        }
+    }
+
+    // Blocks marked in another world point at nothing here.
+    private void syncWorld() {
+        if (world.changed()) {
+            marked.clear();
+            nextMarked = 0;
+        }
     }
 
     private void letGo() {

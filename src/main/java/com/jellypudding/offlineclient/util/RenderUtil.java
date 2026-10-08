@@ -62,15 +62,6 @@ public final class RenderUtil {
     }
 
     // An animated rainbow wave with one colour per character.
-    public static void rainbowText(GuiGraphicsExtractor context, Font font, String text, int x, int y) {
-        rainbowText(context, font, text, x, y, 1f, 1f);
-    }
-
-    public static void rainbowText(GuiGraphicsExtractor context, Font font, String text,
-                                   float x, float y, float scale) {
-        rainbowText(context, font, text, x, y, scale, 1f);
-    }
-
     public static void rainbowText(GuiGraphicsExtractor context, Font font, String text,
                                    float x, float y, float scale, float alpha) {
         if (alpha < 0.05f) {
@@ -306,13 +297,30 @@ public final class RenderUtil {
         }
     }
 
-    // Five pixels square.
+    public static final int TICK_SIZE = 5;
+
     public static void tick(GuiGraphicsExtractor context, int x, int y, int color) {
         context.fill(x, y + 2, x + 1, y + 4, color);
         context.fill(x + 1, y + 3, x + 2, y + 5, color);
         context.fill(x + 2, y + 2, x + 3, y + 4, color);
         context.fill(x + 3, y + 1, x + 4, y + 3, color);
         context.fill(x + 4, y, x + 5, y + 2, color);
+    }
+
+    public static final int HOOK_WIDTH = 6;
+    public static final int HOOK_HEIGHT = 5;
+
+    // The arrow that points back as left top right bottom spans. It runs left and curls down
+    // round to the right. The forward arrow is its mirror image.
+    private static final int[][] HOOK = {{1, 0, 2, 1}, {0, 1, 5, 2}, {1, 2, 2, 3}, {5, 2, 6, 4}, {3, 4, 5, 5}};
+
+    // A hooked arrow that says a value goes back. The forward one says it comes back.
+    public static void hookArrow(GuiGraphicsExtractor context, int x, int y, boolean forward, int color) {
+        for (int[] span : HOOK) {
+            int left = forward ? HOOK_WIDTH - span[2] : span[0];
+            int right = forward ? HOOK_WIDTH - span[0] : span[2];
+            context.fill(x + left, y + span[1], x + right, y + span[3], color);
+        }
     }
 
     // Behind a world label. Text over bright terrain is unreadable without it.

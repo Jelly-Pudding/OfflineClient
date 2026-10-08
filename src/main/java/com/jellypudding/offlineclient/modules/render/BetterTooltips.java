@@ -1,7 +1,5 @@
 package com.jellypudding.offlineclient.modules.render;
 
-import com.jellypudding.offlineclient.event.Subscribe;
-import com.jellypudding.offlineclient.event.events.ClientTickEvent;
 import com.jellypudding.offlineclient.gui.PeekScreen;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
@@ -14,14 +12,13 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
-import com.jellypudding.offlineclient.util.InventoryUtil;
+import com.jellypudding.offlineclient.util.EnderChest;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.ChatFormatting;
 import net.minecraft.SharedConstants;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.BookViewScreen;
-import net.minecraft.client.gui.screens.inventory.ContainerScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.client.gui.screens.inventory.tooltip.ClientBundleTooltip;
 import net.minecraft.client.gui.screens.inventory.tooltip.ClientTooltipComponent;
@@ -34,7 +31,6 @@ import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
-import net.minecraft.world.Container;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffectUtil;
 import net.minecraft.world.entity.Bucketable;
@@ -42,7 +38,6 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.food.FoodProperties;
-import net.minecraft.world.inventory.ChestMenu;
 import net.minecraft.world.item.BannerItem;
 import net.minecraft.world.item.BundleItem;
 import net.minecraft.world.item.DyeColor;
@@ -50,7 +45,6 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.ItemStackTemplate;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.item.MapItem;
 import net.minecraft.world.item.MobBucketItem;
 import net.minecraft.world.item.component.BundleContents;
 import net.minecraft.world.item.component.Consumable;
@@ -62,8 +56,6 @@ import net.minecraft.world.item.component.WrittenBookContent;
 import net.minecraft.world.item.consume_effects.ApplyStatusEffectsConsumeEffect;
 import net.minecraft.world.level.block.entity.BannerPattern;
 import net.minecraft.world.level.block.entity.BannerPatternLayers;
-import net.minecraft.world.level.saveddata.maps.MapId;
-import net.minecraft.world.level.saveddata.maps.MapItemSavedData;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -84,12 +76,10 @@ public final class BetterTooltips extends Module {
 
     public enum SizeUnit { BYTES, KILOBYTES, MEGABYTES, AUTO }
 
-    private static final int ENDER_CHEST_SLOTS = 27;
     private static final int COLUMNS = 9;
     private static final int COMPACT_ROWS = 5;
     private static final int KILOBYTE = 1024;
     private static final int MEGABYTE = KILOBYTE * KILOBYTE;
-    private static final int ENDER_TINT = 0xC0003232;
 
     private final EnumSetting<When> show = new EnumSetting<>("Show previews",
         "When the picture previews appear in a tooltip.", When.KEY_HELD)
@@ -146,8 +136,6 @@ public final class BetterTooltips extends Module {
         "Leaves middle click alone in creative where it clones the item.", true)
         .under(openContents);
 
-    // What the ender chest held the last time it was open this session.
-    private final List<ItemStack> remembered = new ArrayList<>();
     private ItemStack hovered = ItemStack.EMPTY;
 
     public BetterTooltips() {
@@ -161,36 +149,11 @@ public final class BetterTooltips extends Module {
     @Override
     protected void onDisable() {
         hovered = ItemStack.EMPTY;
-        // The copy belongs to the server it was taken on.
-        remembered.clear();
     }
 
     // Called from the mixin whilst the game builds an item tooltip.
     public void setHovered(ItemStack stack) {
         hovered = stack;
-    }
-
-    @Subscribe
-    private void onClientTick(ClientTickEvent event) {
-        if (mc.level == null) {
-            remembered.clear();
-            return;
-        }
-        if (!enderChest.isOn() || !(mc.gui.screen() instanceof ContainerScreen screen)) {
-            return;
-        }
-        if (!InventoryUtil.isEnderChest(screen)) {
-            return;
-        }
-        ChestMenu menu = screen.getMenu();
-        Container container = menu.getContainer();
-        if (container.getContainerSize() < ENDER_CHEST_SLOTS) {
-            return;
-        }
-        remembered.clear();
-        for (int i = 0; i < ENDER_CHEST_SLOTS; i++) {
-            remembered.add(container.getItem(i).copy());
-        }
     }
 
     // The tooltip rows with our lines and preview worked in. The hovered stack is used up.
@@ -398,9 +361,10 @@ public final class BetterTooltips extends Module {
             return new ContainerPreview(ContainerPreview.contentsOf(stack), COLUMNS, ContainerPreview.tintOf(stack));
         }
         if (enderChest.isOn() && item == Items.ENDER_CHEST) {
-            return remembered.isEmpty()
+            List<ItemStack> chest = EnderChest.INSTANCE.contents();
+            return chest.isEmpty()
                 ? text(Component.literal("Unknown inventory.").withStyle(ChatFormatting.DARK_RED))
-                : new ContainerPreview(new ArrayList<>(remembered), COLUMNS, ENDER_TINT);
+                : new ContainerPreview(chest, COLUMNS, ContainerPreview.tintOf(stack));
         }
         if (maps.isOn() && item == Items.FILLED_MAP) {
             return mapPreview(stack);
@@ -420,23 +384,9 @@ public final class BetterTooltips extends Module {
         return null;
     }
 
-    // Empty until an ender chest has been opened this session.
-    public List<ItemStack> rememberedEnderChest() {
-        return List.copyOf(remembered);
-    }
-
     private ClientTooltipComponent mapPreview(ItemStack stack) {
-        MapId id = stack.get(DataComponents.MAP_ID);
-        if (id == null || mc.level == null) {
-            return null;
-        }
-        MapItemSavedData data = MapItem.getSavedData(id, mc.level);
-        if (data == null) {
-            return null;
-        }
-        MapRenderState state = new MapRenderState();
-        mc.getMapRenderer().extractRenderState(id, data, state);
-        return new MapPreview(state, mapSize.getInt());
+        MapRenderState state = MapPreview.stateOf(stack);
+        return state == null ? null : new MapPreview(state, mapSize.getInt());
     }
 
     private static ClientTooltipComponent bookPreview(ItemStack stack) {
@@ -522,8 +472,9 @@ public final class BetterTooltips extends Module {
             open(stack, ContainerPreview.contentsOf(stack), ContainerPreview.tintOf(stack));
             return true;
         }
-        if (item == Items.ENDER_CHEST && !remembered.isEmpty()) {
-            open(stack, new ArrayList<>(remembered), ENDER_TINT);
+        List<ItemStack> chest = EnderChest.INSTANCE.contents();
+        if (item == Items.ENDER_CHEST && !chest.isEmpty()) {
+            open(stack, chest, ContainerPreview.tintOf(stack));
             return true;
         }
         return false;

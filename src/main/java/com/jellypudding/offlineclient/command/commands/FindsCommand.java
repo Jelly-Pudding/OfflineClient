@@ -9,6 +9,7 @@ import com.jellypudding.offlineclient.config.FindSource;
 import com.jellypudding.offlineclient.gui.FindsScreen;
 import com.jellypudding.offlineclient.setting.Setting;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.ClientLines;
 import com.jellypudding.offlineclient.util.Notice;
 import com.jellypudding.offlineclient.util.Tally;
 import net.minecraft.client.player.LocalPlayer;
@@ -121,14 +122,14 @@ public final class FindsCommand extends Command {
             return;
         }
         int count = log.all().size();
-        log.export(file -> {
+        log.export(file -> ClientLines.inChat(() -> {
             if (file == null) {
                 ChatUtil.error("Could not write the finds of " + log.name() + ".");
                 return;
             }
             ChatUtil.component(Component.literal("§7Wrote " + Tally.counted(count, "find") + " to ")
                 .append(ChatUtil.fileLink(file)).append("§7."));
-        });
+        }));
     }
 
     // Null after telling the player no module of that name keeps finds.

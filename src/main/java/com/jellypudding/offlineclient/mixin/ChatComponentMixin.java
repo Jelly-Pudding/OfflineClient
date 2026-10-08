@@ -14,6 +14,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
@@ -29,6 +30,9 @@ public abstract class ChatComponentMixin {
         + "Lnet/minecraft/client/multiplayer/chat/GuiMessageTag;)V";
 
     @Unique
+    private static final String ADD_MESSAGE_CALL = "Lnet/minecraft/client/gui/components/ChatComponent;" + ADD_MESSAGE;
+
+    @Unique
     private static final String EXTRACT =
         "extractRenderState(Lnet/minecraft/client/gui/components/ChatComponent$ChatGraphicsAccess;"
             + "IILnet/minecraft/client/gui/components/ChatComponent$DisplayMode;)V";
@@ -37,9 +41,19 @@ public abstract class ChatComponentMixin {
     private void onAddMessage(Component message, MessageSignature signature,
                               GuiMessageSource source, GuiMessageTag tag, CallbackInfo ci) {
         BetterChat betterChat = Modules.get(BetterChat.class);
-        if (betterChat != null && betterChat.filters(message)) {
+        if (betterChat != null && betterChat.filters(message, source)) {
             ci.cancel();
         }
+    }
+
+    // A signed line the game trusts goes up with no tag of its own.
+    @ModifyArg(method = "addPlayerMessage(Lnet/minecraft/network/chat/Component;"
+        + "Lnet/minecraft/network/chat/MessageSignature;Lnet/minecraft/client/multiplayer/chat/GuiMessageTag;)V",
+        at = @At(value = "INVOKE", target = ADD_MESSAGE_CALL), index = 3)
+    private GuiMessageTag markReportable(Component message, MessageSignature signature, GuiMessageSource source,
+                                         GuiMessageTag tag) {
+        BetterChat betterChat = Modules.get(BetterChat.class);
+        return betterChat == null ? tag : betterChat.tagFor(signature, tag);
     }
 
     @ModifyVariable(method = ADD_MESSAGE, at = @At("HEAD"), argsOnly = true)

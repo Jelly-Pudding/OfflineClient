@@ -8,7 +8,6 @@ import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.phys.BlockHitResult;
 
@@ -37,7 +36,7 @@ public final class XRayCommand extends Command {
             return;
         }
         boolean aimed = args[0].equalsIgnoreCase(THIS);
-        Block block = aimed ? lookedAt() : named(args[0]);
+        Block block = aimed ? lookedAt() : CommandManager.registryEntry(BuiltInRegistries.BLOCK, args[0]);
         if (block == null) {
             ChatUtil.error(aimed ? "Point at a block first." : "There is no block called " + args[0]);
             return;
@@ -56,21 +55,13 @@ public final class XRayCommand extends Command {
         return OfflineClient.MC.level.getBlockState(hit.getBlockPos()).getBlock();
     }
 
-    private static Block named(String text) {
-        Identifier id = Identifier.tryParse(text.contains(":") ? text : "minecraft:" + text);
-        return id == null ? null : BuiltInRegistries.BLOCK.getOptional(id).orElse(null);
-    }
-
     @Override
     public List<String> complete(String[] tokens, int index, String current) {
         if (index != 1) {
             return List.of();
         }
-        List<String> options = new ArrayList<>();
+        List<String> options = new ArrayList<>(CommandManager.registryPaths(BuiltInRegistries.BLOCK));
         options.add(THIS);
-        for (Identifier id : BuiltInRegistries.BLOCK.keySet()) {
-            options.add(id.getPath());
-        }
         return CommandManager.filter(current, options);
     }
 }

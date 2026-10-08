@@ -12,8 +12,10 @@ import com.jellypudding.offlineclient.util.AxisWalker;
 import com.jellypudding.offlineclient.util.BlockMiner;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.FaceMode;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
+import com.jellypudding.offlineclient.util.SwingMode;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.phys.AABB;
@@ -33,8 +35,10 @@ public final class Tunneller extends Module {
 
     private final NumberSetting width = new NumberSetting("Width",
         "How wide the tunnel is.", 1, 1, 5, 1, " blocks").min(1).max(9);
+    // Two blocks give you room to walk. Above eight blocks the top row is past the server's reach
+    // from the floor.
     private final NumberSetting height = new NumberSetting("Height",
-        "How tall the tunnel is.", 2, 1, 5, 1, " blocks").min(1).max(9);
+        "How tall the tunnel is.", 2, 2, 5, 1, " blocks").min(2).max(8);
     private final NumberSetting length = new NumberSetting("Length",
         "How far to dig before stopping.", 64, 8, 512, 8, " blocks").min(1);
     private final BoolSetting wallLiquids = new BoolSetting("Wall off liquids",
@@ -50,6 +54,8 @@ public final class Tunneller extends Module {
     private int cleared;
     private int lastTorch;
     private BlockPos current;
+    // True once chat has named a block this run left out of reach.
+    private boolean toldLeft;
 
     public Tunneller() {
         super("Tunneller", "Digs a straight tunnel the way you face.", Category.WORLD);
@@ -90,6 +96,7 @@ public final class Tunneller extends Module {
         walker.lock();
         cleared = 0;
         lastTorch = 0;
+        toldLeft = false;
     }
 
     @Override
@@ -143,28 +150,44 @@ public final class Tunneller extends Module {
         placeTorch();
     }
 
+    // The nearest block in reach in the first slice still to dig. A slice you stand in with nothing
+    // left in reach is given up. Chat names the first block a run leaves.
     private BlockPos nextBlock() {
         double reach = mc.player.blockInteractionRange();
         for (int scanned = 0; scanned < SCAN_DEPTHS && cleared < length.getInt(); scanned++) {
+            int depth = cleared + 1;
             BlockPos best = null;
+            BlockPos outOfReach = null;
             double bestDistance = Double.MAX_VALUE;
-            boolean anyLeft = false;
-            for (BlockPos pos : slice(cleared + 1)) {
+            for (BlockPos pos : slice(depth)) {
                 if (!BlockUtil.diggable(pos)) {
                     continue;
                 }
-                anyLeft = true;
+                if (!BlockUtil.reaches(pos, reach)) {
+                    outOfReach = pos;
+                    continue;
+                }
                 double distance = BlockUtil.distanceTo(pos);
-                if (distance <= reach && distance < bestDistance) {
+                if (distance < bestDistance) {
                     bestDistance = distance;
                     best = pos;
                 }
             }
-            if (!anyLeft) {
-                cleared++;
-                continue;
+            if (best != null) {
+                return best;
             }
-            return best;
+            if (outOfReach != null) {
+                // Walking closer may still bring it in reach.
+                if (depth > walker.travelled() + AxisWalker.BESIDE) {
+                    return null;
+                }
+                if (!toldLeft) {
+                    toldLeft = true;
+                    ChatUtil.message("§bTunneller §7left a block it cannot reach at §f"
+                        + BlockUtil.text(outOfReach) + "§7.");
+                }
+            }
+            cleared++;
         }
         return null;
     }
@@ -179,8 +202,11 @@ public final class Tunneller extends Module {
                     boolean inside = lane >= leftLane() && lane <= rightLane()
                         && up >= 0 && up < height.getInt();
                     BlockPos pos = walker.blockAt(depth, lane, up);
-                    if (inside || mc.level.getFluidState(pos).isEmpty()
-                        || BlockUtil.distanceTo(pos) > reach) {
+                    if (inside || mc.level.getFluidState(pos).isEmpty()) {
+                        continue;
+                    }
+                    BlockUtil.Placement click = BlockUtil.reachablePlacement(pos, reach, false);
+                    if (click == null) {
                         continue;
                     }
                     int slot = BlockUtil.findBlockSlot();
@@ -188,7 +214,7 @@ public final class Tunneller extends Module {
                         return false;
                     }
                     slots.select(slot);
-                    boolean placed = BlockUtil.placeAny(pos, true, true);
+                    boolean placed = click.place(FaceMode.SERVER, SwingMode.CLIENT);
                     slots.restoreIfMine();
                     if (placed) {
                         return true;

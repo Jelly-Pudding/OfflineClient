@@ -21,6 +21,7 @@ import com.jellypudding.offlineclient.util.RotationPriority;
 import com.jellypudding.offlineclient.util.SwingMode;
 import com.jellypudding.offlineclient.util.TargetFilter;
 import com.jellypudding.offlineclient.util.TargetPriority;
+import com.jellypudding.offlineclient.util.Targeting;
 import com.jellypudding.offlineclient.util.TickRate;
 import com.jellypudding.offlineclient.util.WeaponKinds;
 import com.jellypudding.offlineclient.util.WeaponUtil;
@@ -40,16 +41,13 @@ import net.minecraft.world.phys.Vec3;
 import java.util.ArrayList;
 import java.util.List;
 
-public final class KillAura extends Module {
+public final class KillAura extends Module implements Targeting {
 
     public enum Rotate { NONE, ON_HIT, ALWAYS, CAMERA }
 
     public enum Shields { NONE, BREAK, IGNORE }
 
     public enum Ages { ADULTS, BABIES, BOTH }
-
-    // How long the server may go quiet before hits are held back.
-    private static final long LAG_MILLIS = 1000;
 
     private final NumberSetting range = new NumberSetting("Range",
         "Maximum reach in blocks.", 4.2, 1, 6, 0.05);
@@ -189,6 +187,7 @@ public final class KillAura extends Module {
     }
 
     // The entity being hit right now. Null between fights.
+    @Override
     public LivingEntity getTarget() {
         return targets.isEmpty() ? null : targets.getFirst();
     }
@@ -253,7 +252,7 @@ public final class KillAura extends Module {
         if (onlyWithWeapon.isOn() && !weapons.matches(mc.player.getMainHandItem())) {
             return true;
         }
-        if (pauseOnLag.isOn() && TickRate.INSTANCE.lagging(LAG_MILLIS)) {
+        if (pauseOnLag.isOn() && TickRate.INSTANCE.stalled()) {
             return true;
         }
         // The smash MaceCombo is falling towards hurts far more than a sword.

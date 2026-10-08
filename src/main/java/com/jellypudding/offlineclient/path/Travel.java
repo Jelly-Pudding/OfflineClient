@@ -5,8 +5,11 @@ import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.ClientLines;
 import com.jellypudding.offlineclient.util.WorldWatch;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.phys.Vec3;
 
 // The walk the goto command and the finds list start. There is one at a time and it says
 // in chat how it went.
@@ -19,6 +22,9 @@ public final class Travel {
 
     private final Trip trip = new Trip();
     private final WorldWatch world = new WorldWatch();
+    private BlockPos goal;
+    // True for a walk a command started. Its end goes in the chat beside the command.
+    private boolean typed;
 
     private Travel() {
     }
@@ -37,6 +43,18 @@ public final class Travel {
         INSTANCE.end();
     }
 
+    // The block the walk is going to. Null whilst no walk is going.
+    public static BlockPos goal() {
+        return INSTANCE.goal;
+    }
+
+    // Blocks in a straight line from you to the goal. Minus one whilst no walk is going.
+    public static double distanceLeft() {
+        BlockPos goal = INSTANCE.goal;
+        LocalPlayer player = OfflineClient.MC.player;
+        return goal == null || player == null ? -1 : player.position().distanceTo(Vec3.atBottomCenterOf(goal));
+    }
+
     private boolean start(BlockPos target) {
         end();
         trip.walker().turn(PathWalker.Turn.CLIENT);
@@ -46,6 +64,8 @@ public final class Travel {
             return false;
         }
         world.accept();
+        goal = target.immutable();
+        typed = ClientLines.replying();
         OfflineClient.INSTANCE.getEventBus().register(this);
         ChatUtil.message("§bGoto §7walking to §f" + BlockUtil.text(target) + "§7.");
         return true;
@@ -53,12 +73,18 @@ public final class Travel {
 
     private void end() {
         trip.stop();
+        goal = null;
         OfflineClient.INSTANCE.getEventBus().unregister(this);
     }
 
     private void finish(String message) {
         end();
-        ChatUtil.message("§bGoto §7" + message);
+        Runnable line = () -> ChatUtil.message("§bGoto §7" + message);
+        if (typed) {
+            ClientLines.inChat(line);
+        } else {
+            line.run();
+        }
     }
 
     // Nothing ticks outside a world. A walk still going when the next world or dimension

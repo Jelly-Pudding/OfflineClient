@@ -25,7 +25,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.protocol.game.ServerboundAttackPacket;
-import net.minecraft.server.level.BlockDestructionProgress;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.boss.enderdragon.EndCrystal;
@@ -39,7 +38,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
-import java.util.SortedSet;
 
 // Missing support under a side is filled first.
 public final class Surround extends Module {
@@ -310,7 +308,7 @@ public final class Surround extends Module {
         float health = EntityUtil.totalHealth(mc.player);
         for (Direction side : Direction.Plane.HORIZONTAL) {
             BlockPos pos = feet.relative(side);
-            if (!BlockUtil.isReplaceable(pos) && !beingMined(pos)) {
+            if (!BlockUtil.isReplaceable(pos) && BlockUtil.crackStage(pos) < 0) {
                 continue;
             }
             AABB reach = new AABB(pos).inflate(1);
@@ -330,16 +328,6 @@ public final class Surround extends Module {
                 swing.getValue().swing(InteractionHand.MAIN_HAND);
             }
         }
-    }
-
-    // True whilst somebody has a crack pattern on the block.
-    private boolean beingMined(BlockPos pos) {
-        for (SortedSet<BlockDestructionProgress> progress : mc.level.destructionProgress().values()) {
-            if (!progress.isEmpty() && progress.last().getPos().equals(pos)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     @Subscribe

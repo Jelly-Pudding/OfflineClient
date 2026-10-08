@@ -5,6 +5,7 @@ import com.jellypudding.offlineclient.command.CommandManager;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.module.ModuleManager;
 import com.jellypudding.offlineclient.setting.ActionSetting;
+import com.jellypudding.offlineclient.setting.Defaults;
 import com.jellypudding.offlineclient.setting.Setting;
 
 import com.google.gson.JsonArray;
@@ -161,8 +162,10 @@ public final class ConfigManager {
         }
     }
 
-    // Every module back to its defaults without writing anything yet.
+    // Every module back to its defaults without writing anything yet. No reset made before
+    // can be taken back afterwards.
     private static void resetModulesQuietly() {
+        Defaults.forget();
         ModuleManager modules = OfflineClient.INSTANCE.getModuleManager();
         for (Module module : modules.getAll()) {
             module.setEnabled(false);

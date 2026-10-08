@@ -23,8 +23,10 @@ import com.jellypudding.offlineclient.util.PacketUtil;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.protocol.game.ClientboundPlayerAbilitiesPacket;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
+import net.minecraft.tags.FluidTags;
 import net.minecraft.world.entity.player.Abilities;
 import net.minecraft.world.entity.player.Input;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
 public final class Flight extends Module {
@@ -92,6 +94,8 @@ public final class Flight extends Module {
         .visibleWhen(this::flowing);
     private final BoolSetting keepFlightOn = new BoolSetting("Keep flight on",
         "Ignores the server when it switches your flight off.", true);
+    private final BoolSetting avoidLava = new BoolSetting("Avoid lava",
+        "Lava stops you like a wall whilst you fly.", true);
     private final EnumSetting<AntiKick> antiKick = new EnumSetting<>("AntiKick",
         "How the vanilla flight kick is dodged.", AntiKick.DIP)
         .describe(AntiKick.DIP, "Drifts down a little now and then and climbs straight back.")
@@ -124,13 +128,24 @@ public final class Flight extends Module {
     public Flight() {
         super("Flight", "Lets you fly like in creative mode.", Category.MOVEMENT);
         addSettings(mode, horizontalSpeed, verticalSpeed, step, riseStep, dropStep, ramp, snapToAxis,
-            throughFloors, scrollSpeed, timer, keepFlightOn, antiKick, antiKickInterval, dipTicks);
+            throughFloors, scrollSpeed, timer, keepFlightOn, avoidLava, antiKick, antiKickInterval, dipTicks);
         searchTags("fly", "teleport fly");
     }
 
     @Override
     public String getSuffix() {
         return pace().getValueString();
+    }
+
+    // Read by BlockCollisionsMixin for every block you could bump into. Only the lava itself
+    // turns solid. Resting on it never counts as hovering on the server. Once you are in lava
+    // nothing walls you in and you can fly out.
+    public boolean wallsLava(BlockState state) {
+        LocalPlayer player = mc.player;
+        if (!avoidLava.isOn() || player == null || !player.getAbilities().flying || player.isInLava()) {
+            return false;
+        }
+        return state.getFluidState().is(FluidTags.LAVA);
     }
 
     // Read by LocalPlayerMixin instead of the fly speed creative flight pushes with.

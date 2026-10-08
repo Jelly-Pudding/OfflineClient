@@ -1,5 +1,6 @@
 package com.jellypudding.offlineclient.modules.render;
 
+import com.jellypudding.offlineclient.config.WaypointStore;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.PacketReceiveEvent;
 import com.jellypudding.offlineclient.event.events.Render2DEvent;
@@ -16,9 +17,12 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ColorUtil;
+import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.RenderUtil;
+import com.jellypudding.offlineclient.util.ServerInfo;
 import com.jellypudding.offlineclient.util.WorldWatch;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.protocol.game.ClientboundPlayerInfoRemovePacket;
 import net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket;
 import net.minecraft.world.entity.player.Player;
@@ -31,12 +35,24 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.TimeUnit;
 
 // The position of every player is cached each tick.
 public final class LogoutSpots extends Module {
 
-    private record Spot(String name, AABB box, float health, float maxHealth) {
+    // Where a player was last seen and on which tick. A spot gets the time its player logged out.
+    private record Spot(String name, AABB box, float health, float maxHealth, int seenTick, long loggedOut) {
+
+        Spot loggedOutNow() {
+            return new Spot(name, box, health, maxHealth, seenTick, System.currentTimeMillis());
+        }
     }
+
+    // Saved waypoints are named Logout and the player such as LogoutSteve1.
+    private static final String WAYPOINT_PREFIX = "Logout";
+    // A player seen within this many ticks of leaving the tab list was still in view. The body and
+    // the tab list entry go in separate packets that can land either side of a tick.
+    private static final int IN_VIEW_TICKS = 20;
 
     private static final int MAX_TRACKED = 512;
     private static final int MAX_SPOTS = 128;
@@ -58,6 +74,11 @@ public final class LogoutSpots extends Module {
         "Colour behind the name.", 0, 0f, 0f, false).under(nametag);
     private final NumberSetting nameBackgroundOpacity = new NumberSetting("Name background opacity",
         "How solid the background behind the name is.", 30, 0, 100, 5, "%").under(nametag);
+    private final BoolSetting saveWaypoints = new BoolSetting("Save waypoints",
+        "Saves a waypoint where a player in view logged out.", false);
+    private final NumberSetting forgetAfter = new NumberSetting("Forget after",
+        "Minutes before a spot is forgotten. Nought keeps it until the player returns.",
+        0, 0, 120, 5, " minutes").min(0);
 
     // Kept even after a player walks out of view. The least recently seen player
     // drops when the store fills up.
@@ -67,13 +88,15 @@ public final class LogoutSpots extends Module {
     private final Queue<UUID> returned = new ConcurrentLinkedQueue<>();
     private final Map<UUID, Spot> spots = new BoundedMap<>(MAX_SPOTS);
     private final WorldWatch world = new WorldWatch();
+    private int ticks;
 
     public LogoutSpots() {
         super("LogoutSpots", "Marks where players logged out.", Category.RENDER);
         addSettings(fullHeight);
         addSettings(style.settings());
-        addSettings(tracers, nametag, scale, nameColor, nameBackground, nameBackgroundOpacity);
-        searchTags("log out", "disconnect");
+        addSettings(tracers, nametag, scale, nameColor, nameBackground, nameBackgroundOpacity, saveWaypoints,
+            forgetAfter);
+        searchTags("log out", "disconnect", "logout waypoint");
     }
 
     @Override
@@ -122,6 +145,7 @@ public final class LogoutSpots extends Module {
         if (world.changed()) {
             clear();
         }
+        ticks++;
 
         UUID id;
         while ((id = returned.poll()) != null) {
@@ -131,11 +155,34 @@ public final class LogoutSpots extends Module {
             Spot spot = lastSeen.get(id);
             if (spot != null && mc.getConnection() != null
                 && mc.getConnection().getPlayerInfo(id) == null) {
-                spots.put(id, spot);
+                spots.put(id, spot.loggedOutNow());
+                if (saveWaypoints.isOn() && ticks - spot.seenTick() <= IN_VIEW_TICKS) {
+                    saveWaypoint(spot);
+                }
             }
         }
-
+        forgetOld();
         snapshot();
+    }
+
+    // A block another waypoint already marks gets no second one.
+    private void saveWaypoint(Spot spot) {
+        BlockPos feet = BlockPos.containing(spot.box().getCenter().x, spot.box().minY, spot.box().getCenter().z);
+        for (WaypointStore.Waypoint waypoint : WaypointStore.get().here()) {
+            if (waypoint.pos().equals(feet)) {
+                return;
+            }
+        }
+        WaypointStore.get().markFresh(WAYPOINT_PREFIX + spot.name(), feet, ServerInfo.dimension(),
+            Modules.nextWaypointHue());
+    }
+
+    private void forgetOld() {
+        if (forgetAfter.getValue() <= 0) {
+            return;
+        }
+        long oldest = System.currentTimeMillis() - (long) (forgetAfter.getValue() * TimeUnit.MINUTES.toMillis(1));
+        spots.values().removeIf(spot -> spot.loggedOut() < oldest);
     }
 
     private void snapshot() {
@@ -147,7 +194,7 @@ public final class LogoutSpots extends Module {
             lastSeen.put(player.getUUID(), new Spot(
                 player.getGameProfile().name(), player.getBoundingBox(),
                 EntityUtil.totalHealth(player),
-                EntityUtil.totalMaxHealth(player)));
+                EntityUtil.totalMaxHealth(player), ticks, 0));
         }
     }
 

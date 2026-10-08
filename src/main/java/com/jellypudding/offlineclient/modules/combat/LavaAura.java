@@ -40,9 +40,6 @@ public final class LavaAura extends Module {
 
     public enum Spot { FEET, HEAD }
 
-    // Milliseconds without a word from the server before the aura holds off.
-    private static final long LAG_MILLIS = 1000;
-
     // Ticks one of our fires is remembered past its time when it cannot be reached.
     private static final int GIVE_UP = 100;
 
@@ -147,7 +144,7 @@ public final class LavaAura extends Module {
         if (!inGame() || mc.player.isSpectator()) {
             return;
         }
-        if (pauseOnLag.isOn() && TickRate.INSTANCE.lagging(LAG_MILLIS)) {
+        if (pauseOnLag.isOn() && TickRate.INSTANCE.stalled()) {
             return;
         }
         putOutFires();

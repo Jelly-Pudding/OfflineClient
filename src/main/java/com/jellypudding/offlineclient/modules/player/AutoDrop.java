@@ -7,11 +7,11 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ChoiceListSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
-import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.ItemUtil;
+import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.entity.player.Inventory;
@@ -73,19 +73,6 @@ public final class AutoDrop extends Module {
     private final NumberSetting delay = new NumberSetting("Delay",
         "Ticks between each throw.", 2, 0, 20, 1, " ticks");
 
-    private final BoolSetting guard = new BoolSetting("Guard items",
-        "Stops you throwing away the items below by hand.", false);
-    private final RegistryListSetting<Item> guarded = new RegistryListSetting<>("Guarded",
-        "Items you are never allowed to throw. Click to pick them.", BuiltInRegistries.ITEM,
-        List.of())
-        .under(guard);
-    private final BoolSetting guardFrames = new BoolSetting("Guard frames",
-        "Also stops a guarded item going into an item frame or a pot.", true)
-        .under(guard);
-    private final KeybindSetting overrideKey = new KeybindSetting("Override key",
-        "Holding this key lets a guarded item through.", KeybindSetting.UNBOUND)
-        .under(guard);
-
     private int timer;
     // Where among the picked slots the next turn starts.
     private int turn;
@@ -93,18 +80,8 @@ public final class AutoDrop extends Module {
     public AutoDrop() {
         super("AutoDrop", "Throws away junk or whatever you hold or chosen hotbar slots.", Category.PLAYER);
         addSettings(mode, items, hotbar, worn, fullStacksOnly, mainHand, offhand, slots, order, perTurn,
-            keepTools, delay, guard, guarded, guardFrames, overrideKey);
-        searchTags("inventory cleaner", "junk", "throw", "anti drop", "drop hand", "drop slots");
-    }
-
-    // True when the game must refuse to throw this stack away.
-    public boolean guards(ItemStack stack) {
-        return isEnabled() && guard.isOn() && !stack.isEmpty()
-            && guarded.contains(stack.getItem()) && !overrideKey.isHeld();
-    }
-
-    public boolean guardsFrames() {
-        return guardFrames.isOn();
+            keepTools, delay);
+        searchTags("inventory cleaner", "junk", "throw", "drop hand", "drop slots");
     }
 
     @Subscribe
@@ -136,7 +113,7 @@ public final class AutoDrop extends Module {
                 continue;
             }
             ItemStack stack = menuSlots.get(netSlot).getItem();
-            if (stack.isEmpty() || !items.contains(stack.getItem()) || guards(stack)) {
+            if (stack.isEmpty() || !items.contains(stack.getItem()) || Modules.keepsFromThrow(stack)) {
                 continue;
             }
             if (fullStacksOnly.isOn() && stack.getCount() < stack.getMaxStackSize()) {
@@ -203,7 +180,7 @@ public final class AutoDrop extends Module {
     }
 
     private boolean throwable(ItemStack stack) {
-        return !stack.isEmpty() && !guards(stack) && !(keepTools.isOn() && keeps(stack));
+        return !stack.isEmpty() && !Modules.keepsFromThrow(stack) && !(keepTools.isOn() && keeps(stack));
     }
 
     // Tools and weapons and armour all wear out. Every bucket is a container.

@@ -8,6 +8,7 @@ import com.jellypudding.offlineclient.modules.player.MiddleClickExtra;
 import com.jellypudding.offlineclient.modules.render.FreeLook;
 import com.jellypudding.offlineclient.modules.render.Freecam;
 import com.jellypudding.offlineclient.modules.render.Zoom;
+import com.jellypudding.offlineclient.util.ClickRate;
 import com.jellypudding.offlineclient.util.Modules;
 
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
@@ -59,6 +60,9 @@ public abstract class MouseHandlerMixin {
         at = @At("HEAD"),
         cancellable = true)
     private void onButton(long window, MouseButtonInfo info, int action, CallbackInfo ci) {
+        if (action == InputConstants.PRESS) {
+            ClickRate.press(info.button());
+        }
         // The pointer is hidden and off its last spot.
         if (offlineclient$turning()) {
             ci.cancel();

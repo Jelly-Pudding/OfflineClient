@@ -8,12 +8,17 @@ import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientboundOpenScreenPacket;
 import net.minecraft.network.protocol.game.ServerboundContainerClosePacket;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
+import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;
 import net.minecraft.world.inventory.MenuType;
 
 public final class PacketUtil {
 
     // The live connection. Set from the netty thread on every packet read.
     private static volatile Connection connection;
+
+    // The ground claim whilst it is being sent and the tick it last went out.
+    private static Packet<?> claim;
+    private static int claimTick = -1;
 
     private PacketUtil() {
     }
@@ -39,6 +44,40 @@ public final class PacketUtil {
         if (live != null && live.isConnected()) {
             live.send(packet);
         }
+    }
+
+    // True for a start or a stop. The server judges either against the last ground flag it heard.
+    public static boolean judgesBreak(Packet<?> packet) {
+        return packet instanceof ServerboundPlayerActionPacket action
+            && (action.getAction() == ServerboundPlayerActionPacket.Action.START_DESTROY_BLOCK
+                || action.getAction() == ServerboundPlayerActionPacket.Action.STOP_DESTROY_BLOCK);
+    }
+
+    // A claim ends a glide and the server ignores one from a rider. It also lands the fall
+    // the server holds and a fall past the safe distance would hurt.
+    public static boolean mayClaimGround(LocalPlayer player) {
+        return !player.isFallFlying() && !player.isPassenger()
+            && player.fallDistance < DamageUtil.SAFE_FALL;
+    }
+
+    // Tells the server you stand on the ground without moving you. The server keeps the
+    // claim until the next movement packet. One a tick covers every break before it.
+    public static void claimGround(LocalPlayer player) {
+        if (!mayClaimGround(player) || claimTick == MoveGate.tick()) {
+            return;
+        }
+        claimTick = MoveGate.tick();
+        claim = new ServerboundMovePlayerPacket.StatusOnly(true, player.horizontalCollision);
+        try {
+            player.connection.send(claim);
+        } finally {
+            claim = null;
+        }
+    }
+
+    // True for the claim above. Modules that rewrite the ground flag leave it as it is.
+    public static boolean isGroundClaim(Packet<?> packet) {
+        return packet != null && packet == claim;
     }
 
     public static ServerboundMovePlayerPacket withOnGround(ServerboundMovePlayerPacket packet,

@@ -1,18 +1,25 @@
 package com.jellypudding.offlineclient.modules.world;
 
+import com.jellypudding.offlineclient.event.Subscribe;
+import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.AreaPlacer;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.ListMode;
+import com.jellypudding.offlineclient.util.BlockMiner;
 import com.jellypudding.offlineclient.util.BlockUtil;
+import com.jellypudding.offlineclient.util.WorldWatch;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.material.FluidState;
 
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 public final class LiquidFiller extends AreaPlacer {
 
@@ -40,6 +47,13 @@ public final class LiquidFiller extends AreaPlacer {
         .describe(Order.FURTHEST, "The furthest liquid first.")
         .describe(Order.TOP_DOWN, "The top layer first and down from there.")
         .describe(Order.BOTTOM_UP, "The bottom layer first and up from there.");
+    private final BoolSetting mineBack = new BoolSetting("Mine back",
+        "Breaks the blocks it put down again once no liquid is left beside them.", false);
+
+    // Where this module put a block down that is still standing. They belong to this world.
+    private final Set<BlockPos> placed = new LinkedHashSet<>();
+    private final WorldWatch world = new WorldWatch();
+    private BlockPos mining;
 
     public LiquidFiller() {
         super("LiquidFiller", "Fills the water and lava around you with solid blocks.",
@@ -48,8 +62,71 @@ public final class LiquidFiller extends AreaPlacer {
                 Blocks.DEEPSLATE, Blocks.NETHERRACK, Blocks.ANDESITE, Blocks.DIORITE, Blocks.GRANITE),
             "Outline the liquid waiting to be filled.", 1, TARGET_COLOR);
         addSettings(shape, range, wallsRange, water, lava, flowing, blocks, listMode,
-            order, perRound, delay, rotate, render);
+            order, mineBack, perRound, delay, rotate, render);
         searchTags("lava", "water", "fill");
+    }
+
+    @Override
+    protected void onEnable() {
+        super.onEnable();
+        placed.clear();
+        mining = null;
+        world.accept();
+    }
+
+    @Override
+    protected void onDisable() {
+        super.onDisable();
+        stopMining();
+        placed.clear();
+    }
+
+    // Runs before the fill round. One block put down earlier comes out again at a time.
+    @Subscribe
+    private void onTick(TickEvent event) {
+        if (!inGame() || mc.player.isSpectator()) {
+            return;
+        }
+        if (world.changed()) {
+            placed.clear();
+            mining = null;
+            return;
+        }
+        placed.removeIf(BlockUtil::isReplaceable);
+        if (!mineBack.isOn()) {
+            stopMining();
+            return;
+        }
+        if (mining == null || !placed.contains(mining) || !minesBack(mining)) {
+            stopMining();
+            mining = placed.stream().filter(this::minesBack)
+                .min(Comparator.comparingDouble(BlockUtil::distanceTo)).orElse(null);
+        }
+        if (mining != null && !BlockMiner.minesOther(mining) && !BlockMiner.mine(mining, rotate.isOn())) {
+            placed.remove(mining);
+            mining = null;
+        }
+    }
+
+    // A block it put down that can come out without letting liquid back in. The block you
+    // stand on stays.
+    private boolean minesBack(BlockPos pos) {
+        if (!BlockUtil.diggable(pos) || !inReach(pos) || BlockUtil.isStandingOn(pos)) {
+            return false;
+        }
+        for (Direction side : Direction.values()) {
+            if (!mc.level.getFluidState(pos.relative(side)).isEmpty()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private void stopMining() {
+        if (mining != null) {
+            BlockMiner.release(mining);
+            mining = null;
+        }
     }
 
     @Override
@@ -96,7 +173,11 @@ public final class LiquidFiller extends AreaPlacer {
 
     @Override
     protected boolean placeOn(BlockPos pos) {
-        return BlockUtil.placeAny(pos, rotate.isOn(), true);
+        if (!BlockUtil.placeAny(pos, rotate.isOn(), true)) {
+            return false;
+        }
+        placed.add(pos.immutable());
+        return true;
     }
 
     private boolean isWanted(BlockPos pos) {

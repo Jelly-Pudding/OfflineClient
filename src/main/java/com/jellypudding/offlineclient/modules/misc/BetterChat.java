@@ -1,13 +1,18 @@
 package com.jellypudding.offlineclient.modules.misc;
 
+import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.ChatSendEvent;
+import com.jellypudding.offlineclient.hud.elements.ClientLinesElement;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
+import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.TextSetting;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.Modules;
+import com.jellypudding.offlineclient.util.ShownChat;
 import com.jellypudding.offlineclient.util.TextLines;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -15,9 +20,13 @@ import net.minecraft.client.gui.components.ChatComponent;
 import net.minecraft.client.gui.components.PlayerFaceExtractor;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.client.multiplayer.chat.GuiMessage;
+import net.minecraft.client.multiplayer.chat.GuiMessageSource;
+import net.minecraft.client.multiplayer.chat.GuiMessageTag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MessageSignature;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
+import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.entity.player.PlayerSkin;
 
 import java.time.LocalTime;
@@ -62,6 +71,12 @@ public final class BetterChat extends Module {
     // The usual server layout for a chat line.
     private static final Pattern SENDER = Pattern.compile("^<([^<>]{1,32})>");
 
+    private static final int RGB = 0xFFFFFF;
+
+    // The bar beside a line Mojang can act on. Amber stands apart from the grey of the game's own marks.
+    private static final GuiMessageTag REPORTABLE = new GuiMessageTag(0xE0A030, GuiMessageTag.Icon.CHAT_MODIFIED,
+        Component.literal("This line is signed and a report of it can reach Mojang."), null);
+
     private final BoolSetting timestamps = new BoolSetting("Timestamps",
         "Puts the time in front of every line.", true);
     private final BoolSetting showSeconds = new BoolSetting("Show seconds",
@@ -83,8 +98,18 @@ public final class BetterChat extends Module {
         .under(longerHistory);
     private final BoolSetting keepHistory = new BoolSetting("Keep history",
         "Chat survives a disconnect and the debug clear key.", true);
+    private final BoolSetting splitClientLines = new BoolSetting("Split client lines",
+        "Sends the client's own messages to the Client lines piece of the HUD instead of the chat."
+            + " Replies to commands you type and lines with a link stay in the chat.", false);
+    private final BoolSetting markReportable = new BoolSetting("Mark reportable",
+        "Marks chat lines that carry a signature Mojang can act on.", false);
     private final BoolSetting infiniteBox = new BoolSetting("Infinite chat box",
         "Lifts the limit on how much you can type into the chat box.", true);
+    private final BoolSetting colourCommands = new BoolSetting("Colour commands",
+        "Colours what you type once it starts with the command prefix.", true);
+    private final ColorSetting commandColour = new ColorSetting("Command colour",
+        "Colour of a command whilst you type it.", 180, false)
+        .under(colourCommands);
     private final BoolSetting guardCoordinates = new BoolSetting("Guard coordinates",
         "Holds back a message that looks like coordinates until you send it a second time.",
         true);
@@ -96,6 +121,16 @@ public final class BetterChat extends Module {
     private final TextLines patterns = new TextLines("Patterns",
         "How many patterns to match against.",
         "A pattern that hides every chat line it matches. Click to type it.").plain().under(filterRegex);
+    private final BoolSetting hidePlayerChat = new BoolSetting("Hide player chat",
+        "Hides everything other players write in chat.", false);
+    private final BoolSetting keepFriends = new BoolSetting("Keep friends",
+        "Still shows what your friends write.", true)
+        .under(hidePlayerChat);
+    private final BoolSetting keepWhispers = new BoolSetting("Keep whispers",
+        "Still shows whispers sent to you.", true)
+        .under(hidePlayerChat);
+    private final TextLines muted = TextLines.named("Muted players", "Muted player",
+        "How many players are muted.", "A player whose chat never shows. Click to type the name.");
 
     private final BoolSetting annoy = new BoolSetting("Annoy",
         "Sends your messages in aLtErNaTiNg case.", false);
@@ -144,27 +179,89 @@ public final class BetterChat extends Module {
     public BetterChat() {
         super("BetterChat", "Small improvements to the chat box.", Category.MISC);
         addSettings(timestamps, showSeconds, playerHeads, scrollbar, lift, indent,
-            longerHistory, historySize,
-            keepHistory, infiniteBox, guardCoordinates, antiClear, filterRegex);
+            longerHistory, historySize, keepHistory, splitClientLines, markReportable, infiniteBox,
+            colourCommands, commandColour, guardCoordinates, antiClear, filterRegex);
         addSettings(patterns.settings());
+        addSettings(hidePlayerChat, keepFriends, keepWhispers);
+        addSettings(muted.settings());
         addSettings(annoy, fancy, prefix, prefixRandom, prefixText, prefixSmall,
             suffix, suffixRandom, suffixText, suffixSmall);
         searchTags("timestamp", "chat history", "coords", "player heads", "small caps",
-            "scrollbar");
+            "scrollbar", "mute", "ignore", "hide chat", "no player chat", "chat reports", "client messages");
     }
 
-    // True when a line matches one of the patterns and must never reach the chat.
-    public boolean filters(Component message) {
-        if (!isEnabled() || !filterRegex.isOn()) {
+    // True when a line must never reach the chat. A pattern hides any line and the rest only
+    // ever hide what other players write.
+    public boolean filters(Component message, GuiMessageSource source) {
+        if (!isEnabled()) {
             return false;
         }
-        String text = message.getString();
+        if (filterRegex.isOn() && matchesPattern(message.getString())) {
+            return true;
+        }
+        if (!hidePlayerChat.isOn() && muted.isEmpty()) {
+            return false;
+        }
+        String writer = ShownChat.writer(message, source);
+        if (writer == null || mc.player != null && writer.equalsIgnoreCase(mc.player.getGameProfile().name())) {
+            return false;
+        }
+        if (muted.holds(writer)) {
+            return true;
+        }
+        boolean kept = keepFriends.isOn() && OfflineClient.INSTANCE.getFriendManager().isFriend(writer)
+            || keepWhispers.isOn() && ShownChat.whisper(message);
+        return hidePlayerChat.isOn() && !kept;
+    }
+
+    private boolean matchesPattern(String text) {
         for (Pattern pattern : compiledPatterns()) {
             if (pattern.matcher(text).find()) {
                 return true;
             }
         }
         return false;
+    }
+
+    // False when every muted row is taken.
+    public boolean mute(String name) {
+        return muted.add(name);
+    }
+
+    public boolean unmute(String name) {
+        return muted.remove(name);
+    }
+
+    public List<String> mutedPlayers() {
+        return muted.all();
+    }
+
+    // True whilst BetterChat is on and hides the chat of that player.
+    public boolean mutes(String name) {
+        return isEnabled() && muted.holds(name);
+    }
+
+    // True whilst the client's own lines go to their piece of the HUD. With that piece off or
+    // Conceal hiding the HUD they stay in the chat.
+    public boolean splitsClientLines() {
+        return isEnabled() && splitClientLines.isOn() && !Conceal.hides(Conceal.Part.OVERLAY)
+            && Modules.hudShows(ClientLinesElement.class);
+    }
+
+    // The tag a player line goes up with. A signed line the game trusts has none and Mark
+    // reportable gives it one.
+    public GuiMessageTag tagFor(MessageSignature signature, GuiMessageTag tag) {
+        return isEnabled() && markReportable.isOn() && signature != null && tag == null ? REPORTABLE : tag;
+    }
+
+    // The shown part of the chat box in the command colour once the whole box starts with the
+    // command prefix. Null leaves it to the game.
+    public FormattedCharSequence commandText(String typed, String shown) {
+        if (!isEnabled() || !colourCommands.isOn()
+            || !typed.startsWith(OfflineClient.INSTANCE.getCommandManager().getPrefix())) {
+            return null;
+        }
+        return FormattedCharSequence.forward(shown, Style.EMPTY.withColor(commandColour.getColor() & RGB));
     }
 
     // Patterns are rebuilt only after the rows change. A bad one is dropped with a warning.

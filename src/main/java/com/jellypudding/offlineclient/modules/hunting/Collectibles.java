@@ -11,6 +11,7 @@ import com.jellypudding.offlineclient.render.DrawBatch;
 import com.jellypudding.offlineclient.render.NearFade;
 import com.jellypudding.offlineclient.render.WorldToScreen;
 import com.jellypudding.offlineclient.setting.BoolSetting;
+import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.Carried;
@@ -50,6 +51,7 @@ import net.minecraft.world.level.block.entity.BannerBlockEntity;
 import net.minecraft.world.level.block.entity.BannerPattern;
 import net.minecraft.world.level.block.entity.BannerPatternLayers;
 import net.minecraft.world.level.block.entity.BannerPatterns;
+import net.minecraft.world.level.block.entity.ShelfBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.RotationSegment;
 import net.minecraft.world.phys.AABB;
@@ -79,6 +81,10 @@ public final class Collectibles extends Module {
         }
     }
 
+    // A shelf showing at least one picked item.
+    private record Shelf(BlockPos pos, String label, String words) {
+    }
+
     // A pattern laid over a banner in one dye.
     private record Motif(ResourceKey<BannerPattern> pattern, DyeColor color) {
 
@@ -99,7 +105,7 @@ public final class Collectibles extends Module {
     private static final List<Motif> END_CITY_BANDS = List.of(new Motif(BannerPatterns.TRIANGLE_TOP, DyeColor.BLACK),
         new Motif(BannerPatterns.TRIANGLE_BOTTOM, DyeColor.BLACK));
 
-    // Twice a second is quick enough for a banner that was just hung.
+    // Twice a second is quick enough for a banner that was just hung or an item just shelved.
     private static final int SCAN_TICKS = 10;
 
     // The banner renderer draws its model in sixteenths of a block at two thirds size.
@@ -131,6 +137,10 @@ public final class Collectibles extends Module {
         "Looks at what armour stands and mannequins hold and wear.", true);
     private final BoolSetting mobs = new BoolSetting("Mobs",
         "Looks at what mobs hold and wear. Your own pets and the mounts you have ridden are left out.", true);
+    private final BoolSetting shelves = new BoolSetting("Shelves",
+        "Looks at items shown on shelves.", true);
+    private final ColorSetting shelfColor = new ColorSetting("Shelf colour",
+        "Colour of shelves showing a picked item.", GOLD_HUE, false).under(shelves);
     private final BoolSetting banners = new BoolSetting("Banners",
         "Marks banners in the shape and colour of their cloth.", true);
     private final BoolSetting structureBanners = new BoolSetting("Structure banners",
@@ -150,8 +160,9 @@ public final class Collectibles extends Module {
 
     // Rebuilt once a tick.
     private List<Find> found = List.of();
-    // Rebuilt by every banner scan.
+    // Rebuilt by every block scan.
     private List<Banner> hung = List.of();
+    private List<Shelf> stocked = List.of();
     private int wait;
     private final Sightings sightings = new Sightings();
     private final WorldWatch world = new WorldWatch();
@@ -160,14 +171,14 @@ public final class Collectibles extends Module {
         super("Collectibles", "Marks rare items and banners wherever they show in the world.", Category.HUNTING);
         addSettings(items);
         addSettings(gear.settings());
-        addSettings(dropped, frames, stands, mobs, banners, structureBanners);
+        addSettings(dropped, frames, stands, mobs, shelves, shelfColor, banners, structureBanners);
         addSettings(style.settings());
         addSettings(tracers, labels, scale);
         addSettings(notice.settings());
         addSettings(colors.settings());
         addSettings(fade.setting());
         searchTags("rare items", "dragon egg", "heads", "music disc", "item frame", "armour stand",
-            "mannequin", "banner", "shulker");
+            "mannequin", "banner", "shulker", "shelf");
     }
 
     // Music discs and netherite are gathered by name and shulker boxes by their block because
@@ -189,7 +200,7 @@ public final class Collectibles extends Module {
 
     @Override
     public String getSuffix() {
-        return count(found.size() + shownBanners().size());
+        return count(found.size() + shownBanners().size() + shownShelves().size());
     }
 
     @Override
@@ -205,6 +216,7 @@ public final class Collectibles extends Module {
     private void clear() {
         found = List.of();
         hung = List.of();
+        stocked = List.of();
         wait = 0;
         sightings.clear();
         world.forget();
@@ -218,12 +230,13 @@ public final class Collectibles extends Module {
         if (world.changed()) {
             // Positions mean something different in every world.
             hung = List.of();
+            stocked = List.of();
             wait = 0;
         }
         found = findEntities();
         if (--wait <= 0) {
             wait = SCAN_TICKS;
-            hung = banners.isOn() ? findBanners() : List.of();
+            scanBlocks();
         }
     }
 
@@ -278,20 +291,54 @@ public final class Collectibles extends Module {
             ChatUtil.withArticle(ChatUtil.words(holder.getType())) + " " + Carried.describe(pieces));
     }
 
-    private List<Banner> findBanners() {
-        List<Banner> scanned = new ArrayList<>();
-        LoadedChunks.forEachBlockEntity(blockEntity -> {
-            if (!(blockEntity instanceof BannerBlockEntity banner)
-                || !structureBanners.isOn() && builtIn(banner)) {
-                return;
+    private void scanBlocks() {
+        List<Banner> bannersSeen = new ArrayList<>();
+        List<Shelf> shelvesSeen = new ArrayList<>();
+        if (banners.isOn() || shelves.isOn()) {
+            LoadedChunks.forEachBlockEntity(blockEntity -> {
+                switch (blockEntity) {
+                    case BannerBlockEntity banner when banners.isOn()
+                        && (structureBanners.isOn() || !builtIn(banner)) -> {
+                        Banner seen = bannerOf(banner);
+                        bannersSeen.add(seen);
+                        tellOnce("banner", seen.words(), seen.pos());
+                    }
+                    case ShelfBlockEntity shelf when shelves.isOn() -> {
+                        Shelf seen = shelfOf(shelf);
+                        if (seen != null) {
+                            shelvesSeen.add(seen);
+                            tellOnce("shelf", seen.words(), seen.pos());
+                        }
+                    }
+                    default -> {
+                    }
+                }
+            });
+        }
+        hung = bannersSeen;
+        stocked = shelvesSeen;
+    }
+
+    private void tellOnce(String kind, String words, BlockPos pos) {
+        if (sightings.firstTime(pos)) {
+            notice.tell(kind, words, pos);
+        }
+    }
+
+    // Null for a shelf showing nothing picked. Such as an oak shelf showing Elytra and Mace.
+    private Shelf shelfOf(ShelfBlockEntity shelf) {
+        List<Carried.Piece> pieces = new ArrayList<>();
+        for (ItemStack stack : shelf.getItems()) {
+            if (picked(stack)) {
+                pieces.add(new Carried.Piece("showing", stack.getHoverName().getString()));
             }
-            Banner found = bannerOf(banner);
-            scanned.add(found);
-            if (sightings.firstTime(found.pos())) {
-                notice.tell("banner", found.words(), found.pos());
-            }
-        });
-        return scanned;
+        }
+        if (pieces.isEmpty()) {
+            return null;
+        }
+        String words = ChatUtil.withArticle(ChatUtil.words(shelf.getBlockState().getBlock())) + " "
+            + Carried.describe(pieces);
+        return new Shelf(shelf.getBlockPos(), Carried.label(pieces), words);
     }
 
     // True for a banner a structure is built with. Every one hangs on a wall with no name in
@@ -365,9 +412,13 @@ public final class Collectibles extends Module {
             depth * Math.cos(turn) - across * Math.sin(turn));
     }
 
-    // The banners to draw. Turning the switch off hides them before the next scan.
+    // The banners and shelves to draw. Turning a switch off hides them before the next scan.
     private List<Banner> shownBanners() {
         return banners.isOn() ? hung : List.of();
+    }
+
+    private List<Shelf> shownShelves() {
+        return shelves.isOn() ? stocked : List.of();
     }
 
     private static AABB boxOf(Entity entity, float partialTicks) {
@@ -402,6 +453,15 @@ public final class Collectibles extends Module {
                 tracer(batch, banner.centre(), color);
             }
         }
+        for (Shelf shelf : shownShelves()) {
+            AABB box = DrawBatch.blockBox(shelf.pos());
+            float strength = fade.strengthAt(box.getCenter());
+            if (strength > 0) {
+                int color = ColorUtil.fade(shelfColor.getColor(), strength);
+                style.draw(batch, box, color, true);
+                tracer(batch, box.getCenter(), color);
+            }
+        }
     }
 
     private void tracer(DrawBatch batch, Vec3 to, int color) {
@@ -426,6 +486,9 @@ public final class Collectibles extends Module {
         for (Banner banner : shownBanners()) {
             int text = ColorUtil.luminance(banner.color()) < DARK_TEXT ? RenderUtil.MUTED_TEXT : banner.color();
             label(event, banner.top().add(0, LABEL_LIFT, 0), banner.label(), text);
+        }
+        for (Shelf shelf : shownShelves()) {
+            label(event, Vec3.upFromBottomCenterOf(shelf.pos(), 1 + LABEL_LIFT), shelf.label(), shelfColor.getColor());
         }
     }
 

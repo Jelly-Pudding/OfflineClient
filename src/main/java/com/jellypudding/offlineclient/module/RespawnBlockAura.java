@@ -21,6 +21,7 @@ import com.jellypudding.offlineclient.util.RotationPriority;
 import com.jellypudding.offlineclient.util.SwingMode;
 import com.jellypudding.offlineclient.util.TargetFilter;
 import com.jellypudding.offlineclient.util.TargetPriority;
+import com.jellypudding.offlineclient.util.Targeting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
@@ -35,7 +36,7 @@ import java.util.function.Predicate;
 
 // The shape shared by the auras that place a respawn block beside an enemy and set it off.
 // A subclass supplies the block and how it is placed and fired.
-public abstract class RespawnBlockAura extends Module {
+public abstract class RespawnBlockAura extends Module implements Targeting {
 
     // Ticks between attempts to pull ammunition up from the backpack.
     private static final int MOVE_DELAY = 4;
@@ -81,7 +82,7 @@ public abstract class RespawnBlockAura extends Module {
     private int placeTimer;
     private int breakTimer;
     private int moveTimer;
-    private String targetName;
+    private LivingEntity target;
     protected String status;
 
     // The escape is safe because addSettings is final and never hands the module out.
@@ -165,7 +166,13 @@ public abstract class RespawnBlockAura extends Module {
 
     @Override
     public String getSuffix() {
-        return suffix(targetName, status);
+        return suffix(nameOf(target), status);
+    }
+
+    // The enemy picked this tick. Null whilst there is none.
+    @Override
+    public LivingEntity getTarget() {
+        return target;
     }
 
     @Override
@@ -186,7 +193,7 @@ public abstract class RespawnBlockAura extends Module {
     private void clear() {
         planned.clear();
         armed = null;
-        targetName = null;
+        target = null;
         status = null;
     }
 
@@ -196,7 +203,7 @@ public abstract class RespawnBlockAura extends Module {
         armed = null;
         status = null;
         if (!inGame() || mc.player.isSpectator()) {
-            targetName = null;
+            target = null;
             return;
         }
         placeTimer = Math.max(0, placeTimer - 1);
@@ -204,12 +211,11 @@ public abstract class RespawnBlockAura extends Module {
         moveTimer = Math.max(0, moveTimer - 1);
 
         if (!explodesHere()) {
-            targetName = null;
+            target = null;
             status = safeHereStatus();
             return;
         }
-        LivingEntity target = bestTarget();
-        targetName = nameOf(target);
+        target = bestTarget();
         if (target == null) {
             restoreSlot();
             return;

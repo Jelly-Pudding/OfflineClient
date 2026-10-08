@@ -1,8 +1,8 @@
 package com.jellypudding.offlineclient.hud.elements;
 
 import com.jellypudding.offlineclient.OfflineClient;
-import com.jellypudding.offlineclient.hud.Backdrop;
 import com.jellypudding.offlineclient.hud.HudElement;
+import com.jellypudding.offlineclient.hud.RowCache;
 import com.jellypudding.offlineclient.hud.TextRow;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
@@ -41,35 +41,35 @@ import java.util.function.Predicate;
 // order you drag them and each lines up with the side the element is anchored to.
 public final class StatsElement extends HudElement {
 
-    // The rows on offer with the item each shows beside it in the settings.
+    // The rows on offer with the item each shows beside it in the settings. The editor shows a
+    // made up amount for each in the unit of its statistic until the server first answers.
     public enum Row {
-        PLAY_TIME(Items.CLOCK),
-        DISTANCE(Items.LEATHER_BOOTS),
-        ELYTRA_DISTANCE(Items.ELYTRA),
-        BLOCKS_MINED(Items.IRON_PICKAXE),
-        MOBS_KILLED(Items.ZOMBIE_HEAD),
-        PLAYERS_KILLED(Items.PLAYER_HEAD),
-        DEATHS(Items.SKELETON_SKULL),
-        SINCE_DEATH(Items.TOTEM_OF_UNDYING),
-        SINCE_SLEEP(Items.BED.red()),
-        ITEMS_CRAFTED(Items.CRAFTING_TABLE),
-        ITEMS_USED(Items.FLINT_AND_STEEL),
-        ITEMS_PICKED_UP(Items.HOPPER),
-        DAMAGE_DEALT(Items.IRON_SWORD),
-        DAMAGE_TAKEN(Items.SHIELD),
-        JUMPS(Items.RABBIT_FOOT);
+        PLAY_TIME(Items.CLOCK, SAMPLE_PLAYED),
+        DISTANCE(Items.LEATHER_BOOTS, 4_270_000),
+        ELYTRA_DISTANCE(Items.ELYTRA, 1_830_000),
+        BLOCKS_MINED(Items.IRON_PICKAXE, 1532),
+        MOBS_KILLED(Items.ZOMBIE_HEAD, 87),
+        PLAYERS_KILLED(Items.PLAYER_HEAD, 3),
+        DEATHS(Items.SKELETON_SKULL, 2),
+        SINCE_DEATH(Items.TOTEM_OF_UNDYING, 56_600),
+        SINCE_SLEEP(Items.BED.red(), 78_000),
+        ITEMS_CRAFTED(Items.CRAFTING_TABLE, 412),
+        ITEMS_USED(Items.FLINT_AND_STEEL, 2210),
+        ITEMS_PICKED_UP(Items.HOPPER, 3904),
+        DAMAGE_DEALT(Items.IRON_SWORD, 9600),
+        DAMAGE_TAKEN(Items.SHIELD, 1900),
+        JUMPS(Items.RABBIT_FOOT, 5120);
 
         private final Item icon;
+        private final long sample;
 
-        Row(Item icon) {
+        Row(Item icon, long sample) {
             this.icon = icon;
+            this.sample = sample;
         }
     }
 
     public enum Period { ALL_TIME, THIS_VISIT }
-
-    // The rows are worked out afresh this often. The sums walk every statistic you have.
-    private static final long REBUILD_NANOS = TimeUnit.MILLISECONDS.toNanos(50);
 
     private static final double CM_PER_KM = 100_000;
     // Damage is counted in tenths of a health point and a heart holds two.
@@ -79,6 +79,10 @@ public final class StatsElement extends HudElement {
     private static final long LEAST_RATE_TICKS = TimeUnit.MINUTES.toSeconds(1) * SharedConstants.TICKS_PER_SECOND;
     // Below this an hourly rate keeps a decimal.
     private static final double WHOLE_RATE = 10;
+    // A row with nothing to say yet.
+    private static final long NOTHING = Long.MIN_VALUE;
+    // Three hours and twelve minutes of play in ticks behind the sample rows.
+    private static final long SAMPLE_PLAYED = 230_400;
 
     // Every way of getting about the game counts towards distance.
     private static final List<Identifier> TRAVEL = List.of(Stats.WALK_ONE_CM, Stats.CROUCH_ONE_CM,
@@ -152,17 +156,11 @@ public final class StatsElement extends HudElement {
     private final BoolSetting perHour = new BoolSetting("Statistics per hour",
         "Adds how many of each you gain in an hour of play over the same period.", false);
     private final NumberSetting refresh = new NumberSetting("Statistics refresh",
-        "How often the server is asked for your statistics. Each ask also resets its idle kick timer.",
-        5, 1, 60, 1, " seconds").min(1);
-    private final ColorSetting color = new ColorSetting("Statistics colour",
-        "Colour of the row names. The numbers stay white.", 190, 0.15f, 0.85f, false);
-    private final BoolSetting shadow = new BoolSetting("Statistics shadow",
-        "Draws a shadow behind the text.", true);
-    private final Backdrop backdrop = new Backdrop("Statistics", "the rows", false);
-
-    // Null until first built.
-    private List<String> lines;
-    private long builtAt;
+        "How often the server is asked for your statistics.", 5, 1, 60, 1, " seconds").min(1);
+    private final ColorSetting color = labelColor("Statistics colour",
+        "Colour of the row names. The numbers stay white.");
+    // The sums walk every statistic you have.
+    private final RowCache<String> lines = new RowCache<>(this::build);
 
     public StatsElement() {
         super("Statistics", "Your statistics on this server as the server keeps them such as play time and kills."
@@ -173,26 +171,31 @@ public final class StatsElement extends HudElement {
         add(crafted.settings());
         add(used.settings());
         add(pickedUp.settings());
-        add(period, perHour, refresh, color, shadow);
-        add(backdrop.settings());
+        add(period, perHour, refresh, color);
     }
 
     @Override
     public boolean visible() {
-        if (!isActive() || OfflineClient.MC.player == null) {
-            return false;
-        }
-        PlayerStats.INSTANCE.want(refresh.getValue());
-        return PlayerStats.INSTANCE.ready() && !lines().isEmpty();
+        return isActive() && !lines().isEmpty();
     }
 
+    // Until the server first answers the editor shows the chosen rows with made up numbers.
     private List<String> lines() {
-        long now = System.nanoTime();
-        if (lines == null || now - builtAt >= REBUILD_NANOS) {
-            lines = build();
-            builtAt = now;
+        if (OfflineClient.MC.player == null) {
+            return List.of();
         }
-        return lines;
+        PlayerStats.INSTANCE.want(refresh.getValue());
+        if (PlayerStats.INSTANCE.ready()) {
+            return lines.get();
+        }
+        if (!editing()) {
+            return List.of();
+        }
+        List<String> sample = new ArrayList<>();
+        for (Row row : rows.ranked()) {
+            sample.add(line(row, row.sample, SAMPLE_PLAYED));
+        }
+        return sample;
     }
 
     private List<String> build() {
@@ -204,36 +207,50 @@ public final class StatsElement extends HudElement {
         long elapsed = PlayerStats.INSTANCE.ticksSinceAnswer();
         long played = custom(Stats.PLAY_TIME, visit) + elapsed;
         for (Row row : rows.ranked()) {
-            String line = line(row, visit, elapsed, played);
-            if (line != null) {
-                built.add(line);
+            long amount = amount(row, visit, elapsed, played);
+            if (amount != NOTHING) {
+                built.add(line(row, amount, played));
             }
         }
         return built;
     }
 
-    // Null for a row with nothing to say yet such as the time since your last death
-    // before you have died.
-    private String line(Row row, boolean visit, long elapsed, long played) {
+    // What the statistic behind a row has counted. NOTHING for a row with nothing to say yet
+    // such as the time since your last death before you have died.
+    private long amount(Row row, boolean visit, long elapsed, long played) {
+        return switch (row) {
+            case PLAY_TIME -> played;
+            case DISTANCE -> travelled(visit);
+            case ELYTRA_DISTANCE -> custom(Stats.AVIATE_ONE_CM, visit);
+            case BLOCKS_MINED -> sum(Stats.BLOCK_MINED, mined, visit);
+            case MOBS_KILLED -> mobKills(visit);
+            case PLAYERS_KILLED -> custom(Stats.PLAYER_KILLS, visit);
+            case DEATHS -> custom(Stats.DEATHS, visit);
+            case SINCE_DEATH -> custom(Stats.DEATHS, false) > 0
+                ? custom(Stats.TIME_SINCE_DEATH, false) + elapsed : NOTHING;
+            case SINCE_SLEEP -> custom(Stats.TIME_SINCE_REST, false) + elapsed;
+            case ITEMS_CRAFTED -> sum(Stats.ITEM_CRAFTED, crafted, visit);
+            case ITEMS_USED -> sum(Stats.ITEM_USED, used, visit);
+            case ITEMS_PICKED_UP -> sum(Stats.ITEM_PICKED_UP, pickedUp, visit);
+            case DAMAGE_DEALT -> custom(Stats.DAMAGE_DEALT, visit);
+            case DAMAGE_TAKEN -> custom(Stats.DAMAGE_TAKEN, visit);
+            case JUMPS -> custom(Stats.JUMP, visit);
+        };
+    }
+
+    // How a row reads once its statistic has counted this much.
+    private String line(Row row, long amount, long played) {
         String label = EnumSetting.label(row);
         return switch (row) {
-            case PLAY_TIME -> text(label, span(played), null);
-            case DISTANCE -> distance(label, travelled(visit), played);
-            case ELYTRA_DISTANCE -> distance(label, custom(Stats.AVIATE_ONE_CM, visit), played);
-            case BLOCKS_MINED -> filtered(label, mined, " mined", sum(Stats.BLOCK_MINED, mined, visit), played);
-            case MOBS_KILLED -> filtered(label, killed, " kills", mobKills(visit), played);
-            case PLAYERS_KILLED -> count(label, custom(Stats.PLAYER_KILLS, visit), played);
-            case DEATHS -> count(label, custom(Stats.DEATHS, visit), played);
-            case SINCE_DEATH -> custom(Stats.DEATHS, false) > 0
-                ? text(label, span(custom(Stats.TIME_SINCE_DEATH, false) + elapsed), null) : null;
-            case SINCE_SLEEP -> text(label, span(custom(Stats.TIME_SINCE_REST, false) + elapsed), null);
-            case ITEMS_CRAFTED -> filtered(label, crafted, " crafted", sum(Stats.ITEM_CRAFTED, crafted, visit), played);
-            case ITEMS_USED -> filtered(label, used, " used", sum(Stats.ITEM_USED, used, visit), played);
-            case ITEMS_PICKED_UP -> filtered(label, pickedUp, " picked up", sum(Stats.ITEM_PICKED_UP, pickedUp, visit),
-                played);
-            case DAMAGE_DEALT -> hearts(label, custom(Stats.DAMAGE_DEALT, visit), played);
-            case DAMAGE_TAKEN -> hearts(label, custom(Stats.DAMAGE_TAKEN, visit), played);
-            case JUMPS -> count(label, custom(Stats.JUMP, visit), played);
+            case PLAY_TIME, SINCE_DEATH, SINCE_SLEEP -> text(label, span(amount), null);
+            case DISTANCE, ELYTRA_DISTANCE -> distance(label, amount, played);
+            case BLOCKS_MINED -> filtered(label, mined, " mined", amount, played);
+            case MOBS_KILLED -> filtered(label, killed, " kills", amount, played);
+            case ITEMS_CRAFTED -> filtered(label, crafted, " crafted", amount, played);
+            case ITEMS_USED -> filtered(label, used, " used", amount, played);
+            case ITEMS_PICKED_UP -> filtered(label, pickedUp, " picked up", amount, played);
+            case DAMAGE_DEALT, DAMAGE_TAKEN -> hearts(label, amount, played);
+            case PLAYERS_KILLED, DEATHS, JUMPS -> count(label, amount, played);
         };
     }
 
@@ -312,30 +329,23 @@ public final class StatsElement extends HudElement {
         return time.toSeconds() + "s";
     }
 
+    // The colour goes on as the rows are drawn. A rainbow keeps moving between rebuilds.
+    private List<TextRow> rows(Font font) {
+        return TextRow.lines(font, lines(), color);
+    }
+
     @Override
     public void render(GuiGraphicsExtractor context, Font font) {
-        List<String> shown = lines();
-        int widest = width(font);
-        backdrop.around(context, widest, shown.size() * TextRow.LINE);
-        int y = 0;
-        for (String line : shown) {
-            int x = (int) Math.round((widest - font.width(line)) * alignment());
-            context.text(font, line, x, y, color.getColor(), shadow.isOn());
-            y += TextRow.LINE;
-        }
+        TextRow.draw(context, font, rows(font), alignment());
     }
 
     @Override
     public int width(Font font) {
-        int widest = 1;
-        for (String line : lines()) {
-            widest = Math.max(widest, font.width(line));
-        }
-        return widest;
+        return TextRow.widest(rows(font));
     }
 
     @Override
     public int height(Font font) {
-        return Math.max(TextRow.LINE, lines().size() * TextRow.LINE);
+        return TextRow.height(font, lines().size());
     }
 }

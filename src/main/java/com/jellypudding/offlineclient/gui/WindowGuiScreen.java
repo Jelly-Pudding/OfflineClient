@@ -238,7 +238,7 @@ public final class WindowGuiScreen extends GuiScreenBase {
         if (!expanded.contains(module.getName())) {
             return MODULE_ROW;
         }
-        return MODULE_ROW + SettingWidget.blockHeight(module);
+        return MODULE_ROW + SettingWidget.blockHeight(SettingBlock.of(module));
     }
 
     private int totalHeight() {
@@ -278,12 +278,13 @@ public final class WindowGuiScreen extends GuiScreenBase {
     private void renderTitle(GuiGraphicsExtractor context, Font font, int wx, int wy, int ww) {
         int titleY = WindowParts.titleY(wy);
         ClickGuiModule gui = OfflineClient.INSTANCE.getModuleManager().get(ClickGuiModule.class);
-        context.text(font, OfflineClient.NAME, wx + 10, titleY, gui.titleColor(), false);
+        int nameX = wx + WindowParts.TITLE_INSET;
+        context.text(font, OfflineClient.NAME, nameX, titleY, gui.titleColor(), false);
         context.text(font, "v" + OfflineClient.VERSION,
-            wx + 14 + font.width(OfflineClient.NAME), titleY, gui.versionColor(), false);
+            nameX + font.width(OfflineClient.NAME) + WindowParts.TITLE_GAP, titleY, gui.versionColor(), false);
         int on = tabCounts[Category.values().length + 1];
         String tally = on + " enabled";
-        context.text(font, tally, wx + ww - 10 - font.width(tally), titleY,
+        context.text(font, tally, wx + ww - WindowParts.TITLE_INSET - font.width(tally), titleY,
             on > 0 ? GuiTheme.accentText() : GuiTheme.textFaint(), false);
     }
 
@@ -355,11 +356,16 @@ public final class WindowGuiScreen extends GuiScreenBase {
         int ty = GuiTheme.textY(y, MODULE_ROW);
         int pillRight = x + w - ARROW_ZONE - 2;
         int pillLeft = pillRight - PILL_WIDTH;
-        context.text(font, module.getName(), x + FAV_ZONE + 2, ty,
-            on ? GuiTheme.text() : GuiTheme.textDim(), false);
+        int nameX = x + FAV_ZONE + 2;
+        context.text(font, module.getName(), nameX, ty, on ? GuiTheme.text() : GuiTheme.textDim(), false);
+        SettingBlock block = SettingBlock.of(module);
+        int changed = ResetMarks.shownChanges(block);
+        if (changed > 0) {
+            ResetMarks.headerMark(context, nameX + font.width(module.getName()), ty);
+        }
 
         String suffix = on ? module.getSuffix() : null;
-        int suffixX = x + FAV_ZONE + 5 + font.width(module.getName());
+        int suffixX = nameX + 3 + font.width(module.getName()) + (changed > 0 ? ResetMarks.MARK_ROOM : 0);
         int suffixRoom = pillLeft - 4 - suffixX;
         if (suffix != null && suffixRoom > 12) {
             context.text(font, SettingWidget.trimEnd(font, suffix, suffixRoom), suffixX, ty,
@@ -376,10 +382,10 @@ public final class WindowGuiScreen extends GuiScreenBase {
             hovered ? GuiTheme.text() : GuiTheme.textDim());
 
         if (hovered) {
-            description = module.getDescription();
+            description = ResetMarks.withCount(module.getDescription(), changed);
         }
         if (open) {
-            SettingWidget.renderBlock(context, font, module, x, y + MODULE_ROW, w,
+            SettingWidget.renderBlock(context, font, block, x, y + MODULE_ROW, w,
                 mouseX, mouseY, hoverAllowed, settings);
         }
     }
@@ -440,7 +446,7 @@ public final class WindowGuiScreen extends GuiScreenBase {
                 return true;
             }
             if (my >= rowY + MODULE_ROW && my < rowY + rowH) {
-                SettingWidget.clickBlock(module, mx, my, x, rowY + MODULE_ROW, rowW,
+                SettingWidget.clickBlock(SettingBlock.of(module), mx, my, x, rowY + MODULE_ROW, rowW,
                     button, settings, drag);
                 return true;
             }

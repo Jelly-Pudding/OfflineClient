@@ -9,12 +9,6 @@ import net.minecraft.world.phys.Vec3;
 // given distance along it.
 public record Bearing(double x, double z, double yaw, double blur, double beyond) {
 
-    // The eight points in the order the yaw passes them from south.
-    private static final String[] POINTS = {"south", "south west", "west", "north west",
-        "north", "north east", "east", "south east"};
-
-    private static final float POINT_DEGREES = 360f / POINTS.length;
-
     private static final double QUARTER_TURN = Math.PI / 2;
 
     // An exact yaw that can point at anything along the line.
@@ -60,7 +54,7 @@ public record Bearing(double x, double z, double yaw, double blur, double beyond
 
     // The nearest of the eight compass points such as north east.
     public String compass() {
-        return POINTS[Math.floorMod(Math.round(degrees() / POINT_DEGREES), POINTS.length)];
+        return CompassPoint.nearest(degrees()).words();
     }
 
     // The two ways at right angles to the line such as east or west. A second line taken

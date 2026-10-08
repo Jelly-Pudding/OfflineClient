@@ -12,8 +12,7 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 
 import java.util.List;
 
-// A solid box over part of the screen. It goes on after everything else the game draws
-// with the tab list and the debug screen and any open screen under it.
+// A solid box over part of the screen. On top it goes on after everything else the game draws.
 public final class CoverElement extends HudElement {
 
     // How many covers the HUD offers.
@@ -35,27 +34,24 @@ public final class CoverElement extends HudElement {
 
     private final ColorSetting color;
     private final NumberSetting opacity;
+    private final BoolSetting onTop;
     private final TextSetting text;
     private final ColorSetting textColor;
-    private final BoolSetting textShadow;
 
     public CoverElement(int number) {
         super("Cover " + number, "A solid box that hides part of the screen such as your coordinates whilst"
-            + " streaming. It covers the tab list and the debug screen too.", false, number * START_STEP, START_Y,
-            1, MOST_STRETCH);
-        // The debug text sits a fixed number of GUI pixels from the corners of any screen.
-        pin();
+            + " streaming.", false, number * START_STEP, START_Y, 1, MOST_STRETCH, Background.NONE);
         String name = getName();
         color = new ColorSetting(name + " colour", "Colour of the box.", 0, 0, 0.08f, false);
         opacity = new NumberSetting(name + " opacity",
             "How solid the box is. At a hundred nothing shows through it.", 100, 0, 100, 5, "%").min(0).max(100);
+        onTop = new BoolSetting(name + " on top",
+            "Draws the box over the tab list and the debug screen and any open screen.", true);
         text = new TextSetting(name + " text",
             "Words written in the middle of the box. Leave it empty for a plain box.", "");
         textColor = new ColorSetting(name + " text colour", "Colour of the words.", 0, 0, 1, false)
             .under(text, () -> !text.isBlank());
-        textShadow = new BoolSetting(name + " text shadow", "Draws a shadow behind the words.", true)
-            .under(text, () -> !text.isBlank());
-        add(color, opacity, text, textColor, textShadow);
+        add(color, opacity, onTop, text, textColor);
     }
 
     @Override
@@ -63,8 +59,16 @@ public final class CoverElement extends HudElement {
         return true;
     }
 
+    // With on top switched off the box draws under the tab list and the debug screen and any
+    // open screen.
     @Override
     public boolean drawsOnTop() {
+        return onTop.isOn();
+    }
+
+    // A cover still hides what it covers whilst the rest of the overlay steps aside.
+    @Override
+    public boolean staysWhenHidden() {
         return true;
     }
 
@@ -90,7 +94,7 @@ public final class CoverElement extends HudElement {
         context.pose().scale(1 / across, 1 / down);
         int y = -shown.size() * font.lineHeight / 2;
         for (String line : shown) {
-            context.text(font, line, -font.width(line) / 2, y, textColor.getColor(), textShadow.isOn());
+            write(context, font, line, -font.width(line) / 2, y, textColor.getColor());
             y += font.lineHeight;
         }
         context.pose().popMatrix();

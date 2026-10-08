@@ -3,21 +3,14 @@ package com.jellypudding.offlineclient.modules.world;
 import com.jellypudding.offlineclient.module.StationModule;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.MenuClicks;
-import net.minecraft.client.gui.screens.recipebook.RecipeCollection;
+import com.jellypudding.offlineclient.util.Recipes;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.util.context.ContextMap;
 import net.minecraft.world.entity.player.StackedItemContents;
 import net.minecraft.world.inventory.AbstractCraftingMenu;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Ingredient;
-import net.minecraft.world.item.crafting.display.RecipeDisplay;
-import net.minecraft.world.item.crafting.display.RecipeDisplayEntry;
-import net.minecraft.world.item.crafting.display.ShapedCraftingRecipeDisplay;
-import net.minecraft.world.item.crafting.display.ShapelessCraftingRecipeDisplay;
-import net.minecraft.world.item.crafting.display.SlotDisplay;
-import net.minecraft.world.item.crafting.display.SlotDisplayContext;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -36,25 +29,12 @@ public final class AutoCraft extends StationModule<AbstractCraftingMenu> {
     // than one a tick. The gap leaves room for a server set stricter than that.
     private static final int PLACE_GAP = 6;
 
-    // A known recipe for a chosen item.
-    private record Craft(RecipeDisplayEntry entry, ItemStack result, List<Ingredient> ingredients) {
-
-        // The recipe book may place the result itself as an ingredient and craft nothing.
-        boolean byHand() {
-            return ingredients.stream().anyMatch(ingredient -> ingredient.acceptsItem(result.typeHolder()));
-        }
-
-        String name() {
-            return result.getHoverName().getString();
-        }
-    }
-
     private final RegistryListSetting<Item> items = new RegistryListSetting<>("Items",
         "The items to craft. Each one is crafted until its ingredients run out.",
         BuiltInRegistries.ITEM, List.of()).onChange(this::forgetRecipes);
 
-    private List<Craft> crafts;
-    private Craft placed;
+    private List<Recipes.Craft> crafts;
+    private Recipes.Craft placed;
     private boolean refusedOnce;
     private int lastRequest = -PLACE_GAP;
     private int crafted;
@@ -94,7 +74,7 @@ public final class AutoCraft extends StationModule<AbstractCraftingMenu> {
     protected void work(AbstractCraftingMenu menu) {
         crafted += takings.settle();
         Slot result = menu.getResultSlot();
-        boolean filled = gridFilled(menu);
+        boolean filled = Recipes.gridFilled(menu);
         if (placed != null) {
             // The server sends the result first and the grid a moment later.
             if (result.hasItem() && filled) {
@@ -151,11 +131,10 @@ public final class AutoCraft extends StationModule<AbstractCraftingMenu> {
             disable("Pick the items to craft first.");
             return;
         }
-        StackedItemContents contents = new StackedItemContents();
-        mc.player.getInventory().fillStackedContents(contents);
+        StackedItemContents contents = Recipes.carried();
         boolean fits = false;
-        for (Craft craft : crafts()) {
-            int[] cells = gridCells(craft, menu);
+        for (Recipes.Craft craft : crafts()) {
+            int[] cells = Recipes.gridCells(craft, menu);
             if (cells == null) {
                 continue;
             }
@@ -178,33 +157,17 @@ public final class AutoCraft extends StationModule<AbstractCraftingMenu> {
             : "Your recipe book has no recipe for the chosen items that fits this grid.");
     }
 
-    private void placed(Craft craft) {
+    private void placed(Recipes.Craft craft) {
         placed = craft;
         startClock();
     }
 
     // Recipe book entries for the chosen items in the order they were picked.
-    private List<Craft> crafts() {
+    private List<Recipes.Craft> crafts() {
         if (crafts != null) {
             return crafts;
         }
-        ContextMap context = SlotDisplayContext.fromLevel(mc.level);
-        Map<Item, List<Craft>> byResult = new HashMap<>();
-        for (RecipeCollection collection : mc.player.getRecipeBook().getCollections()) {
-            for (RecipeDisplayEntry entry : collection.getRecipes()) {
-                RecipeDisplay display = entry.display();
-                boolean crafting = display instanceof ShapedCraftingRecipeDisplay
-                    || display instanceof ShapelessCraftingRecipeDisplay;
-                if (!crafting || entry.craftingRequirements().isEmpty()) {
-                    continue;
-                }
-                ItemStack result = display.result().resolveForFirstStack(context);
-                if (!result.isEmpty() && items.contains(result.getItem())) {
-                    byResult.computeIfAbsent(result.getItem(), item -> new ArrayList<>())
-                        .add(new Craft(entry, result, entry.craftingRequirements().get()));
-                }
-            }
-        }
+        Map<Item, List<Recipes.Craft>> byResult = Recipes.known(items::contains);
         crafts = new ArrayList<>();
         for (Item item : items.resolved()) {
             crafts.addAll(byResult.getOrDefault(item, List.of()));
@@ -212,36 +175,9 @@ public final class AutoCraft extends StationModule<AbstractCraftingMenu> {
         return crafts;
     }
 
-    // The grid slot of each ingredient in the order the recipe lists them.
-    // Null when the recipe needs a bigger grid than this one.
-    private static int[] gridCells(Craft craft, AbstractCraftingMenu menu) {
-        int gridWidth = menu.getGridWidth();
-        int count = craft.ingredients().size();
-        int[] cells = new int[count];
-        if (craft.entry().display() instanceof ShapedCraftingRecipeDisplay shaped) {
-            if (shaped.width() > gridWidth || shaped.height() > menu.getGridHeight()) {
-                return null;
-            }
-            int next = 0;
-            for (int i = 0; i < shaped.ingredients().size() && next < count; i++) {
-                if (!(shaped.ingredients().get(i) instanceof SlotDisplay.Empty)) {
-                    cells[next++] = i / shaped.width() * gridWidth + i % shaped.width();
-                }
-            }
-            return next == count ? cells : null;
-        }
-        if (count > gridWidth * menu.getGridHeight()) {
-            return null;
-        }
-        for (int i = 0; i < count; i++) {
-            cells[i] = i;
-        }
-        return cells;
-    }
-
     // The inventory slot each ingredient comes from or null when one is missing.
     // Named stacks are fine here but worn or enchanted ones never go in.
-    private int[] handSources(AbstractCraftingMenu menu, Craft craft) {
+    private int[] handSources(AbstractCraftingMenu menu, Recipes.Craft craft) {
         Map<Integer, Integer> taken = new HashMap<>();
         int[] sources = new int[craft.ingredients().size()];
         for (int i = 0; i < sources.length; i++) {
@@ -270,9 +206,5 @@ public final class AutoCraft extends StationModule<AbstractCraftingMenu> {
         for (int i = 0; i < cells.length; i++) {
             MenuClicks.moveSome(menu, sources[i], grid.get(cells[i]).index, 1);
         }
-    }
-
-    private static boolean gridFilled(AbstractCraftingMenu menu) {
-        return menu.getInputGridSlots().stream().anyMatch(Slot::hasItem);
     }
 }

@@ -426,7 +426,8 @@ public final class Jesus extends Module {
         if (bypass.is(Bypass.NONE) || !mode.is(Mode.SOLID)) {
             return;
         }
-        if (!(event.getPacket() instanceof ServerboundMovePlayerPacket packet)) {
+        if (!(event.getPacket() instanceof ServerboundMovePlayerPacket packet)
+            || PacketUtil.isGroundClaim(packet)) {
             return;
         }
         // The packet thread can lose the player mid handler.

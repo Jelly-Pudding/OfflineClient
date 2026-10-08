@@ -3,6 +3,7 @@ package com.jellypudding.offlineclient.modules.world;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.BlockBreakEvent;
 import com.jellypudding.offlineclient.event.events.KeyPressEvent;
+import com.jellypudding.offlineclient.event.events.LeftClickEvent;
 import com.jellypudding.offlineclient.event.events.Render3DEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
@@ -20,19 +21,24 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.BlockMiner;
 import com.jellypudding.offlineclient.util.BlockUtil;
+import com.jellypudding.offlineclient.util.BoundedMap;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.ItemUtil;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.PacketBreaker;
 import com.jellypudding.offlineclient.util.RotationPriority;
+import com.jellypudding.offlineclient.util.SpawnBed;
 import com.jellypudding.offlineclient.util.SwingMode;
-import com.mojang.blaze3d.platform.InputConstants;
+import com.jellypudding.offlineclient.util.WorldWatch;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.Clearable;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.decoration.HangingEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.BaseFireBlock;
@@ -41,6 +47,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
@@ -68,6 +75,13 @@ public final class Nuker extends Module {
 
     // The furthest a cube side may reach out.
     private static final int MAX_SIDE = 6;
+
+    // The most hits one frame or painting takes. A frame holding an item lets the item go on the
+    // first and breaks on the second.
+    private static final int HANGING_HITS = 2;
+
+    // Frames and paintings whose hits are counted. The oldest are let go first.
+    private static final int MAX_HANGING = 64;
 
     private final EnumSetting<Shape> shape = new EnumSetting<>("Shape",
         "The region searched for blocks.", Shape.SPHERE)
@@ -117,6 +131,12 @@ public final class Nuker extends Module {
         "Only breaks blocks with no hardness such as plants and torches.", false);
     private final BoolSetting suitableTools = new BoolSetting("Suitable tools only",
         "Skips blocks the tool in your hand is the wrong kind for such as dirt for a pickaxe.", false);
+    private final BoolSetting spareBed = new BoolSetting("Spare my bed",
+        "Never breaks the bed you last slept in or set your spawn at.", true);
+    private final BoolSetting onlyOnClick = new BoolSetting("Only on click",
+        "Only breaks blocks whilst you hold the attack key.", false);
+    private final BoolSetting framesAndPaintings = new BoolSetting("Frames and paintings",
+        "Also breaks item frames and paintings in range.", false);
     private final BoolSetting interact = new BoolSetting("Interact",
         "Right clicks each matching block once instead of breaking it.", false);
     private final EnumSetting<Speed> speed = new EnumSetting<>("Speed",
@@ -172,17 +192,22 @@ public final class Nuker extends Module {
     // The drawn cube for the two box shapes. Null whilst the shape is a sphere.
     private AABB region;
 
+    // The hits each frame or painting has taken by entity id. Another world hands out its own ids.
+    private final Map<Integer, Integer> hangingHits = new BoundedMap<>(MAX_HANGING);
+    private final WorldWatch world = new WorldWatch();
+
     public Nuker() {
         super("Nuker", "Breaks all blocks around you.", Category.WORLD);
         addSettings(shape, range, up, down, left, right, forward, back, wallsRange,
             mode, blocks, listMode, selectBind, onlyWithTnt, lockTarget, flat, smash, suitableTools,
-            interact, speed, perTick, instantOnly, delay, autoTool, rotate, order, swing);
+            spareBed, onlyOnClick, framesAndPaintings, interact, speed, perTick, instantOnly, delay, autoTool, rotate,
+            order, swing);
         addSettings(blockStyle.settings());
         addSettings(highlightStrength, boundingBox);
         addSettings(regionStyle.settings());
         addSettings(trail.settings());
         searchTags("dig", "excavate", "break blocks", "instant break", "one tick", "redstone",
-            "disarm traps");
+            "disarm traps", "speed nuker", "bed");
     }
 
     private static NumberSetting sideSetting(String name, String where) {
@@ -232,6 +257,7 @@ public final class Nuker extends Module {
         lastChosen = null;
         waitTicks = 0;
         region = null;
+        hangingHits.clear();
         trail.clear();
     }
 
@@ -255,6 +281,20 @@ public final class Nuker extends Module {
         ChatUtil.message("§bNuker §7now breaks §f" + BlockUtil.blockName(selected) + "§7.");
     }
 
+    // Only on click takes the attack key over. A click on a block breaks the blocks around you
+    // and vanilla starts no mining of its own. In Selected mode the click still picks the block
+    // type. A click on an entity still lands.
+    @Subscribe
+    private void onLeftClick(LeftClickEvent event) {
+        if (onlyOnClick.isOn() && !candidates.isEmpty() && mc.hitResult instanceof BlockHitResult hit
+            && hit.getType() == HitResult.Type.BLOCK) {
+            if (mode.is(Mode.SELECTED)) {
+                select(hit.getBlockPos());
+            }
+            event.cancel();
+        }
+    }
+
     // A real click on a block in Selected mode picks that block type.
     @Subscribe
     private void onBlockBreak(BlockBreakEvent event) {
@@ -266,10 +306,7 @@ public final class Nuker extends Module {
 
     @Subscribe
     private void onKeyPress(KeyPressEvent event) {
-        if (event.getAction() != InputConstants.PRESS || mc.gui.screen() != null) {
-            return;
-        }
-        if (!selectBind.isBound() || event.getKey() != selectBind.getValue()) {
+        if (!event.presses(selectBind) || mc.gui.screen() != null) {
             return;
         }
         if (!inGame() || !mode.isAny(Mode.LIST, Mode.REDSTONE)) {
@@ -303,8 +340,12 @@ public final class Nuker extends Module {
             slots.restoreIfMine();
             return;
         }
-        // Holding attack means the player is mining by hand.
-        if (InputUtil.physicallyHeld(mc.options.keyAttack) || mc.player.isUsingItem()) {
+        if (world.changed()) {
+            hangingHits.clear();
+        }
+        // Holding attack means the player is mining by hand. Only on click turns that round.
+        boolean clicking = InputUtil.physicallyHeld(mc.options.keyAttack);
+        if (clicking && !onlyOnClick.isOn() || mc.player.isUsingItem()) {
             current = null;
             slots.restoreIfMine();
             return;
@@ -317,11 +358,22 @@ public final class Nuker extends Module {
         }
         collect();
         sortCandidates();
+        boolean breaking = clicking || !onlyOnClick.isOn();
+        if (breaking && framesAndPaintings.isOn()) {
+            hitHanging();
+        }
         if (candidates.isEmpty()) {
             interacted.clear();
             waitTicks = 0;
             lastChosen = null;
             slots.restoreIfMine();
+            return;
+        }
+        if (!breaking) {
+            // The blocks a click would break stay marked and vanilla mining keeps out of the way.
+            current = null;
+            slots.restoreIfMine();
+            BlockMiner.keepControl();
             return;
         }
         // A fresh target waits out the delay before anything is sent.
@@ -333,6 +385,7 @@ public final class Nuker extends Module {
         if (waitTicks > 0) {
             waitTicks--;
             BlockMiner.release();
+            claimClick();
             return;
         }
         if (interact.isOn()) {
@@ -343,6 +396,28 @@ public final class Nuker extends Module {
             mineLegit();
         } else {
             mineInstant();
+        }
+        claimClick();
+    }
+
+    // With Only on click the held attack key belongs to Nuker and vanilla mines nothing.
+    private void claimClick() {
+        if (onlyOnClick.isOn()) {
+            BlockMiner.keepControl();
+        }
+    }
+
+    // One hit a tick on the nearest frame or painting in reach that still has hits left. One
+    // that outlasts them all is fixed or protected and is left alone.
+    private void hitHanging() {
+        double reach = Math.min(EntityUtil.serverEntityReach(), range.getValue());
+        Entity hanging = EntityUtil.nearest(Double.MAX_VALUE, entity -> entity instanceof HangingEntity
+            && entity.isAlive() && hangingHits.getOrDefault(entity.getId(), 0) < HANGING_HITS
+            && EntityUtil.reachDistance(mc.player, entity) <= reach);
+        if (hanging != null) {
+            mc.gameMode.attack(mc.player, hanging);
+            swing.getValue().swing();
+            hangingHits.merge(hanging.getId(), 1, Integer::sum);
         }
     }
 
@@ -518,6 +593,9 @@ public final class Nuker extends Module {
             && !ItemUtil.suits(mc.player.getMainHandItem(), state)) {
             return false;
         }
+        if (!interact.isOn() && Modules.toolRefuses(state, speed.is(Speed.INSTANT))) {
+            return false;
+        }
         if (instantOnly.isOn() && !interact.isOn() && speed.is(Speed.INSTANT)
             && !breaksInOneTick(pos, state)) {
             return false;
@@ -526,6 +604,9 @@ public final class Nuker extends Module {
             return false;
         }
         if (BlockUtil.isStandingOn(pos)) {
+            return false;
+        }
+        if (spareBed.isOn() && SpawnBed.isSpawnBed(pos)) {
             return false;
         }
         return inReach(pos);

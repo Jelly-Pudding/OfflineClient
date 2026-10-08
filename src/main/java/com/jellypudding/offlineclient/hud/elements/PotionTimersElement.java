@@ -1,112 +1,253 @@
 package com.jellypudding.offlineclient.hud.elements;
 
 import com.jellypudding.offlineclient.OfflineClient;
-import com.jellypudding.offlineclient.gui.GuiTheme;
 import com.jellypudding.offlineclient.hud.HudElement;
+import com.jellypudding.offlineclient.hud.RowCache;
+import com.jellypudding.offlineclient.hud.TextRow;
 import com.jellypudding.offlineclient.setting.BoolSetting;
+import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
+import com.jellypudding.offlineclient.setting.RegistryListSetting;
+import com.jellypudding.offlineclient.util.ColorUtil;
 import net.minecraft.SharedConstants;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.Hud;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.util.ARGB;
+import net.minecraft.world.effect.MobEffect;
+import net.minecraft.world.effect.MobEffectCategory;
 import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffectUtil;
+import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.player.Player;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Locale;
 
+// The effects on you and how long each has left. Each row lines up with the side the element
+// is anchored to.
 public final class PotionTimersElement extends HudElement {
 
-    public enum Order { TIME, ALPHABETICAL }
+    public enum Order { SOONEST_FIRST, LONGEST_FIRST, STRONGEST_FIRST, HARMFUL_FIRST, HELPFUL_FIRST, NAME }
 
-    private static final int LINE = 10;
+    // One effect as it is listed. The colour goes on as the row is drawn.
+    private record Line(MobEffectInstance effect, String text) {
+    }
+
     private static final int SECONDS_PER_MINUTE = 60;
 
     // Roman numerals for the levels a potion can reach.
     private static final String[] LEVELS = {"", " II", " III", " IV", " V", " VI"};
 
+    // A potion of Speed II and a long one of Fire Resistance stand in whilst the editor is
+    // open and no effect is on you.
+    private static final List<MobEffectInstance> SAMPLE = List.of(
+        new MobEffectInstance(MobEffects.SPEED, 90 * SharedConstants.TICKS_PER_SECOND, 1),
+        new MobEffectInstance(MobEffects.FIRE_RESISTANCE, 8 * SECONDS_PER_MINUTE * SharedConstants.TICKS_PER_SECOND));
+
+    // The game's own effect icons pulse through the last ten seconds of an effect.
+    private static final int ENDING_TICKS = 10 * SharedConstants.TICKS_PER_SECOND;
+    // Ticks in one fade out and back in. Twice a second.
+    private static final int PULSE_TICKS = 10;
+    // How far a pulsing row fades at its faintest.
+    private static final float PULSE_DEPTH = 0.6f;
+
+    // A few effects such as Blindness are nearly black. Their rows keep the hue but are never
+    // darker than this.
+    private static final float LEAST_BRIGHTNESS = 0.6f;
+
+    private static final int ICON_GAP = 2;
+    // Rows anchored past the middle line up on the right.
+    private static final double MIDDLE = 0.5;
+
+    private static final Comparator<MobEffectInstance> NAMES =
+        Comparator.comparing(PotionTimersElement::plainName, String.CASE_INSENSITIVE_ORDER);
+    // A beacon or a conduit keeps topping its effect up. Those sit below the rest and an endless
+    // effect sits below every timed one. Ties go by name and rows never swap on their own.
+    private static final Comparator<MobEffectInstance> SOONEST = Comparator
+        .comparing(MobEffectInstance::isAmbient)
+        .thenComparing(MobEffectInstance::isInfiniteDuration)
+        .thenComparingInt(MobEffectInstance::getDuration)
+        .thenComparing(NAMES);
+    private static final Comparator<MobEffectInstance> LONGEST = Comparator
+        .comparing(MobEffectInstance::isAmbient)
+        .thenComparing(MobEffectInstance::isInfiniteDuration, Comparator.reverseOrder())
+        .thenComparing(MobEffectInstance::getDuration, Comparator.reverseOrder())
+        .thenComparing(NAMES);
+    private static final Comparator<MobEffectInstance> STRONGEST = Comparator
+        .comparingInt(MobEffectInstance::getAmplifier).reversed()
+        .thenComparing(SOONEST);
+    private static final Comparator<MobEffectInstance> HARMFUL = byKind(MobEffectCategory.HARMFUL,
+        MobEffectCategory.NEUTRAL, MobEffectCategory.BENEFICIAL);
+    private static final Comparator<MobEffectInstance> HELPFUL = byKind(MobEffectCategory.BENEFICIAL,
+        MobEffectCategory.NEUTRAL, MobEffectCategory.HARMFUL);
+    private static final Comparator<MobEffectInstance> BY_NAME = NAMES.thenComparing(SOONEST);
+
     private final EnumSetting<Order> order = new EnumSetting<>("Potion order",
-        "How the effects are ordered.", Order.TIME)
-        .describe(Order.TIME, "The one running out soonest at the top.")
-        .describe(Order.ALPHABETICAL, "By name from A to Z.");
+        "How the effects are ordered.", Order.SOONEST_FIRST)
+        .describe(Order.SOONEST_FIRST, "The one ending soonest at the top with endless effects and beacon or"
+            + " conduit effects last.")
+        .describe(Order.LONGEST_FIRST, "The one lasting longest at the top with endless effects first and beacon"
+            + " or conduit effects last.")
+        .describe(Order.STRONGEST_FIRST, "The highest level at the top and equal levels by time left.")
+        .describe(Order.HARMFUL_FIRST, "Harmful effects at the top then neutral and helpful ones each by time left.")
+        .describe(Order.HELPFUL_FIRST, "Helpful effects at the top then neutral and harmful ones each by time left.")
+        .describe(Order.NAME, "By name from A to Z.");
+    private final RegistryListSetting<MobEffect> hidden = new RegistryListSetting<>("Potion hidden effects",
+        "Effects left out of the list. Click to pick them.", BuiltInRegistries.MOB_EFFECT, List.of());
     private final BoolSetting hideAmbient = new BoolSetting("Hide ambient",
-        "Leave out the effects a beacon gives.", false);
+        "Leaves out the effects a beacon or conduit gives.", false);
     private final BoolSetting ownColours = new BoolSetting("Potion colours",
-        "Write each effect in its own colour.", true);
+        "Writes each effect in its own colour.", true);
+    private final ColorSetting rowColor = labelColor("Potion row colour",
+        "Colour of every row whilst Potion colours is off.").unless(ownColours);
+    private final BoolSetting pulse = new BoolSetting("Potion pulse",
+        "Fades a row in and out over its last ten seconds like the game's own effect icons.", true);
+    private final BoolSetting icons = new BoolSetting("Potion icons",
+        "Draws each effect's icon beside its row.", false);
+    private final RowCache<Line> lines = new RowCache<>(this::build);
 
     public PotionTimersElement() {
         super("Potion timers", "The effects on you and how long they last.", false, 0, 78);
-        add(order, hideAmbient, ownColours);
+        add(order, hidden, hideAmbient, ownColours, rowColor, pulse, icons);
+    }
+
+    // One kind of effect at the top then the next. Each group goes by time left.
+    private static Comparator<MobEffectInstance> byKind(MobEffectCategory... kinds) {
+        List<MobEffectCategory> ranked = List.of(kinds);
+        return Comparator.<MobEffectInstance>comparingInt(
+            effect -> ranked.indexOf(effect.getEffect().value().getCategory())).thenComparing(SOONEST);
+    }
+
+    private Comparator<MobEffectInstance> comparator() {
+        return switch (order.getValue()) {
+            case SOONEST_FIRST -> SOONEST;
+            case LONGEST_FIRST -> LONGEST;
+            case STRONGEST_FIRST -> STRONGEST;
+            case HARMFUL_FIRST -> HARMFUL;
+            case HELPFUL_FIRST -> HELPFUL;
+            case NAME -> BY_NAME;
+        };
     }
 
     @Override
     public boolean visible() {
-        return isActive() && !effects().isEmpty();
+        return isActive() && !lines().isEmpty();
     }
 
-    private List<MobEffectInstance> effects() {
+    private List<Line> lines() {
+        List<Line> built = lines.get();
+        return built.isEmpty() && editing() ? linesOf(SAMPLE) : built;
+    }
+
+    private List<Line> build() {
         Player player = OfflineClient.MC.player;
-        List<MobEffectInstance> active = new ArrayList<>();
-        if (player == null) {
-            return active;
-        }
-        for (MobEffectInstance effect : player.getActiveEffects()) {
-            if (!hideAmbient.isOn() || !effect.isAmbient()) {
-                active.add(effect);
+        return player == null ? List.of() : linesOf(player.getActiveEffects());
+    }
+
+    // The effects the settings let through in the chosen order.
+    private List<Line> linesOf(Collection<MobEffectInstance> effects) {
+        List<MobEffectInstance> shown = new ArrayList<>();
+        for (MobEffectInstance effect : effects) {
+            if (!hidden.contains(effect.getEffect().value()) && !(hideAmbient.isOn() && effect.isAmbient())) {
+                shown.add(effect);
             }
         }
-        if (order.is(Order.ALPHABETICAL)) {
-            active.sort(Comparator.comparing(PotionTimersElement::nameOf, String.CASE_INSENSITIVE_ORDER));
-        } else {
-            active.sort(Comparator.comparingInt(MobEffectInstance::getDuration));
+        shown.sort(comparator());
+        List<Line> built = new ArrayList<>(shown.size());
+        for (MobEffectInstance effect : shown) {
+            built.add(new Line(effect, nameOf(effect) + " " + timeOf(effect)));
         }
-        return active;
+        return built;
+    }
+
+    private static String plainName(MobEffectInstance effect) {
+        return effect.getEffect().value().getDisplayName().getString();
     }
 
     private static String nameOf(MobEffectInstance effect) {
-        String name = effect.getEffect().value().getDisplayName().getString();
+        String name = plainName(effect);
         int level = effect.getAmplifier();
         return level > 0 && level < LEVELS.length ? name + LEVELS[level]
             : level > 0 ? name + " " + (level + 1) : name;
     }
 
-    // Minutes and seconds. An infinite effect has no clock at all.
+    // Hours and minutes and seconds at the speed the world runs. An endless effect shows the
+    // infinity sign.
     private static String timeOf(MobEffectInstance effect) {
-        if (effect.isInfiniteDuration()) {
-            return "";
+        ClientLevel level = OfflineClient.MC.level;
+        float tickRate = level == null ? SharedConstants.TICKS_PER_SECOND : level.tickRateManager().tickrate();
+        return MobEffectUtil.formatDuration(effect, 1, tickRate).getString();
+    }
+
+    // The colour goes on as the rows are drawn. A rainbow keeps moving between rebuilds and a
+    // row near its end keeps pulsing.
+    private List<TextRow> rowsOf(Font font, List<Line> shown) {
+        List<TextRow> rows = new ArrayList<>(shown.size());
+        for (int i = 0; i < shown.size(); i++) {
+            MobEffectInstance effect = shown.get(i).effect();
+            int tint = ownColours.isOn() ? readable(effect.getEffect().value().getColor()) : rowColor.rowColor(i);
+            rows.add(TextRow.of(font, shown.get(i).text(), ColorUtil.fade(tint, alphaOf(effect))));
         }
-        int seconds = effect.getDuration() / SharedConstants.TICKS_PER_SECOND;
-        return String.format(Locale.ROOT, " %d:%02d",
-            seconds / SECONDS_PER_MINUTE, seconds % SECONDS_PER_MINUTE);
+        return rows;
     }
 
-    private static String rowOf(MobEffectInstance effect) {
-        return nameOf(effect) + timeOf(effect);
+    private static int readable(int color) {
+        float[] hsv = ColorUtil.hsvOf(color);
+        return hsv[2] >= LEAST_BRIGHTNESS ? ARGB.opaque(color) : ColorUtil.hsv(hsv[0], hsv[1], LEAST_BRIGHTNESS);
     }
 
+    // Beacon and conduit effects are topped up before they run out and never pulse.
+    private float alphaOf(MobEffectInstance effect) {
+        if (!pulse.isOn() || effect.isAmbient() || !effect.endsWithin(ENDING_TICKS)) {
+            return 1;
+        }
+        double phase = effect.getDuration() * 2 * Math.PI / PULSE_TICKS;
+        return (float) (1 - PULSE_DEPTH * (1 - Math.cos(phase)) / 2);
+    }
+
+    // The icon leads its row unless the rows line up on the right. There it follows the row and
+    // the icons stand in one column at the edge.
     @Override
     public void render(GuiGraphicsExtractor context, Font font) {
-        int y = 0;
-        for (MobEffectInstance effect : effects()) {
-            int tint = ownColours.isOn()
-                ? 0xFF000000 | effect.getEffect().value().getColor() : GuiTheme.HUD_TEXT;
-            context.text(font, rowOf(effect), 0, y, tint, true);
-            y += LINE;
+        List<Line> shown = lines();
+        List<TextRow> rows = rowsOf(font, shown);
+        if (!icons.isOn()) {
+            TextRow.draw(context, font, rows, alignment());
+            return;
         }
+        int widest = TextRow.widest(rows);
+        boolean after = alignment() > MIDDLE;
+        for (int i = 0; i < rows.size(); i++) {
+            TextRow row = rows.get(i);
+            MobEffectInstance effect = shown.get(i).effect();
+            int y = i * TextRow.LINE;
+            int left = row.leftIn(widest, alignment()) + (after ? 0 : iconRoom(font));
+            int iconLeft = after ? left + row.width() + ICON_GAP : left - iconRoom(font);
+            context.blitSprite(RenderPipelines.GUI_TEXTURED, Hud.getMobEffectSprite(effect.getEffect()), iconLeft, y,
+                font.lineHeight, font.lineHeight, alphaOf(effect));
+            row.draw(context, font, left, y);
+        }
+    }
+
+    // An icon stands as tall as a line of text.
+    private static int iconRoom(Font font) {
+        return font.lineHeight + ICON_GAP;
     }
 
     @Override
     public int width(Font font) {
-        int widest = 1;
-        for (MobEffectInstance effect : effects()) {
-            widest = Math.max(widest, font.width(rowOf(effect)));
-        }
-        return widest;
+        int widest = TextRow.widest(rowsOf(font, lines()));
+        return icons.isOn() ? widest + iconRoom(font) : widest;
     }
 
     @Override
     public int height(Font font) {
-        return Math.max(LINE, effects().size() * LINE);
+        return TextRow.height(font, lines().size());
     }
 }

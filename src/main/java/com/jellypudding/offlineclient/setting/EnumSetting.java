@@ -2,6 +2,7 @@ package com.jellypudding.offlineclient.setting;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonPrimitive;
+import com.jellypudding.offlineclient.util.ChatUtil;
 
 import java.util.EnumMap;
 import java.util.Locale;
@@ -60,6 +61,11 @@ public final class EnumSetting<E extends Enum<E>> extends Setting<E> {
         return label(value);
     }
 
+    @Override
+    public String defaultText() {
+        return label(defaultValue);
+    }
+
     // Display text for a constant. An enum overriding toString keeps its
     // own wording and everything else reads as a sentence such as Low health.
     public static String label(Enum<?> constant) {
@@ -68,7 +74,7 @@ public final class EnumSetting<E extends Enum<E>> extends Setting<E> {
             return custom;
         }
         String words = constant.name().toLowerCase(Locale.ROOT).replace('_', ' ');
-        return Character.toUpperCase(words.charAt(0)) + words.substring(1);
+        return ChatUtil.capitalised(words);
     }
 
     @Override

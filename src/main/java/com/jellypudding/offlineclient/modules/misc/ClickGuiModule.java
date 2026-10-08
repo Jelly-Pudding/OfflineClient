@@ -16,6 +16,9 @@ public final class ClickGuiModule extends Module {
 
     public enum Style { PANELS, WINDOW }
 
+    // How fast every rainbow turns by default and before this module is built.
+    public static final double RAINBOW_SPEED = 1;
+
     private final EnumSetting<Style> style = new EnumSetting<>("Style",
         "How the GUI is laid out.", Style.PANELS)
         .describe(Style.PANELS, "A draggable panel for each category.")
@@ -27,12 +30,20 @@ public final class ClickGuiModule extends Module {
 
     private final BoolSetting hoverHelp = new BoolSetting("Hover help",
         "Explains a module or setting whilst you hover over it.", true);
+    private final BoolSetting resetMarks = new BoolSetting("Reset marks",
+        "Marks every setting you changed and adds a reset row under each list of settings.", true);
+    private final BoolSetting toggleMessages = new BoolSetting("Toggle messages",
+        "Says in chat when a bound key or a typed command or a trigger switches a module on or off.", true);
     private final ColorSetting accent = new ColorSetting("Accent",
         "Main colour of the GUI and HUD.", 190, false);
     private final ColorSetting background = new ColorSetting("Background",
         "Colour the panels and rows are shaded from.", 240, 0.40625f, 0.1254902f, false);
     private final ColorSetting text = new ColorSetting("Text",
         "Colour the writing is shaded from.", 240, 0.0327869f, 0.9568627f, false);
+    // Nought would stop every rainbow.
+    private final NumberSetting rainbowSpeed = new NumberSetting("Rainbow speed",
+        "How fast every colour set to RGB goes round the colour wheel.", RAINBOW_SPEED, 0.1, 5, 0.1, "x")
+        .min(0.01);
     private final NumberSetting opacity = new NumberSetting("Opacity",
         "How solid the GUI is. Lower lets the world show through.",
         50, 10, 100, 1, "%").min(0).max(100);
@@ -50,7 +61,8 @@ public final class ClickGuiModule extends Module {
     public ClickGuiModule() {
         super("ClickGUI", "Opens the GUI and sets its accent colour.",
             Category.MISC, InputConstants.KEY_RSHIFT);
-        addSettings(style, scale, hoverHelp, accent, background, text, opacity, tabs);
+        addSettings(style, scale, hoverHelp, resetMarks, toggleMessages, accent, background, text, rainbowSpeed,
+            opacity, tabs);
         for (TabStrip.Tab tab : TabStrip.Tab.values()) {
             addSettings(tab.getSetting().under(tabs));
         }
@@ -78,6 +90,14 @@ public final class ClickGuiModule extends Module {
         return hoverHelp.isOn();
     }
 
+    public boolean showsResetMarks() {
+        return resetMarks.isOn();
+    }
+
+    public boolean showsToggleMessages() {
+        return toggleMessages.isOn();
+    }
+
     @Override
     public boolean isTogglable() {
         return false;
@@ -93,6 +113,11 @@ public final class ClickGuiModule extends Module {
 
     public int textColor() {
         return text.getColor();
+    }
+
+    // How many times faster than normal every colour set to rainbow goes round the colour wheel.
+    public double rainbowSpeed() {
+        return rainbowSpeed.getValue();
     }
 
     // A share from nought to one.

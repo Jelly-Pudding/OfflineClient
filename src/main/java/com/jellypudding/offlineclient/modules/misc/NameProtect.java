@@ -1,5 +1,6 @@
 package com.jellypudding.offlineclient.modules.misc;
 
+import com.jellypudding.offlineclient.config.NameStore;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
@@ -132,8 +133,8 @@ public final class NameProtect extends Module {
         return found;
     }
 
-    private boolean isOwn(String name) {
-        return mc.getUser() != null && mc.getUser().getName().equals(name);
+    private static boolean isOwn(String name) {
+        return NameStore.ownName().equals(name);
     }
 
     private String ownAlias() {
@@ -144,9 +145,8 @@ public final class NameProtect extends Module {
     // another one is then never half swapped.
     private List<Rename> renames() {
         List<Rename> all = new ArrayList<>();
-        if (renameSelf.isOn() && mc.getUser() != null) {
-            all.add(new Rename(mc.getUser().getName(), ownAlias(),
-                colored.isOn() ? color.getColor() : null));
+        if (renameSelf.isOn()) {
+            all.add(new Rename(NameStore.ownName(), ownAlias(), colored.isOn() ? color.getColor() : null));
         }
         for (Slot slot : slots) {
             Rename rename = slot.rename();

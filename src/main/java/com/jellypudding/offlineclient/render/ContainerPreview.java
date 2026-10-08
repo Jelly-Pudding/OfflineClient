@@ -7,6 +7,7 @@ import net.minecraft.client.gui.screens.inventory.tooltip.ClientTooltipComponent
 import net.minecraft.core.NonNullList;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.ShulkerBoxBlock;
 
@@ -18,6 +19,7 @@ public final class ContainerPreview implements ClientTooltipComponent {
     private static final int SLOT = 18;
     private static final int PADDING = 2;
     private static final int BACKGROUND = 0xC0100010;
+    private static final int ENDER_TINT = 0xC0003232;
     private static final int SHULKER_SLOTS = 27;
     // How far a dyed box background sits from black towards its dye.
     private static final float TINT_SHADE = 0.45f;
@@ -35,8 +37,11 @@ public final class ContainerPreview implements ClientTooltipComponent {
         return items;
     }
 
-    // A shulker box previews on a dark shade of its own dye.
+    // A shulker box previews on a dark shade of its own dye and an ender chest on dark teal.
     public static int tintOf(ItemStack stack) {
+        if (stack.is(Items.ENDER_CHEST)) {
+            return ENDER_TINT;
+        }
         if (!(Block.byItem(stack.getItem()) instanceof ShulkerBoxBlock box) || box.getColor() == null) {
             return BACKGROUND;
         }

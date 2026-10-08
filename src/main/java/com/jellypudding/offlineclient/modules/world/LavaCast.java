@@ -84,10 +84,6 @@ public final class LavaCast extends Module {
     // Feet resting on the tower top can read a hair below it.
     private static final double STANDING_SLACK = 1.0E-3;
 
-    // The time packet comes once a second. A server quiet for longer than this has stalled
-    // and the flow clocks stop with it.
-    private static final long LAG_MILLIS = 1500;
-
     // A longer gap between two client ticks is a pause or a hitch and counts as this much.
     private static final long LONGEST_TICK_MILLIS = 100;
 
@@ -362,7 +358,7 @@ public final class LavaCast extends Module {
         long now = System.currentTimeMillis();
         long gap = Math.min(now - lastTickAt, LONGEST_TICK_MILLIS);
         lastTickAt = now;
-        if (TickRate.INSTANCE.lagging(LAG_MILLIS)) {
+        if (TickRate.INSTANCE.stalled()) {
             return 0;
         }
         return gap * TickRate.INSTANCE.tps() / MILLIS_PER_SECOND;

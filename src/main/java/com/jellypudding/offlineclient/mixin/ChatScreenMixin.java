@@ -204,12 +204,17 @@ public abstract class ChatScreenMixin extends Screen {
         return common;
     }
 
+    // The game colours a server command whilst it is typed. Ours come after and get the box when it does not.
     @Inject(method = "init", at = @At("TAIL"))
     private void onInit(CallbackInfo ci) {
         BetterChat betterChat = Modules.get(BetterChat.class);
         if (betterChat != null && betterChat.liftsBoxLimit()) {
             input.setMaxLength(Integer.MAX_VALUE);
         }
+        input.addFormatter((shown, start) -> {
+            BetterChat chat = Modules.get(BetterChat.class);
+            return chat == null ? null : chat.commandText(input.getValue(), shown);
+        });
     }
 
     @Inject(method = "handleChatInput(Ljava/lang/String;Z)V",

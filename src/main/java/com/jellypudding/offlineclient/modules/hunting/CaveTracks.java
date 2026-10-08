@@ -196,7 +196,7 @@ public final class CaveTracks extends Module implements FindSource {
     private void forgetFilled() {
         for (FindLog.Find find : new ArrayList<>(finds.here())) {
             BlockPos pos = find.pos();
-            if (mc.level.hasChunk(pos.getX() >> 4, pos.getZ() >> 4) && !mc.level.getBlockState(pos).is(Blocks.AIR)) {
+            if (mc.level.isLoaded(pos) && !mc.level.getBlockState(pos).is(Blocks.AIR)) {
                 finds.remove(find);
                 shapes.remove(find.pos().asLong());
             }

@@ -11,6 +11,7 @@ import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.SectionPos;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Blocks;
@@ -148,8 +149,8 @@ public final class CaveTraces {
                 }
             }
         }
-        return owner != Long.MAX_VALUE && (BlockPos.getX(owner) >> 4) == chunk.x()
-            && (BlockPos.getZ(owner) >> 4) == chunk.z();
+        return owner != Long.MAX_VALUE && SectionPos.blockToSectionCoord(BlockPos.getX(owner)) == chunk.x()
+            && SectionPos.blockToSectionCoord(BlockPos.getZ(owner)) == chunk.z();
     }
 
     private BlockState at(long cell) {

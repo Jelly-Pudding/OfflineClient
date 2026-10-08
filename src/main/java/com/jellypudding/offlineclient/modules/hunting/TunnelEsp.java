@@ -8,6 +8,7 @@ import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.render.BoxStyle;
 import com.jellypudding.offlineclient.render.DrawBatch;
+import com.jellypudding.offlineclient.render.HeightBand;
 import com.jellypudding.offlineclient.render.JoinedCells;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ChoiceListSetting;
@@ -15,25 +16,30 @@ import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChunkScanner;
+import com.jellypudding.offlineclient.worldgen.NaturalBlocks;
 import com.jellypudding.offlineclient.worldgen.SeenBlocks;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.longs.LongArrayList;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.SectionPos;
 import net.minecraft.server.level.ChunkMap;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.phys.AABB;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
-// Highlights passages players dug by hand. Natural caves almost never make a corridor one
-// block wide with a floor and a ceiling. Nor do they make a shaft walled on all four sides or
-// a staircase that climbs one block a step or a zigzag cut through the rock.
+// Highlights passages players dug by hand. Natural caves almost never make a straight corridor
+// of one width with a floor and a ceiling. Nor do they make a shaft walled on every side or a
+// staircase that climbs one block a step or a zigzag cut through the rock.
 public final class TunnelEsp extends Module {
 
     private enum Kind { CORRIDOR, SHAFT, STAIRS, DIAGONAL }
@@ -43,28 +49,59 @@ public final class TunnelEsp extends Module {
     }
 
     // What the scan looks for. It reads these once a chunk.
-    private record Rules(int low, int high, boolean onlyAir, boolean corridors, int minLength, int minHeight,
-                         int maxHeight, boolean shafts, int minDepth, boolean waterShafts, boolean stairs,
-                         int stairSteps, int minHeadroom, int maxHeadroom, boolean diagonals, int diagonalSteps,
-                         int shortestRun, int longestRun) {
+    private record Rules(int low, int high, int widest, boolean onlyAir, boolean naturalWalls, boolean corridors,
+                         int minLength, int minHeight, int maxHeight, boolean shafts, int minDepth,
+                         boolean waterShafts, boolean stairs, int stairSteps, int minHeadroom, int maxHeadroom,
+                         boolean diagonals, int diagonalSteps, int shortestRun, int longestRun) {
+    }
+
+    // The first and last cell across a tunnel.
+    private record Span(int from, int to) {
+    }
+
+    // How many of the blocks round a passage are natural ground.
+    private static final class Walls {
+
+        private int all;
+        private int natural;
+
+        private void add(BlockState state) {
+            all++;
+            if (NaturalBlocks.contains(state.getBlock())) {
+                natural++;
+            }
+        }
+
+        private boolean mostlyNatural() {
+            return natural >= all * NATURAL_SHARE;
+        }
     }
 
     private static final Direction[] AROUND = {Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST};
+    private static final Direction.Axis[] FLAT_AXES = {Direction.Axis.X, Direction.Axis.Z};
     // A path is followed no further than this each way from where its trace began.
     private static final int LONGEST_PATH = 256;
     // A cell is walled by its neighbours and a short run carries on across a chunk border.
     private static final int CELL_BORDER = 2;
+    // The scan sees this many chunks round each chunk. A hole any wider has walls it cannot read.
+    private static final int VIEW_CHUNKS = 2;
+    private static final int WIDEST_SEEN = VIEW_CHUNKS * SectionPos.SECTION_SIZE - 1;
+    private static final int SIDE = SectionPos.SECTION_SIZE;
+    private static final int COLUMNS = SIDE * SIDE;
+    // Seven in ten of the blocks round a dug passage are natural ground.
+    private static final double NATURAL_SHARE = 0.7;
 
     private final NumberSetting range = new NumberSetting("Range",
         "Chunk radius to search around you.", 4, 1, 8, 1, " chunks").max(ChunkMap.MAX_VIEW_DISTANCE);
-    private final NumberSetting bottom = new NumberSetting("Bottom",
-        "Lowest height to search.", -64, -64, 320, 4).min(-2048).max(2048);
-    private final NumberSetting top = new NumberSetting("Top",
-        "Highest height to search.", 320, -64, 320, 4).min(-2048).max(2048);
+    private final HeightBand band = new HeightBand("passages");
+    private final NumberSetting widest = new NumberSetting("Widest",
+        "How many blocks wide a tunnel or shaft may be.", 1, 1, 5, 1, " blocks").min(1).max(WIDEST_SEEN);
     private final BoolSetting onlyAir = new BoolSetting("Only air",
         "Counts only air as open. Torches and rails then block a passage.", false);
+    private final BoolSetting naturalWalls = new BoolSetting("Natural walls",
+        "Only counts passages walled mostly by natural ground and leaves out mineshafts and strongholds.", true);
     private final BoolSetting corridors = new BoolSetting("Corridors",
-        "Marks straight tunnels one block wide.", true);
+        "Marks straight tunnels up to Widest blocks across.", true);
     private final NumberSetting minLength = new NumberSetting("Min length",
         "How many blocks long a tunnel must be.", 3, 1, 32, 1, " blocks").min(1).under(corridors);
     private final NumberSetting minHeight = new NumberSetting("Min height",
@@ -73,7 +110,7 @@ public final class TunnelEsp extends Module {
         "How tall a tunnel or zigzag may be. Below Min height it counts as Min height.", 3, 1, 6, 1, " blocks")
         .min(1);
     private final BoolSetting shafts = new BoolSetting("Shafts",
-        "Marks upright holes one block across with walls on all four sides.", true);
+        "Marks upright holes up to Widest blocks across with walls on every side.", true);
     private final NumberSetting minDepth = new NumberSetting("Min depth",
         "How deep a shaft must be.", 4, 2, 64, 1, " blocks").min(2).under(shafts);
     private final BoolSetting waterShafts = new BoolSetting("Water shafts",
@@ -115,7 +152,7 @@ public final class TunnelEsp extends Module {
     private final ColorSetting diagonalColor = new ColorSetting("Diagonal colour",
         "Colour of zigzag tunnels.", 280, false).under(diagonals);
 
-    private final ChunkScanner<Find> scanner = new ChunkScanner<Find>(2).borderReach(CELL_BORDER);
+    private final ChunkScanner<Find> scanner = new ChunkScanner<>(VIEW_CHUNKS);
 
     private final JoinedCells<Find> joined = new JoinedCells<>(find -> BlockPos.asLong(find.x(), find.y(), find.z()));
 
@@ -124,12 +161,15 @@ public final class TunnelEsp extends Module {
 
     public TunnelEsp() {
         super("TunnelESP", "Highlights hand dug tunnels shafts and staircases underground.", Category.HUNTING);
-        addSettings(range, bottom, top, onlyAir, corridors, minLength, minHeight, maxHeight, shafts, minDepth,
+        addSettings(range);
+        addSettings(band.settings());
+        addSettings(widest, onlyAir, naturalWalls, corridors, minLength, minHeight, maxHeight, shafts, minDepth,
             waterShafts, staircases, stairSteps, minHeadroom, maxHeadroom, diagonals, diagonalSteps, shortestRun,
             longestRun, skipped, fullHeight, height, connected);
         addSettings(style.settings());
         addSettings(corridorColor, shaftColor, stairsColor, diagonalColor);
-        searchTags("tunnel", "base finder", "corridor", "hole", "shaft", "staircase", "stairs", "diagonal");
+        searchTags("tunnel", "base finder", "corridor", "hole", "shaft", "staircase", "stairs", "diagonal",
+            "highway");
     }
 
     private static List<String> dimensions() {
@@ -173,14 +213,17 @@ public final class TunnelEsp extends Module {
             return;
         }
         // Each max counts as at least its min.
-        Rules now = new Rules(bottom.getInt(), top.getInt(), onlyAir.isOn(), corridors.isOn(), minLength.getInt(),
-            minHeight.getInt(), Math.max(minHeight.getInt(), maxHeight.getInt()), shafts.isOn(), minDepth.getInt(),
-            waterShafts.isOn(), staircases.isOn(), stairSteps.getInt(), minHeadroom.getInt(),
-            Math.max(minHeadroom.getInt(), maxHeadroom.getInt()), diagonals.isOn(), diagonalSteps.getInt(),
-            shortestRun.getInt(), Math.max(shortestRun.getInt(), longestRun.getInt()));
-        // The scan reads the rules once a chunk. A change has to throw the cache away.
+        HeightBand.Rows rows = band.rows();
+        Rules now = new Rules(rows.from(), rows.to(), widest.getInt(), onlyAir.isOn(), naturalWalls.isOn(),
+            corridors.isOn(), minLength.getInt(), minHeight.getInt(), Math.max(minHeight.getInt(), maxHeight.getInt()),
+            shafts.isOn(), minDepth.getInt(), waterShafts.isOn(), staircases.isOn(), stairSteps.getInt(),
+            minHeadroom.getInt(), Math.max(minHeadroom.getInt(), maxHeadroom.getInt()), diagonals.isOn(),
+            diagonalSteps.getInt(), shortestRun.getInt(), Math.max(shortestRun.getInt(), longestRun.getInt()));
+        // The scan reads the rules once a chunk. A change has to throw the cache away. A chunk's
+        // verdict reads Widest blocks into its neighbours and a change that far in rescans it.
         if (!now.equals(rules)) {
             rules = now;
+            scanner.borderReach(Math.max(CELL_BORDER, now.widest() + 1));
             scanner.reset();
         }
         Rules scanRules = rules;
@@ -305,6 +348,9 @@ public final class TunnelEsp extends Module {
         }
 
         private void mark(int x, int y, int z, Kind kind, int h) {
+            if (rules.naturalWalls() && !dug(x, y, z, h)) {
+                return;
+            }
             long key = BlockPos.asLong(x, y, z);
             Find known = cells.get(key);
             if (known == null || kind.ordinal() > known.kind().ordinal()) {
@@ -312,70 +358,201 @@ public final class TunnelEsp extends Module {
             }
         }
 
-        // Columns walled on all four sides. The whole column is one find at its foot.
+        // Dug out of natural ground. The world carves its mineshafts and strongholds out as cave
+        // air and a block a player breaks leaves plain air. Most of the blocks round the cell and
+        // under and over it are natural.
+        private boolean dug(int x, int y, int z, int h) {
+            Walls walls = new Walls();
+            walls.add(world.at(x, y - 1, z));
+            walls.add(world.at(x, y + h, z));
+            for (int i = 0; i < h; i++) {
+                if (world.at(x, y + i, z).is(Blocks.CAVE_AIR)) {
+                    return false;
+                }
+                for (Direction side : AROUND) {
+                    int nx = x + side.getStepX();
+                    int nz = z + side.getStepZ();
+                    if (!open(nx, y + i, nz)) {
+                        walls.add(world.at(nx, y + i, nz));
+                    }
+                }
+            }
+            return walls.mostlyNatural();
+        }
+
+        // Columns of holes closed on every side. Each column is one find at its foot.
         private void shafts(List<Find> out) {
-            for (int x = baseX; x < baseX + 16; x++) {
-                for (int z = baseZ; z < baseZ + 16; z++) {
-                    int start = Integer.MIN_VALUE;
-                    for (int y = from; y <= to + 1; y++) {
-                        boolean shaft = y <= to && shaftCell(x, y, z);
-                        if (shaft && start == Integer.MIN_VALUE) {
-                            start = y;
-                        } else if (!shaft && start != Integer.MIN_VALUE) {
-                            if (y - start >= rules.minDepth()) {
-                                out.add(new Find(x, start, z, Kind.SHAFT, y - start));
-                            }
-                            start = Integer.MIN_VALUE;
+            int[] start = new int[COLUMNS];
+            Arrays.fill(start, Integer.MIN_VALUE);
+            for (int y = from; y <= to + 1; y++) {
+                boolean[] holes = y <= to ? holes(y) : new boolean[COLUMNS];
+                for (int i = 0; i < COLUMNS; i++) {
+                    if (holes[i] && start[i] == Integer.MIN_VALUE) {
+                        start[i] = y;
+                    } else if (!holes[i] && start[i] != Integer.MIN_VALUE) {
+                        if (y - start[i] >= rules.minDepth()) {
+                            out.add(new Find(baseX + i / SIDE, start[i], baseZ + i % SIDE, Kind.SHAFT, y - start[i]));
                         }
+                        start[i] = Integer.MIN_VALUE;
                     }
                 }
             }
         }
 
-        private boolean shaftCell(int x, int y, int z) {
-            if (!shaftOpen(x, y, z)) {
-                return false;
-            }
-            for (Direction side : AROUND) {
-                if (shaftOpen(x + side.getStepX(), y, z + side.getStepZ())) {
-                    return false;
+        // The columns of this chunk that lie in a hole at one height. Each open patch is flooded
+        // once.
+        private boolean[] holes(int y) {
+            boolean[] holes = new boolean[COLUMNS];
+            LongSet seen = new LongOpenHashSet();
+            for (int i = 0; i < COLUMNS; i++) {
+                int x = baseX + i / SIDE;
+                int z = baseZ + i % SIDE;
+                if (seen.contains(BlockPos.asLong(x, y, z)) || !shaftOpen(x, y, z)) {
+                    continue;
+                }
+                LongArrayList patch = patch(x, y, z, seen);
+                if (patch == null || !walledHole(patch)) {
+                    continue;
+                }
+                for (int k = 0; k < patch.size(); k++) {
+                    int cx = BlockPos.getX(patch.getLong(k)) - baseX;
+                    int cz = BlockPos.getZ(patch.getLong(k)) - baseZ;
+                    if (cx >= 0 && cx < SIDE && cz >= 0 && cz < SIDE) {
+                        holes[cx * SIDE + cz] = true;
+                    }
                 }
             }
-            return true;
+            return holes;
         }
 
-        // A cell walled on two opposite sides whose run along the other axis is long enough.
+        // The open patch round a cell at one height. Null when it spreads further from the chunk
+        // than a hole of Widest could. Every cell it reaches is seen.
+        private LongArrayList patch(int x, int y, int z, LongSet seen) {
+            int reach = rules.widest() + 1;
+            LongArrayList patch = new LongArrayList();
+            LongArrayList waiting = new LongArrayList();
+            boolean spreads = false;
+            long first = BlockPos.asLong(x, y, z);
+            seen.add(first);
+            waiting.add(first);
+            while (!waiting.isEmpty()) {
+                long cell = waiting.removeLong(waiting.size() - 1);
+                patch.add(cell);
+                for (Direction side : AROUND) {
+                    int nx = BlockPos.getX(cell) + side.getStepX();
+                    int nz = BlockPos.getZ(cell) + side.getStepZ();
+                    if (!shaftOpen(nx, y, nz)) {
+                        continue;
+                    }
+                    if (nx < baseX - reach || nx >= baseX + SIDE + reach || nz < baseZ - reach
+                        || nz >= baseZ + SIDE + reach) {
+                        spreads = true;
+                    } else if (seen.add(BlockPos.asLong(nx, y, nz))) {
+                        waiting.add(BlockPos.asLong(nx, y, nz));
+                    }
+                }
+            }
+            return spreads ? null : patch;
+        }
+
+        // A whole rectangle no wider than Widest either way. With Natural walls it holds no cave
+        // air and its sides are mostly natural ground. Every open cell beside it is part of it.
+        private boolean walledHole(LongArrayList patch) {
+            int minX = Integer.MAX_VALUE;
+            int maxX = Integer.MIN_VALUE;
+            int minZ = Integer.MAX_VALUE;
+            int maxZ = Integer.MIN_VALUE;
+            for (int k = 0; k < patch.size(); k++) {
+                long cell = patch.getLong(k);
+                minX = Math.min(minX, BlockPos.getX(cell));
+                maxX = Math.max(maxX, BlockPos.getX(cell));
+                minZ = Math.min(minZ, BlockPos.getZ(cell));
+                maxZ = Math.max(maxZ, BlockPos.getZ(cell));
+            }
+            int across = maxX - minX + 1;
+            int along = maxZ - minZ + 1;
+            if (across > rules.widest() || along > rules.widest() || patch.size() != across * along) {
+                return false;
+            }
+            if (!rules.naturalWalls()) {
+                return true;
+            }
+            Walls walls = new Walls();
+            for (int k = 0; k < patch.size(); k++) {
+                long cell = patch.getLong(k);
+                int x = BlockPos.getX(cell);
+                int y = BlockPos.getY(cell);
+                int z = BlockPos.getZ(cell);
+                if (world.at(x, y, z).is(Blocks.CAVE_AIR)) {
+                    return false;
+                }
+                for (Direction side : AROUND) {
+                    int nx = x + side.getStepX();
+                    int nz = z + side.getStepZ();
+                    if (!shaftOpen(nx, y, nz)) {
+                        walls.add(world.at(nx, y, nz));
+                    }
+                }
+            }
+            return walls.mostlyNatural();
+        }
+
+        // A cell of a straight tunnel whose run along the axis is long enough. Every slice of the
+        // run spans the same cells across.
         private void corridor(int x, int y, int z) {
-            for (Direction.Axis axis : new Direction.Axis[] {Direction.Axis.X, Direction.Axis.Z}) {
-                int h = along(x, y, z, axis);
-                if (h == 0) {
+            for (Direction.Axis axis : FLAT_AXES) {
+                Span span = across(x, y, z, axis);
+                if (span == null) {
                     continue;
                 }
                 int run = 1;
                 int dx = axis == Direction.Axis.X ? 1 : 0;
                 int dz = 1 - dx;
                 for (int way = -1; way <= 1 && run < rules.minLength(); way += 2) {
-                    for (int step = 1; run < rules.minLength() && along(x + way * dx * step, y, z + way * dz * step,
-                        axis) > 0; step++) {
+                    for (int step = 1; run < rules.minLength()
+                        && span.equals(across(x + way * dx * step, y, z + way * dz * step, axis)); step++) {
                         run++;
                     }
                 }
                 if (run >= rules.minLength()) {
-                    mark(x, y, z, Kind.CORRIDOR, h);
+                    mark(x, y, z, Kind.CORRIDOR, opening(x, y, z, rules.minHeight(), rules.maxHeight()));
                 }
             }
         }
 
-        // The opening of a cell whose sides across the axis are walled or nought.
-        private int along(int x, int y, int z, Direction.Axis axis) {
+        // The cells across a tunnel through a cell running along the axis. Each one has a floor and
+        // a ceiling in range and walls close both ends within Widest. Null for anything else.
+        private Span across(int x, int y, int z, Direction.Axis axis) {
             int h = opening(x, y, z, rules.minHeight(), rules.maxHeight());
             if (h == 0) {
-                return 0;
+                return null;
             }
-            boolean walls = axis == Direction.Axis.X
-                ? walled(x, y, z - 1, h) && walled(x, y, z + 1, h)
-                : walled(x - 1, y, z, h) && walled(x + 1, y, z, h);
-            return walls ? h : 0;
+            // A tunnel along X spreads across Z and one along Z across X.
+            int stepX = axis == Direction.Axis.X ? 0 : 1;
+            int stepZ = 1 - stepX;
+            int back = beside(x, y, z, h, -stepX, -stepZ);
+            int ahead = beside(x, y, z, h, stepX, stepZ);
+            if (back < 0 || ahead < 0 || 1 + back + ahead > rules.widest()) {
+                return null;
+            }
+            int at = axis == Direction.Axis.X ? z : x;
+            return new Span(at - back, at + ahead);
+        }
+
+        // How many open cells lie one way across from a tunnel cell before its wall. Minus one when
+        // something other than a wall ends it or it runs on past Widest.
+        private int beside(int x, int y, int z, int h, int stepX, int stepZ) {
+            int last = h;
+            for (int k = 1; k <= rules.widest(); k++) {
+                int cx = x + stepX * k;
+                int cz = z + stepZ * k;
+                int next = opening(cx, y, cz, rules.minHeight(), rules.maxHeight());
+                if (next == 0) {
+                    return walled(cx, y, cz, last) ? k - 1 : -1;
+                }
+                last = next;
+            }
+            return -1;
         }
 
         // A cell that starts or carries on a staircase in one of the four directions.

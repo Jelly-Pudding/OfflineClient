@@ -23,6 +23,7 @@ import com.jellypudding.offlineclient.util.BreakSlots;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.ItemUtil;
+import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.PacketBreaker;
 import com.jellypudding.offlineclient.util.RotationManager;
 import com.jellypudding.offlineclient.util.RotationPriority;
@@ -214,7 +215,7 @@ public final class PacketMine extends Module {
             return;
         }
         BlockPos pos = event.getPos().immutable();
-        if (queued(pos) || !BlockUtil.isBreakable(pos)) {
+        if (queued(pos) || !BlockUtil.isBreakable(pos) || Modules.toolRefuses(BlockUtil.state(pos), true)) {
             return;
         }
         if (rebreak.isOn()) {
@@ -304,7 +305,8 @@ public final class PacketMine extends Module {
         if (target.cleared && !target.mining) {
             return target == queue.getFirst() && !rebreak.isOn() && areaDone(target);
         }
-        if (!target.mining && !BlockUtil.isBreakable(target.pos)) {
+        // A block AutoTool keeps standing for want of a Silk Touch tool leaves like one that cannot break.
+        if (!target.mining && (!BlockUtil.isBreakable(target.pos) || Modules.toolRefuses(state, true))) {
             return true;
         }
         return target.mining && progress(target) > 2
@@ -318,8 +320,12 @@ public final class PacketMine extends Module {
         return target.areaLeft == 0 || target.areaStall > patience;
     }
 
-    // The pair goes out once the server has an angle on the block and room to take it.
+    // The pair goes out once the server has an angle on the block and room to take it. A block
+    // put back at a kept spot waits whilst AutoTool keeps it standing for want of a Silk Touch tool.
     private boolean start(Target target, BlockState state) {
+        if (Modules.toolRefuses(state, true)) {
+            return false;
+        }
         Vec3 aim = BlockUtil.hitPoint(target.pos, BlockUtil.facingSide(target.pos));
         if (rotate.isOn() && !RotationManager.look(aim, RotationPriority.MINE, RotationManager.BLOCK_TOLERANCE)) {
             return false;
@@ -413,7 +419,7 @@ public final class PacketMine extends Module {
             return false;
         }
         BlockState state = BlockUtil.state(pos);
-        if (!listMode.getValue().admits(blocks.contains(state.getBlock()))) {
+        if (!listMode.getValue().admits(blocks.contains(state.getBlock())) || Modules.toolRefuses(state, true)) {
             return false;
         }
         return !rightTool.isOn() || ItemUtil.suits(mc.player.getMainHandItem(), state);

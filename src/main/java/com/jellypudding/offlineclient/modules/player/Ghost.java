@@ -81,8 +81,7 @@ public final class Ghost extends Module {
 
     @Subscribe
     private void onKeyPress(KeyPressEvent event) {
-        if (event.getAction() != InputConstants.PRESS || !respawnKey.isBound()
-            || event.getKey() != respawnKey.getValue() || mc.gui.screen() != null) {
+        if (!event.presses(respawnKey) || mc.gui.screen() != null) {
             return;
         }
         // One request is enough. The server answers it with a new body.

@@ -13,7 +13,7 @@ public final class Multitask extends Module {
     private final BoolSetting whileUsing = new BoolSetting("Mine whilst using",
         "Break blocks whilst you are eating or drawing a bow.", true);
     private final BoolSetting attackWhileUsing = new BoolSetting("Attack whilst using",
-        "Hit entities whilst you are eating or drawing a bow.", true);
+        "Hit entities whilst you eat or block or draw a bow.", true);
 
     public Multitask() {
         super("Multitask", "Lets you mine and place blocks whilst you eat or draw a bow.",

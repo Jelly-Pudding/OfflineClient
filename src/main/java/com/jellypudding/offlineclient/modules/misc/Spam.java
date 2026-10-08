@@ -1,32 +1,48 @@
 package com.jellypudding.offlineclient.modules.misc;
 
+import com.jellypudding.offlineclient.config.DataFiles;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.ClientTickEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
+import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.setting.TextSetting;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.Tally;
 import com.jellypudding.offlineclient.util.TextLines;
 import net.minecraft.SharedConstants;
 import net.minecraft.client.gui.screens.DisconnectedScreen;
 
+import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.ThreadLocalRandom;
 
 // A message starting with a slash is sent as a command.
 public final class Spam extends Module {
 
+    public enum Source { LIST, FILE }
+
     // Tacked onto the end of a message when the variation calls for it.
     private static final String TAILS = "!.~";
 
+    private final EnumSetting<Source> source = new EnumSetting<>("Source",
+        "Where the lines come from.", Source.LIST)
+        .describe(Source.LIST, "The lines typed below.")
+        .describe(Source.FILE, "Each line of a text file in the offlineclient folder once.");
+    private final TextSetting file = new TextSetting("File",
+        "Name of the text file inside the offlineclient folder.", "spam.txt")
+        .under(source, Source.FILE);
     private final TextLines lines = new TextLines("Messages",
         "How many lines to rotate through.", "The text to send. Click to type it.",
-        "minecraftoffline.net is OK I guess");
+        "minecraftoffline.net is OK I guess")
+        .under(source, Source.LIST);
     private final NumberSetting delay = new NumberSetting("Delay",
         "Seconds between messages.", 5, 0.1, 60, 0.1, "s").min(0.1);
     private final BoolSetting randomise = new BoolSetting("Randomise",
@@ -50,6 +66,8 @@ public final class Spam extends Module {
     private final NumberSetting splitDelay = new NumberSetting("Split delay",
         "Ticks between one piece and the next.", 20, 0, 200, 1, " ticks").min(0)
         .under(split);
+    private final NumberSetting stopAfter = new NumberSetting("Stop after",
+        "Switches off after sending this many messages. Zero keeps going.", 0, 0, 100, 1).min(0);
     private final BoolSetting stopOnLeave = new BoolSetting("Stop on leave",
         "Turns itself off when you leave a world.", true);
     private final BoolSetting stopOnDisconnect = new BoolSetting("Stop on disconnect",
@@ -59,13 +77,20 @@ public final class Spam extends Module {
     private final Deque<String> pieces = new ArrayDeque<>();
     private int timer;
     private boolean wasInGame;
+    private int sent;
+
+    // The lines of the file and the name they were read from. Null until the file is read.
+    private List<String> fileLines;
+    private String fileName;
+    private int fileNext;
 
     public Spam() {
         super("Spam", "Sends chat messages on a timer.", Category.MISC);
+        addSettings(source, file);
         addSettings(lines.settings());
         addSettings(delay, randomise, spread, vary, variation, split, splitLength, splitDelay,
-            stopOnLeave, stopOnDisconnect);
-        searchTags("auto message", "advert", "chat spam");
+            stopAfter, stopOnLeave, stopOnDisconnect);
+        searchTags("auto message", "advert", "chat spam", "command spam");
     }
 
     @Override
@@ -79,7 +104,10 @@ public final class Spam extends Module {
         timer = 20;
         pieces.clear();
         wasInGame = inGame();
+        sent = 0;
         lines.restart();
+        fileLines = null;
+        fileNext = 0;
     }
 
     // Leaving a world or landing on the disconnected screen can switch it off.
@@ -108,19 +136,19 @@ public final class Spam extends Module {
         }
         // The rest of a split message goes out before the next line starts.
         if (!pieces.isEmpty()) {
-            timer = Math.max(1, splitDelay.getInt());
-            mc.getConnection().sendChat(pieces.removeFirst());
+            sendPiece();
             return;
         }
         timer = nextDelay();
 
-        String text = lines.pick();
+        String text = nextLine();
         if (text == null) {
             return;
         }
         // A command goes out as it is. Only chat is varied and split.
         if (text.startsWith("/")) {
             ChatUtil.say(text);
+            lineSent();
             return;
         }
         if (vary.isOn()) {
@@ -130,14 +158,76 @@ public final class Spam extends Module {
         }
         if (split.isOn() && text.length() > splitLength.getInt()) {
             cutInto(text);
-            timer = Math.max(1, splitDelay.getInt());
-            mc.getConnection().sendChat(pieces.removeFirst());
+            sendPiece();
             return;
         }
         if (text.length() > SharedConstants.MAX_CHAT_LENGTH) {
             text = text.substring(0, SharedConstants.MAX_CHAT_LENGTH);
         }
         mc.getConnection().sendChat(text);
+        lineSent();
+    }
+
+    // A split line counts as one message once its last piece is out.
+    private void sendPiece() {
+        timer = Math.max(1, splitDelay.getInt());
+        mc.getConnection().sendChat(pieces.removeFirst());
+        if (pieces.isEmpty()) {
+            lineSent();
+        }
+    }
+
+    private void lineSent() {
+        sent++;
+        if (stopAfter.getInt() > 0 && sent >= stopAfter.getInt()) {
+            ChatUtil.message("§bSpam §7stopped after §f" + Tally.counted(sent, "message") + "§7.");
+            setEnabled(false);
+        } else {
+            fileSpent();
+        }
+    }
+
+    // Switches off once every line of the file has gone out. True when it did.
+    private boolean fileSpent() {
+        if (!source.is(Source.FILE) || fileLines == null || fileNext < fileLines.size()) {
+            return false;
+        }
+        ChatUtil.message("§bSpam §7sent every line of §f" + fileName + "§7.");
+        setEnabled(false);
+        return true;
+    }
+
+    // The next line of the list or the file. Null whilst there is nothing to send.
+    private String nextLine() {
+        if (source.is(Source.LIST)) {
+            return lines.pick();
+        }
+        if (fileLines == null || !file.getValue().equals(fileName)) {
+            readFile();
+            if (fileLines == null) {
+                return null;
+            }
+        }
+        return fileSpent() ? null : fileLines.get(fileNext++);
+    }
+
+    // A file that cannot be read or holds no text switches the module off and says why.
+    private void readFile() {
+        Path path = DataFiles.path(file.getValue());
+        Optional<String> text = DataFiles.readText(path);
+        List<String> read = text.map(Spam::textLines).orElse(List.of());
+        if (read.isEmpty()) {
+            disable(text.isEmpty() ? "Could not read " + path.getFileName() + " from the offlineclient folder."
+                : path.getFileName() + " holds no lines.");
+            return;
+        }
+        fileLines = read;
+        fileName = file.getValue();
+        fileNext = 0;
+    }
+
+    private static List<String> textLines(String text) {
+        return text.lines().map(String::strip).filter(line -> !line.isEmpty()).toList();
     }
 
     private void cutInto(String text) {

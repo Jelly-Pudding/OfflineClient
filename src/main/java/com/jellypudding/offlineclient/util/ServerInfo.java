@@ -3,6 +3,7 @@ package com.jellypudding.offlineclient.util;
 import com.jellypudding.offlineclient.OfflineClient;
 import net.minecraft.SharedConstants;
 import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.client.player.LocalPlayer;
@@ -14,6 +15,7 @@ import net.minecraft.world.level.Level;
 
 import java.util.Locale;
 import java.util.Map;
+import java.util.UUID;
 import java.util.regex.Pattern;
 
 // What the client knows about the server it is playing on. The server command
@@ -93,7 +95,7 @@ public final class ServerInfo {
             return known;
         }
         String words = dimension.substring(dimension.indexOf(':') + 1).replace('_', ' ');
-        return Character.toUpperCase(words.charAt(0)) + words.substring(1);
+        return ChatUtil.capitalised(words);
     }
 
     // The label the server has in your own server list. Null until you name it.
@@ -128,9 +130,11 @@ public final class ServerInfo {
         return brand != null && PAPER_FAMILY.matcher(brand).find();
     }
 
+    // The players the tab list shows. A server can add hidden entries such as the figures it
+    // gives a skin and those are left out.
     public static int online() {
         LocalPlayer player = OfflineClient.MC.player;
-        return player == null ? 0 : player.connection.getOnlinePlayers().size();
+        return player == null ? 0 : player.connection.getListedOnlinePlayers().size();
     }
 
     // The commands the server lets you run in the words the game uses such as none or gamemaster.
@@ -142,11 +146,20 @@ public final class ServerInfo {
     // Your own round trip time in milliseconds. Nought until the tab list has you.
     public static int ping() {
         LocalPlayer player = OfflineClient.MC.player;
-        if (player == null) {
-            return 0;
-        }
-        PlayerInfo info = player.connection.getPlayerInfo(player.getUUID());
-        return info == null ? 0 : info.getLatency();
+        return player == null ? 0 : Math.max(0, latency(player.getUUID()));
+    }
+
+    // A player's round trip time in milliseconds as the tab list gives it. Minus one when the
+    // tab list does not have them.
+    public static int latency(UUID player) {
+        ClientPacketListener connection = OfflineClient.MC.getConnection();
+        return latency(connection == null ? null : connection.getPlayerInfo(player));
+    }
+
+    // The same for a tab list entry already in hand. Minus one when there is none or the
+    // server gives no figure.
+    public static int latency(PlayerInfo info) {
+        return info == null ? -1 : Math.max(-1, info.getLatency());
     }
 
     // The round trip to the nearest whole tick.
@@ -162,6 +175,15 @@ public final class ServerInfo {
 
     // The server tick rate to one decimal place.
     public static String tps() {
-        return String.format(Locale.ROOT, "%.1f", TickRate.INSTANCE.tps());
+        return oneDecimal(TickRate.INSTANCE.tps());
+    }
+
+    // The same with a stall still under way counted in.
+    public static String liveTps() {
+        return oneDecimal(TickRate.INSTANCE.liveTps());
+    }
+
+    private static String oneDecimal(float rate) {
+        return String.format(Locale.ROOT, "%.1f", rate);
     }
 }

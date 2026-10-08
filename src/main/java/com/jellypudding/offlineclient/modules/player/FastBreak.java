@@ -120,7 +120,7 @@ public final class FastBreak extends Module {
         }
         float adjusted = vanilla;
         // Vanilla divides purely on being off the ground. Water has its own factor.
-        if (airPenalty.isOn() && !mc.player.onGround()) {
+        if (claimsGround(mc.player)) {
             adjusted *= BlockUtil.AIR_PENALTY;
         }
         if (!mode.is(Mode.NORMAL) || !allows(state.getBlock()) || !lucky(aimedBlock())) {
@@ -250,33 +250,45 @@ public final class FastBreak extends Module {
         }
     }
 
+    // The server lifts its airborne penalty only whilst it is told you stand on the ground.
+    // Where no claim can go the client keeps the penalty as well and the two stay agreed.
+    private boolean claimsGround(LocalPlayer player) {
+        return airPenalty.isOn() && !player.onGround() && PacketUtil.mayClaimGround(player);
+    }
+
     @Subscribe
     private void onPacketSend(PacketSendEvent event) {
+        // The packet thread can drop the player and the game mode mid handler.
+        LocalPlayer player = mc.player;
+        if (player == null) {
+            return;
+        }
         if (event.getPacket() instanceof ServerboundMovePlayerPacket packet) {
-            claimGround(event, packet);
-        } else if (event.getPacket() instanceof ServerboundPlayerActionPacket packet) {
-            abortAbove(packet);
+            claimGround(event, packet, player);
+            return;
+        }
+        // The rewrite below only runs whilst the game mines a block. A block that breaks on
+        // the first hit and a break sent by packet go out without it.
+        if (PacketUtil.judgesBreak(event.getPacket()) && claimsGround(player)) {
+            PacketUtil.claimGround(player);
+        }
+        if (event.getPacket() instanceof ServerboundPlayerActionPacket packet) {
+            abortAbove(packet, player);
         }
     }
 
-    // The server applies its own airborne mining penalty.
-    private void claimGround(PacketSendEvent event, ServerboundMovePlayerPacket packet) {
-        if (!airPenalty.isOn() || packet.isOnGround()) {
-            return;
-        }
-        // The packet thread can drop the player and the game mode mid handler.
-        LocalPlayer player = mc.player;
+    private void claimGround(PacketSendEvent event, ServerboundMovePlayerPacket packet, LocalPlayer player) {
         MultiPlayerGameMode gameMode = mc.gameMode;
-        if (player == null || gameMode == null || !gameMode.isDestroying()) {
+        if (packet.isOnGround() || gameMode == null || !gameMode.isDestroying()
+            || !airPenalty.isOn() || !PacketUtil.mayClaimGround(player)) {
             return;
         }
         event.setPacket(PacketUtil.withOnGround(packet, player, true));
     }
 
     // Grim skips its fast break check when an abort for another block follows a finish.
-    private void abortAbove(ServerboundPlayerActionPacket packet) {
-        LocalPlayer player = mc.player;
-        if (!mode.is(Mode.DAMAGE) || !grimBypass.isOn() || player == null
+    private void abortAbove(ServerboundPlayerActionPacket packet, LocalPlayer player) {
+        if (!mode.is(Mode.DAMAGE) || !grimBypass.isOn()
             || packet.getAction() != ServerboundPlayerActionPacket.Action.STOP_DESTROY_BLOCK) {
             return;
         }

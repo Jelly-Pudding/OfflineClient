@@ -8,6 +8,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -33,6 +34,7 @@ public final class SoftLanding {
         WATER(Items.WATER_BUCKET),
         POWDER_SNOW(Items.POWDER_SNOW_BUCKET),
         COBWEB(Items.COBWEB),
+        SWEET_BERRIES(Items.SWEET_BERRIES),
         SLIME_BLOCK(Items.SLIME_BLOCK),
         HAY_BALE(Items.HAY_BLOCK),
         HONEY_BLOCK(Items.HONEY_BLOCK);
@@ -184,11 +186,17 @@ public final class SoftLanding {
             return null;
         }
         BlockPos spot = BlockUtil.isReplaceable(ground) ? ground : ground.above();
-        if (!BlockUtil.isReplaceable(spot)) {
+        if (!BlockUtil.isReplaceable(spot) || !stays(kind, spot)) {
             return null;
         }
         return new Plan(kind, ground, spot, BlockUtil.opensOnClick(BlockUtil.state(ground)),
             spot.getY() + ROOM);
+    }
+
+    // A berry bush only takes root in soil. Every other landing block stays anywhere.
+    private static boolean stays(Kind kind, BlockPos spot) {
+        return kind.item instanceof BlockItem block
+            && block.getBlock().defaultBlockState().canSurvive(MC.level, spot);
     }
 
     // Water poured into the ground only catches a player who lands low enough to be in it.
@@ -304,8 +312,9 @@ public final class SoftLanding {
         return hit.getType() == HitResult.Type.BLOCK ? hit : null;
     }
 
-    // True when the fall already ends in water or a web or powder snow or slime. Webs and
-    // powder snow hold you and the server forgets the fall. Slime cancels it unless you sneak.
+    // True when the fall already ends in water or a web or powder snow or a berry bush or slime.
+    // Webs and powder snow and berry bushes hold you and the server forgets the fall. Slime
+    // cancels it unless you sneak.
     private static boolean alreadySoft(BlockHitResult ground) {
         BlockPos pos = ground.getBlockPos();
         FluidState fluid = MC.level.getFluidState(pos);
@@ -314,7 +323,7 @@ public final class SoftLanding {
             return true;
         }
         BlockState state = BlockUtil.state(pos);
-        return state.is(Blocks.COBWEB) || state.is(Blocks.POWDER_SNOW)
+        return state.is(Blocks.COBWEB) || state.is(Blocks.POWDER_SNOW) || state.is(Blocks.SWEET_BERRY_BUSH)
             || (state.is(Blocks.SLIME_BLOCK) && !MC.player.isShiftKeyDown());
     }
 

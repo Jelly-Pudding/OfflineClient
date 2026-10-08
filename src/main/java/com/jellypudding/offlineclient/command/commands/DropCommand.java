@@ -3,7 +3,6 @@ package com.jellypudding.offlineclient.command.commands;
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.command.Command;
 import com.jellypudding.offlineclient.command.CommandManager;
-import com.jellypudding.offlineclient.modules.player.AutoDrop;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.client.player.LocalPlayer;
@@ -32,9 +31,8 @@ public final class DropCommand extends Command {
             return;
         }
         // The throw is refused further down without a word.
-        AutoDrop autoDrop = Modules.get(AutoDrop.class);
-        if (autoDrop != null && autoDrop.guards(player.getMainHandItem())) {
-            ChatUtil.error("AutoDrop is guarding what you hold.");
+        if (Modules.keepsFromThrow(player.getMainHandItem())) {
+            ChatUtil.error("NoInteract keeps what you hold from being thrown.");
             return;
         }
         OfflineClient.MC.gameMode.dropItem(player, whole);

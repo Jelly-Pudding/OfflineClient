@@ -18,6 +18,11 @@ public final class BoolSetting extends Setting<Boolean> {
     }
 
     @Override
+    public String defaultText() {
+        return defaultValue ? "on" : "off";
+    }
+
+    @Override
     public JsonElement toJson() {
         return new JsonPrimitive(value);
     }

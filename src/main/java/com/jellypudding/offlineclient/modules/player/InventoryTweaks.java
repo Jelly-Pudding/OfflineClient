@@ -10,12 +10,14 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
+import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.ItemUtil;
 import com.jellypudding.offlineclient.util.MenuClicks;
 import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.protocol.game.ServerboundContainerClosePacket;
 import net.minecraft.world.inventory.AbstractContainerMenu;
@@ -31,29 +33,35 @@ public final class InventoryTweaks extends Module {
 
     public enum SortWhen {
         ALWAYS,
-        ON_KEY
+        ON_KEY,
+        MIDDLE_CLICK
     }
 
     public enum DumpFilter {
         WHITELIST,
         BLACKLIST,
         UNLISTED,
+        MATCHING,
         EVERYTHING
     }
+
+    // The part of the screen a middle click asked to have sorted.
+    private enum Part { NONE, YOURS, CONTAINER }
 
     private final BoolSetting sort = new BoolSetting("Sort",
         "Keep the inventory in a stable order.", true);
     private final BoolSetting sortHotbar = new BoolSetting("Sort hotbar",
         "Include the hotbar in the sorting.", false)
         .under(sort);
-    private final BoolSetting sortContainer = new BoolSetting("Sort containers",
-        "Also sort the chest or barrel you have open.", false)
-        .under(sort);
     private final EnumSetting<SortWhen> sortWhen = new EnumSetting<>("Sort when",
         "When the sorting runs.", SortWhen.ALWAYS)
         .describe(SortWhen.ALWAYS, "Sorts whenever a screen is open.")
         .describe(SortWhen.ON_KEY, "Sorts only whilst the sort key is held.")
+        .describe(SortWhen.MIDDLE_CLICK, "Sorts the part of the screen you middle click.")
         .under(sort);
+    private final BoolSetting sortContainer = new BoolSetting("Sort containers",
+        "Also sort the chest or barrel you have open.", false)
+        .under(sort, () -> sort.isOn() && !sortWhen.is(SortWhen.MIDDLE_CLICK));
     private final KeybindSetting sortKey = new KeybindSetting("Sort key",
         "The key that runs the sorting.", KeybindSetting.UNBOUND)
         .under(sortWhen, SortWhen.ON_KEY);
@@ -69,6 +77,7 @@ public final class InventoryTweaks extends Module {
         .describe(DumpFilter.WHITELIST, "Dumps only the listed items.")
         .describe(DumpFilter.BLACKLIST, "Dumps everything except the listed items.")
         .describe(DumpFilter.UNLISTED, "Dumps everything the ChestStealer list or limits turn away.")
+        .describe(DumpFilter.MATCHING, "Dumps only items the open container already holds.")
         .describe(DumpFilter.EVERYTHING, "Dumps the whole inventory.")
         .under(dump);
     private final RegistryListSetting<Item> junk = new RegistryListSetting<>("Junk",
@@ -92,6 +101,8 @@ public final class InventoryTweaks extends Module {
     private int dumpCount = -1;
     // True whilst a close packet for your own inventory has been held back.
     private boolean heldClose;
+    // What the last middle click asked to have sorted. It runs until that part is in order.
+    private Part clicked = Part.NONE;
 
     public InventoryTweaks() {
         super("InventoryTweaks", "Sorts and merges your inventory whilst it is open.",
@@ -121,6 +132,24 @@ public final class InventoryTweaks extends Module {
 
     public boolean frameInput() {
         return isEnabled() && frameInput.isOn();
+    }
+
+    // A middle click on a slot sorts the part of the screen it belongs to. False leaves the
+    // click to the game.
+    public boolean middleClicked(MouseButtonEvent event, AbstractContainerMenu menu, Slot slot) {
+        if (!isEnabled() || slot == null || !InputUtil.isMiddle(event.button()) || !sortWhen.is(SortWhen.MIDDLE_CLICK)
+            || !sortsHere()) {
+            return false;
+        }
+        if (MenuClicks.isInventorySlot(slot)) {
+            clicked = Part.YOURS;
+            return true;
+        }
+        if (MenuClicks.isContainerSlot(slot) && InventoryUtil.isStorage(menu)) {
+            clicked = Part.CONTAINER;
+            return true;
+        }
+        return false;
     }
 
     // Your own inventory never really closes. The crafting grid keeps its items.
@@ -155,12 +184,16 @@ public final class InventoryTweaks extends Module {
         if (!craftingCarry.isOn()) {
             releaseClose();
         }
+        if (Modules.packing()) {
+            return;
+        }
         Screen screen = mc.gui.screen();
         boolean own = screen instanceof InventoryScreen;
         boolean container = !own && InventoryUtil.isStorage(screen);
         if (!own && !container) {
             dumpSlot = -1;
             dumpCount = -1;
+            clicked = Part.NONE;
             return;
         }
         AbstractContainerMenu menu = mc.player.containerMenu;
@@ -185,6 +218,14 @@ public final class InventoryTweaks extends Module {
             timer = delay.getInt();
             return;
         }
+        if (clicked != Part.NONE) {
+            if (sortStep(menu, clicked == Part.YOURS ? mine : MenuClicks.containerSlots(menu))) {
+                timer = delay.getInt();
+            } else {
+                clicked = Part.NONE;
+            }
+            return;
+        }
         if (!sorts()) {
             return;
         }
@@ -198,10 +239,19 @@ public final class InventoryTweaks extends Module {
     }
 
     private boolean sorts() {
-        if (!sort.isOn() || (skipCreative.isOn() && mc.player.isCreative())) {
+        if (!sortsHere()) {
             return false;
         }
-        return sortWhen.is(SortWhen.ALWAYS) || sortKey.isHeld();
+        return switch (sortWhen.getValue()) {
+            case ALWAYS -> true;
+            case ON_KEY -> sortKey.isHeld();
+            case MIDDLE_CLICK -> false;
+        };
+    }
+
+    // Sorting is on and creative mode is not holding it back.
+    private boolean sortsHere() {
+        return sort.isOn() && !(skipCreative.isOn() && mc.player.isCreative());
     }
 
     private boolean stealerBusy() {
@@ -235,8 +285,17 @@ public final class InventoryTweaks extends Module {
             case WHITELIST -> junk.contains(stack.getItem());
             case BLACKLIST -> !junk.contains(stack.getItem());
             case UNLISTED -> stealerTurnsAway(stack);
+            case MATCHING -> containerHolds(stack);
             case EVERYTHING -> true;
         };
+    }
+
+    // True when the open container already holds the item. With no container open any item
+    // may match the next one.
+    private boolean containerHolds(ItemStack stack) {
+        AbstractContainerMenu menu = mc.player.containerMenu;
+        return !InventoryUtil.isStorage(menu)
+            || MenuClicks.firstContainerSlot(menu, held -> held.is(stack.getItem())) != -1;
     }
 
     private boolean dumpJunk(AbstractContainerMenu menu) {

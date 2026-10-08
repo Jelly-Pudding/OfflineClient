@@ -10,11 +10,13 @@ import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.render.BoxStyle;
 import com.jellypudding.offlineclient.render.DrawBatch;
+import com.jellypudding.offlineclient.render.HeightBand;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.setting.Setting;
+import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.ChunkScanner;
 import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.NearestCut;
@@ -62,6 +64,7 @@ public final class BlockEsp extends Module {
         "Chunk radius to scan around you.", 4, 1, 8, 1, " chunks").max(ChunkMap.MAX_VIEW_DISTANCE);
     private final NumberSetting limit = new NumberSetting("Limit",
         "Most blocks drawn at once with the nearest first.", 2000, 100, 5000, 100).min(1);
+    private final HeightBand band = new HeightBand("blocks");
     private final RegistryListSetting<Block> blocks = new RegistryListSetting<>("Blocks",
         "The blocks to find.", BuiltInRegistries.BLOCK,
         List.of(Blocks.DIAMOND_ORE, Blocks.DEEPSLATE_DIAMOND_ORE, Blocks.ANCIENT_DEBRIS,
@@ -118,6 +121,8 @@ public final class BlockEsp extends Module {
 
     // Read from the scanner thread and replaced whole.
     private volatile Set<Block> wanted = Set.of();
+    // The heights the current scans read. A new band scans everything again.
+    private HeightBand.Rows scannedRows;
 
     private final ChunkScanner<Target> scanner = new ChunkScanner<>();
     // Set from the settings screen and read on the next tick.
@@ -131,7 +136,9 @@ public final class BlockEsp extends Module {
 
     public BlockEsp() {
         super("BlockESP", "Highlights chosen blocks through walls.", Category.RENDER);
-        addSettings(range, limit, blocks, automatic);
+        addSettings(range, limit);
+        addSettings(band.settings());
+        addSettings(blocks, automatic);
         addSettings(defaultStyle.settings());
         addSettings(defaultTracer, defaultTracerColor, store);
         searchTags("search", "block search", "ore esp", "archaeology", "suspicious sand", "suspicious gravel");
@@ -223,9 +230,15 @@ public final class BlockEsp extends Module {
                 reset();
             }
         }
+        HeightBand.Rows rows = band.rows();
+        if (!rows.equals(scannedRows)) {
+            scannedRows = rows;
+            reset();
+        }
 
         Set<Block> query = wanted;
         scanner.update(range.getInt(), (view, out) -> view.forEachMatching(
+            Math.max(view.minY(), rows.from()), Math.min(view.maxY(), rows.to()),
             state -> query.contains(state.getBlock()),
             (x, y, z, state) -> out.add(new Target(x, y, z, state.getBlock()))));
 
@@ -407,10 +420,6 @@ public final class BlockEsp extends Module {
 
     // A block id such as deepslate_diamond_ore reads as a sentence case name.
     private static String sentence(String id) {
-        if (id.isEmpty()) {
-            return id;
-        }
-        String words = id.replace('_', ' ');
-        return Character.toUpperCase(words.charAt(0)) + words.substring(1);
+        return ChatUtil.capitalised(id.replace('_', ' '));
     }
 }

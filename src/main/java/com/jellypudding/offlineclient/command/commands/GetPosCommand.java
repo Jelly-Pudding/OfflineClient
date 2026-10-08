@@ -7,13 +7,12 @@ import com.jellypudding.offlineclient.config.WaypointStore;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import net.minecraft.client.player.LocalPlayer;
-import net.minecraft.core.BlockPos;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
 import java.util.Locale;
-import java.util.OptionalDouble;
 
 // Typed coordinates belong to the dimension you are in unless a side is named.
 // In the end they are read as overworld ones.
@@ -39,16 +38,14 @@ public final class GetPosCommand extends Command {
         }
         boolean inNether = player.level().dimension() == Level.NETHER;
         if (args.length == 0) {
-            BlockPos pos = player.blockPosition();
-            ChatUtil.message("§7You are at §b" + BlockUtil.text(pos));
+            ChatUtil.message("§7You are at §b" + BlockUtil.text(player.blockPosition()));
             if (inNether || player.level().dimension() == Level.OVERWORLD) {
-                showAcross(pos.getX(), pos.getZ(), inNether);
+                showAcross(player.getX(), player.getZ(), inNether);
             }
             return;
         }
-        OptionalDouble x = coordinate(args[0], player.getX());
-        OptionalDouble z = x.isPresent() ? coordinate(args[1], player.getZ()) : OptionalDouble.empty();
-        if (z.isEmpty()) {
+        Vec3 spot = flatCoordinates(args, 0, player.position());
+        if (spot == null) {
             return;
         }
         boolean fromNether = inNether;
@@ -62,13 +59,13 @@ public final class GetPosCommand extends Command {
                 }
             }
         }
-        showAcross(Mth.floor(x.getAsDouble()), Mth.floor(z.getAsDouble()), fromNether);
+        showAcross(spot.x, spot.z, fromNether);
     }
 
-    private static void showAcross(int x, int z, boolean fromNether) {
+    private static void showAcross(double x, double z, boolean fromNether) {
         int otherX = WaypointStore.acrossPortal(x, !fromNether);
         int otherZ = WaypointStore.acrossPortal(z, !fromNether);
-        ChatUtil.message("§7" + (fromNether ? "Nether" : "Overworld") + " §b" + x + " " + z
+        ChatUtil.message("§7" + (fromNether ? "Nether" : "Overworld") + " §b" + Mth.floor(x) + " " + Mth.floor(z)
             + " §7is " + (fromNether ? "Overworld" : "Nether") + " §b" + otherX + " " + otherZ);
     }
 

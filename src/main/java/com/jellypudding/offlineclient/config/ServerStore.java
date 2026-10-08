@@ -2,6 +2,7 @@ package com.jellypudding.offlineclient.config;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.jellypudding.offlineclient.util.ProxyTunnel;
 
 import java.nio.file.Path;
 import java.util.List;
@@ -14,6 +15,8 @@ import java.util.function.Function;
 public final class ServerStore<T> {
 
     private static ServerStore<String> logins;
+    private static ServerStore<ProxyTunnel.Login> proxyLogins;
+    private static ServerStore<String> modelKeys;
     private static ServerStore<Long> seeds;
 
     private final Path file;
@@ -34,6 +37,23 @@ public final class ServerStore<T> {
             logins = new ServerStore<>("logins.json", Function.identity(), Function.identity());
         }
         return logins;
+    }
+
+    // Proxy logins by proxy host. They stay out of config.json for the same reason.
+    public static synchronized ServerStore<ProxyTunnel.Login> proxyLogins() {
+        if (proxyLogins == null) {
+            proxyLogins = new ServerStore<>("proxies.json", ProxyTunnel.Login::parse, ProxyTunnel.Login::text);
+        }
+        return proxyLogins;
+    }
+
+    // Keys for chat model services by the host of the service. They stay out of config.json
+    // for the same reason.
+    public static synchronized ServerStore<String> modelKeys() {
+        if (modelKeys == null) {
+            modelKeys = new ServerStore<>("modelkeys.json", Function.identity(), Function.identity());
+        }
+        return modelKeys;
     }
 
     // World seeds OreSight works out the ores from.

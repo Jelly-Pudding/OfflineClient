@@ -2,6 +2,7 @@ package com.jellypudding.offlineclient.mixin;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.events.Render3DEvent;
+import com.jellypudding.offlineclient.modules.misc.Conceal;
 import com.jellypudding.offlineclient.modules.render.BlockSelection;
 import com.jellypudding.offlineclient.render.DrawBatch;
 import com.jellypudding.offlineclient.util.Modules;
@@ -33,17 +34,23 @@ public class LevelRendererMixin {
         try {
             OfflineClient.INSTANCE.getEventBus().post(new Render3DEvent(batch, partialTicks));
         } finally {
-            // The native buffer is freed even when a handler throws.
-            batch.draw();
+            // The native buffer is freed even when a handler throws. Conceal lets the handlers run
+            // for those that do more than draw and throws away what they drew.
+            if (Conceal.hides(Conceal.Part.WORLD)) {
+                batch.discard();
+            } else {
+                batch.draw();
+            }
         }
     }
 
-    // BlockSelection draws its own outline in place of the vanilla one.
+    // BlockSelection draws its own outline in place of the vanilla one. The vanilla one stays
+    // whilst Conceal throws the world drawing away.
     @Inject(
         method = "submitBlockOutline(Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/SubmitNodeCollector;Lnet/minecraft/client/renderer/state/level/LevelRenderState;)V",
         at = @At("HEAD"), cancellable = true)
     private void onSubmitBlockOutline(CallbackInfo ci) {
-        if (Modules.enabled(BlockSelection.class)) {
+        if (Modules.enabled(BlockSelection.class) && !Conceal.hides(Conceal.Part.WORLD)) {
             ci.cancel();
         }
     }

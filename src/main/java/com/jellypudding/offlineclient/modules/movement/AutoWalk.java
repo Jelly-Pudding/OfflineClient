@@ -15,6 +15,7 @@ import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.SectionPos;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
@@ -201,8 +202,8 @@ public final class AutoWalk extends Module {
     // Looks two ticks of travel ahead. The stop comes before the border.
     private boolean chunkAheadMissing() {
         Vec3 motion = mc.player.getDeltaMovement();
-        int chunkX = (int) Math.floor((mc.player.getX() + motion.x * 2) / 16);
-        int chunkZ = (int) Math.floor((mc.player.getZ() + motion.z * 2) / 16);
+        int chunkX = SectionPos.blockToSectionCoord(mc.player.getX() + motion.x * 2);
+        int chunkZ = SectionPos.blockToSectionCoord(mc.player.getZ() + motion.z * 2);
         return !mc.level.getChunkSource().hasChunk(chunkX, chunkZ);
     }
 }

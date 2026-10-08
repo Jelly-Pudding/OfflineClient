@@ -3,6 +3,7 @@ package com.jellypudding.offlineclient.mixin;
 import com.jellypudding.offlineclient.modules.misc.BetterTab;
 import com.jellypudding.offlineclient.modules.misc.NameProtect;
 import com.jellypudding.offlineclient.util.Modules;
+import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.llamalad7.mixinextras.injector.ModifyReturnValue;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.PlayerTabOverlay;
@@ -57,6 +58,15 @@ public class PlayerTabOverlayMixin {
     private int onPingRoom(int original) {
         BetterTab tab = Modules.get(BetterTab.class);
         return tab == null ? original : tab.pingRoom(original);
+    }
+
+    // The one read of online mode decides both the heads and the room each row keeps for them.
+    @ModifyExpressionValue(
+        method = "extractRenderState(Lnet/minecraft/client/gui/GuiGraphicsExtractor;ILnet/minecraft/world/scores/Scoreboard;Lnet/minecraft/world/scores/Objective;)V",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/multiplayer/ClientPacketListener;onlineMode()Z"))
+    private boolean onOnlineMode(boolean original) {
+        BetterTab tab = Modules.get(BetterTab.class);
+        return original || (tab != null && tab.showsHeads());
     }
 
     // Vanilla wraps to a new column after twenty rows.

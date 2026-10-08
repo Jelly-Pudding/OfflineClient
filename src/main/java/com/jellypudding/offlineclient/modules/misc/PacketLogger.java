@@ -6,17 +6,24 @@ import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.ClientTickEvent;
 import com.jellypudding.offlineclient.event.events.PacketReceiveEvent;
 import com.jellypudding.offlineclient.event.events.PacketSendEvent;
+import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ChoiceListSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.ChatSender;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.MoveGate;
 import com.jellypudding.offlineclient.util.PacketNames;
+import com.jellypudding.offlineclient.util.ServerInfo;
 import net.minecraft.SharedConstants;
+import net.minecraft.client.gui.components.toasts.SystemToast;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.PacketType;
+import net.minecraft.world.phys.Vec3;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -28,17 +35,33 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
-// Prints or files every packet of the kinds you pick.
+// Prints or files every packet of the kinds you pick. The kick report keeps every packet
+// both ways for a few seconds and files them when the server drops you.
 public final class PacketLogger extends Module {
 
+    // One line of the kick report and when it happened on the nano clock.
+    private record Recent(long nanos, String line) {
+    }
+
     private static final DateTimeFormatter CLOCK = DateTimeFormatter.ofPattern("HH:mm:ss.SSS");
+
+    private static final double NANOS_PER_SECOND = TimeUnit.SECONDS.toNanos(1);
+
+    // A packet line in the kick report stops here. A chunk sent whole would fill the file.
+    private static final int REPORT_LINE = 400;
+
+    // Lines the kick report holds at most however busy the window.
+    private static final int MAX_RECENT = 50_000;
 
     private static final int MEGABYTE = 1024 * 1024;
 
@@ -62,7 +85,7 @@ public final class PacketLogger extends Module {
     private final BoolSetting toChat = new BoolSetting("Log to chat",
         "Prints each line into your chat.", true);
     private final BoolSetting toFile = new BoolSetting("Log to file",
-        "Writes each line into offlineclient/packet-logs inside your game folder.", false);
+        "Writes each line into a log file and names the file in chat.", false);
     private final NumberSetting flushSeconds = new NumberSetting("Flush interval",
         "Seconds between one write to the file and the next.", 1, 1, 10, 1, "s").min(1)
         .under(toFile);
@@ -73,6 +96,12 @@ public final class PacketLogger extends Module {
         "The oldest files are deleted once the folder gets bigger.", 50, 1, 500, 1, " MB")
         .min(1)
         .under(toFile);
+    private final BoolSetting kickReport = new BoolSetting("Kick report",
+        "Writes the last few seconds of packets and your movement to a file when the server drops you.", false);
+    private final NumberSetting reportWindow = new NumberSetting("Report window",
+        "Seconds of packets and movement the report keeps.", 5, 1, 30, 1, "s")
+        .min(1)
+        .under(kickReport);
 
     // The picked names resolved to types. Read from the netty thread and replaced whole.
     private volatile Set<PacketType<?>> logIncoming = Set.of();
@@ -88,11 +117,20 @@ public final class PacketLogger extends Module {
     private long written;
     private int flushTimer;
 
+    // Filled from the netty thread and the game thread and read when the server drops you.
+    private final ConcurrentLinkedDeque<Recent> recent = new ConcurrentLinkedDeque<>();
+    private final AtomicInteger recentCount = new AtomicInteger();
+    // When the last client tick with a player in the world ran on the nano clock. A report needs
+    // one inside its window.
+    private long lastTick = Long.MIN_VALUE;
+    // The server you are on. It is gone by the time the disconnected screen opens.
+    private String server;
+
     public PacketLogger() {
         super("PacketLogger", "Writes the packets you pick to chat or to a file.", Category.MISC);
         addSettings(incoming, outgoing, timestamp, showData, showCount, showSummary, toChat,
-            toFile, flushSeconds, maxFileSize, maxTotalSize);
-        searchTags("packet log", "network log", "sniffer");
+            toFile, flushSeconds, maxFileSize, maxTotalSize, kickReport, reportWindow);
+        searchTags("packet log", "network log", "sniffer", "kick", "forensics");
     }
 
     @Override
@@ -114,6 +152,7 @@ public final class PacketLogger extends Module {
         file = null;
         written = 0;
         flushTimer = 0;
+        forgetRecent();
     }
 
     @Override
@@ -128,6 +167,7 @@ public final class PacketLogger extends Module {
         counts.clear();
         buffer.clear();
         file = null;
+        forgetRecent();
     }
 
     private void summarise() {
@@ -152,6 +192,100 @@ public final class PacketLogger extends Module {
     @Subscribe
     private void onPacketSend(PacketSendEvent event) {
         record(event.getPacket(), logOutgoing, "out");
+    }
+
+    // Before any module can drop a packet that arrived.
+    @Subscribe(priority = Subscribe.FIRST)
+    private void onPacketArrived(PacketReceiveEvent event) {
+        remember("in", event.getPacket());
+    }
+
+    // After every module has rewritten a packet or held it back.
+    @Subscribe(priority = Subscribe.LAST)
+    private void onPacketLeaving(PacketSendEvent event) {
+        remember("out", event.getPacket());
+    }
+
+    // Where you were and how you moved on each tick of the window.
+    @Subscribe
+    private void onTick(TickEvent event) {
+        LocalPlayer player = mc.player;
+        if (!kickReport.isOn() || player == null) {
+            return;
+        }
+        Vec3 motion = player.getDeltaMovement();
+        remember(String.format(Locale.ROOT, "tick at %.3f %.3f %.3f moving %.3f %.3f %.3f ground %b fall %.2f"
+                + " ping %d floating %d", player.getX(), player.getY(), player.getZ(), motion.x, motion.y, motion.z,
+            player.onGround(), player.fallDistance, ServerInfo.ping(), MoveGate.floatingTicks(false)));
+    }
+
+    private void remember(String direction, Packet<?> packet) {
+        if (!kickReport.isOn()) {
+            return;
+        }
+        String text = String.valueOf(packet);
+        remember(direction + " " + packet.type().id() + " "
+            + (text.length() > REPORT_LINE ? text.substring(0, REPORT_LINE) + "..." : text));
+    }
+
+    // Lines older than the window go as each new one comes.
+    private void remember(String line) {
+        long now = System.nanoTime();
+        recent.addLast(new Recent(now, line));
+        long oldest = windowStart(now);
+        Recent first;
+        while ((first = recent.peekFirst()) != null
+            && (first.nanos() < oldest || recentCount.get() >= MAX_RECENT)) {
+            if (recent.pollFirst() != null) {
+                recentCount.decrementAndGet();
+            }
+        }
+        recentCount.incrementAndGet();
+    }
+
+    private long windowStart(long now) {
+        return now - (long) (reportWindow.getValue() * NANOS_PER_SECOND);
+    }
+
+    private void forgetRecent() {
+        recent.clear();
+        recentCount.set(0);
+        lastTick = Long.MIN_VALUE;
+    }
+
+    // Called as the disconnected screen opens. A failed join or a refused retry has no tick in a world
+    // inside the window and writes nothing.
+    public void kickReport(Component reason) {
+        if (!kickReport.isOn()) {
+            return;
+        }
+        long now = System.nanoTime();
+        long oldest = windowStart(now);
+        if (lastTick < oldest) {
+            forgetRecent();
+            return;
+        }
+        List<String> lines = new ArrayList<>();
+        lines.add("Kick report written " + DataFiles.timestamp());
+        lines.add("Server " + (server == null ? "unknown" : server));
+        lines.add("Reason " + ChatSender.plain(reason).replace('\n', ' '));
+        lines.add("");
+        for (Recent line : recent) {
+            if (line.nanos() >= oldest) {
+                lines.add(String.format(Locale.ROOT, "%+.3fs %s", (line.nanos() - now) / NANOS_PER_SECOND,
+                    line.line()));
+            }
+        }
+        forgetRecent();
+        try {
+            Path report = nextFile(folder(), "kick-" + LocalDate.now());
+            if (DataFiles.appendLines(report, lines)) {
+                SystemToast.add(mc.gui.toastManager(), SystemToast.SystemToastId.PERIODIC_NOTIFICATION,
+                    Component.literal(getName()), Component.literal("Saved the kick report as " + report.getFileName()));
+            }
+        } catch (IOException | UncheckedIOException error) {
+            OfflineClient.LOG.error("Failed to write the kick report", error);
+        }
     }
 
     // Fired on the netty thread. Only the line is built here.
@@ -180,9 +314,14 @@ public final class PacketLogger extends Module {
         pending.add(line.toString());
     }
 
+    // Every client tick including loading screens where the player tick waits for chunks.
     @Subscribe
     private void onClientTick(ClientTickEvent event) {
         drain();
+        if (kickReport.isOn() && mc.player != null) {
+            lastTick = System.nanoTime();
+            server = ServerInfo.address();
+        }
     }
 
     private void drain() {
@@ -219,7 +358,7 @@ public final class PacketLogger extends Module {
         Path folder = folder();
         try {
             if (file == null || written > maxFileSize.getInt() * (long) MEGABYTE) {
-                file = nextFile(folder);
+                file = nextFile(folder, "packets-" + LocalDate.now());
                 written = 0;
                 announce(file);
             }
@@ -242,8 +381,7 @@ public final class PacketLogger extends Module {
         return DataFiles.path("packet-logs");
     }
 
-    private static Path nextFile(Path folder) throws IOException {
-        String stem = "packets-" + LocalDate.now();
+    private static Path nextFile(Path folder, String stem) throws IOException {
         for (int i = 1; ; i++) {
             Path candidate = folder.resolve(stem + "-" + i + ".log");
             if (!Files.exists(candidate)) {

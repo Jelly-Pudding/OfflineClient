@@ -7,13 +7,18 @@ import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
+import com.jellypudding.offlineclient.util.DamageUtil;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.SectionPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import net.minecraft.network.protocol.game.ServerboundMoveVehiclePacket;
+import net.minecraft.tags.BlockTags;
+import net.minecraft.tags.FluidTags;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.Shapes;
@@ -25,7 +30,9 @@ import java.util.List;
 public final class Collisions extends Module {
 
     private final RegistryListSetting<Block> blocks = new RegistryListSetting<>("Blocks",
-        "Blocks that become solid to you. Click to pick them.", BuiltInRegistries.BLOCK,
+        "Blocks that become solid to you. Click to pick them. "
+            + "Water and webs and berry bushes still catch a fall that would hurt.",
+        BuiltInRegistries.BLOCK,
         List.of(Blocks.FIRE, Blocks.SOUL_FIRE, Blocks.COBWEB, Blocks.SWEET_BERRY_BUSH, Blocks.POWDER_SNOW));
     private final BoolSetting magma = new BoolSetting("Magma",
         "Makes the air over magma solid to keep you off it.", false);
@@ -50,12 +57,12 @@ public final class Collisions extends Module {
         haveSafe = false;
     }
 
-    // Null leaves the block with the shape the game gave it.
+    // Null leaves the block with the shape the game gave it. The ridden vehicle asks as well.
     public VoxelShape forcedShape(BlockState state, BlockPos pos) {
-        if (!state.getFluidState().isEmpty() || !inGame()) {
+        if (!inGame()) {
             return null;
         }
-        if (blocks.contains(state.getBlock())) {
+        if (blocks.contains(state.getBlock()) && !swimmingIn(state) && !catchesFall(state)) {
             return Shapes.block();
         }
         // Sneaking lets you drop onto the magma on purpose.
@@ -64,6 +71,24 @@ public final class Collisions extends Module {
             return Shapes.block();
         }
         return null;
+    }
+
+    // A picked water or lava stays soft whilst you are in it. You could never swim out otherwise.
+    private boolean swimmingIn(BlockState state) {
+        if (!(state.getBlock() instanceof LiquidBlock)) {
+            return false;
+        }
+        Entity mover = mc.player.getRootVehicle();
+        return state.getFluidState().is(FluidTags.LAVA) ? mover.isInLava() : mover.isInWater();
+    }
+
+    // A picked water or web or berry bush or climbable goes soft once landing on top would hurt.
+    // The fall then ends inside it as if the module were off. This tick's drop counts too.
+    private boolean catchesFall(BlockState state) {
+        Entity mover = mc.player.getRootVehicle();
+        double fall = mover.fallDistance - Math.min(0, mover.getDeltaMovement().y);
+        return fall > DamageUtil.SAFE_FALL
+            && (state.getFluidState().is(FluidTags.WATER) || state.is(BlockTags.FALL_DAMAGE_RESETTING));
     }
 
     public boolean ignoresBorder() {
@@ -116,6 +141,7 @@ public final class Collisions extends Module {
     }
 
     private boolean loaded(double x, double z) {
-        return mc.level.getChunkSource().hasChunk((int) Math.floor(x) >> 4, (int) Math.floor(z) >> 4);
+        return mc.level.getChunkSource().hasChunk(SectionPos.blockToSectionCoord(x),
+            SectionPos.blockToSectionCoord(z));
     }
 }

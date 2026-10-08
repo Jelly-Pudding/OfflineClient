@@ -14,7 +14,9 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.display.RecipeDisplayId;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Predicate;
 
 // Clicks on the slots of an open container menu. InventoryUtil covers the player's own inventory.
@@ -45,12 +47,12 @@ public final class MenuClicks {
     // The first slot of the player's own backpack or hotbar that passes. Minus one when none does.
     // Armour and the offhand never count.
     public static int firstInventorySlot(AbstractContainerMenu menu, Predicate<ItemStack> test) {
-        for (Slot slot : menu.slots) {
-            if (isInventorySlot(slot) && test.test(slot.getItem())) {
-                return slot.index;
-            }
-        }
-        return -1;
+        return firstSlot(menu, MenuClicks::isInventorySlot, test);
+    }
+
+    // The first slot of whatever the menu was opened on that passes. Minus one when none does.
+    public static int firstContainerSlot(AbstractContainerMenu menu, Predicate<ItemStack> test) {
+        return firstSlot(menu, MenuClicks::isContainerSlot, test);
     }
 
     public static boolean isInventorySlot(Slot slot) {
@@ -81,6 +83,15 @@ public final class MenuClicks {
             }
         }
         return found;
+    }
+
+    private static int firstSlot(AbstractContainerMenu menu, Predicate<Slot> where, Predicate<ItemStack> test) {
+        for (Slot slot : menu.slots) {
+            if (where.test(slot) && test.test(slot.getItem())) {
+                return slot.index;
+            }
+        }
+        return -1;
     }
 
     // How many more of the stack the slots could take between them. A shift click fills the
@@ -202,6 +213,39 @@ public final class MenuClicks {
         }
         if (!menu.getCarried().isEmpty()) {
             click(menu, from, 0, ContainerInput.PICKUP);
+        }
+    }
+
+    // Moves that many of a stack across to the other side of the menu. A whole stack goes by
+    // shift click. Part of one goes into one of the given slots a right click at a time and
+    // the rest stays where it was.
+    public static void move(AbstractContainerMenu menu, int from, List<Integer> into, int count) {
+        ItemStack stack = menu.slots.get(from).getItem();
+        int target = count < stack.getCount() ? landing(menu, into, stack) : -1;
+        if (target == -1) {
+            quickMove(menu, from);
+        } else {
+            moveSome(menu, from, target, count);
+        }
+    }
+
+    // What each clicked slot held. A slot that holds it still had its move thrown back by the
+    // server and is passed over until its stack changes. Each owner keeps its own.
+    public static final class Clicked {
+
+        private final Map<Integer, ItemStack> held = new HashMap<>();
+
+        public void note(int slot, ItemStack stack) {
+            held.put(slot, stack.copy());
+        }
+
+        public boolean thrownBack(int slot, ItemStack now) {
+            ItemStack before = held.get(slot);
+            return before != null && ItemStack.matches(before, now);
+        }
+
+        public void clear() {
+            held.clear();
         }
     }
 

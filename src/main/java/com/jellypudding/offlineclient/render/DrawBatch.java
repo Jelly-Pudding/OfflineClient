@@ -342,11 +342,19 @@ public final class DrawBatch {
             }
             buffer.endDraw();
         } finally {
-            draws.clear();
-            types.clear();
-            buffer.close();
-            buffer = null;
+            discard();
         }
+    }
+
+    // Frees everything collected this frame without drawing it.
+    public void discard() {
+        if (buffer == null) {
+            return;
+        }
+        draws.clear();
+        types.clear();
+        buffer.close();
+        buffer = null;
     }
 
     private void lineRelative(Vec3 from, Vec3 to, int color, boolean throughWalls) {

@@ -6,7 +6,7 @@ import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.util.BoundedMap;
-import com.jellypudding.offlineclient.util.Modules;
+import com.jellypudding.offlineclient.util.EntityUtil;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.network.protocol.game.ClientboundLoginPacket;
@@ -14,7 +14,6 @@ import net.minecraft.network.protocol.game.ClientboundPlayerInfoRemovePacket;
 import net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket;
 import net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket.Action;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.player.Player;
 
 import java.util.Collections;
 import java.util.Map;
@@ -76,14 +75,14 @@ public final class AntiBot extends Module {
 
     // Our own FakePlayer bodies have no tab entry either. They stay fair game for practice.
     public boolean isBot(Entity entity) {
-        if (!(entity instanceof Player player) || player == mc.player || Modules.isLocalBody(player)) {
+        if (!EntityUtil.isOtherPlayer(entity)) {
             return false;
         }
         ClientPacketListener connection = mc.getConnection();
         if (connection == null) {
             return false;
         }
-        UUID id = player.getUUID();
+        UUID id = entity.getUUID();
         if (oddUuid.isOn() && !ACCOUNT_VERSIONS.contains(id.version())) {
             return true;
         }

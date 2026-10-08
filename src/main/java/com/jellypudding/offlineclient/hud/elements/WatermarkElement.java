@@ -1,10 +1,10 @@
 package com.jellypudding.offlineclient.hud.elements;
 
 import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.gui.WindowGuiScreen;
 import com.jellypudding.offlineclient.hud.HudElement;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
-import com.jellypudding.offlineclient.util.RenderUtil;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 
@@ -12,6 +12,10 @@ public final class WatermarkElement extends HudElement {
 
     // Space between the name and the version.
     private static final int GAP = 6;
+
+    // The windowed ClickGUI writes the client name near the top left. The watermark gives way
+    // whilst it sits within this percent of the screen from that corner.
+    private static final double CORNER = 25;
 
     private final ColorSetting color = new ColorSetting("Watermark colour",
         "Colour of the client name.", 200, false);
@@ -27,15 +31,30 @@ public final class WatermarkElement extends HudElement {
     }
 
     @Override
+    public boolean visible() {
+        return isActive() && !(OfflineClient.MC.gui.screen() instanceof WindowGuiScreen
+            && xPercent() < CORNER && yPercent() < CORNER);
+    }
+
+    @Override
     public void render(GuiGraphicsExtractor context, Font font) {
-        if (color.isRainbow()) {
-            RenderUtil.rainbowText(context, font, OfflineClient.NAME, 0, 0);
-        } else {
-            context.text(font, OfflineClient.NAME, 0, 0, color.getColor(), true);
-        }
+        writeName(context, font);
         if (showVersion.isOn()) {
-            context.text(font, version(), font.width(OfflineClient.NAME) + GAP, 0,
-                versionColor.getColor(), true);
+            write(context, font, version(), font.width(OfflineClient.NAME) + GAP, 0, versionColor.getColor());
+        }
+    }
+
+    // A rainbow runs along the name a letter at a time. Any other colour fills it whole.
+    private void writeName(GuiGraphicsExtractor context, Font font) {
+        if (!color.isRainbow()) {
+            write(context, font, OfflineClient.NAME, 0, 0, color.getColor());
+            return;
+        }
+        int x = 0;
+        for (int i = 0; i < OfflineClient.NAME.length(); i++) {
+            String letter = String.valueOf(OfflineClient.NAME.charAt(i));
+            write(context, font, letter, x, 0, color.rowColor(i));
+            x += font.width(letter);
         }
     }
 

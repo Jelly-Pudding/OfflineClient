@@ -53,6 +53,9 @@ public final class FindLog {
     // Every log whatever module keeps it. The game saves them all as it closes.
     private static final List<FindLog> LOGS = new CopyOnWriteArrayList<>();
 
+    // How many brand new finds every module together has made this session.
+    private static int newFinds;
+
     static {
         Runtime.getRuntime().addShutdownHook(new Thread(FindLog::saveAllOnExit, "OfflineClient finds save"));
     }
@@ -145,6 +148,18 @@ public final class FindLog {
         return revision;
     }
 
+    // False whilst the saved finds of the server you joined are still being read. A module that
+    // compares what it sees with its finds waits for them.
+    public boolean ready() {
+        follow();
+        return server != null && (!save.isOn() || loaded);
+    }
+
+    // Goes up with each brand new find any module makes. Finds read from a file never move it.
+    public static int newFinds() {
+        return newFinds;
+    }
+
     // The finds of the dimension you are in as a live view for drawing. Copy it before adding
     // or removing finds whilst walking through it.
     public Collection<Find> here() {
@@ -222,8 +237,11 @@ public final class FindLog {
             return false;
         }
         byKey.put(key, find);
-        if (old == null && total() > MAX_FINDS) {
-            dropOldest();
+        if (old == null) {
+            newFinds++;
+            if (total() > MAX_FINDS) {
+                dropOldest();
+            }
         }
         changed();
         return old == null;

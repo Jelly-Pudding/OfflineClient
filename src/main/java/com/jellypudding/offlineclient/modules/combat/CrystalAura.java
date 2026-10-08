@@ -32,6 +32,7 @@ import com.jellypudding.offlineclient.util.RenderUtil;
 import com.jellypudding.offlineclient.util.RotationManager;
 import com.jellypudding.offlineclient.util.RotationPriority;
 import com.jellypudding.offlineclient.util.SwingMode;
+import com.jellypudding.offlineclient.util.Targeting;
 import com.jellypudding.offlineclient.util.TickRate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -60,7 +61,7 @@ import java.util.Locale;
 import java.util.Map;
 
 // Every candidate spot is scored with the game's own explosion maths against every target.
-public final class CrystalAura extends Module {
+public final class CrystalAura extends Module implements Targeting {
 
     public enum Switch { NORMAL, SILENT, NONE }
 
@@ -210,8 +211,9 @@ public final class CrystalAura extends Module {
         .describe(Pause.NONE, "Carries on regardless.");
     private final BoolSetting pauseOnLag = new BoolSetting("Pause on lag",
         "Holds off whilst the server has stopped ticking.", true);
-    private final NumberSetting lagLimit = new NumberSetting("Lag limit",
-        "How long the server may go quiet before that counts as lag.", 1000, 250, 5000, 250, " ms").min(50)
+    private final NumberSetting lagThreshold = new NumberSetting("Lag threshold",
+        "How far past its usual update the server may go quiet before that counts as lag.", 500, 0, 5000, 250, " ms")
+        .min(0)
         .under(pauseOnLag);
     private final ChoiceListSetting pauseModules = new ChoiceListSetting("Pause modules",
         "Holds off whilst any of these modules is on.",
@@ -280,7 +282,6 @@ public final class CrystalAura extends Module {
     private int busyTimer;
     private int switchTimer;
     private long lastHitAt;
-    private String targetName;
     private String status;
 
     // True for the tick when some target is weak enough to ignore Min damage.
@@ -318,7 +319,7 @@ public final class CrystalAura extends Module {
             minDamage, maxSelfDamage, antiSuicide, predict,
             finisher, finisherHealth, finisherArmour, finisherMissing, finisherKey,
             autoSwitch, switchDelay, noGapSwitch, noBowSwitch,
-            pauseOnUse, pauseOnMine, pauseOnLag, lagLimit, pauseModules, pauseHealth,
+            pauseOnUse, pauseOnMine, pauseOnLag, lagThreshold, pauseModules, pauseHealth,
             rotate, yawSteps, yawStepsMode, swing,
             renderMode);
         addSettings(boxStyle.settings());
@@ -329,11 +330,18 @@ public final class CrystalAura extends Module {
 
     @Override
     public String getSuffix() {
-        return targetName == null ? null : suffix(targetName, status);
+        LivingEntity target = getTarget();
+        return target == null ? null : suffix(nameOf(target), status);
+    }
+
+    // The nearest of this tick's targets. Null whilst there is none.
+    @Override
+    public LivingEntity getTarget() {
+        return targets.isEmpty() ? null : targets.getFirst();
     }
 
     public boolean hasTarget() {
-        return targetName != null;
+        return getTarget() != null;
     }
 
     // True only for a short window after a real place or break.
@@ -364,7 +372,6 @@ public final class CrystalAura extends Module {
     }
 
     private void clearMemory() {
-        targetName = null;
         targets.clear();
         entities.clear();
         ownSpots.clear();
@@ -381,14 +388,12 @@ public final class CrystalAura extends Module {
         entities.clear();
         targets.clear();
         if (!inGame() || mc.player.isSpectator()) {
-            targetName = null;
             return;
         }
         tickTimers();
         forgetOld();
 
         collectTargets();
-        targetName = targets.isEmpty() ? null : nameOf(targets.getFirst());
         status = null;
         if (targets.isEmpty()) {
             restoreSlot();
@@ -452,7 +457,7 @@ public final class CrystalAura extends Module {
     }
 
     private String pauseReason() {
-        if (pauseOnLag.isOn() && TickRate.INSTANCE.lagging(lagLimit.getInt())) {
+        if (pauseOnLag.isOn() && TickRate.INSTANCE.lagging(lagThreshold.getInt())) {
             return "(lag)";
         }
         if (pauseHealth.getValue() > 0 && EntityUtil.totalHealth(mc.player) <= pauseHealth.getFloat()) {

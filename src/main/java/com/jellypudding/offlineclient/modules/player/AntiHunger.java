@@ -44,8 +44,17 @@ public final class AntiHunger extends Module {
             }
             return;
         }
-        if (!onGround.isOn() || !(event.getPacket() instanceof ServerboundMovePlayerPacket packet)
-            || !packet.isOnGround()) {
+        if (!onGround.isOn()) {
+            return;
+        }
+        // The server would judge the break in the air and refuse a block that only breaks
+        // at once on the ground.
+        if (PacketUtil.judgesBreak(event.getPacket()) && player.onGround()) {
+            PacketUtil.claimGround(player);
+            return;
+        }
+        if (!(event.getPacket() instanceof ServerboundMovePlayerPacket packet) || !packet.isOnGround()
+            || PacketUtil.isGroundClaim(packet)) {
             return;
         }
         if (player.fallDistance > 0.5) {

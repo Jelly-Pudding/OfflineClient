@@ -4,7 +4,6 @@ import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.events.AttackEntityEvent;
 import com.jellypudding.offlineclient.event.events.BlockBreakEvent;
 import com.jellypudding.offlineclient.modules.movement.ElytraBoost;
-import com.jellypudding.offlineclient.modules.player.AutoDrop;
 import com.jellypudding.offlineclient.modules.player.FastBreak;
 import com.jellypudding.offlineclient.modules.player.NoInteract;
 import com.jellypudding.offlineclient.modules.world.NoGhostBlocks;
@@ -22,9 +21,6 @@ import net.minecraft.core.Direction;
 import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
-import net.minecraft.world.entity.decoration.ItemFrame;
-import net.minecraft.world.inventory.ContainerInput;
-import net.minecraft.world.level.block.DecoratedPotBlock;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
@@ -142,69 +138,37 @@ public abstract class MultiPlayerGameModeMixin {
         }
     }
 
-    // NoInteract drops every block right click made with a chosen hand.
+    // NoInteract drops every block right click made with a chosen hand and every one that
+    // would put a protected item into a pot.
     @Inject(
         method = "useItemOn(Lnet/minecraft/client/player/LocalPlayer;Lnet/minecraft/world/InteractionHand;Lnet/minecraft/world/phys/BlockHitResult;)Lnet/minecraft/world/InteractionResult;",
         at = @At("HEAD"), cancellable = true)
     private void onUseItemOn(LocalPlayer player, InteractionHand hand, BlockHitResult hit,
                              CallbackInfoReturnable<InteractionResult> cir) {
         NoInteract noInteract = Modules.active(NoInteract.class);
-        if (noInteract != null && noInteract.blocksUseWith(hand)) {
-            cir.setReturnValue(InteractionResult.FAIL);
-            return;
-        }
-        AutoDrop autoDrop = Modules.get(AutoDrop.class);
-        if (autoDrop == null || !autoDrop.guardsFrames() || minecraft.level == null) {
-            return;
-        }
-        if (minecraft.level.getBlockState(hit.getBlockPos()).getBlock() instanceof DecoratedPotBlock
-            && autoDrop.guards(player.getItemInHand(hand))) {
+        if (noInteract != null && noInteract.blocksUseWith(hand, hit.getBlockPos())) {
             cir.setReturnValue(InteractionResult.FAIL);
         }
     }
 
-    // NoInteract drops every entity right click made with a chosen hand.
+    // NoInteract drops every entity right click made with a chosen hand and every one that
+    // would put a protected item into an item frame.
     @Inject(
         method = "interact(Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/world/entity/Entity;Lnet/minecraft/world/phys/EntityHitResult;Lnet/minecraft/world/InteractionHand;)Lnet/minecraft/world/InteractionResult;",
         at = @At("HEAD"), cancellable = true)
     private void onInteract(Player player, Entity target, EntityHitResult hit, InteractionHand hand,
                             CallbackInfoReturnable<InteractionResult> cir) {
         NoInteract noInteract = Modules.active(NoInteract.class);
-        if (noInteract != null && noInteract.blocksEntityUseWith(hand)) {
-            cir.setReturnValue(InteractionResult.FAIL);
-            return;
-        }
-        AutoDrop autoDrop = Modules.get(AutoDrop.class);
-        if (autoDrop != null && autoDrop.guardsFrames() && target instanceof ItemFrame
-            && autoDrop.guards(player.getItemInHand(hand))) {
+        if (noInteract != null && noInteract.blocksEntityUseWith(hand, target)) {
             cir.setReturnValue(InteractionResult.FAIL);
         }
     }
 
-    // The throw key never gives away an item AutoDrop is guarding.
+    // The throw key never gives away an item NoInteract protects.
     @Inject(method = "dropItem(Lnet/minecraft/client/player/LocalPlayer;Z)V",
         at = @At("HEAD"), cancellable = true)
     private void onDropItem(LocalPlayer player, boolean whole, CallbackInfo ci) {
-        AutoDrop autoDrop = Modules.get(AutoDrop.class);
-        if (autoDrop != null && autoDrop.guards(player.getMainHandItem())) {
-            ci.cancel();
-        }
-    }
-
-    // A guarded item is never thrown from a slot and never posted into a pot.
-    @Inject(
-        method = "handleContainerInput(IIILnet/minecraft/world/inventory/ContainerInput;Lnet/minecraft/world/entity/player/Player;)V",
-        at = @At("HEAD"), cancellable = true)
-    private void onContainerInput(int containerId, int slot, int button, ContainerInput kind,
-                                  Player player, CallbackInfo ci) {
-        if (kind != ContainerInput.THROW || slot < 0) {
-            return;
-        }
-        AutoDrop autoDrop = Modules.get(AutoDrop.class);
-        if (autoDrop == null || slot >= player.containerMenu.slots.size()) {
-            return;
-        }
-        if (autoDrop.guards(player.containerMenu.getSlot(slot).getItem())) {
+        if (Modules.keepsFromThrow(player.getMainHandItem())) {
             ci.cancel();
         }
     }

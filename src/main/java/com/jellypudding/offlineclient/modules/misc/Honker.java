@@ -9,7 +9,6 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
-import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -52,7 +51,7 @@ public final class Honker extends Module {
         }
         Set<UUID> near = new HashSet<>();
         for (Player player : mc.level.players()) {
-            if (player != mc.player && wanted(player) && mc.player.distanceTo(player) <= range.getValue()) {
+            if (wanted(player) && mc.player.distanceTo(player) <= range.getValue()) {
                 near.add(player.getUUID());
             }
         }
@@ -67,7 +66,7 @@ public final class Honker extends Module {
     }
 
     private boolean wanted(Player player) {
-        return player.isAlive() && !player.isSpectator() && !Modules.isBot(player)
+        return EntityUtil.isRealPlayer(player) && player.isAlive() && !player.isSpectator()
             && !(ignoreFriends.isOn() && EntityUtil.isFriend(player));
     }
 

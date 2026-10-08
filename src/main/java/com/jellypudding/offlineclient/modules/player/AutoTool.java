@@ -11,6 +11,7 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
+import com.jellypudding.offlineclient.util.BlockMiner;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.BreakSlots;
 import com.jellypudding.offlineclient.util.ChatUtil;
@@ -65,8 +66,12 @@ public final class AutoTool extends Module {
         .describe(Prefer.SILK_TOUCH, "A Silk Touch tool wins a tie on any block such as glass or ice.");
     private final BoolSetting fortune = new BoolSetting("Fortune on ores",
         "Takes a Fortune tool for ores and crops even when a plain one is faster.", true);
-    private final BoolSetting silkTouch = new BoolSetting("Silk touch on ender chests",
-        "Takes a Silk Touch pickaxe for an ender chest. It then drops whole.", true);
+    private final RegistryListSetting<Block> silkBlocks = new RegistryListSetting<>("Silk touch blocks",
+        "Blocks AutoTool mines with a Silk Touch tool whenever you carry one. Click to pick them.",
+        BuiltInRegistries.BLOCK, List.of(Blocks.ENDER_CHEST));
+    private final BoolSetting silkOnly = new BoolSetting("Silk only",
+        "Stops the break of those blocks when no Silk Touch tool is to hand.", false)
+        .under(silkBlocks, () -> silkBlocks.size() > 0);
     private final BoolSetting switchBack = new BoolSetting("Switch back",
         "Returns to the slot you had once you stop mining.", true);
     private final NumberSetting switchDelay = new NumberSetting("Switch delay",
@@ -93,6 +98,9 @@ public final class AutoTool extends Module {
     private final BoolSetting saveTools = new BoolSetting("Save tools",
         "Hands the hit that breaks each block to a cheaper hotbar item and spares your tool the wear.",
         false);
+    private final NumberSetting saveBelow = new NumberSetting("Save below",
+        "Spares a tool only once its durability falls to this share.", 100, 5, 100, 5, "%")
+        .min(1).max(100).under(saveTools);
     private final EnumSetting<Spare> spare = new EnumSetting<>("Spare",
         "Which item makes the last hit.", Spare.CHEAPEST)
         .describe(Spare.CHEAPEST, "The cheapest item in the hotbar that still breaks the block in time.")
@@ -126,13 +134,14 @@ public final class AutoTool extends Module {
     private int breakTicks;
 
     private boolean holdingBack;
-    private ItemStack warnedAbout;
+    // The tool or block the last warning was about.
+    private Object warnedAbout;
 
     public AutoTool() {
         super("AutoTool", "Switches to your best tool when you mine something.", Category.PLAYER);
-        addSettings(fromInventory, prefer, fortune, silkTouch, switchBack, switchDelay, antiBreak,
-            breakMargin, swords, hands, filter, tools, saveTools, spare, spareSlot, spareStays, keepDrops,
-            keepEnchants, neverSave);
+        addSettings(fromInventory, prefer, fortune, silkBlocks, silkOnly, switchBack, switchDelay, antiBreak,
+            breakMargin, swords, hands, filter, tools, saveTools, saveBelow, spare, spareSlot, spareStays,
+            keepDrops, keepEnchants, neverSave);
         searchTags("tool", "pickaxe", "best tool", "fortune", "silk touch", "spare tool",
             "tool saver", "durability");
     }
@@ -180,28 +189,41 @@ public final class AutoTool extends Module {
     @Subscribe
     private void onBlockBreak(BlockBreakEvent event) {
         holdingBack = false;
-        if (!inGame() || mc.player.isSpectator()) {
+        // A creative break is instant and wears nothing.
+        if (!inGame() || mc.player.isSpectator() || mc.player.getAbilities().instabuild) {
             return;
         }
         BlockPos pos = event.getPos();
         BlockState state = mc.level.getBlockState(pos);
         track(pos, state);
-        ItemStack held = mc.player.getMainHandItem();
-        boolean snaps = wouldSnap(held, state);
         // AutoWeapon drives the same hand and a spare still in hand stays for its ticks. A tool
-        // about to snap never waits out the switch delay.
-        boolean handBusy = weaponBusy() || spareTicksLeft > 0;
-        if (!handBusy && (snaps || breakTicks >= switchDelay.getInt())) {
-            int best = pick(state, fromInventory.isOn() ? InventoryUtil.WHOLE_INVENTORY : InventoryUtil.HOTBAR_SIZE);
+        // about to snap and a block that wants Silk Touch never wait out the switch delay.
+        boolean ownTool = BlockMiner.isOwnTool();
+        boolean handBusy = ownTool || weaponBusy() || spareTicksLeft > 0;
+        boolean urgent = wouldSnap(mc.player.getMainHandItem(), state) || wantsSilk(state);
+        if (!handBusy && (urgent || breakTicks >= switchDelay.getInt())) {
+            int best = pick(state, clickSlots());
             if (best != -1) {
                 loan.select(best);
-                return;
             }
         }
-        holdingBack = snaps;
-        if (holdingBack) {
-            warnOnce(held);
+        ItemStack held = mc.player.getMainHandItem();
+        if (wouldSnap(held, state)) {
+            holdingBack = true;
+            warnOnce(held, "AutoTool will not mine with your nearly broken " + held.getHoverName().getString() + ".");
+        } else if (!ownTool && silkOnly.isOn() && wantsSilk(state) && !keepsWhole(held, state)) {
+            holdingBack = true;
+            warnOnce(state.getBlock(), "No Silk Touch tool to hand for " + state.getBlock().getName().getString() + ".");
         }
+    }
+
+    private boolean wantsSilk(BlockState state) {
+        return silkBlocks.contains(state.getBlock());
+    }
+
+    // The tool drops the block itself.
+    private static boolean keepsWhole(ItemStack stack, BlockState state) {
+        return ItemUtil.enchantLevel(Enchantments.SILK_TOUCH, stack) > 0 && ItemUtil.getsDrops(stack, state);
     }
 
     // Counts the ticks spent on one block and keeps the block as it stood.
@@ -215,9 +237,17 @@ public final class AutoTool extends Module {
         breakingState = state;
     }
 
-    // True whilst a break is stopped because the only tool to hand would snap on it.
+    // True whilst a break is stopped because the only tool to hand would snap on it or lacks
+    // the Silk Touch the block needs.
     public boolean holdsBack() {
         return holdingBack;
+    }
+
+    // True when Silk only keeps the block standing. The hotbar counts for a packet break and Search
+    // inventory counts for a held click. A creative break drops nothing.
+    public boolean refuses(BlockState state, boolean byPacket) {
+        return silkOnly.isOn() && wantsSilk(state) && !mc.player.getAbilities().instabuild
+            && enchantedPick(state, byPacket ? InventoryUtil.HOTBAR_SIZE : clickSlots()) == -1;
     }
 
     // The slot among the first few AutoTool would mine the block with. Minus one keeps what is held.
@@ -235,7 +265,7 @@ public final class AutoTool extends Module {
             }
         }
         // Nothing better than a hand and the hand itself is better than what is held.
-        if (best == -1 && hands.isOn() && ItemUtil.miningSpeed(held, state) <= 1 && !held.isEmpty()) {
+        if (best == -1 && hands.isOn() && score(held, state) <= HAND_SCORE && !held.isEmpty()) {
             best = InventoryUtil.freeHotbarSlot();
         }
         return best == selected ? -1 : best;
@@ -244,6 +274,11 @@ public final class AutoTool extends Module {
     // The same within the hotbar for the packet miners.
     public int hotbarPick(BlockState state) {
         return pick(state, InventoryUtil.HOTBAR_SIZE);
+    }
+
+    // The slots a held click picks from. Search inventory adds the rest of the inventory.
+    private int clickSlots() {
+        return fromInventory.isOn() ? InventoryUtil.WHOLE_INVENTORY : InventoryUtil.HOTBAR_SIZE;
     }
 
     // A slot that mines like a bare hand and cannot wear out. Minus one on a hotbar full of tools.
@@ -256,19 +291,20 @@ public final class AutoTool extends Module {
         return antiBreak.isOn() && isNearlyBroken(held) && ItemUtil.wearsOn(held, state);
     }
 
-    private void warnOnce(ItemStack held) {
-        if (held == warnedAbout) {
+    // One line for each tool or block until something else is warned about.
+    private void warnOnce(Object about, String line) {
+        if (about == warnedAbout) {
             return;
         }
-        warnedAbout = held;
-        ChatUtil.error("AutoTool will not mine with your nearly broken " + held.getHoverName().getString() + ".");
+        warnedAbout = about;
+        ChatUtil.error(line);
     }
 
     // The enchantment a block deserves outranks raw speed. Ores and crops want
-    // Fortune and an ender chest wants Silk Touch. Minus one when nothing carries it.
+    // Fortune and the Silk Touch list wants Silk Touch. Minus one when nothing carries it.
     private int enchantedPick(BlockState state, int slots) {
         ResourceKey<Enchantment> wanted = null;
-        if (silkTouch.isOn() && state.is(Blocks.ENDER_CHEST)) {
+        if (wantsSilk(state)) {
             wanted = Enchantments.SILK_TOUCH;
         } else if (fortune.isOn() && fortuneCounts(state)) {
             wanted = Enchantments.FORTUNE;
@@ -286,8 +322,10 @@ public final class AutoTool extends Module {
             }
             int level = ItemUtil.enchantLevel(wanted, stack);
             double score = score(stack, state);
-            // Real tools for the block only. Level wins first and score breaks a tie.
-            if (level == 0 || score <= HAND_SCORE) {
+            // Fortune takes a real tool for the block and Silk Touch any tool that keeps it whole.
+            // Level wins first and score breaks a tie.
+            boolean fits = wanted == Enchantments.SILK_TOUCH ? keepsWhole(stack, state) : score > HAND_SCORE;
+            if (level == 0 || !fits) {
                 continue;
             }
             if (level > bestLevel || (level == bestLevel && score > bestScore)) {
@@ -326,14 +364,16 @@ public final class AutoTool extends Module {
     // enchantments only separate tools that mine at the same speed.
     private double score(ItemStack stack, BlockState state) {
         double score = ItemUtil.miningSpeed(stack, state) * SPEED_WEIGHT;
-        if (score <= HAND_SCORE) {
-            return HAND_SCORE;
-        }
         ResourceKey<Enchantment> preferred = switch (prefer.getValue()) {
             case NONE -> null;
             case FORTUNE -> Enchantments.FORTUNE;
             case SILK_TOUCH -> Enchantments.SILK_TOUCH;
         };
+        // No faster than a hand. A preferred Silk Touch tool still wins where it keeps the block whole.
+        if (score <= HAND_SCORE) {
+            return preferred == Enchantments.SILK_TOUCH && keepsWhole(stack, state)
+                ? HAND_SCORE + PREFERRED_WEIGHT : HAND_SCORE;
+        }
         if (preferred != null) {
             score += ItemUtil.enchantLevel(preferred, stack) * PREFERRED_WEIGHT;
         }
@@ -387,13 +427,15 @@ public final class AutoTool extends Module {
             && breakingState.getDestroyProgress(mc.player, mc.level, pos) >= 1;
     }
 
+    // A module that mines with its own tool keeps it for the last hit too.
     private void finishWithSpare(BlockPos pos, float needed) {
-        if (!pos.equals(breaking) || breakingState == null || mc.player.getAbilities().instabuild
-            || weaponBusy()) {
+        if (BlockMiner.isOwnTool() || !pos.equals(breaking) || breakingState == null
+            || mc.player.getAbilities().instabuild || weaponBusy()) {
             return;
         }
         ItemStack held = mc.player.getMainHandItem();
-        if (neverSave.contains(breakingState.getBlock()) || !ItemUtil.wearsOn(held, breakingState)) {
+        if (neverSave.contains(breakingState.getBlock()) || !ItemUtil.wearsOn(held, breakingState)
+            || !ItemUtil.wornBelow(held, saveBelow.getValue() / 100)) {
             return;
         }
         int slot = spareFor(held, breakingState, pos, needed);

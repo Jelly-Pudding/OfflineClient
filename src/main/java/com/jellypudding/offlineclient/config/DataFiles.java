@@ -99,12 +99,27 @@ public final class DataFiles {
     // Empty when the file is missing. A file that cannot be read or decoded is logged
     // and comes back empty as well.
     public static <T> Optional<T> readJson(Path path, Function<JsonElement, T> decoder) {
+        Optional<String> text = readText(path);
+        if (text.isEmpty()) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.ofNullable(decoder.apply(JsonParser.parseString(text.get())));
+        } catch (RuntimeException e) {
+            OfflineClient.LOG.error("Failed to read {}", path.getFileName(), e);
+            return Optional.empty();
+        }
+    }
+
+    // The whole text of a file. Empty when the file is missing. A file that cannot be read is
+    // logged and comes back empty as well.
+    public static Optional<String> readText(Path path) {
         if (!Files.exists(path)) {
             return Optional.empty();
         }
         try {
-            return Optional.ofNullable(decoder.apply(JsonParser.parseString(Files.readString(path))));
-        } catch (IOException | RuntimeException e) {
+            return Optional.of(Files.readString(path));
+        } catch (IOException e) {
             OfflineClient.LOG.error("Failed to read {}", path.getFileName(), e);
             return Optional.empty();
         }

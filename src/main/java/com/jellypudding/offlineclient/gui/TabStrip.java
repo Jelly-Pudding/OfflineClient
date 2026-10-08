@@ -17,6 +17,8 @@ public final class TabStrip {
     public enum Tab {
         FRIENDS("Friends"),
         MACROS("Macros"),
+        WAYPOINTS("Waypoints"),
+        NAMES("Names"),
         HUD("HUD"),
         PROFILES("Profiles");
 

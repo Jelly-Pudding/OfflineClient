@@ -14,6 +14,9 @@ import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.MovementUtil;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
+
+import java.util.Set;
 
 // Each slowdown source has its own mixin hook across several classes.
 // Vanilla slows slime twice through step and friction. Both are covered here.
@@ -25,6 +28,11 @@ public final class NoSlowdown extends Module {
     private static final float NORMAL_FRICTION = 0.6f;
 
     private static final String TIMER_KEY = "noslowdown";
+
+    // Every climbable block but ladders and scaffolding.
+    private static final Set<Block> VINES = Set.of(Blocks.VINE, Blocks.WEEPING_VINES,
+        Blocks.WEEPING_VINES_PLANT, Blocks.TWISTING_VINES, Blocks.TWISTING_VINES_PLANT,
+        Blocks.CAVE_VINES, Blocks.CAVE_VINES_PLANT);
 
     private final BoolSetting items = new BoolSetting("Items",
         "Eating and drinking and drawing a bow no longer slow you.", true);
@@ -45,6 +53,8 @@ public final class NoSlowdown extends Module {
         "Walk over slime blocks at full speed.", true);
     private final BoolSetting berryBushes = new BoolSetting("Berry bushes",
         "Walk through berry bushes at full speed.", true);
+    private final BoolSetting vines = new BoolSetting("Vines",
+        "Vines of every kind no longer slow you or catch your fall. You can no longer climb them either.", false);
     private final EnumSetting<WebMode> webs = new EnumSetting<>("Cobwebs",
         "How cobwebs are handled.", WebMode.FULL_SPEED)
         .describe(WebMode.FULL_SPEED, "Walk through cobwebs at full speed.")
@@ -63,7 +73,7 @@ public final class NoSlowdown extends Module {
         super("NoSlowdown", "Keeps your full speed through everything that would normally slow you down.",
             Category.MOVEMENT);
         addSettings(items, airStrict, sneaking, hunger, slowness, honey, soulSand, slime,
-            berryBushes, webs, webTimer, fluidDrag);
+            berryBushes, vines, webs, webTimer, fluidDrag);
         searchTags("noslow", "eating", "sneak speed", "soul sand", "honey", "cobweb", "NoWeb", "no web");
     }
 
@@ -93,6 +103,11 @@ public final class NoSlowdown extends Module {
 
     public boolean skipsBerryBushes() {
         return isEnabled() && berryBushes.isOn();
+    }
+
+    // Read by LivingEntityMixin. The vine you are in reads as air.
+    public boolean skipsVine(BlockState state) {
+        return isEnabled() && vines.isOn() && VINES.contains(state.getBlock());
     }
 
     public boolean skipsWebs() {

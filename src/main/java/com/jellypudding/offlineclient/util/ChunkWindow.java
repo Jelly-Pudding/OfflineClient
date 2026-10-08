@@ -5,6 +5,7 @@ import net.minecraft.client.multiplayer.ClientChunkCache;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
+import net.minecraft.core.SectionPos;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
@@ -49,7 +50,8 @@ public final class ChunkWindow {
     }
 
     public static ChunkWindow capture(BlockPos centre, int radius) {
-        return capture(centre.getX() >> 4, centre.getZ() >> 4, radius);
+        return capture(SectionPos.blockToSectionCoord(centre.getX()),
+            SectionPos.blockToSectionCoord(centre.getZ()), radius);
     }
 
     // The chunk at the given chunk coordinates and every chunk within the radius of it.
@@ -94,7 +96,7 @@ public final class ChunkWindow {
         if (y < minY || y > maxY) {
             return OUTSIDE;
         }
-        LevelChunk chunk = chunkAt(x >> 4, z >> 4);
+        LevelChunk chunk = chunkAt(SectionPos.blockToSectionCoord(x), SectionPos.blockToSectionCoord(z));
         if (chunk == null) {
             return OUTSIDE;
         }

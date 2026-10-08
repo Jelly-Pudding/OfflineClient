@@ -129,6 +129,11 @@ public final class KeybindSetting extends Setting<Integer> {
         return nameOfKey(value);
     }
 
+    @Override
+    public String defaultText() {
+        return nameOfKey(defaultValue);
+    }
+
     public static String nameOfKey(int key) {
         if (key == UNBOUND) {
             return "None";

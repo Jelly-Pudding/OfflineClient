@@ -2,6 +2,7 @@ package com.jellypudding.offlineclient.modules.misc;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.Subscribe;
+import com.jellypudding.offlineclient.event.events.KillEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
@@ -12,6 +13,7 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.JoinWatch;
+import net.minecraft.SharedConstants;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.Level;
 
@@ -19,7 +21,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 // Each rule fires once as its condition starts. Switch back returns the modules it
-// changed to how they were once the condition ends. A join has no end.
+// changed to how they were once the condition ends. A join and a kill have no end and
+// Lasts for times them instead.
 public final class Triggers extends Module {
 
     // How many rules can be set up one by one.
@@ -30,7 +33,8 @@ public final class Triggers extends Module {
         PLAYER_NEAR,
         DIMENSION,
         FALLING,
-        JOINING
+        JOINING,
+        KILL
     }
 
     public enum Action {
@@ -62,10 +66,13 @@ public final class Triggers extends Module {
         final ChoiceListSetting modules;
         final EnumSetting<Action> action;
         final BoolSetting switchBack;
+        final NumberSetting lastsFor;
 
         // Each module the rule changed and whether it was on before.
         final Map<Module, Boolean> before = new LinkedHashMap<>();
         boolean holds;
+        // Ticks until a rule that holds for one tick puts its modules back. Nought whilst none run.
+        int timeLeft;
 
         Rule(int number) {
             int slot = number - 1;
@@ -75,6 +82,7 @@ public final class Triggers extends Module {
                 .describe(When.DIMENSION, "You arrive in a dimension.")
                 .describe(When.FALLING, "You fall further than a set distance.")
                 .describe(When.JOINING, "You join a server.")
+                .describe(When.KILL, "You kill a player.")
                 .visibleWhen(() -> slot < ruleCount.getInt());
             health = new NumberSetting("Health " + number,
                 "Hearts at or below which the rule fires.", 5, 0.5, 18, 0.5, " hearts")
@@ -102,27 +110,51 @@ public final class Triggers extends Module {
                 .under(when, () -> slot < ruleCount.getInt());
             switchBack = new BoolSetting("Switch back " + number,
                 "Puts the modules back how they were once the condition ends.", true)
-                .under(when, () -> slot < ruleCount.getInt() && !when.is(When.JOINING));
+                .under(when, () -> slot < ruleCount.getInt() && !once());
+            lastsFor = new NumberSetting("Lasts for " + number,
+                "Seconds before the rule puts its modules back. Nought leaves them switched.",
+                0, 0, 60, 1, " seconds")
+                .min(0)
+                .under(when, () -> slot < ruleCount.getInt() && once());
         }
 
-        // A join has no end to switch back at.
+        // A join and a kill hold for one tick and have no end to switch back at.
+        boolean once() {
+            return when.is(When.JOINING) || when.is(When.KILL);
+        }
+
         boolean switchesBack() {
-            return switchBack.isOn() && !when.is(When.JOINING);
+            return switchBack.isOn() && !once();
         }
 
         boolean inUse(int slot) {
             return slot < ruleCount.getInt() && modules.size() > 0;
         }
 
-        // Whether the condition holds this tick. A join holds for one tick only.
-        boolean test(boolean joined) {
+        // Whether the condition holds this tick. A join and a kill hold for one tick only.
+        boolean test(boolean joined, boolean killed) {
             return switch (when.getValue()) {
                 case LOW_HEALTH -> EntityUtil.healthAtOrBelow(health.getValue());
                 case PLAYER_NEAR -> EntityUtil.nearestEnemy(range.getValue()) != null;
                 case DIMENSION -> mc.level.dimension() == dimension.getValue().key;
                 case FALLING -> mc.player.fallDistance > fall.getValue();
                 case JOINING -> joined;
+                case KILL -> killed;
             };
+        }
+
+        // A fresh firing whilst the time still runs only starts the time again.
+        void start() {
+            if (timeLeft == 0) {
+                fire();
+            }
+            timeLeft = once() ? lastsFor.getInt() * SharedConstants.TICKS_PER_SECOND : 0;
+        }
+
+        void countDown() {
+            if (timeLeft > 0 && --timeLeft == 0) {
+                undo();
+            }
         }
 
         void fire() {
@@ -160,6 +192,7 @@ public final class Triggers extends Module {
         "How many rules there are. A row opens for each.", 1, 0, SLOTS, 1).min(0).max(SLOTS);
     private final Rule[] rules = new Rule[SLOTS];
     private final JoinWatch joins = new JoinWatch();
+    private boolean killed;
 
     public Triggers() {
         super("Triggers", "Switches modules on or off by rules such as low health or a player coming near.", Category.MISC);
@@ -168,19 +201,21 @@ public final class Triggers extends Module {
             Rule rule = new Rule(i + 1);
             rules[i] = rule;
             addSettings(rule.when, rule.health, rule.range, rule.dimension, rule.fall, rule.modules,
-                rule.action, rule.switchBack);
+                rule.action, rule.switchBack, rule.lastsFor);
         }
-        searchTags("condition", "auto toggle", "rules", "low health", "when");
+        searchTags("condition", "auto toggle", "rules", "low health", "when", "on kill", "join drop");
     }
 
     // A condition already true as the module comes on does not fire.
     @Override
     protected void onEnable() {
         joins.accept();
+        killed = false;
         for (int i = 0; i < SLOTS; i++) {
             Rule rule = rules[i];
             rule.before.clear();
-            rule.holds = inGame() && rule.inUse(i) && rule.test(false);
+            rule.timeLeft = 0;
+            rule.holds = inGame() && rule.inUse(i) && rule.test(false, false);
         }
     }
 
@@ -188,7 +223,13 @@ public final class Triggers extends Module {
     protected void onDisable() {
         for (Rule rule : rules) {
             rule.before.clear();
+            rule.timeLeft = 0;
         }
+    }
+
+    @Subscribe
+    private void onKill(KillEvent event) {
+        killed = true;
     }
 
     @Subscribe
@@ -197,15 +238,18 @@ public final class Triggers extends Module {
             return;
         }
         boolean joined = joins.joined();
+        boolean kill = killed;
+        killed = false;
         for (int i = 0; i < SLOTS; i++) {
             Rule rule = rules[i];
-            boolean holds = rule.inUse(i) && rule.test(joined);
+            boolean holds = rule.inUse(i) && rule.test(joined, kill);
             if (holds && !rule.holds) {
-                rule.fire();
+                rule.start();
             } else if (!holds && rule.holds && rule.switchesBack()) {
                 rule.undo();
             }
             rule.holds = holds;
+            rule.countDown();
         }
     }
 }

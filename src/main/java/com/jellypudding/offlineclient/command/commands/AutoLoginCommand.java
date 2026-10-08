@@ -1,6 +1,5 @@
 package com.jellypudding.offlineclient.command.commands;
 
-import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.command.Command;
 import com.jellypudding.offlineclient.command.CommandManager;
 import com.jellypudding.offlineclient.config.ServerStore;
@@ -16,7 +15,7 @@ import java.util.Locale;
 public final class AutoLoginCommand extends Command {
 
     public AutoLoginCommand() {
-        super("autologin", "Saves the password AutoLogin types for the server you are on.",
+        super("autologin", "Saves the password AutoLogin types for the server and name you joined with.",
             "autologin <set|remove|list> [password|server]");
     }
 
@@ -48,8 +47,9 @@ public final class AutoLoginCommand extends Command {
             return;
         }
         String password = args[1];
-        ServerStore.logins().set(ServerInfo.key(), password);
-        ChatUtil.message("§7Saved a password for §b" + ServerInfo.address() + "§7.");
+        String key = AutoLogin.loginKey();
+        ServerStore.logins().set(key, password);
+        ChatUtil.message("§7Saved a password for §b" + key + "§7.");
         forgetTypedLine(password);
         AutoLogin autoLogin = Modules.get(AutoLogin.class);
         if (autoLogin != null && !autoLogin.isEnabled()) {
@@ -58,21 +58,13 @@ public final class AutoLoginCommand extends Command {
         }
     }
 
-    // The typed line joins the chat history once this returns. It is taken out again
-    // on the next pass of the game thread.
-    private static void forgetTypedLine(String password) {
-        String prefix = OfflineClient.INSTANCE.getCommandManager().getPrefix();
-        OfflineClient.MC.schedule(() -> OfflineClient.MC.gui.hud.getChat().getRecentChat()
-            .removeIf(line -> line.startsWith(prefix) && line.contains(password)));
-    }
-
     private void remove(String[] args) {
         if (args.length > 2) {
             usage("autologin remove [server]");
             return;
         }
         String server = args.length == 2 ? args[1].toLowerCase(Locale.ROOT)
-            : ServerInfo.address() == null ? null : ServerInfo.key();
+            : ServerInfo.address() == null ? null : AutoLogin.loginKey();
         if (server == null) {
             usage("autologin remove <server>");
             return;

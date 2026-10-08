@@ -1,6 +1,7 @@
 package com.jellypudding.offlineclient.modules.misc;
 
 import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.config.NameStore;
 import com.jellypudding.offlineclient.config.ServerStore;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.PacketReceiveEvent;
@@ -16,7 +17,7 @@ import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-// The password goes out once per join and only to the server it was saved for.
+// The password goes out once per join and only to the server and name it was saved for.
 // Only a line the server wrote counts as a prompt. Another player's chat never does.
 public final class AutoLogin extends Module {
 
@@ -32,6 +33,7 @@ public final class AutoLogin extends Module {
     private static final Pattern PROMPT = Pattern.compile("/(login|register)\\s+[<\\[]");
     private static final Pattern PLACEHOLDER = Pattern.compile("[<\\[][^<>\\[\\]]+[>\\]]");
     private static final String LOGIN = "login";
+    private static final String AT = "@";
 
     private boolean answered;
     private boolean hinted;
@@ -45,6 +47,15 @@ public final class AutoLogin extends Module {
     @Override
     protected void onEnable() {
         newJoin();
+    }
+
+    // Where the password for this server and the name you joined it with is saved. Your account
+    // name keeps the server alone as its key.
+    public static String loginKey() {
+        String joined = NameStore.ownName();
+        String server = ServerInfo.key();
+        return joined.equalsIgnoreCase(NameStore.accountName()) ? server
+            : joined.toLowerCase(Locale.ROOT) + AT + server;
     }
 
     private void newJoin() {
@@ -76,9 +87,10 @@ public final class AutoLogin extends Module {
         if (prompt == null) {
             return;
         }
-        String password = ServerStore.logins().get(ServerInfo.key());
+        String key = loginKey();
+        String password = ServerStore.logins().get(key);
         if (password == null) {
-            hint();
+            hint(key);
             return;
         }
         answered = true;
@@ -86,12 +98,12 @@ public final class AutoLogin extends Module {
         ChatUtil.message("§7Answered the login prompt with your saved password.");
     }
 
-    private void hint() {
+    private void hint(String key) {
         if (hinted) {
             return;
         }
         hinted = true;
-        ChatUtil.message("§7No password is saved for this server. Type §f"
+        ChatUtil.message("§7No password is saved for §b" + key + "§7. Type §f"
             + OfflineClient.INSTANCE.getCommandManager().getPrefix() + "autologin set <password>§7 to save one.");
     }
 

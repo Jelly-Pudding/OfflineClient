@@ -1,5 +1,6 @@
 package com.jellypudding.offlineclient.modules.misc;
 
+import com.jellypudding.offlineclient.config.NameStore;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.ClientTickEvent;
 import com.jellypudding.offlineclient.module.Category;
@@ -22,6 +23,10 @@ public final class AutoReconnect extends Module {
         "Adds a reconnect button and a switch to the disconnected screen.", true);
     private final BoolSetting loadingButtons = new BoolSetting("Loading buttons",
         "Adds disconnect and reconnect buttons to the loading screen for a join that never finishes.", true);
+    private final BoolSetting nameButton = new BoolSetting("Name button",
+        "Adds a button to the disconnected screen that rejoins under your next saved name.", true);
+    private final BoolSetting connectLog = new BoolSetting("Connect log",
+        "Shows the newest game log lines on the connecting and disconnected screens.", false);
 
     // The last server joined. Kept even whilst the module is off. Switched on
     // after a disconnect it still knows where to go.
@@ -31,8 +36,9 @@ public final class AutoReconnect extends Module {
 
     public AutoReconnect() {
         super("AutoReconnect", "Rejoins the server after you get disconnected.", Category.MISC);
-        addSettings(delay, buttons, loadingButtons);
-        searchTags("rejoin", "reconnect", "stuck loading", "loading terrain", "cancel loading");
+        addSettings(delay, buttons, loadingButtons, nameButton, connectLog);
+        searchTags("rejoin", "reconnect", "stuck loading", "loading terrain", "cancel loading", "alt name",
+            "connection log");
     }
 
     // Called from the connect screen whatever the module is doing.
@@ -50,6 +56,14 @@ public final class AutoReconnect extends Module {
         return loadingButtons.isOn();
     }
 
+    public boolean showsNameButton() {
+        return nameButton.isOn();
+    }
+
+    public boolean showsConnectLog() {
+        return connectLog.isOn();
+    }
+
     // Seconds left rounded to one place. Below zero whilst nothing is counting.
     public double secondsLeft() {
         return countdown < 0 ? -1 : Math.round(countdown / 2f) / 10.0;
@@ -57,6 +71,11 @@ public final class AutoReconnect extends Module {
 
     public static boolean canReconnect() {
         return lastServer != null;
+    }
+
+    // The address of the last server joined. Null before the first join.
+    public static String lastAddress() {
+        return lastServer == null ? null : lastServer.ip;
     }
 
     // True whilst you play on a server there is a way back to.
@@ -80,6 +99,12 @@ public final class AutoReconnect extends Module {
         connect();
     }
 
+    // Joins again under another name. The name stays in use for later joins.
+    public void reconnectAs(String name) {
+        NameStore.get().use(name);
+        reconnectNow();
+    }
+
     // The button on the screen flips the module and starts the wait again.
     public void toggleFromScreen() {
         countdown = -1;
@@ -94,7 +119,9 @@ public final class AutoReconnect extends Module {
             return;
         }
 
-        if (!(mc.gui.screen() instanceof DisconnectedScreen) || lastServer == null) {
+        // A server that turned the saved name away turns it away again.
+        if (!(mc.gui.screen() instanceof DisconnectedScreen) || lastServer == null
+            || NameStore.get().checkedName() != null) {
             countdown = -1;
             return;
         }

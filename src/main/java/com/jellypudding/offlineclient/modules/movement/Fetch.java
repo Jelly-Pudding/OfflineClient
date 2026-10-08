@@ -10,19 +10,28 @@ import com.jellypudding.offlineclient.setting.ListMode;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.ChatWarning;
+import com.jellypudding.offlineclient.util.GearKind;
 import com.jellypudding.offlineclient.util.Hop;
+import com.jellypudding.offlineclient.util.InventoryUtil;
+import com.jellypudding.offlineclient.util.ItemUtil;
+import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.MoveGate;
 import com.jellypudding.offlineclient.util.PacketBudget;
 import com.jellypudding.offlineclient.util.RotationManager;
 import com.jellypudding.offlineclient.util.ServerInfo;
 import com.jellypudding.offlineclient.util.WorldWatch;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.phys.Vec3;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -68,12 +77,16 @@ public final class Fetch extends Module {
         "Hops back to where you started once every item is in.", true).under(mode, Mode.HOP);
     private final BoolSetting stayOn = new BoolSetting("Stay on",
         "Keeps fetching new drops instead of switching off once none are left.", false);
+    private final BoolSetting tradeUp = new BoolSetting("Trade up",
+        "Throws a worse tool or piece of armour to make room for a better one on the ground.", false);
 
     private final ChatWarning warning = new ChatWarning();
     private final WorldWatch world = new WorldWatch();
 
     // Items the server would not hand over. They are left alone from then on.
     private final Set<Integer> tried = new HashSet<>();
+    // What Trade up threw away. It is never fetched back.
+    private final List<ItemStack> traded = new ArrayList<>();
     private Stage stage = Stage.IDLE;
     private Vec3 home;
     private ItemEntity fetching;
@@ -84,7 +97,7 @@ public final class Fetch extends Module {
 
     public Fetch() {
         super("Fetch", "Picks up dropped items from far away.", Category.MOVEMENT);
-        addSettings(mode, range, listMode, items, comeBack, stayOn);
+        addSettings(mode, range, listMode, items, comeBack, stayOn, tradeUp);
         searchTags("item magnet", "collect items", "pickup");
     }
 
@@ -103,6 +116,7 @@ public final class Fetch extends Module {
     // Starts afresh with nothing to come back to.
     private void forget() {
         tried.clear();
+        traded.clear();
         stage = Stage.IDLE;
         home = null;
         fetching = null;
@@ -149,8 +163,8 @@ public final class Fetch extends Module {
             goHome(mover);
             return;
         }
-        Vec3 spot = Hop.nearestFit(mover, item.position());
-        if (spot == null || !reaches(mover, spot, item)) {
+        Hop.Plan trip = tripTo(mover, item);
+        if (trip == null) {
             tried.add(item.getId());
             return;
         }
@@ -159,7 +173,22 @@ public final class Fetch extends Module {
         }
         fetching = item;
         stage = Stage.GOING;
-        Hop.travel(spot, thisRun(this::arrived));
+        trip.go(thisRun(this::arrived));
+    }
+
+    // The way to a spot where the pickup reach takes in the item. Null when the item has no
+    // room or there is no such spot or no way there.
+    private Hop.Plan tripTo(Entity mover, ItemEntity item) {
+        Vec3 spot = Hop.nearestFit(mover, item.position());
+        if (spot == null || !reaches(mover, spot, item) || !roomFor(item)) {
+            return null;
+        }
+        Hop.Plan trip = Hop.plan().to(spot);
+        if (trip.problem() != null) {
+            warning.say(trip.problem().problem());
+            return null;
+        }
+        return trip;
     }
 
     // A trip started before Fetch was last switched on reports to nobody.
@@ -174,6 +203,7 @@ public final class Fetch extends Module {
 
     private void arrived(Hop.Result result) {
         if (result == Hop.Result.MOVED) {
+            makeRoom(fetching);
             stage = Stage.WAITING;
             waited = 0;
             return;
@@ -250,7 +280,73 @@ public final class Fetch extends Module {
 
     private boolean wanted(ItemEntity item) {
         return item.isAlive() && item.getAge() >= SETTLE_TICKS && !tried.contains(item.getId())
-            && listMode.getValue().admits(items.contains(item.getItem().getItem()));
+            && listMode.getValue().admits(items.contains(item.getItem().getItem()))
+            && traded.stream().noneMatch(stack -> ItemStack.matches(stack, item.getItem()));
+    }
+
+    // True when the inventory takes the item or Trade up has a worse piece to throw for it.
+    // Nothing is thrown before the item is in reach.
+    private boolean roomFor(ItemEntity item) {
+        return takes(item.getItem()) || worsePiece(item.getItem()) != -1;
+    }
+
+    private boolean takes(ItemStack stack) {
+        Inventory inventory = mc.player.getInventory();
+        return inventory.getFreeSlot() != -1 || inventory.getSlotWithRemainingSpace(stack) != -1;
+    }
+
+    // Trade up throws the worse piece once the item is in reach and still lies there with no
+    // room for it. A trip that ends after Fetch was switched off throws nothing.
+    private void makeRoom(ItemEntity item) {
+        ItemStack stack = item.getItem();
+        int worst = !isEnabled() || item.isRemoved() || takes(stack) ? -1 : worsePiece(stack);
+        if (worst == -1) {
+            return;
+        }
+        ItemStack thrown = mc.player.getInventory().getItem(worst).copy();
+        if (InventoryUtil.throwFrom(worst)) {
+            traded.add(thrown);
+        }
+    }
+
+    // The lowest scoring piece of the same kind you carry when the one on the ground scores
+    // higher. Renamed pieces and Mending pieces and the ones NoInteract protects always stay.
+    // Minus one whilst Trade up is off or nothing worse is carried.
+    private int worsePiece(ItemStack better) {
+        GearKind kind = GearKind.of(better);
+        if (!tradeUp.isOn() || kind == null) {
+            return -1;
+        }
+        int worst = -1;
+        double worstScore = unwornScore(better);
+        for (int i = 0; i < InventoryUtil.WHOLE_INVENTORY; i++) {
+            ItemStack stack = mc.player.getInventory().getItem(i);
+            if (!tradeable(stack, kind)) {
+                continue;
+            }
+            double score = unwornScore(stack);
+            if (score < worstScore) {
+                worst = i;
+                worstScore = score;
+            }
+        }
+        return worst;
+    }
+
+    // Wear is left out and the tier and enchantments decide. A worn piece of a high tier still
+    // beats a fresh one of a low tier.
+    private static double unwornScore(ItemStack stack) {
+        ItemStack unworn = stack.copy();
+        unworn.setDamageValue(0);
+        return ItemUtil.gearScore(unworn);
+    }
+
+    private static boolean tradeable(ItemStack stack, GearKind kind) {
+        if (GearKind.of(stack) != kind || stack.has(DataComponents.CUSTOM_NAME)
+            || ItemUtil.enchantLevel(Enchantments.MENDING, stack) > 0) {
+            return false;
+        }
+        return !Modules.keepsFromThrow(stack);
     }
 
     // True when the server's pickup reach round the mover at the spot takes in the item.
@@ -297,7 +393,12 @@ public final class Fetch extends Module {
         if (packets > MoveGate.spare()) {
             return;
         }
+        if (!roomFor(item)) {
+            tried.add(item.getId());
+            return;
+        }
         if (jump(at, RotationManager.yawTo(item.position()), jumps)) {
+            makeRoom(item);
             fetching = item;
             stage = Stage.WAITING;
             waited = 0;

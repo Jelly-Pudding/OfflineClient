@@ -8,19 +8,27 @@ import net.minecraft.world.level.block.ColorCollection;
 import net.minecraft.world.level.block.WeatheringCopperCollection;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-// The groups of blocks BaseFinder counts. The world never puts down any of them by itself and
-// PlacedOnly reads every group as one. Each block was checked against every structure template
-// and jigsaw block and worldgen feature and generator piece of 26.3 and against weathering and
-// lightning and what endermen carry. The colours and copper stages a structure does use are named
-// where they are left out.
+// The blocks BaseFinder counts with how many of each mark a chunk. The world never puts down any
+// of them by itself and PlacedOnly reads them all. Each block was checked against every structure
+// template and jigsaw block and worldgen feature and generator piece of 26.3 and against weathering
+// and lightning and what endermen carry. The colours and copper stages a structure does use are
+// named where they are left out.
 public final class BaseBlocks {
 
-    // Valuables and trophies. One of them already shows a player.
-    public static final List<Block> RARE = List.of(Blocks.NETHERITE_BLOCK, Blocks.EMERALD_BLOCK,
+    // One valuable or workstation or storage block already shows a player. Furnishings and
+    // redstone parts take a few and building blocks come in numbers.
+    private static final int ALONE = 1;
+    private static final int FEW = 3;
+    private static final int MANY = 6;
+
+    // Valuables and trophies.
+    private static final List<Block> RARE = List.of(Blocks.NETHERITE_BLOCK, Blocks.EMERALD_BLOCK,
         Blocks.IRON_BLOCK, Blocks.RAW_GOLD_BLOCK, Blocks.HEAVY_CORE, Blocks.SPONGE, Blocks.OCHRE_FROGLIGHT,
         Blocks.VERDANT_FROGLIGHT, Blocks.PEARLESCENT_FROGLIGHT, Blocks.DRAGON_HEAD, Blocks.PLAYER_HEAD,
         Blocks.PLAYER_WALL_HEAD, Blocks.CREEPER_HEAD, Blocks.CREEPER_WALL_HEAD, Blocks.ZOMBIE_HEAD,
@@ -30,20 +38,21 @@ public final class BaseBlocks {
         Blocks.SNIFFER_EGG);
 
     // Blocks players stop at to use. Trees grow bee nests and never beehives.
-    public static final List<Block> WORKSTATIONS = List.of(Blocks.ENCHANTING_TABLE, Blocks.ANVIL,
+    private static final List<Block> WORKSTATIONS = List.of(Blocks.ENCHANTING_TABLE, Blocks.ANVIL,
         Blocks.CHIPPED_ANVIL, Blocks.BEACON, Blocks.CONDUIT, Blocks.LODESTONE, Blocks.RESPAWN_ANCHOR,
         Blocks.JUKEBOX, Blocks.BEEHIVE);
 
-    public static final List<Block> STORAGE = storage();
+    private static final List<Block> STORAGE = storage();
 
-    public static final List<Block> FURNISHING = furnishing();
+    private static final List<Block> FURNISHING = furnishing();
 
-    public static final List<Block> REDSTONE = redstone();
+    private static final List<Block> REDSTONE = redstone();
 
-    public static final List<Block> BUILDING = building();
+    private static final List<Block> BUILDING = building();
 
-    public static final List<List<Block>> GROUPS = List.of(RARE, WORKSTATIONS, STORAGE, FURNISHING, REDSTONE,
-        BUILDING);
+    // Every block with how many of it alone mark a chunk. Valuables come first and building
+    // blocks last.
+    public static final Map<Block, Integer> NEEDED = needed();
 
     // What a structure with a spawner always leaves around it. Dungeons are cobblestone.
     // Mineshafts hold cobwebs and rails and their supports. The stronghold portal room is stone
@@ -68,13 +77,28 @@ public final class BaseBlocks {
         return COMPANIONS.getOrDefault(dimension, Set.of());
     }
 
+    private static Map<Block, Integer> needed() {
+        Map<Block, Integer> needed = new LinkedHashMap<>();
+        count(needed, ALONE, RARE, WORKSTATIONS, STORAGE);
+        count(needed, FEW, FURNISHING, REDSTONE);
+        count(needed, MANY, BUILDING);
+        return Collections.unmodifiableMap(needed);
+    }
+
+    @SafeVarargs
+    private static void count(Map<Block, Integer> needed, int count, List<Block>... lists) {
+        for (List<Block> blocks : lists) {
+            blocks.forEach(block -> needed.putIfAbsent(block, count));
+        }
+    }
+
     private static List<Block> storage() {
         List<Block> blocks = new ArrayList<>(List.of(Blocks.SHULKER_BOX, Blocks.CHISELED_BOOKSHELF,
             Blocks.OAK_SHELF, Blocks.SPRUCE_SHELF, Blocks.BIRCH_SHELF, Blocks.JUNGLE_SHELF, Blocks.ACACIA_SHELF,
             Blocks.DARK_OAK_SHELF, Blocks.MANGROVE_SHELF, Blocks.CHERRY_SHELF, Blocks.PALE_OAK_SHELF,
             Blocks.POPLAR_SHELF, Blocks.BAMBOO_SHELF, Blocks.CRIMSON_SHELF, Blocks.WARPED_SHELF));
         blocks.addAll(Blocks.DYED_SHULKER_BOX.asList());
-        // Abandoned camps leave oxidized copper chests and lightning scrubs them back.
+        // Abandoned camps leave oxidised copper chests and lightning scrubs them back.
         Blocks.COPPER_CHEST.waxed().forEach(blocks::add);
         return List.copyOf(blocks);
     }
@@ -124,7 +148,7 @@ public final class BaseBlocks {
         blocks.addAll(Blocks.DYED_CANDLE_CAKE.asList());
         blocks.addAll(Blocks.COPPER_BARS.asList());
         blocks.addAll(Blocks.COPPER_CHAIN.asList());
-        // Abandoned camps leave oxidized lanterns and statues and lightning scrubs them back.
+        // Abandoned camps leave oxidised lanterns and statues and lightning scrubs them back.
         Blocks.COPPER_LANTERN.waxed().forEach(blocks::add);
         Blocks.COPPER_GOLEM_STATUE.waxed().forEach(blocks::add);
         return List.copyOf(blocks);
@@ -231,7 +255,7 @@ public final class BaseBlocks {
             Blocks.BIRCH_TRAPDOOR, Blocks.BIRCH_FENCE_GATE, Blocks.ACACIA_TRAPDOOR);
     }
 
-    // Trial chambers use plain and oxidized waxed copper. Their unwaxed copper blocks and cut copper
+    // Trial chambers use plain and oxidised waxed copper. Their unwaxed copper blocks and cut copper
     // and trapdoors weather into every unwaxed stage. The world never makes the rest.
     private static List<Block> copper() {
         List<Block> blocks = new ArrayList<>();

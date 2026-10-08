@@ -13,6 +13,8 @@ import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ChunkScanner;
+import com.jellypudding.offlineclient.util.ColorUtil;
+import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.HeldKey;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.RenderUtil;
@@ -23,6 +25,8 @@ import net.minecraft.core.Direction;
 import net.minecraft.server.level.ChunkMap;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.monster.warden.AngerLevel;
+import net.minecraft.world.entity.monster.warden.Warden;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.CalibratedSculkSensorBlock;
 import net.minecraft.world.level.block.SculkSensorBlock;
@@ -104,6 +108,8 @@ public final class SculkRange extends Module {
         "Colour of calibrated sculk sensors and their range.", 285, false);
     private final ColorSetting shriekerColor = new ColorSetting("Shrieker colour",
         "Colour of sculk shriekers and how far a clicking sensor wakes them.", 0, false);
+    private final BoolSetting wardens = new BoolSetting("Wardens",
+        "Outlines each warden in a colour that reddens as it grows angry.", false);
     private final BoolSetting warning = new BoolSetting("Warning",
         "Writes a warning under the crosshair when your next step would set off sculk.", true);
     private final BoolSetting sneak = new BoolSetting("Sneak for me",
@@ -122,7 +128,7 @@ public final class SculkRange extends Module {
     public SculkRange() {
         super("SculkRange", "Shows how far sculk sensors and shriekers hear and warns before a step sets one off.",
             Category.RENDER);
-        addSettings(range, shape, blocks, sensorColor, calibratedColor, shriekerColor, warning, sneak);
+        addSettings(range, shape, blocks, sensorColor, calibratedColor, shriekerColor, wardens, warning, sneak);
         searchTags("sculk", "sensor", "shrieker", "warden", "ancient city", "vibration");
     }
 
@@ -342,6 +348,11 @@ public final class SculkRange extends Module {
         return edges;
     }
 
+    // Green whilst calm and red once the warden is angry enough to hunt.
+    private static int angerColor(Warden warden) {
+        return ColorUtil.redToGreen(1 - (float) warden.getClientAngerLevel() / AngerLevel.ANGRY.getMinimumAnger());
+    }
+
     private int colorOf(Kind kind) {
         return switch (kind) {
             case SENSOR -> sensorColor.getColor();
@@ -360,6 +371,13 @@ public final class SculkRange extends Module {
         if (blocks.isOn()) {
             for (Listener listener : all) {
                 batch.outlineBlock(listener.pos(), colorOf(listener.kind()), true);
+            }
+        }
+        if (wardens.isOn()) {
+            for (Entity entity : mc.level.entitiesForRendering()) {
+                if (entity instanceof Warden warden) {
+                    batch.outlineBox(EntityUtil.lerpedBox(warden, event.getPartialTicks()), angerColor(warden), true);
+                }
             }
         }
         if (shape.is(Shape.SPHERES)) {

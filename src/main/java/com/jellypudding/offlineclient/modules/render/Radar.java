@@ -1,40 +1,24 @@
 package com.jellypudding.offlineclient.modules.render;
 
-import com.jellypudding.offlineclient.event.Subscribe;
-import com.jellypudding.offlineclient.event.events.Render2DEvent;
+import com.jellypudding.offlineclient.hud.elements.RadarElement;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
-import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
-import com.jellypudding.offlineclient.util.RenderUtil;
-import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.monster.cubemob.AbstractCubeMob;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.phys.Vec3;
 
+// What the radar shows and how. The Radar element of the HUD draws it whilst this is on.
 public final class Radar extends Module {
 
-    private static final int BACKGROUND = 0x80101018;
-    private static final int BORDER = 0xFF3A3A4A;
-    private static final int GRID = 0x40FFFFFF;
-    private static final int SELF = 0xFFFFFFFF;
-
-    public enum Corner { TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT }
-
-    private final NumberSetting size = new NumberSetting("Size",
-        "Width of the radar in pixels.", 100, 60, 220, 10, " px").min(40);
     private final NumberSetting range = new NumberSetting("Range",
-        "How far the edge of the radar reaches.", 64, 16, 256, 8, " blocks").min(4);
-    private final EnumSetting<Corner> corner = new EnumSetting<>("Corner",
-        "Which corner the radar sits in.", Corner.TOP_RIGHT);
-    private final NumberSetting margin = new NumberSetting("Margin",
-        "Gap between the radar and the screen edge.", 6, 0, 40, 1, " px").min(0);
+        "How many blocks the radar reaches from you to its nearest edge.", 64, 16, 256, 8, " blocks").min(4);
     private final BoolSetting rotate = new BoolSetting("Rotate",
         "Turns the radar until the way you face points up.", true);
     private final BoolSetting players = new BoolSetting("Players",
@@ -67,13 +51,22 @@ public final class Radar extends Module {
         .under(height);
 
     public Radar() {
-        super("Radar", "Draws a small map of nearby entities on your screen.", Category.RENDER);
-        addSettings(size, range, corner, margin, rotate, players, sleeping, hostile, slimes, passive,
-            water, bats, invisible, items, names, height, tintDepth, tintStrength);
-        searchTags("minimap", "entity map");
+        super("Radar", "Draws a small map of nearby entities where you place it with .hud edit.",
+            Category.RENDER);
+        addSettings(range, rotate, players, sleeping, hostile, slimes, passive, water, bats, invisible,
+            items, names, height, tintDepth, tintStrength);
+        searchTags("entity map");
     }
 
-    private boolean shows(Entity entity) {
+    @Override
+    protected void onEnable() {
+        if (!Modules.hudShows(RadarElement.class)) {
+            ChatUtil.message("§bRadar §7shows on the HUD. Turn on the HUD and its Radar element to see it.");
+        }
+    }
+
+    // True for an entity that gets a dot.
+    public boolean shows(Entity entity) {
         if (entity == mc.player) {
             return false;
         }
@@ -95,78 +88,26 @@ public final class Radar extends Module {
         };
     }
 
-    @Subscribe
-    private void onRender2D(Render2DEvent event) {
-        if (!inGame()) {
-            return;
+    public double range() {
+        return range.getValue();
+    }
+
+    public boolean turns() {
+        return rotate.isOn();
+    }
+
+    public boolean writesNames() {
+        return names.isOn();
+    }
+
+    // The colour of its dot. Height tint fades it the further above or below you it is.
+    public int colorOf(Entity entity) {
+        int color = EntityUtil.colorOf(entity);
+        if (!height.isOn() || mc.player == null) {
+            return color;
         }
-        GuiGraphicsExtractor context = event.getContext();
-        int box = size.getInt();
-        int gap = margin.getInt();
-        int left = switch (corner.getValue()) {
-            case TOP_LEFT, BOTTOM_LEFT -> gap;
-            case TOP_RIGHT, BOTTOM_RIGHT -> context.guiWidth() - box - gap;
-        };
-        int top = switch (corner.getValue()) {
-            case TOP_LEFT, TOP_RIGHT -> gap;
-            case BOTTOM_LEFT, BOTTOM_RIGHT -> context.guiHeight() - box - gap;
-        };
-        int centerX = left + box / 2;
-        int centerY = top + box / 2;
-
-        RenderUtil.roundedBorderedRect(context, left, top, left + box, top + box, 0, BACKGROUND, BORDER);
-        context.fill(centerX, top + 2, centerX + 1, top + box - 2, GRID);
-        context.fill(left + 2, centerY, left + box - 2, centerY + 1, GRID);
-
-        double blocks = range.getValue();
-        double pixelsPerBlock = (box / 2.0) / blocks;
-        double yaw = Math.toRadians(mc.player.getYRot());
-        boolean turn = rotate.isOn();
-        double sin = Math.sin(yaw);
-        double cos = Math.cos(yaw);
-        Vec3 eye = mc.player.position();
-        Font font = mc.font;
-
-        context.guiRenderState.up();
-        for (Entity entity : mc.level.entitiesForRendering()) {
-            if (!shows(entity)) {
-                continue;
-            }
-            double dx = entity.getX() - eye.x;
-            double dz = entity.getZ() - eye.z;
-            if (dx * dx + dz * dz > blocks * blocks) {
-                continue;
-            }
-            // Yaw zero looks south.
-            double rx = turn ? -(dx * cos + dz * sin) : dx;
-            double rz = turn ? dx * sin - dz * cos : dz;
-            int px = centerX + (int) Math.round(rx * pixelsPerBlock);
-            int py = centerY + (int) Math.round(rz * pixelsPerBlock);
-            if (px < left + 1 || px > left + box - 2 || py < top + 1 || py > top + box - 2) {
-                continue;
-            }
-
-            int color = EntityUtil.colorOf(entity);
-            if (height.isOn()) {
-                double drop = Math.abs(entity.getY() - eye.y);
-                float faintest = 1 - tintStrength.getFloat() / 100f;
-                color = ColorUtil.fade(color,
-                    (float) Math.clamp(1 - drop / tintDepth.getValue(), faintest, 1));
-            }
-            boolean isPlayer = entity instanceof Player;
-            int dot = isPlayer ? 2 : 1;
-            context.fill(px - dot, py - dot, px + dot + 1, py + dot + 1, color);
-            if (isPlayer && names.isOn()) {
-                String name = EntityUtil.displayNameOf((Player) entity);
-                int width = font.width(name);
-                int textX = px - width / 2;
-                if (width < box - 2) {
-                    textX = Math.clamp(textX, left + 1, left + box - width - 1);
-                }
-                context.text(font, name, textX, py - font.lineHeight - 2, color, true);
-            }
-        }
-
-        context.fill(centerX - 1, centerY - 1, centerX + 2, centerY + 2, SELF);
+        double drop = Math.abs(entity.getY() - mc.player.getY());
+        float faintest = 1 - tintStrength.getFloat() / 100f;
+        return ColorUtil.fade(color, (float) Math.clamp(1 - drop / tintDepth.getValue(), faintest, 1));
     }
 }

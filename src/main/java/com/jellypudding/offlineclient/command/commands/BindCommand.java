@@ -5,6 +5,7 @@ import com.jellypudding.offlineclient.command.Command;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.KeyUse;
 import com.jellypudding.offlineclient.command.CommandManager;
 import java.util.List;
 
@@ -37,6 +38,7 @@ public final class BindCommand extends Command {
         } else {
             ChatUtil.message("§b" + module.getName() + " §7bound to §b"
                 + module.getKeybind().getKeyName() + "§7.");
+            KeyUse.warn(key, module.getKeybind());
         }
         OfflineClient.INSTANCE.getConfigManager().saveSoon();
     }

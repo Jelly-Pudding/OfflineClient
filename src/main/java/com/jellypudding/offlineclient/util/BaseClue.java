@@ -15,13 +15,9 @@ public enum BaseClue {
     BEDROCK("bedrock", Source.BLOCKS),
     ROOF("roof build", Source.BLOCKS),
     SPAWNER("spawner", Source.BLOCKS),
-    RARE("rare blocks", Source.BLOCKS),
-    BUILDING("building blocks", Source.BLOCKS),
-    WORKSTATIONS("workstations", Source.BLOCKS),
-    STORAGE("storage blocks", Source.BLOCKS),
-    FURNISHING("furnishings", Source.BLOCKS),
-    REDSTONE("redstone parts", Source.BLOCKS),
-    CUSTOM("custom blocks", Source.BLOCKS),
+    BED("bed", Source.BLOCKS),
+    ROOM("bedrock room", Source.BLOCKS),
+    PLAYER_BLOCKS("player blocks", Source.BLOCKS),
     DECORATION("decoration", Source.ENTITIES),
     PEARL("pearl", Source.ENTITIES),
     NAMED("named mob", Source.ENTITIES),
@@ -29,6 +25,7 @@ public enum BaseClue {
     BOAT("boat", Source.ENTITIES),
     PET("pet", Source.ENTITIES),
     CROWD("crowd", Source.ENTITIES),
+    DROPS("dropped blocks", Source.ENTITIES),
     MARK("mark", Source.HAND);
 
     public enum Source { BLOCKS, ENTITIES, HAND }

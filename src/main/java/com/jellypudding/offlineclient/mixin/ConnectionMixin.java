@@ -4,20 +4,25 @@ import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.events.PacketReceiveEvent;
 import com.jellypudding.offlineclient.event.events.PacketSendEvent;
 import com.jellypudding.offlineclient.modules.misc.AntiPacketKick;
+import com.jellypudding.offlineclient.modules.misc.Proxy;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.PacketNotice;
 import com.jellypudding.offlineclient.util.PacketUtil;
+import com.jellypudding.offlineclient.util.ProxyTunnel;
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelPipeline;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.timeout.TimeoutException;
+import net.minecraft.network.BandwidthDebugMonitor;
 import net.minecraft.network.Connection;
 import net.minecraft.network.PacketListener;
 import net.minecraft.network.SkipPacketEncoderException;
 import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.PacketFlow;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBundlePacket;
 import org.spongepowered.asm.mixin.Mixin;
@@ -90,6 +95,17 @@ public abstract class ConnectionMixin extends SimpleChannelInboundHandler<Packet
             PacketNotice.report(cause.getClass().getName(), "Dropped a packet the client could not read. " + cause);
         }
         ci.cancel();
+    }
+
+    // Every connection the client opens to a server is set up here. Server list pings are too.
+    // The proxy tunnel goes first to dial the proxy in place of the server.
+    @Inject(method = "configureSerialization", at = @At("RETURN"))
+    private static void onConfigureSerialization(ChannelPipeline pipeline, PacketFlow flow, boolean local,
+                                                 BandwidthDebugMonitor monitor, CallbackInfo ci) {
+        Proxy proxy = Modules.active(Proxy.class);
+        if (proxy != null && flow == PacketFlow.CLIENTBOUND && !local) {
+            pipeline.addFirst(ProxyTunnel.NAME, proxy.tunnel());
+        }
     }
 
     @WrapMethod(

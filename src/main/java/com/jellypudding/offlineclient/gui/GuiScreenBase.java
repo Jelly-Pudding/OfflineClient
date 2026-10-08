@@ -4,7 +4,10 @@ import com.google.gson.JsonObject;
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.modules.misc.ClickGuiModule;
 import com.jellypudding.offlineclient.modules.render.Blur;
+import com.jellypudding.offlineclient.setting.Defaults;
+import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.ColorUtil;
+import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.Tally;
 import com.mojang.blaze3d.platform.InputConstants;
@@ -19,7 +22,7 @@ import net.minecraft.network.chat.Component;
 
 // Shared by both ClickGUI styles. Owns the search box and the typing and
 // binding state.
-public abstract class GuiScreenBase extends Screen {
+public abstract class GuiScreenBase extends Screen implements ClientScreen {
 
     private static final String SEARCH_KEY = "search";
     private static final int DIM_TOP = 0x70101018;
@@ -184,6 +187,7 @@ public abstract class GuiScreenBase extends Screen {
     public void onClose() {
         settings.beginClick();
         releaseDrags();
+        ResetFoot.disarm();
         saveState();
         super.onClose();
     }
@@ -267,6 +271,13 @@ public abstract class GuiScreenBase extends Screen {
             return searchBar.keyPressed(event);
         }
 
+        // An undo can bring the style back and no mouse release follows a key.
+        if (InputUtil.isUndo(event)) {
+            ChatUtil.undone(Defaults.undoNewest());
+            checkStyle();
+            return true;
+        }
+
         if (key == OfflineClient.INSTANCE.getModuleManager()
             .get(ClickGuiModule.class).getKeybind().getValue()) {
             onClose();
@@ -275,7 +286,7 @@ public abstract class GuiScreenBase extends Screen {
         return false;
     }
 
-    // True whilst a key press would type or bind rather than reach the game.
+    @Override
     public boolean isTyping() {
         return searchBar.isFocused() || settings.isEditing() || settings.isListening() || extraTyping();
     }

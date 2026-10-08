@@ -51,6 +51,18 @@ public abstract class LivingEntityMixin {
         }
     }
 
+    // NoSlowdown lets you pass through vines without climbing them.
+    @Inject(method = "onClimbable()Z", at = @At("HEAD"), cancellable = true)
+    private void onClimbable(CallbackInfoReturnable<Boolean> cir) {
+        if ((Object) this != OfflineClient.MC.player) {
+            return;
+        }
+        NoSlowdown noSlowdown = Modules.get(NoSlowdown.class);
+        if (noSlowdown != null && noSlowdown.skipsVine(((LivingEntity) (Object) this).getInBlockState())) {
+            cir.setReturnValue(false);
+        }
+    }
+
     // Crumbs fly for food only. A drunk potion or a thrown egg keeps its particles.
     @Inject(method = "spawnItemParticles(Lnet/minecraft/world/item/ItemStack;I)V",
         at = @At("HEAD"), cancellable = true)

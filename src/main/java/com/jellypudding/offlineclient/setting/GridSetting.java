@@ -85,14 +85,20 @@ public final class GridSetting extends Setting<GridSetting.Pattern> {
             return out.toString();
         }
 
-        @Override
-        public boolean equals(Object other) {
-            return other instanceof Pattern pattern && pattern.size == size && pattern.field.equals(field);
-        }
-
-        @Override
-        public int hashCode() {
-            return 31 * size + field.hashCode();
+        // The same size with every cell that size shows alike. Cells past the edge do nothing
+        // until the size grows.
+        private boolean sameCells(Pattern other) {
+            if (other.size != size) {
+                return false;
+            }
+            for (int row = 0; row < size; row++) {
+                for (int column = 0; column < size; column++) {
+                    if (isOn(column, row) != other.isOn(column, row)) {
+                        return false;
+                    }
+                }
+            }
+            return true;
         }
     }
 
@@ -152,6 +158,11 @@ public final class GridSetting extends Setting<GridSetting.Pattern> {
 
     public List<Cell> cellsOn() {
         return value.cellsOn();
+    }
+
+    @Override
+    public boolean isDefault() {
+        return value.sameCells(defaultValue);
     }
 
     // One word for each row. False when the words do not make an odd square that fits.

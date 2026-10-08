@@ -4,15 +4,15 @@ import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.command.Command;
 import com.jellypudding.offlineclient.gui.PeekScreen;
 import com.jellypudding.offlineclient.modules.player.ChestLink;
-import com.jellypudding.offlineclient.modules.render.BetterTooltips;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.EnderChest;
 import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.List;
 
-// ChestLink may keep the chest itself open. BetterTooltips keeps a copy every time you open one.
+// ChestLink may keep the chest itself open. A copy is kept every time you open one.
 public final class EnderChestCommand extends Command {
 
     private static final int TINT = 0x80100010;
@@ -28,8 +28,7 @@ public final class EnderChestCommand extends Command {
         if (link != null && link.showEnderChest()) {
             return;
         }
-        BetterTooltips tooltips = Modules.get(BetterTooltips.class);
-        List<ItemStack> items = tooltips == null ? List.of() : tooltips.rememberedEnderChest();
+        List<ItemStack> items = EnderChest.INSTANCE.contents();
         if (items.isEmpty()) {
             ChatUtil.error("Open your ender chest once first.");
             return;

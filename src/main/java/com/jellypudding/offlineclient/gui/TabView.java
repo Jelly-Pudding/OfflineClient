@@ -16,8 +16,13 @@ import java.util.List;
 // field to add another. Drag an edge to resize it.
 public final class TabView {
 
-    // One row. The detail sits on the right and the tip explains the row.
-    public record Entry(String name, String detail, String tip) {
+    // One row. The detail sits on the right and the tip explains the row. A warned detail stands
+    // out in the warning colour.
+    public record Entry(String name, String detail, String tip, boolean warn) {
+
+        public Entry(String name, String detail, String tip) {
+            this(name, detail, tip, false);
+        }
     }
 
     // A short how to under the rows. Each example types itself into the field
@@ -85,6 +90,7 @@ public final class TabView {
     private static final int CHIP_STEP = CHIP_HEIGHT + 2;
     private static final int CHIP_PAD = 3;
     private static final String CHIP_TIP = "Click to use this example";
+    private static final int WARN_TEXT = 0xFFF0B050;
 
     // A listing can reach the disk. Often enough to feel live is plenty.
     private static final long REFRESH_MS = 500;
@@ -417,7 +423,8 @@ public final class TabView {
         if (!detail.isEmpty()) {
             boolean overDetail = hovered && mouseX >= detailX && mouseX < detailX + detailWidth;
             int colour = entry.name().equals(binding) ? GuiTheme.accentText()
-                : (overDetail && source.bindable() ? GuiTheme.text() : GuiTheme.textFaint());
+                : overDetail && source.bindable() ? GuiTheme.text()
+                : entry.warn() ? WARN_TEXT : GuiTheme.textFaint();
             context.text(font, detail, detailX + 3, textY, colour, false);
         }
 

@@ -36,4 +36,9 @@ public interface PickList<T> {
 
     // Empty when the entry has no picture.
     ItemStack icon(T entry);
+
+    // Every pick list is a setting. The picker saves and takes back its bulk presses through it.
+    default Setting<?> asSetting() {
+        return (Setting<?>) this;
+    }
 }

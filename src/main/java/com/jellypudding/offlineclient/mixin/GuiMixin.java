@@ -2,6 +2,7 @@ package com.jellypudding.offlineclient.mixin;
 
 import com.jellypudding.offlineclient.modules.misc.HudModule;
 import com.jellypudding.offlineclient.modules.player.Ghost;
+import com.jellypudding.offlineclient.modules.player.InvWalk;
 import com.jellypudding.offlineclient.util.Modules;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
@@ -13,7 +14,9 @@ import net.minecraft.client.gui.screens.DeathScreen;
 import net.minecraft.client.gui.screens.Screen;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(Gui.class)
 public abstract class GuiMixin {
@@ -24,6 +27,15 @@ public abstract class GuiMixin {
         at = @At("HEAD"), argsOnly = true)
     private Screen onSetScreen(Screen screen) {
         return screen instanceof DeathScreen && Modules.enabled(Ghost.class) ? null : screen;
+    }
+
+    // A key InvWalk held whilst one screen opens or closes would leave a toggle key stuck.
+    @Inject(method = "setScreen(Lnet/minecraft/client/gui/screens/Screen;)V", at = @At("HEAD"))
+    private void beforeSetScreen(CallbackInfo ci) {
+        InvWalk invWalk = Modules.active(InvWalk.class);
+        if (invWalk != null) {
+            invWalk.letGo();
+        }
     }
 
     @ModifyExpressionValue(method = "setScreen(Lnet/minecraft/client/gui/screens/Screen;)V",

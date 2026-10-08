@@ -12,30 +12,48 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-// Containers ChestAura leaves alone. Each mark is filed under the server and the
-// dimension it was made in.
-public final class ContainerMarks {
+// Blocks marked for one purpose. Each mark is filed under the server and the dimension it was
+// made in and every purpose keeps a file of its own under offlineclient.
+public final class BlockMarks {
 
-    private static ContainerMarks instance;
+    private static BlockMarks containers;
+    private static BlockMarks lootedVaults;
 
     private final Path file;
     private final Set<String> marks = new HashSet<>();
 
-    private ContainerMarks(Path file) {
-        this.file = file;
-        DataFiles.readJson(file, ContainerMarks::decode).ifPresent(marks::addAll);
+    private BlockMarks(String fileName) {
+        file = DataFiles.path(fileName);
+        DataFiles.readJson(file, BlockMarks::decode).ifPresent(marks::addAll);
     }
 
-    public static synchronized ContainerMarks get() {
-        if (instance == null) {
-            instance = new ContainerMarks(DataFiles.path("container_marks.json"));
+    // The containers ChestAura leaves alone.
+    public static synchronized BlockMarks containers() {
+        if (containers == null) {
+            containers = new BlockMarks("container_marks.json");
         }
-        return instance;
+        return containers;
+    }
+
+    // The vaults TrialESP saw reward you.
+    public static synchronized BlockMarks lootedVaults() {
+        if (lootedVaults == null) {
+            lootedVaults = new BlockMarks("looted_vaults.json");
+        }
+        return lootedVaults;
     }
 
     // A null position is never marked. The other half of a single chest is null.
     public boolean isMarked(BlockPos pos) {
         return pos != null && marks.contains(key(pos));
+    }
+
+    // The file is written only when the mark changes.
+    public void set(BlockPos pos, boolean marked) {
+        String key = key(pos);
+        if (marked ? marks.add(key) : marks.remove(key)) {
+            save();
+        }
     }
 
     // Marks every block given or clears them all when any of them is marked already.
@@ -62,7 +80,7 @@ public final class ContainerMarks {
     }
 
     private static String key(BlockPos pos) {
-        return ServerInfo.key() + " " + ServerInfo.dimension() + " " + BlockUtil.text(pos);
+        return ServerInfo.worldKey() + " " + BlockUtil.text(pos);
     }
 
     private static List<String> decode(JsonElement root) {

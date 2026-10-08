@@ -3,12 +3,16 @@ package com.jellypudding.offlineclient.command;
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.ActionSetting;
+import com.jellypudding.offlineclient.setting.Defaults;
+import com.jellypudding.offlineclient.setting.Setting;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.ClientLines;
 import com.jellypudding.offlineclient.util.Hop;
-import net.minecraft.client.multiplayer.chat.GuiMessage;
+import com.jellypudding.offlineclient.util.Tally;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
 import java.util.OptionalDouble;
 import java.util.OptionalInt;
@@ -98,30 +102,57 @@ public abstract class Command {
         return z.isPresent() ? new Vec3(x.getAsDouble(), y.getAsDouble(), z.getAsDouble()) : null;
     }
 
+    // Two coordinates across the ground from the given index. Null after telling the player what
+    // was wrong.
+    protected static Vec3 flatCoordinates(String[] args, int from, Vec3 here) {
+        OptionalDouble x = coordinate(args[from], here.x);
+        OptionalDouble z = x.isPresent() ? coordinate(args[from + 1], here.z) : OptionalDouble.empty();
+        return z.isPresent() ? new Vec3(x.getAsDouble(), here.y, z.getAsDouble()) : null;
+    }
+
     // Hops the player there and says how it went once the trip is over.
     protected static void hopTo(Vec3 spot, String done) {
-        Hop.travel(spot, result -> {
+        Hop.travel(spot, result -> ClientLines.inChat(() -> {
             if (result == Hop.Result.MOVED) {
                 ChatUtil.message(done);
             } else {
                 ChatUtil.error(result.problem());
             }
-        });
+        }));
     }
 
     // Runs an action named in a command. One that throws work away wants the command a
     // second time. What it did goes in chat unless it wrote a line of its own.
     protected static void press(ActionSetting action) {
-        GuiMessage before = ChatUtil.newestLine();
+        int before = ChatUtil.written();
         if (!action.press()) {
             ChatUtil.message("§7Send it again within §f" + ActionSetting.CONFIRM_SECONDS
                 + "§7 seconds to " + action.confirmWords() + ".");
             return;
         }
         String result = action.result();
-        if (result != null && ChatUtil.newestLine() == before) {
+        if (result != null && ChatUtil.written() == before) {
             ChatUtil.message("§7" + result + ".");
         }
+    }
+
+    // Puts back every changed setting of one module or HUD piece. The reply carries a link that takes it back.
+    protected static void resetAll(String name, Collection<? extends Setting<?>> settings) {
+        Defaults.Change change = Defaults.reset(name, settings);
+        if (change == null) {
+            ChatUtil.message("§b" + name + " §7is already at its defaults.");
+            return;
+        }
+        ChatUtil.undoable("§7Put back §f" + Tally.counted(change.size(), "setting") + "§7 in §b" + name + "§7.",
+            change);
+    }
+
+    // A line holding a secret joins the chat history once the command returns. It is taken out
+    // again on the next pass of the game thread.
+    protected static void forgetTypedLine(String secret) {
+        String prefix = OfflineClient.INSTANCE.getCommandManager().getPrefix();
+        OfflineClient.MC.schedule(() -> OfflineClient.MC.gui.hud.getChat().getRecentChat()
+            .removeIf(line -> line.startsWith(prefix) && line.contains(secret)));
     }
 
     // Null after telling the player there is no module with that name.

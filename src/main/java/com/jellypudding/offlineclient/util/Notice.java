@@ -2,6 +2,7 @@ package com.jellypudding.offlineclient.util;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.modules.misc.Webhook;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
@@ -18,7 +19,8 @@ import java.util.Map;
 
 // How a module tells the player about a find. After a message one kind of find keeps
 // quiet for a while and the next message of that kind counts what turned up in between.
-// The module stores every find whether or not its message was held back.
+// The module stores every find whether or not its message was held back. Every message
+// that goes out also goes to Webhook.
 public final class Notice {
 
     public enum Where { OFF, CHAT, TOAST, BOTH }
@@ -78,6 +80,7 @@ public final class Notice {
         if (!where.is(Where.CHAT)) {
             toast(owner.getName(), ChatFormatting.stripFormatting(words.getString()));
         }
+        Modules.alert(Webhook.Alert.FIND, owner.getName() + " " + words.getString());
     }
 
     // Makes the rows a sub option of a switch. Nothing is announced whilst that switch is off.
@@ -117,11 +120,13 @@ public final class Notice {
         String away = here ? away(OfflineClient.MC.player.position(), pos)
             : "in the " + ServerInfo.dimensionName(dimension);
         if (!where.is(Where.TOAST)) {
-            chat(what, away, pos, here, count);
+            chat(what, away, pos, dimension, count);
         }
         if (!where.is(Where.CHAT)) {
             toast(what, away, pos, count);
         }
+        Modules.alert(Webhook.Alert.FIND, owner + " found " + what + " " + away + " at " + BlockUtil.text(pos)
+            + (count > 0 ? " and " + count + " more" : ""));
     }
 
     // How far and which way a spot lies from a point such as 340 blocks north east.
@@ -136,12 +141,11 @@ public final class Notice {
         return Math.round(distance) + " blocks " + Bearing.between(from, to).compass();
     }
 
-    // How far and which way the find lies. With coordinates on they follow and a click
-    // on them walks there whilst the find is in your dimension.
-    private void chat(String what, String away, BlockPos pos, boolean here, int more) {
+    // How far and which way the find lies. With coordinates on they follow.
+    private void chat(String what, String away, BlockPos pos, String dimension, int more) {
         MutableComponent line = Component.literal("§b" + owner + " §7found §f" + what + "§7 " + away);
         if (coordinates.isOn()) {
-            line.append("§7 at ").append(here ? ChatUtil.walkLink(pos) : Component.literal("§f" + BlockUtil.text(pos)));
+            line.append("§7 at ").append(ChatUtil.walkLink(pos, dimension));
         }
         line.append(more > 0 ? "§7. §f" + more + "§7 more turned up since the last message." : "§7.");
         ChatUtil.component(line);
@@ -153,8 +157,7 @@ public final class Notice {
     }
 
     private static void toast(String title, String body) {
-        String capital = body.isEmpty() ? body : Character.toUpperCase(body.charAt(0)) + body.substring(1);
         SystemToast.add(OfflineClient.MC.gui.toastManager(), SystemToast.SystemToastId.PERIODIC_NOTIFICATION,
-            Component.literal(title), Component.literal(capital));
+            Component.literal(title), Component.literal(ChatUtil.capitalised(body)));
     }
 }

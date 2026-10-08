@@ -1,9 +1,12 @@
 package com.jellypudding.offlineclient.modules.hunting;
 
+import com.jellypudding.offlineclient.config.FindLog;
+import com.jellypudding.offlineclient.config.FindSource;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.Render2DEvent;
 import com.jellypudding.offlineclient.event.events.Render3DEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
+import com.jellypudding.offlineclient.gui.FindsScreen;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.render.BoxStyle;
@@ -15,17 +18,16 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.TextSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
-import com.jellypudding.offlineclient.util.BoundedMap;
+import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.LoadedChunks;
 import com.jellypudding.offlineclient.util.Notice;
 import com.jellypudding.offlineclient.util.RenderUtil;
-import com.jellypudding.offlineclient.util.ServerWatch;
 import com.jellypudding.offlineclient.util.SignWords;
 import com.jellypudding.offlineclient.util.WorldWatch;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceKey;
-import net.minecraft.world.level.Level;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.SignBlockEntity;
 import net.minecraft.world.level.block.entity.SignTextSlot;
 import net.minecraft.world.phys.AABB;
@@ -33,30 +35,67 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
+import java.util.Set;
+import java.util.regex.Pattern;
 
 // Reads the text the server sends with every sign in loaded chunks. A 26.3 server flags every
 // sign it loads from a world saved before 26.3 as allowed to run operator commands and sends the
 // flag with the text. Only an operator can give a newer sign that flag. The igloo and taiga
-// village templates carry it too.
-public final class SignReader extends Module {
+// village templates carry it too. Every sign with writing is a find that also keeps the last
+// few texts it showed before.
+public final class SignReader extends Module implements FindSource {
 
     // A sign in a loaded chunk. The lines before the front count are its front and the rest its back.
-    private record Sign(BlockPos pos, AABB box, List<String> lines, int front, boolean old) {
+    // Earlier is the text it showed before its last change or null.
+    private record Sign(BlockPos pos, AABB box, List<String> lines, int front, boolean old, String earlier) {
+    }
+
+    // The words of a find. The newest text comes first and the texts it replaced follow newest first.
+    private record Texts(List<String> all) {
+
+        private static Texts of(String words) {
+            return new Texts(List.of(EARLIER_MARK.split(words)));
+        }
+
+        private String newest() {
+            return all.getFirst();
+        }
+
+        // Null for a sign never seen to change.
+        private String earlier() {
+            return all.size() > 1 ? all.get(1) : null;
+        }
+
+        // The words once the sign reads the text. The oldest drop off past the kept number.
+        private String after(String text) {
+            List<String> texts = new ArrayList<>(all);
+            texts.addFirst(text);
+            return String.join(EARLIER, texts.subList(0, Math.min(texts.size(), KEPT_TEXTS + 1)));
+        }
     }
 
     // Twice a second is quick enough for a sign that was just written.
     private static final int SCAN_TICKS = 10;
 
-    // Far more signs than a session meets in one dimension. It only bounds the memory.
-    private static final int MAX_POSTED = 16384;
-
     // The background of a label reaches this far past its line of text.
     private static final int LINE_GAP = 2;
 
     private static final int TEXT = 0xFFFFFFFF;
+    private static final int EARLIER_TEXT = 0xFF8A8A96;
+
+    private static final String SIGN = "sign";
+    private static final String OLD_SIGN = "old sign";
+
+    // The lines of a sign read as one text with this between them.
+    private static final String LINE_BREAK = " / ";
+    // Each earlier text follows the newer ones behind this mark. The character never stays in a text.
+    private static final char EARLIER_CHAR = '«';
+    private static final String EARLIER = " " + EARLIER_CHAR + " ";
+    private static final Pattern EARLIER_MARK = Pattern.compile(EARLIER, Pattern.LITERAL);
+    // How many texts a sign keeps from before its newest one.
+    private static final int KEPT_TEXTS = 4;
 
     private final NumberSetting range = new NumberSetting("Range",
         "How far away a sign still shows its text and box.", 48, 8, 256, 8, " blocks").min(1);
@@ -75,28 +114,37 @@ public final class SignReader extends Module {
         "Size of the labels.", 1, 0.5, 3, 0.1).min(0.1);
     private final EnumSetting<Notice.Where> messages = Notice.row(
         "Where it posts each new sign with writing on it along with its coordinates.", Notice.Where.CHAT);
+    private final BoolSetting changes = new BoolSetting("Changes",
+        "Says when a sign you saw before reads differently or is gone.", true)
+        .under(messages, () -> !messages.is(Notice.Where.OFF));
+    private final FindLog finds = new FindLog(this);
 
-    // The text each sign was last posted with in every dimension of the current server.
-    private final Map<ResourceKey<Level>, Map<BlockPos, String>> posted = new HashMap<>();
-    private final ServerWatch server = new ServerWatch();
+    private final WorldWatch world = new WorldWatch();
     // Rebuilt by every scan.
     private List<Sign> signs = List.of();
-    private int written;
+    // Known signs the last scan found missing or blank. Paper sends the signs of a crowded chunk
+    // just after the chunk. Only a sign missing from two scans running is gone.
+    private Set<BlockPos> missing = Set.of();
     private int wait;
-    private final WorldWatch world = new WorldWatch();
 
     public SignReader() {
-        super("SignReader", "Shows the text of nearby signs through walls and lists new ones in chat.",
+        super("SignReader", "Shows the text of nearby signs through walls and remembers what each one said.",
             Category.HUNTING);
         addSettings(range, skipBlank, skipWords, oldSigns, oldColor);
         addSettings(style.settings());
-        addSettings(scale, messages);
-        searchTags("signs", "sign text", "old signs", "base");
+        addSettings(scale, messages, changes);
+        addSettings(FindsScreen.settingsFor(finds));
+        searchTags("signs", "sign text", "old signs", "sign history", "base");
+    }
+
+    @Override
+    public FindLog findLog() {
+        return finds;
     }
 
     @Override
     public String getSuffix() {
-        return count(written);
+        return count(finds.count());
     }
 
     @Override
@@ -110,14 +158,12 @@ public final class SignReader extends Module {
     @Override
     protected void onDisable() {
         clear();
-        posted.clear();
-        server.forget();
         world.forget();
     }
 
     private void clear() {
         signs = List.of();
-        written = 0;
+        missing = Set.of();
         wait = 0;
     }
 
@@ -130,7 +176,8 @@ public final class SignReader extends Module {
             // Positions mean something different in every world.
             clear();
         }
-        if (--wait > 0) {
+        // A sign judged before the saved finds are in would pass for new and lose its earlier texts.
+        if (!finds.ready() || --wait > 0) {
             return;
         }
         wait = SCAN_TICKS;
@@ -138,49 +185,91 @@ public final class SignReader extends Module {
     }
 
     private void scan() {
-        Map<BlockPos, String> seen = postedHere();
         List<String> words = SignWords.words(skipWords.getValue());
         List<Sign> found = new ArrayList<>();
-        LoadedChunks.forEachBlockEntity(blockEntity -> {
-            if (blockEntity instanceof SignBlockEntity sign) {
-                read(sign, words, seen, found);
+        Set<Long> scanned = new HashSet<>();
+        Set<BlockPos> written = new HashSet<>();
+        LoadedChunks.forEach(chunk -> {
+            scanned.add(ChunkPos.pack(chunk.getPos().x(), chunk.getPos().z()));
+            for (BlockEntity blockEntity : chunk.getBlockEntities().values()) {
+                if (blockEntity instanceof SignBlockEntity sign) {
+                    read(sign, words, written, found);
+                }
             }
         });
         signs = found;
-        written = (int) found.stream().filter(sign -> !sign.lines().isEmpty()).count();
+        forgetGone(scanned, written);
     }
 
-    private Map<BlockPos, String> postedHere() {
-        if (server.changed()) {
-            // Two servers share their dimension names.
-            posted.clear();
-        }
-        return posted.computeIfAbsent(mc.level.dimension(), key -> new BoundedMap<>(MAX_POSTED));
-    }
-
-    private void read(SignBlockEntity sign, List<String> words, Map<BlockPos, String> seen, List<Sign> out) {
+    // A sign the skip settings leave out is neither drawn nor put in the finds.
+    private void read(SignBlockEntity sign, List<String> words, Set<BlockPos> written, List<Sign> out) {
         List<String> lines = SignWords.lines(sign, SignTextSlot.FRONT);
         int front = lines.size();
         SignWords.addLines(sign.getText(SignTextSlot.BACK), lines);
+        BlockPos pos = sign.getBlockPos();
+        if (!lines.isEmpty()) {
+            written.add(pos);
+        }
         if (lines.isEmpty() ? skipBlank.isOn() : SignWords.hasAnyWord(lines, words)) {
             return;
         }
-        BlockPos pos = sign.getBlockPos();
         boolean old = oldSigns.isOn() && sign.allowOpFeatures;
-        if (!lines.isEmpty()) {
-            post(pos, lines, old, seen);
-        }
-        out.add(new Sign(pos, boxOf(sign), lines, front, old));
+        String earlier = lines.isEmpty() ? null : remember(pos, lines, old);
+        out.add(new Sign(pos, boxOf(sign), lines, front, old, earlier));
     }
 
-    // Once for each sign and again whenever its text changes.
-    private void post(BlockPos pos, List<String> lines, boolean old, Map<BlockPos, String> seen) {
-        String text = String.join(" / ", lines);
-        if (text.equals(seen.put(pos, text))) {
-            return;
+    // Puts the sign in the finds. A sign whose text changed keeps the text it replaced. Gives the
+    // text the sign showed before its last change or null.
+    private String remember(BlockPos pos, List<String> lines, boolean old) {
+        String text = String.join(LINE_BREAK, lines).replace(EARLIER_CHAR, '<');
+        String kind = old ? OLD_SIGN : SIGN;
+        FindLog.Find known = finds.at(pos);
+        if (known == null) {
+            if (finds.add(pos, kind, text)) {
+                Notice.post(messages, this, Component.literal("§7found " + ChatUtil.withArticle(kind) + " at §f"
+                    + BlockUtil.text(pos) + " §7reading §f" + shown(text) + "§7."));
+            }
+            return null;
         }
-        Notice.post(messages, this, Component.literal("§7found " + (old ? "an old sign" : "a sign") + " at §f"
-            + BlockUtil.text(pos) + " §7reading §f" + String.join(" §7/ §f", lines) + "§7."));
+        Texts texts = Texts.of(known.detail());
+        if (texts.newest().equals(text)) {
+            finds.add(pos, kind, known.detail());
+            return texts.earlier();
+        }
+        finds.add(pos, kind, texts.after(text));
+        if (changes.isOn()) {
+            Notice.post(messages, this, Component.literal("§7" + ChatUtil.withArticle(kind) + " at §f"
+                + BlockUtil.text(pos) + " §7changed from §f" + shown(texts.newest()) + " §7to §f" + shown(text) + "§7."));
+        }
+        return texts.newest();
+    }
+
+    // A known sign that is missing from a scanned chunk or left blank leaves the finds.
+    private void forgetGone(Set<Long> scanned, Set<BlockPos> written) {
+        Set<BlockPos> missingNow = new HashSet<>();
+        for (FindLog.Find find : List.copyOf(finds.here())) {
+            BlockPos pos = find.pos();
+            if (!scanned.contains(ChunkPos.pack(pos)) || written.contains(pos)) {
+                continue;
+            }
+            if (!missing.contains(pos)) {
+                missingNow.add(pos);
+                continue;
+            }
+            finds.remove(find);
+            if (changes.isOn()) {
+                String fate = mc.level.getBlockEntity(pos) instanceof SignBlockEntity ? "was wiped" : "is gone";
+                Notice.post(messages, this, Component.literal("§7" + ChatUtil.withArticle(find.kind()) + " at §f"
+                    + BlockUtil.text(pos) + " §7that read §f" + shown(Texts.of(find.detail()).newest()) + " §7" + fate
+                    + "."));
+            }
+        }
+        missing = missingNow;
+    }
+
+    // A text for chat with the breaks between its lines greyed.
+    private static String shown(String text) {
+        return text.replace(LINE_BREAK, " §7/ §f");
     }
 
     // The outline the game gives the sign block. A wall sign is a thin plate.
@@ -215,7 +304,7 @@ public final class SignReader extends Module {
 
     @Subscribe
     private void onRender2D(Render2DEvent event) {
-        if (!inGame() || written == 0 || !WorldToScreen.update()) {
+        if (!inGame() || signs.isEmpty() || !WorldToScreen.update()) {
             return;
         }
         double reach = range.getValue();
@@ -233,10 +322,15 @@ public final class SignReader extends Module {
             // The back reads fainter unless the whole sign is tinted as old.
             int front = sign.old() ? oldColor.getColor() : TEXT;
             int back = sign.old() ? front : RenderUtil.MUTED_TEXT;
-            double top = screen.y - step * (lines.size() - 1) / 2;
+            int rows = lines.size() + (sign.earlier() == null ? 0 : 1);
+            double top = screen.y - step * (rows - 1) / 2;
             for (int i = 0; i < lines.size(); i++) {
                 RenderUtil.label(event.getContext(), mc.font, screen.x, top + step * i, size,
                     List.of(lines.get(i)), List.of(i < sign.front() ? front : back));
+            }
+            if (sign.earlier() != null) {
+                RenderUtil.label(event.getContext(), mc.font, screen.x, top + step * lines.size(), size,
+                    List.of(sign.earlier()), List.of(EARLIER_TEXT));
             }
         }
     }

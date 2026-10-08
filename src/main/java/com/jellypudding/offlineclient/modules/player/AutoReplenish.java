@@ -9,6 +9,9 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
+import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.ChatWarning;
+import com.jellypudding.offlineclient.util.GearKind;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.ItemUtil;
 import com.jellypudding.offlineclient.util.Modules;
@@ -53,24 +56,30 @@ public final class AutoReplenish extends Module {
     private final RegistryListSetting<Item> excluded = new RegistryListSetting<>("Excluded",
         "Items that are never refilled. Click to pick them.", BuiltInRegistries.ITEM, List.of());
     private final NumberSetting repairAt = new NumberSetting("Swap worn tools",
-        "Swaps a worn tool out of your hotbar once it has this many uses left. Zero leaves it in place.",
+        "Swaps a nearly spent tool for a fresher one of its kind once it has this many uses left."
+            + " Zero leaves it in place.",
         0, 0, 100, 1, " uses");
+    private final BoolSetting warnSpent = new BoolSetting("Warn when spent",
+        "Says in chat when a worn tool has no fresher spare left.", true)
+        .under(repairAt, () -> repairAt.getInt() > 0);
 
     // What each hotbar slot and the offhand held last tick.
     private final ItemStack[] previous = new ItemStack[10];
+    private final ChatWarning warning = new ChatWarning();
     private int timer;
     private boolean hadScreen;
 
     public AutoReplenish() {
         super("AutoReplenish", "Refills your hotbar stacks from your inventory.", Category.PLAYER);
         addSettings(refills, slot, pinned, threshold, delay, offhand, unstackable, sameEnchants,
-            fromHotbar, excluded, repairAt);
-        searchTags("refill", "restock", "hotbar");
+            fromHotbar, excluded, repairAt, warnSpent);
+        searchTags("refill", "restock", "hotbar", "anti break");
     }
 
     @Override
     protected void onEnable() {
         timer = 0;
+        warning.clear();
         hadScreen = mc.gui.screen() != null;
         if (inGame()) {
             snapshot();
@@ -209,18 +218,73 @@ public final class AutoReplenish extends Module {
         return false;
     }
 
-    // A tool close to snapping is put away before it breaks.
+    // A tool close to snapping trades places with the freshest spare of its kind. With no spare
+    // it goes into an empty slot before it breaks and the slot it held stays empty.
     private boolean swapWorn(int index, ItemStack now) {
         if (!tooWorn(now)) {
             return false;
         }
-        for (int i = InventoryUtil.HOTBAR_SIZE; i < InventoryUtil.WHOLE_INVENTORY; i++) {
-            ItemStack stack = mc.player.getInventory().getItem(i);
-            if (stack.isEmpty() || !stack.isDamageableItem()) {
-                return move(i, index);
+        int spare = freshestSpare(index, now);
+        if (spare != -1) {
+            warning.clear();
+            return move(spare, index);
+        }
+        if (warnSpent.isOn() && !carriesSpare(now)) {
+            warning.say("Your " + ChatUtil.words(now.getItem()) + " is nearly spent and you carry no fresher one.");
+        }
+        for (int i = InventoryUtil.MAIN_START; i < InventoryUtil.WHOLE_INVENTORY; i++) {
+            if (mc.player.getInventory().getItem(i).isEmpty()) {
+                return InventoryUtil.swap(networkSlot(index), InventoryUtil.networkSlot(i))
+                    != InventoryUtil.Swap.REFUSED;
             }
         }
         return false;
+    }
+
+    // The spare with the most uses left that is not itself worn out. The same item wins over
+    // another of its kind. Minus one when there is none.
+    private int freshestSpare(int index, ItemStack worn) {
+        // The offhand is not part of the inventory index space.
+        int own = index == OFFHAND_INDEX ? -1 : index;
+        int best = -1;
+        boolean bestSame = false;
+        int bestUses = 0;
+        int lowest = fromHotbar.isOn() ? 0 : InventoryUtil.MAIN_START;
+        for (int i = lowest; i < InventoryUtil.WHOLE_INVENTORY; i++) {
+            ItemStack stack = mc.player.getInventory().getItem(i);
+            if (i == own || hotbarLocked(i, index) || !spareFor(worn, stack)) {
+                continue;
+            }
+            boolean same = stack.is(worn.getItem());
+            int uses = usesLeft(stack);
+            if (best == -1 || beats(same, uses, bestSame, bestUses)) {
+                best = i;
+                bestSame = same;
+                bestUses = uses;
+            }
+        }
+        return best;
+    }
+
+    // True when a fresher spare sits anywhere you carry it. Search hotbar only limits where a
+    // swap may take one from.
+    private boolean carriesSpare(ItemStack worn) {
+        return InventoryUtil.findSlot(stack -> spareFor(worn, stack), InventoryUtil.WHOLE_INVENTORY) != -1
+            || spareFor(worn, mc.player.getOffhandItem());
+    }
+
+    // A tool of the same kind that is not worn out itself.
+    private boolean spareFor(ItemStack worn, ItemStack stack) {
+        return GearKind.alike(worn, stack) && stack.isDamageableItem() && !tooWorn(stack);
+    }
+
+    // The same item beats another of its kind and then more uses win.
+    private static boolean beats(boolean same, int uses, boolean bestSame, int bestUses) {
+        return same != bestSame ? same : uses > bestUses;
+    }
+
+    private static int usesLeft(ItemStack stack) {
+        return stack.getMaxDamage() - stack.getDamageValue();
     }
 
     // Only the held slot and the offhand may take from the hotbar.
@@ -235,10 +299,13 @@ public final class AutoReplenish extends Module {
     }
 
     private boolean move(int source, int index) {
-        int target = index == OFFHAND_INDEX
-            ? InventoryUtil.OFFHAND_SLOT : InventoryUtil.networkSlot(index);
-        return InventoryUtil.swap(InventoryUtil.networkSlot(source), target)
+        return InventoryUtil.swap(InventoryUtil.networkSlot(source), networkSlot(index))
             != InventoryUtil.Swap.REFUSED;
+    }
+
+    // The network slot of a hotbar index or the offhand.
+    private static int networkSlot(int index) {
+        return index == OFFHAND_INDEX ? InventoryUtil.OFFHAND_SLOT : InventoryUtil.networkSlot(index);
     }
 
     // Only exact matches merge into a partial stack. An emptied slot accepts

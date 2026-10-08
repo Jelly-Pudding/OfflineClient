@@ -1,9 +1,8 @@
 package com.jellypudding.offlineclient.modules.render;
 
 import com.jellypudding.offlineclient.event.Subscribe;
-import com.jellypudding.offlineclient.event.events.PacketReceiveEvent;
 import com.jellypudding.offlineclient.event.events.Render3DEvent;
-import com.jellypudding.offlineclient.event.events.TickEvent;
+import com.jellypudding.offlineclient.event.events.TotemPopEvent;
 import com.jellypudding.offlineclient.mixinterface.IRenderState;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
@@ -18,17 +17,13 @@ import com.jellypudding.offlineclient.util.ColorUtil;
 import net.minecraft.client.renderer.entity.state.EntityRenderState;
 import net.minecraft.client.renderer.entity.state.LivingEntityRenderState;
 import net.minecraft.client.renderer.state.level.LevelRenderState;
-import net.minecraft.network.protocol.game.ClientboundEntityEventPacket;
-import net.minecraft.world.entity.EntityEvent;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Queue;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentLinkedQueue;
 
 // LevelExtractorMixin feeds the frozen copies into the frame.
 public final class PopChams extends Module {
@@ -80,8 +75,6 @@ public final class PopChams extends Module {
     private final BoolSetting fadeOut = new BoolSetting("Fade out",
         "The copy fades as it ages. Off keeps it solid until it vanishes.", true);
 
-    // Entity ids filled on the netty thread and drained on the game thread.
-    private final Queue<Integer> pending = new ConcurrentLinkedQueue<>();
     private final List<Ghost> ghosts = new ArrayList<>();
 
     public PopChams() {
@@ -94,50 +87,31 @@ public final class PopChams extends Module {
 
     @Override
     protected void onEnable() {
-        pending.clear();
         ghosts.clear();
     }
 
     @Override
     protected void onDisable() {
-        pending.clear();
         ghosts.clear();
     }
 
-    // Fired on the netty thread.
     @Subscribe
-    private void onPacketReceive(PacketReceiveEvent event) {
-        if (event.getPacket() instanceof ClientboundEntityEventPacket packet
-            && packet.getEventId() == EntityEvent.PROTECTED_FROM_DEATH) {
-            pending.add(packet.entityId);
+    private void onTotemPop(TotemPopEvent event) {
+        Player player = event.getPlayer();
+        if (event.isDeath() || (player == mc.player && !self.isOn()) || player.isSpectator()) {
+            return;
         }
-    }
-
-    @Subscribe
-    private void onTick(TickEvent event) {
-        Integer id;
-        while ((id = pending.poll()) != null) {
-            if (!inGame() || !(mc.level.getEntity(id) instanceof Player player)) {
-                continue;
-            }
-            if (player == mc.player && !self.isOn()) {
-                continue;
-            }
-            if (player.isSpectator()) {
-                continue;
-            }
-            if (onlyOne.isOn()) {
-                ghosts.removeIf(ghost -> ghost.id.equals(player.getUUID()));
-            }
-            Ghost ghost = new Ghost(player, player.position(), System.currentTimeMillis());
-            if (mode.is(Mode.WIREFRAME)) {
-                ghost.quads = ModelWireframe.capture(player, 1);
-                ghost.origin = ModelWireframe.origin(player, 1);
-            }
-            ghosts.add(ghost);
-            if (ghosts.size() > MAX_GHOSTS) {
-                ghosts.removeFirst();
-            }
+        if (onlyOne.isOn()) {
+            ghosts.removeIf(ghost -> ghost.id.equals(player.getUUID()));
+        }
+        Ghost ghost = new Ghost(player, player.position(), System.currentTimeMillis());
+        if (mode.is(Mode.WIREFRAME)) {
+            ghost.quads = ModelWireframe.capture(player, 1);
+            ghost.origin = ModelWireframe.origin(player, 1);
+        }
+        ghosts.add(ghost);
+        if (ghosts.size() > MAX_GHOSTS) {
+            ghosts.removeFirst();
         }
     }
 

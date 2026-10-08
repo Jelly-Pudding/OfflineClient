@@ -5,9 +5,10 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.util.Mth;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
-// Holds the line and floor a digging module works along and keeps the player centred.
+// Holds the line and floor a digging module works along and keeps the player on a lane of it.
 // The line runs along a compass direction or a diagonal between two of them.
 public final class AxisWalker {
 
@@ -16,9 +17,15 @@ public final class AxisWalker {
     // Standing further than this above or below the floor counts as having left it.
     private static final double OFF_FLOOR = 1.5;
 
-    // How hard a tick pushes the player back onto the middle line.
+    // How hard a tick pushes the player back onto the held lane.
     private static final double CENTRE_PULL = 0.2;
     private static final double MAX_CENTRE_PUSH = 0.1;
+
+    // The push stops once the player is this close to the lane.
+    public static final double ON_LANE = 0.05;
+
+    // A block no further ahead than this is beside you. Walking on brings it no nearer.
+    public static final double BESIDE = 0.5;
 
     private Direction axis;
     private BlockPos origin;
@@ -30,6 +37,9 @@ public final class AxisWalker {
     private double rightX;
     private double rightZ;
     private boolean diagonal;
+
+    // The lane the player is held on. Zero is the line and a half is the seam between two lanes.
+    private double heldLane;
 
     public void lock() {
         lock(false);
@@ -49,6 +59,7 @@ public final class AxisWalker {
         rightX = -alongZ;
         rightZ = alongX;
         diagonal = alongX != 0 && alongZ != 0;
+        heldLane = 0;
     }
 
     // Kills the noise a sine leaves on a clean angle.
@@ -58,10 +69,15 @@ public final class AxisWalker {
 
     public void clear() {
         axis = null;
+        heldLane = 0;
     }
 
     public boolean isLocked() {
         return axis != null;
+    }
+
+    public boolean isDiagonal() {
+        return diagonal;
     }
 
     // Reads as north east for a diagonal and north for a straight line.
@@ -79,7 +95,12 @@ public final class AxisWalker {
     }
 
     public boolean offFloor() {
-        return Math.abs(MC.player.getY() - floorY) > OFF_FLOOR;
+        return offFloor(floorY);
+    }
+
+    // For a line whose floor changes height along the way.
+    public boolean offFloor(int floor) {
+        return Math.abs(MC.player.getY() - floor) > OFF_FLOOR;
     }
 
     // Lanes run from left to right with lane zero on the line. An even width leans right.
@@ -96,7 +117,11 @@ public final class AxisWalker {
         holdAxis(true);
     }
 
-    // Keeps the footing on the line. The view follows the line only when asked.
+    public void holdLane(double lane) {
+        heldLane = lane;
+    }
+
+    // Keeps the footing on the held lane. The view follows the line only when asked.
     public void holdAxis(boolean steerView) {
         if (axis == null || MC.player == null) {
             return;
@@ -104,22 +129,30 @@ public final class AxisWalker {
         if (steerView) {
             MC.player.setYRot((float) Math.toDegrees(Math.atan2(-alongX, alongZ)));
         }
-        double offset = acrossOf(MC.player.getX(), MC.player.getZ());
-        if (Math.abs(offset) < 0.05) {
+        if (onLane(heldLane)) {
             return;
         }
+        double offset = acrossOf(MC.player.getX(), MC.player.getZ()) - heldLane;
         double push = Math.clamp(-offset * CENTRE_PULL, -MAX_CENTRE_PUSH, MAX_CENTRE_PUSH);
         Vec3 velocity = MC.player.getDeltaMovement();
         MC.player.setDeltaMovement(velocity.x + rightX * push, velocity.y, velocity.z + rightZ * push);
     }
 
-    // Walks along the line whatever way the player faces.
+    // True once the player stands close enough to the lane for the pull to stop.
+    public boolean onLane(double lane) {
+        return Math.abs(acrossOf(MC.player.getX(), MC.player.getZ()) - lane) < ON_LANE;
+    }
+
+    // Walks along the line whatever way the player faces. The sideways part of the motion is
+    // kept. It holds the player on the lane.
     public void walkAlong(double speed) {
         if (axis == null || MC.player == null) {
             return;
         }
         Vec3 velocity = MC.player.getDeltaMovement();
-        MC.player.setDeltaMovement(alongX * speed, velocity.y, alongZ * speed);
+        double across = velocity.x * rightX + velocity.z * rightZ;
+        MC.player.setDeltaMovement(alongX * speed + rightX * across, velocity.y,
+            alongZ * speed + rightZ * across);
     }
 
     // Blocks moved along the line since it was taken. Zero when unlocked.
@@ -151,7 +184,11 @@ public final class AxisWalker {
 
     // Blocks along the line from the origin to a position on a straight line.
     public int depthOf(BlockPos pos) {
-        return (int) Math.round(alongOf(pos));
+        return depthOf(pos.getX() + 0.5, pos.getZ() + 0.5);
+    }
+
+    public int depthOf(double x, double z) {
+        return (int) Math.round(alongOf(x, z));
     }
 
     // Blocks ahead then to the right then up. Whole blocks only on a straight line.
@@ -167,5 +204,23 @@ public final class AxisWalker {
         return new Vec3(origin.getX() + 0.5 + alongX * depth + rightX * lane,
             floorY + up,
             origin.getZ() + 0.5 + alongZ * depth + rightZ * lane);
+    }
+
+    // Where the eyes of a player standing on a lane at a point along the line would be.
+    public Vec3 eyeAt(double along, double lane, int floor) {
+        Vec3 spot = pointAt(along, lane, 0);
+        return new Vec3(spot.x, floor + MC.player.getEyeHeight(), spot.z);
+    }
+
+    // True when a player could stand on a lane at a point along the line. The floor holds them
+    // and the two blocks above it let them in unharmed.
+    public boolean standable(double along, double lane, int floor) {
+        BlockPos feet = BlockPos.containing(pointAt(along, lane, 0)).atY(floor);
+        return BlockUtil.isSolid(feet.below()) && passable(feet) && passable(feet.above());
+    }
+
+    private static boolean passable(BlockPos pos) {
+        BlockState state = BlockUtil.state(pos);
+        return !BlockUtil.blocksMotion(state) && !BlockUtil.harmful(state) && state.getFluidState().isEmpty();
     }
 }

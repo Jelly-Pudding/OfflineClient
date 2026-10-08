@@ -8,6 +8,7 @@ import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.ServerInfo;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -24,6 +25,8 @@ public final class BetterTab extends Module {
 
     private final BoolSetting ping = new BoolSetting("Ping",
         "Show the exact latency instead of the signal bars.", true);
+    private final BoolSetting heads = new BoolSetting("Heads",
+        "Shows player heads in the list on servers that hide them.", true);
     private final BoolSetting friends = new BoolSetting("Friends",
         "Paint people on your friend list in their own colour.", true);
     private final ColorSetting friendColor = new ColorSetting("Friend colour",
@@ -48,12 +51,17 @@ public final class BetterTab extends Module {
 
     public BetterTab() {
         super("BetterTab", "Ping numbers and friend colours in the player list.", Category.MISC);
-        addSettings(ping, friends, friendColor, self, selfColor, gameMode, raiseLimit, limit, columnHeight);
+        addSettings(ping, heads, friends, friendColor, self, selfColor, gameMode, raiseLimit, limit, columnHeight);
         searchTags("tab list", "player list", "latency");
     }
 
     public boolean showsPing() {
         return isEnabled() && ping.isOn();
+    }
+
+    // Read by PlayerTabOverlayMixin. Vanilla only draws heads on a server in online mode.
+    public boolean showsHeads() {
+        return isEnabled() && heads.isOn();
     }
 
     // Vanilla leaves room for a ten pixel icon. A number needs more or it sits on the name.
@@ -75,7 +83,7 @@ public final class BetterTab extends Module {
     // Drawn in the column vanilla fills with the signal bars.
     public void drawPing(GuiGraphicsExtractor context, int width, int x, int y, PlayerInfo info) {
         Font font = mc.font;
-        int latency = info.getLatency();
+        int latency = ServerInfo.latency(info);
         String text = latency < 0 ? "?" : String.valueOf(Math.min(latency, 9999));
         context.text(font, text, x + width - font.width(text) - 1, y, ColorUtil.ping(latency), false);
     }

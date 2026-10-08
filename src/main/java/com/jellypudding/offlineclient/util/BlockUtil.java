@@ -2,9 +2,11 @@ package com.jellypudding.offlineclient.util;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.Identifier;
+import net.minecraft.server.level.BlockDestructionProgress;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -12,6 +14,7 @@ import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.monster.Shulker;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.effect.MobEffects;
@@ -51,11 +54,16 @@ import net.minecraft.world.level.block.NoteBlock;
 import net.minecraft.world.level.block.PowderSnowBlock;
 import net.minecraft.world.level.block.RepeaterBlock;
 import net.minecraft.world.level.block.RespawnAnchorBlock;
+import net.minecraft.world.level.block.ShulkerBoxBlock;
 import net.minecraft.world.level.block.StonecutterBlock;
 import net.minecraft.world.level.block.SweetBerryBushBlock;
 import net.minecraft.world.level.block.TorchBlock;
 import net.minecraft.world.level.block.TrapDoorBlock;
 import net.minecraft.world.level.block.WitherRoseBlock;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.ChestBlockEntity;
+import net.minecraft.world.level.block.entity.EnderChestBlockEntity;
+import net.minecraft.world.level.block.entity.ShulkerBoxBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.ChestType;
 import net.minecraft.world.level.material.Fluids;
@@ -70,6 +78,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
+import java.util.SortedSet;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 
@@ -101,6 +110,11 @@ public final class BlockUtil {
     private static final int WRONG_TOOL_DIVISOR = 100;
     // Each level of Mining Fatigue multiplies the speed by this once more.
     private static final double FATIGUE_BASE = 0.3;
+    // A shulker box opens as far as its own size and its lid lifts half a block. The game trims
+    // a sliver off the space it needs.
+    private static final float SHULKER_SIZE = 1;
+    private static final float SHULKER_LID = 0.5f;
+    private static final double SHULKER_SLIVER = 1.0E-6;
 
     private BlockUtil() {
     }
@@ -142,6 +156,15 @@ public final class BlockUtil {
     public static boolean isBreakable(BlockPos pos) {
         BlockState state = state(pos);
         return !state.isAir() && state.getDestroySpeed(MC.level, pos) >= 0;
+    }
+
+    // The deepest crack anyone has made in the block from nought to nine. Your own digging
+    // counts. Minus one whilst nobody is breaking it.
+    public static int crackStage(BlockPos pos) {
+        ClientLevel level = MC.level;
+        SortedSet<BlockDestructionProgress> cracks = level == null ? null
+            : level.destructionProgress().get(pos.asLong());
+        return cracks == null || cracks.isEmpty() ? -1 : cracks.last().getProgress();
     }
 
     // The three coordinates with spaces between.
@@ -263,11 +286,44 @@ public final class BlockUtil {
         return MC.player.getAttributeValue(Attributes.BLOCK_INTERACTION_RANGE);
     }
 
-    // True when the server takes a click on this block. It measures from the eyes to the
-    // nearest point of the block.
+    // The furthest from the eyes the server takes a click on a block.
+    public static double serverReachLimit() {
+        return serverBlockReach() + SERVER_REACH_SLACK;
+    }
+
+    // The point of the block nearest the eyes. The server measures reach to it.
+    public static Vec3 nearestPoint(BlockPos pos, Vec3 eye) {
+        return new Vec3(Math.clamp(eye.x, pos.getX(), pos.getX() + 1),
+            Math.clamp(eye.y, pos.getY(), pos.getY() + 1),
+            Math.clamp(eye.z, pos.getZ(), pos.getZ() + 1));
+    }
+
+    public static double reachTo(BlockPos pos) {
+        return reachTo(pos, MC.player.getEyePosition());
+    }
+
+    // From eyes somewhere else such as a spot the player could stand on.
+    public static double reachTo(BlockPos pos, Vec3 eye) {
+        return eye.distanceTo(nearestPoint(pos, eye));
+    }
+
+    // True when the server takes a click on this block.
     public static boolean serverReaches(BlockPos pos) {
-        double reach = serverBlockReach() + SERVER_REACH_SLACK;
-        return new AABB(pos).distanceToSqr(MC.player.getEyePosition()) < reach * reach;
+        return serverReaches(reachTo(pos));
+    }
+
+    private static boolean serverReaches(double distance) {
+        return distance < serverReachLimit();
+    }
+
+    // Within the range a module allows and the server takes.
+    public static boolean reaches(BlockPos pos, double range) {
+        return reaches(pos, MC.player.getEyePosition(), range);
+    }
+
+    public static boolean reaches(BlockPos pos, Vec3 eye, double range) {
+        double distance = reachTo(pos, eye);
+        return distance <= range && serverReaches(distance);
     }
 
     // The space a block placed by this click fills. A replaceable block is filled itself.
@@ -344,16 +400,18 @@ public final class BlockUtil {
 
     // A click the server takes that puts a block at the spot. Against a neighbour face when one
     // is in reach and straight into the empty spot otherwise. Null when neither would land.
+    // The click into the spot lands on its point nearest the eyes. The server takes any point
+    // inside the block.
     public static Placement reachablePlacement(BlockPos pos, double range, boolean needSight) {
         Placement leaning = placementInReach(pos, range, needSight);
         if (leaning != null && serverReaches(pos.relative(leaning.support()))) {
             return leaning;
         }
-        Vec3 centre = Vec3.atCenterOf(pos);
-        if (MC.player.getEyePosition().distanceToSqr(centre) > range * range || !serverReaches(pos)) {
+        if (!reaches(pos, range)) {
             return null;
         }
-        return needSight && !canSee(centre) ? null : new Placement(pos, null, centre);
+        Vec3 point = nearestPoint(pos, MC.player.getEyePosition());
+        return needSight && !canSee(point) ? null : new Placement(pos, null, point);
     }
 
     // Null unless a neighbour face sits within range of the eyes and in sight when that is asked for.
@@ -845,12 +903,47 @@ public final class BlockUtil {
         return MC.level.environmentAttributes().getValue(EnvironmentAttributes.WATER_EVAPORATES, pos);
     }
 
+    // True when liquid beside or above the block would pour in once it came out. Liquid below
+    // never flows up.
+    public static boolean holdsBackLiquid(BlockPos pos) {
+        for (Direction side : Direction.values()) {
+            if (side != Direction.DOWN && !state(pos.relative(side)).getFluidState().isEmpty()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     // The other half of a double chest. Null for a single chest or any other block.
     public static BlockPos otherChestHalf(BlockPos pos, BlockState state) {
         if (!state.hasProperty(ChestBlock.TYPE) || state.getValue(ChestBlock.TYPE) == ChestType.SINGLE) {
             return null;
         }
         return pos.relative(ChestBlock.getConnectedDirection(state));
+    }
+
+    // True for a container the game will not open where it stands. A chest stays shut with a
+    // solid block or a sitting cat over either half and an ender chest with a solid block over it.
+    // A closed shulker box has to lift its lid into space no block or boat fills.
+    public static boolean keptShut(BlockEntity container) {
+        BlockPos pos = container.getBlockPos();
+        if (container instanceof ChestBlockEntity) {
+            BlockPos other = otherChestHalf(pos, container.getBlockState());
+            return ChestBlock.isChestBlockedAt(MC.level, pos)
+                || other != null && ChestBlock.isChestBlockedAt(MC.level, other);
+        }
+        if (container instanceof EnderChestBlockEntity) {
+            BlockPos above = pos.above();
+            return MC.level.getBlockState(above).isRedstoneConductor(MC.level, above);
+        }
+        if (container instanceof ShulkerBoxBlockEntity box
+            && box.getAnimationStatus() == ShulkerBoxBlockEntity.AnimationStatus.CLOSED) {
+            Direction facing = container.getBlockState().getValue(ShulkerBoxBlock.FACING);
+            AABB lid = Shulker.getProgressDeltaAabb(SHULKER_SIZE, facing, 0, SHULKER_LID, Vec3.atBottomCenterOf(pos))
+                .deflate(SHULKER_SLIVER);
+            return !MC.level.noCollision(lid);
+        }
+        return false;
     }
 
     public static boolean isStandingOn(BlockPos pos) {

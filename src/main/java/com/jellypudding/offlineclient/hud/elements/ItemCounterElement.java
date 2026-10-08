@@ -2,9 +2,9 @@ package com.jellypudding.offlineclient.hud.elements;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.gui.GuiTheme;
-import com.jellypudding.offlineclient.hud.Backdrop;
 import com.jellypudding.offlineclient.hud.HudElement;
 import com.jellypudding.offlineclient.hud.HudLayout;
+import com.jellypudding.offlineclient.hud.RowCache;
 import com.jellypudding.offlineclient.hud.TextRow;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
@@ -58,12 +58,12 @@ public final class ItemCounterElement extends HudElement {
         .describe(Empty.HIDE, "Leaves the item out.")
         .describe(Empty.ZERO, "Shows the item with a nought.")
         .describe(Empty.GREY, "Shows the item greyed out.");
-    private final Backdrop backdrop = new Backdrop("Counter", "the totals", false);
+    // Each gathering walks the whole inventory once for every counted item.
+    private final RowCache<Counted> counts = new RowCache<>(this::build);
 
     public ItemCounterElement() {
         super("Item counter", "How many of the items you pick you are carrying.", false, 50, 96);
         add(items, leastDurability, worn, layout, icons, empty);
-        add(backdrop.settings());
     }
 
     @Override
@@ -71,7 +71,21 @@ public final class ItemCounterElement extends HudElement {
         return isActive() && !tallies().isEmpty();
     }
 
+    // A full stack of each counted item stands in whilst the editor is open and nothing is counted.
     private List<Counted> tallies() {
+        List<Counted> counted = counts.get();
+        if (!counted.isEmpty() || !editing()) {
+            return counted;
+        }
+        List<Counted> sample = new ArrayList<>();
+        for (Item item : items.resolved()) {
+            ItemStack stack = new ItemStack(item);
+            sample.add(new Counted(stack, stack.getMaxStackSize()));
+        }
+        return sample;
+    }
+
+    private List<Counted> build() {
         Player player = OfflineClient.MC.player;
         List<Counted> found = new ArrayList<>();
         if (player == null) {
@@ -121,9 +135,6 @@ public final class ItemCounterElement extends HudElement {
     @Override
     public void render(GuiGraphicsExtractor context, Font font) {
         List<Counted> found = tallies();
-        if (backdrop.around(context, width(font), height(font))) {
-            context.guiRenderState.up();
-        }
         boolean across = layout.is(HudLayout.ACROSS);
         int step = across ? cellWidth(font) + GAP : cellHeight(font) + GAP;
         for (int i = 0; i < found.size(); i++) {
@@ -133,7 +144,7 @@ public final class ItemCounterElement extends HudElement {
             String label = labelOf(tally);
             int tint = greyed(tally) ? GREY_TEXT : GuiTheme.HUD_TEXT;
             if (!icons.isOn()) {
-                context.text(font, label, x, y, tint, true);
+                write(context, font, label, x, y, tint);
                 continue;
             }
             context.item(tally.stack(), x, y);
@@ -142,9 +153,9 @@ public final class ItemCounterElement extends HudElement {
                 context.guiRenderState.up();
                 context.fill(x, y, x + SLOT, y + SLOT, GREYED);
             } else if (across) {
-                context.text(font, label, x + (SLOT - font.width(label)) / 2, y + SLOT, tint, true);
+                write(context, font, label, x + (SLOT - font.width(label)) / 2, y + SLOT, tint);
             } else {
-                context.text(font, label, x + SLOT + GAP, y + (SLOT - font.lineHeight) / 2 + 1, tint, true);
+                write(context, font, label, x + SLOT + GAP, y + (SLOT - font.lineHeight) / 2 + 1, tint);
             }
         }
     }

@@ -1,5 +1,6 @@
 package com.jellypudding.offlineclient.util;
 
+import com.jellypudding.offlineclient.modules.misc.ClickGuiModule;
 import net.minecraft.util.ARGB;
 
 import java.util.concurrent.ThreadLocalRandom;
@@ -42,10 +43,21 @@ public final class ColorUtil {
         return Math.clamp(Math.round(share * 255f), 0, 255);
     }
 
-    // The offset shifts the phase between adjacent characters or entries.
+    // Neighbouring letters or rows sit this many degrees apart round the colour wheel.
+    private static final float RAINBOW_STEP = 8;
+    private static final float RAINBOW_SATURATION = 0.65f;
+    // How long one turn takes at the normal speed.
+    private static final double RAINBOW_SECONDS = 4;
+    private static final double MILLIS_PER_SECOND = 1000;
+
+    // The offset shifts the phase between adjacent characters or entries. The ClickGUI module
+    // sets how fast it turns.
     public static int rainbow(int offset) {
-        float hue = ((System.currentTimeMillis() % 4000L) / 4000f * 360f + offset * 8f) % 360f;
-        return hsv(hue, 0.65f, 1f);
+        ClickGuiModule gui = Modules.get(ClickGuiModule.class);
+        double speed = gui == null ? ClickGuiModule.RAINBOW_SPEED : gui.rainbowSpeed();
+        double turn = RAINBOW_SECONDS * MILLIS_PER_SECOND / speed;
+        float share = (float) (System.currentTimeMillis() % turn / turn);
+        return hsv(share * 2 * HALF_TURN + offset * RAINBOW_STEP, RAINBOW_SATURATION, 1f);
     }
 
     public static int withAlpha(int color, int alpha) {

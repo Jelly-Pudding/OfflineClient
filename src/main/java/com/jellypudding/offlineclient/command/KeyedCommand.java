@@ -3,6 +3,7 @@ package com.jellypudding.offlineclient.command;
 import com.jellypudding.offlineclient.config.KeyedStore;
 import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.KeyUse;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -96,6 +97,7 @@ public abstract class KeyedCommand<T extends KeyedStore.Keyed<T>> extends Comman
         }
         store().add(entry.withKey(key));
         ChatUtil.message(keyedMessage(entry, keyName(key)));
+        KeyUse.warn(key, entry);
     }
 
     private static String keyName(int key) {

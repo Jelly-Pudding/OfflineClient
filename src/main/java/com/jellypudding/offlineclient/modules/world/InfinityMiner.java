@@ -72,7 +72,7 @@ public final class InfinityMiner extends Module {
         "Outlines the block being walked to.", true);
     private final BoxStyle targetBox = new BoxStyle(BoxStyle.Shape.BOTH, 180).under(render);
 
-    private final MiningTrip miner = new MiningTrip();
+    private final MiningTrip miner = new MiningTrip().ownTool(true);
     private final Trip homeTrip = new Trip();
     private final SlotSwap slots = new SlotSwap();
 

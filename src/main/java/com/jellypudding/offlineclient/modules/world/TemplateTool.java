@@ -113,8 +113,6 @@ public final class TemplateTool extends Module {
 
     @Subscribe
     private void onRender3D(Render3DEvent event) {
-        if (corners.started()) {
-            boxStyle.draw(event.getBatch(), corners.box().inflate(0.005), true);
-        }
+        corners.draw(event.getBatch(), boxStyle);
     }
 }

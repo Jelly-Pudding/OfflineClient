@@ -1,8 +1,11 @@
 package com.jellypudding.offlineclient.setting;
 
 import com.google.gson.JsonElement;
+import com.jellypudding.offlineclient.util.ChatUtil;
 
+import java.util.Collection;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
@@ -25,6 +28,9 @@ public abstract class Setting<T> {
 
     // Saved with the config but never shown or offered to the player.
     private boolean internal;
+
+    // A value the player made rather than chose. Nothing puts it back.
+    private boolean noDefault;
 
     protected Setting(String name, String description, T defaultValue) {
         this.name = name;
@@ -50,7 +56,7 @@ public abstract class Setting<T> {
     // an empty prefix gives Shape.
     public static String prefixed(String prefix, String noun) {
         String name = prefix.isEmpty() ? noun : prefix + " " + noun;
-        return Character.toUpperCase(name.charAt(0)) + name.substring(1);
+        return ChatUtil.capitalised(name);
     }
 
     public String getDescription() {
@@ -77,6 +83,30 @@ public abstract class Setting<T> {
     // True whilst the value is still the one it started with.
     public boolean isDefault() {
         return Objects.equals(value, defaultValue);
+    }
+
+    // True whilst a value the player chose differs from the one it started with.
+    public final boolean isChanged() {
+        return !internal && !noDefault && !isDefault();
+    }
+
+    // The starting value as the GUI and chat write it. Null where no short text says it.
+    public String defaultText() {
+        return null;
+    }
+
+    // Equal items in the same order. Some modules rank by the order things were picked in.
+    protected static boolean sameOrder(Collection<?> one, Collection<?> two) {
+        if (one.size() != two.size()) {
+            return false;
+        }
+        Iterator<?> other = two.iterator();
+        for (Object item : one) {
+            if (!Objects.equals(item, other.next())) {
+                return false;
+            }
+        }
+        return true;
     }
 
     // Hides this setting in the GUI whilst the supplier returns false.
@@ -127,6 +157,17 @@ public abstract class Setting<T> {
 
     public boolean isInternal() {
         return internal;
+    }
+
+    // Marks a value the player made such as a marker corner. It has no default to go back to.
+    @SuppressWarnings("unchecked")
+    public <S extends Setting<T>> S noDefault() {
+        noDefault = true;
+        return (S) this;
+    }
+
+    public boolean hasDefault() {
+        return !noDefault;
     }
 
     public Setting<?> getParent() {

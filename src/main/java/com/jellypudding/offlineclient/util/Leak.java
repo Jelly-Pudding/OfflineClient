@@ -32,6 +32,11 @@ public record Leak(String name, String detail, BlockPos pos, boolean knowsHeight
         return all;
     }
 
+    // True whilst any source is switched on even if it has found nothing yet.
+    public static boolean anySourceOn() {
+        return Modules.all(Source.class).stream().anyMatch(Source::isEnabled);
+    }
+
     // X Y Z or only X Z when the height is not known.
     public String coordinates() {
         return knowsHeight ? BlockUtil.text(pos) : pos.getX() + " " + pos.getZ();

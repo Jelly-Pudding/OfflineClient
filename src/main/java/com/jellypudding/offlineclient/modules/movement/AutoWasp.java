@@ -16,10 +16,12 @@ import net.minecraft.core.Direction;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
 
-// Flies straight at a chosen player on an elytra. It assumes a clear line.
+// Flies at a chosen player on an elytra. It assumes a clear line.
 public final class AutoWasp extends Module {
 
     public enum OnLoss { SWITCH_OFF, NEW_TARGET, DISCONNECT }
+
+    public enum Approach { STRAIGHT, DIVE }
 
     // Ticks after the jump before the wings open.
     private static final int OPEN_DELAY = 4;
@@ -30,14 +32,32 @@ public final class AutoWasp extends Module {
     // Height above a landed target to hover at.
     private static final double HOVER = 1.25;
 
+    // A climb or a dive turns once it comes this close to its height.
+    private static final double TURN_SLACK = 0.5;
+
     private static final double TINY = 1.0E-5;
 
     private final NumberSetting horizontalSpeed = new NumberSetting("Horizontal speed",
         "Blocks a tick along the ground.", 2, 0.1, 10, 0.1, " blocks").min(0);
     private final NumberSetting verticalSpeed = new NumberSetting("Vertical speed",
         "Blocks a tick up or down.", 3, 0.1, 10, 0.1, " blocks").min(0);
+    private final EnumSetting<Approach> approach = new EnumSetting<>("Approach",
+        "How you close in on the target.", Approach.STRAIGHT)
+        .describe(Approach.STRAIGHT, "Flies straight at the target.")
+        .describe(Approach.DIVE, "Climbs high over the target then dives at it and pulls up again.");
+    private final NumberSetting perchHeight = new NumberSetting("Perch height",
+        "How far above the target you climb before each dive. The dive starts once the target is this close.",
+        18, 4, 60, 1, " blocks")
+        .under(approach, Approach.DIVE);
+    private final NumberSetting pullUpHeight = new NumberSetting("Pull up height",
+        "How far above the target each dive turns back up.", 3, 1, 20, 0.5, " blocks")
+        .under(approach, Approach.DIVE);
+    private final NumberSetting diveSpeed = new NumberSetting("Dive speed",
+        "Blocks a tick down during a dive.", 1.5, 0.1, 4, 0.1, " blocks")
+        .min(0.1).under(approach, Approach.DIVE);
     private final BoolSetting avoidLanding = new BoolSetting("Avoid landing",
-        "Hovers above a target on the ground to keep your glide going.", true);
+        "Hovers above a target on the ground to keep your glide going.", true)
+        .under(approach, Approach.STRAIGHT);
     private final BoolSetting predictMovement = new BoolSetting("Predict movement",
         "Aims where the target is heading rather than where they are.", true);
     private final BoolSetting onlyFriends = new BoolSetting("Only friends",
@@ -57,12 +77,14 @@ public final class AutoWasp extends Module {
     private Player target;
     private int jumpTimer;
     private boolean jumped;
+    // True from the top of a climb until the dive comes down to the pull up height.
+    private boolean diving;
 
     public AutoWasp() {
-        super("AutoWasp", "Flies you straight at a player on your elytra.", Category.MOVEMENT);
-        addSettings(horizontalSpeed, verticalSpeed, avoidLanding, predictMovement, onlyFriends,
-            onLoss, offsetX, offsetY, offsetZ);
-        searchTags("wasp", "elytra chase", "follow");
+        super("AutoWasp", "Flies you at a player on your elytra.", Category.MOVEMENT);
+        addSettings(horizontalSpeed, verticalSpeed, approach, perchHeight, pullUpHeight, diveSpeed, avoidLanding,
+            predictMovement, onlyFriends, onLoss, offsetX, offsetY, offsetZ);
+        searchTags("wasp", "elytra chase", "follow", "dive");
     }
 
     @Override
@@ -80,6 +102,7 @@ public final class AutoWasp extends Module {
     protected void onEnable() {
         jumpTimer = 0;
         jumped = false;
+        diving = false;
         if (!pickTarget()) {
             disable("AutoWasp found no player to follow.");
         }
@@ -106,7 +129,8 @@ public final class AutoWasp extends Module {
         double dy = aim.y - mc.player.getY();
         double vy = 0;
         if (Math.abs(dy) > TINY) {
-            vy = Math.signum(dy) * Math.min(Math.abs(dy), verticalSpeed.getValue());
+            double vertical = diving ? diveSpeed.getValue() : verticalSpeed.getValue();
+            vy = Math.signum(dy) * Math.min(Math.abs(dy), vertical);
         }
         return new Vec3(vx, vy, vz);
     }
@@ -128,6 +152,7 @@ public final class AutoWasp extends Module {
         if (mc.player.isFallFlying()) {
             jumped = false;
             jumpTimer = 0;
+            turnDive();
             return;
         }
         if (mc.player.onGround()) {
@@ -174,15 +199,35 @@ public final class AutoWasp extends Module {
         return target != null;
     }
 
+    // The climb turns into a dive at the perch once the target is no further off than the perch
+    // is high. The dive turns back up at the pull up height.
+    private void turnDive() {
+        if (!approach.is(Approach.DIVE)) {
+            diving = false;
+            return;
+        }
+        Vec3 spot = targetSpot();
+        double above = mc.player.getY() - spot.y;
+        double away = Math.hypot(spot.x - mc.player.getX(), spot.z - mc.player.getZ());
+        if (diving && above <= pullUpHeight.getValue() + TURN_SLACK) {
+            diving = false;
+        } else if (!diving && above >= perchHeight.getValue() - TURN_SLACK && away <= perchHeight.getValue()) {
+            diving = true;
+        }
+    }
+
     private Vec3 aimPoint() {
+        Vec3 aim = targetSpot();
+        if (approach.is(Approach.DIVE)) {
+            return aim.add(0, diving ? pullUpHeight.getValue() : perchHeight.getValue(), 0);
+        }
+        return avoidLanding.isOn() ? hoverAbove(aim) : aim;
+    }
+
+    // Where the target is or is about to be with the offsets added.
+    private Vec3 targetSpot() {
         Vec3 aim = target.position().add(offsetX.getValue(), offsetY.getValue(), offsetZ.getValue());
-        if (predictMovement.isOn()) {
-            aim = aim.add(target.getDeltaMovement());
-        }
-        if (avoidLanding.isOn()) {
-            aim = hoverAbove(aim);
-        }
-        return aim;
+        return predictMovement.isOn() ? aim.add(target.getDeltaMovement()) : aim;
     }
 
     // A target standing on a block gets a hover point a little above it.

@@ -3,7 +3,7 @@ package com.jellypudding.offlineclient.modules.player;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.ClientTickEvent;
 import com.jellypudding.offlineclient.event.events.Render3DEvent;
-import com.jellypudding.offlineclient.gui.GuiScreenBase;
+import com.jellypudding.offlineclient.gui.ClientScreen;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.modules.render.Freecam;
@@ -142,7 +142,7 @@ public final class GUIMove extends Module {
 
     // The client's own screens need the pointer for clicking.
     private static boolean allowed(Screen screen) {
-        return !(screen instanceof GuiScreenBase) && InvWalk.walkable(screen);
+        return !(screen instanceof ClientScreen) && InvWalk.walkable(screen);
     }
 
     private void startTurning() {

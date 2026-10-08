@@ -54,6 +54,11 @@ public final class ChoiceListSetting extends Setting<Set<String>> implements Pic
     }
 
     @Override
+    public boolean isDefault() {
+        return sameOrder(value, defaultValue);
+    }
+
+    @Override
     public Collection<String> options() {
         Set<String> all = new LinkedHashSet<>(options.get());
         all.addAll(value);

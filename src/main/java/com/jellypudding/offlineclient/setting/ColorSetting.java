@@ -44,6 +44,11 @@ public final class ColorSetting extends Setting<Float> {
         return ColorUtil.hsv(value, saturation, brightness);
     }
 
+    // The colour of one row of a list. A rainbow runs down the rows and any other colour stays put.
+    public int rowColor(int row) {
+        return rainbow ? ColorUtil.rainbow(row) : getColor();
+    }
+
     // A phase offset for gradients and waves.
     public int getColor(int offset) {
         if (rainbow) {
@@ -92,6 +97,19 @@ public final class ColorSetting extends Setting<Float> {
         rainbow = defaultRainbow;
         saturation = defaultSaturation;
         brightness = defaultBrightness;
+    }
+
+    // The hue alone is not the colour. Another shade or the rainbow differs too.
+    @Override
+    public boolean isDefault() {
+        return super.isDefault() && rainbow == defaultRainbow && saturation == defaultSaturation
+            && brightness == defaultBrightness;
+    }
+
+    // A fixed shade has no short name.
+    @Override
+    public String defaultText() {
+        return defaultRainbow ? "rainbow" : null;
     }
 
     @Override

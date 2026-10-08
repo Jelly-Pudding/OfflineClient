@@ -10,6 +10,10 @@ import java.math.RoundingMode;
 // but typed values can go past it up to any hard min and max.
 public final class NumberSetting extends Setting<Double> {
 
+    // Values closer than this count as the same. A size stepped in the HUD editor lands a
+    // hair away from the round number it means.
+    private static final double SAME = 1e-9;
+
     private final double sliderMin;
     private final double sliderMax;
     private final double step;
@@ -89,6 +93,12 @@ public final class NumberSetting extends Setting<Double> {
         }
     }
 
+    // Moves by whole slider steps and rounds to them. The hard limits still hold.
+    public void nudge(int steps) {
+        double moved = BigDecimal.valueOf(value + steps * step).setScale(decimals, RoundingMode.HALF_UP).doubleValue();
+        setValue(moved);
+    }
+
     // A typed value above the normal range stretches the slider.
     private double sliderTop() {
         if (activeSliderMax > 0) {
@@ -122,8 +132,22 @@ public final class NumberSetting extends Setting<Double> {
     }
 
     @Override
+    public boolean isDefault() {
+        return Math.abs(value - defaultValue) < SAME;
+    }
+
+    @Override
     public String getValueString() {
-        BigDecimal bd = BigDecimal.valueOf(value)
+        return format(value);
+    }
+
+    @Override
+    public String defaultText() {
+        return format(defaultValue);
+    }
+
+    private String format(double number) {
+        BigDecimal bd = BigDecimal.valueOf(number)
             .setScale(Math.max(decimals, 4), RoundingMode.HALF_UP)
             .stripTrailingZeros();
         if (bd.scale() < 0) {

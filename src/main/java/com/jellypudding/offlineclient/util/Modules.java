@@ -2,16 +2,24 @@ package com.jellypudding.offlineclient.util;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.config.WaypointStore;
+import com.jellypudding.offlineclient.hud.HudElement;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.module.ModuleManager;
 import com.jellypudding.offlineclient.modules.combat.AntiBot;
+import com.jellypudding.offlineclient.modules.combat.AutoPearl;
 import com.jellypudding.offlineclient.modules.combat.CrystalAura;
 import com.jellypudding.offlineclient.modules.combat.Knockback;
 import com.jellypudding.offlineclient.modules.combat.MaceCombo;
 import com.jellypudding.offlineclient.modules.combat.PistonAura;
+import com.jellypudding.offlineclient.modules.hunting.NewChunks;
 import com.jellypudding.offlineclient.modules.misc.AntiPacketKick;
+import com.jellypudding.offlineclient.modules.misc.AutoReconnect;
+import com.jellypudding.offlineclient.modules.misc.BetterChat;
 import com.jellypudding.offlineclient.modules.misc.FakePlayer;
+import com.jellypudding.offlineclient.modules.misc.HudModule;
 import com.jellypudding.offlineclient.modules.misc.Latency;
+import com.jellypudding.offlineclient.modules.misc.Webhook;
+import com.jellypudding.offlineclient.modules.movement.Autopilot;
 import com.jellypudding.offlineclient.modules.movement.Fetch;
 import com.jellypudding.offlineclient.modules.movement.Flight;
 import com.jellypudding.offlineclient.modules.movement.Sneak;
@@ -20,14 +28,23 @@ import com.jellypudding.offlineclient.modules.player.AutoExtinguish;
 import com.jellypudding.offlineclient.modules.player.AutoGap;
 import com.jellypudding.offlineclient.modules.player.AutoPotion;
 import com.jellypudding.offlineclient.modules.player.AutoTool;
+import com.jellypudding.offlineclient.modules.player.ChestLink;
+import com.jellypudding.offlineclient.modules.player.NoInteract;
+import com.jellypudding.offlineclient.modules.player.ShulkerPacker;
+import com.jellypudding.offlineclient.modules.render.PearlTracker;
 import com.jellypudding.offlineclient.modules.render.Waypoints;
 import net.minecraft.network.protocol.PacketType;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -87,7 +104,11 @@ public final class Modules {
             return true;
         }
         AutoExtinguish extinguish = get(AutoExtinguish.class);
-        return extinguish != null && extinguish != asker && extinguish.isBusy();
+        if (extinguish != null && extinguish != asker && extinguish.isBusy()) {
+            return true;
+        }
+        AutoPearl pearl = get(AutoPearl.class);
+        return pearl != null && pearl != asker && pearl.isBusy();
     }
 
     // True whilst AutoEat or AutoGap is eating with Pause combat on.
@@ -162,9 +183,58 @@ public final class Modules {
         return autoTool != null && autoTool.holdsBack();
     }
 
+    // True whilst AutoTool keeps the block standing for want of a Silk Touch tool. The hotbar counts
+    // for a packet break and Search inventory counts for a held click.
+    public static boolean toolRefuses(BlockState state, boolean byPacket) {
+        AutoTool autoTool = active(AutoTool.class);
+        return autoTool != null && autoTool.refuses(state, byPacket);
+    }
+
+    // True whilst NoInteract is on and keeps the stack from being thrown away.
+    public static boolean keepsFromThrow(ItemStack stack) {
+        NoInteract noInteract = active(NoInteract.class);
+        return noInteract != null && noInteract.keeps(stack);
+    }
+
+    // True whilst PearlTracker is on and names a pearl after a player who joined or left with it.
+    public static boolean guessesPearlOwners() {
+        PearlTracker tracker = active(PearlTracker.class);
+        return tracker != null && tracker.guessesOwners();
+    }
+
+    // True whilst PearlTracker is on and remembers who owns each stasis pearl.
+    public static boolean remembersPearlOwners() {
+        PearlTracker tracker = active(PearlTracker.class);
+        return tracker != null && tracker.remembersOwners();
+    }
+
+    // The ender chest ChestLink keeps open. Null whilst it keeps none.
+    public static AbstractContainerMenu keptEnderChest() {
+        ChestLink link = active(ChestLink.class);
+        return link == null ? null : link.keptEnderChest();
+    }
+
+    // True whilst ShulkerPacker is on. It keeps track of your stacks as it packs and nothing
+    // else may move them meanwhile.
+    public static boolean packing() {
+        return enabled(ShulkerPacker.class);
+    }
+
     // The sneak key held or Sneak keeping the player down.
     public static boolean sneaking() {
         return OfflineClient.MC.player.isShiftKeyDown() || enabled(Sneak.class);
+    }
+
+    // The entity the first combat module that is on and fighting has picked. Null whilst none
+    // of them has one.
+    public static LivingEntity target() {
+        for (Targeting module : all(Targeting.class)) {
+            LivingEntity target = module.isEnabled() ? module.getTarget() : null;
+            if (target != null) {
+                return target;
+            }
+        }
+        return null;
     }
 
     // True whilst AntiBot is on and takes the entity for a fake player.
@@ -183,6 +253,13 @@ public final class Modules {
     // The server never sent it and it may carry your name and your gear.
     public static boolean isLocalBody(Entity entity) {
         return entity instanceof FakePlayer.Body;
+    }
+
+    // True whilst the HUD is on and its element of this kind is switched on.
+    public static boolean hudShows(Class<? extends HudElement> type) {
+        HudModule hud = active(HudModule.class);
+        return hud != null && hud.getManager().all().stream()
+            .anyMatch(element -> type.isInstance(element) && element.isActive());
     }
 
     // The hue the next saved waypoint takes. The Waypoints module picks it whether or not it
@@ -211,5 +288,42 @@ public final class Modules {
             }
         }
         return all;
+    }
+
+    // How NewChunks judged a chunk of the dimension you are in. Null whilst NewChunks is off
+    // or for a chunk it has not judged.
+    public static NewChunks.Verdict chunkVerdict(int chunkX, int chunkZ) {
+        NewChunks newChunks = active(NewChunks.class);
+        return newChunks == null ? null : newChunks.verdict(ChunkPos.pack(chunkX, chunkZ));
+    }
+
+    // The distance and time an autopilot flight has left for the Info bar. Empty whilst none flies.
+    public static Optional<String> autopilotLeft() {
+        Autopilot autopilot = active(Autopilot.class);
+        return autopilot == null ? Optional.empty() : Optional.ofNullable(autopilot.left());
+    }
+
+    // True whilst BetterChat hides the chat of that player.
+    public static boolean mutes(String name) {
+        BetterChat betterChat = get(BetterChat.class);
+        return betterChat != null && betterChat.mutes(name);
+    }
+
+    // Hands a line to Webhook whilst it is on. It goes out whilst the switch for its kind is on.
+    public static void alert(Webhook.Alert alert, String text) {
+        Webhook webhook = active(Webhook.class);
+        if (webhook != null) {
+            webhook.send(alert, text);
+        }
+    }
+
+    // Switches AutoReconnect off before a planned leave. True when it was on.
+    public static boolean stopReconnecting() {
+        AutoReconnect reconnect = active(AutoReconnect.class);
+        if (reconnect == null) {
+            return false;
+        }
+        reconnect.setEnabled(false);
+        return true;
     }
 }

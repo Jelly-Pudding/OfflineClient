@@ -10,7 +10,7 @@ public final class GamePartElement extends HudElement {
     private final GamePart part;
 
     public GamePartElement(GamePart part) {
-        super(part.label(), part.description(), true, part.usualX(), part.usualY());
+        super(part.label(), part.description(), true, part.usualX(), part.usualY(), Background.NONE);
         this.part = part;
     }
 
@@ -26,6 +26,12 @@ public final class GamePartElement extends HudElement {
     // It may sit flush with the edge as it does at home.
     @Override
     public boolean touchesEdges() {
+        return true;
+    }
+
+    // The game draws its own bars whatever the rest of the overlay does.
+    @Override
+    public boolean staysWhenHidden() {
         return true;
     }
 

@@ -7,8 +7,10 @@ import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.modules.combat.AntiBot;
 import com.jellypudding.offlineclient.modules.combat.Hitboxes;
+import com.jellypudding.offlineclient.modules.misc.Conceal;
 import com.jellypudding.offlineclient.render.BoxStyle;
 import com.jellypudding.offlineclient.render.DrawBatch;
+import com.jellypudding.offlineclient.render.HeightBand;
 import com.jellypudding.offlineclient.render.ModelWireframe;
 import com.jellypudding.offlineclient.render.WorldToScreen;
 import com.jellypudding.offlineclient.setting.BoolSetting;
@@ -73,6 +75,7 @@ public final class Esp extends Module {
         "Also mark your own body in third person.", false);
     private final NumberSetting range = new NumberSetting("Range",
         "Furthest an entity can be and still show.", 128, 16, 256, 8, " blocks").min(1);
+    private final HeightBand band = new HeightBand("entities");
     private final NumberSetting nearFade = new NumberSetting("Near fade",
         "Entities closer than this to the camera fade out.",
         3, 0, 12, 0.5, " blocks").min(0);
@@ -95,8 +98,9 @@ public final class Esp extends Module {
         addSettings(shape.settings());
         addSettings(size, alsoGlow, tracers);
         addSettings(filter.settings());
-        addSettings(ignoreSleeping, ignoreInvisible, ignorePets, armourStands, neutral, self,
-            range, nearFade, highlightTarget, targetColor, targetHitbox, hitboxColor);
+        addSettings(ignoreSleeping, ignoreInvisible, ignorePets, armourStands, neutral, self, range);
+        addSettings(band.settings());
+        addSettings(nearFade, highlightTarget, targetColor, targetHitbox, hitboxColor);
         addSettings(colors.settings());
         searchTags("crystal esp", "wallhack", "boxes", "wireframe");
     }
@@ -220,7 +224,8 @@ public final class Esp extends Module {
 
     // The glow styles work through mixins that pick the targets and set the outline colour.
     public boolean shouldGlow(Entity entity) {
-        return isEnabled() && (style.is(Style.GLOW) || alsoGlow.isOn()) && (matches(entity) || isTarget(entity));
+        return isEnabled() && (style.is(Style.GLOW) || alsoGlow.isOn()) && !Conceal.hides(Conceal.Part.WORLD)
+            && (matches(entity) || isTarget(entity));
     }
 
     public int glowColor(Entity entity) {
@@ -232,7 +237,7 @@ public final class Esp extends Module {
     }
 
     private boolean matches(Entity entity) {
-        if (mc.player == null || mc.player.distanceTo(entity) > range.getValue()) {
+        if (mc.player == null || mc.player.distanceTo(entity) > range.getValue() || !band.contains(entity.getY())) {
             return false;
         }
         if (entity == mc.player) {

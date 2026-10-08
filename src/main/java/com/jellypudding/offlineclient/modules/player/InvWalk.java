@@ -2,8 +2,7 @@ package com.jellypudding.offlineclient.modules.player;
 
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.ClientTickEvent;
-import com.jellypudding.offlineclient.gui.GuiScreenBase;
-import com.jellypudding.offlineclient.gui.ListPickerScreen;
+import com.jellypudding.offlineclient.gui.ClientScreen;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
@@ -11,6 +10,8 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.util.InputUtil;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.components.MultiLineEditBox;
+import net.minecraft.client.gui.components.events.ContainerEventHandler;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.screens.ChatScreen;
 import net.minecraft.client.gui.screens.Screen;
@@ -21,7 +22,7 @@ import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import java.util.ArrayList;
 import java.util.List;
 
-// The real keyboard state is fed into the movement key mappings every tick.
+// The real keyboard state is fed into the movement key mappings every tick whilst a screen allows it.
 public final class InvWalk extends Module {
 
     public enum Screens { INVENTORY, GAME, CLIENT, BOTH }
@@ -39,6 +40,9 @@ public final class InvWalk extends Module {
     private final BoolSetting jump = new BoolSetting("Jump",
         "Also let the jump key work.", true);
 
+    // The mappings set from the keyboard on the last tick. The game sets them itself with no screen open.
+    private List<KeyMapping> fed = List.of();
+
     public InvWalk() {
         super("InvWalk", "Lets you walk about whilst a screen is open.", Category.PLAYER);
         addSettings(screens, sneak, sprint, jump);
@@ -47,7 +51,13 @@ public final class InvWalk extends Module {
 
     @Override
     protected void onDisable() {
-        release();
+        letGo();
+    }
+
+    // Puts up every key it holds. GuiMixin calls this before a screen opens or closes. The game
+    // then sorts out its toggle keys from the keyboard alone.
+    public void letGo() {
+        feed(List.of());
     }
 
     // Read by Sprint. True whilst the sprint key still works in a screen.
@@ -63,20 +73,26 @@ public final class InvWalk extends Module {
 
     @Subscribe
     private void onClientTick(ClientTickEvent event) {
-        if (!inGame()) {
-            return;
-        }
         Screen screen = mc.gui.screen();
-        if (screen == null) {
+        if (!inGame() || screen == null) {
+            fed = List.of();
             return;
         }
-        if (!allows(screen)) {
-            release();
-            return;
+        feed(allows(screen) ? keys() : List.of());
+    }
+
+    // Copies the keyboard into the given mappings. A mapping fed on the last tick and not
+    // on this one goes up once and is then left alone.
+    private void feed(List<KeyMapping> keys) {
+        for (KeyMapping mapping : fed) {
+            if (!keys.contains(mapping)) {
+                InputUtil.setHeld(mapping, false);
+            }
         }
-        for (KeyMapping mapping : keys()) {
-            mapping.setDown(InputUtil.physicallyHeld(mapping));
+        for (KeyMapping mapping : keys) {
+            InputUtil.setHeld(mapping, InputUtil.physicallyHeld(mapping));
         }
+        fed = keys;
     }
 
     // True whilst the screen is one the setting covers and nothing on it is typing.
@@ -84,7 +100,7 @@ public final class InvWalk extends Module {
         if (!walkable(screen)) {
             return false;
         }
-        boolean own = isClientScreen(screen);
+        boolean own = screen instanceof ClientScreen;
         return switch (screens.getValue()) {
             case INVENTORY -> !own && isInventory(screen);
             case GAME -> !own;
@@ -95,29 +111,31 @@ public final class InvWalk extends Module {
 
     // Screens that take typing keep the keyboard to themselves.
     public static boolean walkable(Screen screen) {
-        if (screen instanceof ChatScreen || screen instanceof AbstractSignEditScreen
-            || screen instanceof ListPickerScreen) {
+        if (screen instanceof ChatScreen || screen instanceof AbstractSignEditScreen) {
             return false;
         }
-        if (screen instanceof GuiScreenBase own) {
+        if (screen instanceof ClientScreen own) {
             return !own.isTyping();
         }
-        // The creative screen carries its search box in every tab and only shows it in the search one.
-        boolean creative = screen instanceof CreativeModeInventoryScreen;
-        for (GuiEventListener child : screen.children()) {
-            if (child instanceof EditBox box && (!creative || box.isVisible())) {
-                return false;
+        return !hasTextBox(screen.children(), screen instanceof CreativeModeInventoryScreen);
+    }
+
+    // A box to type in counts even inside a scrolling panel. The creative screen carries its
+    // search box in every tab and only shows it in the search one.
+    private static boolean hasTextBox(List<? extends GuiEventListener> children, boolean creative) {
+        for (GuiEventListener child : children) {
+            if (child instanceof MultiLineEditBox || (child instanceof EditBox box && (!creative || box.isVisible()))) {
+                return true;
+            }
+            if (child instanceof ContainerEventHandler nested && hasTextBox(nested.children(), creative)) {
+                return true;
             }
         }
-        return true;
+        return false;
     }
 
     private static boolean isInventory(Screen screen) {
         return screen instanceof InventoryScreen || screen instanceof CreativeModeInventoryScreen;
-    }
-
-    private static boolean isClientScreen(Screen screen) {
-        return screen instanceof GuiScreenBase || screen instanceof ListPickerScreen;
     }
 
     private List<KeyMapping> keys() {
@@ -133,14 +151,5 @@ public final class InvWalk extends Module {
             keys.add(mc.options.keyJump);
         }
         return keys;
-    }
-
-    private void release() {
-        List<KeyMapping> all = List.of(mc.options.keyUp, mc.options.keyDown,
-            mc.options.keyLeft, mc.options.keyRight, mc.options.keyShift,
-            mc.options.keySprint, mc.options.keyJump);
-        for (KeyMapping mapping : all) {
-            InputUtil.release(mapping);
-        }
     }
 }

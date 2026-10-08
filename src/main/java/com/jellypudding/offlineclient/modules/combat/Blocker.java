@@ -1,20 +1,26 @@
 package com.jellypudding.offlineclient.modules.combat;
 
 import com.jellypudding.offlineclient.event.Subscribe;
+import com.jellypudding.offlineclient.event.events.KeyPressEvent;
 import com.jellypudding.offlineclient.event.events.Render3DEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.render.BoxStyle;
+import com.jellypudding.offlineclient.setting.ActionSetting;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
+import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
+import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.ExplosionUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.SwingMode;
+import com.jellypudding.offlineclient.util.Tally;
+import com.jellypudding.offlineclient.util.WorldWatch;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -23,6 +29,7 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.piston.PistonBaseBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
@@ -32,7 +39,8 @@ import java.util.List;
 import java.util.Set;
 
 // A piston cannot fire through obsidian and a crystal needs an empty block to stand in.
-// Pistons aimed into the hole go first and then the crystal spots that would hurt most.
+// The spots you keep go first then pistons aimed into the hole and then the crystal spots
+// that would hurt most.
 public final class Blocker extends Module {
 
     // Crystal spots are looked for from one below your feet to two above.
@@ -73,19 +81,26 @@ public final class Blocker extends Module {
     private final BoolSetting rotate = new BoolSetting("Rotate",
         "Send a look packet towards each block as it goes down.", true);
     private final EnumSetting<SwingMode> swing = SwingMode.setting(SwingMode.BOTH);
+    private final KeybindSetting keepKey = new KeybindSetting("Keep spot key",
+        "Marks the block you look at and fills it again the moment it breaks.", KeybindSetting.UNBOUND);
+    private final ActionSetting clearSpots = new ActionSetting("Clear spots",
+        "Forgets every spot you marked.", () -> Tally.cleared(clearKept(), "spot"));
     private final BoolSetting render = new BoolSetting("Render",
         "Draws the spots waiting to be filled.", true);
     private final BoxStyle style = new BoxStyle(BoxStyle.Shape.BOTH, 50).under(render);
 
     private final SlotSwap slots = new SlotSwap();
     private List<BlockPos> pending = List.of();
+    // The spots you marked with the keep key. They belong to the world they were marked in.
+    private final Set<BlockPos> kept = new LinkedHashSet<>();
+    private final WorldWatch world = new WorldWatch();
     private int timer;
 
     public Blocker() {
         super("Blocker", "Fills the spots around your hole that crystals and pistons would use.",
             Category.COMBAT);
-        addSettings(blocks, onlyInHole, crystals, minDamage, radius, enemyRange, pistons, placeRange,
-            perRound, delay, rotate, swing, render);
+        addSettings(blocks, onlyInHole, crystals, minDamage, radius, enemyRange, pistons, keepKey, clearSpots,
+            placeRange, perRound, delay, rotate, swing, render);
         addSettings(style.settings());
         searchTags("anti crystal", "anti piston", "face place", "hole");
     }
@@ -114,16 +129,19 @@ public final class Blocker extends Module {
         if (!inGame() || mc.player.isSpectator() || mc.player.isDeadOrDying()) {
             return;
         }
-        if (onlyInHole.isOn() && !BlockUtil.playerInHole()) {
-            slots.restore();
-            return;
-        }
+        syncWorld();
         Set<BlockPos> spots = new LinkedHashSet<>();
-        if (pistons.isOn()) {
-            pistonSpots(spots);
+        for (BlockPos pos : kept) {
+            addFillable(spots, pos);
         }
-        if (crystals.isOn() && enemyNear()) {
-            crystalSpots(spots);
+        // Kept spots are filled wherever you stand. The rest wait for a hole whilst Only in holes is on.
+        if (!onlyInHole.isOn() || BlockUtil.playerInHole()) {
+            if (pistons.isOn()) {
+                pistonSpots(spots);
+            }
+            if (crystals.isOn() && enemyNear()) {
+                crystalSpots(spots);
+            }
         }
         pending = new ArrayList<>(spots);
         if (pending.isEmpty()) {
@@ -158,6 +176,38 @@ public final class Blocker extends Module {
             timer = delay.getInt();
         }
         slots.restore();
+    }
+
+    @Subscribe
+    private void onKeyPress(KeyPressEvent event) {
+        if (!event.presses(keepKey) || !inGame() || mc.gui.screen() != null) {
+            return;
+        }
+        BlockHitResult hit = BlockUtil.aimedBlock();
+        if (hit == null) {
+            return;
+        }
+        BlockPos pos = hit.getBlockPos().immutable();
+        syncWorld();
+        if (kept.remove(pos)) {
+            ChatUtil.message("§bBlocker §7forgot the spot at §f" + BlockUtil.text(pos) + "§7.");
+        } else {
+            kept.add(pos);
+            ChatUtil.message("§bBlocker §7keeps the spot at §f" + BlockUtil.text(pos) + "§7 filled.");
+        }
+    }
+
+    // Spots marked in another world point at nothing here.
+    private void syncWorld() {
+        if (world.changed()) {
+            kept.clear();
+        }
+    }
+
+    private int clearKept() {
+        int count = kept.size();
+        kept.clear();
+        return count;
     }
 
     private boolean enemyNear() {
@@ -224,5 +274,8 @@ public final class Blocker extends Module {
             return;
         }
         style.drawAll(event.getBatch(), pending, false);
+        for (BlockPos pos : kept) {
+            event.getBatch().outlineBlock(pos, style.lineColor(), false);
+        }
     }
 }

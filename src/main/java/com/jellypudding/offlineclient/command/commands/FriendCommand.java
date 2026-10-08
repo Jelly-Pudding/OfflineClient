@@ -2,20 +2,22 @@ package com.jellypudding.offlineclient.command.commands;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.command.Command;
-import com.jellypudding.offlineclient.friend.FriendManager;
-import com.jellypudding.offlineclient.util.ChatUtil;
-
-import java.util.Locale;
 import com.jellypudding.offlineclient.command.CommandManager;
+import com.jellypudding.offlineclient.friend.FriendManager;
+import com.jellypudding.offlineclient.modules.misc.SecretChat;
+import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.client.player.AbstractClientPlayer;
+
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 public final class FriendCommand extends Command {
 
     public FriendCommand() {
         super("friend", "Manages your friends list. Friends are never targeted by combat modules.",
-            "friend <add|remove|list> [name]", "f");
+            "friend <add|remove|list|ping> [name]", "f");
     }
 
     @Override
@@ -27,6 +29,15 @@ public final class FriendCommand extends Command {
                 ChatUtil.message("§7Your friends list is empty.");
             } else {
                 ChatUtil.message("§3Friends §b" + String.join("§7 §b", friends.getAll()));
+            }
+            return;
+        }
+
+        // A ping with no name goes to every friend online.
+        if (args.length >= 1 && args.length <= 2 && args[0].equalsIgnoreCase("ping")) {
+            SecretChat secretChat = Modules.get(SecretChat.class);
+            if (secretChat != null) {
+                ChatUtil.message("§7" + secretChat.ping(args.length == 2 ? args[1] : null) + ".");
             }
             return;
         }
@@ -65,7 +76,7 @@ public final class FriendCommand extends Command {
     @Override
     public List<String> complete(String[] tokens, int index, String current) {
         if (index == 1) {
-            return CommandManager.filter(current, List.of("add", "remove", "list"));
+            return CommandManager.filter(current, List.of("add", "remove", "list", "ping"));
         }
         if (index != 2) {
             return List.of();
@@ -73,6 +84,10 @@ public final class FriendCommand extends Command {
         FriendManager friends = OfflineClient.INSTANCE.getFriendManager();
         if (tokens[1].equalsIgnoreCase("remove")) {
             return CommandManager.filter(current, new ArrayList<>(friends.getAll()));
+        }
+        if (tokens[1].equalsIgnoreCase("ping")) {
+            SecretChat secretChat = Modules.get(SecretChat.class);
+            return secretChat == null ? List.of() : CommandManager.filter(current, secretChat.onlineFriends());
         }
         if (!tokens[1].equalsIgnoreCase("add") || OfflineClient.MC.level == null) {
             return List.of();

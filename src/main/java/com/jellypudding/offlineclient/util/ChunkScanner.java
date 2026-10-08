@@ -129,8 +129,9 @@ public final class ChunkScanner<T> {
 
     // How many chunks out from the scanned one each view reaches.
     private final int reach;
-    // A block changed this close to a chunk border also rescans the chunk across it.
-    private int border;
+    // A block changed this close to a chunk border also rescans the chunk across it. Read on the
+    // network thread.
+    private volatile int border;
     private final Map<ChunkPos, List<T>> results = new HashMap<>();
     private final Map<ChunkPos, Future<List<T>>> pending = new HashMap<>();
     // Chunks scanned whilst part of their window was missing.
@@ -192,8 +193,12 @@ public final class ChunkScanner<T> {
 
     // The chunk of a changed block and every chunk across a border it lies close to.
     private void changedAt(BlockPos pos) {
-        for (int x = (pos.getX() - border) >> 4; x <= (pos.getX() + border) >> 4; x++) {
-            for (int z = (pos.getZ() - border) >> 4; z <= (pos.getZ() + border) >> 4; z++) {
+        int west = SectionPos.blockToSectionCoord(pos.getX() - border);
+        int east = SectionPos.blockToSectionCoord(pos.getX() + border);
+        int north = SectionPos.blockToSectionCoord(pos.getZ() - border);
+        int south = SectionPos.blockToSectionCoord(pos.getZ() + border);
+        for (int x = west; x <= east; x++) {
+            for (int z = north; z <= south; z++) {
                 changed.add(new ChunkPos(x, z));
             }
         }

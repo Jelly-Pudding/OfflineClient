@@ -364,13 +364,9 @@ public final class Notebot extends Module {
     private Map<Note, List<BlockPos>> findNoteBlocks() {
         Map<Note, List<BlockPos>> found = new LinkedHashMap<>();
         scanned.clear();
-        double reach = mc.player.blockInteractionRange();
-        for (BlockPos pos : BlockUtil.positionsWithin(reach + 1)) {
+        for (BlockPos pos : BlockUtil.positionsWithin(BlockUtil.serverReachLimit())) {
             BlockState state = BlockUtil.state(pos);
             if (!state.is(Blocks.NOTE_BLOCK) || !BlockUtil.state(pos.above()).isAir()) {
-                continue;
-            }
-            if (!mc.player.isWithinBlockInteractionRange(pos, 1)) {
                 continue;
             }
             scanned.add(pos.immutable());

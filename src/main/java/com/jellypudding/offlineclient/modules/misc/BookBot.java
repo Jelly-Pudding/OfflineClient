@@ -11,21 +11,25 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.TextSetting;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
+import com.jellypudding.offlineclient.util.MenuClicks;
+import com.jellypudding.offlineclient.util.Recipes;
 import net.minecraft.client.gui.screens.inventory.BookEditScreen;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.FormattedText;
 import net.minecraft.network.protocol.game.ServerboundEditBookPacket;
+import net.minecraft.world.entity.player.StackedItemContents;
+import net.minecraft.world.inventory.InventoryMenu;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.component.WritableBookContent;
 import net.minecraft.world.item.component.WrittenBookContent;
 
-import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
 
@@ -47,6 +51,9 @@ public final class BookBot extends Module {
 
     // Lines of text on one book page.
     private static final int PAGE_LINES = 14;
+
+    // Ticks the server is given to write a book or fill the crafting grid.
+    private static final int SERVER_WAIT = 40;
 
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
         "Where the text comes from.", Mode.RANDOM)
@@ -79,15 +86,26 @@ public final class BookBot extends Module {
         "Title given to a signed book.", "Offline").under(sign);
     private final BoolSetting number = new BoolSetting("Number books",
         "Adds the book count to each title.", true).under(sign);
+    private final BoolSetting dropWhenDone = new BoolSetting("Drop when done",
+        "Throws each book on the ground once it is written.", false);
+    private final BoolSetting craftQuills = new BoolSetting("Craft quills",
+        "Crafts a book and quill in your inventory when you run out.", false);
 
     private final InventoryUtil.HotbarLoan loan = new InventoryUtil.HotbarLoan();
     private final Random random = new Random();
     private int timer;
     private int written;
+    // The inventory slot of the book last sent until the server writes it. Minus one whilst none.
+    private int awaiting = -1;
+    private int awaitTicks;
+    // True from a recipe request until its result shows in the grid.
+    private boolean crafting;
+    private int craftTicks;
 
     public BookBot() {
         super("BookBot", "Writes book after book for you.", Category.MISC);
-        addSettings(mode, file, characters, pages, perPage, wordWrap, delay, sign, title, number);
+        addSettings(mode, file, characters, pages, perPage, wordWrap, delay, sign, title, number,
+            dropWhenDone, craftQuills);
         searchTags("book and quill", "write books");
     }
 
@@ -100,6 +118,8 @@ public final class BookBot extends Module {
     protected void onEnable() {
         timer = delay.getInt();
         written = 0;
+        awaiting = -1;
+        crafting = false;
     }
 
     @Override
@@ -112,14 +132,21 @@ public final class BookBot extends Module {
         if (!inGame() || mc.gui.screen() != null) {
             return;
         }
+        if (awaiting != -1) {
+            settle();
+            return;
+        }
         if (!isBlankBook(mc.player.getMainHandItem())) {
             int slot = InventoryUtil.findSlot(BookBot::isBlankBook, InventoryUtil.WHOLE_INVENTORY);
-            if (slot == -1) {
-                ChatUtil.message("§bBookBot §7has no blank books left.");
-                setEnabled(false);
+            if (slot != -1) {
+                loan.select(slot);
                 return;
             }
-            loan.select(slot);
+            if (craftQuills.isOn() && craftQuill()) {
+                return;
+            }
+            ChatUtil.message("§bBookBot §7has no blank books left.");
+            setEnabled(false);
             return;
         }
         if (timer > 0) {
@@ -133,6 +160,76 @@ public final class BookBot extends Module {
             return;
         }
         send(text);
+    }
+
+    // The server writes a book a moment after the packet. Once it shows written it can be thrown.
+    // A book still blank after the wait was refused and is written again. Anything else moved
+    // into the slot meanwhile stays.
+    private void settle() {
+        ItemStack book = mc.player.getInventory().getItem(awaiting);
+        if (!isBlankBook(book)) {
+            if (dropWhenDone.isOn() && (book.is(Items.WRITTEN_BOOK) || book.is(Items.WRITABLE_BOOK))) {
+                InventoryUtil.throwFrom(awaiting);
+            }
+            awaiting = -1;
+        } else if (++awaitTicks > SERVER_WAIT) {
+            awaiting = -1;
+        }
+    }
+
+    // One step of crafting a book and quill in the inventory grid. A book is crafted first when
+    // it is the only thing missing. False when there is nothing to craft one from.
+    private boolean craftQuill() {
+        InventoryMenu menu = mc.player.inventoryMenu;
+        if (!InventoryUtil.cursorFree()) {
+            return false;
+        }
+        boolean roomy = mc.player.getInventory().getFreeSlot() != -1;
+        // The server sends the result first and the grid a moment later.
+        if (crafting) {
+            if (menu.getResultSlot().hasItem() && Recipes.gridFilled(menu) && roomy) {
+                MenuClicks.quickMove(menu, menu.getResultSlot().index);
+                crafting = false;
+            } else if (++craftTicks > SERVER_WAIT) {
+                disable(roomy ? "The server crafted nothing for BookBot." : "BookBot has no room for what it crafted.");
+            }
+            return true;
+        }
+        if (Recipes.gridFilled(menu)) {
+            disable("BookBot needs the crafting grid of your inventory empty.");
+            return true;
+        }
+        Recipes.Craft craft = nextCraft(menu);
+        if (craft == null) {
+            return false;
+        }
+        if (!roomy) {
+            disable("BookBot has no room to craft a book and quill.");
+            return true;
+        }
+        Recipes.placeOne(menu, craft);
+        crafting = true;
+        craftTicks = 0;
+        return true;
+    }
+
+    // A book and quill when the inventory holds what it takes. Otherwise a book when that book is
+    // all a book and quill still lacks. Null when neither can be crafted.
+    private static Recipes.Craft nextCraft(InventoryMenu menu) {
+        Map<Item, List<Recipes.Craft>> known = Recipes.known(item -> item == Items.WRITABLE_BOOK
+            || item == Items.BOOK);
+        List<Recipes.Craft> quills = known.getOrDefault(Items.WRITABLE_BOOK, List.of());
+        StackedItemContents carried = Recipes.carried();
+        Recipes.Craft quill = Recipes.craftable(quills, menu, carried);
+        if (quill != null) {
+            return quill;
+        }
+        StackedItemContents withBook = Recipes.carried();
+        withBook.accountStack(new ItemStack(Items.BOOK));
+        if (Recipes.craftable(quills, menu, withBook) == null) {
+            return null;
+        }
+        return Recipes.craftable(known.getOrDefault(Items.BOOK, List.of()), menu, carried);
     }
 
     private static boolean isBlankBook(ItemStack stack) {
@@ -197,18 +294,16 @@ public final class BookBot extends Module {
     // Null when the file cannot be read. A message says why.
     private List<String> fromFile() {
         Path path = DataFiles.path(file.getValue());
-        String text;
-        try {
-            text = Files.readString(path);
-        } catch (IOException e) {
+        Optional<String> text = DataFiles.readText(path);
+        if (text.isEmpty()) {
             ChatUtil.error("Could not read " + path.getFileName() + " from the offlineclient folder.");
             return null;
         }
-        if (text.isBlank()) {
+        if (text.get().isBlank()) {
             ChatUtil.error(path.getFileName() + " is empty.");
             return null;
         }
-        return wordWrap.isOn() ? wrapPages(text) : cutPages(text);
+        return wordWrap.isOn() ? wrapPages(text.get()) : cutPages(text.get());
     }
 
     // The game's own line breaking decides where each page ends.
@@ -253,8 +348,9 @@ public final class BookBot extends Module {
         int room = WrittenBookContent.TITLE_MAX_LENGTH - count.length();
         String name = (base.length() > room ? base.substring(0, room) : base) + count;
         Optional<String> signed = sign.isOn() ? Optional.of(name) : Optional.empty();
-        mc.player.connection.send(new ServerboundEditBookPacket(
-            InventoryUtil.selectedSlot(), text, signed));
+        awaiting = InventoryUtil.selectedSlot();
+        awaitTicks = 0;
+        mc.player.connection.send(new ServerboundEditBookPacket(awaiting, text, signed));
         written++;
     }
 }

@@ -57,7 +57,7 @@ public final class DamageCommand extends Command {
         BlockPos pos = hit.getBlockPos().above();
         Vec3 source = kind.equals("crystal")
             ? new Vec3(pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5) : Vec3.atCenterOf(pos);
-        ChatUtil.message("§7You would take §b" + hearts(
+        ChatUtil.message("§7You would take §b" + EntityUtil.hearts(
             ExplosionUtil.blastDamage(player, source, power)));
         Player target = EntityUtil.nearestEnemy(TARGET_RANGE);
         if (target == null) {
@@ -65,11 +65,7 @@ public final class DamageCommand extends Command {
             return;
         }
         ChatUtil.message("§b" + EntityUtil.nameOf(target) + " §7would take §b"
-            + hearts(ExplosionUtil.blastDamage(target, source, power)));
-    }
-
-    private static String hearts(float damage) {
-        return String.format(Locale.ROOT, "%.1f", damage / EntityUtil.HEART) + " hearts";
+            + EntityUtil.hearts(ExplosionUtil.blastDamage(target, source, power)));
     }
 
     @Override

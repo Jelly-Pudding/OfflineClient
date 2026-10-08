@@ -35,6 +35,7 @@ import com.jellypudding.offlineclient.worldgen.SpawnerRooms.Room;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.SectionPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.network.protocol.game.ClientboundBlockEventPacket;
@@ -279,6 +280,8 @@ public final class SpawnerFinder extends Module implements FindSource {
         "Colour of dungeons and spider corridors.", 220, false).under(minedSpawners);
     private final BoolSetting wakeRange = new BoolSetting("Wake range",
         "Draws a ball round each marked spawner as far out as a player must come to wake it.", false);
+    private final BoolSetting everySpawner = new BoolSetting("Every spawner",
+        "Also draws the ball round every loaded spawner whether it is marked or not.", false).under(wakeRange);
     private final ColorSetting wakeColor = new ColorSetting("Wake range colour",
         "Colour of the ball round each spawner.", 195, false).under(wakeRange);
     private final FindLog finds = new FindLog(this);
@@ -310,7 +313,7 @@ public final class SpawnerFinder extends Module implements FindSource {
         addSettings(notice.settings());
         addSettings(alarm.settings());
         addSettings(style.settings());
-        addSettings(spawnerColor, trialColor, litColor, roomColor, wakeRange, wakeColor);
+        addSettings(spawnerColor, trialColor, litColor, roomColor, wakeRange, everySpawner, wakeColor);
         addSettings(marks.settings());
         addSettings(FindsScreen.settingsFor(finds));
         searchTags("spawner", "activated spawner", "dungeon", "trial spawner", "stash", "spider corridor",
@@ -515,7 +518,7 @@ public final class SpawnerFinder extends Module implements FindSource {
         for (Survey survey : List.copyOf(surveys)) {
             if (!watch.complete(survey)) {
                 survey.readyAt = -1;
-                boolean gone = !mc.level.hasChunk(survey.pos.getX() >> 4, survey.pos.getZ() >> 4);
+                boolean gone = !mc.level.isLoaded(survey.pos);
                 // An untouched spawner waits for as long as it is loaded.
                 if (gone && survey.evidence == null) {
                     surveys.remove(survey);
@@ -628,8 +631,12 @@ public final class SpawnerFinder extends Module implements FindSource {
         Tally stored = new Tally();
         int reach = arrival.reach;
         double reachSqr = (double) reach * reach;
-        for (int cx = (pos.getX() - reach) >> 4; cx <= (pos.getX() + reach) >> 4; cx++) {
-            for (int cz = (pos.getZ() - reach) >> 4; cz <= (pos.getZ() + reach) >> 4; cz++) {
+        int west = SectionPos.blockToSectionCoord(pos.getX() - reach);
+        int east = SectionPos.blockToSectionCoord(pos.getX() + reach);
+        int north = SectionPos.blockToSectionCoord(pos.getZ() - reach);
+        int south = SectionPos.blockToSectionCoord(pos.getZ() + reach);
+        for (int cx = west; cx <= east; cx++) {
+            for (int cz = north; cz <= south; cz++) {
                 LevelChunk chunk = mc.level.getChunkSource().getChunk(cx, cz, ChunkStatus.FULL, false);
                 if (chunk == null) {
                     continue;
@@ -767,6 +774,7 @@ public final class SpawnerFinder extends Module implements FindSource {
         DrawBatch batch = event.getBatch();
         List<FindLog.Find> visible = visible();
         refreshRoomBoxes();
+        boolean everyBall = wakeRange.isOn() && everySpawner.isOn();
         for (FindLog.Find find : visible) {
             if (!marks.inDrawRange(find)) {
                 continue;
@@ -775,8 +783,14 @@ public final class SpawnerFinder extends Module implements FindSource {
             Room room = kind.evidence().ofSpawner() ? null : roomsByKey.get(find.pos().asLong());
             AABB box = room == null ? DrawBatch.blockBox(find.pos()) : room.box();
             style.draw(batch, box, colorOf(kind), true);
-            if (wakeRange.isOn() && kind.evidence().ofSpawner()) {
+            if (wakeRange.isOn() && !everyBall && kind.evidence().ofSpawner()) {
                 drawRange(batch, find.pos());
+            }
+        }
+        // The watch holds only spawners whose chunk is loaded.
+        if (everyBall) {
+            for (Map.Entry<Long, Arrival> entry : watch.loaded.entrySet()) {
+                ball(batch, BlockPos.of(entry.getKey()), entry.getValue());
             }
         }
         marks.draw(batch, visible, find -> colorOf(Kind.parse(find.kind())));
@@ -798,8 +812,12 @@ public final class SpawnerFinder extends Module implements FindSource {
     private void drawRange(DrawBatch batch, BlockPos pos) {
         Arrival arrival = watch.arrivalAt(pos);
         if (arrival != null) {
-            batch.sphere(Vec3.atCenterOf(pos), arrival.reach, wakeColor.getColor(), true);
+            ball(batch, pos, arrival);
         }
+    }
+
+    private void ball(DrawBatch batch, BlockPos pos, Arrival arrival) {
+        batch.sphere(Vec3.atCenterOf(pos), arrival.reach, wakeColor.getColor(), true);
     }
 
     // Keeps the readings of every loaded spawner whether or not the module is on. A spawner
@@ -929,7 +947,7 @@ public final class SpawnerFinder extends Module implements FindSource {
                 double reach = arrival.reach + REACH_SLACK;
                 if (!(blockEntity instanceof SpawnerBlockEntity) && !(blockEntity instanceof TrialSpawnerBlockEntity)) {
                     // A spawner broken whilst its chunk stays loaded and you stand away is someone else's work.
-                    if (mc.level.hasChunk(pos.getX() >> 4, pos.getZ() >> 4) && ticksWithin(pos, reach, LIVE_TICKS) == 0
+                    if (mc.level.isLoaded(pos) && ticksWithin(pos, reach, LIVE_TICKS) == 0
                         && !OwnDigs.anyIn(new AABB(pos))) {
                         ledger.takenByOthers(entry.getKey());
                     }

@@ -9,6 +9,7 @@ import com.jellypudding.offlineclient.event.events.ClientTickEvent;
 import com.jellypudding.offlineclient.event.events.EntityAddedEvent;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.ClientLines;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.Tally;
@@ -301,6 +302,10 @@ public final class HologramCommand extends Command {
 
         private void finish() {
             OfflineClient.INSTANCE.getEventBus().unregister(this);
+            ClientLines.inChat(this::report);
+        }
+
+        private void report() {
             if (arrived == expected) {
                 ChatUtil.message(expected == 1
                     ? "§7Placed the hologram." : "§7Placed " + Tally.counted(expected, "line") + ".");

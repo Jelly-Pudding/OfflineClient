@@ -8,6 +8,7 @@ import net.minecraft.network.chat.Style;
 import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.function.UnaryOperator;
 import java.util.regex.Pattern;
 
 // Styled text a player types in one line of chat. An ampersand and a colour or format code styles
@@ -32,14 +33,20 @@ public final class TextMarkup {
     }
 
     public static List<Component> lines(String markup) {
+        return lines(markup, UnaryOperator.identity());
+    }
+
+    // Each run of words goes through fill once the codes are read. Whatever fill writes is
+    // never read as a code or a line break.
+    public static List<Component> lines(String markup, UnaryOperator<String> fill) {
         List<Component> lines = new ArrayList<>();
         for (String line : LINE_BREAK.split(markup, -1)) {
-            lines.add(line(line));
+            lines.add(line(line, fill));
         }
         return lines;
     }
 
-    private static Component line(String text) {
+    private static Component line(String text, UnaryOperator<String> fill) {
         MutableComponent line = Component.empty();
         Style style = Style.EMPTY;
         StringBuilder run = new StringBuilder();
@@ -51,11 +58,11 @@ public final class TextMarkup {
                 at++;
                 continue;
             }
-            addRun(line, run, style);
+            addRun(line, run, style, fill);
             style = code.style();
             at += code.length();
         }
-        addRun(line, run, style);
+        addRun(line, run, style, fill);
         return line;
     }
 
@@ -81,10 +88,11 @@ public final class TextMarkup {
         return new Code(Style.EMPTY.withColor(HexFormat.fromHexDigits(digits)), end - at);
     }
 
-    private static void addRun(MutableComponent line, StringBuilder run, Style style) {
-        if (!run.isEmpty()) {
-            line.append(Component.literal(run.toString()).setStyle(style));
-            run.setLength(0);
+    private static void addRun(MutableComponent line, StringBuilder run, Style style, UnaryOperator<String> fill) {
+        String words = fill.apply(run.toString());
+        if (!words.isEmpty()) {
+            line.append(Component.literal(words).setStyle(style));
         }
+        run.setLength(0);
     }
 }

@@ -6,6 +6,7 @@ import com.jellypudding.offlineclient.config.SpongeSchematic;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.ClientLines;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
@@ -38,7 +39,7 @@ public final class ExportCommand extends Command {
     private static Export running;
 
     public ExportCommand() {
-        super("export", "Saves the loaded blocks around you to a schematic for WorldEdit and Litematica.",
+        super("export", "Saves the loaded blocks around you to a schematic file.",
             "export <name> <radius> or export <name> <x y z> <x y z>", "schem");
     }
 
@@ -129,7 +130,7 @@ public final class ExportCommand extends Command {
         int lastZ = SectionPos.blockToSectionCoord(max.getZ());
         for (int x = SectionPos.blockToSectionCoord(min.getX()); x <= lastX; x++) {
             for (int z = SectionPos.blockToSectionCoord(min.getZ()); z <= lastZ; z++) {
-                if (!level.hasChunk(x, z)) {
+                if (!level.getChunkSource().hasChunk(x, z)) {
                     missing++;
                 }
             }
@@ -169,7 +170,8 @@ public final class ExportCommand extends Command {
             if (OfflineClient.MC.level != level) {
                 stop();
                 running = null;
-                ChatUtil.error("The export of " + name + " stopped when you left that world.");
+                ClientLines.inChat(() -> ChatUtil.error("The export of " + name
+                    + " stopped when you left that world."));
                 return;
             }
             long deadline = System.nanoTime() + SLICE_NANOS;
@@ -214,7 +216,7 @@ public final class ExportCommand extends Command {
             Path file = SpongeSchematic.file(name);
             Util.ioPool().execute(() -> {
                 boolean saved = SpongeSchematic.write(root, file);
-                OfflineClient.MC.execute(() -> finished(file, saved));
+                ClientLines.inChatLater(() -> finished(file, saved));
             });
         }
 

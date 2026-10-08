@@ -3,6 +3,8 @@ package com.jellypudding.offlineclient.mixin;
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.events.KeyPressEvent;
 import com.jellypudding.offlineclient.setting.KeybindSetting;
+import com.jellypudding.offlineclient.util.InputUtil;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.KeyboardHandler;
 import net.minecraft.client.input.KeyEvent;
 import org.spongepowered.asm.mixin.Mixin;
@@ -18,6 +20,11 @@ public class KeyboardHandlerMixin {
     private void onKeyPress(long windowHandle, int action, KeyEvent event, CallbackInfo ci) {
         // An unbound keybind holds this same value.
         if (event.key() == KeybindSetting.UNBOUND) {
+            return;
+        }
+        // A debug combo belongs to the game. Any other key pressed with the debug key held still
+        // comes through like the debug key itself and every release.
+        if (action == InputConstants.PRESS && InputUtil.isDebugCombo(event)) {
             return;
         }
         if (OfflineClient.INSTANCE.getEventBus().post(new KeyPressEvent(event.key(), action)).isCancelled()) {

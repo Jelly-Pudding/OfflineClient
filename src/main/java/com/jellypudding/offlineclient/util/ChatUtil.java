@@ -2,6 +2,8 @@ package com.jellypudding.offlineclient.util;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.modules.misc.ClickGuiModule;
+import com.jellypudding.offlineclient.setting.Defaults;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.components.ChatComponent;
 import net.minecraft.client.multiplayer.ClientPacketListener;
@@ -37,6 +39,8 @@ public final class ChatUtil {
 
     // About a screen of chat. Longer text is best shown folded behind a click that copies it.
     public static final int LONGEST_SHOWN = 1000;
+
+    private static int written;
 
     private ChatUtil() {
     }
@@ -105,10 +109,40 @@ public final class ChatUtil {
     // Coordinates that walk there with the goto command when clicked.
     public static Component walkLink(BlockPos pos) {
         String spot = BlockUtil.text(pos);
-        String command = OfflineClient.INSTANCE.getCommandManager().getPrefix() + "goto " + spot;
-        return Component.literal(spot).withStyle(style -> style.withColor(ChatFormatting.WHITE)
-            .withClickEvent(new ClickEvent.RunCommand(command))
-            .withHoverEvent(new HoverEvent.ShowText(Component.literal("Click to walk there"))));
+        return commandLink("§f" + spot, "goto " + spot, "Click to walk there");
+    }
+
+    // Coordinates that walk there whilst the spot is in the dimension you are in. Elsewhere they
+    // are plain text.
+    public static Component walkLink(BlockPos pos, String dimension) {
+        return dimension.equals(ServerInfo.dimension()) ? walkLink(pos) : Component.literal("§f" + BlockUtil.text(pos));
+    }
+
+    // Text that runs one of our own commands when clicked. The command is written without the prefix.
+    public static Component commandLink(String shown, String command, String hover) {
+        String typed = OfflineClient.INSTANCE.getCommandManager().getPrefix() + command;
+        return Component.literal(shown).withStyle(style -> style
+            .withClickEvent(new ClickEvent.RunCommand(typed))
+            .withHoverEvent(new HoverEvent.ShowText(Component.literal(hover))));
+    }
+
+    // A line about a reset with a link after it that takes the reset back.
+    public static void undoable(String line, Defaults.Change change) {
+        component(Component.literal(line + " ").append(
+            commandLink("§8[§7undo§8]", "reset undo " + change.id(), "Click to undo")));
+    }
+
+    // What an undo did. Null stands for nothing left to undo.
+    public static void undone(Defaults.Undone undone) {
+        if (undone == null) {
+            message("§7There is no reset to undo.");
+        } else if (undone.restored() == 0) {
+            message("§7Nothing came back. Each one has changed since.");
+        } else {
+            String kept = undone.kept() == 0 ? ""
+                : " §8Kept " + Tally.counted(undone.kept(), "newer change") + ".";
+            message("§7Brought back what §b" + undone.name() + "§7 had." + kept);
+        }
     }
 
     // Clicking the shown text copies the other text.
@@ -183,6 +217,11 @@ public final class ChatUtil {
         return (VOWELS.indexOf(Character.toUpperCase(noun.charAt(0))) >= 0 ? "an " : "a ") + noun;
     }
 
+    // The words with a capital first letter such as A zombie.
+    public static String capitalised(String words) {
+        return words.isEmpty() ? words : Character.toUpperCase(words.charAt(0)) + words.substring(1);
+    }
+
     // The path of a game id in words such as oak door. It reads the id alone and is safe on any thread.
     public static String words(Identifier id) {
         return id == null ? "unknown" : id.getPath().replace('_', ' ');
@@ -202,6 +241,10 @@ public final class ChatUtil {
     }
 
     public static void toggled(Module module) {
+        ClickGuiModule gui = Modules.get(ClickGuiModule.class);
+        if (gui != null && !gui.showsToggleMessages()) {
+            return;
+        }
         message("§b" + module.getName() + " §7is now "
             + (module.isEnabled() ? "§aenabled" : "§cdisabled") + "§7.");
     }
@@ -226,18 +269,21 @@ public final class ChatUtil {
         return Character.isLetterOrDigit(c) || c == '_';
     }
 
-    // The newest line in chat or null when chat is empty. Reading it before and after some
-    // work tells whether the work wrote a line.
-    public static GuiMessage newestLine() {
-        List<GuiMessage> all = OfflineClient.MC.gui.hud.getChat().allMessages;
-        return all.isEmpty() ? null : all.getFirst();
+    // How many lines the client has written to the chat or its own panel. Reading it before and
+    // after some work tells whether the work wrote a line.
+    public static int written() {
+        return written;
     }
 
     public static void component(Component component) {
         if (OfflineClient.MC.player == null) {
             return;
         }
-        OfflineClient.MC.gui.hud.getChat()
-            .addClientSystemMessage(Component.literal(PREFIX).append(component));
+        written++;
+        Component line = Component.literal(PREFIX).append(component);
+        // BetterChat can send the client's own lines to their piece of the HUD instead.
+        if (!ClientLines.take(line)) {
+            OfflineClient.MC.gui.hud.getChat().addClientSystemMessage(line);
+        }
     }
 }

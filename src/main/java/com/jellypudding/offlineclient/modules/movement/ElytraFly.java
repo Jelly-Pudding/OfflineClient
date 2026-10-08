@@ -23,6 +23,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Input;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -50,6 +51,8 @@ public final class ElytraFly extends Module {
     private static final double STALL_FRACTION = 0.5;
 
     private static final double LOW_DURABILITY = 0.05;
+    // Twice the guard leaves an elytra at least twenty seconds of help to come down with.
+    private static final double WEARING_OUT = LOW_DURABILITY * 2;
 
     private static final double TAKE_OFF_CLEARANCE = 3;
 
@@ -214,7 +217,8 @@ public final class ElytraFly extends Module {
     private final BoolSetting replaceElytra = new BoolSetting("Replace elytra",
         "Swaps in a fresher elytra from your inventory once the worn one runs low.", false);
     private final NumberSetting replaceAt = new NumberSetting("Replace at",
-        "Swaps once the worn elytra has this much durability left.", 10, 1, 50, 1, "%").min(1).max(99)
+        "Swaps once the worn elytra has this much durability left. Below five percent Durability guard"
+            + " stops helping first.", 10, 1, 50, 1, "%").min(1).max(99)
         .under(replaceElytra);
     private final BoolSetting durabilityGuard = new BoolSetting("Durability guard",
         "Stops helping and warns you when the elytra is nearly broken.", true);
@@ -239,6 +243,11 @@ public final class ElytraFly extends Module {
     private double savedFovScale = -1;
     // Set once a Bounce pull back has waited out its delay.
     private boolean reopen;
+
+    // The heading and height the autopilot last asked for and the tick it asked.
+    private float steerYaw;
+    private double steerHeight;
+    private int steerTick = Integer.MIN_VALUE;
 
     // Runs on after the module is off until the glide has ended.
     private final Object dropWatcher = new Object() {
@@ -322,6 +331,50 @@ public final class ElytraFly extends Module {
         return mode.is(Mode.CRUISE);
     }
 
+    // The autopilot calls this each tick it flies you. Cruise takes the heading and the height
+    // and Bounce takes the heading. The other modes go by the keys the autopilot holds.
+    public void steer(float yaw, double height) {
+        steerYaw = yaw;
+        steerHeight = height;
+        steerTick = mc.player.tickCount;
+    }
+
+    // True whilst the mode keeps its own height. The autopilot leaves jump and sneak alone then.
+    public boolean keepsOwnHeight() {
+        return mode.isAny(Mode.CRUISE, Mode.BOUNCE);
+    }
+
+    // True whilst the mode holds forward and jump itself. The autopilot only turns the view then.
+    public boolean holdsOwnKeys() {
+        return mode.is(Mode.BOUNCE);
+    }
+
+    // True whilst Chest swap is set and a glider in your bag can go on. The autopilot starts on it.
+    public boolean swapsGliderOn() {
+        return !chestSwap.is(ChestSwapMode.NEVER) && InventoryUtil.findSlot(
+            stack -> LivingEntity.canGlideUsing(stack, EquipmentSlot.CHEST), InventoryUtil.WHOLE_INVENTORY) != -1;
+    }
+
+    // True once the worn elytra nears the durability guard and Replace elytra has no spare clear
+    // of it to put on before the guard stops helping. A container that stays open takes every
+    // click and holds the swap up. The autopilot brings you down then.
+    public boolean wearingOut() {
+        ItemStack worn = mc.player.getItemBySlot(EquipmentSlot.CHEST);
+        if (!worn.is(Items.ELYTRA) || !ItemUtil.wornBelow(worn, WEARING_OUT)) {
+            return false;
+        }
+        boolean swapsFirst = replaceElytra.isOn() && InventoryUtil.canClick()
+            && (!durabilityGuard.isOn() || replaceShare() >= LOW_DURABILITY);
+        int spare = swapsFirst ? fresherElytra(worn) : -1;
+        return spare == -1 || ItemUtil.wornBelow(mc.player.getInventory().getItem(spare), WEARING_OUT);
+    }
+
+    // True on the tick the autopilot steers and the one after.
+    private boolean steered() {
+        int since = mc.player.tickCount - steerTick;
+        return since >= 0 && since <= 1;
+    }
+
     @Override
     public String getSuffix() {
         return switch (mode.getValue()) {
@@ -396,7 +449,7 @@ public final class ElytraFly extends Module {
             ramp = 0;
             rubberbanded = mode.is(Mode.BOUNCE);
         }
-        // A mode change lets go of whatever the old mode was holding.
+        // A mode change lets go of whatever the last mode was holding.
         if (applied != mode.getValue()) {
             letGo();
             applied = mode.getValue();
@@ -457,7 +510,7 @@ public final class ElytraFly extends Module {
         takeOffWindow = 0;
         wasGliding = true;
         pilotTick();
-        if (mode.is(Mode.CONTROL) && sneakDrop.isOn() && mc.player.input.keyPresses.shift()) {
+        if (mode.is(Mode.CONTROL) && sneakDrop.isOn() && mc.player.input.keyPresses.shift() && !steered()) {
             // The same command that opens a glide closes one that is already open.
             MovementUtil.sendStartGlide();
             dropped = true;
@@ -477,13 +530,26 @@ public final class ElytraFly extends Module {
         crashGuard.brake(mc.player);
     }
 
-    // A worn elytra at the threshold gives way to the fullest one in the bag.
+    // A worn elytra at the threshold gives way to the fullest one in the bag. A pause or chat
+    // screen does not hold the swap up.
     private void replaceWornElytra() {
         ItemStack worn = mc.player.getItemBySlot(EquipmentSlot.CHEST);
-        if (!worn.is(Items.ELYTRA) || !ItemUtil.wornBelow(worn, replaceAt.getValue() / 100)
-            || !InventoryUtil.inventoryFree()) {
+        if (!worn.is(Items.ELYTRA) || !ItemUtil.wornBelow(worn, replaceShare()) || !InventoryUtil.cursorFree()) {
             return;
         }
+        int best = fresherElytra(worn);
+        if (best != -1) {
+            InventoryUtil.swap(InventoryUtil.networkSlot(best), InventoryUtil.CHEST_SLOT);
+        }
+    }
+
+    private double replaceShare() {
+        return replaceAt.getValue() / 100;
+    }
+
+    // The inventory index of the elytra with the most durability left beyond the worn one.
+    // Minus one when none has more.
+    private int fresherElytra(ItemStack worn) {
         int best = -1;
         int bestLeft = worn.getMaxDamage() - worn.getDamageValue();
         for (int i = 0; i < InventoryUtil.WHOLE_INVENTORY; i++) {
@@ -497,9 +563,7 @@ public final class ElytraFly extends Module {
                 best = i;
             }
         }
-        if (best != -1) {
-            InventoryUtil.swap(InventoryUtil.networkSlot(best), InventoryUtil.CHEST_SLOT);
-        }
+        return best;
     }
 
     // A stack from the bag fills the chosen slot once the hotbar has run dry.
@@ -518,7 +582,7 @@ public final class ElytraFly extends Module {
 
     // Holds forward whilst gliding high enough and lets go below that.
     private void pilotTick() {
-        boolean wanted = autoPilot.isOn() && mc.player.isFallFlying()
+        boolean wanted = autoPilot.isOn() && !steered() && mc.player.isFallFlying()
             && mc.player.getY() > autoPilotHeight.getValue();
         if (wanted) {
             InputUtil.hold(mc.options.keyUp);
@@ -629,7 +693,7 @@ public final class ElytraFly extends Module {
         if (keys.jump()) {
             vy += MovementUtil.GRAVITY * climb;
         } else if (keys.shift()) {
-            vy = autoHover.isOn() ? hover(vy, climb) : vy - MovementUtil.GRAVITY / 2 * climb;
+            vy = autoHover.isOn() && !steered() ? hover(vy, climb) : vy - MovementUtil.GRAVITY / 2 * climb;
         } else if (holdHeight.isOn() && pitch < 0 && steering) {
             // Looking up whilst moving climbs.
             // The lift only stops the sink underneath the climb.
@@ -706,8 +770,13 @@ public final class ElytraFly extends Module {
             forcedPitch = mc.player.getXRot();
         }
 
+        // The autopilot sets the heading and the height the cycle turns around.
+        Altitude heights = steered() ? Altitude.TAKE_OFF : altitude.getValue();
         Input keys = mc.player.input.keyPresses;
-        if (altitude.is(Altitude.TAKE_OFF)) {
+        if (steered()) {
+            cruiseYaw = steerYaw;
+            cruiseY = steerHeight;
+        } else if (heights == Altitude.TAKE_OFF) {
             if (keys.jump()) {
                 cruiseY += 1;
             } else if (keys.shift()) {
@@ -720,7 +789,7 @@ public final class ElytraFly extends Module {
         double target = cruiseSpeed.getValue();
         double y = mc.player.getY();
 
-        if (altitude.is(Altitude.BAND)) {
+        if (heights == Altitude.BAND) {
             // The two heights alone turn the cycle. A stall still earns a rocket.
             if (diving && y <= lowerHeight.getValue()) {
                 diving = false;
@@ -736,7 +805,7 @@ public final class ElytraFly extends Module {
         } else if (bps >= target) {
             diving = false;
         } else {
-            diving = altitude.is(Altitude.FREE) || y >= cruiseY;
+            diving = heights == Altitude.FREE || y >= cruiseY;
         }
 
         float wanted = diving ? DIVE_PITCH : CLIMB_PITCH;
@@ -744,15 +813,15 @@ public final class ElytraFly extends Module {
         forcedPitch = forcedPitch + Mth.clamp(wanted - forcedPitch, -step, step);
     }
 
-    // The cruise angle goes on after the entity tick has saved the old one. The camera
-    // then eases between the two over one frame instead of jumping the whole step.
+    // The cruise angle goes on after the entity tick has saved the angle of the last tick. The
+    // camera then eases between the two over one frame instead of jumping the whole step.
     @Subscribe
     private void onPostMotion(PostMotionEvent event) {
         if (!cruising || !inGame()) {
             return;
         }
         mc.player.setXRot(forcedPitch);
-        if (lockYaw.isOn()) {
+        if (lockYaw.isOn() || steered()) {
             mc.player.setYRot(cruiseYaw);
         }
     }
@@ -841,7 +910,8 @@ public final class ElytraFly extends Module {
         if (lockPitch.isOn()) {
             mc.player.setXRot(bouncePitch.getFloat());
         }
-        switch (bounceHeading.getValue()) {
+        // The autopilot turns the view itself.
+        switch (steered() ? Heading.FREE : bounceHeading.getValue()) {
             case SNAP -> mc.player.setYRot(Math.round(mc.player.getYRot() / YAW_SNAP) * YAW_SNAP);
             case FIXED -> mc.player.setYRot(bounceYaw.getFloat());
             case FREE -> { }

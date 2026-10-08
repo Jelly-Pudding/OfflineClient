@@ -1,10 +1,20 @@
 package com.jellypudding.offlineclient.util;
 
 import com.jellypudding.offlineclient.OfflineClient;
-import net.minecraft.SharedConstants;
+import com.jellypudding.offlineclient.config.WaypointStore;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.MultiPlayerGameMode;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
+import net.minecraft.util.Mth;
+import net.minecraft.util.Util;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.EntityHitResult;
+import net.minecraft.world.phys.HitResult;
 
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -20,8 +30,9 @@ public final class LiveText {
     private static final long MINUTES_PER_HOUR = 60;
 
     private static final String[] KEYS = {
-        "fps", "tps", "ping", "x", "y", "z", "dimension", "direction",
-        "speed", "health", "server", "time", "username"
+        "fps", "tps", "ping", "online", "server", "x", "y", "z", "otherx", "otherz", "dimension",
+        "biome", "direction", "yaw", "pitch", "speed", "health", "hunger", "level", "totems",
+        "durability", "gamemode", "lookingat", "username", "time", "clock"
     };
 
     // Every word on offer in its braces with an and before the last. For a description.
@@ -50,7 +61,7 @@ public final class LiveText {
         for (String key : KEYS) {
             String token = "{" + key + "}";
             if (out.contains(token)) {
-                out = out.replace(token, valueOf(key));
+                out = out.replace(token, value(key));
             }
         }
         return out;
@@ -61,7 +72,8 @@ public final class LiveText {
         return List.of(TextMarkup.LINE_BREAK.split(fill(text)));
     }
 
-    private static String valueOf(String key) {
+    // The live value of one word without its braces such as biome. Empty for a word it does not know.
+    public static String value(String key) {
         LocalPlayer player = OfflineClient.MC.player;
         if (player == null) {
             return "";
@@ -71,25 +83,90 @@ public final class LiveText {
             case "fps" -> String.valueOf(OfflineClient.MC.getFps());
             case "tps" -> ServerInfo.tps();
             case "ping" -> String.valueOf(ServerInfo.ping());
+            case "online" -> String.valueOf(ServerInfo.online());
+            case "server" -> Objects.requireNonNullElse(ServerInfo.address(), "singleplayer");
             case "x" -> String.valueOf(block.getX());
             case "y" -> String.valueOf(block.getY());
             case "z" -> String.valueOf(block.getZ());
+            case "otherx" -> otherSide(player, false);
+            case "otherz" -> otherSide(player, true);
             case "dimension" -> player.level().dimension().identifier().getPath();
+            case "biome" -> biome(player, block);
             case "direction" -> player.getDirection().getName();
-            case "speed" -> String.format(Locale.ROOT, "%.1f",
-                player.getDeltaMovement().horizontalDistance() * SharedConstants.TICKS_PER_SECOND);
+            case "yaw" -> oneDecimal(Mth.wrapDegrees(player.getYRot()));
+            case "pitch" -> oneDecimal(Mth.wrapDegrees(player.getXRot()));
+            case "speed" -> oneDecimal(EntityUtil.ownSpeed());
             case "health" -> String.valueOf(Math.round(EntityUtil.totalHealth(player)));
-            case "server" -> Objects.requireNonNullElse(ServerInfo.address(), "singleplayer");
-            case "time" -> dayTime(player);
+            case "hunger" -> String.valueOf(player.getFoodData().getFoodLevel());
+            case "level" -> String.valueOf(player.experienceLevel);
+            case "totems" -> String.valueOf(Totems.carried());
+            case "durability" -> durability(player.getMainHandItem());
+            case "gamemode" -> gameMode();
+            case "lookingat" -> lookingAt();
             case "username" -> player.getGameProfile().name();
+            case "time" -> dayTime(player);
+            case "clock" -> computerTime();
             default -> "";
         };
+    }
+
+    private static String oneDecimal(double value) {
+        return String.format(Locale.ROOT, "%.1f", value);
+    }
+
+    // One coordinate of the matching spot in the other dimension. Empty in the End.
+    private static String otherSide(LocalPlayer player, boolean z) {
+        BlockPos other = WaypointStore.acrossPortal(player.position(), ServerInfo.dimension());
+        if (other == null) {
+            return "";
+        }
+        return String.valueOf(z ? other.getZ() : other.getX());
+    }
+
+    // The biome at your feet by the name the game gives it.
+    private static String biome(LocalPlayer player, BlockPos block) {
+        return player.level().getBiome(block).unwrapKey()
+            .map(key -> Component.translatableWithFallback(Util.makeDescriptionId("biome", key.identifier()),
+                ChatUtil.words(key.identifier())).getString())
+            .orElse("");
+    }
+
+    // The share of its durability the item has left. Empty for an item that never wears.
+    private static String durability(ItemStack stack) {
+        return stack.isDamageableItem() ? Math.round(ItemUtil.durabilityPercent(stack)) + "%" : "";
+    }
+
+    private static String gameMode() {
+        MultiPlayerGameMode mode = OfflineClient.MC.gameMode;
+        return mode == null ? "" : mode.getPlayerMode().getShortDisplayName().getString();
+    }
+
+    // The name of the block or entity under the crosshair. Empty when it points at nothing.
+    private static String lookingAt() {
+        Minecraft mc = OfflineClient.MC;
+        HitResult hit = mc.hitResult;
+        if (hit instanceof EntityHitResult entityHit) {
+            return EntityUtil.displayNameOf(entityHit.getEntity());
+        }
+        if (hit instanceof BlockHitResult blockHit && hit.getType() == HitResult.Type.BLOCK) {
+            return mc.level.getBlockState(blockHit.getBlockPos()).getBlock().getName().getString();
+        }
+        return "";
     }
 
     // The world clock as a twenty four hour reading. Nought ticks is six in the morning.
     private static String dayTime(LocalPlayer player) {
         long ticks = Math.floorMod(player.level().getOverworldClockTime() + SIX_AM, DAY_TICKS);
-        return String.format(Locale.ROOT, "%02d:%02d", ticks / HOUR_TICKS,
-            ticks % HOUR_TICKS * MINUTES_PER_HOUR / HOUR_TICKS);
+        return clock(ticks / HOUR_TICKS, ticks % HOUR_TICKS * MINUTES_PER_HOUR / HOUR_TICKS);
+    }
+
+    // The time on the computer you play on.
+    private static String computerTime() {
+        LocalTime now = LocalTime.now();
+        return clock(now.getHour(), now.getMinute());
+    }
+
+    private static String clock(long hours, long minutes) {
+        return String.format(Locale.ROOT, "%02d:%02d", hours, minutes);
     }
 }

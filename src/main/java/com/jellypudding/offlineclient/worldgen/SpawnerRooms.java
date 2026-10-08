@@ -6,6 +6,7 @@ import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.SectionPos;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.entity.EntityType;
@@ -306,7 +307,8 @@ public final class SpawnerRooms {
     }
 
     private static boolean owns(ChunkScanner.View view, BlockPos pos) {
-        return (pos.getX() >> 4) == view.pos().x() && (pos.getZ() >> 4) == view.pos().z();
+        return SectionPos.blockToSectionCoord(pos.getX()) == view.pos().x()
+            && SectionPos.blockToSectionCoord(pos.getZ()) == view.pos().z();
     }
 
     // A dungeon is cave air over its spawner spot. Lichen dripstone or vines may fill a cell.

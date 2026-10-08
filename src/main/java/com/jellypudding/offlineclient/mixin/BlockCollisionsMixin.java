@@ -3,7 +3,9 @@ package com.jellypudding.offlineclient.mixin;
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.modules.player.AntiCactus;
 import com.jellypudding.offlineclient.modules.player.AutoExtinguish;
+import com.jellypudding.offlineclient.modules.movement.Flight;
 import com.jellypudding.offlineclient.modules.movement.Jesus;
+import com.jellypudding.offlineclient.modules.movement.NoReturn;
 import com.jellypudding.offlineclient.modules.world.Collisions;
 import com.jellypudding.offlineclient.util.Modules;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
@@ -48,6 +50,14 @@ public abstract class BlockCollisionsMixin {
         }
         AutoExtinguish extinguish = Modules.active(AutoExtinguish.class);
         if (entity == player && extinguish != null && extinguish.isWall(state)) {
+            return Shapes.block();
+        }
+        Flight flight = Modules.active(Flight.class);
+        if (entity == player && flight != null && flight.wallsLava(state)) {
+            return Shapes.block();
+        }
+        NoReturn noReturn = Modules.active(NoReturn.class);
+        if (noReturn != null && noReturn.closed(pos)) {
             return Shapes.block();
         }
         Collisions collisions = Modules.active(Collisions.class);

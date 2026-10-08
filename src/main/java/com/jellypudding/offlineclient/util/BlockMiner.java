@@ -15,8 +15,10 @@ public final class BlockMiner {
     private static final int IDLE = Integer.MIN_VALUE / 2;
 
     private static int lastDriveTick = IDLE;
+    private static int lastMineTick = IDLE;
     private static BlockPos target;
     private static boolean selfCall;
+    private static boolean ownTool;
 
     private BlockMiner() {
     }
@@ -48,7 +50,22 @@ public final class BlockMiner {
         swing.swing(InteractionHand.MAIN_HAND);
         keepControl();
         target = pos;
+        lastMineTick = MC.player.tickCount;
         return true;
+    }
+
+    // For a module that picked its own tool. AutoTool leaves the hand alone whilst it mines.
+    public static boolean mineWithHeld(BlockPos pos, boolean rotate) {
+        return mineWithHeld(pos, rotate, SwingMode.BOTH);
+    }
+
+    public static boolean mineWithHeld(BlockPos pos, boolean rotate, SwingMode swing) {
+        ownTool = true;
+        try {
+            return mine(pos, rotate, swing);
+        } finally {
+            ownTool = false;
+        }
     }
 
     // Sends the start and stop packets for a block in one go.
@@ -84,11 +101,15 @@ public final class BlockMiner {
 
     // True when a module drove mining this tick or the one before.
     public static boolean isActive() {
+        return lately(lastDriveTick);
+    }
+
+    private static boolean lately(int tick) {
         if (MC.player == null) {
             return false;
         }
-        int sinceDrive = MC.player.tickCount - lastDriveTick;
-        return sinceDrive >= 0 && sinceDrive <= 1;
+        int since = MC.player.tickCount - tick;
+        return since >= 0 && since <= 1;
     }
 
     // True whilst the game is inside a mining call made from here.
@@ -96,8 +117,21 @@ public final class BlockMiner {
         return selfCall;
     }
 
+    // True whilst a module that picked its own tool is mining.
+    public static boolean isOwnTool() {
+        return ownTool;
+    }
+
+    // The block a module mined this tick or the one before. Null whilst none did.
     public static BlockPos getTarget() {
-        return isActive() ? target : null;
+        return lately(lastMineTick) ? target : null;
+    }
+
+    // True whilst a module mines a block other than this one. A module outside the mining group
+    // waits its turn because two blocks mined at once restart each other every tick.
+    public static boolean minesOther(BlockPos pos) {
+        BlockPos mined = getTarget();
+        return mined != null && !mined.equals(pos);
     }
 
     // Sends the abort the server expects.
@@ -107,5 +141,12 @@ public final class BlockMiner {
         }
         lastDriveTick = IDLE;
         target = null;
+    }
+
+    // Lets go of this block only whilst it is the one being mined. Another module's block stays.
+    public static void release(BlockPos pos) {
+        if (pos.equals(getTarget())) {
+            release();
+        }
     }
 }

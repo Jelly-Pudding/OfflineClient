@@ -119,15 +119,14 @@ public final class Marker extends Module {
 
     @Subscribe
     private void onKeyPress(KeyPressEvent event) {
-        if (event.getAction() != InputConstants.PRESS || mc.gui.screen() != null || !inGame()) {
+        if (mc.gui.screen() != null || !inGame()) {
             return;
         }
-        int key = event.getKey();
-        if (addKey.isBound() && key == addKey.getValue()) {
+        if (event.presses(addKey)) {
             add();
-        } else if (nextLayerKey.isBound() && key == nextLayerKey.getValue()) {
+        } else if (event.presses(nextLayerKey)) {
             stepLayer(1);
-        } else if (prevLayerKey.isBound() && key == prevLayerKey.getValue()) {
+        } else if (event.presses(prevLayerKey)) {
             stepLayer(-1);
         }
     }
@@ -234,6 +233,10 @@ public final class Marker extends Module {
             style = new BoxStyle(label, BoxStyle.Shape.BOTH, 217).under(active);
             drop = new BoolSetting(label + " remove", "Tick to delete this marker.", false)
                 .under(active);
+            // Every row is part of the marker you placed. A reset of the module leaves them alone.
+            List<Setting<?>> rows = new ArrayList<>();
+            addTo(rows);
+            rows.forEach(Setting::noDefault);
         }
 
         private String label() {

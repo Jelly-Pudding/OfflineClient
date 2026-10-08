@@ -1,7 +1,6 @@
 package com.jellypudding.offlineclient.gui;
 
 import com.jellypudding.offlineclient.OfflineClient;
-import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.ActionSetting;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
@@ -15,6 +14,7 @@ import com.jellypudding.offlineclient.setting.Setting;
 import com.jellypudding.offlineclient.setting.TextSetting;
 import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.InputUtil;
+import com.jellypudding.offlineclient.util.KeyUse;
 import com.jellypudding.offlineclient.util.RenderUtil;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -29,7 +29,8 @@ public final class SettingWidget {
     private static final int PAD = GuiTheme.PAD;
 
     private static final int VALUE_BAND = GuiTheme.SETTING_HEIGHT - 5;
-    private static final int INDENT = 10;
+    // Where the block starts right of the row. The strip of reset marks fills the gap.
+    static final int INDENT = 10;
     private static final int BOX = 9;
 
     // Each level of sub option steps in by this much with a guide line beside it.
@@ -265,11 +266,12 @@ public final class SettingWidget {
         return index >= 0 && index < rank.size() ? index : -1;
     }
 
-    // A bind row wants the help text and not the description of the key. The choices
-    // of a ranked list explain how to move them and the cells of a grid how to paint.
+    // A bind row wants the help text and not the description of the key. It also names whatever
+    // else answers to the key. The choices of a ranked list explain how to move them and the
+    // cells of a grid how to paint.
     private static String tooltipOf(Setting<?> setting, double my, int y) {
         return switch (setting) {
-            case KeybindSetting ignored -> BIND_HELP;
+            case KeybindSetting bind -> BIND_HELP + KeyUse.alsoUsedBy(bind.getValue(), bind);
             case RankSetting<?> rank when entryAt(rank, my, y) >= 0 -> RANK_HELP;
             case GridSetting ignored when my >= y + GuiTheme.SETTING_HEIGHT -> GRID_HELP;
             default -> setting.getDescription();
@@ -293,14 +295,19 @@ public final class SettingWidget {
         return mx >= left && mx <= right + 1 && my >= y && my < y + VALUE_BAND;
     }
 
+    // Rows with a bar at the bottom centre their name in the band above it.
+    private static int textTop(Setting<?> setting, int y) {
+        boolean banded = setting instanceof NumberSetting || setting instanceof ColorSetting;
+        return GuiTheme.textY(y, banded ? VALUE_BAND : GuiTheme.SETTING_HEIGHT);
+    }
+
     private static void render(GuiGraphicsExtractor context, Font font, Setting<?> setting,
                               int x, int y, int width, int mouseX, int mouseY,
                               boolean hoverAllowed, Host host) {
         int w = width;
         int h = rowHeight(setting);
         int ty = GuiTheme.textY(y, GuiTheme.SETTING_HEIGHT);
-        // Rows with a bar at the bottom centre their text in the band above it.
-        int bandY = GuiTheme.textY(y, VALUE_BAND);
+        int nameY = textTop(setting, y);
         boolean hovered = hoverAllowed && isOver(mouseX, mouseY, x, y, w, h);
         if (hovered) {
             host.setTooltip(tooltipOf(setting, mouseY, y));
@@ -320,7 +327,7 @@ public final class SettingWidget {
             }
             case NumberSetting n -> {
                 int room = w - 2 * PAD - font.width(n.getValueString()) - 6;
-                context.text(font, trimEnd(font, n.getName(), room), x + PAD, bandY, nameColor, false);
+                context.text(font, trimEnd(font, n.getName(), room), x + PAD, nameY, nameColor, false);
                 renderNumber(context, font, n, x, y, w, mouseX, mouseY, hoverAllowed, host);
             }
             case KeybindSetting k -> {
@@ -338,7 +345,7 @@ public final class SettingWidget {
             }
             case ColorSetting c -> {
                 int room = w - 2 * PAD - BOX - rainbowChipWidth(font) - 8;
-                context.text(font, trimEnd(font, c.getName(), room), x + PAD, bandY, nameColor, false);
+                context.text(font, trimEnd(font, c.getName(), room), x + PAD, nameY, nameColor, false);
                 renderColor(context, font, c, x, y, w);
             }
             case PickList<?> r -> {
@@ -606,16 +613,16 @@ public final class SettingWidget {
             t.isBlank() ? GuiTheme.textFaint() : GuiTheme.text(), false);
     }
 
-    public static int blockHeight(Module module) {
-        return blockHeight(module.getSettings(), module.getKeybind());
+    // The rows a block shows with the reset row under them whilst it is there.
+    public static int blockHeight(SettingBlock block) {
+        return rowsHeight(block, layout(block)) + (ResetFoot.shows(block) ? GuiTheme.SETTING_HEIGHT : 0);
     }
 
-    public static int blockHeight(List<Setting<?>> settings, Setting<?> trailer) {
-        int height = trailer == null ? 4 : GuiTheme.SETTING_HEIGHT + 4;
-        Layout layout = layout(settings);
-        for (int i = 0; i < settings.size(); i++) {
+    private static int rowsHeight(SettingBlock block, Layout layout) {
+        int height = 4;
+        for (int i = 0; i < block.rows(); i++) {
             if (layout.shown[i]) {
-                height += rowHeight(settings.get(i));
+                height += rowHeight(block.row(i));
             }
         }
         return height;
@@ -623,19 +630,24 @@ public final class SettingWidget {
 
     // Where each row of a block sits. A row is shown whilst it is visible and no
     // setting above it in its family is folded. A parent row carries the chevron.
+    // A module's bind comes last and always shows.
     private record Layout(int[] indent, boolean[] shown, boolean[] parent) {
     }
 
     // A sub option only steps in whilst it follows its parent or sibling
     // directly and reads as its own row otherwise.
-    private static Layout layout(List<Setting<?>> settings) {
-        int count = settings.size();
+    private static Layout layout(SettingBlock block) {
+        int count = block.rows();
         Layout layout = new Layout(new int[count], new boolean[count], new boolean[count]);
         // The previous row and its ancestors from the top down with their indexes.
         List<Setting<?>> open = new ArrayList<>();
         List<Integer> openAt = new ArrayList<>();
         for (int i = 0; i < count; i++) {
-            Setting<?> setting = settings.get(i);
+            Setting<?> setting = block.row(i);
+            if (setting == block.bind()) {
+                layout.shown[i] = true;
+                continue;
+            }
             if (!setting.isVisible()) {
                 continue;
             }
@@ -683,34 +695,29 @@ public final class SettingWidget {
         return rowW - INDENT - 5;
     }
 
-    public static void renderBlock(GuiGraphicsExtractor context, Font font, Module module,
+    // The strip left of the block carries a mark beside every row that differs from its
+    // default. The reset row closes the block whilst anything in it is changed.
+    public static void renderBlock(GuiGraphicsExtractor context, Font font, SettingBlock block,
                                    int rowX, int rowY, int rowW, int mouseX, int mouseY,
                                    boolean hoverAllowed, Host host) {
-        renderBlock(context, font, module.getSettings(), module.getKeybind(), rowX, rowY, rowW,
-            mouseX, mouseY, hoverAllowed, host);
-    }
-
-    public static void renderBlock(GuiGraphicsExtractor context, Font font,
-                                   List<Setting<?>> settings, Setting<?> trailer,
-                                   int rowX, int rowY, int rowW, int mouseX, int mouseY,
-                                   boolean hoverAllowed, Host host) {
+        int cx = blockContentX(rowX);
+        int cw = blockContentWidth(rowW);
+        Layout layout = layout(block);
+        ResetMarks.Strip strip = new ResetMarks.Strip(block, layout.shown, rowX, cx + cw);
         int x = rowX + INDENT;
         int right = rowX + rowW - 2;
-        int bottom = rowY + blockHeight(settings, trailer) - 2;
+        int bottom = rowY + rowsHeight(block, layout) + (strip.hasFoot() ? GuiTheme.SETTING_HEIGHT : 0) - 2;
         RenderUtil.roundedRect(context, x, rowY, right, bottom, GuiTheme.CORNER,
             GuiTheme.bgSetting(), false, true);
         context.fill(x, rowY, x + 1, bottom, GuiTheme.accentOn(GuiTheme.bgSetting(), 0.55f));
         context.guiRenderState.up();
 
-        int cx = blockContentX(rowX);
-        int cw = blockContentWidth(rowW);
         int y = rowY + 2;
-        Layout layout = layout(settings);
-        for (int i = 0; i < settings.size(); i++) {
+        for (int i = 0; i < block.rows(); i++) {
             if (!layout.shown[i]) {
                 continue;
             }
-            Setting<?> setting = settings.get(i);
+            Setting<?> setting = block.row(i);
             int h = rowHeight(setting);
             int indent = layout.indent[i];
             if (indent > 0) {
@@ -723,33 +730,36 @@ public final class SettingWidget {
                 sx += FOLD_ZONE;
                 sw -= FOLD_ZONE;
             }
+            strip.wash(context, i, sx, y, sw, h);
             render(context, font, setting, sx, y, sw, mouseX, mouseY, hoverAllowed, host);
+            strip.mark(context, i, y, h, textTop(setting, y), mouseX, mouseY, hoverAllowed, host);
             y += h;
         }
-        if (trailer != null) {
-            render(context, font, trailer, cx, y, cw, mouseX, mouseY, hoverAllowed, host);
+        if (strip.hasFoot()) {
+            ResetFoot.render(context, font, strip, y, cx, cw, mouseX, mouseY, hoverAllowed, host);
         }
     }
 
-    public static boolean clickBlock(Module module, double mx, double my, int rowX, int rowY,
-                                     int rowW, int button, Host host, Drag drag) {
-        return clickBlock(module.getSettings(), module.getKeybind(), mx, my, rowX, rowY, rowW,
-            button, host, drag);
-    }
-
-    public static boolean clickBlock(List<Setting<?>> settings, Setting<?> trailer,
-                                     double mx, double my, int rowX, int rowY,
+    // A middle press puts a row back. It waits whilst a drag holds a value because the drag
+    // would write over the reset on the next frame.
+    public static boolean clickBlock(SettingBlock block, double mx, double my, int rowX, int rowY,
                                      int rowW, int button, Host host, Drag drag) {
         int cx = blockContentX(rowX);
         int cw = blockContentWidth(rowW);
         int y = rowY + 2;
-        Layout layout = layout(settings);
-        for (int i = 0; i < settings.size(); i++) {
+        Layout layout = layout(block);
+        for (int i = 0; i < block.rows(); i++) {
             if (!layout.shown[i]) {
                 continue;
             }
-            Setting<?> setting = settings.get(i);
+            Setting<?> setting = block.row(i);
             int h = rowHeight(setting);
+            if (ResetMarks.inZone(mx, my, rowX, y)) {
+                if (!drag.isActive()) {
+                    new ResetMarks.Strip(block, layout.shown, rowX, cx + cw).press(i, button);
+                }
+                return true;
+            }
             if (isOver(mx, my, cx, y, cw, h)) {
                 // The gutter beside a sub option still belongs to its row.
                 int sx = cx + layout.indent[i];
@@ -761,14 +771,20 @@ public final class SettingWidget {
                     }
                     sx += FOLD_ZONE;
                 }
+                if (InputUtil.isMiddle(button)) {
+                    if (!drag.isActive()) {
+                        ResetMarks.middle(block, setting);
+                    }
+                    return true;
+                }
                 drag.indent = sx - cx;
                 click(setting, mx, my, sx, y, cw - (sx - cx), button, host, drag);
                 return true;
             }
             y += h;
         }
-        if (trailer != null && isOver(mx, my, cx, y, cw, GuiTheme.SETTING_HEIGHT)) {
-            click(trailer, mx, my, cx, y, cw, button, host, drag);
+        if (ResetFoot.shows(block) && ResetMarks.onLine(mx, my, rowX, cx + cw, y, GuiTheme.SETTING_HEIGHT)) {
+            ResetFoot.press(block, button);
             return true;
         }
         return false;
@@ -789,14 +805,8 @@ public final class SettingWidget {
     }
 
     // The hit test has already been done by the caller.
-    public static void click(Setting<?> setting, double mx, double my, int x, int y, int width,
-                             int button, Host host, Drag drag) {
-        // The middle button puts a setting back to how it started.
-        if (InputUtil.isMiddle(button)) {
-            setting.reset();
-            OfflineClient.INSTANCE.getConfigManager().saveSoon();
-            return;
-        }
+    private static void click(Setting<?> setting, double mx, double my, int x, int y, int width,
+                              int button, Host host, Drag drag) {
         // Only the left and the right button act on a setting.
         if (!InputUtil.isLeft(button) && !InputUtil.isRight(button)) {
             return;

@@ -16,10 +16,11 @@ public final class SpawnerMob {
 
     // Null for any other block entity and for a spawner that names no mob.
     public static EntityType<?> of(BlockEntity blockEntity) {
-        if (!(blockEntity instanceof SpawnerBlockEntity spawner)) {
-            return null;
-        }
-        SpawnData data = spawner.getSpawner().nextSpawnData;
+        return blockEntity instanceof SpawnerBlockEntity spawner ? of(spawner.getSpawner().nextSpawnData) : null;
+    }
+
+    // The mob the spawn data names. Null for none and for a mob the game does not know.
+    public static EntityType<?> of(SpawnData data) {
         if (data == null) {
             return null;
         }

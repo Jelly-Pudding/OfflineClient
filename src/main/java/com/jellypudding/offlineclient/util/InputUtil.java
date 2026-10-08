@@ -5,11 +5,15 @@ import com.jellypudding.offlineclient.event.events.PacketSendEvent;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.Options;
+import net.minecraft.client.input.InputQuirks;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.protocol.game.ServerboundPlayerInputPacket;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.player.Input;
 
+import java.util.Arrays;
 import java.util.function.BooleanSupplier;
 
 // The real state of input devices. A module forcing a mapping down is ignored here.
@@ -20,6 +24,9 @@ public final class InputUtil {
 
     // Vanilla repeats a held right click this many ticks apart.
     public static final int USE_DELAY = 4;
+
+    // Key codes for letters are the lower case character.
+    private static final int UNDO_LETTER = 'z';
 
     // The game sets the right click delay on every use and counts it down once a tick.
     public static void capUseDelay(int ticks) {
@@ -42,6 +49,25 @@ public final class InputUtil {
         return button == InputConstants.MOUSE_BUTTON_MIDDLE;
     }
 
+    // Ctrl Z or Cmd Z on a Mac. Matched on the letter the layout types the way the game matches copy.
+    public static boolean isUndo(KeyEvent event) {
+        return event.shortcutKey() == UNDO_LETTER && event.hasControlDownWithQuirk()
+            && !event.hasShiftDown() && !event.hasAltDown();
+    }
+
+    // The undo keys as the player reads them.
+    public static String undoKeys() {
+        return InputQuirks.REPLACE_CTRL_KEY_WITH_CMD_KEY ? "Cmd Z" : "Ctrl Z";
+    }
+
+    // True for a press the game takes as a debug combo. Only a key one of its debug keys sits on
+    // counts whilst the debug key is held.
+    public static boolean isDebugCombo(KeyEvent event) {
+        Options options = OfflineClient.MC.options;
+        return options.keyDebugModifier.isDown()
+            && Arrays.stream(options.debugKeys).anyMatch(combo -> combo.matches(event));
+    }
+
     public static boolean isKey(KeyMapping mapping, int code) {
         InputConstants.Key key = mapping.key;
         return key.getType() == InputConstants.Type.KEYBOARD && key.getValue() == code;
@@ -56,11 +82,14 @@ public final class InputUtil {
     }
 
     // Lets go of a key a module was holding without really lifting a finger off it.
-    // A toggle bound key throws away a plain false and has to be flipped.
     public static void release(KeyMapping mapping) {
-        boolean held = physicallyHeld(mapping);
-        mapping.setDown(held);
-        if (mapping.isDown() != held) {
+        setHeld(mapping, physicallyHeld(mapping));
+    }
+
+    // Sets a mapping up or down. A toggle bound key throws away a plain false and flips on a true.
+    public static void setHeld(KeyMapping mapping, boolean down) {
+        mapping.setDown(down);
+        if (mapping.isDown() != down) {
             mapping.setDown(true);
         }
     }

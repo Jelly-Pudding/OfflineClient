@@ -2,13 +2,23 @@ package com.jellypudding.offlineclient.gui;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.config.MacroStore;
+import com.jellypudding.offlineclient.config.NameStore;
+import com.jellypudding.offlineclient.config.WaypointStore;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.modules.misc.ClickGuiModule;
+import com.jellypudding.offlineclient.path.Travel;
 import com.jellypudding.offlineclient.setting.KeybindSetting;
+import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.KeyUse;
+import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.SearchRank;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.core.BlockPos;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 
@@ -16,8 +26,24 @@ import java.util.Locale;
 public final class GuiSources {
 
     private static final String NO_KEY = "no key";
+    private static final String IN_USE = "in use";
+    private static final String ACCOUNT = "account";
+    // A waypoint typed with its spot is a name and three coordinates.
+    private static final int SPOT_WORDS = 4;
 
     private GuiSources() {
+    }
+
+    // What a tab opens. Null for the HUD tab which opens the HUD editor in its place.
+    public static TabView.Source of(TabStrip.Tab tab, Runnable beforeSave, Runnable afterLoad) {
+        return switch (tab) {
+            case FRIENDS -> friends();
+            case MACROS -> macros();
+            case WAYPOINTS -> waypoints();
+            case NAMES -> names();
+            case HUD -> null;
+            case PROFILES -> profiles(beforeSave, afterLoad);
+        };
     }
 
     public static TabView.Source friends() {
@@ -77,13 +103,13 @@ public final class GuiSources {
                 for (MacroStore.Macro macro : MacroStore.get().all()) {
                     if (matches(macro.name(), query)) {
                         String join = macro.joinText() == null ? "" : " " + macro.joinText();
-                        rows.add(new TabView.Entry(macro.name(), keyName(macro.key()),
-                            "Runs " + String.join(" then ", macro.lines()) + join));
+                        rows.add(keyRow(macro.name(), macro.key(), macro,
+                            "Runs " + String.join(" then ", macro.lines()) + join + "."));
                     }
                 }
                 for (Module module : bindable(query)) {
-                    rows.add(new TabView.Entry(module.getName(),
-                        keyName(module.getKeybind().getValue()), module.getDescription()));
+                    rows.add(keyRow(module.getName(), module.getKeybind().getValue(), module.getKeybind(),
+                        module.getDescription()));
                 }
                 return rows;
             }
@@ -180,12 +206,14 @@ public final class GuiSources {
                 MacroStore.Macro macro = MacroStore.get().find(name);
                 if (macro != null) {
                     MacroStore.get().add(macro.withKey(key));
+                    KeyUse.warn(key, macro);
                     return;
                 }
                 Module module = moduleNamed(name);
                 if (module != null) {
                     module.getKeybind().setValue(key);
                     OfflineClient.INSTANCE.getConfigManager().saveSoon();
+                    KeyUse.warn(key, module.getKeybind());
                 }
             }
 
@@ -206,6 +234,169 @@ public final class GuiSources {
                     module.getKeybind().setValue(KeybindSetting.UNBOUND);
                     OfflineClient.INSTANCE.getConfigManager().saveSoon();
                 }
+            }
+        };
+    }
+
+    // The waypoints of the world you are in from A to Z. A click walks there and closes the GUI.
+    public static TabView.Source waypoints() {
+        return new TabView.Source() {
+            @Override
+            public List<TabView.Entry> entries(String query) {
+                List<WaypointStore.Waypoint> here = new ArrayList<>(WaypointStore.get().here());
+                here.sort(Comparator.comparing(WaypointStore.Waypoint::name, String.CASE_INSENSITIVE_ORDER));
+                List<TabView.Entry> rows = new ArrayList<>();
+                for (WaypointStore.Waypoint waypoint : here) {
+                    if (matches(waypoint.name(), query)) {
+                        rows.add(new TabView.Entry(waypoint.name(),
+                            BlockUtil.text(waypoint.pos()),
+                            "Walk to " + waypoint.name() + " with the pathfinder."));
+                    }
+                }
+                return rows;
+            }
+
+            @Override
+            public String emptyText(String query) {
+                if (query.isEmpty()) {
+                    return "no waypoints in this world yet";
+                }
+                Mark mark = mark(query);
+                if (mark == null) {
+                    return "type a name or a name and x y z";
+                }
+                return "press enter to mark " + mark.name()
+                    + (mark.spot() == null ? " where you stand" : " at " + BlockUtil.text(mark.spot()));
+            }
+
+            @Override
+            public String footer() {
+                return "click a waypoint to walk there";
+            }
+
+            @Override
+            public String addHint() {
+                return "type a name and press enter";
+            }
+
+            @Override
+            public void add(String text) {
+                LocalPlayer player = OfflineClient.MC.player;
+                if (player == null) {
+                    ChatUtil.error("You need to be in a world to mark a waypoint.");
+                    return;
+                }
+                Mark mark = mark(text);
+                if (mark == null) {
+                    ChatUtil.error("Type a name or a name and x y z.");
+                    return;
+                }
+                BlockPos pos = mark.spot() == null ? player.blockPosition() : mark.spot();
+                WaypointStore.get().mark(mark.name(), pos, Modules.nextWaypointHue());
+                ChatUtil.message("§aSaved §b" + mark.name() + " §7at §f" + BlockUtil.text(pos));
+            }
+
+            @Override
+            public void activate(String name) {
+                WaypointStore.Waypoint waypoint = WaypointStore.get().find(name);
+                if (waypoint == null || !Travel.to(waypoint.pos())) {
+                    return;
+                }
+                Screen open = OfflineClient.MC.gui.screen();
+                if (open != null) {
+                    open.onClose();
+                }
+            }
+
+            @Override
+            public String dropHint(String name) {
+                return "Remove the waypoint " + name;
+            }
+
+            @Override
+            public void drop(String name) {
+                WaypointStore.get().remove(name);
+            }
+        };
+    }
+
+    // The names you join offline servers with. Your account name heads the list.
+    public static TabView.Source names() {
+        return new TabView.Source() {
+            @Override
+            public List<TabView.Entry> entries(String query) {
+                NameStore store = NameStore.get();
+                String account = NameStore.accountName();
+                String joining = store.joinName();
+                List<TabView.Entry> rows = new ArrayList<>();
+                if (matches(account, query)) {
+                    rows.add(new TabView.Entry(account, account.equals(joining) ? IN_USE : ACCOUNT,
+                        "Your account name. An online mode server takes no other."));
+                }
+                for (String name : store.saved()) {
+                    if (matches(name, query)) {
+                        rows.add(new TabView.Entry(name, name.equals(joining) ? IN_USE : "",
+                            "Joins offline servers as " + name + " from your next join."));
+                    }
+                }
+                return rows;
+            }
+
+            @Override
+            public String emptyText(String query) {
+                String word = firstWord(query);
+                if (word.equalsIgnoreCase(NameStore.RANDOM)) {
+                    return "press enter for a made up name";
+                }
+                return NameStore.valid(word) ? "press enter to join as " + word
+                    : "a name has 3 to 16 letters or digits or underscores";
+            }
+
+            @Override
+            public String footer() {
+                return "click a name to join as it";
+            }
+
+            @Override
+            public String addHint() {
+                return "type a name and press enter";
+            }
+
+            // Only shown until a name is saved.
+            @Override
+            public List<TabView.Hint> hints(String query) {
+                if (!query.isEmpty() || !NameStore.get().saved().isEmpty()) {
+                    return List.of();
+                }
+                return List.of(new TabView.Hint("Add a name",
+                    "Type a name and press enter. The word random makes one up.", List.of(NameStore.RANDOM)));
+            }
+
+            @Override
+            public void add(String text) {
+                String name = NameStore.named(firstWord(text));
+                if (name == null) {
+                    ChatUtil.error(NameStore.RULE);
+                    return;
+                }
+                NameStore.get().use(name);
+            }
+
+            // Your account name puts you back on it.
+            @Override
+            public void activate(String name) {
+                NameStore.get().use(name);
+            }
+
+            @Override
+            public String dropHint(String name) {
+                return name.equals(NameStore.accountName()) ? "Your account name always stays"
+                    : "Forget the name " + name;
+            }
+
+            @Override
+            public void drop(String name) {
+                NameStore.get().remove(name);
             }
         };
     }
@@ -270,6 +461,27 @@ public final class GuiSources {
         return text.trim().split("\\s+")[0];
     }
 
+    // A waypoint typed in the tab. A name alone has no spot and marks where you stand.
+    private record Mark(String name, BlockPos spot) {
+    }
+
+    // A name alone or a name and x y z. Null for any other text.
+    private static Mark mark(String text) {
+        String[] words = text.trim().split("\\s+");
+        if (words.length == 1) {
+            return new Mark(words[0], null);
+        }
+        if (words.length != SPOT_WORDS) {
+            return null;
+        }
+        try {
+            return new Mark(words[0], BlockPos.containing(Double.parseDouble(words[1]),
+                Double.parseDouble(words[2]), Double.parseDouble(words[3])));
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
     // Profiles are saved as files. The name is kept to one plain word.
     private static String profileName(String text) {
         return text.trim().toLowerCase(Locale.ROOT).replace(' ', '_');
@@ -288,6 +500,13 @@ public final class GuiSources {
 
     private static String keyName(int key) {
         return key == KeybindSetting.UNBOUND ? NO_KEY : KeybindSetting.nameOfKey(key);
+    }
+
+    // A row whose detail is a key. A key something else answers to as well is drawn as a warning
+    // and the tip names what else uses it.
+    private static TabView.Entry keyRow(String name, int key, Object self, String tip) {
+        String also = KeyUse.alsoUsedBy(key, self);
+        return new TabView.Entry(name, keyName(key), tip + also, !also.isEmpty());
     }
 
     private static Module moduleNamed(String name) {

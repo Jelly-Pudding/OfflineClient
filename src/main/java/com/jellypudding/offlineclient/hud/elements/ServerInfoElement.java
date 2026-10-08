@@ -2,6 +2,7 @@ package com.jellypudding.offlineclient.hud.elements;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.hud.HudElement;
+import com.jellypudding.offlineclient.hud.TextRow;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.util.ServerInfo;
@@ -13,8 +14,6 @@ import java.util.List;
 
 public final class ServerInfoElement extends HudElement {
 
-    private static final int LINE = 10;
-
     private final BoolSetting address = new BoolSetting("Show address",
         "Write the address you are connected to.", true);
     private final BoolSetting players = new BoolSetting("Show players online",
@@ -23,8 +22,8 @@ public final class ServerInfoElement extends HudElement {
         "Write how fast the server is ticking.", true);
     private final BoolSetting ping = new BoolSetting("Show ping",
         "Write your own round trip time.", true);
-    private final ColorSetting color = new ColorSetting("Server info colour",
-        "Colour of the rows.", 190, 0.15f, 0.85f, false);
+    private final ColorSetting color = labelColor("Server info colour",
+        "Colour of the rows.");
 
     public ServerInfoElement() {
         super("Server info", "Where you are and how the server is doing.", false, 100, 96);
@@ -33,52 +32,47 @@ public final class ServerInfoElement extends HudElement {
 
     @Override
     public boolean visible() {
-        return isActive() && !rows().isEmpty();
+        return isActive() && !lines().isEmpty();
     }
 
-    private List<String> rows() {
-        List<String> rows = new ArrayList<>(4);
+    private List<String> lines() {
+        List<String> lines = new ArrayList<>(4);
         if (OfflineClient.MC.player == null) {
-            return rows;
+            return lines;
         }
         if (address.isOn()) {
             String ip = ServerInfo.address();
-            rows.add(ip == null ? "Single player" : ip);
+            lines.add(ip == null ? "Single player" : ip);
         }
         if (players.isOn()) {
-            rows.add(ServerInfo.online() + " online");
+            lines.add(ServerInfo.online() + " online");
         }
         if (tps.isOn()) {
-            rows.add(ServerInfo.tps() + " tps");
+            lines.add(ServerInfo.tps() + " tps");
         }
         if (ping.isOn()) {
-            rows.add(ServerInfo.ping() + " ms");
+            lines.add(ServerInfo.ping() + " ms");
         }
-        return rows;
+        return lines;
     }
 
-    // Rows are right aligned. The block hugs the edge of the screen.
+    private List<TextRow> rows(Font font) {
+        return TextRow.lines(font, lines(), color);
+    }
+
+    // Each row lines up with the side of the screen the element is anchored to.
     @Override
     public void render(GuiGraphicsExtractor context, Font font) {
-        int widest = width(font);
-        int y = 0;
-        for (String row : rows()) {
-            context.text(font, row, widest - font.width(row), y, color.getColor(), true);
-            y += LINE;
-        }
+        TextRow.draw(context, font, rows(font), alignment());
     }
 
     @Override
     public int width(Font font) {
-        int widest = 1;
-        for (String row : rows()) {
-            widest = Math.max(widest, font.width(row));
-        }
-        return widest;
+        return TextRow.widest(rows(font));
     }
 
     @Override
     public int height(Font font) {
-        return Math.max(LINE, rows().size() * LINE);
+        return TextRow.height(font, lines().size());
     }
 }

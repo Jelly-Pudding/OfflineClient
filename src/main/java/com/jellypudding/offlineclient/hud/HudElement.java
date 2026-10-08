@@ -1,17 +1,27 @@
 package com.jellypudding.offlineclient.hud;
 
+import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.gui.HudEditorScreen;
+import com.jellypudding.offlineclient.modules.misc.HudModule;
 import com.jellypudding.offlineclient.setting.BoolSetting;
+import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.Setting;
+import com.jellypudding.offlineclient.util.Modules;
+import com.jellypudding.offlineclient.util.RenderUtil;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 // One piece of the overlay. Its settings hang off the HUD module and the config
 // and the ClickGUI need to know nothing about elements.
 public abstract class HudElement {
+
+    // Whether an element has a background and whether that starts out switched on.
+    protected enum Background { NONE, OFF, ON }
 
     // The narrowest any element can be stretched either way and the widest most can.
     public static final double MIN_STRETCH = 0.25;
@@ -19,6 +29,11 @@ public abstract class HudElement {
 
     // Where the stretch sliders stop. A typed or dragged size goes further.
     private static final double SLIDER_STRETCH = 2;
+
+    // The soft blue grey most rows of overlay text start out in.
+    private static final float LABEL_HUE = 190;
+    private static final float LABEL_SATURATION = 0.15f;
+    private static final float LABEL_BRIGHTNESS = 0.85f;
 
     private final String name;
     private final String description;
@@ -30,34 +45,37 @@ public abstract class HudElement {
     private final NumberSetting y;
     private final NumberSetting across;
     private final NumberSetting down;
-    // The size in GUI pixels of the screen a pinned element was last placed on. Null for an
-    // element that is not pinned.
-    private NumberSetting placedWidth;
-    private NumberSetting placedHeight;
+    // Null for an element that never has a background.
+    private final Backdrop backdrop;
+    // The size in GUI pixels of the screen the element was last placed on. It keeps the element
+    // as many GUI pixels from the side or the middle its share is nearest on any other screen.
+    private final NumberSetting placedWidth;
+    private final NumberSetting placedHeight;
 
     private int boxLeft;
     private int boxTop;
     private int boxWidth;
     private int boxHeight;
 
-    // addSettings is final and files the settings away without handing out the element.
-    @SuppressWarnings("this-escape")
-    protected HudElement(String name, String description, boolean on,
-                         double startX, double startY) {
-        this(name, description, on, startX, startY, 1);
+    protected HudElement(String name, String description, boolean on, double startX, double startY) {
+        this(name, description, on, startX, startY, Background.OFF);
+    }
+
+    // An element whose background starts on or that has none at all.
+    protected HudElement(String name, String description, boolean on, double startX, double startY,
+                         Background background) {
+        this(name, description, on, startX, startY, 1, MAX_STRETCH, background);
     }
 
     // A few elements are wordy enough to ship smaller than the rest.
-    @SuppressWarnings("this-escape")
-    protected HudElement(String name, String description, boolean on,
-                         double startX, double startY, double startSize) {
-        this(name, description, on, startX, startY, startSize, MAX_STRETCH);
+    protected HudElement(String name, String description, boolean on, double startX, double startY,
+                         double startSize) {
+        this(name, description, on, startX, startY, startSize, MAX_STRETCH, Background.OFF);
     }
 
     // An element that has to reach across any screen such as a cover sets how far it stretches.
-    @SuppressWarnings("this-escape")
-    protected HudElement(String name, String description, boolean on,
-                         double startX, double startY, double startSize, double mostStretch) {
+    protected HudElement(String name, String description, boolean on, double startX, double startY,
+                         double startSize, double mostStretch, Background background) {
         this.name = name;
         this.description = description;
         this.mostStretch = mostStretch;
@@ -68,6 +86,14 @@ public abstract class HudElement {
         across = stretch(" width scale", "How wide it is drawn next to its normal size.", startSize);
         down = stretch(" height scale", "How tall it is drawn next to its normal size.", startSize);
         add(x, y, across, down);
+        backdrop = background == Background.NONE ? null : new Backdrop(name, background == Background.ON);
+        if (backdrop != null) {
+            for (Setting<?> setting : backdrop.settings()) {
+                hang(setting);
+            }
+        }
+        placedWidth = placedSize(" screen width", "width");
+        placedHeight = placedSize(" screen height", "height");
     }
 
     private NumberSetting percent(String suffix, String description, double start) {
@@ -80,30 +106,30 @@ public abstract class HudElement {
             .min(MIN_STRETCH).max(mostStretch);
     }
 
-    // Files settings in display order. Anything not already a sub option of
-    // something else goes under the element switch. Like a module's settings
-    // they show whether the element is on or off.
+    private NumberSetting placedSize(String suffix, String side) {
+        return new NumberSetting(name + suffix, "The " + side + " of the screen it was last placed on in GUI pixels.",
+            0, 0, 1, 1).min(0).internal();
+    }
+
+    // A colour setting that starts out in the soft label colour.
+    protected static ColorSetting labelColor(String name, String description) {
+        return new ColorSetting(name, description, LABEL_HUE, LABEL_SATURATION, LABEL_BRIGHTNESS, false);
+    }
+
+    // Files settings in display order.
     protected final void add(Setting<?>... more) {
         for (Setting<?> setting : more) {
-            if (setting.getParent() == null) {
-                setting.under(active, () -> true);
-            }
+            hang(setting);
             settings.add(setting);
         }
     }
 
-    // Keeps the element as many GUI pixels from the side or the middle its share is nearest
-    // when the screen changes size. The size of the screen it was placed on saves unseen.
-    protected final void pin() {
-        placedWidth = placedSize(" screen width", "width");
-        placedHeight = placedSize(" screen height", "height");
-        settings.add(placedWidth);
-        settings.add(placedHeight);
-    }
-
-    private NumberSetting placedSize(String suffix, String side) {
-        return new NumberSetting(name + suffix, "The " + side + " of the screen it was last placed on in GUI pixels.",
-            0, 0, 1, 1).min(0).internal();
+    // Anything not already a sub option of something else goes under the element switch. Like
+    // a module's settings they show whether the element is on or off.
+    private void hang(Setting<?> setting) {
+        if (setting.getParent() == null) {
+            setting.under(active, () -> true);
+        }
     }
 
     public final String getName() {
@@ -114,17 +140,34 @@ public abstract class HudElement {
         return description;
     }
 
-    // Everything but the switch. The list draws that as a toggle instead.
+    // Everything but the switch. The element's own options come before its background and the
+    // screen it was last placed on saves unseen at the end.
     public final List<Setting<?>> getOptions() {
-        return List.copyOf(settings);
+        List<Setting<?>> options = new ArrayList<>(settings);
+        if (backdrop != null) {
+            options.addAll(backdrop.settings());
+        }
+        options.add(placedWidth);
+        options.add(placedHeight);
+        return Collections.unmodifiableList(options);
     }
 
     // The switch itself first. The ClickGUI then shows the group closed.
     public final List<Setting<?>> getSettings() {
-        List<Setting<?>> all = new ArrayList<>(settings.size() + 1);
+        List<Setting<?>> all = new ArrayList<>();
         all.add(active);
-        all.addAll(settings);
+        all.addAll(getOptions());
         return all;
+    }
+
+    // The width and height stretch. Putting the size back resets these.
+    public final List<Setting<?>> sizeSettings() {
+        return List.of(across, down);
+    }
+
+    // The share across and down. Putting the element back where it started resets these.
+    public final List<Setting<?>> placeSettings() {
+        return List.of(x, y);
     }
 
     public final double scaleX() {
@@ -175,11 +218,6 @@ public abstract class HudElement {
         return across.isDefault() && down.isDefault();
     }
 
-    public final void resetSize() {
-        across.reset();
-        down.reset();
-    }
-
     public final double xPercent() {
         return x.getValue();
     }
@@ -188,23 +226,22 @@ public abstract class HudElement {
         return y.getValue();
     }
 
-    // The screen a pinned element was last placed on. Nought for any other and before then.
+    // The screen it was last placed on. Nought for an axis still at its starting share and
+    // before it has been placed. That axis follows whatever screen it is on.
     public final double placedWidth() {
-        return placedWidth == null ? 0 : placedWidth.getValue();
+        return x.isDefault() ? 0 : placedWidth.getValue();
     }
 
     public final double placedHeight() {
-        return placedHeight == null ? 0 : placedHeight.getValue();
+        return y.isDefault() ? 0 : placedHeight.getValue();
     }
 
     // The anchor as a share of a screen of this size.
     public final void moveTo(double xPercent, double yPercent, int screenWidth, int screenHeight) {
         x.setValue(xPercent);
         y.setValue(yPercent);
-        if (placedWidth != null) {
-            placedWidth.setValue((double) screenWidth);
-            placedHeight.setValue((double) screenHeight);
-        }
+        placedWidth.setValue((double) screenWidth);
+        placedHeight.setValue((double) screenHeight);
     }
 
     public final boolean positionIsDefault() {
@@ -214,10 +251,8 @@ public abstract class HudElement {
     public final void resetPosition() {
         x.reset();
         y.reset();
-        if (placedWidth != null) {
-            placedWidth.reset();
-            placedHeight.reset();
-        }
+        placedWidth.reset();
+        placedHeight.reset();
     }
 
     // Where the element sits until the player moves it. Null for an element placed
@@ -238,6 +273,12 @@ public abstract class HudElement {
         return false;
     }
 
+    // True for an element that keeps drawing whilst the rest of the overlay steps aside for a
+    // menu or the debug screen.
+    public boolean staysWhenHidden() {
+        return false;
+    }
+
     // How the element lines up against its anchor. Nought is the left edge and one
     // the right edge and a half the middle.
     protected final double alignment() {
@@ -253,9 +294,55 @@ public abstract class HudElement {
         active.setValue(on);
     }
 
-    // False for an element with nothing to say right now.
+    // False for an element with nothing to say right now. In the editor an element may say
+    // something it would not in play such as a sample of what it shows.
     public boolean visible() {
         return active.isOn();
+    }
+
+    // True whilst the HUD editor is open.
+    public static boolean editing() {
+        return OfflineClient.MC.gui.screen() instanceof HudEditorScreen;
+    }
+
+    // Whether overlay text has a shadow. The HUD module says.
+    protected static boolean textShadow() {
+        HudModule hud = Modules.get(HudModule.class);
+        return hud == null || hud.textShadow();
+    }
+
+    // All overlay text goes through here.
+    protected static void write(GuiGraphicsExtractor context, Font font, String text, int x, int y, int color) {
+        context.text(font, text, x, y, color, textShadow());
+    }
+
+    // In the editor an element with nothing to show stands in with its name.
+    private boolean blank() {
+        return editing() && !visible();
+    }
+
+    final int shownWidth(Font font) {
+        return blank() ? font.width(name) : width(font);
+    }
+
+    final int shownHeight(Font font) {
+        return blank() ? font.lineHeight : height(font);
+    }
+
+    // Measured in GUI pixels round the box the element was placed in. It keeps the same margin
+    // at any stretch.
+    final void drawBackground(GuiGraphicsExtractor context) {
+        if (backdrop != null) {
+            backdrop.around(context, boxWidth, boxHeight);
+        }
+    }
+
+    final void drawContent(GuiGraphicsExtractor context, Font font) {
+        if (blank()) {
+            write(context, font, name, 0, 0, RenderUtil.MUTED_TEXT);
+        } else {
+            render(context, font);
+        }
     }
 
     // Drawn with its own top left corner at the origin.

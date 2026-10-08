@@ -72,7 +72,7 @@ public final class HudElementList extends PanelFrame {
         if (!expanded.contains(element.getName())) {
             return GuiTheme.ROW_HEIGHT;
         }
-        return GuiTheme.ROW_HEIGHT + SettingWidget.blockHeight(element.getOptions(), null);
+        return GuiTheme.ROW_HEIGHT + SettingWidget.blockHeight(SettingBlock.of(element));
     }
 
     @Override
@@ -114,15 +114,20 @@ public final class HudElementList extends PanelFrame {
                 : (over ? GuiTheme.bgRowHover() : GuiTheme.bgRow()));
         context.fill(getX(), y + h, getX() + rowWidth, y + GuiTheme.ROW_HEIGHT, GuiTheme.RULE);
         context.guiRenderState.up();
+        SettingBlock block = SettingBlock.of(element);
+        int changed = ResetMarks.shownChanges(block);
         if (over) {
             hovered = element;
-            host.setTooltip(element.getDescription());
+            host.setTooltip(ResetMarks.withCount(element.getDescription(), changed));
         }
 
-        int room = rowWidth - PAD * 2 - PILL_WIDTH - ARROW_ZONE;
-        context.text(font, SettingWidget.trimEnd(font, element.getName(), room),
-            getX() + PAD, GuiTheme.textY(y, h),
-            on ? GuiTheme.text() : GuiTheme.textFaint(), false);
+        int room = rowWidth - PAD * 2 - PILL_WIDTH - ARROW_ZONE - (changed > 0 ? ResetMarks.MARK_ROOM : 0);
+        String name = SettingWidget.trimEnd(font, element.getName(), room);
+        int textY = GuiTheme.textY(y, h);
+        context.text(font, name, getX() + PAD, textY, on ? GuiTheme.text() : GuiTheme.textFaint(), false);
+        if (changed > 0) {
+            ResetMarks.headerMark(context, getX() + PAD + font.width(name), textY);
+        }
         RenderUtil.toggle(context, getX() + rowWidth - ARROW_ZONE - PILL_WIDTH,
             y + (h - PILL_HEIGHT) / 2, PILL_WIDTH, PILL_HEIGHT, on,
             GuiTheme.accent(), GuiTheme.bgSetting(),
@@ -132,8 +137,8 @@ public final class HudElementList extends PanelFrame {
             over ? GuiTheme.text() : GuiTheme.textFaint());
 
         if (expanded.contains(element.getName())) {
-            SettingWidget.renderBlock(context, font, element.getOptions(), null, getX(),
-                y + GuiTheme.ROW_HEIGHT, rowWidth, mouseX, mouseY, inView, host);
+            SettingWidget.renderBlock(context, font, block, getX(), y + GuiTheme.ROW_HEIGHT, rowWidth,
+                mouseX, mouseY, inView, host);
         }
     }
 
@@ -148,7 +153,7 @@ public final class HudElementList extends PanelFrame {
                 return true;
             }
             if (my >= y + GuiTheme.ROW_HEIGHT && my < y + h) {
-                return SettingWidget.clickBlock(element.getOptions(), null, mx, my, getX(),
+                return SettingWidget.clickBlock(SettingBlock.of(element), mx, my, getX(),
                     y + GuiTheme.ROW_HEIGHT, rowWidth, button, host, drag);
             }
             y += h;

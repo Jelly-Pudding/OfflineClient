@@ -10,12 +10,20 @@ import com.jellypudding.offlineclient.path.PathWalker;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.setting.TextSetting;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.player.Player;
 
-// Walks after another player using the pathfinder.
+import java.util.List;
+
+// Walks after another player or an entity using the pathfinder.
 public final class Follow extends Module {
 
     // Ticks between two searches. A moving target must not thrash the worker.
@@ -24,15 +32,20 @@ public final class Follow extends Module {
     // How far the target has to move before the path is worked out again.
     private static final double MOVED = 3;
 
-    public enum Target { NEAREST, NAME }
+    public enum Target { NEAREST, NAME, ENTITY }
 
     private final EnumSetting<Target> target = new EnumSetting<>("Target",
         "Who to walk after.", Target.NEAREST)
         .describe(Target.NEAREST, "Walks after the closest player in range.")
-        .describe(Target.NAME, "Walks after the player whose name you type in.");
+        .describe(Target.NAME, "Walks after the player whose name you type in.")
+        .describe(Target.ENTITY, "Walks after the nearest entity of a kind picked below.");
     private final TextSetting name = new TextSetting("Name",
         "The account name of the player to follow.", "")
         .under(target, Target.NAME);
+    private final RegistryListSetting<EntityType<?>> entities = new RegistryListSetting<>("Entities",
+        "The kinds of entity to walk after. Click to pick them.", BuiltInRegistries.ENTITY_TYPE,
+        List.of(EntityTypes.MINECART))
+        .under(target, Target.ENTITY);
     private final NumberSetting distance = new NumberSetting("Distance to keep",
         "How close to get before you stop walking.", 3, 1, 10, 0.5, " blocks").min(1);
     private final NumberSetting range = new NumberSetting("Range to give up at",
@@ -44,14 +57,14 @@ public final class Follow extends Module {
     private final PathFinder finder = new PathFinder();
     private final PathWalker walker = new PathWalker();
 
-    private Player following;
+    private Entity following;
     private BlockPos searchedFor;
     private int delay;
 
     public Follow() {
-        super("Follow", "Walks after another player.", Category.PLAYER);
-        addSettings(target, name, distance, range, rotate);
-        searchTags("path", "chase", "stalk");
+        super("Follow", "Walks after another player or an entity you pick.", Category.PLAYER);
+        addSettings(target, name, entities, distance, range, rotate);
+        searchTags("path", "chase", "stalk", "minecart");
     }
 
     @Override
@@ -117,25 +130,27 @@ public final class Follow extends Module {
         return searchedFor == null || Math.sqrt(searchedFor.distSqr(goal)) > MOVED;
     }
 
-    private Player pick() {
+    private Entity pick() {
+        if (target.is(Target.ENTITY)) {
+            return EntityUtil.nearest(range.getValue(),
+                entity -> entities.contains(entity.getType()) && entity.isAlive() && !Modules.isLocalBody(entity));
+        }
         if (target.is(Target.NAME)) {
             if (name.isBlank()) {
                 return null;
             }
             for (Player other : mc.level.players()) {
-                if (other != mc.player && name.getValue().equalsIgnoreCase(EntityUtil.nameOf(other))
-                    && inRange(other)) {
+                if (name.getValue().equalsIgnoreCase(EntityUtil.nameOf(other)) && followable(other)
+                    && mc.player.distanceTo(other) <= range.getValue()) {
                     return other;
                 }
             }
             return null;
         }
-        return (Player) EntityUtil.nearest(range.getValue(),
-            entity -> entity instanceof Player other && other.isAlive() && !other.isSpectator());
+        return EntityUtil.nearest(range.getValue(), entity -> entity instanceof Player other && followable(other));
     }
 
-    private boolean inRange(Player other) {
-        return other.isAlive() && !other.isSpectator()
-            && mc.player.distanceTo(other) <= range.getValue();
+    private boolean followable(Player other) {
+        return EntityUtil.isOtherPlayer(other) && other.isAlive() && !other.isSpectator();
     }
 }

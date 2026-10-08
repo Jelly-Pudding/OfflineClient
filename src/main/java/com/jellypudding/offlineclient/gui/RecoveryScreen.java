@@ -2,7 +2,9 @@ package com.jellypudding.offlineclient.gui;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.config.ConfigManager;
+import com.jellypudding.offlineclient.setting.ActionSetting;
 import com.jellypudding.offlineclient.util.ColorUtil;
+import com.jellypudding.offlineclient.util.Flash;
 import com.jellypudding.offlineclient.util.RenderUtil;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.gui.Font;
@@ -13,6 +15,8 @@ import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundEvents;
+
+import java.util.concurrent.TimeUnit;
 
 // Reached from the title screen. Puts the client back into a known good
 // state when a saved setting makes the game unplayable.
@@ -37,12 +41,8 @@ public final class RecoveryScreen extends Screen {
     private static final int TITLE_ROOM = 70;
     private static final int FOOT_ROOM = 24;
 
-    // A finished button holds its message this long and eases back over the last part.
-    private static final long DONE_MS = 2500;
-    private static final long FADE_MS = 400;
-    private static final long ARM_MS = 3000;
+    private static final long ARM_MS = TimeUnit.SECONDS.toMillis(ActionSetting.CONFIRM_SECONDS);
 
-    private static final int TICK_SIZE = 5;
     private static final int TICK_GAP = 4;
 
     private final Screen parent;
@@ -116,8 +116,8 @@ public final class RecoveryScreen extends Screen {
             Action action = actions[i];
             boolean hovered = overButton(mouseX, mouseY, y);
             boolean waiting = armed == i;
-            // Full strength until the last moments and then eased back to normal.
-            float success = done == i ? Math.clamp((doneUntil - now) / (float) FADE_MS, 0f, 1f) : 0f;
+            // A finished button holds its message for a moment and then eases back to normal.
+            float success = done == i ? Flash.strength(doneUntil) : 0f;
 
             int fill = ColorUtil.lerp(hovered ? GuiTheme.bgRowHover() : GuiTheme.bgPanel(),
                 GuiTheme.GREEN, success * 0.2f);
@@ -157,9 +157,9 @@ public final class RecoveryScreen extends Screen {
     // and the pair stays centred.
     private void renderDone(GuiGraphicsExtractor context, Font font, String message, int textY,
                             float strength) {
-        int left = width / 2 - (TICK_SIZE + TICK_GAP + font.width(message)) / 2;
+        int left = width / 2 - (RenderUtil.TICK_SIZE + TICK_GAP + font.width(message)) / 2;
         RenderUtil.tick(context, left, textY + 1, ColorUtil.fade(GuiTheme.GREEN, strength));
-        context.text(font, message, left + TICK_SIZE + TICK_GAP, textY,
+        context.text(font, message, left + RenderUtil.TICK_SIZE + TICK_GAP, textY,
             ColorUtil.lerp(GuiTheme.text(), GuiTheme.GREEN, strength));
     }
 
@@ -245,7 +245,7 @@ public final class RecoveryScreen extends Screen {
         armed = -1;
         action.task().run();
         done = index;
-        doneUntil = now + DONE_MS;
+        doneUntil = now + Flash.SHOWN_MS;
     }
 
     private static void click() {

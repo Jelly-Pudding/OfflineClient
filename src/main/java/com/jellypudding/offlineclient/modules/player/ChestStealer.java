@@ -36,6 +36,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.Predicate;
 
 public final class ChestStealer extends Module {
 
@@ -44,6 +45,8 @@ public final class ChestStealer extends Module {
 
     // Smallest stack is a share out of a hundred.
     private static final double PERCENT = 100;
+
+    private static final Predicate<ItemStack> ANYTHING = _ -> true;
 
     // The menus whose slots the stealer knows. A crafting or trade or anvil result would spend
     // your own items when taken.
@@ -115,9 +118,9 @@ public final class ChestStealer extends Module {
     private boolean driven;
     // Set for a ChestAura visit that stores as well. Taking then leaves the dump filter's picks.
     private boolean storing;
-    // What each slot held when it was last clicked. A slot that holds it still had its move
-    // thrown back by the server and is passed over until its stack changes.
-    private final Map<Integer, ItemStack> clickedAt = new HashMap<>();
+    // What a ChestAura visit may put into the container it opened.
+    private Predicate<ItemStack> storesHere = ANYTHING;
+    private final MenuClicks.Clicked clicked = new MenuClicks.Clicked();
 
     public ChestStealer() {
         super("ChestStealer", "Takes everything or only what you set limits for out of containers.",
@@ -146,7 +149,7 @@ public final class ChestStealer extends Module {
     public void dumpNow() {
         dumping = true;
         dumped = true;
-        clickedAt.clear();
+        clicked.clear();
         nextClick = 0;
     }
 
@@ -168,17 +171,20 @@ public final class ChestStealer extends Module {
         return isEnabled() || driven;
     }
 
-    // ChestAura opens a container and runs its visit through take or store.
-    public void startVisit(boolean alsoStores) {
+    // ChestAura opens a container and runs its visit through take or store. Only what the
+    // container takes goes in.
+    public void startVisit(boolean alsoStores, Predicate<ItemStack> takes) {
         forget();
         driven = true;
         storing = alsoStores;
+        storesHere = takes;
     }
 
     public void endVisit() {
         forget();
         driven = false;
         storing = false;
+        storesHere = ANYTHING;
     }
 
     public Step take() {
@@ -196,7 +202,12 @@ public final class ChestStealer extends Module {
 
     // Something in the inventory is waiting to be stored.
     public boolean somethingToStore() {
-        return InventoryUtil.findSlot(ChestStealer::dumps, InventoryUtil.WHOLE_INVENTORY) != -1;
+        return somethingToStore(ANYTHING);
+    }
+
+    // Something waiting to be stored that a container takes.
+    public boolean somethingToStore(Predicate<ItemStack> takes) {
+        return InventoryUtil.findSlot(stack -> dumps(stack) && takes.test(stack), InventoryUtil.WHOLE_INVENTORY) != -1;
     }
 
     // Something held goes past its limit and a visit would put it back.
@@ -234,7 +245,7 @@ public final class ChestStealer extends Module {
         if (!inGame() || driven) {
             return;
         }
-        if (!handles(mc.gui.screen())) {
+        if (!handles(mc.gui.screen()) || Modules.packing()) {
             forget();
             return;
         }
@@ -302,7 +313,7 @@ public final class ChestStealer extends Module {
             if (count == 0 || count < stack.getCount() && !menu.slots.get(slot).mayPlace(stack)) {
                 continue;
             }
-            if (thrownBack(slot, stack) || MenuClicks.room(menu, mine, stack) == 0) {
+            if (clicked.thrownBack(slot, stack) || MenuClicks.room(menu, mine, stack) == 0) {
                 blocked = true;
                 continue;
             }
@@ -360,7 +371,7 @@ public final class ChestStealer extends Module {
                 continue;
             }
             int extra = held.getOrDefault(rule, 0) - rule.limit();
-            if (extra <= 0 || thrownBack(slot, stack) || MenuClicks.room(menu, theirs, stack) == 0) {
+            if (extra <= 0 || clicked.thrownBack(slot, stack) || MenuClicks.room(menu, theirs, stack) == 0) {
                 continue;
             }
             move(menu, slot, theirs, Math.min(extra, stack.getCount()));
@@ -381,7 +392,7 @@ public final class ChestStealer extends Module {
         for (int slot : bestFirst(menu, MenuClicks.containerSlots(menu))) {
             ItemStack offer = menu.slots.get(slot).getItem();
             LootLimits.Rule rule = takeable(menu, slot, offer) ? limits.ruleFor(offer) : null;
-            if (rule == null || rule.limit() == 0 || thrownBack(slot, offer)) {
+            if (rule == null || rule.limit() == 0 || clicked.thrownBack(slot, offer)) {
                 continue;
             }
             int worst = worstUnder(menu, mine, rule);
@@ -392,8 +403,8 @@ public final class ChestStealer extends Module {
             if (!menu.slots.get(slot).mayPlace(given) || !beats(offer, given, rule, held, full)) {
                 continue;
             }
-            clickedAt.put(slot, offer.copy());
-            clickedAt.put(worst, given.copy());
+            clicked.note(slot, offer);
+            clicked.note(worst, given);
             MenuClicks.swap(menu, slot, worst);
             return true;
         }
@@ -434,10 +445,10 @@ public final class ChestStealer extends Module {
         boolean blocked = false;
         for (int slot : MenuClicks.inventorySlots(menu)) {
             ItemStack stack = menu.slots.get(slot).getItem();
-            if (!dumps(stack)) {
+            if (!dumps(stack) || !storesHere.test(stack)) {
                 continue;
             }
-            if (thrownBack(slot, stack) || MenuClicks.room(menu, theirs, stack) == 0) {
+            if (clicked.thrownBack(slot, stack) || MenuClicks.room(menu, theirs, stack) == 0) {
                 blocked = true;
                 continue;
             }
@@ -451,35 +462,22 @@ public final class ChestStealer extends Module {
     private Step throwOnce(AbstractContainerMenu menu) {
         for (int slot : MenuClicks.containerSlots(menu)) {
             ItemStack stack = menu.slots.get(slot).getItem();
-            if (!takeable(menu, slot, stack) || thrownBack(slot, stack)) {
+            if (!takeable(menu, slot, stack) || clicked.thrownBack(slot, stack)) {
                 continue;
             }
             if (backwards.isOn()) {
                 FaceMode.SPAM.faceExact(mc.player.getYRot() + 180f, mc.player.getXRot(), RotationPriority.IDLE);
             }
-            clickedAt.put(slot, stack.copy());
+            clicked.note(slot, stack);
             MenuClicks.click(menu, slot, 1, ContainerInput.THROW);
             return Step.MOVED;
         }
         return Step.DONE;
     }
 
-    // A whole stack goes by shift click. Part of one is dropped into a single slot a right click
-    // at a time and the rest goes back where it was.
     private void move(AbstractContainerMenu menu, int from, List<Integer> into, int count) {
-        ItemStack stack = menu.slots.get(from).getItem();
-        clickedAt.put(from, stack.copy());
-        int target = count < stack.getCount() ? MenuClicks.landing(menu, into, stack) : -1;
-        if (target == -1) {
-            MenuClicks.quickMove(menu, from);
-        } else {
-            MenuClicks.moveSome(menu, from, target, count);
-        }
-    }
-
-    private boolean thrownBack(int slot, ItemStack now) {
-        ItemStack before = clickedAt.get(slot);
-        return before != null && ItemStack.matches(before, now);
+        clicked.note(from, menu.slots.get(from).getItem());
+        MenuClicks.move(menu, from, into, count);
     }
 
     private static List<Integer> bestFirst(AbstractContainerMenu menu, List<Integer> slots) {
@@ -521,6 +519,6 @@ public final class ChestStealer extends Module {
         open = false;
         dumping = false;
         dumped = false;
-        clickedAt.clear();
+        clicked.clear();
     }
 }

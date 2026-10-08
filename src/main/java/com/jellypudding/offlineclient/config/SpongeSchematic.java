@@ -19,9 +19,9 @@ import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-// A schematic in version three of the Sponge format that WorldEdit and Litematica read. It is
-// gzipped NBT with a Schematic compound inside a root with no name. Blocks go in the order the
-// format keeps them. X runs fastest then Z then Y.
+// A schematic in version three of the Sponge format. It is gzipped NBT with a Schematic compound
+// inside a root with no name. Blocks go in the order the format keeps them. X runs fastest then Z
+// then Y.
 public final class SpongeSchematic {
 
     private static final int FORMAT_VERSION = 3;
@@ -69,8 +69,8 @@ public final class SpongeSchematic {
         return blockEntities.size();
     }
 
-    // The offset runs from the spot it was saved at to the lowest corner. WorldEdit pastes
-    // it the same way round from wherever you stand.
+    // The offset runs from the spot it was saved at to the lowest corner. A paste puts the
+    // blocks back the same way round from wherever you stand.
     public CompoundTag toTag(String name, String author, Vec3i offset) {
         CompoundTag paletteTag = new CompoundTag();
         palette.forEach((state, index) -> paletteTag.putInt(BlockStateParser.serialize(state), index));

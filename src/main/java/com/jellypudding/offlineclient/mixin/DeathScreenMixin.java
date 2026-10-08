@@ -1,5 +1,6 @@
 package com.jellypudding.offlineclient.mixin;
 
+import com.jellypudding.offlineclient.modules.misc.Conceal;
 import com.jellypudding.offlineclient.modules.player.AutoRespawn;
 import com.jellypudding.offlineclient.modules.player.Ghost;
 import com.jellypudding.offlineclient.util.Modules;
@@ -31,6 +32,9 @@ public abstract class DeathScreenMixin extends Screen {
 
     @Inject(method = "init", at = @At("TAIL"))
     private void onInit(CallbackInfo ci) {
+        if (Conceal.hides(Conceal.Part.SCREENS)) {
+            return;
+        }
         int top = height / 4 + BUTTON_TOP;
         AutoRespawn respawn = Modules.get(AutoRespawn.class);
         if (respawn != null && !respawn.isEnabled() && respawn.showsButton()) {
