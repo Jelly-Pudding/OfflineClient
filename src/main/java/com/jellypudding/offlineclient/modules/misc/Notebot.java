@@ -2,6 +2,7 @@ package com.jellypudding.offlineclient.modules.misc;
 
 import com.jellypudding.offlineclient.config.DataFiles;
 import com.jellypudding.offlineclient.event.Subscribe;
+import com.jellypudding.offlineclient.event.events.PacketReceiveEvent;
 import com.jellypudding.offlineclient.event.events.Render2DEvent;
 import com.jellypudding.offlineclient.event.events.Render3DEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
@@ -9,23 +10,28 @@ import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.render.BoxStyle;
 import com.jellypudding.offlineclient.render.WorldToScreen;
+import com.jellypudding.offlineclient.setting.ActionSetting;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ChoiceListSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.Setting;
+import com.jellypudding.offlineclient.setting.TextSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
-import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.ItemUtil;
+import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.NoteSong.Note;
 import com.jellypudding.offlineclient.util.NoteSong;
 import com.jellypudding.offlineclient.util.RenderUtil;
 import com.jellypudding.offlineclient.util.SwingMode;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.network.protocol.game.ClientboundSoundPacket;
 import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.NoteBlock;
@@ -37,8 +43,10 @@ import net.minecraft.world.phys.Vec3;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Deque;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -49,6 +57,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+import java.util.SortedMap;
+import java.util.TreeMap;
 import java.util.stream.Stream;
 
 // Plays Note Block Studio songs on the note blocks around you.
@@ -80,6 +90,14 @@ public final class Notebot extends Module {
     // Note block pitches wrap after this many clicks.
     private static final int PITCHES = 25;
 
+    // Ticks a note may wait for its turn under One note a tick before it is left out.
+    private static final int CARRY_TICKS = 4;
+
+    // The most notes one recording holds. Hours of music fit.
+    private static final int MAX_RECORDED = 200000;
+    private static final int MAX_NAME = 48;
+    private static final String RECORDING = "recording";
+
     private static final int TEXT_COLOR = 0xFF30E030;
     private static final int OWED_COLOR = 0xFFE03030;
 
@@ -102,17 +120,21 @@ public final class Notebot extends Module {
         new EnumMap<>(NoteBlockInstrument.class);
     private final NumberSetting tunePerTick = new NumberSetting("Tune per tick",
         "How many note blocks to click in one tick whilst tuning. Paper servers want one.",
-        1, 1, 20, 1).min(1);
+        1, 1, 20, 1);
     private final NumberSetting tuneDelay = new NumberSetting("Tune delay",
-        "Ticks between one round of tuning clicks and the next.", 1, 1, 20, 1, " ticks").min(1);
+        "Ticks between one round of tuning clicks and the next.", 1, 1, 20, 1, " ticks");
     private final NumberSetting recheckDelay = new NumberSetting("Recheck delay",
-        "Ticks to wait after tuning before the blocks are read back.", 10, 1, 40, 1, " ticks").min(1);
+        "Ticks to wait after tuning before the blocks are read back.", 10, 1, 40, 1, " ticks");
     private final BoolSetting foldNotes = new BoolSetting("Fold notes",
         "Moves notes outside the two octave range by an octave instead of dropping them.", true);
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Turn towards the note block on the server side.", true);
+        "Turns towards the note block on the server side.", true);
     private final BoolSetting swing = new BoolSetting("Swing",
         "Swings the arm on every hit.", true);
+    private final BoolSetting oneATick = new BoolSetting("One note a tick",
+        "Strikes a single note block each tick. The other notes of a chord follow on the next ticks and one"
+            + " that would come four ticks late is left out. For servers that drop several hits in one tick.",
+        false);
     private final BoolSetting playNext = new BoolSetting("Play next",
         "Starts another song from the folder when one ends.", false);
     private final BoolSetting preview = new BoolSetting("Preview",
@@ -135,6 +157,20 @@ public final class Notebot extends Module {
         "Also outlines every note block found in the scan.", false);
     private final BoxStyle scannedStyle = new BoxStyle("Scanned", BoxStyle.Shape.LINES, 58f)
         .under(showScanned);
+    private final TextSetting recordName = new TextSetting("Recording name",
+        "The name the next recording is saved under in the songs folder.", RECORDING);
+    // One of the two rows shows at a time and says what a press does.
+    private final ActionSetting record = new ActionSetting("Record",
+        "Starts writing down every note block you hear whether Notebot is on or off.", this::startRecording)
+        .visibleWhen(() -> !recording());
+    private final ActionSetting save = new ActionSetting("Stop and save",
+        "Ends the recording and saves what you heard in the songs folder as a song Notebot can play.",
+        this::saveRecording)
+        .visibleWhen(this::recording);
+
+    // A note waiting for its strike and the song tick it belongs to.
+    private record Late(Note note, int due) {
+    }
 
     private NoteSong loaded;
     private Stage stage;
@@ -158,6 +194,11 @@ public final class Notebot extends Module {
 
     private int tuneWait;
 
+    // Notes of the song not struck yet. Only One note a tick leaves any waiting.
+    private final Deque<Late> owed = new ArrayDeque<>();
+
+    private final Recorder recorder = new Recorder();
+
     private final Random random = new Random();
 
     public Notebot() {
@@ -165,13 +206,14 @@ public final class Notebot extends Module {
         addSettings(songs, instruments, detect, remap);
         addSettings(buildRemaps());
         addSettings(tunePerTick, tuneDelay, recheckDelay, foldNotes, rotate, swing,
-            playNext, preview, render);
+            oneATick, playNext, preview, render);
         addSettings(untunedStyle.settings());
         addSettings(tunedStyle.settings());
         addSettings(hitStyle.settings());
         addSettings(renderText, textScale, showScanned);
         addSettings(scannedStyle.settings());
-        searchTags("note block", "music", "nbs");
+        addSettings(recordName, record, save);
+        searchTags("note block", "music", "nbs", "record song");
     }
 
     // One row per instrument a note block can play.
@@ -233,7 +275,7 @@ public final class Notebot extends Module {
             return;
         }
         paused = !paused;
-        ChatUtil.message("§bNotebot §7" + (paused ? "paused." : "resumed."));
+        tell(paused ? "paused." : "resumed.");
     }
 
     @Override
@@ -257,7 +299,124 @@ public final class Notebot extends Module {
         tuning.clear();
         struck.clear();
         scanned.clear();
+        owed.clear();
         slots.restore();
+    }
+
+    // Listens for the note block sounds the server sends and keeps them by the tick they came
+    // in on. It runs whether the module is on or off.
+    private final class Recorder {
+
+        // Filled on the network thread.
+        private final TreeMap<Integer, List<Note>> heard = new TreeMap<>();
+        private volatile int clock;
+        private int count;
+        private boolean running;
+
+        private void start() {
+            synchronized (heard) {
+                heard.clear();
+                count = 0;
+            }
+            clock = 0;
+            running = true;
+            watch(this);
+        }
+
+        // The notes with the first of them moved to tick nought.
+        private SortedMap<Integer, List<Note>> stop() {
+            unwatch(this);
+            running = false;
+            TreeMap<Integer, List<Note>> notes = new TreeMap<>();
+            synchronized (heard) {
+                if (!heard.isEmpty()) {
+                    int first = heard.firstKey();
+                    heard.forEach((at, struckThen) -> notes.put(at - first, List.copyOf(struckThen)));
+                }
+            }
+            return notes;
+        }
+
+        @Subscribe
+        private void onTick(TickEvent event) {
+            clock++;
+            if (full()) {
+                tell("has heard all the notes one recording holds.");
+                saveRecording();
+            }
+        }
+
+        private boolean full() {
+            synchronized (heard) {
+                return count >= MAX_RECORDED;
+            }
+        }
+
+        // Fired on the network thread. A note block plays on the jukebox and note block channel. A
+        // plugin that plays the same sound for a menu or an alert mostly uses another one.
+        @Subscribe
+        private void onPacketReceive(PacketReceiveEvent event) {
+            if (!(event.getPacket() instanceof ClientboundSoundPacket sound) || sound.getSource() != SoundSource.RECORDS
+                || Modules.dormant()) {
+                return;
+            }
+            NoteBlockInstrument instrument = NoteSong.instrumentOf(sound.getSound().value());
+            if (instrument == null) {
+                return;
+            }
+            synchronized (heard) {
+                if (count < MAX_RECORDED) {
+                    heard.computeIfAbsent(clock, at -> new ArrayList<>())
+                        .add(new Note(instrument, NoteSong.pitchOf(sound.getPitch())));
+                    count++;
+                }
+            }
+        }
+    }
+
+    private boolean recording() {
+        return recorder.running;
+    }
+
+    // The Record row. A command can name it whilst a recording runs.
+    private String startRecording() {
+        if (recorder.running) {
+            return "Already recording";
+        }
+        recorder.start();
+        return "Recording";
+    }
+
+    // The Stop and save row and a recording that has filled up.
+    private String saveRecording() {
+        if (!recorder.running) {
+            return "Nothing is being recorded";
+        }
+        SortedMap<Integer, List<Note>> notes = recorder.stop();
+        if (notes.isEmpty()) {
+            return "Heard no note blocks";
+        }
+        String title = recordName.getValue().strip();
+        if (title.isEmpty()) {
+            title = RECORDING;
+        }
+        title = title.substring(0, Math.min(title.length(), MAX_NAME));
+        Path file = freeFile(DataFiles.safeName(title));
+        if (!NoteSong.write(file, title, mc.getUser().getName(), notes)) {
+            return "Could not save the recording";
+        }
+        tell("saved the recording as §f" + file.getFileName() + "§7.");
+        return "Saved";
+    }
+
+    // A file in the songs folder no earlier recording has. A taken name gets a number after it.
+    private static Path freeFile(String name) {
+        Path folder = songsFolder();
+        Path file = folder.resolve(name + ".txt");
+        for (int copy = 2; Files.exists(file); copy++) {
+            file = folder.resolve(name + "_" + copy + ".txt");
+        }
+        return file;
     }
 
     private static Path songsFolder() {
@@ -282,8 +441,9 @@ public final class Notebot extends Module {
         }
         tick = 0;
         paused = false;
+        owed.clear();
         stage = preview.isOn() ? Stage.PREVIEW : Stage.SCAN;
-        ChatUtil.message("§bNotebot §7loaded §f" + loaded.title()
+        tell("loaded §f" + loaded.title()
             + (loaded.author().isBlank() ? "" : " §7by §f" + loaded.author()) + "§7.");
     }
 
@@ -324,12 +484,7 @@ public final class Notebot extends Module {
     private void onTick(TickEvent event) {
         struck.clear();
         if (loaded == null) {
-            if (inGame()) {
-                loadSong();
-            }
-            return;
-        }
-        if (!inGame()) {
+            loadSong();
             return;
         }
         switch (stage) {
@@ -354,7 +509,7 @@ public final class Notebot extends Module {
         }
         int missing = loaded.needed().size() - assigned.size();
         if (missing > 0) {
-            ChatUtil.message("§bNotebot §7is short of §f" + missing + "§7 note blocks. Those notes are skipped.");
+            tell("is short of §f" + missing + "§7 note blocks. Those notes are skipped.");
         }
         planTuning();
         stage = Stage.TUNE;
@@ -442,7 +597,8 @@ public final class Notebot extends Module {
             stage = Stage.RECHECK;
             return;
         }
-        if (--tuneWait > 0) {
+        // The tuning clicks use the hand and wait whilst something else has it.
+        if (--tuneWait > 0 || Hands.taken()) {
             return;
         }
         tuneWait = tuneDelay.getInt();
@@ -483,7 +639,7 @@ public final class Notebot extends Module {
             return;
         }
         holdSafeItem();
-        ChatUtil.message("§bNotebot §7tuned. Playing.");
+        tell("tuned. Playing.");
         tick = 0;
         stage = Stage.PLAY;
     }
@@ -510,20 +666,24 @@ public final class Notebot extends Module {
         if (paused) {
             return;
         }
-        if (tick > loaded.lastTick()) {
+        if (tick > loaded.lastTick() && owed.isEmpty()) {
             finish();
             return;
         }
-        List<Note> notes = loaded.notesAt(tick++);
-        if (notes.isEmpty()) {
-            return;
+        for (Note note : loaded.notesAt(tick)) {
+            owed.add(new Late(note, tick));
         }
+        tick++;
+        // Whatever has waited too long is left out and the tune keeps its time.
+        owed.removeIf(late -> tick - late.due() > CARRY_TICKS);
+        int strikes = oneATick.isOn() ? 1 : owed.size();
         boolean turned = false;
-        for (Note note : notes) {
-            BlockPos pos = assigned.get(note);
+        while (strikes > 0 && !owed.isEmpty()) {
+            BlockPos pos = assigned.get(owed.poll().note());
             if (pos == null) {
                 continue;
             }
+            strikes--;
             if (rotate.isOn() && !turned) {
                 BlockUtil.faceVector(Vec3.atCenterOf(pos));
                 turned = true;
@@ -563,7 +723,7 @@ public final class Notebot extends Module {
             loadSong();
             return;
         }
-        ChatUtil.message("§bNotebot §7finished §f" + loaded.title() + "§7.");
+        tell("finished §f" + loaded.title() + "§7.");
         setEnabled(false);
     }
 
@@ -622,5 +782,11 @@ public final class Notebot extends Module {
             RenderUtil.label(event.getContext(), mc.font, screen.x, screen.y,
                 textScale.getFloat(), parts, colors);
         }
+    }
+
+    // The key does more than switch the module and cannot be a held one.
+    @Override
+    public boolean keySwitches() {
+        return false;
     }
 }

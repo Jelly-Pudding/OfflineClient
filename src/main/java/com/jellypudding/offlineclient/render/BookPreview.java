@@ -1,19 +1,17 @@
 package com.jellypudding.offlineclient.render;
 
+import com.jellypudding.offlineclient.util.ChatUtil;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.inventory.BookViewScreen;
 import net.minecraft.client.gui.screens.inventory.tooltip.ClientTooltipComponent;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.FormattedText;
 import net.minecraft.network.chat.MutableComponent;
-import net.minecraft.network.chat.Style;
 import net.minecraft.util.FormattedCharSequence;
 import org.joml.Matrix3x2fStack;
 
 import java.util.List;
-import java.util.Optional;
 
 // The first page of a book drawn on the open book picture inside a tooltip.
 public final class BookPreview implements ClientTooltipComponent {
@@ -42,15 +40,7 @@ public final class BookPreview implements ClientTooltipComponent {
     // The start of a page up to what the picture can show with its styles kept. A server can
     // send a page millions of letters long and the tooltip lays it out every frame.
     public static MutableComponent head(Component page) {
-        MutableComponent head = Component.empty();
-        int[] left = {MAX_CHARACTERS};
-        page.visit((style, text) -> {
-            String part = text.length() > left[0] ? text.substring(0, left[0]) : text;
-            head.append(Component.literal(part).setStyle(style));
-            left[0] -= part.length();
-            return left[0] > 0 ? Optional.empty() : FormattedText.STOP_ITERATION;
-        }, Style.EMPTY);
-        return head;
+        return ChatUtil.head(page, MAX_CHARACTERS);
     }
 
     @Override

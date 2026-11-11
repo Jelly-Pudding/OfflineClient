@@ -31,7 +31,7 @@ public final class ClearView extends Module {
         "Removes the flames drawn over your view whilst you burn.", true);
     private final NumberSetting lowerFire = new NumberSetting("Lower fire",
         "Pushes the flames down out of your view instead of removing them.", 0, 0, 0.6, 0.01, " blocks")
-        .min(0).max(1).unless(fire);
+        .max(1).unless(fire);
     private final BoolSetting water = new BoolSetting("Water",
         "Removes the blue tint drawn over your view underwater.", false);
     private final BoolSetting blockInFace = new BoolSetting("Block in face",

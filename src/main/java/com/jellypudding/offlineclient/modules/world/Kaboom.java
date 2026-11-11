@@ -1,6 +1,7 @@
 package com.jellypudding.offlineclient.modules.world;
 
 import com.jellypudding.offlineclient.event.Subscribe;
+import com.jellypudding.offlineclient.event.events.ClientTickEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
@@ -26,19 +27,19 @@ public final class Kaboom extends Module {
 
     private final NumberSetting power = new NumberSetting("Power",
         "How many times each block is hit.", 128, 32, 512, 32).min(1);
-    private final NumberSetting rate = new NumberSetting("Packets a tick",
-        "How many packets go out each tick. Fewer gives the server time to keep up.", 600, 100, 4000, 100).min(1);
+    private final NumberSetting rate = new NumberSetting("Hits a tick",
+        "How many block hits go out each tick. Each hit is two packets.", 600, 100, 4000, 100).min(1);
     private final BoolSetting sound = new BoolSetting("Sound",
-        "Play an explosion for yourself.", true);
+        "Plays an explosion for yourself.", true);
     private final BoolSetting particles = new BoolSetting("Particles",
-        "Show an explosion for yourself.", true);
+        "Shows an explosion for yourself.", true);
 
     private final List<BlockPos> targets = new ArrayList<>();
     private int roundsLeft;
     private int next;
 
     public Kaboom() {
-        super("Kaboom", "Blows a hole around you in one go.", Category.WORLD);
+        super("Kaboom", "Blows a hole around you in one go and gets you kicked on Paper.", Category.WORLD);
         addSettings(power, rate, sound, particles);
         searchTags("explode", "boom", "instant mine");
     }
@@ -83,10 +84,6 @@ public final class Kaboom extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame()) {
-            setEnabled(false);
-            return;
-        }
         int budget = rate.getInt();
         while (budget > 0 && roundsLeft > 0) {
             BlockMiner.breakInstantly(targets.get(next));
@@ -97,6 +94,14 @@ public final class Kaboom extends Module {
             }
         }
         if (roundsLeft == 0) {
+            setEnabled(false);
+        }
+    }
+
+    // Leaving the game ends the blast at once. One left on after a kick would flood the next join.
+    @Subscribe
+    private void onClientTick(ClientTickEvent event) {
+        if (mc.level == null) {
             setEnabled(false);
         }
     }

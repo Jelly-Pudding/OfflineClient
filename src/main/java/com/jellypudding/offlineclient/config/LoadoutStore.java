@@ -2,6 +2,7 @@ package com.jellypudding.offlineclient.config;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.jellypudding.offlineclient.setting.Bind;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -15,14 +16,14 @@ import java.util.TreeMap;
 // inventory index to the kind of item that belongs there.
 public final class LoadoutStore extends KeyedStore<LoadoutStore.Loadout> {
 
-    public record Loadout(String name, int key, Map<Integer, String> slots) implements KeyedStore.Keyed<Loadout> {
+    public record Loadout(String name, Bind key, Map<Integer, String> slots) implements KeyedStore.Keyed<Loadout> {
 
         public Loadout {
             slots = Map.copyOf(slots);
         }
 
         @Override
-        public Loadout withKey(int key) {
+        public Loadout withKey(Bind key) {
             return new Loadout(name, key, slots);
         }
     }
@@ -54,7 +55,7 @@ public final class LoadoutStore extends KeyedStore<LoadoutStore.Loadout> {
         return contents.potion().map(Holder::getRegisteredName).map(potion -> item + " " + potion).orElse(item);
     }
 
-    private static Loadout read(String name, int key, JsonObject saved) {
+    private static Loadout read(String name, Bind key, JsonObject saved) {
         Map<Integer, String> slots = new TreeMap<>();
         for (Map.Entry<String, JsonElement> slot : saved.getAsJsonObject("slots").entrySet()) {
             slots.put(Integer.parseInt(slot.getKey()), slot.getValue().getAsString());

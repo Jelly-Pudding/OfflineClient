@@ -6,24 +6,29 @@ import com.jellypudding.offlineclient.event.events.EntityDeathEvent;
 import com.jellypudding.offlineclient.event.events.Render2DEvent;
 import com.jellypudding.offlineclient.event.events.Render3DEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
+import com.jellypudding.offlineclient.gui.WaypointsScreen;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.render.DrawBatch;
 import com.jellypudding.offlineclient.render.NearFade;
+import com.jellypudding.offlineclient.render.WaypointIcons;
 import com.jellypudding.offlineclient.render.WorldToScreen;
+import com.jellypudding.offlineclient.setting.ActionSetting;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
+import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.ColorUtil;
+import com.jellypudding.offlineclient.util.Dimension;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.LifeWatch;
 import com.jellypudding.offlineclient.util.RenderUtil;
 import com.jellypudding.offlineclient.util.ServerInfo;
 import com.jellypudding.offlineclient.util.WorldWatch;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.block.Blocks;
@@ -35,7 +40,6 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Set;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
@@ -45,7 +49,7 @@ public final class Waypoints extends Module {
     // Death markers are named Death followed by the time of day.
     private static final String DEATH_PREFIX = "Death";
     private static final DateTimeFormatter DEATH_TIME = DateTimeFormatter.ofPattern("HH:mm:ss");
-    private static final int DEATH_HUE = 0;
+    private static final WaypointStore.Colour DEATH_COLOUR = WaypointStore.Colour.ofHue(0);
     // Another player's death marker is named Grave and the player and the time of day such as
     // GraveSteve14:03:22. A waypoint of your own named Graveyard never matches.
     private static final String GRAVE_PREFIX = "Grave";
@@ -53,11 +57,15 @@ public final class Waypoints extends Module {
     // Portal markers are named Portal and a number in the purple of a lit portal.
     private static final String PORTAL_PREFIX = "Portal";
     private static final Pattern PORTAL = Pattern.compile(PORTAL_PREFIX + "\\d+");
-    private static final int PORTAL_HUE = 275;
+    private static final WaypointStore.Colour PORTAL_COLOUR = WaypointStore.Colour.ofHue(275);
     // A portal marker this close already marks the portal.
     private static final double SAME_PORTAL = 8;
-    // A death marker this close counts as reached.
-    private static final double REACHED = 3;
+    // A death marker goes once you stand this close to it. A find lies somewhere about the spot
+    // the server gave away and goes from further off.
+    private static final WaypointStore.Near REACHED = WaypointStore.Near.of(WaypointStore.Action.DELETE, 3);
+    private static final int FIND_BLOCKS = 16;
+    private static final WaypointStore.Near FIND_REACHED =
+        WaypointStore.Near.of(WaypointStore.Action.DELETE, FIND_BLOCKS);
     // A trip starts within a second of last standing in a portal. The portal you come out of is
     // waited for five seconds since a busy server sends the new world late.
     private static final int DEPARTURE_TICKS = 20;
@@ -66,22 +74,31 @@ public final class Waypoints extends Module {
     private final BoolSetting beam = new BoolSetting("Beam",
         "Draws a tall line that shows a marker over hills.", true);
     private final NumberSetting beamHeight = new NumberSetting("Beam height",
-        "How far the line reaches up and down.", 64, 8, 320, 8, " blocks").min(1);
+        "How far the line reaches up and down.", 64, 8, 320, 8, " blocks").min(1)
+        .under(beam);
     private final BoolSetting box = new BoolSetting("Box",
-        "Draw a box on the marked block.", true);
+        "Draws a box on the marked block.", true);
     private final BoolSetting label = new BoolSetting("Label",
-        "Write the name above the marker.", true);
+        "Writes the name above the marker.", true);
     private final BoolSetting distance = new BoolSetting("Distance",
-        "Add how far away the marker is to the label.", true);
+        "Adds how far away the marker is to the label.", true)
+        .under(label);
     private final BoolSetting coordinates = new BoolSetting("Coordinates",
-        "Add the block position to the label.", false);
-    private final NumberSetting scale = new NumberSetting("Scale",
-        "Size of the labels.", 1, 0.5, 3, 0.1).min(0.1);
-    private final NumberSetting range = new NumberSetting("Range",
-        "Furthest marker to draw or zero for every one.", 0, 0, 2000, 100, " blocks").min(0);
+        "Adds the block position to the label.", false)
+        .under(label);
+    private final NumberSetting labelReach = new NumberSetting("Label reach",
+        "Writes a label only whilst its marker is within this many pixels of the crosshair. Nought writes"
+            + " every label.", 0, 0, 400, 10, " px")
+        .under(label);
+    private final EnumSetting<WaypointStore.Icon> icon = new EnumSetting<>("Icon",
+        "The shape drawn on a waypoint that has no icon of its own.", WaypointStore.Icon.NONE);
+    private final NumberSetting scale = scaleRow(
+        "Size of the label and icon of a waypoint that has no scale of its own.", 1);
+    private final NumberSetting range = rangeRow(
+        "How far away a waypoint with no range of its own is still drawn. Nought draws it from any distance.", 0);
     private final BoolSetting acrossDimensions = new BoolSetting("Across dimensions",
-        "Shows overworld markers in the nether and the other way round with the coordinates scaled by eight.",
-        true);
+        "Shows overworld markers in the nether and the other way round with the coordinates scaled by eight."
+            + " A waypoint with a switch of its own follows that.", true);
     private final NearFade fade = new NearFade(0);
     private final BoolSetting autoColor = new BoolSetting("Automatic colours",
         "Each new waypoint takes a colour from its name. Off gives it the colour below.", true);
@@ -92,7 +109,7 @@ public final class Waypoints extends Module {
         "Saves a red waypoint where you die.", false);
     private final NumberSetting deathsKept = new NumberSetting("Deaths kept",
         "How many death markers are kept in each world for you and as many again for other players.",
-        5, 1, 20, 1).min(1)
+        5, 1, 20, 1)
         .under(markDeaths);
     private final BoolSetting deathChat = new BoolSetting("Death message",
         "Tells you in chat where you died.", false)
@@ -103,17 +120,22 @@ public final class Waypoints extends Module {
     private final BoolSetting forgetReached = new BoolSetting("Forget when reached",
         "Removes a death marker once you walk up to it.", false)
         .under(markDeaths);
+    private final BoolSetting forgetFinds = new BoolSetting("Forget finds",
+        "Removes a waypoint a module or the locate command saved for a find once you come within "
+            + FIND_BLOCKS + " blocks of it.", false);
     private final BoolSetting markPortals = new BoolSetting("Mark portals",
         "Saves a waypoint on both sides of each nether portal you travel through.", false);
+    private final ActionSetting openList = new ActionSetting("Open waypoints",
+        "Opens the list of the waypoints on this server where each one can be edited.", WaypointsScreen::open);
 
     // Rebuilt once a tick.
     private List<WaypointStore.Waypoint> shown = List.of();
 
-    // The player whose death was last marked. A respawn hands over a new one.
-    private LocalPlayer marked;
-    // Death markers you have been away from in this world. Only these count as reached. A
-    // respawn right beside one leaves it.
-    private final Set<String> leftBehind = new HashSet<>();
+    // The body whose death was last marked. A respawn hands over a fresh one.
+    private final LifeWatch marked = new LifeWatch();
+    // Waypoints you have been outside the near distance of in this world since they last changed.
+    // Only these act when you come near. One made or edited where you stand waits until you have left.
+    private final Set<WaypointStore.Waypoint> armed = new HashSet<>();
     private final WorldWatch world = new WorldWatch();
     // The nether portal block you last stood in and the dimension it is in.
     private BlockPos lastPortal;
@@ -124,10 +146,10 @@ public final class Waypoints extends Module {
 
     public Waypoints() {
         super("Waypoints", "Marks the coordinates you saved in the world.", Category.RENDER);
-        addSettings(beam, beamHeight, box, label, distance, coordinates, scale, range,
+        addSettings(beam, beamHeight, box, label, distance, coordinates, labelReach, icon, scale, range,
             acrossDimensions, fade.setting(), autoColor, nextColor, markDeaths, deathsKept, deathChat,
-            otherDeaths, forgetReached, markPortals);
-        searchTags("waypoint", "marker", "coords", "grave", "portal");
+            otherDeaths, forgetReached, forgetFinds, markPortals, openList);
+        searchTags("waypoint", "marker", "coords", "grave", "portal", "icon");
     }
 
     @Override
@@ -144,7 +166,7 @@ public final class Waypoints extends Module {
     @Override
     protected void onDisable() {
         shown = List.of();
-        leftBehind.clear();
+        armed.clear();
         forgetPortal();
     }
 
@@ -155,18 +177,15 @@ public final class Waypoints extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        shown = inGame() ? visible() : List.of();
-        if (!inGame()) {
-            return;
-        }
+        shown = visible();
         boolean newWorld = world.changed();
         if (newWorld) {
-            leftBehind.clear();
+            armed.clear();
         }
         if (mc.player.isDeadOrDying()) {
             markDeath(mc.player.position());
-        } else if (markDeaths.isOn() && forgetReached.isOn()) {
-            forgetReached();
+        } else {
+            actNear();
         }
         followPortals(newWorld);
     }
@@ -174,23 +193,55 @@ public final class Waypoints extends Module {
     // The waypoints the markers show. The compass strip shows the same.
     public List<WaypointStore.Waypoint> visible() {
         List<WaypointStore.Waypoint> all = new ArrayList<>(WaypointStore.get().here());
-        if (acrossDimensions.isOn()) {
-            all.addAll(WaypointStore.get().mirrored());
+        for (WaypointStore.Waypoint far : WaypointStore.get().mirrored()) {
+            if (resolved(far).mirrored()) {
+                all.add(far);
+            }
         }
         all.removeIf(WaypointStore.Waypoint::hidden);
         return all;
     }
 
+    // What the module gives a waypoint wherever it has nothing of its own. The list edits a
+    // waypoint against these.
+    public WaypointStore.Options defaults(WaypointStore.Waypoint waypoint) {
+        return new WaypointStore.Options(icon.getValue(), scale.getValue(), range.getValue(),
+            acrossDimensions.isOn(), usualRule(waypoint));
+    }
+
+    // The options a waypoint is drawn and judged with.
+    public WaypointStore.Options resolved(WaypointStore.Waypoint waypoint) {
+        return waypoint.options().over(defaults(waypoint));
+    }
+
+    // The Scale row here and the one each waypoint has in the list. Only the text differs.
+    public static NumberSetting scaleRow(String description, double value) {
+        return new NumberSetting("Scale", description, value, 0.5, 3, 0.1).min(WaypointStore.Options.SMALLEST_SCALE);
+    }
+
+    // The same for the Range row.
+    public static NumberSetting rangeRow(String description, double value) {
+        return new NumberSetting("Range", description, value, 0, 2000, 100, " blocks");
+    }
+
+    // Death markers and finds go when reached whilst their switch is on. Anything else stays.
+    private WaypointStore.Near usualRule(WaypointStore.Waypoint waypoint) {
+        String name = waypoint.name();
+        if (markDeaths.isOn() && forgetReached.isOn() && (isDeathMarker(name) || isGrave(name))) {
+            return REACHED;
+        }
+        return waypoint.found() && forgetFinds.isOn() ? FIND_REACHED : WaypointStore.Near.NOTHING;
+    }
+
     // Saves a marker on the spot of a death. AutoRespawn calls this before it
     // respawns and the tick above catches a death without it. Once per death.
     public void markDeath(Vec3 position) {
-        if (!markDeaths.isOn() || !inGame() || mc.player == marked) {
+        if (!markDeaths.isOn() || !inGame() || !marked.changed()) {
             return;
         }
-        marked = mc.player;
         BlockPos at = BlockPos.containing(position);
         String name = DEATH_PREFIX + LocalTime.now().format(DEATH_TIME);
-        WaypointStore.get().mark(name, at, DEATH_HUE);
+        WaypointStore.get().mark(name, at, DEATH_COLOUR);
         dropOld(Waypoints::isDeathMarker);
         if (deathChat.isOn()) {
             ChatUtil.message("§cYou died at §f" + BlockUtil.text(at) + "§c.");
@@ -199,10 +250,10 @@ public final class Waypoints extends Module {
 
     // Only the newest markers of a kind are kept. Saving moves a marker to the end.
     private void dropOld(Predicate<String> kind) {
-        List<String> marked = new ArrayList<>();
+        List<WaypointStore.Waypoint> marked = new ArrayList<>();
         for (WaypointStore.Waypoint waypoint : WaypointStore.get().here()) {
             if (kind.test(waypoint.name())) {
-                marked.add(waypoint.name());
+                marked.add(waypoint);
             }
         }
         for (int i = 0; i < marked.size() - deathsKept.getInt(); i++) {
@@ -226,23 +277,36 @@ public final class Waypoints extends Module {
             return;
         }
         String name = GRAVE_PREFIX + player.getGameProfile().name() + LocalTime.now().format(DEATH_TIME);
-        WaypointStore.get().mark(name, player.blockPosition(), DEATH_HUE);
+        WaypointStore.get().mark(name, player.blockPosition(), DEATH_COLOUR);
         dropOld(Waypoints::isGrave);
     }
 
-    private void forgetReached() {
+    // Hides or removes each waypoint of this world whose rule says to once you are within its
+    // distance. A hidden waypoint has nothing left to do.
+    private void actNear() {
         Vec3 feet = mc.player.position();
-        for (WaypointStore.Waypoint waypoint : WaypointStore.get().here()) {
-            String name = waypoint.name();
-            if (!isDeathMarker(name) && !isGrave(name)) {
-                continue;
-            }
-            if (!waypoint.centre().closerThan(feet, REACHED)) {
-                leftBehind.add(name);
-            } else if (leftBehind.remove(name)) {
-                WaypointStore.get().remove(name);
+        List<WaypointStore.Waypoint> here = WaypointStore.get().here();
+        armed.retainAll(new HashSet<>(here));
+        for (WaypointStore.Waypoint waypoint : here) {
+            WaypointStore.Near rule = resolved(waypoint).near();
+            if (!rule.acts() || waypoint.hidden()) {
+                armed.remove(waypoint);
+            } else if (away(waypoint, feet) > rule.distance()) {
+                armed.add(waypoint);
+            } else if (armed.remove(waypoint)) {
+                if (rule.action() == WaypointStore.Action.DELETE) {
+                    WaypointStore.get().remove(waypoint);
+                } else {
+                    WaypointStore.get().replace(waypoint, waypoint.withHidden(true));
+                }
             }
         }
+    }
+
+    // A find often has no real height and only how far off it lies on the level counts.
+    private static double away(WaypointStore.Waypoint waypoint, Vec3 feet) {
+        Vec3 middle = waypoint.centre();
+        return waypoint.found() ? Math.hypot(middle.x - feet.x, middle.z - feet.z) : middle.distanceTo(feet);
     }
 
     // A new world reached within a second of standing in a nether portal is the other side of it.
@@ -255,7 +319,7 @@ public final class Waypoints extends Module {
         String dimension = ServerInfo.dimension();
         if (newWorld) {
             if (lastPortal != null && sincePortal <= DEPARTURE_TICKS
-                && dimension.equals(WaypointStore.otherSide(lastPortalDimension))) {
+                && dimension.equals(Dimension.otherSide(lastPortalDimension))) {
                 markPortal(lastPortal, lastPortalDimension);
                 arrivalWait = ARRIVAL_TICKS;
             }
@@ -292,19 +356,16 @@ public final class Waypoints extends Module {
                 return;
             }
         }
-        WaypointStore.get().markFresh(PORTAL_PREFIX, pos, dimension, PORTAL_HUE);
+        WaypointStore.get().markFresh(PORTAL_PREFIX, pos, dimension, PORTAL_COLOUR);
     }
 
-    // The hue the next added waypoint gets. Below zero leaves it to the name.
-    public int nextHue() {
-        return autoColor.isOn() ? WaypointStore.Waypoint.AUTO_HUE : Math.round(nextColor.getHue());
+    // The colour the next added waypoint gets. Automatic colours leave it to the name.
+    public WaypointStore.Colour nextColour() {
+        return autoColor.isOn() ? WaypointStore.Colour.AUTO : WaypointStore.Colour.of(nextColor);
     }
 
-    // A chosen hue wins. Otherwise the same name always gets the same hue.
-    public static int colorOf(WaypointStore.Waypoint waypoint) {
-        int hue = waypoint.hue() >= 0 ? waypoint.hue()
-            : Math.floorMod(waypoint.name().toLowerCase(Locale.ROOT).hashCode(), 360);
-        return ColorUtil.hsv(hue, 0.7f, 1f);
+    private static boolean outOfRange(WaypointStore.Options look, double away) {
+        return look.range() > 0 && away > look.range();
     }
 
     @Subscribe
@@ -313,20 +374,19 @@ public final class Waypoints extends Module {
             return;
         }
         DrawBatch batch = event.getBatch();
-        double limit = range.getValue();
         double reach = beamHeight.getValue();
         Vec3 eye = mc.player.getEyePosition();
 
         for (WaypointStore.Waypoint waypoint : shown) {
             Vec3 middle = waypoint.centre();
-            if (limit > 0 && eye.distanceTo(middle) > limit) {
+            if (outOfRange(resolved(waypoint), eye.distanceTo(middle))) {
                 continue;
             }
             float strength = fade.strengthAt(middle);
             if (strength <= 0) {
                 continue;
             }
-            int color = ColorUtil.fade(colorOf(waypoint), strength);
+            int color = ColorUtil.fade(waypoint.argb(), strength);
             if (beam.isOn()) {
                 batch.line(middle.subtract(0, reach, 0), middle.add(0, reach, 0), color, true);
             }
@@ -338,29 +398,39 @@ public final class Waypoints extends Module {
         }
     }
 
+    // The icon sits on the marker and the label under it. Without an icon the label takes the spot.
     @Subscribe
     private void onRender2D(Render2DEvent event) {
-        if (!label.isOn() || !inGame() || !WorldToScreen.update()) {
-            return;
-        }
         List<WaypointStore.Waypoint> waypoints = shown;
-        if (waypoints.isEmpty()) {
+        if (waypoints.isEmpty() || !inGame() || !WorldToScreen.update()) {
             return;
         }
         GuiGraphicsExtractor context = event.getContext();
         Font font = mc.font;
         Vec3 camera = WorldToScreen.cameraPos();
-        double limit = range.getValue();
-        float factor = scale.getFloat();
+        double reach = labelReach.getValue();
+        double middleX = context.guiWidth() / 2.0;
+        double middleY = context.guiHeight() / 2.0;
 
         for (WaypointStore.Waypoint waypoint : waypoints) {
+            WaypointStore.Options look = resolved(waypoint);
             Vec3 middle = waypoint.centre().add(0, 1, 0);
             double away = camera.distanceTo(middle);
-            if (limit > 0 && away > limit) {
+            if (outOfRange(look, away)) {
                 continue;
             }
             Vec3 screen = WorldToScreen.project(middle);
             if (screen == null || fade.strengthAt(middle) < 1) {
+                continue;
+            }
+            float factor = look.scale().floatValue();
+            int color = waypoint.argb();
+            double labelY = screen.y;
+            if (look.icon() != WaypointStore.Icon.NONE) {
+                WaypointIcons.draw(context, look.icon(), screen.x, screen.y, factor, color);
+                labelY += WaypointIcons.ROOM_BELOW * factor;
+            }
+            if (!label.isOn() || reach > 0 && Math.hypot(screen.x - middleX, screen.y - middleY) > reach) {
                 continue;
             }
 
@@ -371,8 +441,7 @@ public final class Waypoints extends Module {
             if (distance.isOn()) {
                 text.append(" ").append(Math.round(away)).append("m");
             }
-            RenderUtil.label(context, font, screen.x, screen.y, factor,
-                List.of(text.toString()), List.of(colorOf(waypoint)));
+            RenderUtil.label(context, font, screen.x, labelY, factor, List.of(text.toString()), List.of(color));
         }
     }
 }

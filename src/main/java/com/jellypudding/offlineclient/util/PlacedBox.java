@@ -2,25 +2,27 @@ package com.jellypudding.offlineclient.util;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
-import net.minecraft.client.gui.screens.inventory.InventoryScreen;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.ShulkerBoxBlock;
 import net.minecraft.world.level.block.state.BlockState;
 
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Predicate;
 
 // A shulker box or an ender chest set down beside you then opened for the owner's clicks and
 // mined back. A shulker box drops as an item with what it holds. An ender chest only comes
 // back to a Silk Touch pickaxe and is left standing without one.
-public final class PlacedBox {
+public final class PlacedBox implements WorkedScreens.Worker {
 
     // What the owner does whilst the container is open. True whilst there is more to do.
     @FunctionalInterface
@@ -45,6 +47,8 @@ public final class PlacedBox {
     private final InventoryUtil.SlotSwap slots;
     private Stage stage = Stage.NONE;
     private BlockPos pos;
+    // The level the container went down in. Held weakly to keep no level left behind alive.
+    private WeakReference<ClientLevel> level = new WeakReference<>(null);
     private int ticks;
     private int sinceClick;
     // The menu open as the container went down. Only one opened after it is the container's.
@@ -55,12 +59,18 @@ public final class PlacedBox {
     // The owner's slot swap picks the container and the tool that mines it back.
     public PlacedBox(InventoryUtil.SlotSwap slots) {
         this.slots = slots;
+        WorkedScreens.add(this);
     }
 
     // The block behind you at floor level or one beside it. The floor under it has to take the
     // click and the block over it has to be free for a shulker lid to lift into. Null when no
     // block will do.
     public static BlockPos spot() {
+        return spot(pos -> true);
+    }
+
+    // The same with a test of the owner's own that the spot has to pass as well.
+    public static BlockPos spot(Predicate<BlockPos> also) {
         BlockPos feet = MC.player.blockPosition();
         List<BlockPos> tries = new ArrayList<>();
         tries.add(feet.relative(MC.player.getDirection().getOpposite()));
@@ -72,7 +82,7 @@ public final class PlacedBox {
             BlockPos above = spot.above();
             if (BlockUtil.isReplaceable(spot) && !BlockUtil.intersectsPlayer(spot)
                 && BlockUtil.isSolid(floor) && !BlockUtil.opensOnClick(BlockUtil.state(floor))
-                && BlockUtil.state(above).getCollisionShape(MC.level, above).isEmpty()) {
+                && BlockUtil.state(above).getCollisionShape(MC.level, above).isEmpty() && also.test(spot)) {
                 return spot;
             }
         }
@@ -84,6 +94,18 @@ public final class PlacedBox {
         return WORKING.contains(pos);
     }
 
+    // True whilst a container another owner set down is worked. Its screen would take this
+    // owner's clicks.
+    public boolean othersAtWork() {
+        return WORKING.size() > (pos == null ? 0 : 1);
+    }
+
+    // True whilst any owner has a container down. Another screen that opens meanwhile and the
+    // container's own could be taken for each other.
+    public static boolean anyAtWork() {
+        return !WORKING.isEmpty();
+    }
+
     // Puts the container held in the hotbar slot down against the floor of the spot. A shulker
     // box then faces up and lifts its lid into the free block above. False when it did not go
     // down.
@@ -93,6 +115,7 @@ public final class PlacedBox {
             return false;
         }
         pos = spot.immutable();
+        level = new WeakReference<>(MC.level);
         WORKING.add(pos);
         stage = Stage.OPEN;
         ticks = 0;
@@ -141,7 +164,7 @@ public final class PlacedBox {
         if (stage == Stage.BREAK) {
             return mineBack(state, rotateMine);
         }
-        AbstractContainerMenu menu = openMenu();
+        AbstractContainerMenu menu = openMenu(state);
         if (menu == null) {
             if (++sinceClick > REOPEN_TICKS) {
                 BlockUtil.useOn(pos, rotatePlace, true);
@@ -171,13 +194,30 @@ public final class PlacedBox {
         pos = null;
     }
 
-    // The container's own screen once its items have come in.
-    private AbstractContainerMenu openMenu() {
-        if (!(MC.gui.screen() instanceof AbstractContainerScreen<?> screen) || screen instanceof InventoryScreen) {
-            return null;
+    // A container left in another level owns nothing here. Menu ids start again on a new connection.
+    @Override
+    public boolean ownsScreen() {
+        ClientLevel here = MC.level;
+        if (stage != Stage.OPEN || here == null || here != level.get() || !InventoryUtil.containerOpen()) {
+            return false;
         }
-        AbstractContainerMenu menu = screen.getMenu();
-        return menu.containerId != menuBefore && menu.getStateId() != 0 ? menu : null;
+        AbstractContainerMenu live = MC.player.containerMenu;
+        return live.containerId != menuBefore && ownKind(BlockUtil.state(pos), live);
+    }
+
+    // The container's own screen once its items have come in.
+    private AbstractContainerMenu openMenu(BlockState state) {
+        AbstractContainerMenu menu = InventoryUtil.openedSince(menuBefore);
+        return menu != null && ownKind(state, menu) ? menu : null;
+    }
+
+    // The server names no block as it opens a screen. A shulker box opens a screen of its own kind
+    // and an ender chest one with its own title.
+    private static boolean ownKind(BlockState state, AbstractContainerMenu menu) {
+        if (state.is(Blocks.ENDER_CHEST)) {
+            return InventoryUtil.isEnderChest(MC.gui.screen());
+        }
+        return state.getBlock() instanceof ShulkerBoxBlock && menu.menuType == MenuType.SHULKER_BOX;
     }
 
     private boolean mineBack(BlockState state, boolean rotate) {
@@ -193,6 +233,11 @@ public final class PlacedBox {
         }
         BlockMiner.mineWithHeld(pos, rotate);
         return true;
+    }
+
+    // True whilst a shulker box or an ender chest stands at the position.
+    static boolean standing(BlockPos pos) {
+        return standing(BlockUtil.state(pos));
     }
 
     private static boolean standing(BlockState state) {

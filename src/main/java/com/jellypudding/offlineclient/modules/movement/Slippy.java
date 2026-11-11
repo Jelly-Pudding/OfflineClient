@@ -20,7 +20,7 @@ public final class Slippy extends Module {
 
     private final NumberSetting friction = new NumberSetting("Friction",
         "The friction every block gets. Plain ground is 0.6 and ice is 0.98. Above one you keep speeding up.",
-        1, 0.01, 1.1, 0.01, "").min(0.01);
+        1, 0.01, 1.1, 0.01, "");
     private final NumberSetting topSpeed = new NumberSetting("Top speed",
         "The fastest a friction above one lets you slide.", 20, 5, 100, 1, " bps").min(1)
         .under(friction, () -> friction.getValue() > 1);
@@ -44,9 +44,14 @@ public final class Slippy extends Module {
         return friction.getValueString();
     }
 
+    // Only a block that takes the friction above one can run away with you.
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || !mc.player.onGround() || friction.getValue() <= 1) {
+        if (!mc.player.onGround() || friction.getValue() <= 1) {
+            return;
+        }
+        Block below = mc.level.getBlockState(mc.player.getBlockPosBelowThatAffectsMyMovement()).getBlock();
+        if (groundFriction(below, below.getFriction()) <= 1) {
             return;
         }
         Vec3 velocity = mc.player.getDeltaMovement();

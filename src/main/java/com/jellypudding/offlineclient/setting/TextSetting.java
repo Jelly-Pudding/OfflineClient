@@ -6,8 +6,21 @@ import com.google.gson.JsonPrimitive;
 // A line of free text.
 public final class TextSetting extends Setting<String> {
 
+    // A value nobody else should read such as a shared key or the spot of a base. A copy of
+    // settings leaves it out.
+    private boolean secret;
+
     public TextSetting(String name, String description, String defaultValue) {
         super(name, description, defaultValue);
+    }
+
+    public TextSetting secret() {
+        secret = true;
+        return this;
+    }
+
+    public boolean isSecret() {
+        return secret;
     }
 
     public boolean isBlank() {

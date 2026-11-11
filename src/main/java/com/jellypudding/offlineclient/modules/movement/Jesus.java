@@ -37,7 +37,7 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 public final class Jesus extends Module {
 
     public enum Mode { SOLID, DOLPHIN }
-    public enum Bypass { WOBBLE, NCP, NONE }
+    public enum Bypass { WOBBLE, NONE }
     private enum Liquid { NONE, WATER, LAVA }
 
     // Upward speed whilst climbing out of the liquid.
@@ -45,50 +45,42 @@ public final class Jesus extends Module {
     // Extra lift per tick whilst bobbing in dolphin mode.
     private static final double DOLPHIN_LIFT = 0.04;
 
-    // Ticks out of the water before the surface counts as solid again.
-    private static final int SETTLED = 10;
+    // Any count past the two ticks of a lift out of the liquid. No lift is due.
+    private static final int SETTLED = 2;
     // How far the sent height wobbles above and below the real one.
     private static final double PACKET_WOBBLE = 0.05;
 
     // Fire Resistance with less than this left is not worth swimming on.
     private static final int SHORT_RESISTANCE_TICKS = 15 * SharedConstants.TICKS_PER_SECOND;
 
-    // A NoCheatPlus bypass. Ticks of a plain walk between hops and the hop
-    // itself and how the sent height creeps down each tick.
-    private static final int NCP_HOP_EVERY = 15;
-    private static final double NCP_HOP = 0.08;
-    private static final double NCP_SINK = 0.02;
-    private static final double NCP_SINK_STEP = 0.0001;
-    private static final float NCP_MAX_FALL = 3;
-
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
         "How the liquid holds you.", Mode.SOLID)
         .describe(Mode.SOLID, "Lets you stand and walk on the surface.")
         .describe(Mode.DOLPHIN, "Keeps you swimming along the top instead.");
     private final BoolSetting water = new BoolSetting("Water",
-        "Walk on water.", true)
+        "Lets you walk on water.", true)
         .under(mode, Mode.SOLID);
     private final BoolSetting dipIfBurning = new BoolSetting("Dip when burning",
         "Lets you drop into water whilst you are on fire to put it out.", true)
         .under(water);
     private final BoolSetting sneakToDip = new BoolSetting("Sneak to dip",
-        "Hold sneak to sink into the water.", true)
+        "Holding sneak sinks you into the water.", true)
         .under(water);
     private final NumberSetting dipFall = new NumberSetting("Dip fall",
-        "Fall further than this into water and you sink instead of landing. 0 always catches you.",
+        "A fall further than this into water sinks you instead of landing. 0 always catches you.",
         4, 0, 20, 0.5, " blocks")
         .under(water);
     private final BoolSetting lava = new BoolSetting("Lava",
-        "Also walk on lava.", false)
+        "Also lets you walk on lava.", false)
         .under(mode, Mode.SOLID);
     private final BoolSetting dipIfResistant = new BoolSetting("Dip when resistant",
         "Lets you sink into lava whilst Fire Resistance has over 15 seconds left.", true)
         .under(lava);
     private final BoolSetting lavaSneakToDip = new BoolSetting("Lava sneak to dip",
-        "Hold sneak to sink into the lava.", true)
+        "Holding sneak sinks you into the lava.", true)
         .under(lava);
     private final NumberSetting lavaDipFall = new NumberSetting("Lava dip fall",
-        "Fall further than this into lava and you sink instead of landing. 0 always catches you.",
+        "A fall further than this into lava sinks you instead of landing. 0 always catches you.",
         0, 0, 20, 0.5, " blocks")
         .under(lava);
     private final BoolSetting climbOn = new BoolSetting("Climb on",
@@ -103,17 +95,12 @@ public final class Jesus extends Module {
     private final EnumSetting<Bypass> bypass = new EnumSetting<>("Server bypass",
         "How the packets hide the walk from an anti cheat.", Bypass.WOBBLE)
         .describe(Bypass.WOBBLE, "Makes standing on liquid look like bobbing to the server.")
-        .describe(Bypass.NCP, "Never claims ground and creeps the sent height down whilst a hop every 15 ticks keeps you up.")
         .describe(Bypass.NONE, "Sends the packets as they are.")
         .under(mode, Mode.SOLID);
-    private final BoolSetting slowDown = new BoolSetting("Slow down",
-        "Stops you dead on each hop as well.", false)
-        .under(bypass, Bypass.NCP);
     private final BoolSetting powderSnow = new BoolSetting("Powder snow",
-        "Also walk on powder snow.", true);
+        "Also lets you walk on powder snow.", true);
 
     private int ticksSinceExit = SETTLED;
-    private int swimmingTicks;
 
     // Set on a tick that lifts the player onto held liquid.
     private boolean lifting;
@@ -121,10 +108,9 @@ public final class Jesus extends Module {
     private double liftZ;
 
     public Jesus() {
-        super("Jesus", "Walk on water and lava.", Category.MOVEMENT);
+        super("Jesus", "Lets you walk on water and lava.", Category.MOVEMENT);
         addSettings(mode, water, dipIfBurning, sneakToDip, dipFall, lava, dipIfResistant,
-            lavaSneakToDip, lavaDipFall, climbOn, riseToSurface, riding, bypass, slowDown,
-            powderSnow);
+            lavaSneakToDip, lavaDipFall, climbOn, riseToSurface, riding, bypass, powderSnow);
         searchTags("water walking", "waterwalk", "lava walking");
     }
 
@@ -136,7 +122,6 @@ public final class Jesus extends Module {
     @Override
     protected void onEnable() {
         ticksSinceExit = SETTLED;
-        swimmingTicks = 0;
         lifting = false;
     }
 
@@ -352,10 +337,6 @@ public final class Jesus extends Module {
             mover.setDeltaMovement(velocity.x, 0, velocity.z);
         }
         ticksSinceExit++;
-
-        if (bypass.is(Bypass.NCP)) {
-            ncpTick();
-        }
     }
 
     private void dolphinTick() {
@@ -368,27 +349,6 @@ public final class Jesus extends Module {
 
     private boolean liquidBelow(Entity mover) {
         return !mc.level.getFluidState(mover.blockPosition().below()).isEmpty();
-    }
-
-    // Walks at a fixed pace for a few ticks then hops. The sent height creeps
-    // down between hops. The server sees a swimmer and not a hoverer.
-    private void ncpTick() {
-        if (!overWantedLiquid(mc.player, mc.level)) {
-            swimmingTicks = 0;
-            return;
-        }
-        Vec3 velocity = mc.player.getDeltaMovement();
-        if (++swimmingTicks < NCP_HOP_EVERY) {
-            if (mc.player.onGround()) {
-                Vec3 heading = MovementUtil.inputDirection().scale(MovementUtil.SPRINT_SPEED);
-                mc.player.setDeltaMovement(heading.x, velocity.y, heading.z);
-            }
-            return;
-        }
-        swimmingTicks = 0;
-        double vx = slowDown.isOn() ? 0 : velocity.x;
-        double vz = slowDown.isOn() ? 0 : velocity.z;
-        mc.player.setDeltaMovement(vx, NCP_HOP, vz);
     }
 
     // True whilst the feet rest on a liquid the module means to hold.
@@ -436,14 +396,8 @@ public final class Jesus extends Module {
         if (player == null || level == null || !active(player) || player.isPassenger()) {
             return;
         }
-        if (player.isInWater() || player.isInLava() || !overWantedLiquid(player, level)) {
-            return;
-        }
-        if (bypass.is(Bypass.NCP)) {
-            event.setPacket(ncpPacket(packet, player));
-            return;
-        }
-        if (!packet.hasPosition() || !player.onGround()) {
+        if (!packet.hasPosition() || !player.onGround() || player.isInWater() || player.isInLava()
+            || !overWantedLiquid(player, level)) {
             return;
         }
         double x = packet.getX(player.getX());
@@ -451,19 +405,5 @@ public final class Jesus extends Module {
         double z = packet.getZ(player.getZ());
         y += player.tickCount % 2 == 0 ? PACKET_WOBBLE : -PACKET_WOBBLE;
         event.setPacket(PacketUtil.withPosition(packet, player, x, y, z, true));
-    }
-
-    // Never claims ground. Whilst standing the sent height sinks a touch more each tick.
-    private ServerboundMovePlayerPacket ncpPacket(ServerboundMovePlayerPacket packet,
-                                                  LocalPlayer player) {
-        if (player.fallDistance > NCP_MAX_FALL) {
-            return packet;
-        }
-        if (!player.onGround() || !packet.hasPosition()) {
-            return PacketUtil.withOnGround(packet, player, false);
-        }
-        double sink = NCP_SINK + NCP_SINK_STEP * swimmingTicks;
-        return PacketUtil.withPosition(packet, player, packet.getX(player.getX()),
-            packet.getY(player.getY()) - sink, packet.getZ(player.getZ()), false);
     }
 }

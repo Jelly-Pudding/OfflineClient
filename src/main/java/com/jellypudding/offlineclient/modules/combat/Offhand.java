@@ -108,7 +108,7 @@ public final class Offhand extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || mc.player.isSpectator()) {
+        if (mc.player.isSpectator()) {
             return;
         }
         if (!cursor.recover()) {

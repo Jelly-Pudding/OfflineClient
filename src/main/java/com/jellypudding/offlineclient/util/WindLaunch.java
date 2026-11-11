@@ -86,8 +86,7 @@ public final class WindLaunch {
         }
         jumpNext = false;
         LocalPlayer player = MC.player;
-        // A held jump key jumps anyway and a second jump would add the sprint push twice.
-        if (player.onGround() && !player.input.keyPresses.jump()) {
+        if (player.onGround()) {
             player.jumpFromGround();
         }
         loan.giveBack();

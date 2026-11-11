@@ -10,15 +10,12 @@ import com.jellypudding.offlineclient.render.DrawBatch;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
-import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.Holes;
 import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
-import net.minecraft.world.phys.shapes.VoxelShape;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -31,9 +28,6 @@ public final class FeetEsp extends Module {
 
     private record Mark(AABB box, Cover cover) {
     }
-
-    // Feet resting on a block top sit this close to it.
-    private static final double STANDING_GAP = 1.0E-3;
 
     private final NumberSetting range = new NumberSetting("Range",
         "How far away a player is marked.", 16, 4, 64, 1, " blocks").min(1);
@@ -77,9 +71,6 @@ public final class FeetEsp extends Module {
     @Subscribe
     private void onTick(TickEvent event) {
         marks.clear();
-        if (!inGame()) {
-            return;
-        }
         for (Player player : mc.level.players()) {
             if (wanted(player)) {
                 marks.add(markOf(player));
@@ -100,22 +91,11 @@ public final class FeetEsp extends Module {
 
     private Mark markOf(Player player) {
         BlockPos feet = player.blockPosition();
-        Cover cover = burrowed(player, feet) ? Cover.BURROWED
-            : BlockUtil.inHole(feet) ? Cover.HOLE : Cover.OPEN;
+        Cover cover = Holes.burrowed(player) ? Cover.BURROWED
+            : Holes.inHole(feet) ? Cover.HOLE : Cover.OPEN;
         AABB box = new AABB(feet.getX(), feet.getY(), feet.getZ(),
             feet.getX() + 1, feet.getY() + height.getValue(), feet.getZ() + 1);
         return new Mark(box, cover);
-    }
-
-    // Standing on top of a low block such as an ender chest is no burrow. The block has
-    // to reach above the feet.
-    private boolean burrowed(Player player, BlockPos feet) {
-        BlockState state = BlockUtil.state(feet);
-        if (!BlockUtil.wallOf(state).holds()) {
-            return false;
-        }
-        VoxelShape shape = state.getCollisionShape(mc.level, feet);
-        return !shape.isEmpty() && feet.getY() + shape.max(Direction.Axis.Y) > player.getY() + STANDING_GAP;
     }
 
     @Subscribe

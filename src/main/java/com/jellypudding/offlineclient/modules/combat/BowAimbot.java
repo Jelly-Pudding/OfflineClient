@@ -1,6 +1,7 @@
 package com.jellypudding.offlineclient.modules.combat;
 
 import com.jellypudding.offlineclient.event.Subscribe;
+import com.jellypudding.offlineclient.event.events.PostMotionEvent;
 import com.jellypudding.offlineclient.event.events.Render2DEvent;
 import com.jellypudding.offlineclient.event.events.Render3DEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
@@ -13,17 +14,20 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.EntityFilter;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.ProjectilePath;
 import com.jellypudding.offlineclient.util.ProjectileUtil;
 import com.jellypudding.offlineclient.util.RenderUtil;
 import com.jellypudding.offlineclient.util.RotationManager;
 import com.jellypudding.offlineclient.util.TargetFilter;
 import com.jellypudding.offlineclient.util.TargetPriority;
+import com.jellypudding.offlineclient.util.Targeting;
 
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.BowItem;
 import net.minecraft.world.item.CrossbowItem;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.ProjectileWeaponItem;
+import net.minecraft.world.item.TridentItem;
+import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.HitResult;
@@ -31,48 +35,56 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
 
-// The pitch comes from the real arrow physics and the flight time leads the target.
-public final class BowAimbot extends Module {
+// The pitch comes from the real physics of an arrow or a thrown trident and the flight time leads
+// the target. A trident with Riptide is never aimed. In water or rain it throws you and not itself.
+public final class BowAimbot extends Module implements Targeting {
 
-    private final EntityFilter filter = EntityFilter.living("Aim at", "aimed at", true,
+    private final EntityFilter filter = EntityFilter.living("Aims at", "aimed at", true,
         EntityFilter.Pick.NONE, List.of());
     private final TargetFilter targets = new TargetFilter();
     private final NumberSetting range = new NumberSetting("Range",
-        "Furthest target to aim at in blocks.", 40, 5, 80, 1);
+        "Furthest target to aim at.", 40, 5, 80, 1, " blocks");
     private final EnumSetting<TargetPriority> priority = TargetPriority.setting("Aims at",
         TargetPriority.NEAREST);
     private final BoolSetting predict = new BoolSetting("Predict",
-        "Lead moving targets by their speed and the arrow flight time.", true);
+        "Leads moving targets by their speed and the arrow flight time.", true);
     private final NumberSetting predictStrength = new NumberSetting("Predict strength",
-        "How much of the worked out lead is used.", 100, 0, 200, 5, "%").min(0)
+        "How much of the worked out lead is used.", 100, 0, 200, 5, "%")
         .under(predict);
     private final BoolSetting walls = new BoolSetting("Through walls",
-        "Also aim at targets you cannot see.", false);
+        "Also aims at targets you cannot see.", false);
     private final BoolSetting render = new BoolSetting("Highlight",
-        "Draw a box around the target that fills in as the bow charges.", true);
+        "Draws a box around the target that fills in as the shot charges.", true);
     private final ColorSetting highlightColor = new ColorSetting("Highlight colour",
         "Colour of that box.", 0, 0.81f, 1f, false).under(render);
     private final BoolSetting readout = new BoolSetting("Charge readout",
-        "Write how far the bow is drawn under your crosshair.", true);
-    private final BoolSetting noSlow = new BoolSetting("No slowdown",
-        "Move at full speed whilst drawing.", true);
+        "Writes how far the bow or trident is drawn under your crosshair.", true);
 
     private Entity target;
     private float charge;
     private boolean wasDrawing;
+    // How far your last tick moved you. By the next tick the old position has caught up with you.
+    private Vec3 ownMove = Vec3.ZERO;
 
     public BowAimbot() {
-        super("BowAimbot", "Aims your bow or crossbow at the nearest target whilst you draw it.", Category.COMBAT);
+        super("BowAimbot", "Aims your bow or crossbow or trident at the nearest target whilst you draw it.",
+            Category.COMBAT);
         addSettings(filter.settings());
         addSettings(targets.settings());
         addSettings(range, priority, predict, predictStrength, walls,
-            render, highlightColor, readout, noSlow);
-        searchTags("bow aim", "crossbow", "aimbot", "arrow");
+            render, highlightColor, readout);
+        searchTags("bow aim", "crossbow", "aimbot", "arrow", "trident");
     }
 
     @Override
     public String getSuffix() {
-        return target == null ? null : target.getName().getString();
+        return target == null ? null : EntityUtil.displayNameOf(target);
+    }
+
+    // What a draw is aimed at. Null between draws.
+    @Override
+    public Entity getFought() {
+        return target;
     }
 
     @Override
@@ -80,17 +92,23 @@ public final class BowAimbot extends Module {
         target = null;
         charge = 0;
         wasDrawing = false;
+        ownMove = Vec3.ZERO;
     }
 
-    // Consulted by LocalPlayerMixin to skip the bow draw slowdown.
-    public boolean suppressesSlowdown() {
-        return isEnabled() && noSlow.isOn() && inGame() && mc.player.isUsingItem()
-            && mc.player.getUseItem().getItem() instanceof ProjectileWeaponItem;
+    // A trident that leaves the hand when let go. Riptide throws the player instead.
+    private boolean thrownTrident(ItemStack stack) {
+        return stack.getItem() instanceof TridentItem
+            && EnchantmentHelper.getTridentSpinAttackStrength(stack, mc.player) <= 0;
+    }
+
+    @Subscribe
+    private void onPostMotion(PostMotionEvent event) {
+        ownMove = EntityUtil.velocityOf(mc.player);
     }
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || mc.player.isSpectator()) {
+        if (mc.player.isSpectator()) {
             target = null;
             return;
         }
@@ -135,6 +153,11 @@ public final class BowAimbot extends Module {
                     / CrossbowItem.getChargeDuration(using, mc.player));
                 return ProjectileUtil.CROSSBOW_SPEED;
             }
+            // A trident flies like an arrow at a speed of its own once held long enough to throw.
+            if (thrownTrident(using)) {
+                charge = Math.min(1, (float) mc.player.getTicksUsingItem() / TridentItem.THROW_THRESHOLD_TIME);
+                return ProjectilePath.TRIDENT.power();
+            }
         }
         ItemStack held = mc.player.getMainHandItem();
         if (held.getItem() instanceof CrossbowItem && CrossbowItem.isCharged(held)
@@ -163,25 +186,24 @@ public final class BowAimbot extends Module {
 
         // The server hands the arrow the distance the last packet moved.
         // The vertical part only counts in the air.
-        Vec3 own = EntityUtil.velocityOf(mc.player);
-        Vec3 drift = new Vec3(own.x, mc.player.onGround() ? 0 : own.y, own.z);
+        Vec3 drift = new Vec3(ownMove.x, mc.player.onGround() ? 0 : ownMove.y, ownMove.z);
 
-        double[] solution = solve(eye, aimPoint, speed);
-        if (solution != null) {
+        ProjectilePath.Arc arc = ProjectilePath.arrowArc(eye, aimPoint, speed);
+        if (arc != null) {
             // The target keeps its pace whilst the momentum the arrow inherited from
             // a sprint or a jump bleeds off to the drag every tick.
-            double flight = solution[1];
+            double flight = arc.ticks();
             Vec3 lead = aimPoint.add(targetVelocity.scale(flight))
                 .subtract(drift.scale(carriedTicks(flight)));
-            double[] again = solve(eye, lead, speed);
+            ProjectilePath.Arc again = ProjectilePath.arrowArc(eye, lead, speed);
             if (again != null) {
-                solution = again;
+                arc = again;
                 aimPoint = lead;
             }
         }
 
         float yaw = RotationManager.yawTo(aimPoint);
-        float pitch = solution == null ? RotationManager.pitchTo(aimPoint) : (float) -solution[0];
+        float pitch = arc == null ? RotationManager.pitchTo(aimPoint) : arc.pitch();
 
         // The view itself turns. A bow shot has to leave from where the camera points.
         mc.player.setYRot(yaw);
@@ -215,70 +237,6 @@ public final class BowAimbot extends Module {
         return (1 - Math.pow(ProjectileUtil.AIR_DRAG, ticks)) / (1 - ProjectileUtil.AIR_DRAG);
     }
 
-    // Finds the lowest launch angle that lands an arrow on the point.
-    // Returns the angle and flight time in ticks or null when out of reach.
-    private static double[] solve(Vec3 from, Vec3 to, double speed) {
-        double dx = to.x - from.x;
-        double dz = to.z - from.z;
-        double distance = Math.sqrt(dx * dx + dz * dz);
-        double height = to.y - from.y;
-        if (distance < 0.01) {
-            return null;
-        }
-
-        double previous = -90;
-        double previousHeight = Double.NaN;
-        for (double angle = -89; angle <= 89; angle += 1) {
-            double h = heightAt(angle, distance, speed);
-            if (Double.isNaN(h)) {
-                continue;
-            }
-            if (h >= height && !Double.isNaN(previousHeight)) {
-                double low = previous;
-                double high = angle;
-                for (int i = 0; i < 16; i++) {
-                    double mid = (low + high) / 2;
-                    double midHeight = heightAt(mid, distance, speed);
-                    if (Double.isNaN(midHeight) || midHeight < height) {
-                        low = mid;
-                    } else {
-                        high = mid;
-                    }
-                }
-                return new double[] {high, flightTicks(high, distance, speed)};
-            }
-            if (h >= height) {
-                return new double[] {angle, flightTicks(angle, distance, speed)};
-            }
-            previous = angle;
-            previousHeight = h;
-        }
-        return null;
-    }
-
-    // Ticks an arrow needs to travel the horizontal distance or NaN if it never gets there.
-    private static double flightTicks(double angleDegrees, double distance, double speed) {
-        double horizontal = speed * Math.cos(Math.toRadians(angleDegrees));
-        double reach = horizontal / (1 - ProjectileUtil.AIR_DRAG);
-        if (horizontal <= 0 || distance >= reach) {
-            return Double.NaN;
-        }
-        return Math.log(1 - distance / reach) / Math.log(ProjectileUtil.AIR_DRAG);
-    }
-
-    // Height an arrow reaches at the horizontal distance using the closed
-    // form of the per tick drag and gravity update.
-    private static double heightAt(double angleDegrees, double distance, double speed) {
-        double ticks = flightTicks(angleDegrees, distance, speed);
-        if (Double.isNaN(ticks)) {
-            return Double.NaN;
-        }
-        double vertical = speed * Math.sin(Math.toRadians(angleDegrees));
-        double terminal = ProjectileUtil.ARROW_GRAVITY / (1 - ProjectileUtil.AIR_DRAG);
-        double fallen = 1 - Math.pow(ProjectileUtil.AIR_DRAG, ticks);
-        return (vertical + terminal) * fallen / (1 - ProjectileUtil.AIR_DRAG) - terminal * ticks;
-    }
-
     // A word under the crosshair that says when to let go.
     @Subscribe
     private void onRender2D(Render2DEvent event) {
@@ -287,8 +245,7 @@ public final class BowAimbot extends Module {
         }
         String line = charge >= 1 ? "Target locked"
             : "Charging " + Math.round(charge * 100) + "%";
-        RenderUtil.underCrosshair(event.getContext(), mc.font, line,
-            charge >= 1 ? highlightColor.getColor() : RenderUtil.MUTED_TEXT);
+        RenderUtil.underCrosshair(event.getContext(), line, charge >= 1 ? highlightColor.getColor() : RenderUtil.MUTED_TEXT);
     }
 
     @Subscribe

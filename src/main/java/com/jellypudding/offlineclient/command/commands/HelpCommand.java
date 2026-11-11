@@ -51,9 +51,9 @@ public final class HelpCommand extends Command {
             + "stashfinder openfinds§7 opens the list of stashes.");
 
         String key = OfflineClient.INSTANCE.getModuleManager()
-            .get(ClickGuiModule.class).getKeybind().getKeyName();
+            .get(ClickGuiModule.class).getKeybind().getValueString();
         Component link = Component.literal("§b§nopen it now")
-            .withStyle(style -> style.withClickEvent(new ClickEvent.RunCommand(prefix + "gui")));
+            .withStyle(style -> style.withClickEvent(new ClickEvent.RunCommand(manager.offer("gui"))));
         ChatUtil.component(Component.literal("§7The ClickGUI opens with §b" + key
                 + "§7. Rebind it with §f" + prefix + "bind clickgui <key>§7 or click here to ")
             .append(link)
@@ -64,9 +64,8 @@ public final class HelpCommand extends Command {
     private static Component entry(String prefix, Command command) {
         Component hover = Component.literal("§b" + prefix + command.getUsage() + "\n§7"
             + command.getDescription());
-        return Component.literal("§b" + command.getName())
-            .withStyle(style -> style.withHoverEvent(new HoverEvent.ShowText(hover))
-                .withClickEvent(new ClickEvent.SuggestCommand(prefix + command.getName() + " ")));
+        return ChatUtil.typeLink(Component.literal("§b" + command.getName())
+            .withStyle(style -> style.withHoverEvent(new HoverEvent.ShowText(hover))), command.getName() + " ");
     }
 
     private static void describe(CommandManager manager, String prefix, String name) {

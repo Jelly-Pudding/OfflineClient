@@ -19,18 +19,20 @@ import com.jellypudding.offlineclient.setting.ChoiceListSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.AlertSound;
+import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.ChunkScanner;
 import com.jellypudding.offlineclient.util.ChunkWindow;
 import com.jellypudding.offlineclient.util.Cooldowns;
+import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.Notice;
 import com.jellypudding.offlineclient.util.OwnDigs;
 import com.jellypudding.offlineclient.util.ServerInfo;
 import com.jellypudding.offlineclient.util.SpawnerMob;
 import com.jellypudding.offlineclient.util.Tally;
 import com.jellypudding.offlineclient.util.WorldWatch;
+import com.jellypudding.offlineclient.worldgen.SpawnerPlace;
 import com.jellypudding.offlineclient.worldgen.SpawnerRooms;
-import com.jellypudding.offlineclient.worldgen.SpawnerRooms.Place;
 import com.jellypudding.offlineclient.worldgen.SpawnerRooms.Room;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
@@ -50,7 +52,6 @@ import net.minecraft.world.entity.vehicle.boat.AbstractChestBoat;
 import net.minecraft.world.entity.vehicle.minecart.MinecartHopper;
 import net.minecraft.world.level.BaseSpawner;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.ChestBlock;
 import net.minecraft.world.level.block.LevelEvent;
 import net.minecraft.world.level.block.TrialSpawnerBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -60,7 +61,6 @@ import net.minecraft.world.level.block.entity.SpawnerBlockEntity;
 import net.minecraft.world.level.block.entity.TrialSpawnerBlockEntity;
 import net.minecraft.world.level.block.entity.trialspawner.TrialSpawnerState;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.block.state.properties.ChestType;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.phys.AABB;
@@ -108,12 +108,12 @@ public final class SpawnerFinder extends Module implements FindSource {
     // The kind a find is saved under such as lit dungeon spawner with stash. A stash is storage
     // a player brought for a spawner and a chest is one still standing in a room. The kind alone
     // tells how to draw and filter a find after a restart.
-    private record Kind(Place place, Evidence evidence, boolean marked) {
+    private record Kind(SpawnerPlace place, Evidence evidence, boolean marked) {
 
         private static final Map<String, Kind> BY_NAME = new HashMap<>();
 
         static {
-            for (Place place : Place.values()) {
+            for (SpawnerPlace place : SpawnerPlace.values()) {
                 for (Evidence evidence : Evidence.values()) {
                     for (boolean marked : new boolean[] {false, true}) {
                         Kind kind = new Kind(place, evidence, marked);
@@ -135,7 +135,8 @@ public final class SpawnerFinder extends Module implements FindSource {
                 case SPAWNER -> label + " spawner";
                 case LIT -> "lit " + label + " spawner";
                 case ROOM -> room(label);
-                case MINED -> place == Place.MINESHAFT ? room(label) + " without spawner" : "mined " + room(label);
+                case MINED -> place == SpawnerPlace.MINESHAFT
+                    ? room(label) + " without spawner" : "mined " + room(label);
             };
             return !marked ? what : what + (evidence.ofSpawner() ? " with stash" : " with chest");
         }
@@ -160,14 +161,14 @@ public final class SpawnerFinder extends Module implements FindSource {
         private final int reading;
         private final int reach;
         private final int spawnRange;
-        private final Place place;
+        private final SpawnerPlace place;
         private final EntityType<?> mob;
         private final boolean live;
         private int ownTicks;
         private int ticksNear;
         private boolean judged;
 
-        private Arrival(boolean trial, int reading, int reach, int spawnRange, Place place, EntityType<?> mob,
+        private Arrival(boolean trial, int reading, int reach, int spawnRange, SpawnerPlace place, EntityType<?> mob,
                         boolean live) {
             this.trial = trial;
             this.reading = reading;
@@ -280,8 +281,6 @@ public final class SpawnerFinder extends Module implements FindSource {
         "Colour of dungeons and spider corridors.", 220, false).under(minedSpawners);
     private final BoolSetting wakeRange = new BoolSetting("Wake range",
         "Draws a ball round each marked spawner as far out as a player must come to wake it.", false);
-    private final BoolSetting everySpawner = new BoolSetting("Every spawner",
-        "Also draws the ball round every loaded spawner whether it is marked or not.", false).under(wakeRange);
     private final ColorSetting wakeColor = new ColorSetting("Wake range colour",
         "Colour of the ball round each spawner.", 195, false).under(wakeRange);
     private final FindLog finds = new FindLog(this);
@@ -313,7 +312,7 @@ public final class SpawnerFinder extends Module implements FindSource {
         addSettings(notice.settings());
         addSettings(alarm.settings());
         addSettings(style.settings());
-        addSettings(spawnerColor, trialColor, litColor, roomColor, wakeRange, everySpawner, wakeColor);
+        addSettings(spawnerColor, trialColor, litColor, roomColor, wakeRange, wakeColor);
         addSettings(marks.settings());
         addSettings(FindsScreen.settingsFor(finds));
         searchTags("spawner", "activated spawner", "dungeon", "trial spawner", "stash", "spider corridor",
@@ -322,7 +321,7 @@ public final class SpawnerFinder extends Module implements FindSource {
     }
 
     private static List<String> placeLabels() {
-        return Arrays.stream(Place.values()).map(Place::label).toList();
+        return Arrays.stream(SpawnerPlace.values()).map(SpawnerPlace::label).toList();
     }
 
     @Override
@@ -376,9 +375,6 @@ public final class SpawnerFinder extends Module implements FindSource {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame()) {
-            return;
-        }
         if (world.changed()) {
             forget();
         }
@@ -394,7 +390,7 @@ public final class SpawnerFinder extends Module implements FindSource {
         }
         surveyWaiting();
         if (minedSpawners.isOn()) {
-            rooms.update(mc.options.getEffectiveRenderDistance(), SpawnerRooms::scan);
+            rooms.update(Modules.renderDistance(), SpawnerRooms::scan);
             tellRooms();
         }
     }
@@ -556,7 +552,7 @@ public final class SpawnerFinder extends Module implements FindSource {
             traced = true;
         }
         String lights = "";
-        if (litSpawners.isOn() && !arrival.trial && SpawnerRooms.lightShy(arrival.mob)) {
+        if (litSpawners.isOn() && !arrival.trial && SpawnerPlace.lightShy(arrival.mob)) {
             Tally lit = playerLights(world, survey.pos, arrival);
             if (!lit.isEmpty()) {
                 evidence = Evidence.LIT;
@@ -642,9 +638,11 @@ public final class SpawnerFinder extends Module implements FindSource {
                     continue;
                 }
                 for (BlockEntity blockEntity : chunk.getBlockEntities().values()) {
-                    if (storage.contains(blockEntity.getType()) && blockEntity.getBlockPos().distSqr(pos) <= reachSqr
-                        && !arrival.place.makes(blockEntity.getType(), doubleChest(blockEntity.getBlockState()))) {
-                        stored.add(containerName(blockEntity.getType()));
+                    BlockPos at = blockEntity.getBlockPos();
+                    if (storage.contains(blockEntity.getType()) && at.distSqr(pos) <= reachSqr
+                        && !arrival.place.makes(blockEntity.getType(),
+                            BlockUtil.otherChestHalf(at, blockEntity.getBlockState()) != null)) {
+                        stored.add(ChatUtil.words(blockEntity.getType()));
                     }
                 }
             }
@@ -657,14 +655,6 @@ public final class SpawnerFinder extends Module implements FindSource {
             }
         }
         return stored;
-    }
-
-    private static boolean doubleChest(BlockState state) {
-        return state.hasProperty(ChestBlock.TYPE) && state.getValue(ChestBlock.TYPE) != ChestType.SINGLE;
-    }
-
-    private static String containerName(BlockEntityType<?> type) {
-        return ChatUtil.words(BuiltInRegistries.BLOCK_ENTITY_TYPE.getKey(type));
     }
 
     // Carts and boats are counted under plain words such as 2 chest minecarts.
@@ -689,7 +679,7 @@ public final class SpawnerFinder extends Module implements FindSource {
             if (evidence == Evidence.MINED && yourWork(room, true)) {
                 continue;
             }
-            boolean dungeon = room.place() == Place.DUNGEON;
+            boolean dungeon = room.place() == SpawnerPlace.DUNGEON;
             String what = dungeon ? "a dungeon" : "a spider corridor";
             if (evidence == Evidence.MINED) {
                 what += dungeon ? " whose spawner a player mined" : " with broken webs and no spawner";
@@ -742,7 +732,7 @@ public final class SpawnerFinder extends Module implements FindSource {
         if (!minedSpawners.isOn() || kind.evidence() == Evidence.ROOM && !intactRooms.isOn()) {
             return false;
         }
-        return !onlyChests.isOn() || kind.place() != Place.DUNGEON || kind.marked();
+        return !onlyChests.isOn() || kind.place() != SpawnerPlace.DUNGEON || kind.marked();
     }
 
     // The finds in this dimension the filters let through.
@@ -762,7 +752,8 @@ public final class SpawnerFinder extends Module implements FindSource {
         return switch (kind.evidence()) {
             case ROOM, MINED -> roomColor.getColor();
             case LIT -> litColor.getColor();
-            case SPAWNER -> kind.place() == Place.TRIAL_CHAMBER ? trialColor.getColor() : spawnerColor.getColor();
+            case SPAWNER -> kind.place() == SpawnerPlace.TRIAL_CHAMBER
+                ? trialColor.getColor() : spawnerColor.getColor();
         };
     }
 
@@ -774,7 +765,6 @@ public final class SpawnerFinder extends Module implements FindSource {
         DrawBatch batch = event.getBatch();
         List<FindLog.Find> visible = visible();
         refreshRoomBoxes();
-        boolean everyBall = wakeRange.isOn() && everySpawner.isOn();
         for (FindLog.Find find : visible) {
             if (!marks.inDrawRange(find)) {
                 continue;
@@ -783,14 +773,8 @@ public final class SpawnerFinder extends Module implements FindSource {
             Room room = kind.evidence().ofSpawner() ? null : roomsByKey.get(find.pos().asLong());
             AABB box = room == null ? DrawBatch.blockBox(find.pos()) : room.box();
             style.draw(batch, box, colorOf(kind), true);
-            if (wakeRange.isOn() && !everyBall && kind.evidence().ofSpawner()) {
+            if (wakeRange.isOn() && kind.evidence().ofSpawner()) {
                 drawRange(batch, find.pos());
-            }
-        }
-        // The watch holds only spawners whose chunk is loaded.
-        if (everyBall) {
-            for (Map.Entry<Long, Arrival> entry : watch.loaded.entrySet()) {
-                ball(batch, BlockPos.of(entry.getKey()), entry.getValue());
             }
         }
         marks.draw(batch, visible, find -> colorOf(Kind.parse(find.kind())));
@@ -812,12 +796,8 @@ public final class SpawnerFinder extends Module implements FindSource {
     private void drawRange(DrawBatch batch, BlockPos pos) {
         Arrival arrival = watch.arrivalAt(pos);
         if (arrival != null) {
-            ball(batch, pos, arrival);
+            batch.sphere(Vec3.atCenterOf(pos), arrival.reach, wakeColor.getColor(), true);
         }
-    }
-
-    private void ball(DrawBatch batch, BlockPos pos, Arrival arrival) {
-        batch.sphere(Vec3.atCenterOf(pos), arrival.reach, wakeColor.getColor(), true);
     }
 
     // Keeps the readings of every loaded spawner whether or not the module is on. A spawner
@@ -863,9 +843,6 @@ public final class SpawnerFinder extends Module implements FindSource {
 
         @Subscribe
         private void onTick(TickEvent event) {
-            if (!inGame()) {
-                return;
-            }
             followWorld();
             trail[trailNext] = mc.player.position();
             trailNext = (trailNext + 1) % TRAIL_TICKS;
@@ -910,13 +887,13 @@ public final class SpawnerFinder extends Module implements FindSource {
             if (blockEntity instanceof SpawnerBlockEntity spawner) {
                 BaseSpawner base = spawner.getSpawner();
                 EntityType<?> mob = SpawnerMob.of(spawner);
-                Place place = Place.of(mob, mc.level.dimension(), mc.level.getBlockState(pos.below()));
+                SpawnerPlace place = SpawnerPlace.of(mob, mc.level.dimension(), mc.level.getBlockState(pos.below()));
                 arrival = new Arrival(false, base.spawnDelay, base.requiredPlayerRange, base.spawnRange, place,
                     mob, live);
             } else if (blockEntity instanceof TrialSpawnerBlockEntity trial
                 && mc.level.getBlockState(pos).is(Blocks.TRIAL_SPAWNER)) {
                 arrival = new Arrival(true, trialReading(mc.level.getBlockState(pos)),
-                    trial.getTrialSpawner().getRequiredPlayerRange(), 0, Place.TRIAL_CHAMBER, null, live);
+                    trial.getTrialSpawner().getRequiredPlayerRange(), 0, SpawnerPlace.TRIAL_CHAMBER, null, live);
             } else {
                 return null;
             }

@@ -19,10 +19,17 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
+import com.jellypudding.offlineclient.util.AttackTimer;
+import com.jellypudding.offlineclient.util.BlastLimits;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ColorUtil;
+import com.jellypudding.offlineclient.util.Cooldowns;
+import com.jellypudding.offlineclient.util.Crystals;
+import com.jellypudding.offlineclient.util.DamageUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.ExplosionUtil;
+import com.jellypudding.offlineclient.util.FaceMode;
+import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.HotbarLoan;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
@@ -36,7 +43,6 @@ import com.jellypudding.offlineclient.util.Targeting;
 import com.jellypudding.offlineclient.util.TickRate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.network.protocol.game.ServerboundAttackPacket;
 import net.minecraft.network.protocol.game.ServerboundSetCarriedItemPacket;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
@@ -44,7 +50,6 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.boss.enderdragon.EndCrystal;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.BowItem;
@@ -95,7 +100,7 @@ public final class CrystalAura extends Module implements Targeting {
     private final NumberSetting targetRange = new NumberSetting("Target range",
         "How far away targets are considered.", 10, 2, 16, 0.5, " blocks");
     private final BoolSetting players = new BoolSetting("Players",
-        "Attack other players.", true);
+        "Attacks other players.", true);
     private final RegistryListSetting<EntityType<?>> mobs = new RegistryListSetting<>("Mobs",
         "Other kinds of entity to attack.", BuiltInRegistries.ENTITY_TYPE,
         List.of(EntityTypes.WARDEN, EntityTypes.WITHER));
@@ -112,15 +117,15 @@ public final class CrystalAura extends Module implements Targeting {
         "Reach for crystals hidden behind blocks.", 3.5, 0, 6, 0.1, " blocks");
 
     private final BoolSetting doPlace = new BoolSetting("Place",
-        "Place crystals near targets.", true);
+        "Places crystals near targets.", true);
     private final NumberSetting placeDelay = new NumberSetting("Place delay",
         "Ticks to wait between placements.", 2, 0, 10, 1, " ticks")
         .under(doPlace);
     private final BoolSetting multiPlace = new BoolSetting("Multi place",
-        "Place another crystal whilst one worth hitting is still up.", false)
+        "Places another crystal whilst one worth hitting is still up.", false)
         .under(doPlace);
     private final BoolSetting oldPlacement = new BoolSetting("Old placement",
-        "Require two air blocks above the base like older servers.", false)
+        "Requires two air blocks above the base like older servers.", false)
         .under(doPlace);
     private final EnumSetting<Support> support = new EnumSetting<>("Support",
         "Places obsidian under a target when there is nothing to crystal. Taken from the inventory when the hotbar has none.", Support.ACCURATE)
@@ -133,7 +138,7 @@ public final class CrystalAura extends Module implements Targeting {
         .under(support, Support.ACCURATE, Support.FAST);
 
     private final BoolSetting doBreak = new BoolSetting("Break",
-        "Hit crystals to set them off.", true);
+        "Hits crystals to set them off.", true);
     private final NumberSetting breakDelay = new NumberSetting("Break delay",
         "Ticks to wait between hits.", 1, 0, 10, 1, " ticks")
         .under(doBreak);
@@ -150,23 +155,23 @@ public final class CrystalAura extends Module implements Targeting {
         "Hits a crystal the moment it appears rather than on the next tick.", true)
         .under(doBreak);
     private final BoolSetting smartDelay = new BoolSetting("Smart delay",
-        "Skip a hit whilst the target is still in damage immunity.", true)
+        "Skips a hit whilst the target is still in damage immunity.", true)
         .under(doBreak);
     private final BoolSetting antiWeakness = new BoolSetting("Anti weakness",
-        "Swap to a tool that still breaks crystals whilst you have weakness.", true)
+        "Swaps to a tool that still breaks crystals whilst you have weakness.", true)
         .under(doBreak);
     private final BoolSetting onlyOwn = new BoolSetting("Only own",
-        "Only hit crystals you placed yourself.", false)
+        "Only hits crystals this module placed in the last five seconds.", false)
         .under(doBreak);
 
     private final NumberSetting minDamage = new NumberSetting("Min damage",
-        "Only act when a target would take at least this much.", 6, 0, 20, 0.5);
-    private final NumberSetting maxSelfDamage = new NumberSetting("Max self damage",
-        "Never take more than this from your own crystal.", 8, 0, 20, 0.5);
-    private final BoolSetting antiSuicide = new BoolSetting("Anti suicide",
-        "Never touch a crystal that could kill you.", true);
+        "Only acts when a target would take at least this much.", 6, 0, 20, 0.5);
+    private final NumberSetting minRatio = new NumberSetting("Min ratio",
+        "Only acts when a target would take at least this many times what you take. Zero switches the rule off.",
+        0, 0, 5, 0.25, "x");
+    private final BlastLimits limits = new BlastLimits(8, 20);
     private final BoolSetting predict = new BoolSetting("Predict",
-        "Score the damage where a moving target is heading.", true);
+        "Scores the damage where a moving target is heading.", true);
 
     private final BoolSetting finisher = new BoolSetting("Finisher",
         "Drops the minimum damage once a target is nearly dead or their armour is about to give out.", true);
@@ -197,23 +202,17 @@ public final class CrystalAura extends Module implements Targeting {
         "Never swaps away from a bow in either hand.", true)
         .under(autoSwitch, Switch.NORMAL);
 
-    private final EnumSetting<Pause> pauseOnUse = new EnumSetting<>("Pause on use",
-        "What to hold off whilst eating or drawing a bow.", Pause.BOTH)
-        .describe(Pause.BOTH, "Neither places nor hits.")
-        .describe(Pause.PLACE, "Stops placing but still hits.")
-        .describe(Pause.BREAK, "Stops hitting but still places.")
-        .describe(Pause.NONE, "Carries on regardless.");
-    private final EnumSetting<Pause> pauseOnMine = new EnumSetting<>("Pause on mine",
-        "What to hold off whilst you mine a block.", Pause.NONE)
-        .describe(Pause.BOTH, "Neither places nor hits.")
-        .describe(Pause.PLACE, "Stops placing but still hits.")
-        .describe(Pause.BREAK, "Stops hitting but still places.")
-        .describe(Pause.NONE, "Carries on regardless.");
+    private final BoolSetting onlyOnUse = new BoolSetting("Only on use key",
+        "Only places and hits whilst you hold the use key. With food or a bow or a shield in hand the"
+            + " key uses that item and Pause on use still applies.", false);
+    private final EnumSetting<Pause> pauseOnUse = pauseRow("Pause on use",
+        "What to hold off whilst eating or drawing a bow.", Pause.BOTH);
+    private final EnumSetting<Pause> pauseOnMine = pauseRow("Pause on mine",
+        "What to hold off whilst you mine a block.", Pause.NONE);
     private final BoolSetting pauseOnLag = new BoolSetting("Pause on lag",
         "Holds off whilst the server has stopped ticking.", true);
     private final NumberSetting lagThreshold = new NumberSetting("Lag threshold",
         "How far past its usual update the server may go quiet before that counts as lag.", 500, 0, 5000, 250, " ms")
-        .min(0)
         .under(pauseOnLag);
     private final ChoiceListSetting pauseModules = new ChoiceListSetting("Pause modules",
         "Holds off whilst any of these modules is on.",
@@ -221,16 +220,15 @@ public final class CrystalAura extends Module implements Targeting {
     private final NumberSetting pauseHealth = new NumberSetting("Pause health",
         "Holds off whilst your health plus absorption is at or below this. Zero never pauses.", 5, 0, 36, 0.5);
 
-    private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Send a look packet towards the crystal spot.", true);
+    private final EnumSetting<FaceMode> faceTarget = FaceMode.setting(FaceMode.SERVER);
     private final NumberSetting yawSteps = new NumberSetting("Yaw steps",
         "Most degrees the server rotation turns in one tick.", 180, 1, 180, 1, " degrees")
-        .under(rotate);
+        .under(faceTarget, FaceMode.SERVER);
     private final EnumSetting<YawSteps> yawStepsMode = new EnumSetting<>("Yaw steps mode",
         "Which turns the yaw steps limit applies to.", YawSteps.BREAK)
         .describe(YawSteps.BREAK, "Only the turn to hit a crystal.")
         .describe(YawSteps.ALL, "Placing turns too.")
-        .under(rotate);
+        .under(faceTarget, FaceMode.SERVER);
     private final EnumSetting<SwingMode> swing = SwingMode.setting(SwingMode.BOTH);
 
     private final EnumSetting<RenderMode> renderMode = new EnumSetting<>("Render",
@@ -240,7 +238,8 @@ public final class CrystalAura extends Module implements Targeting {
         .describe(RenderMode.FADING, "The box fades out after a placement.")
         .describe(RenderMode.GRADIENT, "A box that fades towards its top.")
         .describe(RenderMode.NONE, "Nothing is drawn.");
-    private final BoxStyle boxStyle = new BoxStyle(BoxStyle.Shape.BOTH, 280);
+    private final BoxStyle boxStyle = new BoxStyle(BoxStyle.Shape.BOTH, 280)
+        .under(renderMode, RenderMode.NORMAL, RenderMode.SMOOTH, RenderMode.FADING, RenderMode.GRADIENT);
     private final BoolSetting renderPlace = new BoolSetting("Show placements",
         "Keeps the box on the spot just placed on.", true)
         .under(renderMode, RenderMode.NORMAL, RenderMode.SMOOTH, RenderMode.FADING, RenderMode.GRADIENT);
@@ -291,11 +290,11 @@ public final class CrystalAura extends Module implements Targeting {
     private final List<LivingEntity> targets = new ArrayList<>();
     private final List<Entity> entities = new ArrayList<>();
 
-    // Spots placed on with the ticks left before they are forgotten.
-    private final Map<BlockPos, Integer> ownSpots = new HashMap<>();
+    // Spots placed on until they are forgotten.
+    private final Cooldowns<BlockPos> ownSpots = new Cooldowns<>();
 
-    // Crystals just hit with the ticks left before they count as still there.
-    private final Map<Integer, Integer> removed = new HashMap<>();
+    // Crystals just hit until they count as still there.
+    private final Cooldowns<Integer> removed = new Cooldowns<>();
 
     // Hits landed on each crystal that refused to go.
     private final Map<Integer, Integer> attempts = new HashMap<>();
@@ -316,11 +315,13 @@ public final class CrystalAura extends Module implements Targeting {
             doPlace, placeDelay, multiPlace, oldPlacement, support, supportDelay,
             doBreak, breakDelay, attackFrequency, breakAttempts, ticksExisted, fastBreak,
             smartDelay, antiWeakness, onlyOwn,
-            minDamage, maxSelfDamage, antiSuicide, predict,
+            minDamage, minRatio);
+        addSettings(limits.settings());
+        addSettings(predict,
             finisher, finisherHealth, finisherArmour, finisherMissing, finisherKey,
             autoSwitch, switchDelay, noGapSwitch, noBowSwitch,
-            pauseOnUse, pauseOnMine, pauseOnLag, lagThreshold, pauseModules, pauseHealth,
-            rotate, yawSteps, yawStepsMode, swing,
+            onlyOnUse, pauseOnUse, pauseOnMine, pauseOnLag, lagThreshold, pauseModules, pauseHealth,
+            faceTarget, yawSteps, yawStepsMode, swing,
             renderMode);
         addSettings(boxStyle.settings());
         addSettings(renderPlace, placeTime, renderBreak, breakTime, smoothness, gradientHeight,
@@ -330,18 +331,18 @@ public final class CrystalAura extends Module implements Targeting {
 
     @Override
     public String getSuffix() {
-        LivingEntity target = getTarget();
-        return target == null ? null : suffix(nameOf(target), status);
+        LivingEntity target = getFought();
+        return target == null ? null : suffix(EntityUtil.displayNameOf(target), status);
     }
 
     // The nearest of this tick's targets. Null whilst there is none.
     @Override
-    public LivingEntity getTarget() {
+    public LivingEntity getFought() {
         return targets.isEmpty() ? null : targets.getFirst();
     }
 
     public boolean hasTarget() {
-        return getTarget() != null;
+        return getFought() != null;
     }
 
     // True only for a short window after a real place or break.
@@ -387,7 +388,7 @@ public final class CrystalAura extends Module implements Targeting {
     private void onTick(TickEvent event) {
         entities.clear();
         targets.clear();
-        if (!inGame() || mc.player.isSpectator()) {
+        if (mc.player.isSpectator()) {
             return;
         }
         tickTimers();
@@ -438,25 +439,23 @@ public final class CrystalAura extends Module implements Targeting {
     }
 
     private void forgetOld() {
-        ownSpots.entrySet().removeIf(entry -> {
-            entry.setValue(entry.getValue() - 1);
-            return entry.getValue() <= 0;
-        });
-        removed.entrySet().removeIf(entry -> {
-            entry.setValue(entry.getValue() - 1);
-            return entry.getValue() <= 0;
-        });
+        ownSpots.tick();
+        removed.tick();
         attempts.keySet().removeIf(id -> mc.level.getEntity(id) == null);
     }
 
-    // The silent switch goes back at the end of the tick. Normal stays on the crystals.
+    // The silent switch goes back at the end of the tick. Normal stays on the crystals
+    // unless AutoCity needs its tool in hand.
     private void restoreSlot() {
-        if (!autoSwitch.is(Switch.NORMAL) || targets.isEmpty()) {
+        if (!autoSwitch.is(Switch.NORMAL) || targets.isEmpty() || Modules.cityKeepsTool()) {
             slots.restore();
         }
     }
 
     private String pauseReason() {
+        if (onlyOnUse.isOn() && !InputUtil.physicallyHeld(mc.options.keyUse)) {
+            return "(use key up)";
+        }
         if (pauseOnLag.isOn() && TickRate.INSTANCE.lagging(lagThreshold.getInt())) {
             return "(lag)";
         }
@@ -476,6 +475,14 @@ public final class CrystalAura extends Module implements Targeting {
             return "(paused)";
         }
         return null;
+    }
+
+    private static EnumSetting<Pause> pauseRow(String name, String description, Pause defaultValue) {
+        return new EnumSetting<>(name, description, defaultValue)
+            .describe(Pause.BOTH, "Neither places nor hits.")
+            .describe(Pause.PLACE, "Stops placing but still hits.")
+            .describe(Pause.BREAK, "Stops hitting but still places.")
+            .describe(Pause.NONE, "Carries on regardless.");
     }
 
     // True when the given half is held off by a use or a mine.
@@ -524,16 +531,12 @@ public final class CrystalAura extends Module implements Targeting {
         return true;
     }
 
-    private static String nameOf(LivingEntity target) {
-        return target instanceof Player player ? EntityUtil.nameOf(player) : target.getName().getString();
-    }
-
     private void collectEntities() {
         for (Entity entity : mc.level.entitiesForRendering()) {
             if (entity.isRemoved() || entity.isSpectator()) {
                 continue;
             }
-            if (entity instanceof EndCrystal && removed.containsKey(entity.getId())) {
+            if (entity instanceof EndCrystal && removed.contains(entity.getId())) {
                 continue;
             }
             entities.add(entity);
@@ -587,7 +590,10 @@ public final class CrystalAura extends Module implements Targeting {
         if (attempts.getOrDefault(crystal.getId(), 0) >= breakAttempts.getInt()) {
             return false;
         }
-        if (onlyOwn.isOn() && !ownSpots.containsKey(crystal.blockPosition())) {
+        if (onlyOwn.isOn() && !ownSpots.contains(crystal.blockPosition())) {
+            return false;
+        }
+        if (Modules.cityHolds(crystal.blockPosition())) {
             return false;
         }
         Vec3 centre = crystal.getBoundingBox().getCenter();
@@ -598,7 +604,7 @@ public final class CrystalAura extends Module implements Targeting {
         if (smartDelay.isOn() && immune()) {
             return false;
         }
-        return selfSafe(crystal.position());
+        return blastAllowed(crystal.position());
     }
 
     // Damage during immunity drops to the difference and the crystal is wasted.
@@ -612,8 +618,7 @@ public final class CrystalAura extends Module implements Targeting {
     }
 
     private boolean hit(EndCrystal crystal) {
-        if (rotate.isOn() && !RotationManager.look(crystal.getBoundingBox().getCenter(),
-            RotationPriority.AURA, RotationManager.BLOCK_TOLERANCE, yawSteps.getFloat())) {
+        if (!face(crystal.getBoundingBox().getCenter(), yawSteps.getFloat())) {
             status = "(turning)";
             return false;
         }
@@ -621,7 +626,7 @@ public final class CrystalAura extends Module implements Targeting {
             status = "(weakness)";
             return false;
         }
-        mc.player.connection.send(new ServerboundAttackPacket(crystal.getId()));
+        AttackTimer.packetHit(crystal);
         swing.getValue().swing();
         lastHitAt = System.currentTimeMillis();
         breakTimer = breakDelay.getInt();
@@ -668,10 +673,8 @@ public final class CrystalAura extends Module implements Targeting {
         if (hand == null) {
             return;
         }
-        BlockHitResult click = BlockUtil.crystalClick(base);
-        float step = yawStepsMode.is(YawSteps.ALL) ? yawSteps.getFloat() : RotationManager.NO_STEP;
-        if (rotate.isOn() && !RotationManager.look(click.getLocation(), RotationPriority.AURA,
-            RotationManager.BLOCK_TOLERANCE, step)) {
+        BlockHitResult click = Crystals.crystalClick(base);
+        if (!face(click.getLocation(), placeStep())) {
             status = "(turning)";
             return;
         }
@@ -699,7 +702,7 @@ public final class CrystalAura extends Module implements Targeting {
             if (eye.distanceTo(crystalPos) > furthest || !BlockUtil.state(above).isAir()) {
                 continue;
             }
-            if (!BlockUtil.crystalBase(BlockUtil.state(base))) {
+            if (!Crystals.crystalBase(BlockUtil.state(base))) {
                 continue;
             }
             if (oldPlacement.isOn() && !BlockUtil.state(above.above()).isAir()) {
@@ -710,7 +713,7 @@ public final class CrystalAura extends Module implements Targeting {
                 continue;
             }
             // The crystal model needs its whole space free of entities.
-            if (entityBlocks(BlockUtil.crystalSpace(above)) || !selfSafe(crystalPos)) {
+            if (entityBlocks(Crystals.crystalSpace(above)) || !blastAllowed(crystalPos)) {
                 continue;
             }
             float damage = scoreOf(crystalPos);
@@ -733,6 +736,7 @@ public final class CrystalAura extends Module implements Targeting {
 
     private float scoreOf(Vec3 crystalPos, List<LivingEntity> against) {
         float total = 0;
+        float hardest = 0;
         boolean enough = false;
         for (LivingEntity target : against) {
             float damage = ExplosionUtil.crystalDamage(target, crystalPos, lead(target));
@@ -741,8 +745,15 @@ public final class CrystalAura extends Module implements Targeting {
             }
             enough |= finishing || damage >= minDamage.getFloat();
             total += damage;
+            hardest = Math.max(hardest, damage);
         }
-        return enough ? total : 0;
+        return enough && worthTheTrade(crystalPos, hardest) ? total : 0;
+    }
+
+    // The hardest hit on any one target weighed against what the same blast deals you.
+    private boolean worthTheTrade(Vec3 crystalPos, float dealt) {
+        float ratio = minRatio.getFloat();
+        return ratio == 0 || dealt >= ratio * ExplosionUtil.crystalDamage(mc.player, crystalPos);
     }
 
     // How far the target travels before the blast lands.
@@ -769,52 +780,44 @@ public final class CrystalAura extends Module implements Targeting {
                 }
                 continue;
             }
-            if (!piece.isDamageableItem()) {
-                continue;
-            }
-            int left = piece.getMaxDamage() - piece.getDamageValue();
-            if (left <= piece.getMaxDamage() * finisherArmour.getFloat() / 100f) {
+            // Multiplying before dividing keeps a piece right at a whole percent counted.
+            if (piece.isDamageableItem()
+                && ItemUtil.usesLeft(piece) <= piece.getMaxDamage() * finisherArmour.getFloat() / 100f) {
                 return true;
             }
         }
         return false;
     }
 
-    // Puts something with attack damage in hand when weakness has zeroed it out.
-    // The server refuses the whole attack at zero and the crystal survives.
+    // Puts something in hand that still hurts whilst weakness takes the hit to nought.
+    // The server refuses the whole attack at nought and the crystal survives.
     private boolean armWeakHand() {
-        if (mc.player.getAttributeValue(Attributes.ATTACK_DAMAGE) > 0) {
+        if (DamageUtil.hitDamage(mc.player, mc.player.getMainHandItem()) > 0) {
             return true;
         }
-        ItemStack held = mc.player.getInventory().getSelectedItem();
-        double heldBonus = ItemUtil.attributeValue(held, Attributes.ATTACK_DAMAGE,
-            EquipmentSlot.MAINHAND);
-        double base = mc.player.getAttributeValue(Attributes.ATTACK_DAMAGE) - heldBonus;
-
-        int bestSlot = -1;
-        double bestBonus = 0;
-        for (int i = 0; i < InventoryUtil.HOTBAR_SIZE; i++) {
-            ItemStack stack = mc.player.getInventory().getItem(i);
-            if (stack.isEmpty()) {
-                continue;
-            }
-            double bonus = ItemUtil.attributeValue(stack, Attributes.ATTACK_DAMAGE,
-                EquipmentSlot.MAINHAND);
-            if (bonus > bestBonus) {
-                bestBonus = bonus;
-                bestSlot = i;
-            }
-        }
-        if (bestSlot == -1 || base + bestBonus <= 0) {
+        int slot = InventoryUtil.hotbarSlot(stack -> DamageUtil.hitDamage(mc.player, stack) > 0);
+        if (slot == -1) {
             return false;
         }
-        slots.select(bestSlot);
+        slots.select(slot);
         return true;
     }
 
-    private boolean selfSafe(Vec3 source) {
-        return ExplosionUtil.selfSafe(source, ExplosionUtil.CRYSTAL_POWER,
-            maxSelfDamage.getFloat(), antiSuicide.isOn());
+    private boolean blastAllowed(Vec3 source) {
+        return limits.allows(source, ExplosionUtil.CRYSTAL_POWER);
+    }
+
+    // A placing turn only heeds the yaw steps when their mode takes in placing turns too.
+    private float placeStep() {
+        return yawStepsMode.is(YawSteps.ALL) ? yawSteps.getFloat() : RotationManager.NO_STEP;
+    }
+
+    // Yaw steps only slow the turn the server sees. The other ways of facing turn at once.
+    private boolean face(Vec3 point, float step) {
+        FaceMode mode = faceTarget.getValue();
+        return mode == FaceMode.SERVER
+            ? RotationManager.look(point, RotationPriority.AURA, RotationManager.BLOCK_TOLERANCE, step)
+            : mode.face(point, RotationPriority.AURA);
     }
 
     private boolean entityBlocks(AABB space) {
@@ -866,7 +869,7 @@ public final class CrystalAura extends Module implements Targeting {
     }
 
     private void refillCrystals() {
-        if (refillTimer > 0 || mc.player.containerMenu != mc.player.inventoryMenu) {
+        if (refillTimer > 0 || Modules.packing() || mc.player.containerMenu != mc.player.inventoryMenu) {
             return;
         }
         int free = InventoryUtil.freeHotbarSlot();
@@ -885,7 +888,9 @@ public final class CrystalAura extends Module implements Targeting {
 
     // Places an obsidian block on the best open spot for the next crystal.
     private void placeSupport() {
-        int slot = InventoryUtil.findSlot(Items.OBSIDIAN, InventoryUtil.WHOLE_INVENTORY);
+        // ShulkerPacker keeps count of the backpack and nothing is borrowed from it meanwhile.
+        int slot = InventoryUtil.findSlot(Items.OBSIDIAN,
+            Modules.packing() ? InventoryUtil.HOTBAR_SIZE : InventoryUtil.WHOLE_INVENTORY);
         if (slot == -1) {
             status = "(no obsidian)";
             return;
@@ -906,7 +911,7 @@ public final class CrystalAura extends Module implements Targeting {
                     continue;
                 }
                 Vec3 crystalPos = Vec3.atBottomCenterOf(pos.above());
-                if (eye.distanceTo(crystalPos) > placeRange.getValue() || !selfSafe(crystalPos)) {
+                if (eye.distanceTo(crystalPos) > placeRange.getValue() || !blastAllowed(crystalPos)) {
                     continue;
                 }
                 float damage = scoreOf(crystalPos, against);
@@ -920,8 +925,7 @@ public final class CrystalAura extends Module implements Targeting {
             status = "(no safe spot)";
             return;
         }
-        if (rotate.isOn() && !RotationManager.look(Vec3.atCenterOf(best), RotationPriority.AURA,
-            RotationManager.BLOCK_TOLERANCE)) {
+        if (!face(Vec3.atCenterOf(best), placeStep())) {
             status = "(turning)";
             return;
         }
@@ -931,7 +935,10 @@ public final class CrystalAura extends Module implements Targeting {
             status = "(no room for obsidian)";
             return;
         }
-        boolean placed = BlockUtil.placeAny(best, false, true);
+        boolean placed = BlockUtil.placeAny(best, false, false);
+        if (placed) {
+            swing.getValue().swing(InteractionHand.MAIN_HAND);
+        }
         // The block goes down before the borrowed stack heads home.
         loan.giveBack();
         if (placed) {
@@ -988,17 +995,21 @@ public final class CrystalAura extends Module implements Targeting {
             case GRADIENT -> {
                 AABB tall = new AABB(box.minX, box.minY, box.minZ, box.maxX,
                     box.minY + gradientHeight.getValue(), box.maxZ);
-                batch.gradientBox(tall, ColorUtil.fade(boxStyle.lineColor(), 0.4f),
-                    ColorUtil.fade(boxStyle.lineColor(), 0f), false);
-                batch.flatRect(box.minX, box.minZ, box.maxX, box.maxZ, box.minY,
-                    boxStyle.lineColor(), false);
+                if (boxStyle.drawsSides()) {
+                    int fill = boxStyle.fadedFill();
+                    batch.gradientBox(tall, fill, ColorUtil.fade(fill, 0f), false);
+                }
+                if (boxStyle.drawsLines()) {
+                    batch.flatRect(box.minX, box.minZ, box.maxX, box.maxZ, box.minY,
+                        boxStyle.lineColor(), false);
+                }
                 drawDamage(box);
                 return;
             }
             default -> {
             }
         }
-        boxStyle.draw(batch, box, ColorUtil.fade(boxStyle.lineColor(), alpha), false);
+        boxStyle.drawFading(batch, box, alpha, false);
         drawDamage(box);
     }
 

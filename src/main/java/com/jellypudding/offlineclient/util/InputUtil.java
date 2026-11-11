@@ -2,6 +2,7 @@ package com.jellypudding.offlineclient.util;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.events.PacketSendEvent;
+import com.jellypudding.offlineclient.setting.Bind;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
@@ -14,6 +15,7 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.player.Input;
 
 import java.util.Arrays;
+import java.util.BitSet;
 import java.util.function.BooleanSupplier;
 
 // The real state of input devices. A module forcing a mapping down is ignored here.
@@ -27,6 +29,9 @@ public final class InputUtil {
 
     // Key codes for letters are the lower case character.
     private static final int UNDO_LETTER = 'z';
+
+    // The mouse buttons that are down by their numbers.
+    private static final BitSet HELD_BUTTONS = new BitSet();
 
     // The game sets the right click delay on every use and counts it down once a tick.
     public static void capUseDelay(int ticks) {
@@ -68,9 +73,27 @@ public final class InputUtil {
             && Arrays.stream(options.debugKeys).anyMatch(combo -> combo.matches(event));
     }
 
-    public static boolean isKey(KeyMapping mapping, int code) {
-        InputConstants.Key key = mapping.key;
-        return key.getType() == InputConstants.Type.KEYBOARD && key.getValue() == code;
+    // True when the control sits on the key or button of the input. An unbound control sits on none.
+    public static boolean isOn(KeyMapping mapping, Bind input) {
+        return mapping.matches(input.gameKey());
+    }
+
+    // Every press and release of a mouse button comes through here. The game itself only
+    // remembers the first three and none of them under a screen.
+    public static void trackButton(int button, boolean down) {
+        if (button > 0) {
+            HELD_BUTTONS.set(button, down);
+        }
+    }
+
+    // True whilst the button is really down with or without a screen open.
+    public static boolean buttonDown(int button) {
+        return HELD_BUTTONS.get(button);
+    }
+
+    // A button let go outside the window sends no release. Without the window none is held.
+    public static void releaseButtons() {
+        HELD_BUTTONS.clear();
     }
 
     // Holds a key down on behalf of a module. Use and attack are toggles under
@@ -94,6 +117,13 @@ public final class InputUtil {
         }
     }
 
+    // True whilst the player really holds any of the four movement keys.
+    public static boolean steering() {
+        Options options = OfflineClient.MC.options;
+        return physicallyHeld(options.keyUp) || physicallyHeld(options.keyDown) || physicallyHeld(options.keyLeft)
+            || physicallyHeld(options.keyRight);
+    }
+
     // True only whilst the player really holds the bound key or button.
     public static boolean physicallyHeld(KeyMapping mapping) {
         InputConstants.Key key = mapping.key;
@@ -104,6 +134,7 @@ public final class InputUtil {
         };
     }
 
+    // A click made under a screen never counts for one of the game's own controls.
     private static boolean buttonHeld(int button) {
         return switch (button) {
             case InputConstants.MOUSE_BUTTON_LEFT -> OfflineClient.MC.mouseHandler.isLeftPressed();
@@ -114,7 +145,7 @@ public final class InputUtil {
     }
 
     // A copy of an input record with only the sneak flag changed.
-    static Input withShift(Input input, boolean shift) {
+    public static Input withShift(Input input, boolean shift) {
         return new Input(input.forward(), input.backward(), input.left(), input.right(),
             input.jump(), shift, input.sprint());
     }

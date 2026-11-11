@@ -37,9 +37,9 @@ public final class AutoWeapon extends Module {
         "Takes up an axe for a hit on a raised shield. The axe knocks the shield down for five seconds.",
         true);
     private final BoolSetting antiBreak = new BoolSetting("Anti break",
-        "Skip weapons that are about to break.", true);
+        "Skips weapons that are about to break.", true);
     private final BoolSetting switchBack = new BoolSetting("Switch back",
-        "Return to the slot you had selected once you stop fighting.", false);
+        "Returns to the slot you had selected once you stop fighting.", false);
     private final NumberSetting releaseTime = new NumberSetting("Release time",
         "Ticks without an attack before switching back.", 20, 1, 100, 1, " ticks")
         .under(switchBack);
@@ -112,7 +112,7 @@ public final class AutoWeapon extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || smashDue()) {
+        if (smashDue()) {
             return;
         }
         if (hover.isOn() && !mc.player.isDeadOrDying()

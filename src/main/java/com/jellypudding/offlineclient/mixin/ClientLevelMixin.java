@@ -2,6 +2,7 @@ package com.jellypudding.offlineclient.mixin;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.events.VehicleTickEvent;
+import com.jellypudding.offlineclient.modules.misc.AntiCrash;
 import com.jellypudding.offlineclient.modules.render.ClearView;
 import com.jellypudding.offlineclient.modules.render.NoRender;
 import com.jellypudding.offlineclient.util.Modules;
@@ -9,6 +10,7 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.item.component.FireworkExplosion;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import org.spongepowered.asm.mixin.Mixin;
@@ -17,6 +19,8 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+
+import java.util.List;
 
 @Mixin(ClientLevel.class)
 public abstract class ClientLevelMixin {
@@ -54,6 +58,16 @@ public abstract class ClientLevelMixin {
         at = @At("HEAD"), cancellable = true)
     private void onBreakingBlockEffect(CallbackInfo ci) {
         if (offlineclient$blocksBlockParticles()) {
+            ci.cancel();
+        }
+    }
+
+    // A rocket bursts here with every star it carries.
+    @Inject(method = "createFireworks(DDDDDDLjava/util/List;Z)V", at = @At("HEAD"), cancellable = true)
+    private void onCreateFireworks(double x, double y, double z, double xSpeed, double ySpeed, double zSpeed,
+                                   List<FireworkExplosion> stars, boolean sound, CallbackInfo ci) {
+        AntiCrash guard = Modules.active(AntiCrash.class);
+        if (guard != null && !guard.letsBurst(stars)) {
             ci.cancel();
         }
     }

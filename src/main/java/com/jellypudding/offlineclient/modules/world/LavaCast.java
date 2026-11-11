@@ -84,9 +84,6 @@ public final class LavaCast extends Module {
     // Feet resting on the tower top can read a hair below it.
     private static final double STANDING_SLACK = 1.0E-3;
 
-    // A longer gap between two client ticks is a pause or a hitch and counts as this much.
-    private static final long LONGEST_TICK_MILLIS = 100;
-
     private static final double MILLIS_PER_SECOND = 1000;
 
     // A flow bigger than this costs too much to outline every frame.
@@ -97,9 +94,9 @@ public final class LavaCast extends Module {
         .describe(Spout.FRONT, "In front of the block you stand on. The lava runs down that side of your tower.")
         .describe(Spout.AIMED, "On top of the block you look at. The lava runs down every side of it.");
     private final NumberSetting height = new NumberSetting("Height",
-        "How many blocks you pillar up before the first layer.", 10, 0, 64, 1, " blocks").min(0);
+        "How many blocks you pillar up before the first layer.", 10, 0, 64, 1, " blocks");
     private final NumberSetting layers = new NumberSetting("Layers",
-        "How many layers of lava and water to pour.", 5, 1, 64, 1).min(1);
+        "How many layers of lava and water to pour.", 5, 1, 64, 1);
     private final BoolSetting climb = new BoolSetting("Climb",
         "Plugs the spout and climbs a block after each layer. Off pours every layer from the same spot.", true)
         .under(layers, () -> true);
@@ -107,7 +104,7 @@ public final class LavaCast extends Module {
         "Plugs the open sides of the spout as well. The next layer then spreads across a cross before it runs down.",
         false).under(climb);
     private final NumberSetting widenAfter = new NumberSetting("Widen after",
-        "Layers poured from a single block before the cross starts.", 2, 1, 16, 1, " layers").min(1)
+        "Layers poured from a single block before the cross starts.", 2, 1, 16, 1, " layers")
         .under(wideTop);
     private final BoolSetting stopHeight = new BoolSetting("Stop height",
         "Ends the cast once your feet reach the height limit.", false);
@@ -122,7 +119,7 @@ public final class LavaCast extends Module {
         List.of(Blocks.COBBLESTONE, Blocks.COBBLED_DEEPSLATE, Blocks.STONE, Blocks.DEEPSLATE,
             Blocks.ANDESITE, Blocks.DIORITE, Blocks.GRANITE, Blocks.DIRT));
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Send a look packet towards each block.", true);
+        "Sends a look packet towards each block.", true);
     private final BoolSetting showSpout = new BoolSetting("Show spout",
         "Draws the block the lava is poured into.", true);
     private final BoxStyle spoutStyle = new BoxStyle("Spout", BoxStyle.Shape.BOTH, 25).under(showSpout);
@@ -133,6 +130,7 @@ public final class LavaCast extends Module {
     private final HotbarLoan loan = new HotbarLoan();
     private final HeldKey sneakKey = new HeldKey(options -> options.keyShift);
     private final JoinedCells<BlockPos> joined = new JoinedCells<>(BlockPos::asLong);
+    private final TickRate.Clock serverClock = new TickRate.Clock();
 
     // Every block of the fluid seen joined to the spout since the stage began.
     private final Set<BlockPos> seen = new HashSet<>();
@@ -152,7 +150,6 @@ public final class LavaCast extends Module {
     private int layersDone;
     private double quiet;
     private double serverTicks;
-    private long lastTickAt;
     private long layerStartedAt;
     private long castStartedAt;
     private int flowEstimate;
@@ -245,7 +242,7 @@ public final class LavaCast extends Module {
         flowEstimate = -1;
         layerStartedAt = 0;
         castStartedAt = System.currentTimeMillis();
-        lastTickAt = castStartedAt;
+        serverClock.restart();
         if (airborne) {
             begin(Stage.LAND);
         } else {
@@ -277,16 +274,12 @@ public final class LavaCast extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame()) {
-            setEnabled(false);
-            return;
-        }
         // A dead player still ticks and the server ignores every click it makes.
         if (mc.player.isDeadOrDying()) {
             disable("LavaCast stopped because you died.");
             return;
         }
-        serverTicks = serverTicksPassed();
+        serverTicks = serverClock.passed();
         // Sneaking keeps you from walking or being washed off the tower.
         sneakKey.hold();
         if (stage != Stage.LAND && stage != Stage.CLIMB && !onTower()) {
@@ -350,18 +343,6 @@ public final class LavaCast extends Module {
 
     private BlockPos spout() {
         return tower.offset(spoutOffset);
-    }
-
-    // Server ticks since the last client tick. Timer and a slow server both change how many
-    // fit in one. None pass whilst the server has stalled.
-    private double serverTicksPassed() {
-        long now = System.currentTimeMillis();
-        long gap = Math.min(now - lastTickAt, LONGEST_TICK_MILLIS);
-        lastTickAt = now;
-        if (TickRate.INSTANCE.stalled()) {
-            return 0;
-        }
-        return gap * TickRate.INSTANCE.tps() / MILLIS_PER_SECOND;
     }
 
     private long secondsSince(long startedAt) {
@@ -457,7 +438,7 @@ public final class LavaCast extends Module {
             layerStartedAt = System.currentTimeMillis();
             String time = estimate < 0 ? "" : " It should stop in about §f"
                 + ChatUtil.duration(LavaReach.seconds(estimate)) + "§7.";
-            ChatUtil.message("§bLavaCast §7poured layer §f" + (layersDone + 1) + "§7 of §f" + layers.getInt()
+            tell("poured layer §f" + (layersDone + 1) + "§7 of §f" + layers.getInt()
                 + "§7." + time);
             begin(Stage.FLOW);
         } else if (++tries > PATIENCE) {
@@ -469,7 +450,7 @@ public final class LavaCast extends Module {
         if (seen.isEmpty()) {
             disable("LavaCast stopped because no lava came out of the spout.");
         } else if (lavaFinish.isOn() && finalLayer()) {
-            finish("§bLavaCast §7finished §f" + Tally.counted(layersDone + 1, "layer")
+            finish("finished §f" + Tally.counted(layersDone + 1, "layer")
                 + "§7 with lava on top in §f"
                 + ChatUtil.duration((System.currentTimeMillis() - castStartedAt) / MILLIS_PER_SECOND) + "§7.");
         } else {
@@ -542,17 +523,17 @@ public final class LavaCast extends Module {
 
     private void layerDone() {
         layersDone++;
-        ChatUtil.message("§bLavaCast §7set layer §f" + layersDone + "§7 of §f" + layers.getInt() + "§7 in §f"
+        tell("set layer §f" + layersDone + "§7 of §f" + layers.getInt() + "§7 in §f"
             + ChatUtil.duration((System.currentTimeMillis() - layerStartedAt) / MILLIS_PER_SECOND) + "§7.");
         layerStartedAt = 0;
         flowEstimate = -1;
         String total = ChatUtil.duration((System.currentTimeMillis() - castStartedAt) / MILLIS_PER_SECOND);
         if (layersDone >= layers.getInt()) {
-            finish("§bLavaCast §7finished §f" + Tally.counted(layersDone, "layer") + "§7 in §f" + total + "§7.");
+            finish("finished §f" + Tally.counted(layersDone, "layer") + "§7 in §f" + total + "§7.");
         } else if (!climb.isOn()) {
             begin(Stage.POUR);
         } else if (heightReached()) {
-            finish("§bLavaCast §7reached the height limit after §f" + Tally.counted(layersDone, "layer") + "§7.");
+            finish("reached the height limit after §f" + Tally.counted(layersDone, "layer") + "§7.");
         } else if (!roomToClimb()) {
             disable("LavaCast hit a ceiling after " + Tally.counted(layersDone, "layer") + ".");
         } else {
@@ -574,8 +555,8 @@ public final class LavaCast extends Module {
         return BlockUtil.isReplaceable(tower.above(2)) && BlockUtil.isReplaceable(tower.above(3));
     }
 
-    private void finish(String message) {
-        ChatUtil.message(message);
+    private void finish(String words) {
+        tell(words);
         setEnabled(false);
     }
 

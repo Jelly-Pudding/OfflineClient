@@ -2,8 +2,8 @@ package com.jellypudding.offlineclient.mixin;
 
 import com.jellypudding.offlineclient.modules.misc.AntiSpam;
 import com.jellypudding.offlineclient.modules.misc.BetterChat;
-import com.jellypudding.offlineclient.modules.misc.NameProtect;
 import com.jellypudding.offlineclient.modules.misc.SecretChat;
+import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.client.gui.components.ChatComponent;
 import net.minecraft.client.multiplayer.chat.GuiMessageSource;
@@ -44,6 +44,10 @@ public abstract class ChatComponentMixin {
         if (betterChat != null && betterChat.filters(message, source)) {
             ci.cancel();
         }
+        AntiSpam antiSpam = Modules.get(AntiSpam.class);
+        if (antiSpam != null && antiSpam.hides(message, source)) {
+            ci.cancel();
+        }
     }
 
     // A signed line the game trusts goes up with no tag of its own.
@@ -62,16 +66,14 @@ public abstract class ChatComponentMixin {
         if (secretChat != null) {
             message = secretChat.reveal(message);
         }
-        NameProtect nameProtect = Modules.get(NameProtect.class);
-        if (nameProtect != null) {
-            message = nameProtect.filter(message);
-        }
-        AntiSpam antiSpam = Modules.get(AntiSpam.class);
-        if (antiSpam != null) {
-            message = antiSpam.fold((ChatComponent) (Object) this, message);
-        }
+        message = EntityUtil.displayed(message);
         BetterChat betterChat = Modules.get(BetterChat.class);
-        return betterChat == null ? message : betterChat.decorate(message);
+        if (betterChat != null) {
+            message = betterChat.decorate(message);
+        }
+        // A repeat is told by the line as it shows with its stars and its blank lines cut.
+        AntiSpam antiSpam = Modules.get(AntiSpam.class);
+        return antiSpam == null ? message : antiSpam.fold((ChatComponent) (Object) this, message);
     }
 
     // Both queues trim to the same hundred lines.

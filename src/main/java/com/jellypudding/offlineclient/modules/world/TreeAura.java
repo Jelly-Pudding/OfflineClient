@@ -10,6 +10,7 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.BoundedMap;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.SwingMode;
 import com.jellypudding.offlineclient.util.TakeFrom;
@@ -51,9 +52,9 @@ public final class TreeAura extends Module {
     private static final Set<Block> SQUARE_ONLY = Set.of(Blocks.DARK_OAK_SAPLING, Blocks.PALE_OAK_SAPLING);
 
     private final NumberSetting range = new NumberSetting("Range",
-        "How far from your eyes to reach.", 4.5, 1, 6, 0.1).min(1);
+        "How far from your eyes to reach.", 4.5, 1, 6, 0.1, " blocks");
     private final NumberSetting spacing = new NumberSetting("Spacing",
-        "Blocks kept clear of saplings and logs around each new sapling.", 2, 0, 6, 1, " blocks").min(0);
+        "Blocks kept clear of saplings and logs around each new sapling.", 2, 0, 6, 1, " blocks");
     private final BoolSetting plant = new BoolSetting("Plant",
         "Plants saplings from your hotbar on dirt and grass with room for a tree.", true);
     private final BoolSetting feed = new BoolSetting("Bone meal",
@@ -62,7 +63,7 @@ public final class TreeAura extends Module {
     private final NumberSetting delay = new NumberSetting("Delay",
         "Ticks to wait between one sapling or meal and the next.", 2, 0, 20, 1, " ticks");
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Turn towards each block on the server side.", true);
+        "Turns towards each block on the server side.", true);
     private final EnumSetting<SwingMode> swing = SwingMode.setting(SwingMode.BOTH);
     private final BoolSetting render = new BoolSetting("Show spot",
         "Outlines where the next sapling goes.", true);
@@ -104,13 +105,18 @@ public final class TreeAura extends Module {
     @Subscribe
     private void onTick(TickEvent event) {
         nextSpot = null;
-        if (!inGame() || mc.gameMode == null || mc.player.isSpectator() || mc.gui.screen() != null) {
+        if (mc.gameMode == null || mc.player.isSpectator() || mc.gui.screen() != null) {
             return;
         }
         if (mc.player.isDeadOrDying()) {
             // Respawn gives a fresh inventory. A borrowed slot could hold anything.
             loan.forget();
             slots.forget();
+            return;
+        }
+        // Borrowed bone meal makes way whilst something else has the hands.
+        if (Hands.taken()) {
+            loan.standAside();
             return;
         }
         int saplingSlot = InventoryUtil.hotbarSlot(TreeAura::isSapling);

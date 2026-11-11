@@ -68,9 +68,6 @@ public class HudMixin {
         at = @At("HEAD"),
         cancellable = true)
     private void onRenderOverlay(GuiGraphicsExtractor context, Identifier texture, float opacity, CallbackInfo ci) {
-        if (texture == null) {
-            return;
-        }
         ClearView clearView = Modules.active(ClearView.class);
         if (clearView == null) {
             return;
@@ -84,10 +81,7 @@ public class HudMixin {
 
     @Inject(method = "extractVignette", at = @At("HEAD"), cancellable = true)
     private void onRenderVignette(CallbackInfo ci) {
-        ClearView clearView = Modules.active(ClearView.class);
-        if (clearView != null && clearView.blocksVignette()) {
-            ci.cancel();
-        }
+        offlineclient$skip(ci, ClearView::blocksVignette);
     }
 
     // The paint goes down before the item and sits under it.

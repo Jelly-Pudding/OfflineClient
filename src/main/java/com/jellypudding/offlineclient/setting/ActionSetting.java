@@ -2,24 +2,21 @@ package com.jellypudding.offlineclient.setting;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonNull;
+import com.jellypudding.offlineclient.util.Armed;
 import com.jellypudding.offlineclient.util.Flash;
 
-import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 // A row that does something when it is clicked or named in a command. It holds no value
 // and is never saved. An action that throws work away waits for a second press.
 public final class ActionSetting extends Setting<Void> {
 
-    // How long a confirmed action waits for its second press.
-    public static final int CONFIRM_SECONDS = 3;
-
     // Hands back a few words about what happened or null when there is nothing to say. The
     // row shows them and a command naming the row writes them in chat unless the action
     // wrote a line of its own.
     private final Supplier<String> action;
     private boolean confirm;
-    private long armedUntil;
+    private final Armed<ActionSetting> armed = new Armed<>();
     private String result;
     private long resultUntil;
 
@@ -43,20 +40,17 @@ public final class ActionSetting extends Setting<Void> {
 
     // A click on the row or a command naming it. False when the press only armed it.
     public boolean press() {
-        long now = System.currentTimeMillis();
-        if (confirm && now > armedUntil) {
-            armedUntil = now + TimeUnit.SECONDS.toMillis(CONFIRM_SECONDS);
+        if (confirm && !armed.press(this)) {
             result = null;
             return false;
         }
-        armedUntil = 0;
         result = action.get();
-        resultUntil = now + Flash.SHOWN_MS;
+        resultUntil = System.currentTimeMillis() + Flash.SHOWN_MS;
         return true;
     }
 
     public boolean isArmed() {
-        return System.currentTimeMillis() <= armedUntil;
+        return armed.isArmed();
     }
 
     // The name as it reads after "again to" such as clear finds.
@@ -83,8 +77,13 @@ public final class ActionSetting extends Setting<Void> {
     // Nothing to put back. An armed row stands down.
     @Override
     public void reset() {
-        armedUntil = 0;
+        armed.disarm();
         result = null;
+    }
+
+    @Override
+    public boolean saves() {
+        return false;
     }
 
     @Override

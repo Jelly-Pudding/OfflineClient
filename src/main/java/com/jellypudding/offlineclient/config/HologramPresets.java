@@ -1,6 +1,5 @@
 package com.jellypudding.offlineclient.config;
 
-import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
 import java.nio.file.Path;
@@ -22,8 +21,8 @@ public final class HologramPresets {
 
     private HologramPresets(Path file) {
         this.file = file;
-        DataFiles.readJson(file, HologramPresets::decode).ifPresentOrElse(presets::putAll,
-            () -> presets.put(EXAMPLE_NAME, EXAMPLE_TEXT));
+        DataFiles.readJson(file, root -> DataFiles.members(root, (name, text) -> text.getAsString(),
+            "hologram presets")).ifPresentOrElse(presets::putAll, () -> presets.put(EXAMPLE_NAME, EXAMPLE_TEXT));
     }
 
     public static synchronized HologramPresets get() {
@@ -61,14 +60,6 @@ public final class HologramPresets {
     public String restoreExample() {
         save(EXAMPLE_NAME, EXAMPLE_TEXT);
         return EXAMPLE_NAME;
-    }
-
-    private static Map<String, String> decode(JsonElement root) {
-        Map<String, String> decoded = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
-        for (Map.Entry<String, JsonElement> entry : root.getAsJsonObject().entrySet()) {
-            decoded.put(entry.getKey(), entry.getValue().getAsString());
-        }
-        return decoded;
     }
 
     private void write() {

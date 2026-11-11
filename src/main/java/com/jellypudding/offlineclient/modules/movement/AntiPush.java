@@ -30,7 +30,7 @@ public final class AntiPush extends Module {
     private final BoolSetting geysers = new BoolSetting("Geysers",
         "Sulfur geysers cannot launch you into the air.", true);
     private final BoolSetting sinking = new BoolSetting("Sinking",
-        "Float in place in water or lava unless you hold jump or sneak.", false);
+        "Keeps you floating in place in water or lava unless you hold jump or sneak.", false);
 
     public AntiPush() {
         super("AntiPush", "Stops water and entities from pushing you around.", Category.MOVEMENT);

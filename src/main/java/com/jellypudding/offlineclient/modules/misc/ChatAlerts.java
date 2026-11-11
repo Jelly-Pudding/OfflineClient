@@ -7,6 +7,7 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.util.AlertSound;
 import com.jellypudding.offlineclient.util.ChatSender;
+import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.ShownChat;
 import com.jellypudding.offlineclient.util.TextLines;
@@ -87,11 +88,8 @@ public final class ChatAlerts extends Module {
             + text);
         if (toast.isOn()) {
             // NameProtect covers the toast as well as the chat.
-            NameProtect nameProtect = Modules.get(NameProtect.class);
-            Component shownName = Component.literal(nameProtect == null ? name : nameProtect.display(name));
-            Component shownText = Component.literal(text);
-            SystemToast.addOrUpdate(mc.gui.toastManager(), TOAST, shownName,
-                nameProtect == null ? shownText : nameProtect.filter(shownText));
+            SystemToast.addOrUpdate(mc.gui.toastManager(), TOAST, Component.literal(EntityUtil.displayName(name)),
+                EntityUtil.displayed(Component.literal(text)));
         }
     }
 

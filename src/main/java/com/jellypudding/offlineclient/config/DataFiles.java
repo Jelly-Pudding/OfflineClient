@@ -8,8 +8,11 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
@@ -19,10 +22,15 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeFormatterBuilder;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.BiFunction;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
@@ -32,6 +40,8 @@ public final class DataFiles {
     private static final String FOLDER = "offlineclient";
     private static final String JSON = ".json";
     private static final String TEMP = ".tmp";
+    // A file that cannot be read is kept beside the new one under this ending.
+    private static final String BROKEN = ".broken";
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Pattern UNSAFE = Pattern.compile("[^a-zA-Z0-9_.-]");
     // How much of a key's hash tells two keys with the same safe name apart.
@@ -60,6 +70,19 @@ public final class DataFiles {
 
     public static Path jsonFile(Path folder, String name) {
         return folder.resolve(name + JSON);
+    }
+
+    // The file a player names inside the folder. Null for a name no path can hold or one that ends at
+    // the folder itself such as an empty name. Null too for one that leads out of the folder by
+    // climbing above it or by naming a place elsewhere in full.
+    public static Path inside(Path folder, String name) {
+        Path root = folder.toAbsolutePath().normalize();
+        try {
+            Path path = root.resolve(name).normalize();
+            return path.startsWith(root) && !path.equals(root) ? path : null;
+        } catch (InvalidPathException e) {
+            return null;
+        }
     }
 
     // Anything a file name could not hold on every system becomes an underscore.
@@ -96,6 +119,70 @@ public final class DataFiles {
         }
     }
 
+    // Every entry of a saved list read on its own. An entry whose read throws or gives null is
+    // left out and the log says how many went. A value that is no list throws.
+    public static <T> List<T> entries(JsonElement list, Function<JsonElement, T> read, String what) {
+        List<T> kept = new ArrayList<>();
+        int broken = 0;
+        for (JsonElement entry : list.getAsJsonArray()) {
+            T value = attempt(() -> read.apply(entry));
+            if (value == null) {
+                broken++;
+            } else {
+                kept.add(value);
+            }
+        }
+        leftOut(broken, what);
+        return kept;
+    }
+
+    // The same for the members of a saved object. Each is read with its name and kept under it
+    // in the order the file holds them. A value that is no object throws.
+    public static <T> Map<String, T> members(JsonElement object, BiFunction<String, JsonElement, T> read,
+                                             String what) {
+        Map<String, T> kept = new LinkedHashMap<>();
+        int broken = 0;
+        for (Map.Entry<String, JsonElement> member : object.getAsJsonObject().entrySet()) {
+            T value = attempt(() -> read.apply(member.getKey(), member.getValue()));
+            if (value == null) {
+                broken++;
+            } else {
+                kept.put(member.getKey(), value);
+            }
+        }
+        leftOut(broken, what);
+        return kept;
+    }
+
+    // Null for a read that throws.
+    private static <T> T attempt(Supplier<T> read) {
+        try {
+            return read.get();
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
+    private static void leftOut(int broken, String what) {
+        if (broken > 0) {
+            OfflineClient.LOG.warn("Left out {} {} that could not be read", broken, what);
+        }
+    }
+
+    // Keeps a file that cannot be read under a name of its own for the player to mend. A new
+    // file then takes its place. False after logging why it could not be moved.
+    public static boolean setAside(Path path) {
+        Path aside = path.resolveSibling(path.getFileName() + BROKEN);
+        try {
+            Files.move(path, aside, StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException e) {
+            OfflineClient.LOG.error("Cannot move the unreadable {} aside", path.getFileName(), e);
+            return false;
+        }
+        OfflineClient.LOG.warn("Moved the unreadable {} to {}", path.getFileName(), aside);
+        return true;
+    }
+
     // Empty when the file is missing. A file that cannot be read or decoded is logged
     // and comes back empty as well.
     public static <T> Optional<T> readJson(Path path, Function<JsonElement, T> decoder) {
@@ -122,6 +209,35 @@ public final class DataFiles {
         } catch (IOException e) {
             OfflineClient.LOG.error("Failed to read {}", path.getFileName(), e);
             return Optional.empty();
+        }
+    }
+
+    // The same for at most that many characters from the start. The rest of a longer file is
+    // never read.
+    public static Optional<String> readText(Path path, int most) {
+        if (!Files.exists(path)) {
+            return Optional.empty();
+        }
+        try (Reader in = Files.newBufferedReader(path)) {
+            char[] text = new char[most];
+            int read = 0;
+            int got;
+            while (read < most && (got = in.read(text, read, most - read)) != -1) {
+                read += got;
+            }
+            return Optional.of(new String(text, 0, read));
+        } catch (IOException e) {
+            OfflineClient.LOG.error("Failed to read {}", path.getFileName(), e);
+            return Optional.empty();
+        }
+    }
+
+    // The bytes of a file of at most that many. Null for a larger file and no more than one byte
+    // past the bound is read.
+    public static byte[] readAtMost(Path path, int most) throws IOException {
+        try (InputStream in = Files.newInputStream(path)) {
+            byte[] bytes = in.readNBytes(most + 1);
+            return bytes.length > most ? null : bytes;
         }
     }
 

@@ -33,9 +33,7 @@ public final class AirPlace extends Module {
 
     private final NumberSetting range = new NumberSetting("Range",
         "How far away blocks can be placed. Your normal block reach grows to match whilst on.",
-        4.5, 1, 6, 0.1).min(0.5);
-    private final BoolSetting anyItem = new BoolSetting("Any item",
-        "Use anything you hold on the empty spot and not just blocks.", false);
+        4.5, 1, 6, 0.1, " blocks").min(0.5);
     private final BoolSetting guide = new BoolSetting("Guide",
         "Draws a box on the spot the block will land in.", true);
     private final BoxStyle style = new BoxStyle(BoxStyle.Shape.BOTH, 0).under(guide);
@@ -44,7 +42,7 @@ public final class AirPlace extends Module {
 
     public AirPlace() {
         super("AirPlace", "Places blocks in mid air where your crosshair points.", Category.WORLD);
-        addSettings(range, anyItem, guide);
+        addSettings(range, guide);
         addSettings(style.settings());
         searchTags("air place", "midair", "build");
     }
@@ -63,7 +61,7 @@ public final class AirPlace extends Module {
     @Subscribe
     private void onTick(TickEvent event) {
         target = null;
-        if (!inGame() || mc.player.isSpectator() || mc.player.isHandsBusy()) {
+        if (mc.player.isSpectator() || mc.player.isHandsBusy()) {
             return;
         }
         if (heldPlaceableHand() == null) {
@@ -72,10 +70,11 @@ public final class AirPlace extends Module {
         target = findSpot();
     }
 
-    // Runs last. AutoBuild and anything else that takes the click for itself go first.
+    // Runs last. AutoBuild and anything else that takes the click for itself go first. A blank
+    // click only uses the held item.
     @Subscribe(priority = -10)
     private void onRightClick(RightClickEvent event) {
-        if (event.isCancelled() || !inGame() || mc.player.isSpectator() || mc.gameMode.isDestroying()) {
+        if (event.isBlank() || !inGame() || mc.player.isSpectator() || mc.gameMode.isDestroying()) {
             return;
         }
         // Swallowing the click whilst the hands are busy would eat a normal use.
@@ -141,9 +140,6 @@ public final class AirPlace extends Module {
         Item item = stack.getItem();
         if (item instanceof FireworkRocketItem) {
             return !mc.player.isFallFlying();
-        }
-        if (anyItem.isOn()) {
-            return !stack.isEmpty();
         }
         return item instanceof BlockItem
             || item instanceof SpawnEggItem

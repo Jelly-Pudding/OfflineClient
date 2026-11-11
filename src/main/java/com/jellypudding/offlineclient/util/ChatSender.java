@@ -30,6 +30,10 @@ public final class ChatSender {
     // What servers put between a name and the message. The close of <Bob> or a colon or a double arrow.
     private static final String MARKS = ">:»";
 
+    // What a server shows in front of a nickname a player picked for themselves. Anyone can pick
+    // the name of somebody else.
+    private static final char NICKNAME = '~';
+
     private ChatSender() {
     }
 
@@ -41,18 +45,14 @@ public final class ChatSender {
 
     // Null for a line the server wrote itself. It reads the tab list and belongs on the game thread.
     public static Line lineOf(Packet<?> packet) {
-        ClientPacketListener connection = OfflineClient.MC.getConnection();
-        if (connection == null) {
-            return null;
-        }
         return switch (packet) {
             case ClientboundPlayerChatPacket chat -> {
-                PlayerInfo info = connection.getPlayerInfo(chat.sender());
+                ClientPacketListener connection = OfflineClient.MC.getConnection();
+                PlayerInfo info = connection == null ? null : connection.getPlayerInfo(chat.sender());
                 yield info == null ? null
                     : new Line(chat.sender(), info.getProfile().name(), chat.body().content());
             }
-            case ClientboundSystemChatPacket system when !system.overlay() ->
-                writerOf(connection, plain(system.content()));
+            case ClientboundSystemChatPacket system when !system.overlay() -> writerOf(system.content());
             default -> null;
         };
     }
@@ -67,8 +67,122 @@ public final class ChatSender {
         return ChatUtil.wholeWordIndex(text.toLowerCase(Locale.ROOT), words.toLowerCase(Locale.ROOT), 0) != -1;
     }
 
-    // The earliest online name with a chat mark after it. Null when no name has one.
-    private static Line writerOf(ClientPacketListener connection, String text) {
+    // The writer of a line only where no player can have made the line up. Player chat names
+    // its sender. In server text the writer has to be the one word before the first chat mark.
+    // A player who types a name and a mark into their own line has their own name before it.
+    // Null for anything else such as a name with a rank in front. It reads the tab list and
+    // belongs on the game thread.
+    public static String certainWriter(Packet<?> packet) {
+        ClientPacketListener connection = OfflineClient.MC.getConnection();
+        if (connection == null) {
+            return null;
+        }
+        switch (packet) {
+            case ClientboundPlayerChatPacket chat -> {
+                PlayerInfo info = connection.getPlayerInfo(chat.sender());
+                return info == null ? null : info.getProfile().name();
+            }
+            case ClientboundSystemChatPacket system when !system.overlay() -> {
+                String name = soleWriter(plain(system.content()));
+                return name != null && connection.getPlayerInfo(name) != null ? name : null;
+            }
+            default -> {
+                return null;
+            }
+        }
+    }
+
+    // The one word that stands before the first chat mark of a line. Null when there is no
+    // mark or more than one word comes before it.
+    public static String soleWriter(String text) {
+        int mark = firstMark(text);
+        return mark == -1 ? null : soleName(text.substring(0, mark));
+    }
+
+    // The name a line shows in front of it in the shape of chat whether or not anybody online
+    // goes by it. That is a name in angle brackets such as <Steve> or one word before the first
+    // chat mark such as Steve or ~Steve with any tags in square brackets in front of either.
+    // Null for a line that opens any other way.
+    public static String apparentWriter(String text) {
+        String line = afterTags(text);
+        if (line.startsWith("<")) {
+            int close = line.indexOf('>');
+            String inside = close == -1 ? "" : line.substring(1, close).strip();
+            return inside.isEmpty() ? null : inside;
+        }
+        int mark = firstMark(line);
+        String before = mark == -1 ? "" : line.substring(0, mark).strip();
+        return before.isEmpty() || before.chars().anyMatch(Character::isWhitespace) ? null : before;
+    }
+
+    // The name a player on the tab list goes by whatever case it was written in. Null when
+    // nobody listed goes by it. It reads the tab list and belongs on the game thread.
+    public static String listedName(String name) {
+        ClientPacketListener connection = OfflineClient.MC.getConnection();
+        PlayerInfo info = connection == null ? null : connection.getPlayerInfoIgnoreCase(name);
+        return info != null && connection.getListedOnlinePlayers().contains(info) ? info.getProfile().name() : null;
+    }
+
+    // The text with any tags in square brackets at its front taken off.
+    private static String afterTags(String text) {
+        String rest = text.stripLeading();
+        int close;
+        while (rest.startsWith("[") && (close = rest.indexOf(']')) != -1) {
+            rest = rest.substring(close + 1).stripLeading();
+        }
+        return rest;
+    }
+
+    // The one name a stretch of text holds with nothing but signs and spaces round it. Null
+    // when a letter or a digit stands anywhere else or a tilde marks the name as a nickname.
+    private static String soleName(String text) {
+        int from = 0;
+        int to = text.length();
+        while (from < to && !ChatUtil.isNameChar(text.charAt(from))) {
+            from++;
+        }
+        while (to > from && !ChatUtil.isNameChar(text.charAt(to - 1))) {
+            to--;
+        }
+        String name = text.substring(from, to);
+        boolean nickname = from > 0 && text.charAt(from - 1) == NICKNAME;
+        return !nickname && !name.isEmpty() && name.chars().allMatch(c -> ChatUtil.isNameChar((char) c)) ? name : null;
+    }
+
+    // True when the name of anyone online stands whole in the text. It reads the tab list and
+    // belongs on the game thread.
+    public static boolean namesAnyone(String text) {
+        ClientPacketListener connection = OfflineClient.MC.getConnection();
+        if (connection == null) {
+            return false;
+        }
+        for (PlayerInfo info : connection.getOnlinePlayers()) {
+            String name = info.getProfile().name();
+            if (!name.isEmpty() && ChatUtil.wholeWordIndex(text, name, 0) != -1) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static int firstMark(String text) {
+        for (int at = 0; at < text.length(); at++) {
+            if (MARKS.indexOf(text.charAt(at)) != -1) {
+                return at;
+            }
+        }
+        return -1;
+    }
+
+    // The writer of a line of server text. That is the earliest online name with a chat mark
+    // after it. Null off a server and when no name has one. It reads the tab list and belongs
+    // on the game thread.
+    static Line writerOf(Component line) {
+        ClientPacketListener connection = OfflineClient.MC.getConnection();
+        if (connection == null) {
+            return null;
+        }
+        String text = plain(line);
         PlayerInfo writer = null;
         int nameAt = Integer.MAX_VALUE;
         int markAt = -1;

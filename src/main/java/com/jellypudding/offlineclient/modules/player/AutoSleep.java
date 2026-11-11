@@ -4,6 +4,7 @@ import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.modules.render.Weather;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ExplosionUtil;
@@ -64,7 +65,7 @@ public final class AutoSleep extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || mc.player.isSpectator() || mc.player.isDeadOrDying()) {
+        if (mc.player.isSpectator() || mc.player.isDeadOrDying()) {
             return;
         }
         if (retryTicks > 0) {
@@ -93,7 +94,7 @@ public final class AutoSleep extends Module {
 
     // Wherever beds do not blow up they work once it is dark.
     private boolean canSleepHere() {
-        return !ExplosionUtil.bedsExplodeHere() && mc.level.isDarkOutside();
+        return !ExplosionUtil.bedsExplodeHere() && Weather.darkOutside(mc.level);
     }
 
     private void getUpAtDawn(boolean night) {

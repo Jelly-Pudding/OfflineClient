@@ -90,9 +90,11 @@ public final class TickRate {
 
     private synchronized void sample() {
         long now = Util.getMillis();
+        // Paper sends the time twice in a row as you join. Both come off the beat.
+        boolean again = count == 0 && now - lastPacketAt < SharedConstants.MILLIS_PER_TICK;
         lastPacketAt = now;
         heard = true;
-        if (offBeat) {
+        if (offBeat || again) {
             offBeat = false;
             return;
         }
@@ -136,6 +138,11 @@ public final class TickRate {
         return tps;
     }
 
+    // True once the rate has been worked out since the last join.
+    public synchronized boolean measured() {
+        return closedGaps > 0;
+    }
+
     // The same rate with the gap still open counted in once it runs past the usual one. A
     // server that has stalled reads slow whilst it is still quiet.
     public synchronized float liveTps() {
@@ -161,5 +168,31 @@ public final class TickRate {
     // The fixed grace for modules that hold off on lag without a setting of their own.
     public boolean stalled() {
         return lagging(STALL_MILLIS);
+    }
+
+    // Server ticks counted on the clock on the wall at the rate the server keeps. Timer and a slow
+    // server both change how many fit in one client tick. None pass whilst the server has stalled.
+    public static final class Clock {
+
+        // A longer gap between two reads is a pause or a hitch and counts as this much.
+        private static final long LONGEST_GAP_MILLIS = 100;
+
+        private long readAt = Util.getMillis();
+
+        // Counts from this moment.
+        public void restart() {
+            readAt = Util.getMillis();
+        }
+
+        // Server ticks since the read before. Read once every client tick.
+        public double passed() {
+            long now = Util.getMillis();
+            long gap = Math.min(now - readAt, LONGEST_GAP_MILLIS);
+            readAt = now;
+            if (INSTANCE.stalled()) {
+                return 0;
+            }
+            return gap * INSTANCE.tps() / MILLIS_PER_SECOND;
+        }
     }
 }

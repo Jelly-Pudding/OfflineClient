@@ -39,10 +39,10 @@ public final class AntiVoid extends Module {
         "Empty blocks below you that count as a void fall.", 12, 3, 40, 1, " blocks")
         .min(2);
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Face the block being placed for the server to accept it.", true)
+        "Faces the block being placed for the server to accept it.", true)
         .under(mode, Mode.PLACE_BLOCK);
     private final BoolSetting sneakToSink = new BoolSetting("Sneak to sink",
-        "Hold sneak to sink slowly whilst caught. Let go and you are caught again.", true)
+        "Holding sneak sinks you slowly whilst caught. Let go and you are caught again.", true)
         .under(mode, Mode.CATCH);
     private final NumberSetting sinkSpeed = new NumberSetting("Sink speed",
         "Blocks a tick you sink whilst sneaking.", 0.2, 0.05, 1, 0.05, " blocks")
@@ -76,7 +76,7 @@ public final class AntiVoid extends Module {
     private void onTick(TickEvent event) {
         boolean wasCatching = catching;
         catching = false;
-        if (!inGame() || mc.player.isSpectator()) {
+        if (mc.player.isSpectator()) {
             return;
         }
         if (flightStarted) {

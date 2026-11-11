@@ -18,7 +18,7 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.BlockMiner;
 import com.jellypudding.offlineclient.util.BlockUtil;
-import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.ItemUtil;
 import com.jellypudding.offlineclient.util.Modules;
@@ -30,37 +30,31 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
-import java.util.function.Predicate;
 
 // Digs out a box marked with two corners. Blocks come out from the top down.
-public final class Excavator extends Module {
+public final class Excavator extends Module implements CornerPicker.Taker {
 
     private final NumberSetting range = new NumberSetting("Range",
         "How far from your eyes a block may be.",
-        4.5, 1, 6, 0.1).min(1);
-    private final NumberSetting maxBlocks = new NumberSetting("Max blocks",
-        "The most blocks one box may hold.", 4096, 64, 16384, 64)
-        .min(1);
+        4.5, 1, 6, 0.1, " blocks");
+    private final NumberSetting maxBlocks = CornerPicker.maxBlocks();
     private final EnumSetting<Speed> speed = new EnumSetting<>("Speed",
         "How the blocks come down.", Speed.LEGIT)
         .describe(Speed.LEGIT, "One block at a time like a held click.")
         .describe(Speed.INSTANT, "Fires the break packets for every block a single tick breaks.");
-    private final NumberSetting perTick = new NumberSetting("Blocks per tick",
-        "The most blocks Instant mode breaks in one tick.", 4, 1, 16, 1)
-        .min(1).under(speed, Speed.INSTANT);
+    private final NumberSetting perTick = PacketBreaker.blocksPerTick().under(speed, Speed.INSTANT);
     private final RegistryListSetting<Block> skipBlocks = new RegistryListSetting<>("Skip blocks",
         "Blocks inside the box that are left standing. Click to pick them.", BuiltInRegistries.BLOCK, List.of());
     private final BoolSetting autoTool = new BoolSetting("Auto tool",
         "Holds the tool AutoTool would pick or else your fastest one.", true);
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Turn towards each block on the server side.", true);
+        "Turns towards each block on the server side.", true);
     private final BoolSetting walkTo = new BoolSetting("Walk to blocks",
         "Walks to the next block whilst it is out of reach.", false);
     private final BoolSetting keepActive = new BoolSetting("Keep active",
@@ -84,7 +78,8 @@ public final class Excavator extends Module {
     private final SlotSwap slots = new SlotSwap();
 
     public Excavator() {
-        super("Excavator", "Digs out a box. Press the bind at each corner whilst it is on.", Category.WORLD);
+        super("Excavator", "Digs out the box between two corners you mark with its bind whilst it is on.",
+            Category.WORLD);
         addSettings(range, maxBlocks, speed, perTick, skipBlocks, autoTool, rotate, walkTo, keepActive, logSelection);
         addSettings(boxStyle.settings());
         addSettings(targetStyle.settings());
@@ -130,28 +125,23 @@ public final class Excavator extends Module {
         current = null;
     }
 
-    // The bind marks the block under the crosshair whilst the module is on.
-    // Pressing it with nothing in view turns the module off again.
     @Override
     public void onKeybind() {
-        if (!isEnabled() || !inGame()) {
+        BlockPos corner = CornerPicker.aimedCorner(this);
+        if (corner == null) {
             toggle();
             return;
         }
-        BlockHitResult hit = BlockUtil.aimedBlock();
-        if (hit != null) {
-            mark(hit.getBlockPos().immutable());
-            return;
-        }
-        toggle();
+        markCorner(corner);
     }
 
-    private void mark(BlockPos pos) {
+    @Override
+    public void markCorner(BlockPos pos) {
         if (!corners.started() || corners.done()) {
             clear();
             corners.mark(pos);
             if (logSelection.isOn()) {
-                ChatUtil.message("§bExcavator §7first corner at §f" + BlockUtil.text(pos) + "§7.");
+                tell("first corner at §f" + BlockUtil.text(pos) + "§7.");
             }
             return;
         }
@@ -160,7 +150,7 @@ public final class Excavator extends Module {
             return;
         }
         if (logSelection.isOn()) {
-            ChatUtil.message("§bExcavator §7second corner at §f" + BlockUtil.text(pos)
+            tell("second corner at §f" + BlockUtil.text(pos)
                 + "§7. §f" + remaining.size() + "§7 blocks to dig.");
         }
     }
@@ -185,7 +175,7 @@ public final class Excavator extends Module {
     @Subscribe
     private void onTick(TickEvent event) {
         current = null;
-        if (!inGame() || mc.player.isSpectator()) {
+        if (mc.player.isSpectator()) {
             return;
         }
         if (world.changed()) {
@@ -197,13 +187,13 @@ public final class Excavator extends Module {
             return;
         }
         // Holding attack means the player is mining by hand.
-        if (InputUtil.physicallyHeld(mc.options.keyAttack) || mc.player.isUsingItem()) {
+        if (InputUtil.physicallyHeld(mc.options.keyAttack) || mc.player.isUsingItem() || Hands.slotsTaken()) {
             stopWalking();
-            slots.restoreIfMine();
+            slots.standAside();
             return;
         }
         if (remaining.isEmpty()) {
-            ChatUtil.message("§bExcavator §7finished that box.");
+            tell("finished that box.");
             slots.restoreIfMine();
             clear();
             if (!keepActive.isOn()) {
@@ -211,10 +201,12 @@ public final class Excavator extends Module {
             }
             return;
         }
-        if (speed.is(Speed.INSTANT) && breakInstantly()) {
+        boolean instant = speed.is(Speed.INSTANT);
+        List<BlockPos> inReach = inReach(instant);
+        if (instant && breakInstantly(inReach)) {
             return;
         }
-        current = next(pos -> true);
+        current = inReach.isEmpty() ? null : inReach.getFirst();
         holdTool(current);
         if (current != null && !BlockMiner.mine(current, rotate.isOn())) {
             remaining.remove(current);
@@ -237,7 +229,7 @@ public final class Excavator extends Module {
             return;
         }
         if (walker.arrived() || walker.lost()) {
-            BlockPos target = closestLeft();
+            BlockPos target = BlockUtil.nearestOf(remaining, pos -> true);
             if (target != null) {
                 finder.search(PathFinder.standingAt(mc.player),
                     new PathGoal.Around(target, Math.max(1, range.getValue() - 1)));
@@ -247,20 +239,6 @@ public final class Excavator extends Module {
         walker.tick(finder.liveRules());
     }
 
-    private BlockPos closestLeft() {
-        Vec3 eye = mc.player.getEyePosition();
-        BlockPos best = null;
-        double bestDistance = Double.MAX_VALUE;
-        for (BlockPos pos : remaining) {
-            double distance = eye.distanceToSqr(Vec3.atCenterOf(pos));
-            if (distance < bestDistance) {
-                bestDistance = distance;
-                best = pos;
-            }
-        }
-        return best;
-    }
-
     private void stopWalking() {
         finder.cancel();
         walker.stop();
@@ -268,20 +246,21 @@ public final class Excavator extends Module {
 
     // Sends the break packets for the blocks in reach a single tick breaks. True when
     // any went out. Slower blocks fall through to the held click path.
-    private boolean breakInstantly() {
+    private boolean breakInstantly(List<BlockPos> inReach) {
         breaker.tick();
         // The tool has to be in hand before anything is judged a one hit block.
         BlockPos slow = breaker.slowBlock();
-        holdTool(slow != null ? slow : next(pos -> true));
+        holdTool(slow != null ? slow : inReach.isEmpty() ? null : inReach.getFirst());
         int sent = 0;
-        while (sent < perTick.getInt()) {
-            BlockPos pos = next(this::sendsInstantly);
-            if (pos == null) {
+        for (BlockPos pos : inReach) {
+            if (sent >= perTick.getInt()) {
                 break;
             }
-            breaker.send(pos);
-            current = pos;
-            sent++;
+            if (sendsInstantly(pos)) {
+                breaker.send(pos);
+                current = pos;
+                sent++;
+            }
         }
         if (sent > 0) {
             SwingMode.swingArm(InteractionHand.MAIN_HAND);
@@ -303,12 +282,19 @@ public final class Excavator extends Module {
         ItemUtil.holdBestTool(BlockUtil.state(pos), slots);
     }
 
-    // Blocks that are already gone or are to be left standing drop out of the queue on the way past.
-    // AutoTool leaves standing a listed block it has no Silk Touch tool for.
-    private BlockPos next(Predicate<BlockPos> wanted) {
+    // Every block in reach in queue order or only the first. Blocks that are gone or are to be left
+    // standing drop out of the queue on the way past. AutoTool leaves standing a listed block it has
+    // no Silk Touch tool for.
+    private List<BlockPos> inReach(boolean every) {
+        List<BlockPos> found = new ArrayList<>();
         Iterator<BlockPos> it = remaining.iterator();
         while (it.hasNext()) {
             BlockPos pos = it.next();
+            boolean near = BlockUtil.distanceTo(pos) <= range.getValue();
+            // Past the first block in reach one out of reach costs only its distance.
+            if (!near && !found.isEmpty()) {
+                continue;
+            }
             BlockState state = BlockUtil.state(pos);
             if (!BlockUtil.diggable(pos) || skipBlocks.contains(state.getBlock())
                 || Modules.toolRefuses(state, false)) {
@@ -316,12 +302,14 @@ public final class Excavator extends Module {
                 continue;
             }
             // The block underfoot waits until the player has moved off it.
-            if (!BlockUtil.isStandingOn(pos) && BlockUtil.distanceTo(pos) <= range.getValue()
-                && wanted.test(pos)) {
-                return pos;
+            if (near && !BlockUtil.isStandingOn(pos)) {
+                found.add(pos);
+                if (!every) {
+                    break;
+                }
             }
         }
-        return null;
+        return found;
     }
 
     @Subscribe
@@ -330,5 +318,11 @@ public final class Excavator extends Module {
         if (corners.done() && current != null) {
             targetStyle.draw(event.getBatch(), current, false);
         }
+    }
+
+    // The key does more than switch the module and cannot be a held one.
+    @Override
+    public boolean keySwitches() {
+        return false;
     }
 }

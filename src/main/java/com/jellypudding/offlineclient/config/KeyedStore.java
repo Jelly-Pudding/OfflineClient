@@ -3,7 +3,9 @@ package com.jellypudding.offlineclient.config;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.jellypudding.offlineclient.setting.KeybindSetting;
+import com.jellypudding.offlineclient.event.events.KeyPressEvent;
+import com.jellypudding.offlineclient.setting.Bind;
+import com.mojang.blaze3d.platform.InputConstants;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -17,24 +19,26 @@ public abstract class KeyedStore<T extends KeyedStore.Keyed<T>> {
     public interface Keyed<T> {
         String name();
 
-        int key();
+        Bind key();
 
-        T withKey(int key);
+        T withKey(Bind key);
     }
 
     // Builds an entry from its name and key and the rest of what was saved for it.
     protected interface Reader<T> {
-        T read(String name, int key, JsonObject saved);
+        T read(String name, Bind key, JsonObject saved);
     }
 
     private final Path file;
+    private final Reader<T> reader;
     private final BiConsumer<T, JsonObject> writer;
     private final List<T> entries = new ArrayList<>();
 
     protected KeyedStore(String fileName, Reader<T> reader, BiConsumer<T, JsonObject> writer) {
         this.file = DataFiles.path(fileName);
+        this.reader = reader;
         this.writer = writer;
-        DataFiles.readJson(file, root -> decode(root, reader)).ifPresent(entries::addAll);
+        DataFiles.readJson(file, root -> decode(root, reader, fileName)).ifPresent(entries::addAll);
     }
 
     public List<T> all() {
@@ -66,44 +70,57 @@ public abstract class KeyedStore<T extends KeyedStore.Keyed<T>> {
     }
 
     // The key of whatever is saved under the name. Saving over an entry keeps its key.
-    public int keyOf(String name) {
+    public Bind keyOf(String name) {
         T entry = find(name);
-        return entry == null ? KeybindSetting.UNBOUND : entry.key();
+        return entry == null ? Bind.NONE : entry.key();
     }
 
-    // Every entry a press of the key sets off.
-    public List<T> boundTo(int key) {
-        List<T> bound = new ArrayList<>();
-        if (key == KeybindSetting.UNBOUND) {
-            return bound;
+    // Every entry the press sets off.
+    public List<T> pressedBy(KeyPressEvent event) {
+        List<T> pressed = new ArrayList<>();
+        if (event.getAction() != InputConstants.PRESS) {
+            return pressed;
         }
         for (T entry : entries) {
-            if (entry.key() == key) {
-                bound.add(entry);
+            if (event.isFor(entry.key())) {
+                pressed.add(entry);
             }
         }
-        return bound;
+        return pressed;
     }
 
-    private static <E> List<E> decode(JsonElement root, Reader<E> reader) {
-        List<E> decoded = new ArrayList<>();
-        for (JsonElement element : root.getAsJsonArray()) {
+    // An entry that cannot be read is left out.
+    private static <E> List<E> decode(JsonElement root, Reader<E> reader, String fileName) {
+        return DataFiles.entries(root, element -> {
             JsonObject object = element.getAsJsonObject();
-            int key = object.has("key") ? object.get("key").getAsInt() : KeybindSetting.UNBOUND;
-            decoded.add(reader.read(object.get("name").getAsString(), key, object));
-        }
-        return decoded;
+            Bind key = object.has("key") ? Bind.fromJson(object.get("key")) : null;
+            return reader.read(object.get("name").getAsString(), key == null ? Bind.NONE : key, object);
+        }, "entries of " + fileName);
     }
 
-    private void save() {
+    // Every entry the way the file holds them. A profile keeps a copy.
+    public JsonArray toJson() {
         JsonArray root = new JsonArray();
         for (T entry : entries) {
             JsonObject object = new JsonObject();
             object.addProperty("name", entry.name());
-            object.addProperty("key", entry.key());
+            object.add("key", entry.key().toJson());
             writer.accept(entry, object);
             root.add(object);
         }
-        DataFiles.writeJson(file, root);
+        return root;
+    }
+
+    // Swaps every entry for the saved ones. Saved text that is no list leaves the store as it is
+    // and an entry that cannot be read is left out.
+    public void replaceWith(JsonElement saved) {
+        List<T> decoded = decode(saved, reader, file.getFileName().toString());
+        entries.clear();
+        entries.addAll(decoded);
+        save();
+    }
+
+    private void save() {
+        DataFiles.writeJson(file, toJson());
     }
 }

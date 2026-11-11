@@ -34,11 +34,11 @@ public final class InvWalk extends Module {
         .describe(Screens.CLIENT, "Only the ClickGUI and the other screens of this client.")
         .describe(Screens.BOTH, "Every screen that does not take typing.");
     private final BoolSetting sneak = new BoolSetting("Sneak",
-        "Also let the sneak key work.", true);
+        "Also lets the sneak key work.", true);
     private final BoolSetting sprint = new BoolSetting("Sprint",
-        "Also let the sprint key work.", true);
+        "Also lets the sprint key work.", true);
     private final BoolSetting jump = new BoolSetting("Jump",
-        "Also let the jump key work.", true);
+        "Also lets the jump key work.", true);
 
     // The mappings set from the keyboard on the last tick. The game sets them itself with no screen open.
     private List<KeyMapping> fed = List.of();

@@ -7,12 +7,12 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
+import com.jellypudding.offlineclient.util.EffectText;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.Swap;
 import com.jellypudding.offlineclient.util.ItemUtil;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.item.BowItem;
@@ -32,9 +32,9 @@ public final class Quiver extends Module {
         List.of(MobEffects.INSTANT_DAMAGE.value(), MobEffects.POISON.value(),
             MobEffects.SLOWNESS.value(), MobEffects.WEAKNESS.value()));
     private final BoolSetting plainFallback = new BoolSetting("Save tipped",
-        "Move plain arrows to the front when none of the chosen ones are around.", false);
+        "Moves plain arrows to the front when none of the chosen ones are around.", false);
     private final BoolSetting drawingOnly = new BoolSetting("Whilst drawing",
-        "Only sort the quiver whilst the bow is actually being drawn.", false);
+        "Only sorts the quiver whilst the bow is actually being drawn.", false);
     private final NumberSetting delay = new NumberSetting("Delay",
         "Ticks between moves.", 2, 0, 20, 1, " ticks");
 
@@ -68,7 +68,7 @@ public final class Quiver extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || mc.player.isSpectator() || !holdsLauncher()) {
+        if (mc.player.isSpectator() || !holdsLauncher()) {
             chosen = null;
             return;
         }
@@ -126,11 +126,7 @@ public final class Quiver extends Module {
 
     // Inventory index of the arrow that should be fired next.
     private int findWanted() {
-        for (Identifier id : effects.getValue()) {
-            if (!BuiltInRegistries.MOB_EFFECT.containsKey(id)) {
-                continue;
-            }
-            MobEffect effect = BuiltInRegistries.MOB_EFFECT.getValue(id);
+        for (MobEffect effect : effects.resolved()) {
             int slot = InventoryUtil.findSlot(stack -> stack.is(Items.TIPPED_ARROW)
                 && ItemUtil.carriesEffect(stack, effect), InventoryUtil.WHOLE_INVENTORY);
             if (slot != -1) {
@@ -153,7 +149,6 @@ public final class Quiver extends Module {
             return "plain";
         }
         var effects = contents.getAllEffects().iterator();
-        return effects.hasNext()
-            ? effects.next().getEffect().value().getDisplayName().getString() : "plain";
+        return effects.hasNext() ? EffectText.plainName(effects.next()) : "plain";
     }
 }

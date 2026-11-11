@@ -1,6 +1,8 @@
 package com.jellypudding.offlineclient.util;
 
 import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.config.NameStore;
+import com.jellypudding.offlineclient.config.RememberedEnderChests;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.ClientTickEvent;
 import net.minecraft.client.Minecraft;
@@ -12,40 +14,41 @@ import java.util.ArrayList;
 import java.util.List;
 
 // What your ender chest held the last time you had it open. The copy is taken again every
-// tick it stays open and is dropped when you leave the world since it belongs to that server.
+// tick it stays open and is kept in a file for the server and the name you play under.
 public final class EnderChest {
 
     public static final EnderChest INSTANCE = new EnderChest();
 
-    private static final int SLOTS = 27;
-
-    private final List<ItemStack> remembered = new ArrayList<>();
+    private final RememberedEnderChests store = new RememberedEnderChests();
 
     private EnderChest() {
     }
 
-    // The slots in order with the empty ones in place. Empty until you open your ender chest.
+    // The slots in order with the empty ones in place. Empty outside a world and until you
+    // have opened your ender chest on this server.
     public List<ItemStack> contents() {
-        return List.copyOf(remembered);
+        return OfflineClient.MC.level == null ? List.of() : store.of(NameStore.ownName());
     }
 
     @Subscribe
     private void onClientTick(ClientTickEvent event) {
         Minecraft mc = OfflineClient.MC;
-        if (mc.level == null) {
-            remembered.clear();
+        if (mc.level == null || Modules.dormant()) {
             return;
         }
+        // The file is read as you arrive. A chest opened before it is in is copied a tick later.
+        store.ready();
         if (!(mc.gui.screen() instanceof ContainerScreen screen) || !InventoryUtil.isEnderChest(screen)) {
             return;
         }
         Container container = screen.getMenu().getContainer();
-        if (container.getContainerSize() < SLOTS) {
+        if (container.getContainerSize() < RememberedEnderChests.SLOTS) {
             return;
         }
-        remembered.clear();
-        for (int i = 0; i < SLOTS; i++) {
-            remembered.add(container.getItem(i).copy());
+        List<ItemStack> held = new ArrayList<>();
+        for (int i = 0; i < RememberedEnderChests.SLOTS; i++) {
+            held.add(container.getItem(i).copy());
         }
+        store.update(NameStore.ownName(), held);
     }
 }

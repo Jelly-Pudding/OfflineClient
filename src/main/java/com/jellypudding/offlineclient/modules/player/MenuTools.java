@@ -3,7 +3,6 @@ package com.jellypudding.offlineclient.modules.player;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
-import com.jellypudding.offlineclient.util.ChatUtil;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMaps;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen;
@@ -64,7 +63,7 @@ public final class MenuTools extends Module {
         }
         connection.send(new ServerboundContainerClosePacket(menu.containerId));
         desynced = new WeakReference<>(menu);
-        ChatUtil.message("§bMenuTools §7told the server the menu closed.");
+        tell("told the server the menu closed.");
     }
 
     // A middle click outside the window does nothing whatever the server thinks the cursor holds.
@@ -80,7 +79,7 @@ public final class MenuTools extends Module {
             STALE_STATE, (short) AbstractContainerMenu.SLOT_CLICKED_OUTSIDE, (byte) 0, ContainerInput.CLONE,
             Int2ObjectMaps.emptyMap(), HashedStack.EMPTY));
         if (shut) {
-            ChatUtil.message("§bMenuTools §7can only fetch your own items as the server shut this menu. "
+            tell("can only fetch your own items as the server shut this menu. "
                 + "Open it again to see what it holds.");
         }
     }

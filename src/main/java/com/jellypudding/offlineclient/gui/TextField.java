@@ -5,6 +5,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.input.KeyEvent;
+import net.minecraft.util.Mth;
 
 // One line of editable text with a caret and a selection. Every text box in the
 // client uses it and gets the same editing and clipboard keys.
@@ -37,6 +38,7 @@ public final class TextField {
     // character on every frame is what makes a long value crawl.
     private int[] widths = {0};
     private String measured = "";
+    private Font measuredIn;
 
     public String get() {
         return buffer.toString();
@@ -304,13 +306,24 @@ public final class TextField {
 
     private void measure(Font font) {
         String text = buffer.toString();
-        if (text.equals(measured)) {
+        if (text.equals(measured) && font == measuredIn) {
             return;
         }
         measured = text;
-        widths = new int[text.length() + 1];
+        measuredIn = font;
+        widths = letterEdges(font, text);
+    }
+
+    // Where each character of a text starts and the last one ends. A letter of a smooth font
+    // is not a whole pixel wide. Adding up the widths of single letters would drift away
+    // from the text drawn in one piece.
+    private static int[] letterEdges(Font font, String text) {
+        int[] edges = new int[text.length() + 1];
+        float edge = 0;
         for (int i = 0; i < text.length(); i++) {
-            widths[i + 1] = widths[i] + font.width(String.valueOf(text.charAt(i)));
+            edge += font.getSplitter().stringWidth(String.valueOf(text.charAt(i)));
+            edges[i + 1] = Mth.ceil(edge);
         }
+        return edges;
     }
 }

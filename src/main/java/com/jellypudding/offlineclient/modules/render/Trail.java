@@ -1,7 +1,7 @@
 package com.jellypudding.offlineclient.modules.render;
 
 import com.jellypudding.offlineclient.event.Subscribe;
-import com.jellypudding.offlineclient.event.events.TickEvent;
+import com.jellypudding.offlineclient.event.events.PostMotionEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
@@ -29,8 +29,9 @@ public final class Trail extends Module {
         searchTags("particles", "footsteps");
     }
 
+    // The move of the tick is done and the old position still holds where the tick began.
     @Subscribe
-    private void onTick(TickEvent event) {
+    private void onPostMotion(PostMotionEvent event) {
         if (!inGame()) {
             return;
         }

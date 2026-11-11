@@ -12,6 +12,7 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.setting.TextSetting;
+import com.jellypudding.offlineclient.util.Chase;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.core.BlockPos;
@@ -23,7 +24,8 @@ import net.minecraft.world.entity.player.Player;
 
 import java.util.List;
 
-// Walks after another player or an entity using the pathfinder.
+// Goes after another player or an entity. The pathfinder picks the way or the
+// player heads straight at the target.
 public final class Follow extends Module {
 
     // Ticks between two searches. A moving target must not thrash the worker.
@@ -42,20 +44,26 @@ public final class Follow extends Module {
     private final TextSetting name = new TextSetting("Name",
         "The account name of the player to follow.", "")
         .under(target, Target.NAME);
+    private final BoolSetting ignoreCreative = new BoolSetting("Ignore creative",
+        "Never picks a player in creative mode.", false)
+        .under(target, Target.NEAREST);
     private final RegistryListSetting<EntityType<?>> entities = new RegistryListSetting<>("Entities",
         "The kinds of entity to walk after. Click to pick them.", BuiltInRegistries.ENTITY_TYPE,
         List.of(EntityTypes.MINECART))
         .under(target, Target.ENTITY);
     private final NumberSetting distance = new NumberSetting("Distance to keep",
-        "How close to get before you stop walking.", 3, 1, 10, 0.5, " blocks").min(1);
+        "How close to get before you stop walking.", 3, 1, 10, 0.5, " blocks");
     private final NumberSetting range = new NumberSetting("Range to give up at",
         "How far the target may be before you stop following.", 48, 8, 128, 1, " blocks")
         .min(4);
+    private final BoolSetting usePath = Chase.pathSwitch(true);
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Turns your view towards the way you are walking.", true);
+        "Turns your view towards the way you are walking.", true)
+        .under(usePath);
 
     private final PathFinder finder = new PathFinder();
     private final PathWalker walker = new PathWalker();
+    private final Chase chase = new Chase();
 
     private Entity following;
     private BlockPos searchedFor;
@@ -63,7 +71,7 @@ public final class Follow extends Module {
 
     public Follow() {
         super("Follow", "Walks after another player or an entity you pick.", Category.PLAYER);
-        addSettings(target, name, entities, distance, range, rotate);
+        addSettings(target, name, ignoreCreative, entities, distance, range, usePath, rotate);
         searchTags("path", "chase", "stalk", "minecart");
     }
 
@@ -83,20 +91,26 @@ public final class Follow extends Module {
     protected void onDisable() {
         finder.cancel();
         walker.stop();
+        chase.stop();
         following = null;
     }
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame()) {
-            return;
-        }
         following = pick();
         if (following == null) {
             finder.cancel();
             walker.stop();
+            chase.stop();
             return;
         }
+        if (!usePath.isOn() || Chase.inFlight()) {
+            finder.cancel();
+            walker.stop();
+            chase.tick(following, distance.getValue(), false);
+            return;
+        }
+        chase.stop();
 
         PathFinder.Result result = finder.poll();
         if (result != null) {
@@ -147,7 +161,8 @@ public final class Follow extends Module {
             }
             return null;
         }
-        return EntityUtil.nearest(range.getValue(), entity -> entity instanceof Player other && followable(other));
+        return EntityUtil.nearest(range.getValue(), entity -> entity instanceof Player other && followable(other)
+            && !(ignoreCreative.isOn() && other.isCreative()));
     }
 
     private boolean followable(Player other) {

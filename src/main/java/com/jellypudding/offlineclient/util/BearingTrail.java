@@ -34,24 +34,36 @@ public final class BearingTrail {
     }
 
     public void add(Bearing bearing, double minSpread) {
-        // A reading that cannot point at a well founded fix means the thing moved on. Any
-        // new reading of a moving thing whilst you stand still means the same.
-        BearingFix known = fix(minSpread);
-        if ((moves && !bearings.isEmpty() && newest().originDistance(bearing) < STILL)
-            || (known != null && bearings.size() > 2 && known.missedBy(bearing, tolerance))) {
-            bearings.clear();
-        }
-        if (!moves && !bearings.isEmpty() && newest().originDistance(bearing) < SAME_SPOT) {
-            bearings.removeLast();
-        }
-        bearings.add(bearing);
-        if (bearings.size() > MAX_BEARINGS) {
-            bearings.removeFirst();
-        }
-        while (bearings.size() > 1 && !BearingFix.agree(bearings, minSpread, tolerance)) {
-            bearings.removeFirst();
-        }
+        join(bearings, bearing, minSpread);
         fixedFor = Double.NaN;
+    }
+
+    // The fix the trail would give once the bearing joined it. The trail stays as it is.
+    public BearingFix fixWith(Bearing bearing, double minSpread) {
+        List<Bearing> joined = new ArrayList<>(bearings);
+        join(joined, bearing, minSpread);
+        return BearingFix.cross(joined, minSpread, tolerance);
+    }
+
+    // Adds the bearing to a copy of this trail's lines or to the lines themselves. A reading
+    // that cannot point at a well founded fix means the thing moved on. Any new reading of a
+    // moving thing whilst you stand still means the same.
+    private void join(List<Bearing> lines, Bearing bearing, double minSpread) {
+        BearingFix known = fix(minSpread);
+        if ((moves && !lines.isEmpty() && lines.getLast().originDistance(bearing) < STILL)
+            || (known != null && lines.size() > 2 && known.missedBy(bearing, tolerance))) {
+            lines.clear();
+        }
+        if (!moves && !lines.isEmpty() && lines.getLast().originDistance(bearing) < SAME_SPOT) {
+            lines.removeLast();
+        }
+        lines.add(bearing);
+        if (lines.size() > MAX_BEARINGS) {
+            lines.removeFirst();
+        }
+        while (lines.size() > 1 && !BearingFix.agree(lines, minSpread, tolerance)) {
+            lines.removeFirst();
+        }
     }
 
     // True when the bearing could point where every line of this trail does.
@@ -63,6 +75,17 @@ public final class BearingTrail {
         List<Bearing> joined = new ArrayList<>(bearings);
         joined.add(bearing);
         return BearingFix.agree(joined, minSpread, tolerance);
+    }
+
+    // True when every line of this trail could point at the spot. An empty trail points anywhere.
+    public boolean pointsAt(double x, double z) {
+        BearingFix spot = new BearingFix(x, z, 0);
+        for (Bearing bearing : bearings) {
+            if (spot.missedBy(bearing, tolerance)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     // Null until the lines spread this many radians and meet in front of every place they

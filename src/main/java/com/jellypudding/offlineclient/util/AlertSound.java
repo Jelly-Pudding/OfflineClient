@@ -63,15 +63,15 @@ public final class AlertSound {
             BuiltInRegistries.SOUND_EVENT, List.of(defaultSound)).under(enabled);
         volume = new NumberSetting(Setting.prefixed(prefix, "volume"),
             "How loud each ring is out of the full interface volume.", 100, 0, 100, 5, "%")
-            .min(0).max(100).under(enabled);
+            .max(100).under(enabled);
         pitch = new NumberSetting(Setting.prefixed(prefix, "pitch"),
             "How high each ring sounds. At a hundred the sound plays unchanged.",
-            100, LOWEST_PITCH, HIGHEST_PITCH, 5, "%").min(LOWEST_PITCH).max(HIGHEST_PITCH).under(enabled);
+            100, LOWEST_PITCH, HIGHEST_PITCH, 5, "%").max(HIGHEST_PITCH).under(enabled);
         rings = new NumberSetting(Setting.prefixed(prefix, "rings"),
-            "How many times the alarm sounds each time it goes off.", defaultRings, 1, 10, 1).min(1).under(enabled);
+            "How many times the alarm sounds each time it goes off.", defaultRings, 1, 10, 1).under(enabled);
         gap = new NumberSetting(Setting.prefixed(prefix, "ring gap"),
             "How long the alarm waits between two rings.", 20, 1, 100, 1, " ticks")
-            .min(1).under(rings, () -> rings.getInt() > 1);
+            .under(rings, () -> rings.getInt() > 1);
         String alarm = prefix.isEmpty() ? "alarm" : prefix.toLowerCase(Locale.ROOT) + " alarm";
         test = new ActionSetting("Test " + alarm, "Plays the alarm as it is set up now.", this::test)
             .under(enabled);

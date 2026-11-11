@@ -39,7 +39,7 @@ public final class AutoBrewer extends StationModule<BrewingStandMenu> {
 
     private enum Stage { TAKE, FILL, BREW }
 
-    // The brewing rules live on the server and never reach the client.
+    // The brewing recipes stay on the server and the client learns only which items they take.
     // These are the steps the game ships with. A server that changes them
     // refuses an ingredient and the module reports it.
     private record Step(Holder<Potion> from, Item reagent, Holder<Potion> to) {
@@ -122,6 +122,8 @@ public final class AutoBrewer extends StationModule<BrewingStandMenu> {
     private Stage stage;
     private List<Item> plan;
     private int planIndex;
+    // The ingredient last put in whilst the stand has yet to show its brew.
+    private Item added;
     private int brewed;
 
     public AutoBrewer() {
@@ -145,6 +147,7 @@ public final class AutoBrewer extends StationModule<BrewingStandMenu> {
     @Override
     protected void closed() {
         stage = null;
+        added = null;
     }
 
     @Override
@@ -201,8 +204,18 @@ public final class AutoBrewer extends StationModule<BrewingStandMenu> {
     }
 
     private void brew(BrewingStandMenu stand) {
+        ItemStack inSlot = stand.slots.get(INGREDIENT_SLOT).getItem();
+        // The stand shows a brew a round trip after the ingredient goes in. One it never starts
+        // was refused.
+        if (added != null && inSlot.is(added)) {
+            if (stalled()) {
+                disable("The server would not brew with " + nameOf(added) + ".");
+            }
+            return;
+        }
+        added = null;
         // The leftover of the last ingredient goes home before the next one.
-        if (!stand.slots.get(INGREDIENT_SLOT).getItem().isEmpty()) {
+        if (!inSlot.isEmpty()) {
             moveOut(stand, INGREDIENT_SLOT, "for the leftover ingredient.");
             return;
         }
@@ -222,10 +235,16 @@ public final class AutoBrewer extends StationModule<BrewingStandMenu> {
         Item ingredient = plan.get(planIndex);
         int slot = MenuClicks.firstInventorySlot(stand, stack -> stack.is(ingredient));
         if (slot == -1) {
-            disable("Out of " + ingredient.getName(ingredient.getDefaultInstance()).getString() + ".");
+            disable("Out of " + nameOf(ingredient) + ".");
+            return;
+        }
+        if (!stand.slots.get(INGREDIENT_SLOT).mayPlace(stand.slots.get(slot).getItem())) {
+            disable("The server does not brew with " + nameOf(ingredient) + ".");
             return;
         }
         MenuClicks.moveSome(stand, slot, INGREDIENT_SLOT, 1);
+        added = ingredient;
+        startClock();
         planIndex++;
     }
 
@@ -272,6 +291,10 @@ public final class AutoBrewer extends StationModule<BrewingStandMenu> {
             result.add(Items.DRAGON_BREATH);
         }
         return result;
+    }
+
+    private static String nameOf(Item item) {
+        return item.getName(item.getDefaultInstance()).getString();
     }
 
     private static PotionContents contentsOf(ItemStack stack) {

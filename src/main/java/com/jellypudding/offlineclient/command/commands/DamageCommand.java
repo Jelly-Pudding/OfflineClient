@@ -55,8 +55,7 @@ public final class DamageCommand extends Command {
             return;
         }
         BlockPos pos = hit.getBlockPos().above();
-        Vec3 source = kind.equals("crystal")
-            ? new Vec3(pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5) : Vec3.atCenterOf(pos);
+        Vec3 source = kind.equals("crystal") ? Vec3.atBottomCenterOf(pos) : Vec3.atCenterOf(pos);
         ChatUtil.message("§7You would take §b" + EntityUtil.hearts(
             ExplosionUtil.blastDamage(player, source, power)));
         Player target = EntityUtil.nearestEnemy(TARGET_RANGE);

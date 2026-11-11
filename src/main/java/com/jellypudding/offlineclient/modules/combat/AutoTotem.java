@@ -29,16 +29,16 @@ public final class AutoTotem extends Module {
     private final NumberSetting delay = new NumberSetting("Delay",
         "Ticks to wait before equipping the next totem.", 0, 0, 20, 1, " ticks");
     private final BoolSetting explosions = new BoolSetting("Explosions",
-        "Equip early when a nearby crystal or bed or anchor could drop you to the health line.", true);
+        "Equips early when a nearby crystal or bed or anchor could drop you to the health line.", true);
     private final NumberSetting blastRange = new NumberSetting("Blast range",
         "How far away a charge is counted as a threat.", 8, 2, 16, 0.5, " blocks")
         .under(explosions);
     private final BoolSetting melee = new BoolSetting("Melee",
-        "Equip early when an enemy within five blocks holds a weapon that could do it.", true);
+        "Equips early when an enemy within five blocks holds a weapon that could do it.", true);
     private final BoolSetting fall = new BoolSetting("Fall",
-        "Equip early when the fall you are in would do it.", true);
+        "Equips early when the fall you are in would do it.", true);
     private final BoolSetting elytra = new BoolSetting("Elytra",
-        "Always hold a totem whilst gliding at speed.", true);
+        "Always holds a totem whilst you glide at speed.", true);
     private final BoolSetting enderChest = new BoolSetting("Kept ender chest",
         "Takes a totem from the ender chest ChestLink keeps open once your inventory has none.", true);
 
@@ -49,7 +49,7 @@ public final class AutoTotem extends Module {
     private boolean locked;
 
     private final BoolSetting counter = new BoolSetting("Totem counter",
-        "Show how many totems you have left next to the name.", true);
+        "Shows how many totems you have left next to the name.", true);
 
     public AutoTotem() {
         super("AutoTotem", "Keeps a totem of undying in your offhand.", Category.COMBAT);
@@ -83,7 +83,7 @@ public final class AutoTotem extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || mc.player.isSpectator()) {
+        if (mc.player.isSpectator()) {
             return;
         }
         if (!cursor.recover()) {

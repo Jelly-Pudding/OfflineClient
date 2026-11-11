@@ -1,6 +1,7 @@
 package com.jellypudding.offlineclient.mixin;
 
 import com.jellypudding.offlineclient.modules.render.Blur;
+import com.jellypudding.offlineclient.modules.render.Freecam;
 import com.jellypudding.offlineclient.modules.render.ItemEsp;
 import com.jellypudding.offlineclient.modules.render.NoHurtCam;
 import com.jellypudding.offlineclient.render.BodyRenderer;
@@ -43,12 +44,14 @@ public abstract class GameRendererMixin {
         }
     }
 
-    // ItemESP holds the view still to keep its tracers from wobbling.
+    // ItemESP holds the view still to keep its tracers from wobbling. Freecam holds it whilst the
+    // camera is away.
     @Inject(method = "bobView(Lnet/minecraft/client/renderer/state/level/CameraRenderState;Lcom/mojang/blaze3d/vertex/PoseStack;)V",
         at = @At("HEAD"), cancellable = true)
     private void onBobView(CallbackInfo ci) {
         ItemEsp items = Modules.get(ItemEsp.class);
-        if (items != null && items.holdsViewStill()) {
+        Freecam freecam = Modules.get(Freecam.class);
+        if (items != null && items.holdsViewStill() || freecam != null && freecam.holdsViewStill()) {
             ci.cancel();
         }
     }

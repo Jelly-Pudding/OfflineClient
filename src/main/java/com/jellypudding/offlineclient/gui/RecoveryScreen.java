@@ -2,7 +2,8 @@ package com.jellypudding.offlineclient.gui;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.config.ConfigManager;
-import com.jellypudding.offlineclient.setting.ActionSetting;
+import com.jellypudding.offlineclient.render.ClientFonts;
+import com.jellypudding.offlineclient.util.Armed;
 import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.Flash;
 import com.jellypudding.offlineclient.util.RenderUtil;
@@ -15,8 +16,6 @@ import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundEvents;
-
-import java.util.concurrent.TimeUnit;
 
 // Reached from the title screen. Puts the client back into a known good
 // state when a saved setting makes the game unplayable.
@@ -41,8 +40,6 @@ public final class RecoveryScreen extends Screen {
     private static final int TITLE_ROOM = 70;
     private static final int FOOT_ROOM = 24;
 
-    private static final long ARM_MS = TimeUnit.SECONDS.toMillis(ActionSetting.CONFIRM_SECONDS);
-
     private static final int TICK_GAP = 4;
 
     private final Screen parent;
@@ -51,8 +48,8 @@ public final class RecoveryScreen extends Screen {
     private int done = -1;
     private long doneUntil;
 
-    private int armed = -1;
-    private long armedUntil;
+    // The index of the button that waits for its second click.
+    private final Armed<Integer> armed = new Armed<>();
 
     public RecoveryScreen(Screen parent) {
         super(Component.literal("Recovery"));
@@ -66,8 +63,8 @@ public final class RecoveryScreen extends Screen {
                 "Panels back to their starting spots and sizes.",
                 config::resetGuiLayout, "GUI layout reset", false),
             new Action("Clear friends",
-                "Empties the friends list.",
-                config::clearFriends, "Friends list cleared", true),
+                "Empties the friends list and the enemies list.",
+                config::clearFriends, "Friends and enemies cleared", true),
             new Action("Reset everything",
                 "Back to a completely fresh client.",
                 config::resetEverything, "Everything reset", true),
@@ -106,7 +103,7 @@ public final class RecoveryScreen extends Screen {
         long now = System.currentTimeMillis();
         expire(now);
 
-        Font font = OfflineClient.MC.font;
+        Font font = ClientFonts.guiAtGameScale();
         renderTitle(context, font);
 
         String hovering = null;
@@ -115,7 +112,7 @@ public final class RecoveryScreen extends Screen {
         for (int i = 0; i < actions.length; i++) {
             Action action = actions[i];
             boolean hovered = overButton(mouseX, mouseY, y);
-            boolean waiting = armed == i;
+            boolean waiting = armed.isArmed(i);
             // A finished button holds its message for a moment and then eases back to normal.
             float success = done == i ? Flash.strength(doneUntil) : 0f;
 
@@ -166,11 +163,12 @@ public final class RecoveryScreen extends Screen {
     // The title in the accent at twice size with a rule and small print below.
     private void renderTitle(GuiGraphicsExtractor context, Font font) {
         String title = OfflineClient.NAME + " Recovery";
-        int fullWidth = font.width(title);
+        Font titleFont = ClientFonts.guiAt(TITLE_SCALE);
+        int fullWidth = titleFont.width(title);
         float x = width / 2f - fullWidth * TITLE_SCALE / 2f;
         int y = topY() - TITLE_ROOM + 12;
 
-        RenderUtil.gradientTextScaled(context, font, title, x, y,
+        RenderUtil.gradientTextScaled(context, titleFont, title, x, y,
             GuiTheme.accentText(), GuiTheme.accent(), TITLE_SCALE);
 
         int ruleY = y + (int) (GuiTheme.TEXT_HEIGHT * TITLE_SCALE) + 7;
@@ -194,9 +192,6 @@ public final class RecoveryScreen extends Screen {
     private void expire(long now) {
         if (done != -1 && now > doneUntil) {
             done = -1;
-        }
-        if (armed != -1 && now > armedUntil) {
-            armed = -1;
         }
     }
 
@@ -230,22 +225,19 @@ public final class RecoveryScreen extends Screen {
     }
 
     private void activate(int index) {
-        long now = System.currentTimeMillis();
         Action action = actions[index];
         click();
 
         // Anything that throws work away asks twice. The rest goes through at once.
-        if (action.confirm() && armed != index) {
-            armed = index;
-            armedUntil = now + ARM_MS;
+        if (action.confirm() && !armed.press(index)) {
             done = -1;
             return;
         }
 
-        armed = -1;
+        armed.disarm();
         action.task().run();
         done = index;
-        doneUntil = now + Flash.SHOWN_MS;
+        doneUntil = System.currentTimeMillis() + Flash.SHOWN_MS;
     }
 
     private static void click() {

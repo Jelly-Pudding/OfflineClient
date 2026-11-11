@@ -9,20 +9,27 @@ import net.minecraft.world.entity.LivingEntity;
 public enum TargetPriority {
     NEAREST, FURTHEST, LOW_HEALTH, HIGH_HEALTH, CLOSEST_ANGLE, ANGLE_AND_DISTANCE;
 
+    // More than any health a living thing can have.
+    private static final double NO_HEALTH = 1.0E9;
+
     public double score(Entity entity) {
         return switch (this) {
             case NEAREST -> OfflineClient.MC.player.distanceToSqr(entity);
             case FURTHEST -> -OfflineClient.MC.player.distanceToSqr(entity);
-            case LOW_HEALTH -> health(entity);
-            case HIGH_HEALTH -> -health(entity);
+            case LOW_HEALTH -> entity instanceof LivingEntity living
+                ? EntityUtil.totalHealth(living) : lifeless(entity);
+            case HIGH_HEALTH -> entity instanceof LivingEntity living
+                ? -EntityUtil.totalHealth(living) : lifeless(entity);
             case CLOSEST_ANGLE -> EntityUtil.lookAngleTo(entity);
             case ANGLE_AND_DISTANCE -> EntityUtil.lookAngleTo(entity)
                 * OfflineClient.MC.player.distanceTo(entity);
         };
     }
 
-    private static double health(Entity entity) {
-        return entity instanceof LivingEntity living ? EntityUtil.totalHealth(living) : 0;
+    // A crystal or a boat has no health to compare. Under either health order it comes after
+    // every living target and the nearest of its like goes first.
+    private static double lifeless(Entity entity) {
+        return NO_HEALTH + OfflineClient.MC.player.distanceToSqr(entity);
     }
 
     // A setting with a line for each choice. The verb reads as "Attacks".

@@ -5,6 +5,7 @@ import com.jellypudding.offlineclient.command.Command;
 import com.jellypudding.offlineclient.command.CommandManager;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.ActionSetting;
+import com.jellypudding.offlineclient.setting.Bind;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.Defaults;
@@ -33,6 +34,10 @@ public final class SetCommand extends Command {
     private static final String GRID_HINT = "§7Type one word for each row with §f#§7 for on and §f.§7 for off"
         + " such as §f.#. ### .#.§7. Three five seven or nine rows.";
     private static final String NUMBER_HINT = "§7Type a number or §fmore§7 or §fless§7.";
+    private static final String SWITCH_HINT = "§7Type §ftrue§7 or §ffalse§7 or §ftoggle§7 to flip it.";
+    private static final String STEP_HINT = "§7Or type §fnext§7 or §fprev§7 to step through them.";
+    private static final String COLOUR_HINT =
+        "§7Type a colour such as §f#33CCFF§7 or a hue from 0 to 360 or §frainbow§7.";
     private static final String LIST_HINT = "§7Type §fadd§7 or §fremove§7 and a word or type §fclear§7.";
 
     private static final String MORE = "more";
@@ -40,6 +45,10 @@ public final class SetCommand extends Command {
     private static final String ADD = "add";
     private static final String REMOVE = "remove";
     private static final String CLEAR = "clear";
+    private static final String TOGGLE = "toggle";
+    private static final String NEXT = "next";
+    private static final String PREVIOUS = "prev";
+    private static final String RAINBOW = "rainbow";
 
     // The namespace a registry id may be typed without.
     private static final String VANILLA = Identifier.DEFAULT_NAMESPACE + Identifier.NAMESPACE_SEPARATOR;
@@ -120,6 +129,13 @@ public final class SetCommand extends Command {
             + rangeHint(setting) + defaultHint(setting) + " §8(" + setting.getDescription() + ")");
         if (setting instanceof EnumSetting<?> e) {
             ChatUtil.message("§7Pick from §f" + enumOptions(e));
+            ChatUtil.message(STEP_HINT);
+        }
+        if (setting instanceof BoolSetting) {
+            ChatUtil.message(SWITCH_HINT);
+        }
+        if (setting instanceof ColorSetting) {
+            ChatUtil.message(COLOUR_HINT);
         }
         if (setting instanceof RankSetting<?> r) {
             ChatUtil.message("§7Name the ones you want in order from §f" + rankOptions(r));
@@ -221,10 +237,11 @@ public final class SetCommand extends Command {
 
     private static void apply(Module module, Setting<?> setting, String value) {
         switch (setting) {
+            case BoolSetting b when value.equalsIgnoreCase(TOGGLE) -> b.toggle();
             case BoolSetting b -> {
                 if (!value.matches("(?i)true|false|on|off")) {
                     ChatUtil.error("§f" + setting.id()
-                        + "§c needs §ftrue §cor §ffalse§c.");
+                        + "§c needs §ftrue §cor §ffalse §cor §ftoggle§c.");
                     return;
                 }
                 b.setValue(value.equalsIgnoreCase("true") || value.equalsIgnoreCase("on"));
@@ -243,20 +260,25 @@ public final class SetCommand extends Command {
                         + n.getValueString() + "§7.");
                 }
             }
-            case ColorSetting c -> {
-                if (value.equalsIgnoreCase("rainbow")) {
-                    c.setRainbow(true);
-                } else {
-                    OptionalDouble hue = number(value);
-                    if (hue.isEmpty()) {
-                        return;
-                    }
-                    c.setRainbow(false);
-                    c.setHue((float) hue.getAsDouble());
+            case ColorSetting c when value.equalsIgnoreCase(RAINBOW) -> c.setRainbow(true);
+            case ColorSetting c when value.startsWith(ColorSetting.HEX_MARK) -> {
+                if (!c.setHex(value)) {
+                    ChatUtil.error("§f" + value + "§c is not a colour. Type six hex digits after the mark such as §f"
+                        + ColorSetting.HEX_MARK + "33CCFF§c.");
+                    return;
                 }
             }
+            case ColorSetting c -> {
+                OptionalDouble hue = number(value);
+                if (hue.isEmpty()) {
+                    return;
+                }
+                c.setRainbow(false);
+                c.setHue((float) hue.getAsDouble());
+            }
+            // An option of that very name wins over a step.
             case EnumSetting<?> e -> {
-                if (!trySetEnum(e, value)) {
+                if (!trySetEnum(e, value) && !tryStep(e, value)) {
                     ChatUtil.error("§f" + value + "§c is not an option here. Pick one of §f" + enumOptions(e));
                     return;
                 }
@@ -277,12 +299,12 @@ public final class SetCommand extends Command {
                 }
             }
             case KeybindSetting k -> {
-                int key = KeybindSetting.keyFromName(value);
-                if (key == KeybindSetting.UNKNOWN) {
-                    ChatUtil.error("§f" + value + "§c is not a key. Try a letter or §fnone§c.");
+                Bind bind = Bind.parse(value);
+                if (bind == null) {
+                    ChatUtil.error(Bind.unknown(value));
                     return;
                 }
-                k.setValue(key);
+                k.setValue(bind);
             }
             case ActionSetting ignored -> {
                 ChatUtil.error("§f" + setting.id() + "§c takes no value. Name it on its own to run it.");
@@ -311,6 +333,15 @@ public final class SetCommand extends Command {
         return false;
     }
 
+    private static boolean tryStep(EnumSetting<?> setting, String value) {
+        boolean forward = value.equalsIgnoreCase(NEXT);
+        if (!forward && !value.equalsIgnoreCase(PREVIOUS)) {
+            return false;
+        }
+        setting.cycle(forward);
+        return true;
+    }
+
     private static String enumOptions(EnumSetting<?> setting) {
         return String.join(" §7/ §f", options(setting));
     }
@@ -322,9 +353,9 @@ public final class SetCommand extends Command {
     private static String rangeHint(Setting<?> setting) {
         if (setting instanceof NumberSetting n) {
             String limit = Double.isInfinite(n.getHardMax())
-                ? "anything from " + fmt(n.getHardMin()) + " up"
-                : fmt(n.getHardMin()) + " to " + fmt(n.getHardMax());
-            return " §8[slider " + fmt(n.getSliderMin()) + " to " + fmt(n.getSliderMax())
+                ? "anything from " + n.write(n.getHardMin()) + " up"
+                : n.write(n.getHardMin()) + " to " + n.write(n.getHardMax());
+            return " §8[slider " + n.write(n.getSliderMin()) + " to " + n.write(n.getSliderMax())
                 + ". accepts " + limit + "]";
         }
         return "";
@@ -339,16 +370,9 @@ public final class SetCommand extends Command {
         return start == null ? " §8(changed)" : " §8(default " + start + ")";
     }
 
-    private static String fmt(double value) {
-        return value == Math.rint(value) ? String.valueOf((long) value) : String.valueOf(value);
-    }
-
     private static String valueString(Setting<?> setting) {
-        if (setting instanceof KeybindSetting k) {
-            return k.getKeyName();
-        }
         if (setting instanceof ColorSetting c) {
-            return c.isRainbow() ? "rainbow" : "hue " + (int) c.getHue();
+            return c.isRainbow() ? RAINBOW : c.hex();
         }
         if (setting instanceof PickList<?> list) {
             return list.size() + " chosen";
@@ -380,10 +404,10 @@ public final class SetCommand extends Command {
             return List.of();
         }
         return switch (setting) {
-            case BoolSetting ignored -> CommandManager.filter(current, List.of("true", "false"));
+            case BoolSetting ignored -> CommandManager.filter(current, List.of("true", "false", TOGGLE));
             case NumberSetting ignored -> CommandManager.filter(current, List.of(MORE, LESS));
-            case EnumSetting<?> choice -> CommandManager.filter(current, options(choice));
-            case ColorSetting ignored -> CommandManager.filter(current, List.of("rainbow"));
+            case EnumSetting<?> choice -> CommandManager.filter(current, withSteps(options(choice)));
+            case ColorSetting ignored -> CommandManager.filter(current, List.of(RAINBOW, ColorSetting.HEX_MARK));
             case null, default -> List.of();
         };
     }
@@ -408,6 +432,13 @@ public final class SetCommand extends Command {
             }
         }
         return CommandManager.filter(current, ids);
+    }
+
+    private static List<String> withSteps(List<String> options) {
+        List<String> words = new ArrayList<>(options);
+        words.add(NEXT);
+        words.add(PREVIOUS);
+        return words;
     }
 
     private static List<String> options(EnumSetting<?> setting) {

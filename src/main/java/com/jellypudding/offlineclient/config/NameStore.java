@@ -8,7 +8,10 @@ import com.jellypudding.offlineclient.util.ChatUtil;
 import net.minecraft.client.player.LocalPlayer;
 
 import java.nio.file.Path;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Deque;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.regex.Pattern;
@@ -24,6 +27,10 @@ public final class NameStore {
 
     // Every server takes these. Account names follow the same rule.
     private static final Pattern VALID = Pattern.compile("[A-Za-z0-9_]{3,16}");
+
+    // The most names a save of a whole server fills the list to. Joining as a new name still
+    // saves it and the file keeps this many of the newest.
+    public static final int MOST_SAVED = 256;
 
     private static final String CONSONANTS = "bcdfghjklmnprstvz";
     private static final String VOWELS = "aeiou";
@@ -136,6 +143,25 @@ public final class NameStore {
         write();
     }
 
+    // Saves names without joining as any of them and hands back how many were new. Your account
+    // name is never saved and nothing goes in once the list is full.
+    public synchronized int add(Collection<String> added) {
+        int before = names.size();
+        for (String name : added) {
+            if (names.size() < MOST_SAVED && find(name) == null && !name.equalsIgnoreCase(accountName())) {
+                names.add(name);
+            }
+        }
+        if (names.size() > before) {
+            write();
+        }
+        return names.size() - before;
+    }
+
+    public synchronized boolean isFull() {
+        return names.size() >= MOST_SAVED;
+    }
+
     // Forgetting the name in use puts you back on your account name.
     public synchronized boolean remove(String name) {
         boolean removed = names.removeIf(saved -> saved.equalsIgnoreCase(name));
@@ -168,13 +194,19 @@ public final class NameStore {
         return null;
     }
 
+    // A name joined as moves to the end. The newest names are kept and the one in use with them.
     private static Saved decode(JsonElement root) {
         JsonObject object = root.getAsJsonObject();
-        List<String> decoded = new ArrayList<>();
-        for (JsonElement name : object.getAsJsonArray(NAMES)) {
-            decoded.add(name.getAsString());
+        Deque<String> decoded = new ArrayDeque<>();
+        for (String name : DataFiles.entries(object.get(NAMES), JsonElement::getAsString, "saved names")) {
+            if (valid(name)) {
+                decoded.addLast(name);
+                if (decoded.size() > MOST_SAVED) {
+                    decoded.removeFirst();
+                }
+            }
         }
-        return new Saved(decoded, object.has(USE) ? object.get(USE).getAsString() : null);
+        return new Saved(List.copyOf(decoded), JsonFields.text(object, USE));
     }
 
     private void write() {

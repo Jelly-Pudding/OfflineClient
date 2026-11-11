@@ -5,48 +5,82 @@ import com.jellypudding.offlineclient.config.ServerStore;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.PacketReceiveEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
+import com.jellypudding.offlineclient.friend.FriendManager;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.ActionSetting;
 import com.jellypudding.offlineclient.setting.BoolSetting;
+import com.jellypudding.offlineclient.setting.ChoiceListSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.TextSetting;
+import com.jellypudding.offlineclient.util.ChatGames;
 import com.jellypudding.offlineclient.util.ChatModel;
+import com.jellypudding.offlineclient.util.ChatPace;
 import com.jellypudding.offlineclient.util.ChatSender;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.LinePattern;
+import com.jellypudding.offlineclient.util.ListFile;
+import com.jellypudding.offlineclient.util.Modules;
+import com.jellypudding.offlineclient.util.SentLine;
+import com.jellypudding.offlineclient.util.ShownChat;
+import com.jellypudding.offlineclient.util.TabChanges;
+import com.jellypudding.offlineclient.util.TextLines;
 import com.jellypudding.offlineclient.util.Web;
+import net.minecraft.client.multiplayer.ClientPacketListener;
+import net.minecraft.client.multiplayer.PlayerInfo;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientboundLoginPacket;
+import net.minecraft.resources.Identifier;
 import net.minecraft.util.StringUtil;
 
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Deque;
+import java.util.EnumSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
 
-// A line holding one of your own rule replies is never answered and nothing goes out during
-// the cooldown. Two clients running the same rules stop after a single exchange. A model
-// writes one reply at a time and the cooldown starts once that reply has gone out.
+// Rules answer what players write and what the server writes and who comes and goes. The
+// first rule a line sets off answers it and rests for the cooldown after. A line a player
+// wrote never counts as a line of the server. A line holding one of your own replies is
+// never answered. Two clients running the same rules stop after a single exchange. A model
+// writes one reply at a time and its cooldown starts once that reply has gone out.
 public final class ChatBot extends Module {
 
-    public enum Replies { RULES, MODEL }
+    public enum Hears { PLAYER_SAYS, SERVER_SAYS, REPEAT_A_PLAYER, PLAYER_JOINS, PLAYER_LEAVES }
 
-    // How many reply rules can be set up one by one.
+    public enum AcceptFrom { FRIENDS, ALL_BUT_ENEMIES }
+
+    // How many rules can be set up one by one.
     private static final int SLOTS = 16;
-
-    // Swapped for the name of the player being answered.
-    private static final String PLAYER = "{player}";
 
     // One line a second never trips the spam kick of a vanilla server.
     private static final double MIN_COOLDOWN = 1;
 
+    // A wait runs up to this much longer again at random.
+    private static final double WAIT_SPREAD = 0.5;
+
+    // Lines waiting for their moment. A flood of lines past this gets no answer.
+    private static final int MAX_WAITING = 16;
+
     // How much of the recent chat the model reads before it answers.
     private static final int CONTEXT_LINES = 10;
     private static final long CONTEXT_MS = TimeUnit.MINUTES.toMillis(5);
+
+    // A trivia file is read up to this many questions.
+    private static final int MAX_QUESTIONS = 2000;
 
     // A name tag such as <Steve> that a model copied from the chat it read.
     private static final Pattern NAME_TAG = Pattern.compile("^<[^<>]*>\\s*");
@@ -56,113 +90,365 @@ public final class ChatBot extends Module {
 
     private static final double PERCENT = 100;
 
-    private static final String NO_ADDRESS = "§bChatBot §cneeds a model address that starts with http or https.";
+    private static final String NO_ADDRESS = ChatUtil.from("ChatBot",
+        "§cneeds a model address that starts with http or https.");
 
-    private record Rule(String phrase, String reply) {
+    // How the common teleport plugins word a request.
+    private static final String[] REQUEST_WORDINGS = {
+        "{player} has requested to teleport to you", "{player} has requested that you teleport to them",
+        "{player} wants to teleport to you", "{player} wants you to teleport to them",
+        "{player} has sent you a teleport request", "{player} has sent a teleport request to you",
+        "{player} sent you a tpa request"
+    };
 
-        // The reply as it goes out to one player.
-        String replyTo(String name) {
-            return reply.replace(PLAYER, name);
-        }
-    }
+    // The games by the names the picker shows them under.
+    private static final Map<String, ChatGames.Kind> GAMES = games();
 
-    // The settings for one rule. The phrase row folds the reply away.
-    private static final class Slot {
+    // The rows of one rule. The rule row folds the rest away.
+    private final class Rule {
 
+        final int slot;
+        final EnumSetting<Hears> hears;
         final TextSetting phrase;
+        final TextSetting wording;
+        final TextSetting player;
+        final BoolSetting regex;
+        final BoolSetting friendsOnly;
         final TextSetting reply;
 
-        Slot(int number, NumberSetting count) {
-            int slot = number - 1;
-            phrase = new TextSetting("Phrase " + number,
+        // What the rule listens for and the rows it was made from.
+        private LinePattern pattern;
+        private String patternFrom;
+        // Whether the wording names a player as the rows stood when last asked.
+        private boolean wordingNames;
+        private String wordingFrom;
+        // The rule answers nothing more until then.
+        long restsUntil;
+
+        Rule(int number) {
+            slot = number - 1;
+            String tail = " " + number;
+            hears = new EnumSetting<>("Rule" + tail, "What sets this rule off.", Hears.PLAYER_SAYS)
+                .describe(Hears.PLAYER_SAYS, "Another player writes a line that holds the phrase.")
+                .describe(Hears.SERVER_SAYS,
+                    "The server writes a line that starts with the wording. A line a player wrote never counts.")
+                .describe(Hears.REPEAT_A_PLAYER, "The player you name writes in open chat and the rule says the same.")
+                .describe(Hears.PLAYER_JOINS, "A player joins the server.")
+                .describe(Hears.PLAYER_LEAVES, "A player leaves the server.")
+                .under(ruleCount, () -> slot < ruleCount.getInt());
+            phrase = new TextSetting("Phrase" + tail,
                 "Words in another player's line that get a reply. Click to type them.", "")
-                .under(count, () -> slot < count.getInt());
-            reply = new TextSetting("Reply " + number,
-                "What you say back with {player} for their name. Start it with a slash to run a command.", "")
-                .under(phrase, () -> slot < count.getInt());
+                .under(hears, Hears.PLAYER_SAYS);
+            wording = new TextSetting("Wording" + tail,
+                "How the server starts the line with {player} where a name stands. Click to type it.", "")
+                .under(hears, Hears.SERVER_SAYS);
+            player = new TextSetting("Player" + tail,
+                "The player whose lines are said again. Click to type the name.", "")
+                .under(hears, Hears.REPEAT_A_PLAYER);
+            regex = new BoolSetting("Regex" + tail,
+                "Reads the phrase or the wording as a regular expression. The first group in brackets of a"
+                    + " wording is the name.", false)
+                .under(hears, Hears.PLAYER_SAYS, Hears.SERVER_SAYS);
+            friendsOnly = new BoolSetting("Friends only" + tail,
+                "Only acts for a player on your friend list.", false)
+                .under(hears, this::asksFriends);
+            reply = new TextSetting("Reply" + tail,
+                "What you say with {player} for the name. Start it with a slash to run a command."
+                    + TextLines.LIVE_WORDS, "")
+                .under(hears, () -> !hears.is(Hears.REPEAT_A_PLAYER));
         }
 
-        // Null whilst either box is blank.
-        Rule rule() {
-            if (phrase.isBlank() || reply.isBlank()) {
+        void register() {
+            addSettings(hears, phrase, wording, player, regex, friendsOnly, reply);
+        }
+
+        boolean inUse() {
+            return slot < ruleCount.getInt() && switch (hears.getValue()) {
+                case PLAYER_SAYS -> !phrase.isBlank() && !reply.isBlank();
+                case SERVER_SAYS -> !wording.isBlank() && !reply.isBlank();
+                case REPEAT_A_PLAYER -> !player.isBlank();
+                case PLAYER_JOINS, PLAYER_LEAVES -> !reply.isBlank();
+            };
+        }
+
+        // Null for a kind that hears no line and for a regular expression that does not compile.
+        // A problem with the pattern is told once each time its rows change.
+        private LinePattern pattern() {
+            boolean server = hears.is(Hears.SERVER_SAYS);
+            if (!server && !hears.is(Hears.PLAYER_SAYS)) {
                 return null;
             }
-            return new Rule(phrase.getValue().trim(), reply.getValue().trim());
+            String typed = server ? wording.getValue() : phrase.getValue();
+            String from = hears.getValue() + "\n" + regex.isOn() + "\n" + typed;
+            if (!from.equals(patternFrom)) {
+                patternFrom = from;
+                Consumer<String> problems = problem -> ChatUtil.error("ChatBot rule " + (slot + 1) + " " + problem);
+                pattern = server ? LinePattern.forServer(typed, regex.isOn(), problems)
+                    : LinePattern.forPlayers(typed, regex.isOn(), problems);
+            }
+            return pattern;
+        }
+
+        // Asked as the rows are drawn. A pattern that does not compile is told of once it is used.
+        private boolean wordingNamesPlayer() {
+            String from = regex.isOn() + "\n" + wording.getValue();
+            if (!from.equals(wordingFrom)) {
+                wordingFrom = from;
+                wordingNames = LinePattern.forServer(wording.getValue(), regex.isOn(), problem -> {
+                }).namesPlayer();
+            }
+            return wordingNames;
+        }
+
+        // A reply about a player needs a line that names one.
+        private boolean needsName() {
+            return reply.getValue().contains(LinePattern.PLAYER);
+        }
+
+        // True where the rule hears a name Friends only can ask about.
+        private boolean asksFriends() {
+            return switch (hears.getValue()) {
+                case REPEAT_A_PLAYER -> false;
+                case SERVER_SAYS -> wordingNamesPlayer();
+                default -> true;
+            };
+        }
+
+        // A friend has to be certain to have written the line. Another player can make a line
+        // of their own read as the line of a friend.
+        private boolean mayAnswer(String name, boolean certain) {
+            return !friendsOnly.isOn() || !asksFriends() || certain && name != null && isFriend(name);
+        }
+
+        // What the rule says to a line another player wrote. Null when the rule is not set off by it.
+        String answerTo(Spoken spoken) {
+            if (!inUse()) {
+                return null;
+            }
+            ChatSender.Line line = spoken.line();
+            if (hears.is(Hears.REPEAT_A_PLAYER)) {
+                if (spoken.whisper() || !spoken.certain() || !line.name().equalsIgnoreCase(player.getValue().strip())) {
+                    return null;
+                }
+                // What the bot said itself and heard back is never said again. Two bots that
+                // repeat each other stop after one round.
+                String said = SentLine.chat(line.text());
+                return said.equalsIgnoreCase(lastSaid) ? "" : said;
+            }
+            LinePattern listens = pattern();
+            if (listens == null || listens.match(line.text()) == null || !mayAnswer(line.name(), spoken.certain())) {
+                return null;
+            }
+            return SentLine.of(reply.getValue(), "player", line.name());
+        }
+
+        // What the rule says to a line of the server. The name the line gives is never yours. A
+        // name at the very start of a line of the server is one no other player put there.
+        String answerToServer(String text, String self) {
+            LinePattern listens = hears.is(Hears.SERVER_SAYS) && inUse() ? pattern() : null;
+            LinePattern.Hit hit = listens == null ? null : listens.match(text);
+            if (hit == null || self.equalsIgnoreCase(hit.name()) || !mayAnswer(hit.name(), true)
+                || hit.name() == null && needsName()) {
+                return null;
+            }
+            return hit.name() == null ? SentLine.of(reply.getValue())
+                : SentLine.of(reply.getValue(), "player", hit.name());
+        }
+
+        // What the rule says as a player comes or goes.
+        String answerToTab(TabChanges.Change change) {
+            Hears wanted = change.joined() ? Hears.PLAYER_JOINS : Hears.PLAYER_LEAVES;
+            if (!inUse() || !hears.is(wanted) || !mayAnswer(change.name(), true)) {
+                return null;
+            }
+            return SentLine.of(reply.getValue(), "player", change.name());
+        }
+
+        // A rule that rests still takes the line and nothing else answers it.
+        void answer(String line, long now) {
+            if (now < restsUntil || line.isEmpty()) {
+                return;
+            }
+            long at = now + answerWait();
+            if (queue(new Due(line, at, this::inUse, false, null))) {
+                restsUntil = at + cooldownMillis();
+            }
+        }
+
+        // Your own reply as another bot would say it back to you.
+        boolean repliesWith(String text, String self) {
+            if (!inUse() || hears.is(Hears.REPEAT_A_PLAYER)) {
+                return false;
+            }
+            String yours = SentLine.of(reply.getValue(), "player", self);
+            return !yours.isBlank() && ChatSender.holds(text, yours);
+        }
+
+        // A rule that repeats a player says nothing of its own and has nothing to tell.
+        void tellProblems() {
+            if (slot >= ruleCount.getInt() || hears.is(Hears.REPEAT_A_PLAYER)) {
+                return;
+            }
+            String rule = "ChatBot rule " + (slot + 1);
+            boolean listens = switch (hears.getValue()) {
+                case PLAYER_SAYS -> !phrase.isBlank();
+                case SERVER_SAYS -> !wording.isBlank();
+                default -> true;
+            };
+            if (listens && reply.isBlank()) {
+                ChatUtil.error(rule + " has no reply yet.");
+            } else if (!listens && !reply.isBlank()) {
+                ChatUtil.error(rule + " has a reply but nothing to listen for yet.");
+            }
+            LinePattern listening = inUse() ? pattern() : null;
+            if (listening != null && hears.is(Hears.SERVER_SAYS) && !listening.namesPlayer() && needsName()) {
+                ChatUtil.error(rule + " says {player} but its wording names nobody. Put {player} where the name"
+                    + " stands.");
+            }
         }
     }
 
-    // A line heard and when.
-    private record Heard(ChatModel.Said said, long at) {
+    // A line another player wrote and whether it came to you alone. Certain when no other player
+    // can have made it read as theirs.
+    private record Spoken(ChatSender.Line line, boolean whisper, boolean certain) {
     }
 
-    // A written reply held back until a player typing it would have finished.
-    private record Due(String text, long at) {
+    // A line heard and when. The model reads them.
+    private record Recent(ChatModel.Said said, long at) {
     }
 
-    private final EnumSetting<Replies> replies = new EnumSetting<>("Replies",
-        "Where the replies come from.", Replies.RULES)
-        .describe(Replies.RULES, "The phrases and answers in the rows below.")
-        .describe(Replies.MODEL, "A chat model at the address below writes each reply.");
+    // A line waiting for its moment. Wanted is asked again just before it goes out. Told is
+    // shown to you once it has gone and may be null.
+    private record Due(String line, long at, BooleanSupplier wanted, boolean fromModel, String told) {
+    }
+
     private final NumberSetting ruleCount = new NumberSetting("Rules",
-        "How many phrases get a reply. A row opens for each.", 1, 0, SLOTS, 1).min(0).max(SLOTS)
-        .under(replies, Replies.RULES);
-    private final Slot[] slots = new Slot[SLOTS];
+        "How many rules the bot follows. A row opens for each.", 1, 0, SLOTS, 1).max(SLOTS);
+    private final Rule[] rules = new Rule[SLOTS];
+    private final BoolSetting chatModel = new BoolSetting("Chat model",
+        "A chat model answers what other players write whenever no rule does.", false);
     private final TextSetting modelAddress = new TextSetting("Model address",
         "The web address of the chat model. A model running on your own computer needs no key.", "")
-        .under(replies, Replies.MODEL);
+        .under(chatModel);
     private final TextSetting modelName = new TextSetting("Model name",
         "Which model the service runs. Click to type it.", "")
-        .under(replies, Replies.MODEL);
+        .under(chatModel);
     private final TextSetting persona = new TextSetting("Persona",
         "Who the bot pretends to be when it writes. Click to type it.", "a friendly player")
-        .under(replies, Replies.MODEL);
+        .under(chatModel);
     private final BoolSetting onlyNamed = new BoolSetting("Only when named",
         "Only answers lines that mention your name.", true)
-        .under(replies, Replies.MODEL);
+        .under(chatModel);
     // Nought would be the same as Only when named.
     private final NumberSetting joinIn = new NumberSetting("Join in",
-        "Chance of answering a line that does not mention you.", 10, 1, 100, 1, "%").min(1).max(PERCENT)
+        "Chance of answering a line that does not mention you.", 10, 1, 100, 1, "%").max(PERCENT)
         .unless(onlyNamed);
-    private final NumberSetting typingSpeed = new NumberSetting("Typing speed",
-        "Words a minute the replies are paced at.", 60, 10, 200, 5, " wpm").min(1)
-        .under(replies, Replies.MODEL);
     private final ActionSetting testModel = new ActionSetting("Test model",
         "Asks the model to answer a made up line and shows the reply only to you.", this::test)
-        .under(replies, Replies.MODEL);
+        .under(chatModel);
+    private final BoolSetting teleports = new BoolSetting("Accept teleports",
+        "Accepts a teleport request when the server tells you of one.", false);
+    private final TextLines requests = TextLines.named("Requests", "Request",
+        "How many wordings of a request are looked for.",
+        "A teleport request as the server starts the line with {player} where the name stands. Click to type it.",
+        REQUEST_WORDINGS)
+        .under(teleports);
+    private final TextSetting acceptWith = new TextSetting("Accept with",
+        "The command that accepts a request with the name of the player who asked on the end or where you put"
+            + " {player}. Click to type it.", "/tpaccept {player}")
+        .under(teleports);
+    private final EnumSetting<AcceptFrom> acceptFrom = new EnumSetting<>("Accept from",
+        "Whose teleport requests are accepted.", AcceptFrom.FRIENDS)
+        .describe(AcceptFrom.FRIENDS, "Only a player on your friend list.")
+        .describe(AcceptFrom.ALL_BUT_ENEMIES, "Anyone who is not on your enemy list.")
+        .under(teleports);
+    private final BoolSetting games = new BoolSetting("Chat games",
+        "Answers the chat games a server runs such as working out a sum or unscrambling a word.", false);
+    private final ChoiceListSetting gameKinds = new ChoiceListSetting("Games",
+        "The chat games the bot answers. Click to pick them.", GAMES::keySet, startingGames())
+        .under(games);
+    private final TextSetting wordFile = new TextSetting("Word file",
+        "A text file in the offlineclient folder with a word on each line. Unscrambling and missing letters look"
+            + " in it and at the name of every item and mob.", "words.txt")
+        .under(games, () -> games.isOn() && (picked(ChatGames.Kind.UNSCRAMBLE) || picked(ChatGames.Kind.FILL_IN)));
+    private final TextSetting triviaFile = new TextSetting("Trivia file",
+        "A text file in the offlineclient folder with a question and its answer on each line split by an"
+            + " equals sign.", "trivia.txt")
+        .under(games, () -> games.isOn() && picked(ChatGames.Kind.TRIVIA));
+    private final NumberSetting typingSpeed = new NumberSetting("Typing speed",
+        "Words a minute the answers of the model and of the chat games are typed at.", 60, 10, 200, 5, " wpm")
+        .min(1)
+        .visibleWhen(() -> chatModel.isOn() || games.isOn());
+    private final NumberSetting answerAfter = new NumberSetting("Answer after",
+        "Seconds before a rule or a game or an accept goes out. Each wait runs up to half as long again at"
+            + " random.", 0, 0, 10, 0.5, "s");
     private final NumberSetting cooldown = new NumberSetting("Cooldown",
-        "Seconds after a reply before the bot answers anyone again. Lines in between get no reply.",
-        10, MIN_COOLDOWN, 60, 1, "s").min(MIN_COOLDOWN);
+        "Seconds a rule or the chat games or the model rest after an answer. Lines in between get no answer"
+            + " from them.", 10, MIN_COOLDOWN, 60, 1, "s");
 
+    private final TabChanges tab = new TabChanges();
+    // Kept in the order the lines go out.
+    private final List<Due> due = new ArrayList<>();
     // The newest lines heard. The model reads them before it answers.
-    private final Deque<Heard> heard = new ArrayDeque<>();
-    private long quietUntil;
+    private final Deque<Recent> heard = new ArrayDeque<>();
+    private final ListFile wordList = new ListFile();
+    private final ListFile triviaList = new ListFile();
+    // The words of the word file with every game name and the list they were made from.
+    private ChatGames.Words words;
+    private List<String> wordsFrom;
+    private Map<String, String> trivia = Map.of();
+    private List<String> triviaFrom;
     // Set whilst the model writes. Nothing else is asked until its answer is back.
     private boolean asking;
-    private Due due;
+    private long modelRestsUntil;
+    private long gamesRestUntil;
     // Counts up whenever replies on their way are dropped. An answer from an older round is
     // thrown away.
     private int round;
     // The last problem told in chat. The same one again stays quiet until a reply gets through.
     private String warned;
+    // What the bot last said. A player who says it back is never repeated.
+    private String lastSaid = "";
 
     public ChatBot() {
-        super("ChatBot", "Answers other players in chat by rules you set or with a chat model.", Category.MISC);
-        addSettings(replies, ruleCount);
+        super("ChatBot", "Answers players and the server in chat by rules you set or with a chat model.",
+            Category.MISC);
+        addSettings(ruleCount);
         for (int i = 0; i < SLOTS; i++) {
-            slots[i] = new Slot(i + 1, ruleCount);
-            addSettings(slots[i].phrase, slots[i].reply);
+            rules[i] = new Rule(i + 1);
+            rules[i].register();
         }
-        addSettings(modelAddress, modelName, persona, onlyNamed, joinIn, typingSpeed, testModel, cooldown);
-        searchTags("auto reply", "responder", "answer", "ai", "chat model");
+        addSettings(chatModel, modelAddress, modelName, persona, onlyNamed, joinIn, testModel, teleports);
+        addSettings(requests.settings());
+        addSettings(acceptWith, acceptFrom, games, gameKinds, wordFile, triviaFile, typingSpeed, answerAfter,
+            cooldown);
+        searchTags("auto reply", "responder", "answer", "ai", "chat model", "auto accept", "tpaccept", "tpa",
+            "welcome", "greeter", "annoy", "echo", "repeat", "chat game", "unscramble", "trivia");
     }
 
     @Override
     protected void onEnable() {
-        quietUntil = 0;
         warned = null;
+        lastSaid = "";
+        modelRestsUntil = 0;
+        gamesRestUntil = 0;
         dropReplies();
-        if (replies.is(Replies.MODEL) && modelHost() == null) {
+        tab.sync();
+        for (Rule rule : rules) {
+            rule.restsUntil = 0;
+            rule.tellProblems();
+        }
+        if (chatModel.isOn() && modelHost() == null) {
             warn(NO_ADDRESS);
+        }
+        if (teleports.isOn()) {
+            List<String> wordings = requests.all();
+            if (wordings.isEmpty() || acceptWith.isBlank()) {
+                ChatUtil.error("ChatBot accepts no teleport whilst it has no request wording or Accept with is"
+                    + " empty.");
+            }
+            wordings.stream().filter(wording -> !namesPlayer(wording)).forEach(wording -> ChatUtil.error(
+                "ChatBot passes over the request wording " + wording + " because it holds no {player}."));
         }
     }
 
@@ -180,7 +466,7 @@ public final class ChatBot extends Module {
     private void dropReplies() {
         round++;
         asking = false;
-        due = null;
+        due.clear();
         heard.clear();
     }
 
@@ -192,66 +478,280 @@ public final class ChatBot extends Module {
             // A reply meant for one server never goes out on the next.
             mc.schedule(this::dropReplies);
         } else if (ChatSender.isChat(packet)) {
-            mc.schedule(() -> onLine(ChatSender.lineOf(packet)));
+            mc.schedule(() -> onChat(packet));
+        }
+        List<TabChanges.Change> changes = tab.read(packet);
+        if (!changes.isEmpty()) {
+            mc.schedule(() -> changes.forEach(this::onTabChange));
         }
     }
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (due == null || System.currentTimeMillis() < due.at()) {
-            return;
-        }
-        String text = due.text();
-        due = null;
-        if (replies.is(Replies.MODEL)) {
-            say(text);
+        long now = System.currentTimeMillis();
+        while (!due.isEmpty() && due.getFirst().at() <= now) {
+            Due next = due.getFirst();
+            if (!next.wanted().getAsBoolean()) {
+                due.removeFirst();
+                continue;
+            }
+            if (!ChatPace.RULE.say(next.line())) {
+                ChatPace.tellHeld(getName());
+                return;
+            }
+            due.removeFirst();
+            lastSaid = next.line();
+            if (next.fromModel()) {
+                modelRestsUntil = now + cooldownMillis();
+            }
+            if (next.told() != null) {
+                ChatUtil.message(next.told());
+            }
         }
     }
 
-    private void onLine(ChatSender.Line line) {
-        if (line == null || !isEnabled() || mc.player == null) {
+    private void onChat(Packet<?> packet) {
+        if (!isEnabled() || !inGame()) {
+            return;
+        }
+        Spoken spoken = playerLine(packet);
+        if (spoken != null) {
+            onPlayerLine(spoken);
+            return;
+        }
+        String text = ShownChat.serverText(packet);
+        if (text != null) {
+            onServerLine(text);
+        }
+    }
+
+    // A line a player wrote. Null for a line of the server and for a whisper whose sender could
+    // be made up.
+    private Spoken playerLine(Packet<?> packet) {
+        ChatSender.Line line = ChatSender.lineOf(packet);
+        if (line != null) {
+            return new Spoken(line, ShownChat.whisper(packet),
+                line.name().equalsIgnoreCase(ChatSender.certainWriter(packet)));
+        }
+        ShownChat.Whisper whisper = ShownChat.whisperOf(packet);
+        if (whisper == null) {
+            return null;
+        }
+        ClientPacketListener connection = mc.getConnection();
+        PlayerInfo info = connection == null ? null : connection.getPlayerInfo(whisper.from());
+        return new Spoken(new ChatSender.Line(info == null ? null : info.getProfile().id(), whisper.from(),
+            whisper.text()), true, true);
+    }
+
+    private void onPlayerLine(Spoken spoken) {
+        ChatSender.Line line = spoken.line();
+        if (Modules.mutes(line.name())) {
             return;
         }
         long now = System.currentTimeMillis();
-        heard.addLast(new Heard(new ChatModel.Said(line.name(), line.text()), now));
+        heard.addLast(new Recent(new ChatModel.Said(line.name(), line.text()), now));
         if (heard.size() > CONTEXT_LINES) {
             heard.removeFirst();
         }
-        if (line.isOwn() || now < quietUntil) {
+        String self = selfName();
+        if (line.isOwn() || line.name().equalsIgnoreCase(self) || line.text().equalsIgnoreCase(lastSaid)) {
             return;
         }
-        if (replies.is(Replies.RULES)) {
-            answerByRule(line);
-        } else {
+        // Another bot saying one of our replies back would start an endless exchange.
+        for (Rule rule : rules) {
+            if (rule.repliesWith(line.text(), self)) {
+                return;
+            }
+        }
+        for (Rule rule : rules) {
+            String answer = rule.answerTo(spoken);
+            if (answer != null) {
+                rule.answer(answer, now);
+                return;
+            }
+        }
+        if (chatModel.isOn()) {
             answerByModel(line, now);
         }
     }
 
-    private void answerByRule(ChatSender.Line line) {
+    // Your rules come first. A request or a game no rule took is looked at after them.
+    private void onServerLine(String text) {
+        long now = System.currentTimeMillis();
         String self = selfName();
-        Rule answer = null;
-        for (int i = 0; i < ruleCount.getInt(); i++) {
-            Rule rule = slots[i].rule();
-            if (rule == null) {
-                continue;
-            }
-            // Another bot saying one of our replies back would start an endless exchange.
-            if (ChatSender.holds(line.text(), rule.replyTo(self))) {
+        for (Rule rule : rules) {
+            String answer = rule.answerToServer(text, self);
+            if (answer != null) {
+                rule.answer(answer, now);
                 return;
             }
-            if (answer == null && ChatSender.holds(line.text(), rule.phrase())) {
-                answer = rule;
+        }
+        if (teleports.isOn() && acceptRequest(text, self, now)) {
+            return;
+        }
+        if (games.isOn()) {
+            answerGame(text, now);
+        }
+    }
+
+    private void onTabChange(TabChanges.Change change) {
+        if (!isEnabled() || !inGame() || change.name().equalsIgnoreCase(selfName())) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        for (Rule rule : rules) {
+            String answer = rule.answerToTab(change);
+            if (answer != null) {
+                rule.answer(answer, now);
+                return;
             }
         }
-        if (answer != null) {
-            String reply = StringUtil.filterText(answer.replyTo(line.name()));
-            say(reply.startsWith("/") ? reply : StringUtil.trimChatMessage(reply));
+    }
+
+    // True for a line that is a request whether or not it was accepted. The accept always names
+    // the player who asked. A bare accept takes whichever request came last and that may not be
+    // theirs. Only a player on the tab list is named. A name the line gives may be no player at
+    // all such as a star that a server reads as everyone.
+    private boolean acceptRequest(String text, String self, long now) {
+        for (String wording : requests.all()) {
+            LinePattern.Hit hit = namesPlayer(wording)
+                ? LinePattern.forServer(wording, false, ChatUtil::error).match(text) : null;
+            if (hit == null) {
+                continue;
+            }
+            if (self.equalsIgnoreCase(hit.name())) {
+                return true;
+            }
+            String name = ChatSender.listedName(hit.name());
+            String shown = EntityUtil.displayName(name == null ? hit.name() : name);
+            String refusal = refusal(name);
+            if (refusal != null) {
+                tell("left the teleport request of §b" + shown + "§7 alone. " + refusal);
+                return true;
+            }
+            queue(new Due(SentLine.of(SentLine.naming(acceptWith.getValue()), "player", name), now + answerWait(),
+                teleports::isOn, false,
+                ChatUtil.from(getName(), "accepted the teleport request of §b" + shown + "§7.")));
+            return true;
         }
+        return false;
+    }
+
+    // Why the request of a player on the tab list or of nobody listed is left alone. Null for
+    // one that is accepted.
+    private String refusal(String listed) {
+        if (listed == null) {
+            return "Nobody by that name is on the tab list.";
+        }
+        if (acceptFrom.is(AcceptFrom.FRIENDS)) {
+            return isFriend(listed) ? null : "They are not your friend.";
+        }
+        return friends().isEnemy(listed) ? "They are your enemy." : null;
+    }
+
+    // A line that names a player online tells who won and the game is over. An answer takes
+    // as long as typing it would and the games rest for the cooldown after it.
+    private void answerGame(String text, long now) {
+        Set<ChatGames.Kind> kinds = EnumSet.noneOf(ChatGames.Kind.class);
+        GAMES.forEach((name, kind) -> {
+            if (gameKinds.contains(name)) {
+                kinds.add(kind);
+            }
+        });
+        if (kinds.isEmpty() || now < gamesRestUntil) {
+            return;
+        }
+        String answer = ChatGames.solve(text, kinds, this::gameWords,
+            kinds.contains(ChatGames.Kind.TRIVIA) ? trivia() : Map.of());
+        if (answer == null || ChatSender.namesAnyone(text)) {
+            return;
+        }
+        String line = SentLine.chat(answer);
+        long at = now + answerWait() + typingMillis(line);
+        if (queue(new Due(line, at, games::isOn, false, null))) {
+            gamesRestUntil = at + cooldownMillis();
+        }
+    }
+
+    private boolean picked(ChatGames.Kind kind) {
+        for (Map.Entry<String, ChatGames.Kind> game : GAMES.entrySet()) {
+            if (game.getValue() == kind && gameKinds.contains(game.getKey())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // The words of the word file and the name of everything in the game.
+    private ChatGames.Words gameWords() {
+        List<String> lines = wordList.lines(wordFile.getValue(), ChatUtil::error);
+        if (lines != wordsFrom) {
+            wordsFrom = lines;
+            Set<String> all = new LinkedHashSet<>(lines);
+            all.addAll(GameNames.ALL);
+            words = new ChatGames.Words(all);
+        }
+        return words;
+    }
+
+    // The questions in lower case with their answers. A line with no equals sign or nothing on
+    // one side of it is left out.
+    private Map<String, String> trivia() {
+        List<String> lines = triviaList.lines(triviaFile.getValue(), ChatUtil::error);
+        if (lines != triviaFrom) {
+            triviaFrom = lines;
+            Map<String, String> read = new LinkedHashMap<>();
+            for (String line : lines) {
+                int split = line.lastIndexOf('=');
+                String question = split == -1 ? "" : line.substring(0, split).strip().toLowerCase(Locale.ROOT);
+                String answer = split == -1 ? "" : line.substring(split + 1).strip();
+                if (!question.isEmpty() && !answer.isEmpty() && read.size() < MAX_QUESTIONS) {
+                    read.putIfAbsent(question, answer);
+                }
+            }
+            trivia = read;
+        }
+        return trivia;
+    }
+
+    // A line already waiting is not added twice. False when nothing was added.
+    private boolean queue(Due next) {
+        if (next.line().isBlank() || due.size() >= MAX_WAITING
+            || due.stream().anyMatch(waiting -> waiting.line().equals(next.line()))) {
+            return false;
+        }
+        int at = 0;
+        while (at < due.size() && due.get(at).at() <= next.at()) {
+            at++;
+        }
+        due.add(at, next);
+        return true;
+    }
+
+    private long answerWait() {
+        double spread = 1 + ThreadLocalRandom.current().nextDouble(WAIT_SPREAD);
+        return Math.round(answerAfter.getValue() * spread * TimeUnit.SECONDS.toMillis(1));
+    }
+
+    private long cooldownMillis() {
+        return Math.round(cooldown.getValue() * TimeUnit.SECONDS.toMillis(1));
+    }
+
+    private static boolean namesPlayer(String wording) {
+        return wording.contains(LinePattern.PLAYER);
+    }
+
+    private static FriendManager friends() {
+        return OfflineClient.INSTANCE.getFriendManager();
+    }
+
+    private static boolean isFriend(String name) {
+        return friends().isFriend(name);
     }
 
     // A line that names you always gets an answer and any other line only by the Join in chance.
     private void answerByModel(ChatSender.Line line, long now) {
-        if (asking || due != null) {
+        if (asking || now < modelRestsUntil || due.stream().anyMatch(Due::fromModel)) {
             return;
         }
         String self = selfName();
@@ -261,11 +761,11 @@ public final class ChatBot extends Module {
         }
         heard.removeIf(old -> now - old.at() > CONTEXT_MS);
         int asked = round;
-        asking = ask(self, heard.stream().map(Heard::said).toList(), reply -> {
+        asking = ask(self, heard.stream().map(Recent::said).toList(), reply -> {
             if (current(asked)) {
                 warned = null;
                 String text = chatLine(reply, self);
-                due = text.isEmpty() ? null : new Due(text, now + typingMillis(text));
+                queue(new Due(text, now + typingMillis(text), chatModel::isOn, true, null));
             }
         }, problem -> {
             if (current(asked)) {
@@ -277,14 +777,14 @@ public final class ChatBot extends Module {
         }
     }
 
-    // True for the answer to the request still waited on whilst Model is chosen. Either way
+    // True for the answer to the request still waited on whilst the model is on. Either way
     // the wait is over.
     private boolean current(int asked) {
         if (asked != round) {
             return false;
         }
         asking = false;
-        return replies.is(Replies.MODEL);
+        return isEnabled() && chatModel.isOn();
     }
 
     // Shows what the model makes of a made up line without saying anything.
@@ -296,7 +796,7 @@ public final class ChatBot extends Module {
         boolean asked = ask(self, List.of(new ChatModel.Said(TEST_PLAYER, "hey " + self + " what are you up to")),
             reply -> {
                 String text = chatLine(reply, self);
-                ChatUtil.message(text.isEmpty() ? "§bChatBot §7would stay quiet." : "§bChatBot §7would say §f" + text);
+                tell(text.isEmpty() ? "would stay quiet." : "would say §f" + text);
             }, ChatUtil::message);
         return asked ? "Asking the model" : "Type a web address first";
     }
@@ -318,8 +818,8 @@ public final class ChatBot extends Module {
                 if (answer.problem() == null) {
                     reply.accept(answer.reply());
                 } else {
-                    problem.accept("§bChatBot §cgot no reply from " + host + ". " + answer.problem()
-                        + (answer.keyRefused() && key == null ? keyHint() : ""));
+                    problem.accept(ChatUtil.from(getName(), "§cgot no reply from " + host + ". " + answer.problem()
+                        + (answer.keyRefused() && key == null ? keyHint() : "")));
                 }
             });
         });
@@ -349,10 +849,7 @@ public final class ChatBot extends Module {
         if (line.length() > 1 && line.startsWith("\"") && line.endsWith("\"")) {
             line = line.substring(1, line.length() - 1).strip();
         }
-        while (line.startsWith("/")) {
-            line = line.substring(1).strip();
-        }
-        return StringUtil.trimChatMessage(line);
+        return SentLine.chat(line);
     }
 
     // How long a player typing at the set speed takes over the reply.
@@ -370,13 +867,49 @@ public final class ChatBot extends Module {
         }
     }
 
-    // Every reply goes out here. The bot answers nobody again until the cooldown has passed.
-    private void say(String text) {
-        quietUntil = System.currentTimeMillis() + Math.round(cooldown.getValue() * TimeUnit.SECONDS.toMillis(1));
-        ChatUtil.say(text);
-    }
-
     private static String selfName() {
         return mc.player.getGameProfile().name();
+    }
+
+    private static Map<String, ChatGames.Kind> games() {
+        Map<String, ChatGames.Kind> games = new LinkedHashMap<>();
+        games.put("Type a word", ChatGames.Kind.TYPE);
+        games.put("Reverse a word", ChatGames.Kind.REVERSE);
+        games.put("Sums", ChatGames.Kind.SUM);
+        games.put("Missing letters", ChatGames.Kind.FILL_IN);
+        games.put("Unscramble", ChatGames.Kind.UNSCRAMBLE);
+        games.put("Trivia", ChatGames.Kind.TRIVIA);
+        return games;
+    }
+
+    // The games whose answer the bot works out. Typing a word and reversing one echo text
+    // from the line itself and trivia answers nothing until you write a file of questions.
+    private static List<String> startingGames() {
+        Set<ChatGames.Kind> left = EnumSet.of(ChatGames.Kind.TYPE, ChatGames.Kind.REVERSE, ChatGames.Kind.TRIVIA);
+        return GAMES.entrySet().stream().filter(game -> !left.contains(game.getValue()))
+            .map(Map.Entry::getKey).toList();
+    }
+
+    // The name of every item and mob and effect in the game whole and word by word. Read once
+    // the first time a game needs a word.
+    private static final class GameNames {
+
+        static final List<String> ALL = read();
+
+        private static List<String> read() {
+            Set<String> names = new LinkedHashSet<>();
+            addAll(names, BuiltInRegistries.ITEM.keySet());
+            addAll(names, BuiltInRegistries.ENTITY_TYPE.keySet());
+            addAll(names, BuiltInRegistries.MOB_EFFECT.keySet());
+            return List.copyOf(names);
+        }
+
+        private static void addAll(Set<String> names, Set<Identifier> ids) {
+            for (Identifier id : ids) {
+                String whole = ChatUtil.words(id);
+                names.add(whole);
+                names.addAll(List.of(whole.split(" ")));
+            }
+        }
     }
 }

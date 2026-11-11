@@ -8,17 +8,17 @@ import com.jellypudding.offlineclient.hud.HudElement;
 import com.jellypudding.offlineclient.hud.HudManager;
 import com.jellypudding.offlineclient.hud.HudManager.Placement;
 import com.jellypudding.offlineclient.modules.misc.HudModule;
+import com.jellypudding.offlineclient.render.ClientFonts;
 import com.jellypudding.offlineclient.setting.Defaults;
 import com.jellypudding.offlineclient.setting.Setting;
-import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.ColorUtil;
-import com.jellypudding.offlineclient.util.Flash;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.RenderUtil;
 import com.jellypudding.offlineclient.util.Tally;
 import com.mojang.blaze3d.platform.cursor.CursorType;
 import com.mojang.blaze3d.platform.cursor.CursorTypes;
+import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.Hud;
 import net.minecraft.client.gui.screens.Screen;
@@ -29,10 +29,12 @@ import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Function;
 
 // Drag the overlay about and pull an edge or a corner to resize it. What you see
 // here is what you get whilst playing. The overlay keeps its true size and the
-// panel listing it follows the ClickGUI scale like every other panel.
+// panel listing it follows the ClickGUI scale like every other panel. Only the pieces
+// and their frames are drawn over the overlay. The help sits at the foot of the panel.
 public final class HudEditorScreen extends Screen implements ClientScreen {
 
     // An element that draws nothing still needs something to grab.
@@ -49,13 +51,6 @@ public final class HudEditorScreen extends Screen implements ClientScreen {
 
     private static final int TIP_WIDTH = 170;
     private static final int PANEL_GAP = 6;
-
-    private static final int HINT_TOP = 3;
-    private static final String HINT = "Drag to move. Pull an edge or a corner to resize. Right click resets."
-        + " Arrow keys nudge. Drag across empty space to pick several.";
-
-    // How long the line saying what a right click put back stays up.
-    private static final long RESULT_MS = 10_000;
 
     private static final double SIZE_STEP = 0.05;
 
@@ -116,42 +111,16 @@ public final class HudEditorScreen extends Screen implements ClientScreen {
     private record Target(Placement placement, Grip grip) {
     }
 
-    // What the last right click put back. A reset with no change found nothing to put back.
-    private record Result(String text, Defaults.Change change, long at, long until) {
-
-        private static Result nothing() {
-            long now = System.currentTimeMillis();
-            return new Result("Nothing to put back.", null, now, now + Flash.SHOWN_MS);
-        }
-
-        private static Result of(Defaults.Change change, String done) {
-            long now = System.currentTimeMillis();
-            return new Result(done + " Press " + InputUtil.undoKeys() + " to undo.", change, now, now + RESULT_MS);
-        }
-
-        // Over once its time is up or the reset cannot be taken back.
-        private boolean over() {
-            return System.currentTimeMillis() > until || (change != null && !Defaults.canUndo(change));
-        }
-
-        // Green at first and then the colour of the hint. It fades out at the end.
-        private int colour() {
-            int ink = change == null ? GuiTheme.textDim()
-                : ColorUtil.lerp(GuiTheme.textDim(), GuiTheme.GREEN, Flash.strength(at + Flash.SHOWN_MS));
-            return ColorUtil.fade(ink, Flash.strength(until));
-        }
-    }
-
     private final HudManager manager;
     private final SettingHost settings = new SettingHost(this, this::setTooltip);
     private final TextInput textInput = new TextInput(this);
+    private final HudFoot foot = new HudFoot();
     private final HudElementList panel;
     private final LatchedScale panelScale = new LatchedScale();
     private final HudPick pick = new HudPick();
     private final HudSnap snap = new HudSnap();
 
     private String tooltip;
-    private Result result;
 
     // The arrow keys move the piece under the pointer or else the one last taken hold of.
     private HudElement pointed;
@@ -177,7 +146,7 @@ public final class HudEditorScreen extends Screen implements ClientScreen {
     public HudEditorScreen(HudManager manager) {
         super(Component.literal("HUD editor"));
         this.manager = manager;
-        panel = new HudElementList("Overlay", PANEL_GAP, "hudList", manager.all(), settings);
+        panel = new HudElementList("Overlay", PANEL_GAP, "hudList", manager.all(), settings, foot);
     }
 
     // Null whilst the HUD module has not been built yet.
@@ -200,6 +169,22 @@ public final class HudEditorScreen extends Screen implements ClientScreen {
         tooltip = text;
     }
 
+    // A piece the player added or took off from its row in the panel. Nothing here holds on to
+    // one that went and the foot says how to take it back.
+    public void piecesChanged(String said, Defaults.Change change) {
+        pick.keepOnly(manager.all());
+        if (!manager.all().contains(lastHeld)) {
+            lastHeld = null;
+        }
+        nudging = null;
+        foot.report(said, change);
+    }
+
+    // Why a row in the panel could not do what it was asked.
+    public void refuse(String why) {
+        foot.refuse(why);
+    }
+
     @Override
     public void removed() {
         textInput.set(false);
@@ -216,7 +201,7 @@ public final class HudEditorScreen extends Screen implements ClientScreen {
     }
 
     private List<Placement> placements() {
-        return manager.layout(font, width, height);
+        return manager.layout(ClientFonts.hud(), width, height);
     }
 
     // The pieces of the pick that are switched on.
@@ -233,6 +218,8 @@ public final class HudEditorScreen extends Screen implements ClientScreen {
             lastMouseX = mouseX;
             lastMouseY = mouseY;
         }
+        Font font = ClientFonts.hud();
+        manager.beginFrame(font, width, height, false);
         context.fill(0, 0, width, height, SHADE);
         context.guiRenderState.up();
         drawGameHud(context);
@@ -242,9 +229,6 @@ public final class HudEditorScreen extends Screen implements ClientScreen {
         }
         context.guiRenderState.up();
         boolean busy = held != null || pick.drawing();
-        if (!busy) {
-            renderTopLine(context);
-        }
         if (held != null && grip == Grip.MOVE) {
             snap.draw(context, width, height, GuiTheme.accent());
         }
@@ -287,30 +271,10 @@ public final class HudEditorScreen extends Screen implements ClientScreen {
         }
     }
 
-    // What the last right click put back. Until the first resize the hint stands there
-    // instead. By then the grips have been found.
-    private void renderTopLine(GuiGraphicsExtractor context) {
-        if (result != null && result.over()) {
-            result = null;
-        }
-        if (result != null) {
-            renderTop(context, result.text(), result.colour());
-        } else if (manager.all().stream().allMatch(HudElement::sizeIsDefault)) {
-            renderTop(context, HINT, GuiTheme.textDim());
-        }
-    }
-
-    private void renderTop(GuiGraphicsExtractor context, String text, int colour) {
-        int y = HINT_TOP;
-        for (String line : RenderUtil.wrap(font, text, width - PANEL_GAP * 2)) {
-            context.centeredText(font, line, width / 2, y, colour);
-            y += font.lineHeight + 1;
-        }
-    }
-
     // The outline round an element sits where its background would. Never smaller than the
     // name written above it. It stays on screen and every edge can be taken hold of.
     private Box frame(Placement placement) {
+        Font font = ClientFonts.hud();
         int wide = Math.max(placement.width(), Math.max(MIN_GRAB, font.width(placement.element().getName())));
         int tall = Math.max(placement.height(), font.lineHeight);
         int left = Math.max(0, placement.left() - Backdrop.PAD);
@@ -377,6 +341,7 @@ public final class HudEditorScreen extends Screen implements ClientScreen {
     private void renderLabel(GuiGraphicsExtractor context, Box frame, HudElement element, boolean over) {
         String name = element.getName();
         String size = over ? sizeText(element) : null;
+        Font font = ClientFonts.hud();
         int nameWidth = font.width(name);
         int total = size == null ? nameWidth : nameWidth + LABEL_SPACE + font.width(size);
         int x = Math.clamp(frame.left(), 0, Math.max(0, width - total));
@@ -444,7 +409,8 @@ public final class HudEditorScreen extends Screen implements ClientScreen {
         if (tooltip == null && hovered != null) {
             tooltip = hovered.getDescription();
         }
-        if (tooltip != null && !tooltip.isEmpty() && GuiScreenBase.hoverHelp()) {
+        if (tooltip != null && !tooltip.isEmpty() && GuiTheme.hoverHelp()) {
+            Font font = ClientFonts.gui();
             RenderUtil.tooltip(context, font, RenderUtil.wrap(font, tooltip, TIP_WIDTH),
                 panelX, panelY, panelW, panelH, GuiTheme.bgTooltip(), GuiTheme.text());
         }
@@ -500,37 +466,56 @@ public final class HudEditorScreen extends Screen implements ClientScreen {
     // The size goes back first and a second right click puts the place back. A right click
     // on a picked piece puts back the whole pick as one change.
     private void reset(HudElement element) {
-        List<HudElement> pieces = new ArrayList<>();
-        if (pick.has(element)) {
-            for (Placement placement : picked(placements())) {
-                pieces.add(placement.element());
-            }
+        List<HudElement> pieces = pick.has(element) ? picked(placements()).stream().map(Placement::element).toList()
+            : List.of(element);
+        List<HudElement> resized = pieces.stream().filter(piece -> !piece.sizeIsDefault()).toList();
+        if (resized.isEmpty()) {
+            putBackPlaces(pieces);
         } else {
-            pieces.add(element);
+            foot.report(resized.size() == 1 ? "Size put back." : "Sizes put back.",
+                Defaults.reset(nameOf(resized), settingsOf(resized, HudElement::sizeSettings)));
         }
-        boolean size = pieces.stream().anyMatch(piece -> !piece.sizeIsDefault());
-        List<Setting<?>> scope = new ArrayList<>();
+    }
+
+    // Each piece goes where it started or as near as it fits where that place is taken. What
+    // the foot says follows from where the pieces end up and not from where they were. One
+    // that sits at its start over another piece is moved clear like any other. The change is
+    // named after the pieces whose place it changed. A piece that is off its start afterwards
+    // found that place taken.
+    private void putBackPlaces(List<HudElement> pieces) {
+        Font font = ClientFonts.hud();
+        manager.repin(pieces, font, width, height);
         List<HudElement> changed = new ArrayList<>();
-        for (HudElement piece : pieces) {
-            List<Setting<?>> part = size ? piece.sizeSettings() : piece.placeSettings();
-            if (Defaults.changed(part) > 0) {
-                changed.add(piece);
-            }
-            scope.addAll(part);
-        }
-        if (changed.isEmpty()) {
-            result = Result.nothing();
+        Defaults.Change change = Defaults.reset(() -> nameOf(changed),
+            settingsOf(pieces, HudElement::placeSettings),
+            () -> changed.addAll(manager.putBackNear(pieces, font, width, height)));
+        if (change == null) {
+            long crowded = pieces.stream().filter(piece -> !piece.positionIsDefault()).count();
+            foot.refuse(crowded == 0 ? "Nothing to put back."
+                : crowded == 1 ? "Its starting place is taken. It is as near as it fits."
+                : "Their starting places are taken. They are as near as they fit.");
             return;
         }
         boolean one = changed.size() == 1;
-        String name = one ? changed.getFirst().getName() : Tally.counted(changed.size(), "HUD piece");
-        String done;
-        if (size) {
-            done = one ? "Size put back." : "Sizes put back.";
+        if (changed.stream().allMatch(HudElement::positionIsDefault)) {
+            foot.report(one ? "Put back where it started." : "Put back where they started.", change);
         } else {
-            done = one ? "Put back where it started." : "Put back where they started.";
+            foot.report(one ? "Its starting place is taken. Put as near as it fits."
+                : "Put back as near to where they started as they fit.", change);
         }
-        result = Result.of(Defaults.reset(name, scope), done);
+    }
+
+    private static String nameOf(List<HudElement> pieces) {
+        return pieces.size() == 1 ? pieces.getFirst().getName() : Tally.counted(pieces.size(), "HUD piece");
+    }
+
+    private static List<Setting<?>> settingsOf(List<HudElement> pieces,
+                                               Function<HudElement, List<Setting<?>>> part) {
+        List<Setting<?>> settings = new ArrayList<>();
+        for (HudElement piece : pieces) {
+            settings.addAll(part.apply(piece));
+        }
+        return settings;
     }
 
     private void hold(Target target, double x, double y) {
@@ -557,8 +542,7 @@ public final class HudEditorScreen extends Screen implements ClientScreen {
             return true;
         }
         // Not whilst a piece is held. Its next move would write over whatever came back.
-        if (held == null && InputUtil.isUndo(event)) {
-            ChatUtil.undone(Defaults.undoNewest());
+        if (held == null && ResetFoot.undoKey(event)) {
             return true;
         }
         return nudge(event) || super.keyPressed(event);
@@ -652,8 +636,9 @@ public final class HudEditorScreen extends Screen implements ClientScreen {
         return true;
     }
 
-    // Snaps to the screen and to the pieces left behind. A part of the game's own HUD moved
-    // alone also snaps back to its home. Shift moves freely.
+    // Snaps to the screen and to the pieces left behind and to the bars the game still draws
+    // itself. A part of the game's own HUD moved alone also snaps back to its home. Shift moves
+    // freely.
     private void move(MouseButtonEvent event) {
         int dx = (int) Math.round(event.x() - pressX);
         int dy = (int) Math.round(event.y() - pressY);
@@ -664,12 +649,8 @@ public final class HudEditorScreen extends Screen implements ClientScreen {
         if (minecraft.hasShiftDown()) {
             snap.loose();
         } else {
-            List<Box> others = new ArrayList<>();
-            for (Placement placement : placements()) {
-                if (carried.stream().noneMatch(piece -> piece.element() == placement.element())) {
-                    others.add(boxOf(placement));
-                }
-            }
+            List<Box> others = manager.others(carried.stream().map(Placement::element).toList(),
+                ClientFonts.hud(), width, height, false).stream().map(Placement::box).toList();
             dx = snap.stickAcross(group.left() + dx, group.width(), width, others) - group.left();
             dy = snap.stickDown(group.top() + dy, group.height(), height, others) - group.top();
         }
@@ -678,13 +659,13 @@ public final class HudEditorScreen extends Screen implements ClientScreen {
 
     // The game's bars sit a few pixels apart. Home wins over their edges.
     private boolean goHome(Placement piece, int dx, int dy) {
-        Placement home = HudManager.homePlacement(piece.element(), font, width, height);
+        Placement home = HudManager.homePlacement(piece.element(), ClientFonts.hud(), width, height);
         if (home == null || Math.abs(piece.left() + dx - home.left()) > HudSnap.REACH
             || Math.abs(piece.top() + dy - home.top()) > HudSnap.REACH) {
             return false;
         }
         piece.element().resetPosition();
-        snap.home(boxOf(home));
+        snap.home(home.box());
         return true;
     }
 
@@ -701,7 +682,7 @@ public final class HudEditorScreen extends Screen implements ClientScreen {
                 Math.max(0, height - margin - piece.height() - piece.top()));
         }
         for (Placement piece : pieces) {
-            settle(piece.element(), piece.left() + across, piece.top() + down, piece.width(), piece.height());
+            pin(piece.element(), piece.left() + across, piece.top() + down, piece.width(), piece.height());
         }
         Box group = around(pieces);
         return new Box(group.left() + across, group.top() + down, group.width(), group.height());
@@ -722,10 +703,6 @@ public final class HudEditorScreen extends Screen implements ClientScreen {
         return new Box(left, top, right - left, bottom - top);
     }
 
-    private static Box boxOf(Placement placement) {
-        return new Box(placement.left(), placement.top(), placement.width(), placement.height());
-    }
-
     // An edge stretches one way and leaves the far edge where it was. A corner keeps
     // the shape and grows away from the opposite corner. Shift turns off the steps.
     private void resize(MouseButtonEvent event) {
@@ -743,10 +720,10 @@ public final class HudEditorScreen extends Screen implements ClientScreen {
         } else {
             held.setSize(startScaleX, step(startScaleY * down, free));
         }
-        Placement now = HudManager.placement(held, font, width, height);
+        Placement now = HudManager.placement(held, ClientFonts.hud(), width, height);
         int left = grip.dx < 0 ? start.left() + start.width() - now.width() : start.left();
         int top = grip.dy < 0 ? start.top() + start.height() - now.height() : start.top();
-        settle(held, left, top, now.width(), now.height());
+        pin(held, left, top, now.width(), now.height());
     }
 
     // Five percent at a time unless shift is held.
@@ -754,25 +731,7 @@ public final class HudEditorScreen extends Screen implements ClientScreen {
         return free ? stretch : Math.round(stretch / SIZE_STEP) * SIZE_STEP;
     }
 
-    // Stores the new spot as a share of the screen. An element landing on its own home
-    // keeps the home itself and follows the game's layout on any screen.
-    private void settle(HudElement element, int left, int top, int wide, int tall) {
-        Placement home = HudManager.homePlacement(element, font, width, height);
-        if (home != null && home.left() == left && home.top() == top) {
-            element.resetPosition();
-            return;
-        }
-        int margin = HudManager.margin(element);
-        element.moveTo(HudManager.shareOf(flush(left, wide, width, margin), wide, width) * 100,
-            HudManager.shareOf(flush(top, tall, height, margin), tall, height) * 100, width, height);
-    }
-
-    // A piece against the margin is stored flush with the edge and is still drawn at the margin.
-    // One put back in its starting corner by hand then holds its starting share.
-    private static int flush(int edge, int size, int room, int margin) {
-        if (edge <= margin) {
-            return 0;
-        }
-        return edge >= room - size - margin ? room - size : edge;
+    private void pin(HudElement element, int left, int top, int wide, int tall) {
+        HudManager.pin(element, left, top, wide, tall, ClientFonts.hud(), width, height);
     }
 }

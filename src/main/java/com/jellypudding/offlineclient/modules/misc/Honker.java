@@ -46,7 +46,7 @@ public final class Honker extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || mc.gameMode == null || mc.player.isSpectator() || mc.player.isDeadOrDying()) {
+        if (mc.gameMode == null || mc.player.isSpectator() || mc.player.isDeadOrDying()) {
             return;
         }
         Set<UUID> near = new HashSet<>();

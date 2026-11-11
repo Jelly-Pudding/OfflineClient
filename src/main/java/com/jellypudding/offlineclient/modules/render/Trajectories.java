@@ -2,6 +2,7 @@ package com.jellypudding.offlineclient.modules.render;
 
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.Render3DEvent;
+import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.render.BoxStyle;
@@ -67,29 +68,35 @@ public final class Trajectories extends Module {
     // Other players further off than this get no arc.
     private static final double OTHER_RANGE_SQ = 64 * 64;
 
+    // A projectile in the air and the rest of its flight as the last tick saw it.
+    private record Fired(Projectile projectile, Path path) {
+    }
+
     private final RegistryListSetting<Item> items = new RegistryListSetting<>("Items",
         "Which held items get an arc.", BuiltInRegistries.ITEM, throwableItems());
     private final BoolSetting otherPlayers = new BoolSetting("Other players",
-        "Also show where other players are aiming.", true);
+        "Also shows where other players are aiming.", true);
     private final BoolSetting firedProjectiles = new BoolSetting("Fired projectiles",
-        "Also predict the rest of the flight of projectiles already in the air.", false);
+        "Also predicts the rest of the flight of projectiles already in the air.", false);
     private final BoolSetting ignoreWitherSkulls = new BoolSetting("Ignore wither skulls",
         "Wither skulls get no arc.", false).under(firedProjectiles);
     private final NumberSetting skipFirstTicks = new NumberSetting("Skip first ticks",
         "Starts your own arc a few ticks out instead of in your face.",
-        3, 0, 20, 1, " ticks").min(0);
+        3, 0, 20, 1, " ticks");
     private final NumberSetting steps = new NumberSetting("Steps",
         "How many ticks of flight to predict.", 200, 20, 500, 10).min(1);
     private final BoxStyle style = new BoxStyle(BoxStyle.Shape.BOTH, 35f);
     private final BoolSetting resultColour = new BoolSetting("Colour by result",
         "The arc turns green when it lands on a block and red when it hits something.", true);
     private final BoolSetting landingMarker = new BoolSetting("Landing marker",
-        "Draw a flat square on the block face the projectile lands on.", true);
+        "Draws a flat square on the block face the projectile lands on.", true);
     private final BoolSetting positionBoxes = new BoolSetting("Position boxes",
-        "Draw a tiny box at every predicted tick along the arc.", false);
+        "Draws a tiny box at every predicted tick along the arc.", false);
     private final NumberSetting positionBoxSize = new NumberSetting("Position box size",
         "Half the size of those boxes.", 0.02, 0.01, 0.1, 0.01, " blocks").under(positionBoxes);
     private final BoxStyle positionStyle = new BoxStyle("Position", BoxStyle.Shape.BOTH, 35f).under(positionBoxes);
+
+    private final List<Fired> fired = new ArrayList<>();
 
     public Trajectories() {
         super("Trajectories", "Shows the path a thrown or shot item will take.", Category.RENDER);
@@ -113,6 +120,36 @@ public final class Trajectories extends Module {
         return list;
     }
 
+    @Override
+    protected void onDisable() {
+        fired.clear();
+    }
+
+    // A fired projectile only moves once a tick. The arcs of held items follow the aim every frame.
+    @Subscribe
+    private void onTick(TickEvent event) {
+        fired.clear();
+        if (!firedProjectiles.isOn()) {
+            return;
+        }
+        for (Entity entity : mc.level.entitiesForRendering()) {
+            if (entity instanceof Projectile projectile && predicted(projectile)) {
+                Path path = ProjectilePath.of(projectile, steps.getInt());
+                if (path != null) {
+                    fired.add(new Fired(projectile, path));
+                }
+            }
+        }
+    }
+
+    private boolean predicted(Projectile projectile) {
+        if (ignoreWitherSkulls.isOn() && projectile instanceof WitherSkull) {
+            return false;
+        }
+        // A trident flying home on loyalty and an arrow stuck in a block go nowhere new.
+        return !(projectile instanceof AbstractArrow arrow && (arrow.isNoPhysics() || arrow.isInGround()));
+    }
+
     @Subscribe
     private void onRender3D(Render3DEvent event) {
         if (!inGame()) {
@@ -128,12 +165,8 @@ public final class Trajectories extends Module {
                 }
             }
         }
-        if (firedProjectiles.isOn()) {
-            for (Entity entity : mc.level.entitiesForRendering()) {
-                if (entity instanceof Projectile projectile) {
-                    drawFired(event.getBatch(), projectile, partialTicks);
-                }
-            }
+        for (Fired shot : fired) {
+            drawFired(event.getBatch(), shot, partialTicks);
         }
     }
 
@@ -160,22 +193,13 @@ public final class Trajectories extends Module {
         }
     }
 
-    private void drawFired(DrawBatch batch, Projectile projectile, float partialTicks) {
-        if (ignoreWitherSkulls.isOn() && projectile instanceof WitherSkull) {
-            return;
+    // The flight starts where the projectile is drawn this frame.
+    private void drawFired(DrawBatch batch, Fired shot, float partialTicks) {
+        List<Vec3> points = shot.path().points();
+        if (!points.isEmpty()) {
+            points.set(0, shot.projectile().getPosition(partialTicks));
         }
-        // A trident flying home on loyalty and an arrow stuck in a block go nowhere new.
-        if (projectile instanceof AbstractArrow arrow && (arrow.isNoPhysics() || arrow.isInGround())) {
-            return;
-        }
-        Path path = ProjectilePath.of(projectile, steps.getInt());
-        if (path == null) {
-            return;
-        }
-        if (!path.points().isEmpty()) {
-            path.points().set(0, projectile.getPosition(partialTicks));
-        }
-        drawPath(batch, path, partialTicks, 0);
+        drawPath(batch, shot.path(), partialTicks, 0);
     }
 
     private void drawPath(DrawBatch batch, Path path, float partialTicks, int skip) {
@@ -183,11 +207,10 @@ public final class Trajectories extends Module {
         if (points.size() < 2) {
             return;
         }
+        boolean byResult = resultColour.isOn() && path.type() != HitResult.Type.MISS;
         int line = style.lineColor();
-        int fill = line;
-        if (resultColour.isOn() && path.type() != HitResult.Type.MISS) {
+        if (byResult) {
             line = path.type() == HitResult.Type.BLOCK ? COLOR_BLOCK : COLOR_ENTITY;
-            fill = line;
         }
         int first = points.size() <= skip ? 0 : skip;
         for (int i = first + 1; i < points.size(); i++) {
@@ -199,10 +222,14 @@ public final class Trajectories extends Module {
             }
         }
         if (landingMarker.isOn() && path.landing() != null) {
-            style.draw(batch, marker(path.landing()), line, fill, true);
+            if (byResult) {
+                style.draw(batch, marker(path.landing()), line, true);
+            } else {
+                style.draw(batch, marker(path.landing()), true);
+            }
         }
         for (Entity hit : path.hits()) {
-            style.draw(batch, EntityUtil.lerpedBox(hit, partialTicks), COLOR_ENTITY, COLOR_ENTITY, true);
+            style.draw(batch, EntityUtil.lerpedBox(hit, partialTicks), COLOR_ENTITY, true);
         }
     }
 

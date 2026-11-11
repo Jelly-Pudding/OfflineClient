@@ -28,6 +28,7 @@ import com.jellypudding.offlineclient.util.RenderUtil;
 import com.jellypudding.offlineclient.util.ServerWatch;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
+import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -46,8 +47,11 @@ import net.minecraft.world.item.component.Bees;
 import net.minecraft.world.item.component.BundleContents;
 import net.minecraft.world.item.component.ItemContainerContents;
 import net.minecraft.world.item.component.LodestoneTracker;
+import net.minecraft.world.item.component.MapDecorations;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BeehiveBlockEntity;
+import net.minecraft.world.level.saveddata.maps.MapDecorationType;
+import net.minecraft.world.level.saveddata.maps.MapDecorationTypes;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
@@ -61,28 +65,25 @@ import java.util.Map;
 // inventory loses its target once the server finds the lodestone gone. A beehive or bee
 // nest taken with Silk Touch keeps its bees and the flower each one last fed from. Bees
 // keep to flowers near their hive and the item carries no dimension. The Overworld is assumed.
+// An explorer or treasure map carries the marker of where it leads. Only the overworld makes
+// such maps and the marker has no height.
 public final class ItemCoords extends Module implements FindSource, Leak.Source {
 
     private enum Kind {
-        LODESTONE("Lodestone", "lodestone", "compass", "a lodestone"),
-        FLOWERS("Flowers", "flowers", "hive", "flowers bees fed from");
+        LODESTONE("compass"),
+        FLOWERS("hive"),
+        // A map find is named after where it leads such as woodland mansion.
+        MAP("map");
 
-        private final String title;
-        // What a find of this kind is called in the finds.
-        private final String name;
         private final String item;
-        private final String news;
 
-        Kind(String title, String name, String item, String news) {
-            this.title = title;
-            this.name = name;
+        Kind(String item) {
             this.item = item;
-            this.news = news;
         }
 
-        // Anything but flowers counts as a lodestone.
+        // The kind of a find from what the finds call it. Every other name is where a map leads.
         private static Kind named(String name) {
-            return FLOWERS.name.equals(name) ? FLOWERS : LODESTONE;
+            return name.equals(LODESTONE_NAME) ? LODESTONE : name.equals(FLOWERS_NAME) ? FLOWERS : MAP;
         }
     }
 
@@ -95,17 +96,42 @@ public final class ItemCoords extends Module implements FindSource, Leak.Source 
         }
     }
 
-    // A spot an item points to.
-    private record Pointer(GlobalPos spot, Kind kind) {
+    // A spot an item points to and what the finds call it.
+    private record Pointer(GlobalPos spot, Kind kind, String name) {
 
         String dimension() {
             return spot.dimension().identifier().toString();
+        }
+
+        // Such as Lodestone or Woodland mansion.
+        String title() {
+            return ChatUtil.capitalised(name);
+        }
+
+        // Such as a lodestone or a woodland mansion.
+        String news() {
+            return switch (kind) {
+                case LODESTONE -> "a lodestone";
+                case FLOWERS -> "flowers bees fed from";
+                case MAP -> ChatUtil.withArticle(name);
+            };
         }
     }
 
     // A find told about since the module was switched on and when.
     private record Told(Carrier carrier, long time) {
     }
+
+    private static final String LODESTONE_NAME = "lodestone";
+    private static final String FLOWERS_NAME = "flowers";
+    // The red cross of a treasure map. Every other marker is named after its picture.
+    private static final String TREASURE = "buried treasure";
+
+    // A map marker has no height. The structures maps lead to sit around the sea.
+    private static final int MAP_HEIGHT = 63;
+    // A map the game makes leads to one place. A server can send more markers and only this many
+    // are read.
+    private static final int MAX_MARKERS = 8;
 
     private static final Carrier YOURS = new Carrier("your inventory", "a ", " in your inventory");
     private static final Carrier OPENED = new Carrier("opened container", "a ", " in the container you opened");
@@ -127,15 +153,20 @@ public final class ItemCoords extends Module implements FindSource, Leak.Source 
     private final ColorSetting flowerColor = new ColorSetting("Flower colour",
         "Colour of the flowers bees fed from. Lodestones take the colours below.", 300, false)
         .under(hives);
+    private final BoolSetting maps = new BoolSetting("Maps",
+        "Also marks where explorer and treasure and trial and village maps lead.", true);
+    private final ColorSetting mapColor = new ColorSetting("Map colour",
+        "Colour of the places maps lead to. Lodestones take the colours below.", 40, false)
+        .under(maps);
     private final BoolSetting yours = new BoolSetting("Your items",
-        "Also marks what the compasses and hives in your own inventory point to.", true);
+        "Also marks what the compasses and hives and maps in your own inventory point to.", true);
     private final BoxStyle style = new BoxStyle(BoxStyle.Shape.BOTH, 180);
     private final BoolSetting labels = new BoolSetting("Labels",
         "Writes above each find what it is and where the item was.", true);
     private final NumberSetting scale = new NumberSetting("Scale",
         "Size of the labels.", 1, 0.5, 3, 0.1).min(0.1).under(labels);
     private final BoolSetting waypoints = new BoolSetting("Waypoints",
-        "Saves a waypoint at each lodestone and each flower bees fed from the first time it is found.", false);
+        "Saves a waypoint at each lodestone and flower and map target the first time it is found.", false);
     private final FindLog finds = new FindLog(this);
     private final Notice notice = new Notice(this, Notice.Where.CHAT);
     private final FindLines marks = new FindLines(finds, false);
@@ -149,9 +180,9 @@ public final class ItemCoords extends Module implements FindSource, Leak.Source 
     private final ServerWatch server = new ServerWatch();
 
     public ItemCoords() {
-        super("ItemCoords", "Marks the lodestones compasses point to and the flowers that bees in hive items fed from.",
+        super("ItemCoords", "Marks where compasses and maps lead and the flowers that bees in hive items fed from.",
             Category.HUNTING);
-        addSettings(hives, flowerColor, yours);
+        addSettings(hives, flowerColor, maps, mapColor, yours);
         addSettings(style.settings());
         addSettings(labels, scale);
         addSettings(notice.settings());
@@ -159,7 +190,7 @@ public final class ItemCoords extends Module implements FindSource, Leak.Source 
         addSettings(waypoints);
         addSettings(FindsScreen.settingsFor(finds));
         searchTags("lodestone", "lodestone finder", "compass", "base", "coords", "bee", "beehive", "bee nest",
-            "flower");
+            "flower", "map", "explorer map", "treasure map", "buried treasure", "woodland mansion");
     }
 
     @Override
@@ -195,9 +226,6 @@ public final class ItemCoords extends Module implements FindSource, Leak.Source 
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame()) {
-            return;
-        }
         if (server.changed()) {
             told.clear();
         }
@@ -283,13 +311,20 @@ public final class ItemCoords extends Module implements FindSource, Leak.Source 
     private void targets(ItemInstance item, int depth) {
         LodestoneTracker tracker = item.get(DataComponents.LODESTONE_TRACKER);
         if (tracker != null) {
-            tracker.target().ifPresent(spot -> pointed.add(new Pointer(spot, Kind.LODESTONE)));
+            tracker.target().ifPresent(spot -> pointed.add(new Pointer(spot, Kind.LODESTONE, LODESTONE_NAME)));
         }
         Bees bees = hives.isOn() ? item.get(DataComponents.BEES) : null;
         if (bees != null) {
             for (BeehiveBlockEntity.Occupant bee : bees.bees()) {
                 bee.entityData().copyTagWithoutId().read(Bee.TAG_FLOWER_POS, BlockPos.CODEC).ifPresent(flower ->
-                    pointed.add(new Pointer(GlobalPos.of(Level.OVERWORLD, flower), Kind.FLOWERS)));
+                    pointed.add(new Pointer(GlobalPos.of(Level.OVERWORLD, flower), Kind.FLOWERS, FLOWERS_NAME)));
+            }
+        }
+        MapDecorations markers = maps.isOn() ? item.get(DataComponents.MAP_DECORATIONS) : null;
+        if (markers != null) {
+            for (MapDecorations.Entry marker : markers.decorations().values().stream().limit(MAX_MARKERS).toList()) {
+                BlockPos spot = BlockPos.containing(marker.x(), MAP_HEIGHT, marker.z());
+                pointed.add(new Pointer(GlobalPos.of(Level.OVERWORLD, spot), Kind.MAP, destination(marker.type())));
             }
         }
         if (depth >= MAX_DEPTH) {
@@ -309,6 +344,11 @@ public final class ItemCoords extends Module implements FindSource, Leak.Source 
         }
     }
 
+    // Where a map marker leads in words such as woodland mansion.
+    private static String destination(Holder<MapDecorationType> type) {
+        return type.value().equals(MapDecorationTypes.RED_X.value()) ? TREASURE : ChatUtil.words(type.value().assetId());
+    }
+
     // Every spot goes in the finds. Each is told once since the module was switched on and
     // a spot new to the finds takes a waypoint.
     private void note(Carrier carrier) {
@@ -317,26 +357,30 @@ public final class ItemCoords extends Module implements FindSource, Leak.Source 
             if (told.containsKey(pointer)) {
                 continue;
             }
-            Kind kind = pointer.kind();
             BlockPos pos = pointer.spot().pos();
             String dimension = pointer.dimension();
-            boolean fresh = finds.add(dimension, pos, kind.name, carrier.label());
+            boolean fresh = finds.add(dimension, pos, pointer.name(), carrier.label());
             Told seen = new Told(carrier, now);
             told.put(pointer, seen);
-            notice.tell(kind.name, kind.news + " §7from " + carrier.phrase(kind), pos, dimension);
+            notice.tell(pointer.kind().item, pointer.news() + " §7from " + carrier.phrase(pointer.kind()), pos,
+                dimension);
             if (fresh && waypoints.isOn()) {
-                leakOf(pointer, seen).saveFresh(kind.title, dimension);
+                leakOf(pointer, seen).saveFresh(pointer.title().replace(" ", ""), dimension);
             }
         }
     }
 
     private Leak leakOf(Pointer pointer, Told seen) {
-        return new Leak(pointer.kind().title, "via " + seen.carrier().label(), pointer.spot().pos(), true,
-            pointer.dimension(), seen.time(), colorOf(pointer.kind()));
+        return new Leak(pointer.title(), "via " + seen.carrier().label(), pointer.spot().pos(),
+            pointer.kind() != Kind.MAP, pointer.dimension(), seen.time(), colorOf(pointer.kind()));
     }
 
     private int colorOf(Kind kind) {
-        return kind == Kind.FLOWERS ? flowerColor.getColor() : style.lineColor();
+        return switch (kind) {
+            case LODESTONE -> style.lineColor();
+            case FLOWERS -> flowerColor.getColor();
+            case MAP -> mapColor.getColor();
+        };
     }
 
     private int colorOf(FindLog.Find find) {
@@ -353,10 +397,11 @@ public final class ItemCoords extends Module implements FindSource, Leak.Source 
             if (!marks.inDrawRange(find)) {
                 continue;
             }
-            if (Kind.named(find.kind()) == Kind.FLOWERS) {
-                style.draw(batch, FarShapes.pullIn(DrawBatch.blockBox(find.pos())), flowerColor.getColor(), true);
-            } else {
+            Kind kind = Kind.named(find.kind());
+            if (kind == Kind.LODESTONE) {
                 style.draw(batch, FarShapes.pullIn(DrawBatch.blockBox(find.pos())), true);
+            } else {
+                style.draw(batch, FarShapes.pullIn(DrawBatch.blockBox(find.pos())), colorOf(kind), true);
             }
         }
         marks.draw(batch, this::colorOf);
@@ -377,9 +422,12 @@ public final class ItemCoords extends Module implements FindSource, Leak.Source 
             if (screen == null) {
                 continue;
             }
-            String distance = String.format(Locale.ROOT, " %dm", Math.round(camera.distanceTo(spot)));
+            // A map target has no true height and is measured across the ground.
+            double away = Kind.named(find.kind()) == Kind.MAP ? Math.hypot(spot.x - camera.x, spot.z - camera.z)
+                : camera.distanceTo(spot);
+            String distance = String.format(Locale.ROOT, " %dm", Math.round(away));
             RenderUtil.label(event.getContext(), mc.font, screen.x, screen.y, scale.getFloat(),
-                List.of(Kind.named(find.kind()).title, " via " + find.detail(), distance),
+                List.of(ChatUtil.capitalised(find.kind()), " via " + find.detail(), distance),
                 List.of(colorOf(find), RenderUtil.MUTED_TEXT, RenderUtil.MUTED_TEXT));
         }
     }

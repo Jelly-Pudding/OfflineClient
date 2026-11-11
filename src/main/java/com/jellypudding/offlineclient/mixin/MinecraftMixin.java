@@ -4,13 +4,14 @@ import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.events.ClientTickEvent;
 import com.jellypudding.offlineclient.event.events.LeftClickEvent;
 import com.jellypudding.offlineclient.event.events.RightClickEvent;
+import com.jellypudding.offlineclient.modules.player.FrameInput;
 import com.jellypudding.offlineclient.modules.player.Ghost;
-import com.jellypudding.offlineclient.modules.player.InventoryTweaks;
 import com.jellypudding.offlineclient.modules.player.Multitask;
 import com.jellypudding.offlineclient.modules.player.NoInteract;
 import com.jellypudding.offlineclient.modules.render.Esp;
 import com.jellypudding.offlineclient.modules.render.Freecam;
 import com.jellypudding.offlineclient.util.BlockMiner;
+import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.Modules;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
@@ -42,23 +43,25 @@ public abstract class MinecraftMixin {
     private void continueAttack(boolean holding) {
     }
 
-    // Whether the attack key was down when the tick skipped its mining call.
+    // Whether the attack key was down at the last frame's key read. Every tick until the next frame mines with it.
     @Unique
     private boolean offlineclient$breaking;
 
+    // True whilst a right click runs with its crosshair target blanked.
+    @Unique
+    private boolean offlineclient$blank;
+
     @Unique
     private static boolean offlineclient$frameInput() {
-        InventoryTweaks tweaks = Modules.get(InventoryTweaks.class);
-        return tweaks != null && tweaks.frameInput();
+        return Modules.enabled(FrameInput.class);
     }
 
-    // Whilst InventoryTweaks reads the keys once a frame the tick skips its own read.
+    // Whilst FrameInput reads the keys once a frame the tick skips its own read.
     @WrapOperation(method = "tick()V",
         at = @At(value = "INVOKE", target = "Lnet/minecraft/client/Minecraft;handleKeybinds()V"))
     private void tickKeybinds(Minecraft instance, Operation<Void> original) {
         if (offlineclient$frameInput()) {
             continueAttack(offlineclient$breaking);
-            offlineclient$breaking = false;
             return;
         }
         original.call(instance);
@@ -75,12 +78,15 @@ public abstract class MinecraftMixin {
         original.call(instance, holding);
     }
 
+    // Like the tick this reads the keys only whilst no screen or overlay is up.
     @Inject(method = "renderFrame(Z)V",
         at = @At(value = "INVOKE",
             target = "Lnet/minecraft/client/renderer/LevelRenderer;endFrame()V",
             shift = At.Shift.AFTER))
     private void onRenderFrame(boolean advanceTime, CallbackInfo ci) {
-        if (OfflineClient.MC.player != null && offlineclient$frameInput()) {
+        Minecraft mc = OfflineClient.MC;
+        if (mc.player != null && mc.gui.screen() == null && mc.gui.overlay() == null
+            && offlineclient$frameInput()) {
             handleKeybinds();
         }
     }
@@ -93,16 +99,18 @@ public abstract class MinecraftMixin {
     }
 
     // Vanilla aborts any block mining every tick the attack key is up and
-    // restarts it on whatever the crosshair hits.
+    // restarts it on whatever the crosshair hits. NoInteract only hears about a block the held
+    // key would mine. A kept block lets go of the one being mined as any other block would.
     @Inject(method = "continueAttack(Z)V", at = @At("HEAD"), cancellable = true)
-    private void onContinueAttack(CallbackInfo ci) {
+    private void onContinueAttack(boolean holding, CallbackInfo ci) {
         if (BlockMiner.isActive() || offlineclient$clicksBlocked()) {
             ci.cancel();
             return;
         }
         NoInteract noInteract = Modules.active(NoInteract.class);
-        if (noInteract != null && OfflineClient.MC.hitResult instanceof BlockHitResult hit
-            && noInteract.blocksMining(hit.getBlockPos())) {
+        BlockHitResult aimed = BlockUtil.aimedBlock();
+        if (holding && noInteract != null && aimed != null && noInteract.blocksMining(aimed.getBlockPos())) {
+            OfflineClient.MC.gameMode.stopDestroyBlock();
             ci.cancel();
         }
     }
@@ -133,27 +141,37 @@ public abstract class MinecraftMixin {
     }
 
     // Blanks the crosshair target whilst a feeder holds the use key. A chest
-    // or villager then cannot swallow the bite. Restored after.
+    // or villager then cannot swallow the bite. Restored after. NoInteract blanks
+    // it the same way to use the held item past a block or entity it protects.
     @WrapMethod(method = "startUseItem()V")
     private void wrapStartUseItem(Operation<Void> original) {
         Minecraft mc = OfflineClient.MC;
         HitResult real = mc.hitResult;
-        if (real == null || real.getType() == HitResult.Type.MISS || !Modules.feeding(null)) {
+        if (real == null || real.getType() == HitResult.Type.MISS
+            || !(Modules.feeding(null) || offlineclient$clicksAsAir(real))) {
             original.call();
             return;
         }
         mc.hitResult = BlockHitResult.miss(real.getLocation(), Direction.UP,
             BlockPos.containing(real.getLocation()));
+        offlineclient$blank = true;
         try {
             original.call();
         } finally {
+            offlineclient$blank = false;
             mc.hitResult = real;
         }
     }
 
+    @Unique
+    private static boolean offlineclient$clicksAsAir(HitResult target) {
+        NoInteract noInteract = Modules.active(NoInteract.class);
+        return noInteract != null && noInteract.clicksAsAir(target);
+    }
+
     @Inject(method = "startUseItem()V", at = @At("HEAD"), cancellable = true)
     private void onStartUseItem(CallbackInfo ci) {
-        if (OfflineClient.INSTANCE.getEventBus().post(new RightClickEvent()).isCancelled()) {
+        if (OfflineClient.INSTANCE.getEventBus().post(new RightClickEvent(offlineclient$blank)).isCancelled()) {
             ci.cancel();
         }
     }

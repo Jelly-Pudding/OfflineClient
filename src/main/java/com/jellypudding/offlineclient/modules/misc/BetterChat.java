@@ -3,17 +3,13 @@ package com.jellypudding.offlineclient.modules.misc;
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.ChatSendEvent;
-import com.jellypudding.offlineclient.hud.elements.ClientLinesElement;
+import com.jellypudding.offlineclient.event.events.PacketReceiveEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
-import com.jellypudding.offlineclient.setting.TextSetting;
-import com.jellypudding.offlineclient.util.ChatUtil;
-import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.ShownChat;
-import com.jellypudding.offlineclient.util.TextLines;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.ChatComponent;
@@ -31,26 +27,20 @@ import net.minecraft.world.entity.player.PlayerSkin;
 
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.regex.PatternSyntaxException;
 
-// ChatComponentMixin asks this about every line that comes in and about the history size.
+// ChatComponentMixin asks this about every line that comes in and about the history size. What you
+// send and the chat it hides and the commands a click runs are parts of their own beside it.
 public final class BetterChat extends Module {
 
     private static final int VANILLA_HISTORY = 100;
     private static final DateTimeFormatter CLOCK = DateTimeFormatter.ofPattern("HH:mm");
     private static final DateTimeFormatter CLOCK_SECONDS = DateTimeFormatter.ofPattern("HH:mm:ss");
-
-    private static final String PLAIN = "abcdefghijklmnopqrstuvwxyz";
-    private static final String SMALL = "ᴀʙᴄᴅᴇꜰɢʜɪᴊᴋʟᴍɴᴏᴩqʀꜱᴛᴜᴠᴡxyᴢ";
 
     // How much wider the chat gets to fit a head on the left.
     private static final int HEAD_ROOM = 10;
@@ -59,17 +49,11 @@ public final class BetterChat extends Module {
     // Sender lookups remembered per message. Cleared once it outgrows any history.
     private static final int HEAD_CACHE = 8192;
 
-    // A number of three digits or more then one of two or more read as coordinates.
-    private static final Pattern COORDINATES = Pattern.compile("-?\\d{3,}[\\s,;/]+-?\\d{2,}");
-
     // A run of blank lines is what a server sends to push chat off the screen.
     private static final Pattern BLANK_RUN = Pattern.compile("\\n(\\n|\\s)+\\n");
 
     // Our own clock stamp on the front of a stored line. Some servers add the same.
     private static final Pattern STAMP = Pattern.compile("^\\[\\d{2}:\\d{2}(?::\\d{2})?] ");
-
-    // The usual server layout for a chat line.
-    private static final Pattern SENDER = Pattern.compile("^<([^<>]{1,32})>");
 
     private static final int RGB = 0xFFFFFF;
 
@@ -88,9 +72,9 @@ public final class BetterChat extends Module {
         "A bar beside the open chat you can drag or click to scroll.", true);
     private final NumberSetting lift = new NumberSetting("Chat lift",
         "How far the chat sits above the bottom of the screen. Vanilla uses forty.",
-        22, 0, 80, 1, " px").min(0);
+        22, 0, 80, 1, " px");
     private final NumberSetting indent = new NumberSetting("Chat indent",
-        "How far the chat sits in from the left edge.", 4, 0, 80, 1, " px").min(0);
+        "How far the chat sits in from the left edge.", 4, 0, 80, 1, " px");
     private final BoolSetting longerHistory = new BoolSetting("Longer history",
         "Keeps more lines than the hundred vanilla scrolls back through.", true);
     private final NumberSetting historySize = new NumberSetting("History size",
@@ -98,9 +82,6 @@ public final class BetterChat extends Module {
         .under(longerHistory);
     private final BoolSetting keepHistory = new BoolSetting("Keep history",
         "Chat survives a disconnect and the debug clear key.", true);
-    private final BoolSetting splitClientLines = new BoolSetting("Split client lines",
-        "Sends the client's own messages to the Client lines piece of the HUD instead of the chat."
-            + " Replies to commands you type and lines with a link stay in the chat.", false);
     private final BoolSetting markReportable = new BoolSetting("Mark reportable",
         "Marks chat lines that carry a signature Mojang can act on.", false);
     private final BoolSetting infiniteBox = new BoolSetting("Infinite chat box",
@@ -110,60 +91,13 @@ public final class BetterChat extends Module {
     private final ColorSetting commandColour = new ColorSetting("Command colour",
         "Colour of a command whilst you type it.", 180, false)
         .under(colourCommands);
-    private final BoolSetting guardCoordinates = new BoolSetting("Guard coordinates",
-        "Holds back a message that looks like coordinates until you send it a second time.",
-        true);
     private final BoolSetting antiClear = new BoolSetting("Anti clear",
         "Some servers send a wall of blank lines to push your chat off the screen. This cuts it out.",
         true);
-    private final BoolSetting filterRegex = new BoolSetting("Filter regex",
-        "Drops any line that matches one of your patterns.", false);
-    private final TextLines patterns = new TextLines("Patterns",
-        "How many patterns to match against.",
-        "A pattern that hides every chat line it matches. Click to type it.").plain().under(filterRegex);
-    private final BoolSetting hidePlayerChat = new BoolSetting("Hide player chat",
-        "Hides everything other players write in chat.", false);
-    private final BoolSetting keepFriends = new BoolSetting("Keep friends",
-        "Still shows what your friends write.", true)
-        .under(hidePlayerChat);
-    private final BoolSetting keepWhispers = new BoolSetting("Keep whispers",
-        "Still shows whispers sent to you.", true)
-        .under(hidePlayerChat);
-    private final TextLines muted = TextLines.named("Muted players", "Muted player",
-        "How many players are muted.", "A player whose chat never shows. Click to type the name.");
 
-    private final BoolSetting annoy = new BoolSetting("Annoy",
-        "Sends your messages in aLtErNaTiNg case.", false);
-    private final BoolSetting fancy = new BoolSetting("Fancy chat",
-        "Sends your messages in small caps.", false);
-
-    private final BoolSetting prefix = new BoolSetting("Prefix",
-        "Puts something in front of every message you send.", false);
-    private final BoolSetting prefixRandom = new BoolSetting("Random prefix",
-        "Uses a random three digit number instead of the text.", false)
-        .under(prefix);
-    private final TextSetting prefixText = new TextSetting("Prefix text",
-        "The text put in front. Click to type it.", "> ")
-        .under(prefix, () -> prefix.isOn() && !prefixRandom.isOn());
-    private final BoolSetting prefixSmall = new BoolSetting("Small caps prefix",
-        "Writes the prefix in small caps.", false)
-        .under(prefix, () -> prefix.isOn() && !prefixRandom.isOn());
-
-    private final BoolSetting suffix = new BoolSetting("Suffix",
-        "Puts something on the end of every message you send.", false);
-    private final BoolSetting suffixRandom = new BoolSetting("Random suffix",
-        "Uses a random three digit number instead of the text.", false)
-        .under(suffix);
-    private final TextSetting suffixText = new TextSetting("Suffix text",
-        "The text put on the end. Click to type it.", " | offline")
-        .under(suffix, () -> suffix.isOn() && !suffixRandom.isOn());
-    private final BoolSetting suffixSmall = new BoolSetting("Small caps suffix",
-        "Writes the suffix in small caps.", true)
-        .under(suffix, () -> suffix.isOn() && !suffixRandom.isOn());
-
-    private final List<Pattern> compiled = new ArrayList<>();
-    private String compiledFrom = "";
-    private String heldBack;
+    private final ChatRewrite rewriter = new ChatRewrite(this::isEnabled);
+    private final ChatFilter filter = new ChatFilter(this::isEnabled);
+    private final ClickGuard clicks = new ClickGuard(this::isEnabled);
 
     // The skin found for each message. A miss is remembered as well and never searched twice.
     private final Map<GuiMessage, Optional<PlayerSkin>> heads = new IdentityHashMap<>();
@@ -179,73 +113,42 @@ public final class BetterChat extends Module {
     public BetterChat() {
         super("BetterChat", "Small improvements to the chat box.", Category.MISC);
         addSettings(timestamps, showSeconds, playerHeads, scrollbar, lift, indent,
-            longerHistory, historySize, keepHistory, splitClientLines, markReportable, infiniteBox,
-            colourCommands, commandColour, guardCoordinates, antiClear, filterRegex);
-        addSettings(patterns.settings());
-        addSettings(hidePlayerChat, keepFriends, keepWhispers);
-        addSettings(muted.settings());
-        addSettings(annoy, fancy, prefix, prefixRandom, prefixText, prefixSmall,
-            suffix, suffixRandom, suffixText, suffixSmall);
+            longerHistory, historySize, keepHistory, markReportable, infiniteBox,
+            colourCommands, commandColour, rewriter.guardRow(), antiClear);
+        addSettings(filter.settings());
+        addSettings(clicks.settings());
+        addSettings(rewriter.rewriteRows());
         searchTags("timestamp", "chat history", "coords", "player heads", "small caps",
-            "scrollbar", "mute", "ignore", "hide chat", "no player chat", "chat reports", "client messages");
+            "scrollbar", "mute", "ignore", "hide chat", "no player chat", "chat reports", "censor",
+            "word filter", "abbreviation", "emote", "replace", "reply", "click event");
     }
 
-    // True when a line must never reach the chat. A pattern hides any line and the rest only
-    // ever hide what other players write.
     public boolean filters(Component message, GuiMessageSource source) {
-        if (!isEnabled()) {
-            return false;
-        }
-        if (filterRegex.isOn() && matchesPattern(message.getString())) {
-            return true;
-        }
-        if (!hidePlayerChat.isOn() && muted.isEmpty()) {
-            return false;
-        }
-        String writer = ShownChat.writer(message, source);
-        if (writer == null || mc.player != null && writer.equalsIgnoreCase(mc.player.getGameProfile().name())) {
-            return false;
-        }
-        if (muted.holds(writer)) {
-            return true;
-        }
-        boolean kept = keepFriends.isOn() && OfflineClient.INSTANCE.getFriendManager().isFriend(writer)
-            || keepWhispers.isOn() && ShownChat.whisper(message);
-        return hidePlayerChat.isOn() && !kept;
+        return filter.filters(message, source);
     }
 
-    private boolean matchesPattern(String text) {
-        for (Pattern pattern : compiledPatterns()) {
-            if (pattern.matcher(text).find()) {
-                return true;
-            }
-        }
-        return false;
+    public boolean blocksClick(String command) {
+        return clicks.blocksClick(command);
     }
 
-    // False when every muted row is taken.
     public boolean mute(String name) {
-        return muted.add(name);
+        return filter.mute(name);
     }
 
     public boolean unmute(String name) {
-        return muted.remove(name);
+        return filter.unmute(name);
     }
 
     public List<String> mutedPlayers() {
-        return muted.all();
+        return filter.mutedPlayers();
     }
 
-    // True whilst BetterChat is on and hides the chat of that player.
     public boolean mutes(String name) {
-        return isEnabled() && muted.holds(name);
+        return filter.mutes(name);
     }
 
-    // True whilst the client's own lines go to their piece of the HUD. With that piece off or
-    // Conceal hiding the HUD they stay in the chat.
-    public boolean splitsClientLines() {
-        return isEnabled() && splitClientLines.isOn() && !Conceal.hides(Conceal.Part.OVERLAY)
-            && Modules.hudShows(ClientLinesElement.class);
+    public String rewrite(String message) {
+        return rewriter.rewrite(message);
     }
 
     // The tag a player line goes up with. A signed line the game trusts has none and Mark
@@ -264,25 +167,6 @@ public final class BetterChat extends Module {
         return FormattedCharSequence.forward(shown, Style.EMPTY.withColor(commandColour.getColor() & RGB));
     }
 
-    // Patterns are rebuilt only after the rows change. A bad one is dropped with a warning.
-    private List<Pattern> compiledPatterns() {
-        List<String> rows = patterns.all();
-        String key = String.join("\n", rows);
-        if (key.equals(compiledFrom)) {
-            return compiled;
-        }
-        compiledFrom = key;
-        compiled.clear();
-        for (String row : rows) {
-            try {
-                compiled.add(Pattern.compile(row));
-            } catch (PatternSyntaxException error) {
-                ChatUtil.error("§f" + row + "§c is not a valid pattern.");
-            }
-        }
-        return compiled;
-    }
-
     public Component decorate(Component message) {
         if (!isEnabled()) {
             return message;
@@ -290,6 +174,8 @@ public final class BetterChat extends Module {
         if (antiClear.isOn() && BLANK_RUN.matcher(message.getString()).find()) {
             message = collapse(message);
         }
+        message = filter.starOut(message);
+        message = clicks.withClickCommands(message);
         if (!timestamps.isOn()) {
             return message;
         }
@@ -391,99 +277,29 @@ public final class BetterChat extends Module {
         return heads.computeIfAbsent(message, m -> Optional.ofNullable(senderSkin(m))).orElse(null);
     }
 
-    // The sender is the name in the usual <name> opening or failing that the first
-    // online player named in the line. That covers servers that dress names up.
+    // The face of the player who wrote the line. A line the server or the client wrote has none.
     private static PlayerSkin senderSkin(GuiMessage message) {
         if (mc.getConnection() == null) {
             return null;
         }
-        String text = withoutStamp(message.content().getString()).trim();
-        Matcher matcher = SENDER.matcher(text);
-        if (matcher.find()) {
-            PlayerInfo info = mc.getConnection().getPlayerInfoIgnoreCase(matcher.group(1));
-            return info == null ? null : info.getSkin();
-        }
-        PlayerInfo first = null;
-        int earliest = Integer.MAX_VALUE;
-        for (PlayerInfo info : mc.getConnection().getOnlinePlayers()) {
-            int at = ChatUtil.wholeWordIndex(text, info.getProfile().name(), 0);
-            if (at != -1 && at < earliest) {
-                earliest = at;
-                first = info;
-            }
-        }
-        return first == null ? null : first.getSkin();
+        String writer = ShownChat.writer(message.content(), message.source());
+        PlayerInfo info = writer == null ? null : mc.getConnection().getPlayerInfoIgnoreCase(writer);
+        return info == null ? null : info.getSkin();
     }
 
-    // The text to send in place of what was typed. Commands are left alone.
-    public String rewrite(String message) {
-        if (!isEnabled() || message.startsWith("/")) {
-            return message;
-        }
-        String body = message;
-        if (annoy.isOn()) {
-            body = alternate(body);
-        }
-        if (fancy.isOn()) {
-            body = smallCaps(body);
-        }
-        return affix(prefix, prefixRandom, prefixText, prefixSmall, "(%03d) ") + body
-            + affix(suffix, suffixRandom, suffixText, suffixSmall, " (%03d)");
-    }
-
-    // The random form carries its own gap on the side that meets the message.
-    private static String affix(BoolSetting on, BoolSetting random, TextSetting text,
-                                BoolSetting small, String randomForm) {
-        if (!on.isOn()) {
-            return "";
-        }
-        if (random.isOn()) {
-            return String.format(Locale.ROOT, randomForm, ThreadLocalRandom.current().nextInt(1000));
-        }
-        return small.isOn() ? smallCaps(text.getValue()) : text.getValue();
-    }
-
-    private static String alternate(String message) {
-        StringBuilder out = new StringBuilder(message.length());
-        boolean upper = true;
-        for (int point : message.codePoints().toArray()) {
-            out.appendCodePoint(upper ? Character.toUpperCase(point) : Character.toLowerCase(point));
-            upper = !upper;
-        }
-        return out.toString();
-    }
-
-    private static String smallCaps(String message) {
-        StringBuilder out = new StringBuilder(message.length());
-        for (char letter : message.toCharArray()) {
-            int at = PLAIN.indexOf(Character.toLowerCase(letter));
-            out.append(at == -1 ? letter : SMALL.charAt(at));
-        }
-        return out.toString();
+    @Subscribe
+    private void onPacketReceive(PacketReceiveEvent event) {
+        rewriter.onPacketReceive(event.getPacket());
     }
 
     @Subscribe
     private void onChatSend(ChatSendEvent event) {
-        if (!guardCoordinates.isOn()) {
-            return;
-        }
-        String message = event.getMessage();
-        if (message.startsWith("/") || !COORDINATES.matcher(message).find()) {
-            return;
-        }
-        // Sending the same text again confirms it and lets it through.
-        if (message.equals(heldBack)) {
-            heldBack = null;
-            return;
-        }
-        heldBack = message;
-        event.cancel();
-        ChatUtil.message("That looks like coordinates. Send it again if you mean it.");
+        rewriter.onChatSend(event);
     }
 
     @Override
     protected void onDisable() {
-        heldBack = null;
+        rewriter.forget();
         drawing = null;
         heads.clear();
     }

@@ -37,11 +37,11 @@ public final class VeinMiner extends Module {
     public enum Targets { ORES, ORES_AND_LOGS, ANY_BLOCK, LIST }
 
     private final NumberSetting range = new NumberSetting("Range",
-        "How far from your eyes a vein block may be.", 4.5, 1, 6, 0.1).min(1);
+        "How far from your eyes a vein block may be.", 4.5, 1, 6, 0.1, " blocks");
     private final NumberSetting delay = new NumberSetting("Delay",
-        "Ticks to wait between one block and the next.", 0, 0, 20, 1, " ticks").min(0);
+        "Ticks to wait between one block and the next.", 0, 0, 20, 1, " ticks");
     private final NumberSetting maxBlocks = new NumberSetting("Max blocks",
-        "The most blocks one vein may contain.", 32, 1, 128, 1).min(1);
+        "The most blocks one vein may contain.", 32, 1, 128, 1);
     private final EnumSetting<Targets> targets = new EnumSetting<>("Targets",
         "Which block types count as a vein.", Targets.ORES)
         .describe(Targets.ORES, "Only ore veins.")
@@ -60,7 +60,7 @@ public final class VeinMiner extends Module {
     private final BoolSetting lineOfSight = new BoolSetting("Line of sight",
         "Skips vein blocks your eyes cannot see.", false);
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Turn towards each block on the server side.", true);
+        "Turns towards each block on the server side.", true);
     private final EnumSetting<SwingMode> swing = SwingMode.setting(SwingMode.BOTH);
     private final BoolSetting render = new BoolSetting("Render",
         "Draws a box on every block in the vein.", true);
@@ -130,7 +130,7 @@ public final class VeinMiner extends Module {
     private void onTick(TickEvent event) {
         BlockPos byHand = minedByHand;
         minedByHand = null;
-        if (!inGame() || mc.player.isSpectator()) {
+        if (mc.player.isSpectator()) {
             return;
         }
         prune();

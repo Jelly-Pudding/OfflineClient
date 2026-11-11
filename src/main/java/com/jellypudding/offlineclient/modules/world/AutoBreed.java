@@ -1,17 +1,11 @@
 package com.jellypudding.offlineclient.modules.world;
 
-import com.jellypudding.offlineclient.event.Subscribe;
-import com.jellypudding.offlineclient.event.events.TickEvent;
-import com.jellypudding.offlineclient.module.Category;
-import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.module.EntityUseAura;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
-import com.jellypudding.offlineclient.util.Cooldowns;
-import com.jellypudding.offlineclient.util.EntityUtil;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EntityTypes;
@@ -22,11 +16,11 @@ import net.minecraft.world.item.ItemStack;
 import java.util.List;
 
 // Feeds the food in your hand to any animal that will take it.
-public final class AutoBreed extends Module {
+public final class AutoBreed extends EntityUseAura {
 
     public enum Age { ADULTS, BABIES, BOTH }
 
-    public enum Hand { MAIN_HAND, OFF_HAND }
+    private static final int FULL_COOLDOWN = 6600;
 
     private final RegistryListSetting<EntityType<?>> animals = new RegistryListSetting<>("Animals",
         "The animals to feed.", BuiltInRegistries.ENTITY_TYPE,
@@ -36,10 +30,6 @@ public final class AutoBreed extends Module {
             EntityTypes.TURTLE, EntityTypes.PANDA, EntityTypes.FOX, EntityTypes.BEE,
             EntityTypes.STRIDER, EntityTypes.HOGLIN, EntityTypes.GOAT, EntityTypes.AXOLOTL,
             EntityTypes.FROG, EntityTypes.CAMEL, EntityTypes.SNIFFER, EntityTypes.ARMADILLO));
-    private final NumberSetting range = new NumberSetting("Range",
-        "How close an animal has to be.", 4.5, 1, 6, 0.1);
-    private final EnumSetting<Hand> hand = new EnumSetting<>("Hand",
-        "Which hand holds the food.", Hand.MAIN_HAND);
     private final EnumSetting<Age> age = new EnumSetting<>("Age",
         "Which animals are fed.", Age.ADULTS)
         .describe(Age.ADULTS, "Grown animals. Feeding them breeds them.")
@@ -52,61 +42,27 @@ public final class AutoBreed extends Module {
     private final NumberSetting interval = new NumberSetting("Interval",
         "Ticks before the same animal is fed again. Love lasts thirty seconds and the cooldown five minutes.",
         FULL_COOLDOWN, 100, 24000, 100, " ticks").min(1).under(repeat);
-    private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Turn towards the animal on the server side.", true);
-
-    private static final int FULL_COOLDOWN = 6600;
-
-    // Animals fed lately. One comes back once feeding it again is allowed.
-    private final Cooldowns<Integer> fed = new Cooldowns<>();
-    private int count;
 
     public AutoBreed() {
-        super("AutoBreed", "Breeds the animals around you with the food you hold.", Category.WORLD);
+        super("AutoBreed", "Breeds the animals around you with the food you hold.");
         addSettings(animals, range, hand, age, skipUntamed, repeat, interval, rotate);
         searchTags("breed", "feed animals", "farm");
     }
 
     @Override
     public String getSuffix() {
-        return count(count, "fed");
+        return count(count(), "fed");
+    }
+
+    // Without repeats an animal only returns after the game's longest cooldown.
+    @Override
+    protected int restTicks(Entity entity) {
+        return repeat.isOn() ? interval.getInt() : FULL_COOLDOWN;
     }
 
     @Override
-    protected void onEnable() {
-        fed.clear();
-        count = 0;
-    }
-
-    @Subscribe
-    private void onTick(TickEvent event) {
-        if (!inGame() || mc.player.isSpectator() || mc.gui.screen() != null) {
-            return;
-        }
-        fed.tick();
-        InteractionHand useHand = hand.is(Hand.OFF_HAND) ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND;
-        ItemStack food = mc.player.getItemInHand(useHand);
-        if (food.isEmpty()) {
-            return;
-        }
-        for (Entity entity : mc.level.entitiesForRendering()) {
-            if (!(entity instanceof Animal animal) || !wanted(animal, food)) {
-                continue;
-            }
-            if (mc.player.distanceTo(animal) > range.getValue()) {
-                continue;
-            }
-            if (EntityUtil.interact(animal, useHand, rotate.isOn())) {
-                count++;
-                // Without repeats an animal only returns after the game's longest cooldown.
-                fed.put(animal.getId(), repeat.isOn() ? interval.getInt() : FULL_COOLDOWN);
-            }
-            return;
-        }
-    }
-
-    private boolean wanted(Animal animal, ItemStack food) {
-        if (!animal.isAlive() || !animals.contains(animal.getType()) || fed.contains(animal.getId())) {
+    protected boolean wanted(Entity entity, ItemStack food) {
+        if (!(entity instanceof Animal animal) || !animals.contains(animal.getType())) {
             return false;
         }
         if (skipUntamed.isOn() && animal instanceof TamableAnimal tamable && !tamable.isTame()) {

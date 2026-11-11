@@ -10,24 +10,28 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.NetherPortalBlock;
+import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.List;
 
-// Lets the crosshair pass through entities.
+// Lets the crosshair pass through entities and nether portals. CrosshairClip asks about portals.
 public final class NoMiningTrace extends Module {
 
     private final RegistryListSetting<EntityType<?>> exempt = new RegistryListSetting<>("Exempt",
         "Entities the crosshair still stops on. Click to pick them.",
         BuiltInRegistries.ENTITY_TYPE, List.of());
     private final BoolSetting toolOnly = new BoolSetting("Tool only",
-        "Only work whilst a pickaxe or an axe is in a hand.", true);
+        "Only looks through entities whilst a pickaxe or an axe is in a hand.", true);
     private final BoolSetting skipPlayers = new BoolSetting("Keep players",
-        "Never look through other players.", true);
+        "Never looks through other players.", true);
+    private final BoolSetting portals = new BoolSetting("Nether portals",
+        "The crosshair passes through nether portal blocks to the blocks and entities behind them.", false);
 
     public NoMiningTrace() {
-        super("NoMiningTrace", "Mines blocks through entities standing in the way.", Category.PLAYER);
-        addSettings(exempt, toolOnly, skipPlayers);
-        searchTags("mine through", "entity", "crosshair");
+        super("NoMiningTrace", "Mines and clicks through the entities and portals in the way.", Category.PLAYER);
+        addSettings(exempt, toolOnly, skipPlayers, portals);
+        searchTags("mine through", "entity", "crosshair", "portal hitbox");
     }
 
     public boolean ignores(Entity entity) {
@@ -44,6 +48,11 @@ public final class NoMiningTrace extends Module {
             return true;
         }
         return isTool(mc.player.getMainHandItem()) || isTool(mc.player.getOffhandItem());
+    }
+
+    // True for a block the crosshair passes through.
+    public boolean looksThrough(BlockState state) {
+        return isEnabled() && portals.isOn() && state.getBlock() instanceof NetherPortalBlock;
     }
 
     private static boolean isTool(ItemStack stack) {

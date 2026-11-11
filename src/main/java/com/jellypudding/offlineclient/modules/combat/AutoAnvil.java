@@ -31,23 +31,23 @@ public final class AutoAnvil extends Module {
     private final EnumSetting<TargetPriority> priority = TargetPriority.setting("Targets",
         TargetPriority.LOW_HEALTH);
     private final NumberSetting placeRange = new NumberSetting("Place range",
-        "How far you can reach to place.", 4.5, 1, 6, 0.1);
+        "How far you can reach to place.", 4.5, 1, 6, 0.1, " blocks");
     private final NumberSetting height = new NumberSetting("Height",
         "How far above their feet the anvil goes.", 3, 2, 6, 1, " blocks");
     private final NumberSetting delay = new NumberSetting("Delay",
         "Ticks to wait between anvils.", 10, 0, 40, 1, " ticks");
     private final BoolSetting multiPlace = new BoolSetting("Multi place",
-        "Fill every free spot from the height down to two above their head in one go.", true);
+        "Fills every free spot from the height down to two above their head in one go.", true);
     private final BoolSetting trigger = new BoolSetting("Place trigger",
-        "Put a button or a plate at their feet to break every anvil on landing.", true);
+        "Puts a button or a plate at their feet to break every anvil on landing.", true);
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Send a look packet towards each block.", true);
+        "Sends a look packet towards each block.", true);
     private final BoolSetting toggleOff = new BoolSetting("Toggle off when done",
-        "Turn off once the target has no helmet left.", false);
+        "Turns off once the target has no helmet left.", false);
     private final BoolSetting closeMenu = new BoolSetting("Close menu",
-        "Keep the repair screen shut when a click lands on a placed anvil.", true);
+        "Keeps the repair screen shut when a click lands on a placed anvil.", true);
     private final BoolSetting render = new BoolSetting("Show spot",
-        "Outline where the next anvil goes.", true);
+        "Outlines where the next anvil goes.", true);
 
     private final SlotSwap slots = new SlotSwap();
     private String targetName;
@@ -84,12 +84,12 @@ public final class AutoAnvil extends Module {
     @Subscribe
     private void onTick(TickEvent event) {
         spot = null;
-        if (!inGame() || mc.player.isSpectator()) {
+        if (mc.player.isSpectator()) {
             targetName = null;
             return;
         }
         Player target = EntityUtil.bestEnemy(targetRange.getValue(), priority.getValue());
-        targetName = EntityUtil.nameOf(target);
+        targetName = EntityUtil.displayNameOf(target);
         if (target == null) {
             slots.restore();
             return;

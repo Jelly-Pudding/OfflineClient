@@ -5,8 +5,8 @@ import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import java.util.List;
 import java.util.function.ToLongFunction;
 
-// The sides each cell of a list shares with another cell. The keys are only rebuilt
-// when a different list comes in.
+// Which of its six sides each cell of a list shares with another cell. The keys are only
+// rebuilt when a different list comes in.
 public final class JoinedCells<T> {
 
     private final ToLongFunction<T> key;

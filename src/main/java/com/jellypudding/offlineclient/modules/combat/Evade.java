@@ -9,12 +9,15 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.ExplosionUtil;
 import com.jellypudding.offlineclient.util.Hop;
 import com.jellypudding.offlineclient.util.PlayerMoves;
 import com.jellypudding.offlineclient.util.SafeDrop;
+import com.jellypudding.offlineclient.util.TntChain;
 import com.jellypudding.offlineclient.util.WorldWatch;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.item.PrimedTnt;
 import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -26,7 +29,7 @@ import net.minecraft.world.phys.Vec3;
 import java.util.ArrayList;
 import java.util.List;
 
-// Watches the players and creepers round you and hops you clear of the hit before it lands.
+// Watches the players and creepers and lit TNT round you and hops you clear of the hit before it lands.
 // The server sends where another player is every second tick and their speed is worked out
 // from that. Fall distance is never sent.
 public final class Evade extends Module {
@@ -70,6 +73,11 @@ public final class Evade extends Module {
     // A creeper blast hurts out to twice its radius. A charged one blasts twice as far.
     private static final double CREEPER_BLAST = 6;
 
+    // Lit TNT is left alone until its fuse is this short. A creeper swells for as long before it
+    // blows. The blast hurts out to twice its power.
+    private static final int FUSE_WARNING = 30;
+    private static final double TNT_BLAST = 2 * ExplosionUtil.TNT_POWER;
+
     // Players and creepers further off are never a threat this tick.
     private static final double SCAN = 32;
 
@@ -94,6 +102,9 @@ public final class Evade extends Module {
         "Hops away from a player with a sword or axe who comes into reach.", false);
     private final BoolSetting creepers = new BoolSetting("Creepers",
         "Hops away from a creeper that starts to swell near you.", true);
+    private final BoolSetting litTnt = new BoolSetting("Lit TNT",
+        "Hops away from lit TNT whose blast would catch you in the open once it is a second and a half from"
+            + " going off.", false);
     private final NumberSetting keepDistance = new NumberSetting("Keep distance",
         "Hops away from anyone holding a mace or spear who comes closer than this. Nought turns it off.",
         0, 0, 12, 0.5, " blocks");
@@ -105,7 +116,7 @@ public final class Evade extends Module {
     private final BoolSetting solidGround = new BoolSetting("Solid ground",
         "Only hops onto ground that holds you up.", true);
     private final KeybindSetting pauseKey = new KeybindSetting("Pause key",
-        "Hold it to stop the hops.", KeybindSetting.UNBOUND);
+        "Stops the hops whilst this key is held.", KeybindSetting.UNBOUND);
     private final BoolSetting ignoreFriends = new BoolSetting("Ignore friends",
         "Never hops away from a friend.", true);
 
@@ -121,9 +132,9 @@ public final class Evade extends Module {
     public Evade() {
         super("Evade", "Hops you out of reach of a falling mace or a charging spear or a raised blade.",
             Category.COMBAT);
-        addSettings(maces, spears, blades, creepers, keepDistance, bigHits, hop, solidGround, pauseKey,
+        addSettings(maces, spears, blades, creepers, litTnt, keepDistance, bigHits, hop, solidGround, pauseKey,
             ignoreFriends);
-        searchTags("dodge", "sidestep", "anti mace", "anti spear", "hop away");
+        searchTags("dodge", "sidestep", "anti mace", "anti spear", "hop away", "anti tnt", "creeper");
     }
 
     @Override
@@ -161,9 +172,6 @@ public final class Evade extends Module {
         ticks++;
         rest = Math.max(0, rest - 1);
         shown = Math.max(0, shown - 1);
-        if (!inGame()) {
-            return;
-        }
         if (world.changed()) {
             moves.clear();
         }
@@ -209,6 +217,18 @@ public final class Evade extends Module {
                 if (creeper.getSwellDir() > 0 && creeper.distanceTo(mc.player) <= blast) {
                     threats.add(new Point(creeper.getBoundingBox().getCenter()));
                     found = found == null ? "creeper" : found;
+                }
+            }
+        }
+        if (litTnt.isOn()) {
+            AABB near = mc.player.getBoundingBox().inflate(TNT_BLAST);
+            for (PrimedTnt tnt : mc.level.getEntitiesOfClass(PrimedTnt.class, near)) {
+                Vec3 blast = TntChain.blastPoint(tnt);
+                // Behind full cover the blast only grazes and a hop could leave the cover.
+                if (tnt.getFuse() <= FUSE_WARNING
+                    && ExplosionUtil.exposed(mc.player, blast, ExplosionUtil.TNT_POWER)) {
+                    threats.add(new Point(blast));
+                    found = found == null ? "lit TNT" : found;
                 }
             }
         }

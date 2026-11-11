@@ -8,6 +8,7 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.PacketUtil;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.common.ServerboundClientInformationPacket;
@@ -27,6 +28,7 @@ import net.minecraft.network.protocol.game.ServerboundContainerClosePacket;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import net.minecraft.network.protocol.game.ServerboundMoveVehiclePacket;
 import net.minecraft.network.protocol.game.ServerboundPlayerLoadedPacket;
+import net.minecraft.network.protocol.game.ServerboundSetCarriedItemPacket;
 
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -40,10 +42,10 @@ public final class AntiPacketKick extends Module {
         "Packets allowed out each second before the rest wait.", 300, 50, 1000, 10, " per second")
         .min(20);
     private final NumberSetting queueSize = new NumberSetting("Queue",
-        "Most packets held back at once.",
+        "Most packets held back at once. The oldest held packet is thrown away once the queue is full.",
         200, 20, 1000, 10, " packets").min(1);
     private final BoolSetting notify = new BoolSetting("Notify",
-        "Say in chat the first time a burst gets paced.", true);
+        "Says in chat the first time a burst gets paced.", true);
     private final BoolSetting spreadTeleports = new BoolSetting("Spread teleports",
         "Makes every teleport take one step a tick. Some servers kick for more.", true);
     private final BoolSetting acceptHuge = new BoolSetting("Accept huge packets",
@@ -97,8 +99,7 @@ public final class AntiPacketKick extends Module {
 
     @Override
     protected void onEnable() {
-        held.clear();
-        heldCount.set(0);
+        forgetHeld();
         sent.set(0);
         windowStart = System.currentTimeMillis();
         rate = 0;
@@ -108,13 +109,13 @@ public final class AntiPacketKick extends Module {
     @Override
     protected void onDisable() {
         release(Integer.MAX_VALUE);
-        held.clear();
-        heldCount.set(0);
+        forgetHeld();
     }
 
     @Subscribe(priority = -100)
     private void onPacketSend(PacketSendEvent event) {
-        if (Thread.currentThread() == drainer || event.isCancelled()) {
+        // Login and configuration packets go straight out. One held there would stall the join.
+        if (Thread.currentThread() == drainer || !PacketUtil.inPlay()) {
             return;
         }
         Packet<?> packet = event.getPacket();
@@ -128,13 +129,28 @@ public final class AntiPacketKick extends Module {
         }
         event.cancel();
         held.add(packet);
-        if (heldCount.incrementAndGet() > queueSize.getInt() && held.poll() != null) {
+        if (heldCount.incrementAndGet() > queueSize.getInt() && dropOldest()) {
             heldCount.decrementAndGet();
         }
     }
 
+    // A slot change stays whilst anything else can go. The client never sends it again and every
+    // later hit or use would act with another item.
+    private boolean dropOldest() {
+        for (Packet<?> packet : held) {
+            if (!(packet instanceof ServerboundSetCarriedItemPacket) && held.remove(packet)) {
+                return true;
+            }
+        }
+        return held.poll() != null;
+    }
+
     @Subscribe
     private void onClientTick(ClientTickEvent event) {
+        // What is held belongs to the game protocol of one connection and goes with it.
+        if (!PacketUtil.inPlay()) {
+            forgetHeld();
+        }
         long now = System.currentTimeMillis();
         if (now - windowStart >= WINDOW_MILLIS) {
             windowStart = now;
@@ -170,6 +186,11 @@ public final class AntiPacketKick extends Module {
         } finally {
             drainer = null;
         }
+    }
+
+    private void forgetHeld() {
+        held.clear();
+        heldCount.set(0);
     }
 
     private static boolean isCritical(Packet<?> packet) {

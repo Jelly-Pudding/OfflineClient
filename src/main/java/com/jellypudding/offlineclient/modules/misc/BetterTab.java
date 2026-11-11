@@ -7,6 +7,7 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ColorUtil;
+import com.jellypudding.offlineclient.util.EntityColors;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.ServerInfo;
 import net.minecraft.ChatFormatting;
@@ -24,23 +25,22 @@ public final class BetterTab extends Module {
     private static final int PING_ICON = 10;
 
     private final BoolSetting ping = new BoolSetting("Ping",
-        "Show the exact latency instead of the signal bars.", true);
+        "Shows the exact latency instead of the signal bars.", true);
     private final BoolSetting heads = new BoolSetting("Heads",
         "Shows player heads in the list on servers that hide them.", true);
     private final BoolSetting friends = new BoolSetting("Friends",
-        "Paint people on your friend list in their own colour.", true);
-    private final ColorSetting friendColor = new ColorSetting("Friend colour",
-        "Colour for friends in the list.", 210, false)
-        .under(friends);
+        "Paints people on your friend list in the friend colour. The colour is set in ClickGUI.", true);
+    private final BoolSetting enemies = new BoolSetting("Enemies",
+        "Paints people on your enemy list in the enemy colour. The colour is set in ClickGUI.", true);
     private final BoolSetting self = new BoolSetting("Highlight self",
-        "Paint your own name in its own colour.", true);
+        "Paints your own name in its own colour.", true);
     private final ColorSetting selfColor = new ColorSetting("Self colour",
         "Colour for your own name in the list.", 27, 0.88f, 0.98f, false)
         .under(self);
     private final BoolSetting gameMode = new BoolSetting("Game mode",
-        "Show a letter after each name for survival or creative or adventure or spectator.", false);
+        "Shows a letter after each name for survival or creative or adventure or spectator.", false);
     private final BoolSetting raiseLimit = new BoolSetting("Raise limit",
-        "Let the list show more players than vanilla allows.", false);
+        "Lets the list show more players than vanilla allows.", false);
     private final NumberSetting limit = new NumberSetting("Limit",
         "How many players the list may show.", 200, 80, 500, 10, " players")
         .min(1)
@@ -51,7 +51,7 @@ public final class BetterTab extends Module {
 
     public BetterTab() {
         super("BetterTab", "Ping numbers and friend colours in the player list.", Category.MISC);
-        addSettings(ping, heads, friends, friendColor, self, selfColor, gameMode, raiseLimit, limit, columnHeight);
+        addSettings(ping, heads, friends, enemies, self, selfColor, gameMode, raiseLimit, limit, columnHeight);
         searchTags("tab list", "player list", "latency");
     }
 
@@ -88,7 +88,7 @@ public final class BetterTab extends Module {
         context.text(font, text, x + width - font.width(text) - 1, y, ColorUtil.ping(latency), false);
     }
 
-    // Anyone who is not you or a friend keeps the server's styling.
+    // Anyone who is not you or a friend or a listed enemy keeps the server's styling.
     public Component decorate(Component original, PlayerInfo info) {
         if (!isEnabled() || original == null) {
             return original;
@@ -112,7 +112,10 @@ public final class BetterTab extends Module {
             return selfColor.getColor();
         }
         if (friends.isOn() && OfflineClient.INSTANCE.getFriendManager().isFriend(info.getProfile().name())) {
-            return friendColor.getColor();
+            return EntityColors.friendColor();
+        }
+        if (enemies.isOn() && OfflineClient.INSTANCE.getFriendManager().isEnemy(info.getProfile().name())) {
+            return EntityColors.enemyColor();
         }
         return 0;
     }

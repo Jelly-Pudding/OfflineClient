@@ -17,7 +17,7 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.AxisWalker;
 import com.jellypudding.offlineclient.util.BlockUtil;
-import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.DamageUtil;
 import com.jellypudding.offlineclient.util.FaceMode;
 import com.jellypudding.offlineclient.util.HeldKey;
 import com.jellypudding.offlineclient.util.InputUtil;
@@ -25,6 +25,7 @@ import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.HotbarLoan;
 import com.jellypudding.offlineclient.util.LavaReach;
 import com.jellypudding.offlineclient.util.Modules;
+import com.jellypudding.offlineclient.util.MovementUtil;
 import com.jellypudding.offlineclient.util.PlacementWatch;
 import com.jellypudding.offlineclient.util.RotationManager;
 import com.jellypudding.offlineclient.util.RotationPriority;
@@ -36,6 +37,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.util.Mth;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
@@ -125,12 +127,9 @@ public final class Staircase extends Module {
     // across is the most one step can take.
     private static final int MAX_GAP = 8;
 
-    // A landing forgives a fall of three blocks. Each step down lands and pays for its own drop.
-    private static final int SAFE_DROP = 3;
-
     // One tick of gravity after drag. It presses you onto the step as standing does in vanilla.
     // The move lands and every move packet claims the ground. The server never banks the descent.
-    private static final Vec3 ONTO_STEP = new Vec3(0, -0.0784, 0);
+    private static final Vec3 ONTO_STEP = new Vec3(0, -MovementUtil.GRAVITY * LivingEntity.BASE_VERTICAL_AIR_DRAG, 0);
 
     // Knocked further than this from the step you stand on ends the run. Closer is pulled back.
     private static final double LOST_DISTANCE = 2;
@@ -162,14 +161,14 @@ public final class Staircase extends Module {
         "Lets the stairs run at forty five degrees when you face that way. Left and right then turn half as far.",
         false).under(pace, Pace.RAPID);
     private final NumberSetting diagonalRun = new NumberSetting("Diagonal run",
-        "Steps taken to one side before the stairs turn to the other.", 1, 1, 8, 1, " steps").min(1)
+        "Steps taken to one side before the stairs turn to the other.", 1, 1, 8, 1, " steps")
         .under(diagonal);
     private final NumberSetting gap = new NumberSetting("Gap",
         "Empty blocks left between steps whilst you hold jump. Going down leaves at most two.",
-        1, 0, 2, 1, " blocks").min(0).max(MAX_GAP)
+        1, 0, 2, 1, " blocks").max(MAX_GAP)
         .under(pace, Pace.RAPID);
     private final NumberSetting stepDelay = new NumberSetting("Step delay",
-        "Ticks between one step and the next.", 0, 0, 10, 1, " ticks").min(0)
+        "Ticks between one step and the next.", 0, 0, 10, 1, " ticks")
         .under(pace, Pace.RAPID);
     private final BoolSetting thenCast = new BoolSetting("Then cast",
         "Climbs to the mountain height and then starts LavaCast down the stairs. The stairs only go up.", false)
@@ -178,7 +177,7 @@ public final class Staircase extends Module {
         "How many blocks the stairs climb before the cast starts.", 30, 5, 128, 1, " blocks").min(1)
         .under(thenCast);
     private final NumberSetting speedUp = new NumberSetting("Speed up",
-        "How many times faster the game runs whilst you build.", 1, 1, 10, 0.1, "x").min(1);
+        "How many times faster the game runs whilst you build.", 1, 1, 10, 0.1, "x");
     private final BoolSetting topLimit = new BoolSetting("Top limit",
         "Stops the stairs climbing past a height.", false);
     private final NumberSetting topHeight = new NumberSetting("Top height",
@@ -312,7 +311,7 @@ public final class Staircase extends Module {
         }
         if (movement.is(Movement.AUTO) && startPaused.isOn()) {
             paused = true;
-            ChatUtil.message("§bStaircase §7waits for you to press use.");
+            tell("waits for you to press use.");
         } else {
             startRapid();
         }
@@ -368,7 +367,7 @@ public final class Staircase extends Module {
     // repeat is swallowed.
     @Subscribe
     private void onRightClick(RightClickEvent event) {
-        if (event.isCancelled() || !pace.is(Pace.RAPID) || !movement.is(Movement.AUTO) || !inGame()) {
+        if (!pace.is(Pace.RAPID) || !movement.is(Movement.AUTO) || !inGame()) {
             return;
         }
         event.cancel();
@@ -508,7 +507,7 @@ public final class Staircase extends Module {
             if (turnBack(up)) {
                 return true;
             }
-            ChatUtil.message("§bStaircase §7stopped " + limit + ".");
+            tell("stopped " + limit + ".");
             setEnabled(false);
             return false;
         }
@@ -785,9 +784,11 @@ public final class Staircase extends Module {
         return Direction.fromYRot(eighths * EIGHTH);
     }
 
-    // Where the feet go next. A drop never passes the fall a landing forgives.
+    // Where the feet go next. Each step down lands and pays for its own drop. A skip deepens it only
+    // as far as a landing forgives and a step down always drops one block at least.
     private BlockPos nextFeet(Direction way, boolean up, int skip) {
-        int rise = up ? 1 + skip : -1 - Math.min(skip, SAFE_DROP - 1);
+        int deepest = Math.max(1, (int) DamageUtil.safeFall(mc.player));
+        int rise = up ? 1 + skip : -Math.min(1 + skip, deepest);
         return mc.player.blockPosition().relative(way).above(rise);
     }
 
@@ -886,7 +887,7 @@ public final class Staircase extends Module {
             pause(where);
         } else if (!endNoted) {
             endNoted = true;
-            ChatUtil.message("§bStaircase §7can go no further " + where + ".");
+            tell("can go no further " + where + ".");
         }
     }
 
@@ -896,7 +897,7 @@ public final class Staircase extends Module {
         Timer.override(TIMER_KEY, 1);
         loan.giveBack();
         String why = where.isEmpty() ? "" : " " + where;
-        ChatUtil.message("§bStaircase §7paused" + why + ". Press use to carry on.");
+        tell("paused" + why + ". Press use to carry on.");
     }
 
     // Starts LavaCast on the top step once the server holds every step.
@@ -907,7 +908,7 @@ public final class Staircase extends Module {
         Direction down = lastWay().getOpposite();
         LavaCast cast = Modules.get(LavaCast.class);
         setEnabled(false);
-        ChatUtil.message("§bStaircase §7reached the top. Starting §fLavaCast§7.");
+        tell("reached the top. Starting §fLavaCast§7.");
         if (cast != null) {
             cast.castDownStairs(down);
         }

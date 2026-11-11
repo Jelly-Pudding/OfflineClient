@@ -34,7 +34,7 @@ public final class GUIMove extends Module {
         .describe(Mode.ALWAYS, "Turns the whole time the screen is open.")
         .describe(Mode.ARROWS_ONLY, "The mouse never turns the view. Only the arrow keys do.");
     private final KeybindSetting hold = new KeybindSetting("Hold key",
-        "Keep this key down to look around.", InputConstants.KEY_LALT)
+        "Lets you look around whilst this key is held.", InputConstants.KEY_LALT)
         .under(mode, Mode.HOLD_KEY);
     private final BoolSetting arrowKeys = new BoolSetting("Arrow keys",
         "The arrow keys turn the view whilst a screen is open.", true);
@@ -72,7 +72,7 @@ public final class GUIMove extends Module {
             return mode.getValueString().toLowerCase(Locale.ROOT);
         }
         // Naming the key here is the only hint most people get.
-        return hold.isBound() ? hold.getKeyName().toLowerCase(Locale.ROOT) : "no key";
+        return hold.isBound() ? hold.getValueString().toLowerCase(Locale.ROOT) : "no key";
     }
 
     @Override

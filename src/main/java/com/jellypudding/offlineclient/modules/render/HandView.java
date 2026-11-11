@@ -36,7 +36,7 @@ public final class HandView extends Module {
         .describe(SwingHand.MAIN_HAND, "Always the main hand.")
         .describe(SwingHand.OFF_HAND, "Always the off hand.");
     private final NumberSetting swingSpeed = new NumberSetting("Swing speed",
-        "Ticks one swing takes.", 6, 1, 20, 1, " ticks").min(1);
+        "Ticks one swing takes.", 6, 1, 20, 1, " ticks");
     private final NumberSetting mainSwing = new NumberSetting("Main hand progress",
         "Adds to how far through a swing the main hand is drawn.", 0, -1, 1, 0.05);
     private final NumberSetting offSwing = new NumberSetting("Off hand progress",
@@ -158,11 +158,11 @@ public final class HandView extends Module {
             z = new NumberSetting(label + " z",
                 "Toward and away offset.", 0, -2, 2, 0.05).under(enabled);
             pitch = new NumberSetting(label + " pitch",
-                "Tilt up or down.", 0, -180, 180, 5, "°").under(enabled);
+                "Tilts it up or down.", 0, -180, 180, 5, "°").under(enabled);
             yaw = new NumberSetting(label + " yaw",
-                "Turn left or right.", 0, -180, 180, 5, "°").under(enabled);
+                "Turns it left or right.", 0, -180, 180, 5, "°").under(enabled);
             roll = new NumberSetting(label + " roll",
-                "Roll about the forward axis.", 0, -180, 180, 5, "°").under(enabled);
+                "Rolls it about the forward axis.", 0, -180, 180, 5, "°").under(enabled);
         }
 
         Setting<?>[] settings() {

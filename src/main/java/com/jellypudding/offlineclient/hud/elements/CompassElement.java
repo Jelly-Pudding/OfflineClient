@@ -133,7 +133,7 @@ public final class CompassElement extends HudElement {
             Vec3 spot = Vec3.atCenterOfWithY(waypoint.pos(), camera.y);
             double offset = Mth.wrapDegrees(Bearing.between(camera, spot).degrees() - yaw);
             if (Math.abs(offset) < half) {
-                int tint = ColorUtil.fade(Waypoints.colorOf(waypoint), strength(offset));
+                int tint = ColorUtil.fade(waypoint.argb(), strength(offset));
                 bar(context, along(offset), WAYPOINT_WIDTH, 1, TICK_HEIGHT, tint);
             }
         }

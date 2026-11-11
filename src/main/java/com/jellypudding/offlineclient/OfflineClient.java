@@ -11,15 +11,21 @@ import com.jellypudding.offlineclient.event.events.ClientTickEvent;
 import com.jellypudding.offlineclient.friend.FriendManager;
 import com.jellypudding.offlineclient.module.ModuleManager;
 import com.jellypudding.offlineclient.util.AntiCheatGuess;
+import com.jellypudding.offlineclient.util.BookPace;
 import com.jellypudding.offlineclient.util.BreakSlots;
+import com.jellypudding.offlineclient.util.ChatPace;
 import com.jellypudding.offlineclient.util.EnderChest;
+import com.jellypudding.offlineclient.util.HitsTaken;
 import com.jellypudding.offlineclient.util.Hop;
+import com.jellypudding.offlineclient.util.IdleTime;
 import com.jellypudding.offlineclient.util.KillTracker;
 import com.jellypudding.offlineclient.util.Lagback;
 import com.jellypudding.offlineclient.util.MoveGate;
 import com.jellypudding.offlineclient.util.OwnDigs;
+import com.jellypudding.offlineclient.util.OwnSimulation;
 import com.jellypudding.offlineclient.util.PearlOwners;
 import com.jellypudding.offlineclient.util.PlayerStats;
+import com.jellypudding.offlineclient.util.PullBacks;
 import com.jellypudding.offlineclient.util.Ridden;
 import com.jellypudding.offlineclient.util.RotationManager;
 import com.jellypudding.offlineclient.util.SpawnBed;
@@ -37,7 +43,7 @@ public enum OfflineClient {
     INSTANCE;
 
     public static final String NAME = "OfflineClient";
-    public static final String VERSION = "0.11.0";
+    public static final String VERSION = "0.12.0";
     public static final String SERVER_NAME = "minecraftoffline.net";
 
     // Read again in init. Anything that loads this class before the game has finished
@@ -71,6 +77,7 @@ public enum OfflineClient {
         eventBus.register(MoveGate.INSTANCE);
         eventBus.register(Hop.INSTANCE);
         eventBus.register(TickRate.INSTANCE);
+        eventBus.register(BookPace.INSTANCE);
         eventBus.register(Lagback.INSTANCE);
         eventBus.register(SpawnBed.INSTANCE);
         eventBus.register(KillTracker.INSTANCE);
@@ -82,8 +89,13 @@ public enum OfflineClient {
         eventBus.register(UseBudget.INSTANCE);
         eventBus.register(BreakSlots.INSTANCE);
         eventBus.register(OwnDigs.INSTANCE);
+        eventBus.register(OwnSimulation.INSTANCE);
         eventBus.register(UseClick.INSTANCE);
         eventBus.register(AntiCheatGuess.INSTANCE);
+        eventBus.register(PullBacks.INSTANCE);
+        eventBus.register(HitsTaken.INSTANCE);
+        eventBus.register(IdleTime.INSTANCE);
+        eventBus.register(ChatPace.MIRROR);
         // Loading the macros puts their key handler on the bus.
         MacroStore.get();
     }
@@ -98,7 +110,7 @@ public enum OfflineClient {
     private void greetOnFirstJoin() {
         boolean inWorld = MC.player != null;
         if (inWorld && !wasInWorld && configManager.needsGreeting()) {
-            String key = moduleManager.get(ClickGuiModule.class).getKeybind().getKeyName();
+            String key = moduleManager.get(ClickGuiModule.class).getKeybind().getValueString();
             ChatUtil.message("§7Welcome to §b" + NAME + "§7. Press §b" + key
                 + "§7 for the menu.");
             ChatUtil.message("§7Type §f" + commandManager.getPrefix()

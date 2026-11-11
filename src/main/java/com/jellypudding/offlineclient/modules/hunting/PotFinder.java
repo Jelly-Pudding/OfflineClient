@@ -24,6 +24,7 @@ import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.BoundedMap;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.FaceMode;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.LoadedChunks;
 import com.jellypudding.offlineclient.util.Notice;
@@ -314,9 +315,6 @@ public final class PotFinder extends Module implements FindSource {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame()) {
-            return;
-        }
         if (world.changed()) {
             // A probe out in the last world gets no answer here.
             endProbe();
@@ -488,7 +486,7 @@ public final class PotFinder extends Module implements FindSource {
             }
             return;
         }
-        if (--probeWait > 0 || mc.gui.screen() != null || mc.player.isUsingItem()) {
+        if (--probeWait > 0 || mc.gui.screen() != null || Hands.taken()) {
             return;
         }
         Probe next = nextProbe();

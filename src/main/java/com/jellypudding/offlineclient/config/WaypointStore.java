@@ -3,7 +3,11 @@ package com.jellypudding.offlineclient.config;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.jellypudding.offlineclient.setting.ColorSetting;
+import com.jellypudding.offlineclient.util.ColorUtil;
+import com.jellypudding.offlineclient.util.Dimension;
 import com.jellypudding.offlineclient.util.ServerInfo;
+import com.jellypudding.offlineclient.util.TextCut;
 import net.minecraft.core.BlockPos;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
@@ -12,28 +16,174 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
 
 // Named coordinates saved to offlineclient/waypoints.json.
 // Each one remembers the server and the dimension it was marked in.
 public final class WaypointStore {
 
-    // A hue below zero means the colour comes from the name.
-    public record Waypoint(String name, int x, int y, int z, String dimension, String server,
-                           int hue, boolean hidden) {
+    // The shape drawn on a waypoint on screen.
+    public enum Icon { NONE, SQUARE, CIRCLE, DIAMOND, TRIANGLE, CROSS, STAR }
 
-        public static final int AUTO_HUE = -1;
+    // What a waypoint does once you come near it.
+    public enum Action { NOTHING, HIDE, DELETE }
 
-        public Waypoint(String name, int x, int y, int z, String dimension, String server, int hue) {
-            this(name, x, y, z, dimension, server, hue, false);
+    // What a waypoint does within a distance of you. Doing nothing has no distance.
+    public record Near(Action action, double distance) {
+
+        public static final Near NOTHING = new Near(Action.NOTHING, 0);
+        // The distance a rule starts with until the player gives one.
+        public static final double USUAL_DISTANCE = 8;
+        // Standing in the marked block puts your feet half a block from its middle. A shorter rule
+        // could miss you even there.
+        public static final double SHORTEST_DISTANCE = 1;
+
+        public static Near of(Action action, double distance) {
+            return action == Action.NOTHING ? NOTHING : new Near(action, Math.max(SHORTEST_DISTANCE, distance));
         }
 
-        public Waypoint withHue(int hue) {
-            return new Waypoint(name, x, y, z, dimension, server, hue, hidden);
+        public boolean acts() {
+            return action != Action.NOTHING;
+        }
+    }
+
+    // A hue below zero takes the colour from the name. A rainbow turns by itself.
+    public record Colour(int hue, float saturation, float brightness, boolean rainbow) {
+
+        public static final float USUAL_SATURATION = 0.7f;
+        public static final float USUAL_BRIGHTNESS = 1f;
+        public static final int FULL_CIRCLE = 360;
+        private static final int NAME_HUE = -1;
+
+        public static final Colour AUTO = new Colour(NAME_HUE, USUAL_SATURATION, USUAL_BRIGHTNESS, false);
+
+        // The usual shade of a hue. Any hue below zero leaves the colour to the name.
+        public static Colour ofHue(int hue) {
+            return hue < 0 ? AUTO : new Colour(Math.floorMod(hue, FULL_CIRCLE), USUAL_SATURATION,
+                USUAL_BRIGHTNESS, false);
+        }
+
+        // The colour a colour row shows with the hue to a whole degree.
+        public static Colour of(ColorSetting row) {
+            return new Colour(Math.floorMod(Math.round(row.getHue()), FULL_CIRCLE), row.getSaturation(),
+                row.getBrightness(), row.isRainbow());
+        }
+
+        public boolean fromName() {
+            return hue < 0 && !rainbow;
+        }
+
+        // The same shade at another hue. A rainbow stops turning.
+        public Colour withHue(int hue) {
+            return new Colour(Math.floorMod(hue, FULL_CIRCLE), saturation, brightness, false);
+        }
+
+        // The same hue in another shade. Saturation and brightness run from nought to one.
+        public Colour withShade(float saturation, float brightness) {
+            return new Colour(hue, Math.clamp(saturation, 0f, 1f), Math.clamp(brightness, 0f, 1f), rainbow);
+        }
+
+        // The same shade turning through every hue. The hue it shows now is kept for when it stops.
+        public Colour turning(String name) {
+            return new Colour(hueFor(name), saturation, brightness, true);
+        }
+
+        // The hue the colour has for a waypoint of that name. The same name always gets the same one.
+        public int hueFor(String name) {
+            return hue >= 0 ? hue : Math.floorMod(name.toLowerCase(Locale.ROOT).hashCode(), FULL_CIRCLE);
+        }
+
+        public int argb(String name) {
+            return rainbow ? ColorUtil.rainbow(0) : ColorUtil.hsv(hueFor(name), saturation, brightness);
+        }
+    }
+
+    // What one waypoint has of its own. A null follows the Waypoints module.
+    public record Options(Icon icon, Double scale, Double range, Boolean mirrored, Near near) {
+
+        public static final Options NONE = new Options(null, null, null, null, null);
+        // A label smaller than this cannot be read.
+        public static final double SMALLEST_SCALE = 0.1;
+
+        // These options with every gap filled from the others.
+        public Options over(Options base) {
+            return new Options(icon != null ? icon : base.icon, scale != null ? scale : base.scale,
+                range != null ? range : base.range, mirrored != null ? mirrored : base.mirrored,
+                near != null ? near : base.near);
+        }
+
+        // These options once rows that showed one set of values show another. A value whose row was left
+        // alone stays as it is. A moved row gives its value and one moved onto what the base gives follows
+        // the base again.
+        public Options edited(Options shown, Options rows, Options base) {
+            return new Options(edited(icon, shown.icon, rows.icon, base.icon),
+                edited(scale, shown.scale, rows.scale, base.scale),
+                edited(range, shown.range, rows.range, base.range),
+                edited(mirrored, shown.mirrored, rows.mirrored, base.mirrored),
+                edited(near, shown.near, rows.near, base.near));
+        }
+
+        private static <T> T edited(T own, T shown, T row, T base) {
+            if (Objects.equals(row, shown)) {
+                return own;
+            }
+            return Objects.equals(row, base) ? null : row;
+        }
+
+        public Options withIcon(Icon icon) {
+            return new Options(icon, scale, range, mirrored, near);
+        }
+
+        public Options withScale(Double scale) {
+            return new Options(icon, scale, range, mirrored, near);
+        }
+
+        public Options withRange(Double range) {
+            return new Options(icon, scale, range, mirrored, near);
+        }
+
+        public Options withMirrored(Boolean mirrored) {
+            return new Options(icon, scale, range, mirrored, near);
+        }
+
+        public Options withNear(Near near) {
+            return new Options(icon, scale, range, mirrored, near);
+        }
+    }
+
+    // A found waypoint is a place a module learnt for you and not one you marked yourself.
+    public record Waypoint(String name, int x, int y, int z, String dimension, String server,
+                           Colour colour, boolean hidden, boolean found, Options options) {
+
+        public Waypoint withName(String name) {
+            return new Waypoint(name, x, y, z, dimension, server, colour, hidden, found, options);
+        }
+
+        public Waypoint at(BlockPos pos) {
+            return new Waypoint(name, pos.getX(), pos.getY(), pos.getZ(), dimension, server, colour, hidden,
+                found, options);
+        }
+
+        public Waypoint in(String dimension) {
+            return new Waypoint(name, x, y, z, dimension, server, colour, hidden, found, options);
+        }
+
+        public Waypoint withColour(Colour colour) {
+            return new Waypoint(name, x, y, z, dimension, server, colour, hidden, found, options);
         }
 
         public Waypoint withHidden(boolean hidden) {
-            return new Waypoint(name, x, y, z, dimension, server, hue, hidden);
+            return new Waypoint(name, x, y, z, dimension, server, colour, hidden, found, options);
+        }
+
+        public Waypoint withOptions(Options options) {
+            return new Waypoint(name, x, y, z, dimension, server, colour, hidden, found, options);
+        }
+
+        public Waypoint withFound(boolean found) {
+            return new Waypoint(name, x, y, z, dimension, server, colour, hidden, found, options);
         }
 
         public BlockPos pos() {
@@ -44,12 +194,19 @@ public final class WaypointStore {
         public Vec3 centre() {
             return Vec3.atCenterOf(pos());
         }
+
+        public int argb() {
+            return colour.argb(name);
+        }
     }
 
-    private static final String OVERWORLD = "minecraft:overworld";
-    private static final String NETHER = "minecraft:the_nether";
-    // Eight overworld blocks to one nether block.
-    private static final int NETHER_SCALE = 8;
+    // A name longer than this is cut. A label has to fit the screen. A stem leaves room for
+    // the number after it.
+    public static final int LONGEST_NAME = 64;
+    private static final int LONGEST_STEM = LONGEST_NAME - 8;
+    // Longer than any real server address or world folder or dimension id. A saved entry with a
+    // longer one came from a broken file.
+    private static final int LONGEST_PLACE = 512;
 
     private static WaypointStore instance;
 
@@ -66,6 +223,16 @@ public final class WaypointStore {
             instance = new WaypointStore(DataFiles.path("waypoints.json"));
         }
         return instance;
+    }
+
+    // A name as it is saved. It is one word of at most the longest length. Null when nothing
+    // is left of the text.
+    public static String cleanName(String text) {
+        String name = text.replaceAll("\\s+", "");
+        if (name.isEmpty()) {
+            return null;
+        }
+        return TextCut.cut(name, LONGEST_NAME);
     }
 
     // Only the waypoints marked in the world the player is standing in.
@@ -85,95 +252,164 @@ public final class WaypointStore {
         return matching;
     }
 
-    // Every dimension of this server that holds a waypoint.
-    public List<String> dimensions() {
+    // Every waypoint of this server whichever dimension it is in.
+    public List<Waypoint> onServer() {
         String server = ServerInfo.key();
-        Set<String> found = new LinkedHashSet<>();
+        List<Waypoint> matching = new ArrayList<>();
         for (Waypoint waypoint : waypoints) {
             if (ServerInfo.matches(waypoint.server(), server)) {
-                found.add(waypoint.dimension());
+                matching.add(waypoint);
             }
         }
-        return new ArrayList<>(found);
+        return matching;
     }
 
-    // The block a coordinate lands in on the other side of a nether portal. It shrinks going in
-    // and grows coming out. The game scales the exact position and only then takes the block.
-    public static int acrossPortal(double coordinate, boolean intoNether) {
-        return Mth.floor(intoNether ? coordinate / NETHER_SCALE : coordinate * NETHER_SCALE);
-    }
-
-    // The dimension a nether portal leads to from this one. Null in the End and anywhere else
-    // a nether portal does not work.
-    public static String otherSide(String dimension) {
-        return dimension.equals(OVERWORLD) ? NETHER : dimension.equals(NETHER) ? OVERWORLD : null;
-    }
-
-    // The block in the other dimension that matches this exact spot at the same height. Null
-    // where there is no other side.
-    public static BlockPos acrossPortal(Vec3 position, String dimension) {
-        String other = otherSide(dimension);
-        if (other == null) {
-            return null;
+    // Every dimension of this server that holds a waypoint.
+    public List<String> dimensions() {
+        Set<String> found = new LinkedHashSet<>();
+        for (Waypoint waypoint : onServer()) {
+            found.add(waypoint.dimension());
         }
-        boolean intoNether = other.equals(NETHER);
-        return new BlockPos(acrossPortal(position.x(), intoNether), Mth.floor(position.y()),
-            acrossPortal(position.z(), intoNether));
+        return new ArrayList<>(found);
     }
 
     // Waypoints from the other side of a nether portal with their coordinates scaled
     // to this side. Empty anywhere but the overworld and the nether.
     public List<Waypoint> mirrored() {
         String dimension = ServerInfo.dimension();
-        String server = ServerInfo.key();
-        String other = otherSide(dimension);
+        String other = Dimension.otherSide(dimension);
         List<Waypoint> matching = new ArrayList<>();
         if (other == null) {
             return matching;
         }
-        for (Waypoint waypoint : waypoints) {
-            if (!waypoint.dimension().equals(other) || !ServerInfo.matches(waypoint.server(), server)) {
-                continue;
-            }
-            BlockPos here = acrossPortal(Vec3.atLowerCornerOf(waypoint.pos()), other);
-            matching.add(new Waypoint(waypoint.name(), here.getX(), here.getY(), here.getZ(), dimension, server,
-                waypoint.hue(), waypoint.hidden()));
+        for (Waypoint waypoint : in(other)) {
+            matching.add(waypoint.at(Dimension.acrossPortal(Vec3.atLowerCornerOf(waypoint.pos()), other))
+                .in(dimension));
         }
         return matching;
     }
 
-    // An existing waypoint of the same name in the new one's world is replaced.
-    public void add(Waypoint waypoint) {
+    // An existing waypoint of the same name in the new one's world is replaced. The new one
+    // goes to the end of the list.
+    private void add(Waypoint waypoint) {
         waypoints.removeIf(existing -> named(existing, waypoint.name(), waypoint.dimension(), waypoint.server()));
         waypoints.add(waypoint);
         save();
     }
 
-    // Saves a waypoint in that dimension of this server. One of the same name there moves and
-    // keeps its colour and whether it is hidden. The hue is for a new name.
-    public void mark(String name, BlockPos pos, String dimension, int hue) {
+    // Puts a changed waypoint in the place of the one it came from. False when that one has
+    // gone or another waypoint already has the new name in a world where both would show.
+    public boolean replace(Waypoint from, Waypoint changed) {
+        int at = indexOf(from);
+        if (at < 0 || !alike(waypoints.get(at), changed) && taken(changed, at)) {
+            return false;
+        }
+        waypoints.set(at, changed);
+        save();
+        return true;
+    }
+
+    // Whether this waypoint is still saved. One a module moved meanwhile still counts.
+    public boolean holds(Waypoint waypoint) {
+        return indexOf(waypoint) >= 0;
+    }
+
+    // Where a waypoint is held. One a module moved meanwhile is found by its name and where it is
+    // filed. Minus one once it has gone.
+    private int indexOf(Waypoint waypoint) {
+        int at = waypoints.indexOf(waypoint);
+        if (at >= 0) {
+            return at;
+        }
+        for (int i = 0; i < waypoints.size(); i++) {
+            if (alike(waypoints.get(i), waypoint)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    // Whether a waypoint other than the one at that place has this name in a world where both
+    // would show.
+    private boolean taken(Waypoint waypoint, int except) {
+        for (int i = 0; i < waypoints.size(); i++) {
+            if (i != except && clash(waypoints.get(i), waypoint)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // The same name in the same dimension filed under the same server. A module that moves a
+    // waypoint keeps all three.
+    private static boolean alike(Waypoint one, Waypoint other) {
+        return one.server().equals(other.server()) && named(one, other.name(), other.dimension(), other.server());
+    }
+
+    // Two waypoints of one name and dimension where one shows in the world the other is filed
+    // under. A plain singleplayer one shows in every single player world.
+    private static boolean clash(Waypoint one, Waypoint other) {
+        return named(one, other.name(), other.dimension(), other.server())
+            || named(other, one.name(), one.dimension(), one.server());
+    }
+
+    // Saves a waypoint in that dimension of the world you play in. One of the same name that shows
+    // there moves to the spot under the name as given and is filed under this world. It keeps its
+    // colour and options and whether it is hidden. The colour is for a new name.
+    public void mark(String name, BlockPos pos, String dimension, Colour colour) {
+        mark(name, pos, dimension, colour, false);
+    }
+
+    // The same for a place a module learnt for you.
+    public void markFind(String name, BlockPos pos, String dimension, Colour colour) {
+        mark(name, pos, dimension, colour, true);
+    }
+
+    // A name with nothing left of it once cleaned saves nothing. A find you mark yourself becomes
+    // your own and stays one whatever a module marks there later.
+    private void mark(String name, BlockPos pos, String dimension, Colour colour, boolean found) {
+        String clean = cleanName(name);
+        if (clean == null) {
+            return;
+        }
         String server = ServerInfo.key();
-        Waypoint old = lookup(name, dimension, server);
-        add(new Waypoint(name, pos.getX(), pos.getY(), pos.getZ(), dimension, server,
-            old == null ? hue : old.hue(), old != null && old.hidden()));
+        Waypoint saved = lookup(clean, dimension, server);
+        add(saved == null
+            ? new Waypoint(clean, pos.getX(), pos.getY(), pos.getZ(), dimension, server, colour, false, found,
+                Options.NONE)
+            : new Waypoint(clean, pos.getX(), pos.getY(), pos.getZ(), dimension, server, saved.colour(),
+                saved.hidden(), found && saved.found(), saved.options()));
     }
 
     // The same in the dimension you are in.
-    public void mark(String name, BlockPos pos, int hue) {
-        mark(name, pos, ServerInfo.dimension(), hue);
+    public void mark(String name, BlockPos pos, Colour colour) {
+        mark(name, pos, ServerInfo.dimension(), colour);
     }
 
     // Saves a new waypoint in that dimension of this server named after the stem with the first
     // number no waypoint there uses such as stash3. Returns the name it took.
-    public String markFresh(String stem, BlockPos pos, String dimension, int hue) {
+    public String markFresh(String stem, BlockPos pos, String dimension, Colour colour) {
+        String name = freshName(stem, dimension);
+        mark(name, pos, dimension, colour, false);
+        return name;
+    }
+
+    // The same for a place a module learnt for you.
+    public String markFreshFind(String stem, BlockPos pos, String dimension, Colour colour) {
+        String name = freshName(stem, dimension);
+        mark(name, pos, dimension, colour, true);
+        return name;
+    }
+
+    private String freshName(String stem, String dimension) {
         String server = ServerInfo.key();
+        String clean = cleanName(stem);
+        String start = clean == null ? "" : TextCut.cut(clean, LONGEST_STEM);
         int number = 1;
-        while (lookup(stem + number, dimension, server) != null) {
+        while (lookup(start + number, dimension, server) != null) {
             number++;
         }
-        String name = stem + number;
-        mark(name, pos, dimension, hue);
-        return name;
+        return start + number;
     }
 
     // Null when no waypoint of that name is in this world.
@@ -196,17 +432,21 @@ public final class WaypointStore {
         return null;
     }
 
+    // Removes the waypoint of that name in this world. False when there is none.
     public boolean remove(String name) {
-        return remove(name, ServerInfo.dimension());
+        Waypoint waypoint = find(name);
+        return waypoint != null && remove(waypoint);
     }
 
-    public boolean remove(String name, String dimension) {
-        String server = ServerInfo.key();
-        boolean removed = waypoints.removeIf(waypoint -> named(waypoint, name, dimension, server));
-        if (removed) {
-            save();
+    // Removes this one waypoint and never another of the same name. False once it has gone.
+    public boolean remove(Waypoint waypoint) {
+        int at = indexOf(waypoint);
+        if (at < 0) {
+            return false;
         }
-        return removed;
+        waypoints.remove(at);
+        save();
+        return true;
     }
 
     // The name matches and the waypoint belongs to that dimension of that server. A base in
@@ -217,8 +457,21 @@ public final class WaypointStore {
             && ServerInfo.matches(waypoint.server(), server);
     }
 
-    public void clear() {
+    // Removes every waypoint of this server in every dimension and hands back how many went.
+    public int clearServer() {
+        String server = ServerInfo.key();
+        int before = waypoints.size();
+        waypoints.removeIf(waypoint -> ServerInfo.matches(waypoint.server(), server));
+        save();
+        return before - waypoints.size();
+    }
+
+    // Swaps every waypoint for the saved ones. Saved text that is no list leaves the store as it
+    // is and an entry that cannot be read is left out.
+    public void replaceWith(JsonElement saved) {
+        List<Waypoint> decoded = decode(saved);
         waypoints.clear();
+        waypoints.addAll(decoded);
         save();
     }
 
@@ -226,24 +479,66 @@ public final class WaypointStore {
         DataFiles.readJson(file, WaypointStore::decode).ifPresent(waypoints::addAll);
     }
 
+    // One entry that cannot be read only loses itself.
     private static List<Waypoint> decode(JsonElement root) {
-        List<Waypoint> decoded = new ArrayList<>();
-        for (JsonElement element : root.getAsJsonArray()) {
-            JsonObject o = element.getAsJsonObject();
-            decoded.add(new Waypoint(
-                o.get("name").getAsString(),
-                o.get("x").getAsInt(),
-                o.get("y").getAsInt(),
-                o.get("z").getAsInt(),
-                o.get("dimension").getAsString(),
-                o.get("server").getAsString(),
-                o.has("hue") ? o.get("hue").getAsInt() : Waypoint.AUTO_HUE,
-                o.has("hidden") && o.get("hidden").getAsBoolean()));
+        return DataFiles.entries(root, WaypointStore::read, "saved waypoints");
+    }
+
+    // Null for an entry without a name or a spot or a real world.
+    private static Waypoint read(JsonElement element) {
+        if (!element.isJsonObject()) {
+            return null;
         }
-        return decoded;
+        JsonObject o = element.getAsJsonObject();
+        String typed = JsonFields.text(o, "name");
+        String name = typed == null ? null : cleanName(typed);
+        String dimension = JsonFields.text(o, "dimension");
+        String server = JsonFields.text(o, "server");
+        Integer x = JsonFields.whole(o, "x");
+        Integer y = JsonFields.whole(o, "y");
+        Integer z = JsonFields.whole(o, "z");
+        if (name == null || dimension == null || server == null || x == null || y == null || z == null
+            || dimension.length() > LONGEST_PLACE || server.length() > LONGEST_PLACE) {
+            return null;
+        }
+        return new Waypoint(name, x, y, z, dimension, server, readColour(o),
+            Boolean.TRUE.equals(JsonFields.flag(o, "hidden")), Boolean.TRUE.equals(JsonFields.flag(o, "found")),
+            readOptions(o));
+    }
+
+    // A colour left to the name has the usual shade.
+    private static Colour readColour(JsonObject o) {
+        Double hue = JsonFields.number(o, "hue");
+        boolean rainbow = Boolean.TRUE.equals(JsonFields.flag(o, "rainbow"));
+        if ((hue == null || hue < 0) && !rainbow) {
+            return Colour.AUTO;
+        }
+        Double saturation = JsonFields.number(o, "saturation");
+        Double brightness = JsonFields.number(o, "brightness");
+        int own = hue == null || hue < 0 ? Colour.NAME_HUE : Math.floorMod(Mth.floor(hue), Colour.FULL_CIRCLE);
+        return new Colour(own,
+            saturation == null ? Colour.USUAL_SATURATION : Math.clamp(saturation.floatValue(), 0f, 1f),
+            brightness == null ? Colour.USUAL_BRIGHTNESS : Math.clamp(brightness.floatValue(), 0f, 1f), rainbow);
+    }
+
+    private static Options readOptions(JsonObject o) {
+        Double scale = JsonFields.number(o, "scale");
+        Double range = JsonFields.number(o, "range");
+        Action action = JsonFields.choice(o, "near", Action.class);
+        Double distance = JsonFields.number(o, "nearDistance");
+        return new Options(JsonFields.choice(o, "icon", Icon.class),
+            scale == null ? null : Math.max(Options.SMALLEST_SCALE, scale),
+            range == null ? null : Math.max(0, range), JsonFields.flag(o, "mirrored"),
+            action == null ? null : Near.of(action, distance == null ? Near.USUAL_DISTANCE : distance));
     }
 
     private void save() {
+        DataFiles.writeJson(file, toJson());
+    }
+
+    // Every waypoint of every server the way the file holds them. A profile keeps a copy. Only
+    // what differs from a plain waypoint is written.
+    public JsonArray toJson() {
         JsonArray root = new JsonArray();
         for (Waypoint waypoint : waypoints) {
             JsonObject o = new JsonObject();
@@ -253,14 +548,53 @@ public final class WaypointStore {
             o.addProperty("z", waypoint.z());
             o.addProperty("dimension", waypoint.dimension());
             o.addProperty("server", waypoint.server());
-            if (waypoint.hue() >= 0) {
-                o.addProperty("hue", waypoint.hue());
-            }
+            write(o, waypoint.colour());
             if (waypoint.hidden()) {
                 o.addProperty("hidden", true);
             }
+            if (waypoint.found()) {
+                o.addProperty("found", true);
+            }
+            write(o, waypoint.options());
             root.add(o);
         }
-        DataFiles.writeJson(file, root);
+        return root;
+    }
+
+    private static void write(JsonObject o, Colour colour) {
+        if (colour.hue() >= 0) {
+            o.addProperty("hue", colour.hue());
+        }
+        if (colour.saturation() != Colour.USUAL_SATURATION) {
+            o.addProperty("saturation", colour.saturation());
+        }
+        if (colour.brightness() != Colour.USUAL_BRIGHTNESS) {
+            o.addProperty("brightness", colour.brightness());
+        }
+        if (colour.rainbow()) {
+            o.addProperty("rainbow", true);
+        }
+    }
+
+    private static void write(JsonObject o, Options options) {
+        if (options.icon() != null) {
+            o.addProperty("icon", options.icon().name());
+        }
+        if (options.scale() != null) {
+            o.addProperty("scale", options.scale());
+        }
+        if (options.range() != null) {
+            o.addProperty("range", options.range());
+        }
+        if (options.mirrored() != null) {
+            o.addProperty("mirrored", options.mirrored());
+        }
+        Near near = options.near();
+        if (near != null) {
+            o.addProperty("near", near.action().name());
+            if (near.acts()) {
+                o.addProperty("nearDistance", near.distance());
+            }
+        }
     }
 }

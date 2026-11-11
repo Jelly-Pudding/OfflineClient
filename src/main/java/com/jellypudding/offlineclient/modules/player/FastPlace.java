@@ -23,9 +23,6 @@ public final class FastPlace extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame()) {
-            return;
-        }
         ItemStack held = mc.player.getMainHandItem();
         if (held.isEmpty()) {
             held = mc.player.getOffhandItem();

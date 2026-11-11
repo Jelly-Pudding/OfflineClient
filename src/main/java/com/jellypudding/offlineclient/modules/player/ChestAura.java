@@ -35,7 +35,6 @@ import net.minecraft.world.entity.vehicle.ContainerEntity;
 import net.minecraft.world.entity.vehicle.minecart.MinecartHopper;
 import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.block.AbstractFurnaceBlock;
 import net.minecraft.world.level.block.BarrelBlock;
 import net.minecraft.world.level.block.Block;
@@ -100,8 +99,7 @@ public final class ChestAura extends Module {
     private final NumberSetting range = new NumberSetting("Range",
         "How far from your eyes a container may be.", 4.5, 1, 6, 0.1, " blocks");
     private final NumberSetting rest = new NumberSetting("Rest",
-        "Ticks to wait after closing one container before opening the next.", 5, 0, 40, 1, " ticks")
-        .min(0);
+        "Ticks to wait after closing one container before opening the next.", 5, 0, 40, 1, " ticks");
     private final RegistryListSetting<Block> containers = new RegistryListSetting<>("Containers",
         "The container blocks the aura opens. Click to pick them. A trapped chest sets off its redstone"
             + " when opened and starts left out.",
@@ -118,7 +116,7 @@ public final class ChestAura extends Module {
         true);
     private final EnumSetting<FaceMode> face = FaceMode.setting(FaceMode.SERVER);
     private final KeybindSetting markKey = new KeybindSetting("Mark key",
-        "Press whilst looking at a container to have the aura leave it alone or open it again."
+        "Toggles whether the aura leaves the container you look at alone."
             + " Works whilst the aura is off.",
         KeybindSetting.UNBOUND);
 
@@ -201,9 +199,6 @@ public final class ChestAura extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame()) {
-            return;
-        }
         if (joins.joined() && offOnLeave.isOn()) {
             disable("ChestAura switched off after joining.");
             return;
@@ -214,7 +209,9 @@ public final class ChestAura extends Module {
             later.clear();
         }
         ChestStealer stealer = Modules.get(ChestStealer.class);
-        if (stealer == null || mc.player.isSpectator() || mc.player.isDeadOrDying() || Modules.packing()) {
+        // A container set down beside you and one the aura opens could each take the other's screen.
+        if (stealer == null || mc.player.isSpectator() || mc.player.isDeadOrDying() || Modules.packing()
+            || PlacedBox.anyAtWork()) {
             endVisit();
             return;
         }
@@ -307,8 +304,7 @@ public final class ChestAura extends Module {
 
     private void visit(ChestStealer stealer) {
         if (!opened) {
-            // The items follow the screen in a packet of their own. The menu counts from nought until then.
-            if (ownScreen(stealer) && mc.player.containerMenu.getStateId() != 0) {
+            if (ownScreen(stealer)) {
                 opened = true;
                 stealer.startVisit(!mode.is(Mode.TAKE), takes(visiting));
             } else if (++waited > OPEN_TIMEOUT) {
@@ -338,11 +334,11 @@ public final class ChestAura extends Module {
         }
     }
 
-    // A click that opened nothing leaves the wait open to a screen you open yourself. Your ender
-    // chest is never one the aura clicked.
+    // The screen the click opened once its items are in. A click that opened nothing leaves the
+    // wait open to a screen you open yourself. Your ender chest is never one the aura clicked.
     private boolean ownScreen(ChestStealer stealer) {
         Screen screen = mc.gui.screen();
-        return stealer.handles(screen) && mc.player.containerMenu.containerId != clickedMenu
+        return InventoryUtil.openedSince(clickedMenu) != null && stealer.handles(screen)
             && !InventoryUtil.isEnderChest(screen);
     }
 
@@ -521,10 +517,7 @@ public final class ChestAura extends Module {
     }
 
     private boolean looksAt(Player player, BlockPos pos, BlockPos other) {
-        Vec3 eye = player.getEyePosition();
-        Vec3 end = eye.add(player.getViewVector(1).scale(LOOK_REACH));
-        BlockHitResult hit = mc.level.clip(new ClipContext(eye, end, ClipContext.Block.OUTLINE,
-            ClipContext.Fluid.NONE, player));
+        BlockHitResult hit = (BlockHitResult) player.pick(LOOK_REACH, 1, false);
         return hit.getType() == HitResult.Type.BLOCK
             && (hit.getBlockPos().equals(pos) || hit.getBlockPos().equals(other));
     }

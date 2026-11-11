@@ -9,6 +9,7 @@ import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ExplosionUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.SwingMode;
+import com.jellypudding.offlineclient.util.UseBudget;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.SlabBlock;
@@ -50,12 +51,16 @@ public final class AntiAnchor extends RespawnBlockBreaker {
 
     @Subscribe
     private void onSlabTick(TickEvent event) {
-        if (!headSlab.isOn() || !inGame() || mc.player.isSpectator() || !explodesHere()) {
+        if (!headSlab.isOn() || mc.player.isSpectator() || !explodesHere()) {
             return;
         }
         BlockPos head = mc.player.blockPosition().above();
         if (BlockUtil.state(head.above()).getBlock() != Blocks.RESPAWN_ANCHOR
             || !BlockUtil.state(head).isAir()) {
+            return;
+        }
+        // A standing body fills the space the slab needs and the click would only spend a use.
+        if (!mc.player.isCrouching() || UseBudget.remaining() == 0) {
             return;
         }
         int slot = BlockUtil.findBlockSlot(block -> block instanceof SlabBlock);

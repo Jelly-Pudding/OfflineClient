@@ -12,7 +12,6 @@ import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.ChatWarning;
 import com.jellypudding.offlineclient.util.HeldShot;
 import com.jellypudding.offlineclient.util.Hop;
-import net.minecraft.network.protocol.Packet;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.Item;
@@ -57,9 +56,7 @@ public final class Slingshot extends Module {
         "Says in chat how much faster each shot left.", false);
 
     private final ChatWarning warning = new ChatWarning();
-
-    // The shot kept back until its hop reaches the server.
-    private HeldShot held;
+    private final HeldShot.Carrier carrier = new HeldShot.Carrier(warning);
 
     public Slingshot() {
         super("Slingshot", "Makes your arrows and throws fly much faster.", Category.COMBAT);
@@ -80,17 +77,10 @@ public final class Slingshot extends Module {
     // Runs after SkyDrop. A shot it carries over a target is left to it.
     @Subscribe
     private void onPacketSend(PacketSendEvent event) {
-        if (event.isCancelled() || !inGame()) {
+        if (!inGame() || carrier.holds(event)) {
             return;
         }
-        Packet<?> packet = event.getPacket();
-        if (held != null) {
-            if (held.gather(packet)) {
-                event.cancel();
-            }
-            return;
-        }
-        HeldShot shot = Hop.travelling() ? null : HeldShot.of(packet, items);
+        HeldShot shot = Hop.travelling() ? null : HeldShot.of(event.getPacket(), items);
         if (shot == null) {
             return;
         }
@@ -100,10 +90,7 @@ public final class Slingshot extends Module {
             warning.say(trouble == null ? "There is no room to hop along your aim." : trouble.problem());
             return;
         }
-        warning.clear();
-        event.cancel();
-        held = shot;
-        launch.go(this::landed);
+        carrier.carry(event, shot, launch);
     }
 
     // The chosen way first and then the level and the other ways where allowed. Null when
@@ -181,18 +168,6 @@ public final class Slingshot extends Module {
         shot.fire();
         if (report.isOn()) {
             ChatUtil.message(String.format(Locale.ROOT, "The shot left %.1f blocks a tick faster.", speed));
-        }
-    }
-
-    // A trip cut short before the shot lets it go as it was. A player who left takes
-    // nothing along.
-    private void landed(Hop.Result result) {
-        if (result != Hop.Result.LEFT) {
-            held.finish();
-        }
-        held = null;
-        if (result != Hop.Result.MOVED) {
-            warning.say(result.problem());
         }
     }
 }

@@ -102,7 +102,7 @@ public final class ChunkWindow {
         }
         LevelChunkSection section = chunk.getSections()[chunk.getSectionIndex(y)];
         // The section count takes cave air for air. Only a palette of plain air skips the read.
-        if (section == null || section.hasOnlyAir() && !section.maybeHas(NOT_PLAIN_AIR)) {
+        if (section.hasOnlyAir() && !section.maybeHas(NOT_PLAIN_AIR)) {
             return AIR;
         }
         return section.getBlockState(x & 15, y & 15, z & 15);

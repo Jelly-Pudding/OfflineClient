@@ -18,10 +18,10 @@ public final class AutoJump extends Module {
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
         "How the jump is made.", Mode.JUMP)
         .describe(Mode.JUMP, "A normal full height jump.")
-        .describe(Mode.LOW_HOP, "A short hop that lifts you by the hop height below.");
-    private final NumberSetting hopHeight = new NumberSetting("Hop height",
+        .describe(Mode.LOW_HOP, "A short hop that starts at the hop speed below.");
+    private final NumberSetting hopSpeed = new NumberSetting("Hop speed",
         "Upward speed of a low hop. A real jump is 0.42.", 0.25, 0, 2, 0.01, "")
-        .min(0).under(mode, Mode.LOW_HOP);
+        .under(mode, Mode.LOW_HOP);
     private final EnumSetting<When> when = new EnumSetting<>("Jump when",
         "When a jump is due.", When.SPRINTING)
         .describe(When.SPRINTING, "Jumps only whilst you sprint.")
@@ -30,7 +30,7 @@ public final class AutoJump extends Module {
 
     public AutoJump() {
         super("AutoJump", "Jumps for you whenever you are on the ground.", Category.MOVEMENT);
-        addSettings(mode, hopHeight, when);
+        addSettings(mode, hopSpeed, when);
         searchTags("bunnyhop", "bhop", "bunny hop");
     }
 
@@ -41,7 +41,7 @@ public final class AutoJump extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || !mc.player.onGround() || mc.player.isShiftKeyDown()) {
+        if (!mc.player.onGround() || mc.player.isShiftKeyDown()) {
             return;
         }
         if (mc.player.isInWater() || mc.player.isInLava() || mc.player.onClimbable()
@@ -62,6 +62,6 @@ public final class AutoJump extends Module {
             return;
         }
         Vec3 motion = mc.player.getDeltaMovement();
-        mc.player.setDeltaMovement(motion.x, hopHeight.getValue(), motion.z);
+        mc.player.setDeltaMovement(motion.x, hopSpeed.getValue(), motion.z);
     }
 }

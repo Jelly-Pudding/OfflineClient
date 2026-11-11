@@ -1,6 +1,7 @@
 package com.jellypudding.offlineclient.util;
 
 import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.event.events.PacketSendEvent;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -179,6 +180,51 @@ public final class HeldShot {
             player.connection.send(packet);
         } finally {
             firing = false;
+        }
+    }
+
+    // Keeps a module's shot back for the length of its hop and lets it go when the trip ends.
+    // Throws made meanwhile go out with it.
+    public static final class Carrier {
+
+        private final ChatWarning warning;
+        private HeldShot held;
+
+        // The warning says why a trip ended early.
+        public Carrier(ChatWarning warning) {
+            this.warning = warning;
+        }
+
+        // True whilst a shot is held. A throw made meanwhile is cancelled and goes with it.
+        public boolean holds(PacketSendEvent event) {
+            if (held == null) {
+                return false;
+            }
+            if (held.gather(event.getPacket())) {
+                event.cancel();
+            }
+            return true;
+        }
+
+        // Cancels the packet of the shot and holds it whilst the plan runs. A plan with a problem
+        // ends at once and the shot has to be held by then.
+        public void carry(PacketSendEvent event, HeldShot shot, Hop.Plan plan) {
+            warning.clear();
+            event.cancel();
+            held = shot;
+            plan.go(this::landed);
+        }
+
+        // A trip cut short before the shot lets it go as it was. A player who left takes
+        // nothing along.
+        private void landed(Hop.Result result) {
+            if (result != Hop.Result.LEFT) {
+                held.finish();
+            }
+            held = null;
+            if (result != Hop.Result.MOVED) {
+                warning.say(result.problem());
+            }
         }
     }
 }

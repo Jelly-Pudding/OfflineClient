@@ -13,10 +13,10 @@ public enum FaceMode {
     public static EnumSetting<FaceMode> setting(FaceMode defaultValue) {
         return new EnumSetting<>("Face target", "Whether to turn towards what you act on.",
             defaultValue)
-            .describe(OFF, "Never turn. The fastest and the most obvious.")
-            .describe(SERVER, "Turn only in the packets the server reads.")
-            .describe(CLIENT, "Turn your real view the way a player would.")
-            .describe(SPAM, "Send an extra look packet before every action.");
+            .describe(OFF, "Never turns. The fastest and the most obvious.")
+            .describe(SERVER, "Turns only in the packets the server reads.")
+            .describe(CLIENT, "Turns your real view the way a player would.")
+            .describe(SPAM, "Sends an extra look packet before every action.");
     }
 
     // True once the angle is close enough to act on.

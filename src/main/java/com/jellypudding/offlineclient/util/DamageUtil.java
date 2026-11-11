@@ -4,10 +4,12 @@ import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.modules.movement.NoFall;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
 import net.minecraft.tags.DamageTypeTags;
 import net.minecraft.tags.EntityTypeTags;
 import net.minecraft.world.damagesource.CombatRules;
 import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
@@ -39,6 +41,10 @@ public final class DamageUtil {
 
     // Blocks a player can drop without being hurt.
     public static final double SAFE_FALL = 3;
+
+    // What each level of Strength adds to a hit and Weakness takes from it.
+    private static final double STRENGTH_PER_LEVEL = 3;
+    private static final double WEAKNESS_PER_LEVEL = 4;
 
     private DamageUtil() {
     }
@@ -116,22 +122,35 @@ public final class DamageUtil {
         return attackDamage(attacker, target, attacker.getWeaponItem());
     }
 
-    // The same hit with a weapon the attacker is not holding yet.
-    // The attacker's own bonuses such as Strength still count.
+    // The same hit with a weapon the attacker is not holding yet. The weapon's own bonus such
+    // as a mace's comes before a critical hit multiplies it and the enchantments after.
     public static float attackDamage(LivingEntity attacker, LivingEntity target, ItemStack weapon) {
-        double held = ItemUtil.attributeValue(attacker.getWeaponItem(), Attributes.ATTACK_DAMAGE,
-            EquipmentSlot.MAINHAND);
-        double swapped = ItemUtil.attributeValue(weapon, Attributes.ATTACK_DAMAGE, EquipmentSlot.MAINHAND);
-        float damage = (float) (attacker.getAttributeValue(Attributes.ATTACK_DAMAGE) - held + swapped);
-        damage += enchantBonus(weapon, target);
-
         DamageSource source = attacker instanceof Player player
             ? MC.level.damageSources().playerAttack(player) : MC.level.damageSources().mobAttack(attacker);
+        float damage = hitDamage(attacker, weapon);
         damage += weapon.getItem().getAttackDamageBonus(target, damage, source);
         if (canCrit(attacker)) {
             damage *= 1.5f;
         }
+        damage += enchantBonus(weapon, target);
         return reduce(damage, target, source);
+    }
+
+    // A full strength hit with the weapon before its enchantments and the target's armour. The
+    // client never learns anyone's attack damage and builds it from the attacker's base and the
+    // weapon. Only your own effects ever reach the client.
+    public static float hitDamage(LivingEntity attacker, ItemStack weapon) {
+        double damage = attacker.getAttributeBaseValue(Attributes.ATTACK_DAMAGE)
+            + ItemUtil.attributeValue(weapon, Attributes.ATTACK_DAMAGE, EquipmentSlot.MAINHAND)
+            + STRENGTH_PER_LEVEL * effectLevel(attacker, MobEffects.STRENGTH)
+            - WEAKNESS_PER_LEVEL * effectLevel(attacker, MobEffects.WEAKNESS);
+        return (float) Math.max(0, damage);
+    }
+
+    // Nought when the effect is not on.
+    private static int effectLevel(LivingEntity entity, Holder<MobEffect> effect) {
+        MobEffectInstance instance = entity.getEffect(effect);
+        return instance == null ? 0 : instance.getAmplifier() + 1;
     }
 
     // The flat damage the weapon enchantments add against this target.
@@ -165,8 +184,17 @@ public final class DamageUtil {
             && !attacker.isPassenger();
     }
 
+    // The drop a mover takes unhurt. Three blocks for a boat or for no mover at all. A server that lowers
+    // the attribute is followed. A raised one such as Jump Boost may run out before the landing and never
+    // stretches the drop past three blocks.
+    public static double safeFall(Entity mover) {
+        return mover instanceof LivingEntity living
+            ? Math.min(SAFE_FALL, living.getAttributeValue(Attributes.SAFE_FALL_DISTANCE)) : SAFE_FALL;
+    }
+
     // Damage the fall the entity is in would deal on landing. The drop still to come is
-    // measured down to the first block or water under them. Zero whilst NoFall is on.
+    // measured down to the first block or water under them and that block charges it. Zero
+    // whilst NoFall is on.
     private static float fallDamage(LivingEntity entity) {
         if (entity == MC.player && Modules.enabled(NoFall.class)) {
             return 0;
@@ -179,6 +207,7 @@ public final class DamageUtil {
             return 0;
         }
         double drop = entity.fallDistance;
+        BlockPos ground = entity.getOnPos();
         if (!entity.onGround()) {
             Vec3 feet = entity.position();
             BlockHitResult hit = MC.level.clip(new ClipContext(feet,
@@ -189,16 +218,10 @@ public final class DamageUtil {
                 return 0;
             }
             drop += feet.y - hit.getLocation().y;
+            ground = hit.getBlockPos();
         }
-        drop -= SAFE_FALL;
-        MobEffectInstance jump = entity.getEffect(MobEffects.JUMP_BOOST);
-        if (jump != null) {
-            drop -= jump.getAmplifier() + 1;
-        }
-        if (drop <= 0) {
-            return 0;
-        }
-        return reduce((float) Math.floor(drop), entity, MC.level.damageSources().fall());
+        float damage = Landing.on(MC.level.getBlockState(ground)).damage(entity, drop);
+        return damage <= 0 ? 0 : reduce(damage, entity, MC.level.damageSources().fall());
     }
 
     // Applies difficulty scaling then armour then resistance then enchantments.

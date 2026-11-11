@@ -12,6 +12,7 @@ import com.jellypudding.offlineclient.render.BoxStyle;
 import com.jellypudding.offlineclient.render.DrawBatch;
 import com.jellypudding.offlineclient.render.HeightBand;
 import com.jellypudding.offlineclient.render.NearFade;
+import com.jellypudding.offlineclient.render.ShaderOutline;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
@@ -61,10 +62,11 @@ import java.util.Map;
 
 public final class ChestEsp extends Module {
 
-    public enum Mode { BOX, GLOW }
+    public enum Mode { BOX, GLOW, SHADER }
 
-    // The box of a container with the colour it gets and whether it has a fancy renderer.
-    private record Target(BlockPos pos, AABB box, int color, boolean modelled) {
+    // The box of a container with the colour it gets and whether it has a fancy renderer. A vehicle
+    // keeps its entity. A block keeps the boxes of its shape whilst the shader draws it.
+    private record Target(BlockPos pos, AABB box, int color, boolean modelled, Entity vehicle, List<AABB> shape) {
     }
 
     // One sixteenth of a block. Chest models sit this far in from the block edge.
@@ -75,73 +77,75 @@ public final class ChestEsp extends Module {
 
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode", "How containers are marked.", Mode.BOX)
         .describe(Mode.BOX, "A box around each container.")
-        .describe(Mode.GLOW, "A glowing outline around the true shape of chests and shulkers. The rest keep a box.");
+        .describe(Mode.GLOW, "A glowing outline around the true shape of chests and shulkers. The rest keep a box.")
+        .describe(Mode.SHADER, "A shader outline around the shape of every container.");
     private final BoxStyle style = BoxStyle.shapeOnly(BoxStyle.Shape.BOTH);
+    private final ShaderOutline outline = new ShaderOutline(style).under(mode, Mode.SHADER);
     private final BoolSetting chests = new BoolSetting("Chests",
-        "Highlight chests.", true);
+        "Highlights chests.", true);
     private final ColorSetting chestColor = new ColorSetting("Chest colour",
         "Colour of chests.", 38, 1f, 1f, false).under(chests);
     private final BoolSetting naturalChests = new BoolSetting("Natural chests",
         "Also marks single chests that dungeons and villages and camps and trial chambers come with.", true)
         .under(chests);
     private final BoolSetting trappedChests = new BoolSetting("Trapped chests",
-        "Highlight trapped chests in their own colour.", true);
+        "Highlights trapped chests in their own colour.", true);
     private final ColorSetting trappedColor = new ColorSetting("Trapped chest colour",
         "Colour of trapped chests.", 0, 1f, 1f, false).under(trappedChests);
     private final BoolSetting enderChests = new BoolSetting("Ender chests",
-        "Highlight ender chests.", true);
+        "Highlights ender chests.", true);
     private final ColorSetting enderColor = new ColorSetting("Ender chest colour",
         "Colour of ender chests.", 268, 1f, 1f, false).under(enderChests);
     private final BoolSetting shulkers = new BoolSetting("Shulkers",
-        "Highlight shulker boxes.", true);
+        "Highlights shulker boxes.", true);
     private final ColorSetting shulkerColor = new ColorSetting("Shulker colour",
         "Colour of shulker boxes.", 38, 1f, 1f, false).under(shulkers);
     private final BoolSetting barrels = new BoolSetting("Barrels",
-        "Highlight barrels.", true);
+        "Highlights barrels.", true);
     private final ColorSetting barrelColor = new ColorSetting("Barrel colour",
         "Colour of barrels.", 38, 1f, 1f, false).under(barrels);
     private final BoolSetting furnaces = new BoolSetting("Furnaces",
-        "Also mark furnaces and smokers and blast furnaces.", true);
+        "Also marks furnaces and smokers and blast furnaces.", true);
     private final ColorSetting furnaceColor = new ColorSetting("Furnace colour",
         "Colour of furnaces.", 24, 0.55f, 0.75f, false).under(furnaces);
     private final BoolSetting hoppers = new BoolSetting("Hoppers",
-        "Also mark hoppers.", true);
+        "Also marks hoppers.", true);
     private final ColorSetting hopperColor = new ColorSetting("Hopper colour",
         "Colour of hoppers.", 0, 0f, 0.7f, false).under(hoppers);
     private final BoolSetting dispensers = new BoolSetting("Dispensers",
-        "Also mark dispensers.", true);
+        "Also marks dispensers.", true);
     private final ColorSetting dispenserColor = new ColorSetting("Dispenser colour",
         "Colour of dispensers.", 0, 0f, 0.55f, false).under(dispensers);
     private final BoolSetting droppers = new BoolSetting("Droppers",
-        "Also mark droppers.", true);
+        "Also marks droppers.", true);
     private final ColorSetting dropperColor = new ColorSetting("Dropper colour",
         "Colour of droppers.", 0, 0f, 0.45f, false).under(droppers);
     private final BoolSetting crafters = new BoolSetting("Crafters",
-        "Also mark crafters.", true);
+        "Also marks crafters.", true);
     private final ColorSetting crafterColor = new ColorSetting("Crafter colour",
         "Colour of crafters.", 190, 0.45f, 0.8f, false).under(crafters);
     private final BoolSetting brewingStands = new BoolSetting("Brewing stands",
-        "Also mark brewing stands.", true);
+        "Also marks brewing stands.", true);
     private final ColorSetting brewingColor = new ColorSetting("Brewing stand colour",
         "Colour of brewing stands.", 300, 0.5f, 0.85f, false).under(brewingStands);
     private final BoolSetting bookshelves = new BoolSetting("Chiseled bookshelves",
-        "Also mark chiselled bookshelves.", true);
+        "Also marks chiselled bookshelves.", true);
     private final ColorSetting bookshelfColor = new ColorSetting("Bookshelf colour",
         "Colour of chiselled bookshelves.", 34, 0.6f, 0.7f, false).under(bookshelves);
     private final BoolSetting pots = new BoolSetting("Decorated pots",
-        "Also mark decorated pots.", true);
+        "Also marks decorated pots.", true);
     private final ColorSetting potColor = new ColorSetting("Pot colour",
         "Colour of decorated pots.", 14, 0.5f, 0.8f, false).under(pots);
     private final BoolSetting chestCarts = new BoolSetting("Chest minecarts",
-        "Also mark minecarts with a chest.", true);
+        "Also marks minecarts with a chest.", true);
     private final ColorSetting chestCartColor = new ColorSetting("Chest minecart colour",
         "Colour of chest minecarts.", 45, 0.7f, 0.9f, false).under(chestCarts);
     private final BoolSetting hopperCarts = new BoolSetting("Hopper minecarts",
-        "Also mark minecarts with a hopper.", true);
+        "Also marks minecarts with a hopper.", true);
     private final ColorSetting hopperCartColor = new ColorSetting("Hopper minecart colour",
         "Colour of hopper minecarts.", 0, 0f, 0.7f, false).under(hopperCarts);
     private final BoolSetting chestBoats = new BoolSetting("Chest boats",
-        "Also mark boats with a chest.", true);
+        "Also marks boats with a chest.", true);
     private final ColorSetting chestBoatColor = new ColorSetting("Chest boat colour",
         "Colour of chest boats.", 34, 0.65f, 0.85f, false).under(chestBoats);
     private final BoolSetting buried = new BoolSetting("Buried",
@@ -149,7 +153,7 @@ public final class ChestEsp extends Module {
     private final ColorSetting buriedColor = new ColorSetting("Buried colour",
         "Colour of containers that cannot be opened.", 0, 0f, 0.35f, false).under(buried);
     private final BoolSetting tracers = new BoolSetting("Tracers",
-        "Draw a line from you to each container.", false);
+        "Draws a line from you to each container.", false);
     private final NearFade fade = new NearFade(6);
     private final BoolSetting hideOpened = new BoolSetting("Hide opened",
         "Containers you have opened are no longer drawn.", false);
@@ -159,7 +163,7 @@ public final class ChestEsp extends Module {
         "Colour of containers you have opened.", 300, 0.55f, 0.8f, false)
         .under(recolourOpened, () -> !hideOpened.isOn() && recolourOpened.isOn());
     private final KeybindSetting forgetKey = new KeybindSetting("Forget key",
-        "Press to forget which containers you have opened.", KeybindSetting.UNBOUND);
+        "Forgets which containers you have opened.", KeybindSetting.UNBOUND);
     private final NumberSetting radius = new NumberSetting("Radius",
         "Chunk radius to scan around you.", 4, 1, 8, 1, " chunks");
     private final HeightBand band = new HeightBand("containers");
@@ -178,9 +182,10 @@ public final class ChestEsp extends Module {
     private static int currentGlow;
 
     public ChestEsp() {
-        super("ChestESP", "See containers through walls.", Category.RENDER);
+        super("ChestESP", "Shows containers through walls.", Category.RENDER);
         addSettings(mode);
         addSettings(style.settings());
+        addSettings(outline.settings());
         addSettings(chests, chestColor, naturalChests, trappedChests, trappedColor, enderChests, enderColor,
             shulkers, shulkerColor, barrels, barrelColor,
             furnaces, furnaceColor, hoppers, hopperColor, dispensers, dispenserColor,
@@ -190,7 +195,7 @@ public final class ChestEsp extends Module {
             buried, buriedColor, tracers, fade.setting(), hideOpened, recolourOpened,
             openedColor, forgetKey, radius);
         addSettings(band.settings());
-        searchTags("storage esp", "container esp", "buried chest", "dungeon chest");
+        searchTags("storage esp", "container esp", "buried chest", "dungeon chest", "shader outline");
     }
 
     @Override
@@ -204,6 +209,7 @@ public final class ChestEsp extends Module {
         opened.clear();
         naturalAt.clear();
         glows = Map.of();
+        outline.release();
     }
 
     // Set by the block entity renderer mixin around each submit.
@@ -239,9 +245,6 @@ public final class ChestEsp extends Module {
     @Subscribe
     private void onTick(TickEvent event) {
         targets.clear();
-        if (!inGame()) {
-            return;
-        }
         if (world.changed()) {
             opened.clear();
             naturalAt.clear();
@@ -314,15 +317,31 @@ public final class ChestEsp extends Module {
                 box = box.minmax(chestBox(other));
             }
             boolean modelled = chestShape || blockEntity instanceof ShulkerBoxBlockEntity;
-            targets.add(new Target(pos, box, color, modelled));
+            List<AABB> shape = mode.is(Mode.SHADER) ? shapeOf(pos, state, other, box) : List.of();
+            targets.add(new Target(pos, box, color, modelled, null, shape));
         }
+    }
+
+    // The boxes of the block's shape and for a double chest those of the other half too. A block
+    // with no shape keeps its marking box.
+    private List<AABB> shapeOf(BlockPos pos, BlockState state, BlockPos other, AABB box) {
+        List<AABB> parts = new ArrayList<>();
+        for (AABB part : state.getShape(mc.level, pos).toAabbs()) {
+            parts.add(part.move(pos));
+        }
+        if (other != null) {
+            for (AABB part : mc.level.getBlockState(other).getShape(mc.level, other).toAabbs()) {
+                parts.add(part.move(other));
+            }
+        }
+        return parts.isEmpty() ? List.of(box) : parts;
     }
 
     private void collectVehicles() {
         for (Entity entity : mc.level.entitiesForRendering()) {
             int color = vehicleColorFor(entity);
             if (color != 0 && band.contains(entity.getY())) {
-                targets.add(new Target(null, entity.getBoundingBox(), color, false));
+                targets.add(new Target(null, entity.getBoundingBox(), color, false, entity, List.of()));
             }
         }
     }
@@ -432,18 +451,38 @@ public final class ChestEsp extends Module {
     @Subscribe
     private void onRender3D(Render3DEvent event) {
         DrawBatch batch = event.getBatch();
+        // The shader mode draws boxes once its shaders have failed.
+        boolean shader = mode.is(Mode.SHADER) && ShaderOutline.works();
+        if (!shader) {
+            outline.release();
+        }
         for (Target target : targets) {
             float strength = fade.strengthAt(target.box().getCenter());
             if (strength <= 0) {
                 continue;
             }
             int color = ColorUtil.fade(target.color(), strength);
-            if (!(mode.is(Mode.GLOW) && target.modelled())) {
+            if (shader) {
+                outlineTarget(target, color);
+            } else if (!(mode.is(Mode.GLOW) && target.modelled())) {
                 style.draw(batch, target.box(), color, true);
             }
             if (tracers.isOn()) {
                 batch.tracer(target.box().getCenter(), color, true);
             }
+        }
+        if (shader) {
+            outline.draw(event.getPartialTicks());
+        }
+    }
+
+    private void outlineTarget(Target target, int color) {
+        if (target.vehicle() != null) {
+            outline.entity(target.vehicle(), color);
+            return;
+        }
+        for (AABB part : target.shape()) {
+            outline.box(part, color);
         }
     }
 }

@@ -5,7 +5,7 @@ import com.jellypudding.offlineclient.config.DataFiles;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.ClientTickEvent;
 import com.jellypudding.offlineclient.event.events.PacketReceiveEvent;
-import com.jellypudding.offlineclient.event.events.PacketSendEvent;
+import com.jellypudding.offlineclient.event.events.PacketSentEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
@@ -17,6 +17,7 @@ import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.MoveGate;
 import com.jellypudding.offlineclient.util.PacketNames;
 import com.jellypudding.offlineclient.util.ServerInfo;
+import com.jellypudding.offlineclient.util.TextCut;
 import net.minecraft.SharedConstants;
 import net.minecraft.client.gui.components.toasts.SystemToast;
 import net.minecraft.client.player.LocalPlayer;
@@ -87,20 +88,18 @@ public final class PacketLogger extends Module {
     private final BoolSetting toFile = new BoolSetting("Log to file",
         "Writes each line into a log file and names the file in chat.", false);
     private final NumberSetting flushSeconds = new NumberSetting("Flush interval",
-        "Seconds between one write to the file and the next.", 1, 1, 10, 1, "s").min(1)
+        "Seconds between one write to the file and the next.", 1, 1, 10, 1, "s")
         .under(toFile);
     private final NumberSetting maxFileSize = new NumberSetting("Max file size",
-        "A new file is started once this one gets bigger.", 10, 1, 100, 1, " MB").min(1)
+        "A new file is started once this one gets bigger.", 10, 1, 100, 1, " MB")
         .under(toFile);
     private final NumberSetting maxTotalSize = new NumberSetting("Max total size",
         "The oldest files are deleted once the folder gets bigger.", 50, 1, 500, 1, " MB")
-        .min(1)
         .under(toFile);
     private final BoolSetting kickReport = new BoolSetting("Kick report",
         "Writes the last few seconds of packets and your movement to a file when the server drops you.", false);
     private final NumberSetting reportWindow = new NumberSetting("Report window",
         "Seconds of packets and movement the report keeps.", 5, 1, 30, 1, "s")
-        .min(1)
         .under(kickReport);
 
     // The picked names resolved to types. Read from the netty thread and replaced whole.
@@ -189,21 +188,17 @@ public final class PacketLogger extends Module {
         record(event.getPacket(), logIncoming, "in");
     }
 
+    // Right behind the write. Only what really left is listed and in the order it left.
     @Subscribe
-    private void onPacketSend(PacketSendEvent event) {
+    private void onPacketSent(PacketSentEvent event) {
         record(event.getPacket(), logOutgoing, "out");
+        remember("out", event.getPacket());
     }
 
     // Before any module can drop a packet that arrived.
     @Subscribe(priority = Subscribe.FIRST)
     private void onPacketArrived(PacketReceiveEvent event) {
         remember("in", event.getPacket());
-    }
-
-    // After every module has rewritten a packet or held it back.
-    @Subscribe(priority = Subscribe.LAST)
-    private void onPacketLeaving(PacketSendEvent event) {
-        remember("out", event.getPacket());
     }
 
     // Where you were and how you moved on each tick of the window.
@@ -223,9 +218,7 @@ public final class PacketLogger extends Module {
         if (!kickReport.isOn()) {
             return;
         }
-        String text = String.valueOf(packet);
-        remember(direction + " " + packet.type().id() + " "
-            + (text.length() > REPORT_LINE ? text.substring(0, REPORT_LINE) + "..." : text));
+        remember(direction + " " + packet.type().id() + " " + TextCut.quote(String.valueOf(packet), REPORT_LINE));
     }
 
     // Lines older than the window go as each new one comes.
@@ -374,7 +367,8 @@ public final class PacketLogger extends Module {
 
     // Says which file is being written. Clicking the line opens the folder.
     private static void announce(Path file) {
-        ChatUtil.component(Component.literal("§bPacketLogger §7is writing to ").append(ChatUtil.fileLink(file)));
+        ChatUtil.component(Component.literal(ChatUtil.from("PacketLogger", "is writing to "))
+            .append(ChatUtil.fileLink(file)));
     }
 
     private static Path folder() {

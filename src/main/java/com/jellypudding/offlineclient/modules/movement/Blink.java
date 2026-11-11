@@ -45,10 +45,10 @@ public final class Blink extends Module {
         "Leaves a copy of you standing where the blink began.", true);
     private final NumberSetting pulseDelay = new NumberSetting("Pulse delay",
         "Ticks between sends of the held movement. Nought holds it until Blink is off.",
-        0, 0, 60, 1, " ticks").min(0);
+        0, 0, 60, 1, " ticks");
     private final NumberSetting limit = new NumberSetting("Limit",
         "Restarts after holding this many packets. Nought holds them for as long as you like.",
-        200, 0, 1000, 10, " packets").min(0);
+        200, 0, 1000, 10, " packets");
     private final BoolSetting nearEnemies = new BoolSetting("Only near enemies",
         "Holds your movement only whilst an enemy player is close.", false);
     private final NumberSetting enemyRange = new NumberSetting("Enemy range",
@@ -281,7 +281,7 @@ public final class Blink extends Module {
                 return true;
             }
             Vec3 to = new Vec3(newest.getX(0), newest.getY(0), newest.getZ(0));
-            if (start == null || mc.player.isPassenger() || start.y - to.y > DamageUtil.SAFE_FALL
+            if (start == null || mc.player.isPassenger() || start.y - to.y > DamageUtil.safeFall(mc.player)
                 || !MoveGate.free() || !Hop.clearWay(mc.player, start, to)) {
                 return false;
             }

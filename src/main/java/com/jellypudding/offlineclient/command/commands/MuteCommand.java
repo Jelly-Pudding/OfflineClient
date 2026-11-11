@@ -6,8 +6,7 @@ import com.jellypudding.offlineclient.command.CommandManager;
 import com.jellypudding.offlineclient.modules.misc.BetterChat;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.Modules;
-import net.minecraft.client.multiplayer.ClientPacketListener;
-import net.minecraft.client.multiplayer.PlayerInfo;
+import com.jellypudding.offlineclient.util.ServerInfo;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -55,14 +54,9 @@ public final class MuteCommand extends Command {
             names.addAll(betterChat.mutedPlayers());
         }
         // Chat comes from the whole server and not only from the players in view.
-        ClientPacketListener connection = OfflineClient.MC.getConnection();
-        if (connection != null) {
-            String self = connection.getLocalGameProfile().name();
-            for (PlayerInfo info : connection.getOnlinePlayers()) {
-                String name = info.getProfile().name();
-                if (!name.equals(self) && !names.contains(name)) {
-                    names.add(name);
-                }
+        for (String name : ServerInfo.othersOnline()) {
+            if (!names.contains(name)) {
+                names.add(name);
             }
         }
         return CommandManager.filter(current, names);

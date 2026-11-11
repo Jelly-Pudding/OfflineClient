@@ -39,9 +39,6 @@ public final class EndermanLook extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame()) {
-            return;
-        }
         // A carved pumpkin already hides your gaze and creative mode is ignored.
         if (mc.player.getItemBySlot(EquipmentSlot.HEAD).is(ItemTags.GAZE_DISGUISE_EQUIPMENT)
             || mc.player.getAbilities().instabuild) {

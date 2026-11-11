@@ -1,7 +1,9 @@
 package com.jellypudding.offlineclient.util;
 
+import com.jellypudding.offlineclient.worldgen.SeenBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.EmptyBlockGetter;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -32,20 +34,36 @@ public final class AntiXray {
     private static final Set<Block> SEE_THROUGH = Set.of(Blocks.SPAWNER, Blocks.BARRIER, Blocks.SHULKER_BOX,
         Blocks.SLIME_BLOCK, Blocks.MANGROVE_ROOTS);
 
+    // Paper hides nothing at this height or above unless the server sets another.
+    public static final int HIDDEN_BELOW = 64;
+
     // A server can have still lava hide what it touches and the client never learns it does.
     // It counts as solid here.
     private static final BlockState STILL_LAVA = Blocks.LAVA.defaultBlockState();
+
+    private static final Direction[] SIDES = Direction.values();
 
     private AntiXray() {
     }
 
     // True when the block at that spot cannot be a fake. Safe on a scanner thread.
     public static boolean shownTruly(ChunkScanner.View view, int x, int y, int z) {
-        if (seeThrough(view.get(x, y, z))) {
+        return openNear(view::get, x, y, z);
+    }
+
+    // The same for a block of the world the client holds.
+    public static boolean shownTruly(BlockGetter level, BlockPos pos) {
+        BlockPos.MutableBlockPos at = new BlockPos.MutableBlockPos();
+        return openNear((x, y, z) -> level.getBlockState(at.set(x, y, z)), pos.getX(), pos.getY(), pos.getZ());
+    }
+
+    // True when the block or one of its six neighbours is see through.
+    private static boolean openNear(SeenBlocks world, int x, int y, int z) {
+        if (seeThrough(world.at(x, y, z))) {
             return true;
         }
-        for (Direction side : Direction.values()) {
-            if (seeThrough(view.get(x + side.getStepX(), y + side.getStepY(), z + side.getStepZ()))) {
+        for (Direction side : SIDES) {
+            if (seeThrough(world.at(x + side.getStepX(), y + side.getStepY(), z + side.getStepZ()))) {
                 return true;
             }
         }

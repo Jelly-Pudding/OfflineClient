@@ -1,6 +1,8 @@
 package com.jellypudding.offlineclient.gui;
 
 import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.setting.Bind;
+import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.PickList;
@@ -18,12 +20,19 @@ import java.util.function.Consumer;
 // settings keeps one of these and hands it the keys it does not want.
 public final class SettingHost implements SettingWidget.Host {
 
+    // The mark and the digits of a colour code.
+    private static final TextField.Filter HEX_CODE =
+        c -> ColorSetting.HEX_MARK.indexOf(c) >= 0 || Character.digit(c, 16) >= 0;
+
     private final Screen owner;
     private final Consumer<String> tooltips;
     private final TextField editField = new TextField();
 
+    private final BindCapture capture = new BindCapture();
     private KeybindSetting bindingTarget;
     private Setting<?> editingSetting;
+    // What the box held as it opened. A colour is only read back from a code the player edited.
+    private String editingFrom = "";
 
     // The character of the key just bound arrives right after the key event
     // and has to be eaten.
@@ -47,6 +56,7 @@ public final class SettingHost implements SettingWidget.Host {
     @Override
     public void startListening(KeybindSetting setting) {
         bindingTarget = setting;
+        capture.begin();
     }
 
     @Override
@@ -72,6 +82,16 @@ public final class SettingHost implements SettingWidget.Host {
         commitEditing();
         editingSetting = setting;
         editField.set(setting.getValue());
+    }
+
+    // The code comes picked. One copy carries the colour to another row.
+    @Override
+    public void startEditing(ColorSetting setting) {
+        commitEditing();
+        editingSetting = setting;
+        editingFrom = setting.hex();
+        editField.set(editingFrom);
+        editField.selectAll();
     }
 
     @Override
@@ -107,6 +127,13 @@ public final class SettingHost implements SettingWidget.Host {
         } else if (editingSetting instanceof TextSetting text) {
             text.setValue(editField.get().trim());
             OfflineClient.INSTANCE.getConfigManager().saveSoon();
+        } else if (editingSetting instanceof ColorSetting colour && !editField.get().equals(editingFrom)) {
+            if (colour.setHex(editField.get())) {
+                OfflineClient.INSTANCE.getConfigManager().saveSoon();
+            } else if (!editField.isEmpty()) {
+                ChatUtil.error(editField.get() + " is not a colour. Type six hex digits such as "
+                    + ColorSetting.HEX_MARK + "33CCFF.");
+            }
         }
         cancelEditing();
     }
@@ -120,6 +147,33 @@ public final class SettingHost implements SettingWidget.Host {
     public void beginClick() {
         commitEditing();
         bindingTarget = null;
+    }
+
+    // True when the click was the mouse button a listening bind row was waiting for. A screen
+    // asks before it does anything else with the click.
+    public boolean takeClick(int button) {
+        if (bindingTarget == null || !capture.mouseClicked(button, this::bind)) {
+            return false;
+        }
+        bindingTarget = null;
+        return true;
+    }
+
+    // True when the key let go was the one a listening bind row was waiting for.
+    public boolean keyReleased(KeyEvent event) {
+        if (bindingTarget == null || !capture.keyReleased(event, this::bind)) {
+            return false;
+        }
+        bindingTarget = null;
+        return true;
+    }
+
+    private void bind(Bind bind) {
+        bindingTarget.setValue(bind);
+        KeyUse.warn(bind, bindingTarget);
+        OfflineClient.INSTANCE.getConfigManager().saveSoon();
+        // Only a key that types a character has one to swallow.
+        eatNextChar = bind.typesCharacter();
     }
 
     // True when the key belonged to a field or a bind.
@@ -139,15 +193,9 @@ public final class SettingHost implements SettingWidget.Host {
         if (bindingTarget == null) {
             return false;
         }
-        int bind = KeybindSetting.fromPress(key);
-        if (bind != KeybindSetting.UNKNOWN) {
-            bindingTarget.setValue(bind);
-            KeyUse.warn(bind, bindingTarget);
+        if (capture.keyPressed(event, this::bind)) {
+            bindingTarget = null;
         }
-        bindingTarget = null;
-        OfflineClient.INSTANCE.getConfigManager().saveSoon();
-        // Only a key that types a character has one to swallow.
-        eatNextChar = KeybindSetting.typesCharacter(key);
         return true;
     }
 
@@ -167,6 +215,10 @@ public final class SettingHost implements SettingWidget.Host {
     }
 
     private TextField.Filter filter() {
-        return editingSetting instanceof NumberSetting ? TextField.NUMBER : TextField.ANY;
+        return switch (editingSetting) {
+            case NumberSetting ignored -> TextField.NUMBER;
+            case ColorSetting ignored -> HEX_CODE;
+            case null, default -> TextField.ANY;
+        };
     }
 }

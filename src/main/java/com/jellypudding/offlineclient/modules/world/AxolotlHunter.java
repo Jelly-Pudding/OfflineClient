@@ -10,7 +10,6 @@ import com.jellypudding.offlineclient.render.DrawBatch;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
-import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.Cooldowns;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
@@ -49,9 +48,9 @@ public final class AxolotlHunter extends Module {
     private final BoolSetting catchThem = new BoolSetting("Catch",
         "Scoops up marked axolotls in reach with a water bucket from the hotbar.", false);
     private final NumberSetting range = new NumberSetting("Range",
-        "How close an axolotl has to be to your eyes to catch it.", 5, 1, 6, 0.1).under(catchThem);
+        "How close an axolotl has to be to your eyes to catch it.", 5, 1, 6, 0.1, " blocks").under(catchThem);
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Turn towards the axolotl on the server side.", true).under(catchThem);
+        "Turns towards the axolotl on the server side.", true).under(catchThem);
 
     // Rebuilt once a tick.
     private List<Axolotl> found = List.of();
@@ -96,15 +95,12 @@ public final class AxolotlHunter extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame()) {
-            return;
-        }
         List<Axolotl> seen = new ArrayList<>();
         for (Entity entity : mc.level.entitiesForRendering()) {
             if (entity instanceof Axolotl axolotl && wanted(axolotl)) {
                 seen.add(axolotl);
                 if (chat.isOn() && sightings.firstTime(axolotl)) {
-                    ChatUtil.message("§bAxolotlHunter §7" + colourName(axolotl) + " axolotl at §f"
+                    tell(colourName(axolotl) + " axolotl at §f"
                         + BlockUtil.text(axolotl.blockPosition()) + "§7.");
                 }
             }

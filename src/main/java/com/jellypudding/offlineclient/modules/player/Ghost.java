@@ -11,6 +11,7 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.LifeWatch;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.gui.screens.DeathScreen;
 import net.minecraft.client.player.LocalPlayer;
@@ -22,13 +23,13 @@ import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 public final class Ghost extends Module {
 
     private final KeybindSetting respawnKey = new KeybindSetting("Respawn key",
-        "Press to respawn whilst you are a ghost.", InputConstants.KEY_R);
+        "Respawns you whilst you are a ghost.", InputConstants.KEY_R);
     private final BoolSetting deathButton = new BoolSetting("Death screen button",
         "Adds a button to the death screen that turns this on when you die with it off.", true);
 
     // The body the hint went to and the one a respawn was asked for. A respawn brings a new one.
-    private LocalPlayer greeted;
-    private LocalPlayer respawning;
+    private final LifeWatch greeted = new LifeWatch();
+    private final LifeWatch respawning = new LifeWatch();
 
     public Ghost() {
         super("Ghost", "Lets you walk and look around after you die whilst the server still sees you dead.",
@@ -70,12 +71,11 @@ public final class Ghost extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!walking() || greeted == mc.player) {
+        if (!walking() || !greeted.changed()) {
             return;
         }
-        greeted = mc.player;
         ChatUtil.message(respawnKey.isBound()
-            ? "§7You are a ghost. Press §b" + respawnKey.getKeyName() + " §7to respawn."
+            ? "§7You are a ghost. Press §b" + respawnKey.getValueString() + " §7to respawn."
             : "§7You are a ghost. Turn Ghost off to see the death screen.");
     }
 
@@ -85,8 +85,7 @@ public final class Ghost extends Module {
             return;
         }
         // One request is enough. The server answers it with a new body.
-        if (walking() && respawning != mc.player) {
-            respawning = mc.player;
+        if (walking() && respawning.changed()) {
             mc.player.respawn();
         }
     }

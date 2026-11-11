@@ -12,7 +12,6 @@ import net.minecraft.world.level.ChunkPos;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -35,8 +34,8 @@ final class FindFile {
     record Reading(Map<String, Map<Long, Find>> finds, boolean news) {
     }
 
-    // A file that cannot be read is kept beside the new one under this ending.
-    private static final String BROKEN = ".broken";
+    // The key of the exact text a find carries. Finds without any leave it out.
+    private static final String CONTENT = "content";
     // Spreadsheets read the file as UTF 8 when it starts with this mark.
     private static final String BYTE_ORDER_MARK = "\uFEFF";
 
@@ -87,8 +86,8 @@ final class FindFile {
         throws IOException {
         Map<String, Map<Long, Find>> from = lastWrite > heard ? lastWritten : base;
         Map<String, Map<Long, Find>> theirs = Objects.equals(SharedFiles.stamp(file), stamp) ? held : read();
-        if (theirs == null) {
-            setAside();
+        if (theirs == null && !DataFiles.setAside(file)) {
+            throw new IOException("Could not set aside " + file.getFileName());
         }
         Map<String, Map<Long, Find>> merged = theirs == null ? mine : merge(from, mine, theirs);
         if (!DataFiles.writeJson(file, encode(merged))) {
@@ -143,7 +142,7 @@ final class FindFile {
         Find newer = mine.equals(base) && !theirs.equals(base) ? theirs : mine;
         long found = Math.min(mine.found(), theirs.found());
         return newer.found() == found ? newer
-            : new Find(newer.dimension(), newer.pos(), newer.kind(), newer.detail(), found);
+            : new Find(newer.dimension(), newer.pos(), newer.kind(), newer.detail(), newer.content(), found);
     }
 
     static Map<String, Map<Long, Find>> copy(Map<String, Map<Long, Find>> finds) {
@@ -176,16 +175,15 @@ final class FindFile {
         }
     }
 
-    // A file that cannot be read is kept for the player to mend before a new one takes its place.
-    private void setAside() throws IOException {
-        Path aside = file.resolveSibling(file.getFileName() + BROKEN);
-        Files.move(file, aside, StandardCopyOption.REPLACE_EXISTING);
-        OfflineClient.LOG.warn("Moved the unreadable finds file to {}", aside);
-    }
-
     private static Find decode(String dimension, JsonObject o) {
         BlockPos pos = new BlockPos(o.get("x").getAsInt(), o.get("y").getAsInt(), o.get("z").getAsInt());
-        return new Find(dimension, pos, o.get("kind").getAsString(), o.get("detail").getAsString(),
+        List<String> content = new ArrayList<>();
+        if (o.has(CONTENT)) {
+            for (JsonElement line : o.getAsJsonArray(CONTENT)) {
+                content.add(line.getAsString());
+            }
+        }
+        return new Find(dimension, pos, o.get("kind").getAsString(), o.get("detail").getAsString(), content,
             o.get("found").getAsLong());
     }
 
@@ -200,6 +198,11 @@ final class FindFile {
                 o.addProperty("z", find.pos().getZ());
                 o.addProperty("kind", find.kind());
                 o.addProperty("detail", find.detail());
+                if (!find.content().isEmpty()) {
+                    JsonArray content = new JsonArray();
+                    find.content().forEach(content::add);
+                    o.add(CONTENT, content);
+                }
                 o.addProperty("found", find.found());
                 list.add(o);
             }

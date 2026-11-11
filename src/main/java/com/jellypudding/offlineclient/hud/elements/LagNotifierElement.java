@@ -26,8 +26,7 @@ public final class LagNotifierElement extends HudElement {
     private static final float SAMPLE_RAMP = 0.25f;
 
     private final NumberSetting threshold = new NumberSetting("Lag threshold",
-        "How far past its usual update the server may go quiet before this shows.", 500, 0, 5000, 100, " ms")
-        .min(0);
+        "How far past its usual update the server may go quiet before this shows.", 500, 0, 5000, 100, " ms");
     private final BoolSetting showTime = new BoolSetting("Show how long",
         "Writes how long the server has been quiet.", true);
     private final BoolSetting showTps = new BoolSetting("Show tick rate",

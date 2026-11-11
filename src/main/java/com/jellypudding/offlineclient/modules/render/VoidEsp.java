@@ -34,11 +34,11 @@ public final class VoidEsp extends Module {
         "Chunk radius to search around you. Only chunks the game has loaded can be searched.", 6, 1, 12, 1, " chunks")
         .max(ChunkMap.MAX_VIEW_DISTANCE);
     private final NumberSetting depth = new NumberSetting("Depth",
-        "How many bedrock layers must be missing.", 1, 1, 5, 1).min(1).max(5);
+        "How many bedrock layers must be missing.", 1, 1, 5, 1).max(5);
     private final BoolSetting airOnly = new BoolSetting("Air only",
-        "Only count columns that are completely open.", false);
+        "Only counts columns that are completely open.", false);
     private final BoolSetting netherRoof = new BoolSetting("Nether roof",
-        "Also search the roof whilst you are in the nether.", true);
+        "Also searches the roof whilst you are in the nether.", true);
     private final BoolSetting connected = new BoolSetting("Connected",
         "Draws touching holes as one shape without the faces they share.", true);
     private final BoxStyle floorStyle = new BoxStyle("Floor", BoxStyle.Shape.BOTH, 351);
@@ -90,9 +90,6 @@ public final class VoidEsp extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame()) {
-            return;
-        }
         if (mc.level.dimension() == Level.END) {
             scanner.reset();
             return;

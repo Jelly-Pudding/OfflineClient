@@ -11,6 +11,7 @@ import com.jellypudding.offlineclient.path.PathWalker;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.ChatPace;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.HeldKey;
 import com.jellypudding.offlineclient.util.InputUtil;
@@ -19,6 +20,7 @@ import com.jellypudding.offlineclient.util.RotationManager;
 import com.jellypudding.offlineclient.util.RotationPriority;
 import com.jellypudding.offlineclient.util.SwingMode;
 import com.jellypudding.offlineclient.util.TextLines;
+import com.jellypudding.offlineclient.util.WorldWatch;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.util.Mth;
@@ -36,23 +38,27 @@ public final class AntiAfk extends Module {
     // How close a plain walk gets before it counts as there.
     private static final double WALK_ARRIVED = 0.5;
 
+    // How many blocks past its range a walk may take you before home moves to where you stand.
+    // A path round a wall or a push from a hit stays inside it.
+    private static final int HOME_SLACK = 4;
+
     public enum Turn { NONE, NUDGE, SPIN, SPIN_VIEW }
 
     private final NumberSetting interval = new NumberSetting("Interval",
         "Average seconds between hops and swings and crouches. Each one fires at a random moment.",
-        5, 1, 60, 1, "s").min(1);
+        5, 1, 60, 1, "s");
     private final BoolSetting useAi = new BoolSetting("Use AI",
         "Finds a path to each random spot instead of walking straight at it.", false);
     private final NumberSetting aiRange = new NumberSetting("AI range",
         "How far from where you started the random goals may be.", 16, 1, 64, 1, " blocks")
-        .min(1).under(useAi);
+        .under(useAi);
     private final NumberSetting walkRange = new NumberSetting("Walk range",
         "How far from where you started the plain walks go. One is a shuffle on the spot.",
-        1, 1, 64, 1, " blocks").min(1).unless(useAi);
+        1, 1, 64, 1, " blocks").unless(useAi);
     private final NumberSetting waitTime = new NumberSetting("Wait time",
-        "Seconds of standing still between one walk and the next.", 2.5, 0, 60, 0.5, "s").min(0);
+        "Seconds of standing still between one walk and the next.", 2.5, 0, 60, 0.5, "s");
     private final NumberSetting waitSpread = new NumberSetting("Wait spread",
-        "Random seconds taken off or added to each wait.", 0.5, 0, 60, 0.5, "s").min(0);
+        "Random seconds taken off or added to each wait.", 0.5, 0, 60, 0.5, "s");
     private final BoolSetting showWait = new BoolSetting("Show wait time",
         "Shows the seconds left until the next walk after the name.", true);
     private final BoolSetting jump = new BoolSetting("Jump",
@@ -62,7 +68,7 @@ public final class AntiAfk extends Module {
     private final BoolSetting sneak = new BoolSetting("Sneak",
         "Crouches for a moment and stands up again.", false);
     private final NumberSetting sneakTime = new NumberSetting("Sneak time",
-        "How many ticks each crouch lasts.", 5, 1, 20, 1, " ticks").min(1)
+        "How many ticks each crouch lasts.", 5, 1, 20, 1, " ticks")
         .under(sneak);
     private final BoolSetting strafe = new BoolSetting("Strafe",
         "Steps left and right on the spot.", false);
@@ -73,7 +79,7 @@ public final class AntiAfk extends Module {
         .describe(Turn.SPIN, "Spins you round for everyone else whilst your own view stays still.")
         .describe(Turn.SPIN_VIEW, "Spins your own view round and round. The plain walk stops whilst this is on.");
     private final NumberSetting speed = new NumberSetting("Speed",
-        "Degrees turned each tick.", 7, 1, 45, 1, " degrees").min(1).max(180)
+        "Degrees turned each tick.", 7, 1, 45, 1, " degrees").max(180)
         .under(turn, Turn.SPIN, Turn.SPIN_VIEW);
     private final NumberSetting pitch = new NumberSetting("Pitch",
         "How far up or down the spin looks for everyone else.", 0, -90, 90, 1, " degrees")
@@ -81,10 +87,11 @@ public final class AntiAfk extends Module {
     private final BoolSetting sendMessages = new BoolSetting("Send messages",
         "Sends chat lines on a timer.", false);
     private final NumberSetting messageDelay = new NumberSetting("Message delay",
-        "Seconds between messages.", 15, 1, 30, 1, "s").min(1)
+        "Seconds between messages.", 15, 1, 30, 1, "s")
         .under(sendMessages);
     private final TextLines lines = new TextLines("Messages",
-        "How many lines to rotate through.", "The text to send. Click to type it.", "I am still here",
+        "How many lines to rotate through.", "The text to send. Click to type it." + TextLines.LIVE_WORDS,
+        "I am still here",
         "Just standing about")
         .under(sendMessages);
 
@@ -92,18 +99,25 @@ public final class AntiAfk extends Module {
     private final HeldKey crouch = new HeldKey(options -> options.keyShift);
     private int strafeTimer;
     private boolean strafeLeft;
-    private boolean strafing;
+    private final HeldKey left = new HeldKey(options -> options.keyLeft);
+    private final HeldKey right = new HeldKey(options -> options.keyRight);
     private float spinYaw;
     private int messageTimer;
+    // A message the server would not take yet. It goes out before the next is picked.
+    private String waiting;
 
     private final PathFinder finder = new PathFinder();
     // An idle wander should not burn hunger.
     private final PathWalker walker = new PathWalker().sprint(false);
+    private final WorldWatch world = new WorldWatch();
     private BlockPos home;
     private int waitTicks;
     // Where the plain walk is heading or null whilst it rests.
     private Vec3 walkTarget;
-    private boolean walking;
+    private final HeldKey forward = new HeldKey(options -> options.keyUp);
+    private final HeldKey jumpKey = new HeldKey(options -> options.keyJump);
+    // True from the pick of an AI goal until the walk there ends.
+    private boolean pathing;
     private boolean surfacing;
     // Creative flight as it was on enable. A wander must not drop a flying player.
     private boolean creativeFlight;
@@ -130,13 +144,13 @@ public final class AntiAfk extends Module {
         strafeTimer = 0;
         strafeLeft = false;
         messageTimer = messageDelay.getInt() * SharedConstants.TICKS_PER_SECOND;
+        waiting = null;
         waitTicks = nextWait();
         home = null;
         walkTarget = null;
         lines.restart();
         if (inGame()) {
             spinYaw = mc.player.getYRot();
-            home = mc.player.blockPosition();
             creativeFlight = mc.player.getAbilities().flying;
         }
         if (sendMessages.isOn() && lines.isEmpty()) {
@@ -154,9 +168,6 @@ public final class AntiAfk extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame()) {
-            return;
-        }
         if (mc.player.isDeadOrDying()) {
             setEnabled(false);
             return;
@@ -168,7 +179,9 @@ public final class AntiAfk extends Module {
             mc.player.jumpFromGround();
         }
         if (swing.isOn() && chance()) {
+            // A swing on its own never leaves this screen. The punch is what the server counts as activity.
             SwingMode.swingArm(InteractionHand.MAIN_HAND);
+            SwingMode.PACKET.swing();
         }
         tickWander();
         tickSneak();
@@ -179,9 +192,7 @@ public final class AntiAfk extends Module {
 
     // Either walk waits between goals. The wait is the same for both.
     private void tickWander() {
-        if (home == null) {
-            home = mc.player.blockPosition();
-        }
+        reanchorIfMoved();
         if (useAi.isOn()) {
             tickPathWander();
         } else {
@@ -189,7 +200,21 @@ public final class AntiAfk extends Module {
         }
     }
 
-    // Walks to a random spot round the one the module was switched on at.
+    // A teleport or a new world leaves home behind. The walks then centre on where you stand
+    // and never head back. Each axis is checked alone since the goals fill a square.
+    private void reanchorIfMoved() {
+        boolean newWorld = world.changed();
+        BlockPos at = mc.player.blockPosition();
+        int range = (useAi.isOn() ? aiRange : walkRange).getInt() + HOME_SLACK;
+        if (home != null && !newWorld && Math.abs(at.getX() - home.getX()) <= range
+            && Math.abs(at.getZ() - home.getZ()) <= range) {
+            return;
+        }
+        home = at;
+        stopWander();
+    }
+
+    // Walks to a random spot round home.
     // Falling and diving are off. A wander cannot end somewhere nasty.
     private void tickPathWander() {
         stopPlainWalk();
@@ -205,12 +230,12 @@ public final class AntiAfk extends Module {
         }
         if (walker.arrived() || walker.lost()) {
             walker.releaseKeys();
-            walking = false;
+            pathing = false;
             if (waitTicks-- > 0) {
                 return;
             }
             waitTicks = nextWait();
-            walking = true;
+            pathing = true;
             pickGoal();
             return;
         }
@@ -232,21 +257,24 @@ public final class AntiAfk extends Module {
     private boolean surface() {
         if (mc.player.isUnderWater() && !Modules.enabled(Jesus.class)) {
             walker.releaseKeys();
-            InputUtil.hold(mc.options.keyJump);
+            jumpKey.hold();
             surfacing = true;
             return true;
         }
+        stopSurfacing();
+        return false;
+    }
+
+    private void stopSurfacing() {
         if (surfacing) {
-            InputUtil.release(mc.options.keyJump);
+            jumpKey.letGo();
             surfacing = false;
         }
-        return false;
     }
 
     // Turns to a random spot and holds forward until it is reached.
     private void tickPlainWalk() {
-        finder.cancel();
-        walker.stop();
+        stopPathWander();
         if (turn.is(Turn.SPIN_VIEW)) {
             stopPlainWalk();
             return;
@@ -267,33 +295,29 @@ public final class AntiAfk extends Module {
             stopPlainWalk();
             return;
         }
-        walking = true;
         mc.player.setYRot(RotationManager.yawTo(walkTarget));
-        InputUtil.hold(mc.options.keyUp);
-        if (mc.player.isInWater()) {
-            InputUtil.hold(mc.options.keyJump);
-        } else {
-            InputUtil.release(mc.options.keyJump);
-        }
+        forward.hold();
+        jumpKey.set(mc.player.isInWater());
     }
 
     private void stopPlainWalk() {
-        if (walking) {
-            InputUtil.release(mc.options.keyUp);
-            InputUtil.release(mc.options.keyJump);
+        if (walkTarget != null) {
+            forward.letGo();
+            jumpKey.letGo();
         }
-        walking = false;
         walkTarget = null;
     }
 
-    private void stopWander() {
+    private void stopPathWander() {
         finder.cancel();
         walker.stop();
+        pathing = false;
+        stopSurfacing();
+    }
+
+    private void stopWander() {
+        stopPathWander();
         stopPlainWalk();
-        if (surfacing) {
-            InputUtil.release(mc.options.keyJump);
-            surfacing = false;
-        }
     }
 
     // Ticks to rest before the next walk. The spread keeps the rhythm uneven.
@@ -306,7 +330,7 @@ public final class AntiAfk extends Module {
 
     // True whilst a walk of either kind is driving the movement keys.
     private boolean wandering() {
-        return walking || surfacing;
+        return walkTarget != null || pathing || surfacing;
     }
 
     // Holds the crouch for the set ticks then waits a random moment before the next.
@@ -336,22 +360,18 @@ public final class AntiAfk extends Module {
         }
         strafeTimer = STRAFE_TICKS;
         strafeLeft = !strafeLeft;
-        strafing = true;
         if (strafeLeft) {
-            InputUtil.release(mc.options.keyRight);
-            InputUtil.hold(mc.options.keyLeft);
+            right.letGo();
+            left.hold();
         } else {
-            InputUtil.release(mc.options.keyLeft);
-            InputUtil.hold(mc.options.keyRight);
+            left.letGo();
+            right.hold();
         }
     }
 
     private void stopStrafe() {
-        if (strafing) {
-            InputUtil.release(mc.options.keyLeft);
-            InputUtil.release(mc.options.keyRight);
-            strafing = false;
-        }
+        left.letGo();
+        right.letGo();
         strafeTimer = 0;
     }
 
@@ -376,17 +396,19 @@ public final class AntiAfk extends Module {
 
     private void tickMessages() {
         if (!sendMessages.isOn() || mc.getConnection() == null) {
+            waiting = null;
             return;
         }
-        if (messageTimer-- > 0) {
-            return;
+        if (waiting == null) {
+            if (messageTimer-- > 0) {
+                return;
+            }
+            messageTimer = messageDelay.getInt() * SharedConstants.TICKS_PER_SECOND;
+            waiting = lines.pick();
         }
-        messageTimer = messageDelay.getInt() * SharedConstants.TICKS_PER_SECOND;
-        String text = lines.pick();
-        if (text == null) {
-            return;
+        if (waiting != null && ChatPace.RULE.say(waiting)) {
+            waiting = null;
         }
-        ChatUtil.say(text);
     }
 
     // Fires once every interval on average.

@@ -31,16 +31,19 @@ public abstract class HttpUtilMixin {
         }
     }
 
-    // The pack is fetched from a web host the server picks. That host would see your own address.
-    // A saved pack never gets this far.
+    // The pack is fetched from a web host the server picks. That host would see your own address
+    // and the server could point the download at your own network. A saved pack never gets this far.
     @WrapOperation(
         method = "downloadFile(Ljava/nio/file/Path;Ljava/net/URL;Ljava/util/Map;"
             + "Lcom/google/common/hash/HashFunction;Lcom/google/common/hash/HashCode;ILjava/net/Proxy;"
             + "Lnet/minecraft/util/HttpUtil$DownloadProgressListener;)Ljava/nio/file/Path;",
         at = @At(value = "INVOKE", target = "Ljava/net/URL;openConnection(Ljava/net/Proxy;)Ljava/net/URLConnection;"))
-    private static URLConnection openThroughProxy(URL url, java.net.Proxy launcherProxy,
-                                                  Operation<URLConnection> original) throws IOException {
+    private static URLConnection openDownload(URL url, java.net.Proxy launcherProxy,
+                                              Operation<URLConnection> original) throws IOException {
         Proxy proxy = Modules.active(Proxy.class);
-        return original.call(url, proxy == null ? launcherProxy : proxy.downloadRoute());
+        java.net.Proxy route = proxy == null ? launcherProxy : proxy.downloadRoute();
+        ServerSpoof spoof = Modules.active(ServerSpoof.class);
+        URLConnection guarded = spoof == null ? null : spoof.guardedDownload(url, route);
+        return guarded == null ? original.call(url, route) : guarded;
     }
 }

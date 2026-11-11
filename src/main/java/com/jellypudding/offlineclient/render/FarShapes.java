@@ -2,9 +2,14 @@ package com.jellypudding.offlineclient.render;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.util.Bearing;
+import com.jellypudding.offlineclient.util.BearingFix;
+import com.jellypudding.offlineclient.util.ColorUtil;
 import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+
+import java.util.List;
 
 // Brings far points in along the line of sight. The depth range cuts anything past a
 // few render distances and a pulled in point keeps its place on the screen. Only
@@ -17,6 +22,10 @@ public final class FarShapes {
     private static final double HORIZON = 4096;
     private static final double RAY_LIFT = 0.1;
     private static final int RING_POINTS = 48;
+    private static final double BEAM = 64;
+
+    // Lines that already gave a place draw this faint.
+    private static final float SETTLED_LINES = 0.4f;
 
     private FarShapes() {
     }
@@ -48,6 +57,24 @@ public final class FarShapes {
     public static void ray(DrawBatch batch, Bearing bearing, double ground, int color) {
         double y = ground + RAY_LIFT;
         line(batch, bearing.along(0, y), bearing.along(HORIZON, y), color);
+    }
+
+    // The bearings that find a place and the place they find. The lines fade once the place
+    // is known. An exact block gets a box with a beam above it and a place known only roughly
+    // gets its estimate. The block is null until it is known.
+    public static void crossing(DrawBatch batch, List<Bearing> lines, BearingFix place, BlockPos block,
+                                double ground, int color) {
+        int lineColor = place == null ? color : ColorUtil.fade(color, SETTLED_LINES);
+        for (Bearing bearing : lines) {
+            ray(batch, bearing, ground, lineColor);
+        }
+        if (block != null) {
+            Vec3 top = Vec3.atCenterOf(block);
+            batch.outlineBox(pullIn(DrawBatch.blockBox(block)), color, true);
+            line(batch, top, top.add(0, BEAM, 0), color);
+        } else if (place != null) {
+            estimate(batch, place.x(), place.z(), place.radius(), color);
+        }
     }
 
     // A spot known only roughly. A line runs through it from the bottom of the world to

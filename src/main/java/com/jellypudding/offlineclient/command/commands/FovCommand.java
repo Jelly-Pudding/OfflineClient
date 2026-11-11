@@ -3,7 +3,7 @@ package com.jellypudding.offlineclient.command.commands;
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.command.Command;
 import com.jellypudding.offlineclient.command.CommandManager;
-import com.jellypudding.offlineclient.mixinterface.ISimpleOption;
+import com.jellypudding.offlineclient.mixinterface.IForcedOption;
 import com.jellypudding.offlineclient.util.ChatUtil;
 
 import java.util.List;
@@ -32,7 +32,7 @@ public final class FovCommand extends Command {
             return;
         }
         if (args[0].equalsIgnoreCase("reset")) {
-            ISimpleOption.force(OfflineClient.MC.options.fov(), DEFAULT_FOV);
+            IForcedOption.force(OfflineClient.MC.options.fov(), DEFAULT_FOV);
             ChatUtil.message("§7Field of view back to §b" + DEFAULT_FOV);
             return;
         }
@@ -44,7 +44,7 @@ public final class FovCommand extends Command {
             ChatUtil.error("Pick between " + MIN_FOV + " and " + MAX_FOV + ".");
             return;
         }
-        ISimpleOption.force(OfflineClient.MC.options.fov(), value.getAsInt());
+        IForcedOption.force(OfflineClient.MC.options.fov(), value.getAsInt());
         ChatUtil.message("§7Field of view is now §b" + value.getAsInt());
     }
 

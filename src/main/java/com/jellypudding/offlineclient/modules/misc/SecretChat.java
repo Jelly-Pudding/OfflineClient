@@ -12,7 +12,9 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.TextSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
+import com.jellypudding.offlineclient.util.ChatPace;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.SentLine;
 import com.jellypudding.offlineclient.util.ServerInfo;
 import com.jellypudding.offlineclient.util.Tally;
 import net.minecraft.ChatFormatting;
@@ -89,18 +91,19 @@ public final class SecretChat extends Module {
 
     private final TextSetting sharedKey = new TextSetting("Key",
         "The secret you share with your friends. Anyone who has it can read every secret line. Click to type it.",
-        "");
+        "").secret();
     private final TextSetting prefix = new TextSetting("Prefix",
         "Messages starting with this go out encrypted without it. When it is empty every message goes out encrypted.",
         "#");
     private final ActionSetting pingFriends = new ActionSetting("Ping friends",
         "Whispers your spot in code to every friend online.", () -> ping(null));
     private final NumberSetting pingEvery = new NumberSetting("Ping every",
-        "Seconds between pings sent on their own. Nought sends none.", 0, 0, 300, 10, " seconds").min(0);
+        "Seconds between pings sent on their own. Nought sends none.", 0, 0, 300, 10, " seconds");
     private final BoolSetting answerPings = new BoolSetting("Answer pings",
         "Whispers your own spot back to a friend who pings you.", false);
     private final BoolSetting markPings = new BoolSetting("Mark pings",
         "Keeps a waypoint named after each friend where they last pinged from.", true);
+    private final TextSetting whisperWith = SentLine.whisperWith();
 
     private String stretchedFrom;
     private SecretKey stretched;
@@ -113,7 +116,7 @@ public final class SecretChat extends Module {
     public SecretChat() {
         super("SecretChat", "Chats in public in a code that anyone with your key can read.",
             Category.MISC);
-        addSettings(sharedKey, prefix, pingFriends, pingEvery, answerPings, markPings);
+        addSettings(sharedKey, prefix, pingFriends, pingEvery, answerPings, markPings, whisperWith);
         searchTags("encrypt", "encryption", "private chat", "cipher", "ping", "share location");
     }
 
@@ -132,7 +135,7 @@ public final class SecretChat extends Module {
     @Subscribe(priority = -10)
     private void onChatSend(ChatSendEvent event) {
         String message = event.getMessage();
-        if (event.isCancelled() || message.startsWith("/") || !message.startsWith(prefix.getValue())) {
+        if (message.startsWith("/") || !message.startsWith(prefix.getValue())) {
             return;
         }
         String text = message.substring(prefix.getValue().length()).trim();
@@ -152,7 +155,7 @@ public final class SecretChat extends Module {
             return;
         }
         for (String piece : pieces) {
-            ChatUtil.say(seal(sealing, piece));
+            ChatPace.PLAYER.say(seal(sealing, piece));
         }
     }
 
@@ -227,7 +230,7 @@ public final class SecretChat extends Module {
             return;
         }
         if (markPings.isOn()) {
-            WaypointStore.get().mark(spot.name(), spot.pos(), spot.dimension(), WaypointStore.Waypoint.AUTO_HUE);
+            WaypointStore.get().mark(spot.name(), spot.pos(), spot.dimension(), WaypointStore.Colour.AUTO);
         }
         if (answerPings.isOn() && spot.asks()) {
             queue(spot.name(), false);
@@ -291,11 +294,16 @@ public final class SecretChat extends Module {
         }
     }
 
-    // Sends the first whisper still worth sending. A player who has left is passed over.
+    // Sends the first whisper still worth sending. A player who has left or whose name cannot stand
+    // as one word of a command is passed over. A whisper the server would count towards a kick for
+    // spam waits for a later tick.
     private void whisperNext() {
         SecretKey sealing = key();
         if (sealing == null) {
             outgoing.clear();
+            return;
+        }
+        if (!ChatPace.RULE.fits(0, 1)) {
             return;
         }
         Iterator<Map.Entry<String, Boolean>> waiting = outgoing.entrySet().iterator();
@@ -305,7 +313,7 @@ public final class SecretChat extends Module {
             boolean asks = next.getValue();
             waiting.remove();
             PlayerInfo info = mc.getConnection().getPlayerInfoIgnoreCase(name);
-            if (info == null) {
+            if (info == null || !SentLine.oneWord(info.getProfile().name())) {
                 continue;
             }
             String spot = Spot.yours(asks).text();
@@ -315,7 +323,9 @@ public final class SecretChat extends Module {
                 outgoing.clear();
                 return;
             }
-            ChatUtil.say("/msg " + info.getProfile().name() + " " + seal(sealing, spot));
+            // SentLine.whisper would cut the line to the chat limit and a long spot would lose its tail.
+            ChatPace.RULE.say(StringUtil.filterText(SentLine.asCommand(whisperWith.getValue())) + " "
+                + info.getProfile().name() + " " + seal(sealing, spot));
             whisperGap = WHISPER_GAP_TICKS;
             return;
         }

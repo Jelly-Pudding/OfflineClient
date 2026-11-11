@@ -21,7 +21,6 @@ import com.jellypudding.offlineclient.util.ChunkScanner;
 import com.jellypudding.offlineclient.util.Notice;
 import com.jellypudding.offlineclient.util.OwnDigs;
 import com.jellypudding.offlineclient.util.Tally;
-import com.jellypudding.offlineclient.util.WorldWatch;
 import com.jellypudding.offlineclient.worldgen.CaveTraces;
 import com.jellypudding.offlineclient.worldgen.CaveTraces.Trace;
 import it.unimi.dsi.fastutil.longs.LongSet;
@@ -62,27 +61,27 @@ public final class CaveTracks extends Module implements FindSource {
         "Marks small holes players dug into old caves and structures.", true);
     private final NumberSetting digSize = new NumberSetting("Dig size",
         "How many blocks one dug space may hold. One marks lone blocks only.", 2, 1, 16, 1, " blocks")
-        .min(1).under(mined);
+        .under(mined);
     private final NumberSetting clearRadius = new NumberSetting("Clear radius",
         "How far a hole must be from the open air of a newer cave or the surface.", 2, 0, 10, 1,
-        " blocks").min(0).under(mined);
+        " blocks").under(mined);
     private final BoolSetting portals = new BoolSetting("Portals",
         "Marks the outlines of broken nether portals in old caves and structures.", true).startFolded();
     private final NumberSetting largestWidth = new NumberSetting("Largest width",
         "How wide a portal outline may be with its frame.", 8, 4, PortalShape.MAX_WIDTH + FRAME, 1, " blocks")
-        .min(4).max(PortalShape.MAX_WIDTH + FRAME).under(portals);
+        .max(PortalShape.MAX_WIDTH + FRAME).under(portals);
     private final NumberSetting largestHeight = new NumberSetting("Largest height",
         "How tall a portal outline may be with its frame.", 8, 5, PortalShape.MAX_HEIGHT + FRAME, 1, " blocks")
-        .min(5).max(PortalShape.MAX_HEIGHT + FRAME).under(portals);
+        .max(PortalShape.MAX_HEIGHT + FRAME).under(portals);
     private final BoolSetting cornersOptional = new BoolSetting("Corners optional",
         "Also marks outlines whose four corners were never built.", true).under(portals);
     private final BoolSetting closedEdges = new BoolSetting("Closed edges",
         "Leaves out outlines with open air just past an edge.", true).under(portals);
     private final NumberSetting solidShare = new NumberSetting("Solid share",
-        "How much of the inside of an outline may be blocks.", 20, 0, 100, 5, "%").min(0).max(PERCENT)
+        "How much of the inside of an outline may be blocks.", 20, 0, 100, 5, "%").max(PERCENT)
         .under(portals);
     private final NumberSetting openShare = new NumberSetting("Open share",
-        "How much of an outline may have open air beside it.", 15, 0, 100, 5, "%").min(0).max(PERCENT)
+        "How much of an outline may have open air beside it.", 15, 0, 100, 5, "%").max(PERCENT)
         .under(portals);
     private final BoolSetting ignoreOwn = new BoolSetting("Ignore own digging",
         "Leaves out the blocks you broke yourself this session.", true);
@@ -97,14 +96,13 @@ public final class CaveTracks extends Module implements FindSource {
     private final FindLog finds = new FindLog(this);
     private final FindLines marks = new FindLines(finds, false);
 
-    private final ChunkScanner<Trace> scanner = new ChunkScanner<Trace>(2).borderReach(TRACE_BORDER);
-    private final WorldWatch world = new WorldWatch();
+    private final ChunkScanner<Trace> scanner = new ChunkScanner<Trace>(2).borderReach(TRACE_BORDER)
+        .onResult((_, traces) -> traces.forEach(this::found));
     // The whole shape of each find seen this session. A find from an older session is drawn
     // as its block until its chunk is scanned again.
     private final Map<Long, AABB> shapes = new BoundedMap<>(SHAPES_KEPT);
     private CaveTraces.Rules rules;
     private boolean ignoring;
-    private List<Trace> seen = List.of();
     private int ticks;
 
     public CaveTracks() {
@@ -134,13 +132,11 @@ public final class CaveTracks extends Module implements FindSource {
     @Override
     protected void onEnable() {
         scanner.reset();
-        seen = List.of();
     }
 
     @Override
     protected void onDisable() {
         scanner.reset();
-        seen = List.of();
         alarm.stop();
     }
 
@@ -151,12 +147,6 @@ public final class CaveTracks extends Module implements FindSource {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame()) {
-            return;
-        }
-        if (world.changed()) {
-            seen = List.of();
-        }
         CaveTraces.Rules now = new CaveTraces.Rules(mined.isOn(), digSize.getInt(), clearRadius.getInt(),
             portals.isOn(), largestWidth.getInt(), largestHeight.getInt(), cornersOptional.isOn(),
             closedEdges.isOn(), solidShare.getValue() / PERCENT, openShare.getValue() / PERCENT);
@@ -169,11 +159,6 @@ public final class CaveTracks extends Module implements FindSource {
         LongSet own = ignoreOwn.isOn() ? OwnDigs.snapshot() : LongSet.of();
         CaveTraces.Rules scanRules = rules;
         scanner.update(range.getInt(), (view, out) -> CaveTraces.scan(view, scanRules, own, out));
-        List<Trace> results = scanner.results();
-        if (results != seen) {
-            seen = results;
-            results.forEach(this::found);
-        }
         if (++ticks % FILLED_CHECK_TICKS == 0) {
             forgetFilled();
         }

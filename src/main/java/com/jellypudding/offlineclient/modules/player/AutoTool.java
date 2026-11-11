@@ -14,6 +14,7 @@ import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.BlockMiner;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.BreakSlots;
+import com.jellypudding.offlineclient.util.BreakTime;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.ItemUtil;
@@ -75,13 +76,12 @@ public final class AutoTool extends Module {
     private final BoolSetting switchBack = new BoolSetting("Switch back",
         "Returns to the slot you had once you stop mining.", true);
     private final NumberSetting switchDelay = new NumberSetting("Switch delay",
-        "Ticks to keep mining with what you hold before the tool is switched.", 0, 0, 20, 1, " ticks")
-        .min(0);
+        "Ticks to keep mining with what you hold before the tool is switched.", 0, 0, 20, 1, " ticks");
     private final BoolSetting antiBreak = new BoolSetting("Anti break",
         "Never mines with a nearly broken tool. Hands over to a free slot or stops the break.", true);
     private final NumberSetting breakMargin = new NumberSetting("Retire at",
         "A tool with this much durability or less counts as nearly broken.", 10, 1, 100, 1, "%")
-        .min(1).max(100)
+        .max(100)
         .under(antiBreak);
     private final BoolSetting swords = new BoolSetting("Use swords",
         "A sword counts as a tool. Cobwebs and bamboo cut far faster with one.", false);
@@ -107,11 +107,11 @@ public final class AutoTool extends Module {
         .describe(Spare.SLOT, "The hotbar slot below whenever it breaks the block in time.")
         .under(saveTools);
     private final NumberSetting spareSlot = new NumberSetting("Spare slot",
-        "The hotbar slot that makes the last hit.", 9, 1, 9, 1).min(1).max(InventoryUtil.HOTBAR_SIZE)
+        "The hotbar slot that makes the last hit.", 9, 1, 9, 1).max(InventoryUtil.HOTBAR_SIZE)
         .under(spare, Spare.SLOT);
     private final NumberSetting spareStays = new NumberSetting("Spare stays for",
         "Ticks the spare stays in hand after its hit to cover a block the server finishes a tick late.",
-        1, 0, 5, 1, " ticks").min(0).under(saveTools);
+        1, 0, 5, 1, " ticks").under(saveTools);
     private final BoolSetting keepDrops = new BoolSetting("Keep drops",
         "Only makes the last hit with an item that still gets the drops.", true).under(saveTools);
     private final BoolSetting keepEnchants = new BoolSetting("Keep enchantments",
@@ -159,7 +159,7 @@ public final class AutoTool extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || mc.gameMode == null || mc.player.isDeadOrDying()) {
+        if (mc.gameMode == null || mc.player.isDeadOrDying()) {
             // Respawn hands out a fresh inventory.
             loan.forget();
             spareHit.forget();
@@ -413,7 +413,7 @@ public final class AutoTool extends Module {
             // The server counts from the start. One tick less allows for the two clocks.
             case STOP_DESTROY_BLOCK -> {
                 if (BreakSlots.isTarget(pos)) {
-                    finishWithSpare(pos, BlockUtil.SERVER_ACCEPTS / Math.max(1, BreakSlots.sinceStart()));
+                    finishWithSpare(pos, BreakTime.SERVER_ACCEPTS / Math.max(1, BreakSlots.sinceStart()));
                 }
             }
             default -> {
@@ -478,7 +478,7 @@ public final class AutoTool extends Module {
         if (keepEnchants.isOn() && !sameLuck(spareStack, held, state)) {
             return false;
         }
-        return BlockUtil.breakDelta(spareStack, state, pos) >= needed;
+        return BreakTime.breakDelta(spareStack, state, pos) >= needed;
     }
 
     // Silk Touch changes what nearly every block drops. Fortune only counts on ores and crops.

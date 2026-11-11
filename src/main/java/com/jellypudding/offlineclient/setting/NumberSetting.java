@@ -2,6 +2,7 @@ package com.jellypudding.offlineclient.setting;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonPrimitive;
+import com.jellypudding.offlineclient.util.ChatUtil;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -13,6 +14,8 @@ public final class NumberSetting extends Setting<Double> {
     // Values closer than this count as the same. A size stepped in the HUD editor lands a
     // hair away from the round number it means.
     private static final double SAME = 1e-9;
+    // A typed value is written to at least this many places whatever the step.
+    private static final int TYPED_PLACES = 4;
 
     private final double sliderMin;
     private final double sliderMax;
@@ -146,14 +149,13 @@ public final class NumberSetting extends Setting<Double> {
         return format(defaultValue);
     }
 
+    // A number the way this setting writes its value but without the suffix.
+    public String write(double number) {
+        return ChatUtil.decimal(number, Math.max(decimals, TYPED_PLACES));
+    }
+
     private String format(double number) {
-        BigDecimal bd = BigDecimal.valueOf(number)
-            .setScale(Math.max(decimals, 4), RoundingMode.HALF_UP)
-            .stripTrailingZeros();
-        if (bd.scale() < 0) {
-            bd = bd.setScale(0);
-        }
-        return bd.toPlainString() + suffix;
+        return write(number) + suffix;
     }
 
     @Override

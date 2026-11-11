@@ -6,12 +6,14 @@ import com.jellypudding.offlineclient.hud.HudElement;
 import com.jellypudding.offlineclient.hud.RowCache;
 import com.jellypudding.offlineclient.hud.TextRow;
 import com.jellypudding.offlineclient.render.BodyPicture;
+import com.jellypudding.offlineclient.render.ClientFonts;
 import com.jellypudding.offlineclient.render.EntityPreview;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ChoiceListSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.EnchantText;
+import com.jellypudding.offlineclient.util.EntityColors;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.ItemUtil;
 import com.jellypudding.offlineclient.util.Modules;
@@ -42,8 +44,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.function.Predicate;
 
-// Whoever you are fighting with their gear and how hurt they are. The target of any aura
-// that is on comes first and then whoever is under the crosshair.
+// Whoever you are fighting with their gear and how hurt they are. The target of any combat
+// module that is on comes first and then whoever is under the crosshair.
 public final class CombatElement extends HudElement {
 
     private static final int BAR_WIDTH = 80;
@@ -82,16 +84,17 @@ public final class CombatElement extends HudElement {
                          List<ItemStack> gear, List<List<EnchantText.Label>> enchants) {
     }
 
-    private final NumberSetting range = new NumberSetting("Combat range",
-        "How far away someone still counts as a target.", 16, 4, 64, 1, " blocks").min(1);
     private final BoolSetting nearest = new BoolSetting("Fall back to nearest",
-        "Show the nearest enemy whilst nothing else is picked.", true);
+        "Shows the nearest enemy whilst no combat module has a target and nobody is under the crosshair.", true);
+    private final NumberSetting range = new NumberSetting("Combat range",
+        "How far away the nearest enemy may be.", 16, 4, 64, 1, " blocks").min(1).under(nearest);
     private final BoolSetting distance = new BoolSetting("Show distance",
-        "Write how far away they are.", true);
+        "Writes how far away they are.", true);
     private final BoolSetting ping = new BoolSetting("Combat ping",
         "Writes their ping coloured from green to red.", true);
     private final BoolSetting status = new BoolSetting("Combat status",
-        "Says whether they are a friend or wear no armour or hold a weapon.", true);
+        "Says whether they are a friend or an enemy on your list and whether they wear no armour or hold a"
+            + " weapon.", true);
     private final BoolSetting pops = new BoolSetting("Combat pops",
         "Writes how many totems they have popped since they last died.", true);
     private final BoolSetting effects = new BoolSetting("Combat effects",
@@ -112,7 +115,7 @@ public final class CombatElement extends HudElement {
 
     public CombatElement() {
         super("Combat", "Who you are fighting with their gear and how hurt they are.", false, 50, 62);
-        add(range, nearest, distance, ping, status, pops, effects, gear, enchantments, shownEnchantments, bar, model);
+        add(nearest, range, distance, ping, status, pops, effects, gear, enchantments, shownEnchantments, bar, model);
     }
 
     @Override
@@ -152,7 +155,7 @@ public final class CombatElement extends HudElement {
     }
 
     private Shown shownOf(LivingEntity target) {
-        Font font = OfflineClient.MC.font;
+        Font font = ClientFonts.hud();
         List<TextRow> lines = new ArrayList<>(2);
         lines.add(TextRow.of(font, label(target), GuiTheme.HUD_TEXT));
         if (target instanceof Player player) {
@@ -184,17 +187,23 @@ public final class CombatElement extends HudElement {
             OfflineClient.MC.player.distanceTo(target));
     }
 
-    // Friend or Naked or Threat then the ping and the pops each in its own colour.
+    // Friend or Enemy and then Naked or Threat and then the ping and the pops each in its own
+    // colour. A friend is no threat and gets the one word.
     private TextRow details(Font font, Player player) {
         List<String> words = new ArrayList<>();
         List<Integer> colors = new ArrayList<>();
         if (status.isOn()) {
             if (EntityUtil.isFriend(player)) {
-                say(words, colors, "Friend", EntityUtil.FRIEND_COLOR);
-            } else if (ItemUtil.ARMOR_SLOTS.stream().allMatch(slot -> player.getItemBySlot(slot).isEmpty())) {
-                say(words, colors, "Naked", GuiTheme.GREEN);
-            } else if (THREAT.test(player.getMainHandItem()) || THREAT.test(player.getOffhandItem())) {
-                say(words, colors, "Threat", GuiTheme.RED);
+                say(words, colors, "Friend", EntityColors.friendColor());
+            } else {
+                if (EntityUtil.isListedEnemy(player)) {
+                    say(words, colors, "Enemy", EntityColors.enemyColor());
+                }
+                if (ItemUtil.ARMOR_SLOTS.stream().allMatch(slot -> player.getItemBySlot(slot).isEmpty())) {
+                    say(words, colors, "Naked", GuiTheme.GREEN);
+                } else if (THREAT.test(player.getMainHandItem()) || THREAT.test(player.getOffhandItem())) {
+                    say(words, colors, "Threat", GuiTheme.RED);
+                }
             }
         }
         int latency = ping.isOn() ? ServerInfo.latency(player.getUUID()) : -1;

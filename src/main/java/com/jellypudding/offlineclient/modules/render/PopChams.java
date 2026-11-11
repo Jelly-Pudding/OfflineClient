@@ -58,14 +58,14 @@ public final class PopChams extends Module {
         .describe(Mode.MODEL, "The textured player model in one tint.")
         .describe(Mode.WIREFRAME, "Boxes around each part of the model.");
     private final ColorSetting color = new ColorSetting("Colour",
-        "Copy colour.", 0, false).under(mode, Mode.MODEL);
+        "Colour of the copy.", 0, false).under(mode, Mode.MODEL);
     private final NumberSetting opacity = new NumberSetting("Opacity",
         "How solid the copy starts out.", 0.6, 0.1, 1, 0.05).min(0.05).max(1).under(mode, Mode.MODEL);
     private final BoxStyle style = new BoxStyle(BoxStyle.Shape.BOTH, 0f).under(mode, Mode.WIREFRAME);
     private final BoolSetting throughWalls = new BoolSetting("Through walls",
-        "Show the copy over blocks.", true);
+        "Shows the copy over blocks.", true);
     private final BoolSetting self = new BoolSetting("Self",
-        "Also show your own pops.", false);
+        "Also shows your own pops.", false);
     private final BoolSetting onlyOne = new BoolSetting("Only one",
         "A new pop replaces that player's earlier copy instead of adding another.", false);
     private final NumberSetting rise = new NumberSetting("Rise",
@@ -187,7 +187,7 @@ public final class PopChams extends Module {
             float strength = strength(age);
             ModelWireframe.draw(batch, ghost.quads, ghost.origin.add(0, lift(age), 0), sizeOf(age),
                 style.shape(), ColorUtil.fade(style.lineColor(), strength),
-                ColorUtil.fade(style.fillColor(), strength), throughWalls.isOn());
+                ColorUtil.fade(style.fadedFill(), strength), throughWalls.isOn());
         }
     }
 

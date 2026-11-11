@@ -1,7 +1,6 @@
 package com.jellypudding.offlineclient.modules.render;
 
 import com.jellypudding.offlineclient.event.Subscribe;
-import com.jellypudding.offlineclient.event.events.KeyPressEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
@@ -23,8 +22,6 @@ public final class FreeLook extends Module {
 
     public enum Mode { PLAYER, CAMERA }
 
-    private final BoolSetting hold = new BoolSetting("Hold",
-        "Look around only whilst the bind is held down.", true);
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
         "What the mouse turns whilst the module is on.", Mode.PLAYER)
         .describe(Mode.PLAYER, "The mouse turns the camera and your body stays put.")
@@ -53,9 +50,10 @@ public final class FreeLook extends Module {
     private Entity swapped;
 
     public FreeLook() {
-        super("FreeLook", "Look around without turning your body.", Category.RENDER);
-        addSettings(hold, mode, perspective, sensitivity, arrows, arrowSpeed);
+        super("FreeLook", "Lets you look around without turning your body.", Category.RENDER);
+        addSettings(mode, perspective, sensitivity, arrows, arrowSpeed);
         searchTags("free look", "perspective", "look behind");
+        holdByDefault();
     }
 
     @Override
@@ -86,14 +84,6 @@ public final class FreeLook extends Module {
         if (savedCamera != null) {
             mc.options.setCameraType(savedCamera);
             savedCamera = null;
-        }
-    }
-
-    @Subscribe
-    private void onKeyPress(KeyPressEvent event) {
-        if (hold.isOn() && event.getAction() == InputConstants.RELEASE
-            && getKeybind().isBound() && event.getKey() == getKeybind().getValue()) {
-            setEnabled(false);
         }
     }
 

@@ -2,7 +2,7 @@ package com.jellypudding.offlineclient.modules.render;
 
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.TickEvent;
-import com.jellypudding.offlineclient.mixinterface.ISimpleOption;
+import com.jellypudding.offlineclient.mixinterface.IForcedOption;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
@@ -37,16 +37,16 @@ public final class Fullbright extends Module {
         .describe(Layer.SKY, "Light from the sky.")
         .under(mode, Mode.LUMINANCE);
     private final NumberSetting minimumLight = new NumberSetting("Minimum light",
-        "No block is lit below this level.", 8, 0, 15, 1, "").min(0).max(15)
+        "No block is lit below this level.", 8, 0, 15, 1, "").max(15)
         .under(mode, Mode.LUMINANCE);
     private final BoolSetting fade = new BoolSetting("Fade",
-        "Ease the brightness up instead of snapping to it.", true)
+        "Eases the brightness up instead of snapping to it.", true)
         .under(mode, Mode.GAMMA);
     private final NumberSetting fadeStep = new NumberSetting("Fade speed",
         "How much of the gap is closed each tick.", 1, 0.1, 4, 0.1).min(0.05)
         .under(fade, () -> mode.is(Mode.GAMMA) && fade.isOn());
     private final NumberSetting restoreBrightness = new NumberSetting("Restore brightness",
-        "The gamma the game goes back to once this is off.", 1, 0, 1, 0.05).min(0).max(1)
+        "The gamma the game goes back to once this is off.", 1, 0, 1, 0.05).max(1)
         .under(mode, Mode.GAMMA);
 
     // Where the fade has reached. Jumps straight to the target whilst fade is off.
@@ -58,7 +58,7 @@ public final class Fullbright extends Module {
     private Layer lastLayer;
 
     public Fullbright() {
-        super("Fullbright", "See in the dark without torches.", Category.RENDER);
+        super("Fullbright", "Lets you see in the dark without torches.", Category.RENDER);
         addSettings(mode, brightness, layer, minimumLight, fade, fadeStep,
             restoreBrightness);
         searchTags("night vision", "brightness");
@@ -95,7 +95,7 @@ public final class Fullbright extends Module {
         switch (mode) {
             case GAMMA -> setGamma(restoreBrightness.getValue());
             case POTION -> {
-                if (mc.player != null) {
+                if (mc.player != null && ownNightVision(mc.player.getEffect(MobEffects.NIGHT_VISION))) {
                     mc.player.removeEffect(MobEffects.NIGHT_VISION);
                 }
             }
@@ -136,9 +136,15 @@ public final class Fullbright extends Module {
 
     private void topUpNightVision() {
         MobEffectInstance current = mc.player.getEffect(MobEffects.NIGHT_VISION);
-        if (current == null || current.getDuration() < POTION_TICKS) {
+        if (current == null || ownNightVision(current)) {
             mc.player.addEffect(new MobEffectInstance(MobEffects.NIGHT_VISION, POTION_TICKS, 0));
         }
+    }
+
+    // Night vision the top up could have given. A potion with longer to run or a server's endless
+    // effect is left alone.
+    private static boolean ownNightVision(MobEffectInstance effect) {
+        return effect != null && effect.endsWithin(POTION_TICKS);
     }
 
     // Every chunk is meshed again with the new light floor.
@@ -156,6 +162,6 @@ public final class Fullbright extends Module {
     }
 
     private void setGamma(double gamma) {
-        ISimpleOption.force(mc.options.gamma(), gamma);
+        IForcedOption.force(mc.options.gamma(), gamma);
     }
 }

@@ -14,6 +14,9 @@ import java.util.concurrent.ThreadLocalRandom;
 // show and pick hands them out in order or at random.
 public final class TextLines {
 
+    // For the description of a row that is sent. It names the live words the row can hold.
+    public static final String LIVE_WORDS = " You can use " + LiveText.WORDS + ".";
+
     private static final int SLOTS = 100;
 
     public enum Order {
@@ -44,10 +47,11 @@ public final class TextLines {
 
     public TextLines(Order startOrder, String countName, String countDescription, String lineDescription,
                      String... defaults) {
-        this(startOrder, countName, "Line", countDescription, lineDescription, defaults);
+        this(startOrder, countName, "", "Line", countDescription, lineDescription, defaults);
     }
 
-    private TextLines(Order startOrder, String countName, String rowName, String countDescription,
+    // The prefix goes in front of the names of the pick order rows.
+    private TextLines(Order startOrder, String countName, String prefix, String rowName, String countDescription,
                       String lineDescription, String[] defaults) {
         count = new NumberSetting(countName, countDescription,
             Math.max(1, defaults.length), 1, 30, 1).max(SLOTS);
@@ -57,20 +61,28 @@ public final class TextLines {
                 i < defaults.length ? defaults[i] : "")
                 .under(count, () -> slot < count.getInt());
         }
-        order = new EnumSetting<>("Order", "How the lines are picked.", startOrder)
+        order = new EnumSetting<>(Setting.prefixed(prefix, "order"), "How the lines are picked.", startOrder)
             .describe(Order.SEQUENCE, "Sends the lines top to bottom and starts over.")
             .describe(Order.RANDOM, "Picks a random line each time.")
             .under(count, () -> rotates && count.getInt() > 1);
-        skipRepeats = new BoolSetting("Skip repeats", "Never sends the same line twice in a row.", true)
+        skipRepeats = new BoolSetting(Setting.prefixed(prefix, "skip repeats"),
+            "Never sends the same line twice in a row.", true)
             .under(order, () -> rotates && count.getInt() > 1 && order.is(Order.RANDOM));
     }
 
     // A plain list whose rows carry its own name such as Join name 1. Two of them can
     // then sit in one module.
     public static TextLines named(String countName, String rowName, String countDescription,
-                                  String lineDescription) {
-        return new TextLines(Order.SEQUENCE, countName, rowName, countDescription, lineDescription,
-            new String[0]).plain();
+                                  String lineDescription, String... defaults) {
+        return new TextLines(Order.SEQUENCE, countName, "", rowName, countDescription, lineDescription,
+            defaults).plain();
+    }
+
+    // A second list of lines to send in one module. Every row carries the prefix such as Pop line 1.
+    public static TextLines prefixed(String prefix, Order startOrder, String countName, String countDescription,
+                                     String lineDescription, String... defaults) {
+        return new TextLines(startOrder, countName, prefix, Setting.prefixed(prefix, "line"), countDescription,
+            lineDescription, defaults);
     }
 
     // Every row is used at once. The pick order rows are pointless.
@@ -118,8 +130,22 @@ public final class TextLines {
         return filled().isEmpty();
     }
 
-    // The next line to send. Null when every row in use is blank.
-    public String pick() {
+    // The next line to send with its live words filled in and cut to the length of a chat line.
+    // Each word in braces is swapped for the value that follows it in the pairs such as player
+    // and then a name. Null when every row in use is blank.
+    public String pick(String... pairs) {
+        String row = next();
+        return row == null ? null : SentLine.of(row, pairs);
+    }
+
+    // The same at whatever length the filled row comes to. For a line that is sent in pieces.
+    public String pickWhole() {
+        String row = next();
+        return row == null ? null : SentLine.filled(row);
+    }
+
+    // The next row as it was typed.
+    private String next() {
         List<String> filled = filled();
         if (filled.isEmpty()) {
             return null;

@@ -1,13 +1,16 @@
 package com.jellypudding.offlineclient.modules.movement;
 
 import com.jellypudding.offlineclient.event.Subscribe;
+import com.jellypudding.offlineclient.event.events.Render3DEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.ExclusivityGroup;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.render.BoxStyle;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.HeldKey;
 import com.jellypudding.offlineclient.util.MovementUtil;
 import net.minecraft.world.entity.LivingEntity;
@@ -33,6 +36,8 @@ public final class EdgeGuard extends Module {
     // Lets a drop of exactly the allowed depth through.
     private static final double TOLERANCE = 1e-4;
 
+    private static final float EDGE_HUE = 40;
+
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
         "What happens at an edge.", Mode.HOLD)
         .describe(Mode.HOLD, "Holds you at the edge at full speed.")
@@ -48,14 +53,19 @@ public final class EdgeGuard extends Module {
         .under(mode, Mode.SNEAK);
     private final NumberSetting edgeDistance = new NumberSetting("Edge distance",
         "How much of your feet is still on the block when the sneak starts.", 0.3, 0, 0.3, 0.01, " blocks")
-        .min(0).max(0.3).under(mode, Mode.SNEAK);
+        .max(0.3).under(mode, Mode.SNEAK);
+    private final BoolSetting showEdge = new BoolSetting("Show edge",
+        "Outlines your feet and the part of them that has to be over the drop for the sneak to start.", false)
+        .under(mode, Mode.SNEAK);
+    private final BoxStyle edgeStyle = new BoxStyle("Edge", BoxStyle.Shape.LINES, EDGE_HUE).under(showEdge);
 
     private final HeldKey sneakKey = new HeldKey(options -> options.keyShift);
 
     public EdgeGuard() {
         super("EdgeGuard", "Stops you from going over edges without the sneak slowdown.",
             Category.MOVEMENT);
-        addSettings(mode, maxDrop, safeSneak, sneakWhenSprinting, edgeDistance);
+        addSettings(mode, maxDrop, safeSneak, sneakWhenSprinting, edgeDistance, showEdge);
+        addSettings(edgeStyle.settings());
         searchTags("safewalk", "safe walk", "edge", "ledge");
     }
 
@@ -75,9 +85,10 @@ public final class EdgeGuard extends Module {
         sneakKey.letGo();
     }
 
-    // True when the run ahead ends in a drop deeper than allowed.
+    // True when the run ahead ends in a drop deeper than allowed. The drop into a hole HoleSnap
+    // holds you over is let through.
     public boolean shouldGuard() {
-        if (!isEnabled() || !inGame()) {
+        if (!isEnabled() || !inGame() || HoleSnap.holds()) {
             return false;
         }
         if (mode.is(Mode.SNEAK) && (!safeSneak.isOn() || sprintOverrides())) {
@@ -88,17 +99,25 @@ public final class EdgeGuard extends Module {
         return landsBelow(box, mc.player.getDeltaMovement(), mc.player.onGround(), limitY);
     }
 
-    @Subscribe
+    // Runs after HoleSnap. A hold it takes this tick is known.
+    @Subscribe(priority = -10)
     private void onTick(TickEvent event) {
-        if (!inGame() || !mode.is(Mode.SNEAK) || sprintOverrides()) {
+        if (!mode.is(Mode.SNEAK) || sprintOverrides() || HoleSnap.holds()) {
             sneakKey.letGo();
             return;
         }
-        if (mc.player.onGround() && dropUnder(edgeBox())) {
-            sneakKey.hold();
-        } else {
-            sneakKey.letGo();
+        sneakKey.set(mc.player.onGround() && dropUnder(edgeBox(mc.player.getBoundingBox())));
+    }
+
+    @Subscribe
+    private void onRender3D(Render3DEvent event) {
+        if (!inGame() || !mode.is(Mode.SNEAK) || !showEdge.isOn()) {
+            return;
         }
+        AABB box = EntityUtil.lerpedBox(mc.player, event.getPartialTicks());
+        AABB feet = box.setMaxY(box.minY);
+        edgeStyle.draw(event.getBatch(), feet, false);
+        edgeStyle.draw(event.getBatch(), edgeBox(feet), false);
     }
 
     private boolean sprintOverrides() {
@@ -107,9 +126,9 @@ public final class EdgeGuard extends Module {
 
     // The player box pulled in from the sides. Standing with only the rim of the
     // feet over the drop leaves nothing under it.
-    private AABB edgeBox() {
+    private AABB edgeBox(AABB box) {
         double edge = edgeDistance.getValue();
-        return mc.player.getBoundingBox().inflate(-edge, 0, -edge);
+        return box.inflate(-edge, 0, -edge);
     }
 
     // True when the fall under the box would be deeper than allowed.

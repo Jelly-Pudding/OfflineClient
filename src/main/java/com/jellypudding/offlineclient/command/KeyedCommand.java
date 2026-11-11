@@ -1,7 +1,7 @@
 package com.jellypudding.offlineclient.command;
 
 import com.jellypudding.offlineclient.config.KeyedStore;
-import com.jellypudding.offlineclient.setting.KeybindSetting;
+import com.jellypudding.offlineclient.setting.Bind;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.KeyUse;
 
@@ -90,9 +90,9 @@ public abstract class KeyedCommand<T extends KeyedStore.Keyed<T>> extends Comman
         if (entry == null) {
             return;
         }
-        int key = KeybindSetting.keyFromName(args[2]);
-        if (key == KeybindSetting.UNKNOWN) {
-            ChatUtil.error("That key means nothing to me.");
+        Bind key = Bind.parse(args[2]);
+        if (key == null) {
+            ChatUtil.error(Bind.unknown(args[2]));
             return;
         }
         store().add(entry.withKey(key));
@@ -100,8 +100,8 @@ public abstract class KeyedCommand<T extends KeyedStore.Keyed<T>> extends Comman
         KeyUse.warn(key, entry);
     }
 
-    private static String keyName(int key) {
-        return key == KeybindSetting.UNBOUND ? "no key" : KeybindSetting.nameOfKey(key);
+    private static String keyName(Bind key) {
+        return key.isBound() ? key.name() : "no key";
     }
 
     private static List<String> withShared(List<String> ownVerbs) {

@@ -9,20 +9,19 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.ListMode;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
-import com.jellypudding.offlineclient.util.FaceMode;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.ItemUtil;
 import com.jellypudding.offlineclient.util.LootLimits;
 import com.jellypudding.offlineclient.util.MenuClicks;
 import com.jellypudding.offlineclient.util.Modules;
-import com.jellypudding.offlineclient.util.RotationPriority;
+import com.jellypudding.offlineclient.util.ThrowOut;
+import com.jellypudding.offlineclient.util.WorkedScreens;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.AbstractFurnaceMenu;
 import net.minecraft.world.inventory.BrewingStandMenu;
-import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.FurnaceResultSlot;
 import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.inventory.Slot;
@@ -55,20 +54,20 @@ public final class ChestStealer extends Module {
         MenuType.SHULKER_BOX, MenuType.HOPPER, MenuType.GENERIC_3x3, MenuType.FURNACE, MenuType.BLAST_FURNACE,
         MenuType.SMOKER, MenuType.BREWING_STAND, MenuType.CRAFTER_3x3);
 
-    // Better gear first and then fuller stacks.
-    private static final Comparator<ItemStack> RANK = Comparator.comparingDouble(ItemUtil::gearScore)
-        .thenComparingInt(ItemStack::getCount);
-
+    private final BoolSetting automatic = new BoolSetting("Automatic",
+        "Takes from a container the moment it opens. Whilst off nothing moves until you press Steal or Dump.",
+        true);
+    private final BoolSetting buttons = new BoolSetting("Buttons",
+        "Draws Steal and Dump buttons above every container screen.", true)
+        .under(automatic);
     private final NumberSetting delay = new NumberSetting("Delay",
-        "Milliseconds between each item grab.", 50, 0, 500, 10, "ms").min(0);
+        "Milliseconds between each item grab.", 50, 0, 500, 10, "ms");
     private final NumberSetting initialDelay = new NumberSetting("Initial delay",
-        "Milliseconds to wait before the first grab of a container.", 50, 0, 1000, 10, "ms")
-        .min(0);
+        "Milliseconds to wait before the first grab of a container.", 50, 0, 1000, 10, "ms");
     private final NumberSetting jitter = new NumberSetting("Jitter",
-        "Adds up to this many milliseconds at random to each grab.", 50, 0, 500, 10, "ms")
-        .min(0);
+        "Adds up to this many milliseconds at random to each grab.", 50, 0, 500, 10, "ms");
     private final NumberSetting perTick = new NumberSetting("Stacks per tick",
-        "How many stacks move in one tick once the delay allows.", 1, 1, 27, 1).min(1);
+        "How many stacks move in one tick once the delay allows.", 1, 1, 27, 1);
     private final EnumSetting<ListMode> listMode = ListMode.setting("List mode", ListMode.BLACKLIST,
         "Takes only the listed items.", "Takes everything except the listed items.");
     private final RegistryListSetting<Item> items = new RegistryListSetting<>("Items",
@@ -76,7 +75,7 @@ public final class ChestStealer extends Module {
         List.of());
     private final NumberSetting smallest = new NumberSetting("Smallest stack",
         "Container stacks below this share of a full stack are left behind.", 0, 0, 100, 5, " %")
-        .min(0).max(PERCENT);
+        .max(PERCENT);
     private final BoolSetting furnaceInputs = new BoolSetting("Furnace inputs",
         "Also takes the fuel and what is cooking out of furnaces and brewing stands.", false);
     private final LootLimits limits = new LootLimits();
@@ -86,15 +85,10 @@ public final class ChestStealer extends Module {
             MenuType.HOPPER, MenuType.GENERIC_3x3, MenuType.FURNACE, MenuType.BLAST_FURNACE,
             MenuType.SMOKER, MenuType.BREWING_STAND, MenuType.CRAFTER_3x3))
         .only(STEALABLE::contains);
-    private final BoolSetting throwOut = new BoolSetting("Throw out",
-        "Throws each item on the ground instead of into your inventory.", false);
-    private final BoolSetting backwards = new BoolSetting("Throw backwards",
-        "Throws the pile behind you.", false)
-        .under(throwOut);
-    private final BoolSetting buttons = new BoolSetting("Buttons",
-        "Draws Steal and Dump buttons above every container screen.", true);
+    private final ThrowOut throwOut = new ThrowOut(
+        "Throws each item on the ground instead of into your inventory.");
     private final BoolSetting close = new BoolSetting("Close when done",
-        "Close the container once everything is taken.", false);
+        "Closes the container once everything is taken.", false);
 
     // How one step over the open container went.
     public enum Step {
@@ -110,6 +104,8 @@ public final class ChestStealer extends Module {
 
     private long nextClick;
     private boolean open;
+    // Set by the steal button whilst nothing is taken unasked. One pass over the container clears it.
+    private boolean stealing;
     // Set by the dump button until every stack the dump wants has gone in.
     private boolean dumping;
     // What a dump put in the container is left there for the rest of the visit.
@@ -125,9 +121,12 @@ public final class ChestStealer extends Module {
     public ChestStealer() {
         super("ChestStealer", "Takes everything or only what you set limits for out of containers.",
             Category.PLAYER);
-        addSettings(delay, initialDelay, jitter, perTick, listMode, items, smallest, furnaceInputs);
+        addSettings(automatic, buttons, delay, initialDelay, jitter, perTick, listMode, items, smallest,
+            furnaceInputs);
         addSettings(limits.settings());
-        addSettings(screens, throwOut, backwards, buttons, close);
+        addSettings(screens);
+        addSettings(throwOut.settings());
+        addSettings(close);
         limits.visibleWhen(() -> !throwOut.isOn());
         searchTags("loot", "chest", "filter", "steal", "dump", "limits");
     }
@@ -137,12 +136,14 @@ public final class ChestStealer extends Module {
         return items.size() == 0 ? null : listMode.getValueString();
     }
 
+    // With nothing taken unasked the buttons are the only way to move anything and always show.
     public boolean showsButtons() {
-        return isEnabled() && buttons.isOn();
+        return isEnabled() && (buttons.isOn() || !automatic.isOn());
     }
 
     // A button press makes the next grab due at once.
     public void stealNow() {
+        stealing = true;
         nextClick = 0;
     }
 
@@ -168,7 +169,7 @@ public final class ChestStealer extends Module {
 
     // True whilst the stealer is working a container of its own or one ChestAura opened.
     public boolean busy() {
-        return isEnabled() || driven;
+        return driven || isEnabled() && (automatic.isOn() || stealing || dumping);
     }
 
     // ChestAura opens a container and runs its visit through take or store. Only what the
@@ -242,20 +243,39 @@ public final class ChestStealer extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || driven) {
+        if (driven) {
             return;
         }
-        if (!handles(mc.gui.screen()) || Modules.packing()) {
+        // ShulkerPacker and our own helpers work the screens they open themselves.
+        if (!handles(mc.gui.screen()) || Modules.packing() || WorkedScreens.showing()) {
             forget();
             return;
         }
         if (dumping) {
-            Step step = store();
-            dumping = step == Step.MOVED || step == Step.WAITING;
+            dumping = unfinished(store());
             return;
         }
-        if (take() == Step.DONE && close.isOn()) {
+        if (!automatic.isOn() && !stealing) {
+            arrive(System.currentTimeMillis());
+            return;
+        }
+        Step step = take();
+        stealing = unfinished(step);
+        if (step == Step.DONE && close.isOn()) {
             mc.player.closeContainer();
+        }
+    }
+
+    private static boolean unfinished(Step step) {
+        return step == Step.MOVED || step == Step.WAITING;
+    }
+
+    // The initial delay runs from the first tick a container is open. A button pressed after it
+    // acts at once.
+    private void arrive(long now) {
+        if (!open) {
+            open = true;
+            nextClick = now + initialDelay.getInt();
         }
     }
 
@@ -263,10 +283,7 @@ public final class ChestStealer extends Module {
     // menu at once and the next move sees it.
     private Step step(boolean store) {
         long now = System.currentTimeMillis();
-        if (!open) {
-            open = true;
-            nextClick = now + initialDelay.getInt();
-        }
+        arrive(now);
         if (now < nextClick) {
             return Step.WAITING;
         }
@@ -388,7 +405,7 @@ public final class ChestStealer extends Module {
             return false;
         }
         boolean full = mc.player.getInventory().getFreeSlot() == -1;
-        List<Integer> mine = MenuClicks.inventorySlots(menu);
+        List<Integer> mine = worstFirst(menu, MenuClicks.inventorySlots(menu));
         for (int slot : bestFirst(menu, MenuClicks.containerSlots(menu))) {
             ItemStack offer = menu.slots.get(slot).getItem();
             LootLimits.Rule rule = takeable(menu, slot, offer) ? limits.ruleFor(offer) : null;
@@ -421,17 +438,16 @@ public final class ChestStealer extends Module {
         return full && more > 0 && held.getOrDefault(rule, 0) + more <= rule.limit();
     }
 
-    // Your slot holding the worst stack under the rule. Minus one when you hold none of it.
-    private int worstUnder(AbstractContainerMenu menu, List<Integer> slots, LootLimits.Rule rule) {
-        int worst = -1;
-        for (int slot : slots) {
+    // The first of your slots in worst first order that holds a stack under the rule. Minus one
+    // when you hold none of it.
+    private int worstUnder(AbstractContainerMenu menu, List<Integer> worstFirst, LootLimits.Rule rule) {
+        for (int slot : worstFirst) {
             ItemStack stack = menu.slots.get(slot).getItem();
-            if (!stack.isEmpty() && rule.equals(limits.ruleFor(stack))
-                && (worst == -1 || RANK.compare(stack, menu.slots.get(worst).getItem()) < 0)) {
-                worst = slot;
+            if (!stack.isEmpty() && rule.equals(limits.ruleFor(stack))) {
+                return slot;
             }
         }
-        return worst;
+        return -1;
     }
 
     // Moves one stack the InventoryTweaks dump filter wants into the container. Only plain
@@ -458,18 +474,14 @@ public final class ChestStealer extends Module {
         return blocked ? Step.FULL : Step.DONE;
     }
 
-    // Button one throws the whole stack onto the ground. The look has to reach the server first.
     private Step throwOnce(AbstractContainerMenu menu) {
         for (int slot : MenuClicks.containerSlots(menu)) {
             ItemStack stack = menu.slots.get(slot).getItem();
             if (!takeable(menu, slot, stack) || clicked.thrownBack(slot, stack)) {
                 continue;
             }
-            if (backwards.isOn()) {
-                FaceMode.SPAM.faceExact(mc.player.getYRot() + 180f, mc.player.getXRot(), RotationPriority.IDLE);
-            }
             clicked.note(slot, stack);
-            MenuClicks.click(menu, slot, 1, ContainerInput.THROW);
+            throwOut.from(menu, slot);
             return Step.MOVED;
         }
         return Step.DONE;
@@ -517,6 +529,7 @@ public final class ChestStealer extends Module {
     private void forget() {
         nextClick = 0;
         open = false;
+        stealing = false;
         dumping = false;
         dumped = false;
         clicked.clear();

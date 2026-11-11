@@ -37,6 +37,11 @@ final class HudPick {
         picked.clear();
     }
 
+    // Lets go of every piece that is not among the given ones.
+    void keepOnly(Collection<HudElement> pieces) {
+        picked.retainAll(pieces);
+    }
+
     void begin(double x, double y) {
         drawing = true;
         fromX = x;

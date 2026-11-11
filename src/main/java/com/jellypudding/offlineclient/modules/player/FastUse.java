@@ -58,7 +58,7 @@ public final class FastUse extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || mc.player.isSpectator()) {
+        if (mc.player.isSpectator()) {
             return;
         }
         ItemStack held = mc.player.getMainHandItem();

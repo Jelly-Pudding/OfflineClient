@@ -1,6 +1,7 @@
 package com.jellypudding.offlineclient.setting;
 
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.EntityKind;
 import net.minecraft.core.Holder;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -15,6 +16,7 @@ import net.minecraft.world.item.SpawnEggItem;
 import net.minecraft.world.level.block.Block;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -51,6 +53,27 @@ final class RegistryEntries {
 
     private static final Identifier AIR = Identifier.withDefaultNamespace("air");
 
+    // The families of entity the picker takes in one press. Boats and minecarts come in
+    // a kind for every wood and every load and go by the end of their id.
+    private enum Family {
+        HOSTILE("hostile", "mob that hunts you", type -> EntityKind.of(type) == EntityKind.HOSTILE),
+        NEUTRAL("neutral", "mob that only fights back", type -> EntityKind.of(type) == EntityKind.NEUTRAL),
+        PASSIVE("passive", "peaceful land mob", type -> EntityKind.of(type) == EntityKind.PASSIVE),
+        WATER("water", "peaceful sea creature", type -> EntityKind.of(type) == EntityKind.WATER),
+        BOATS("boats", "boat and raft", type -> idEnds(type, "boat") || idEnds(type, "raft")),
+        MINECARTS("minecarts", "kind of minecart", type -> idEnds(type, "minecart"));
+
+        private final String label;
+        private final String noun;
+        private final Predicate<EntityType<?>> member;
+
+        Family(String label, String noun, Predicate<EntityType<?>> member) {
+            this.label = label;
+            this.noun = noun;
+            this.member = member;
+        }
+    }
+
     private RegistryEntries() {
     }
 
@@ -64,6 +87,26 @@ final class RegistryEntries {
             }
         });
         return all;
+    }
+
+    // A button for each family that holds some of the offer and not all of it. Only
+    // entities come in families.
+    static <T> List<RegistryListSetting.Group<T>> groups(Registry<T> registry, Collection<T> offered) {
+        List<RegistryListSetting.Group<T>> groups = new ArrayList<>();
+        if (registry != BuiltInRegistries.ENTITY_TYPE) {
+            return groups;
+        }
+        for (Family family : Family.values()) {
+            List<T> members = offered.stream().filter(entry -> family.member.test((EntityType<?>) entry)).toList();
+            if (!members.isEmpty() && members.size() < offered.size()) {
+                groups.add(new RegistryListSetting.Group<>(family.label, family.noun, members));
+            }
+        }
+        return groups;
+    }
+
+    private static boolean idEnds(EntityType<?> type, String ending) {
+        return BuiltInRegistries.ENTITY_TYPE.getKey(type).getPath().endsWith(ending);
     }
 
     static <T> String idOf(Registry<T> registry, T entry) {

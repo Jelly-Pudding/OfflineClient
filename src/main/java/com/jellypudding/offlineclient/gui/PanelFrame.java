@@ -1,7 +1,7 @@
 package com.jellypudding.offlineclient.gui;
 
 import com.google.gson.JsonObject;
-import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.render.ClientFonts;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.RenderUtil;
 import net.minecraft.client.gui.Font;
@@ -68,12 +68,12 @@ public abstract class PanelFrame {
 
     protected abstract void releaseContent();
 
-    // A strip along the bottom the rows never scroll over.
+    // A strip along the bottom the rows never scroll over. It runs the full width of the box.
     protected int footerHeight() {
         return 0;
     }
 
-    protected void renderFooter(GuiGraphicsExtractor context, int top, int rowWidth) {
+    protected void renderFooter(GuiGraphicsExtractor context, int top) {
     }
 
     public String getTitle() {
@@ -283,7 +283,7 @@ public abstract class PanelFrame {
     }
 
     private void renderHeader(GuiGraphicsExtractor context, int mouseX, int mouseY) {
-        Font font = OfflineClient.MC.font;
+        Font font = ClientFonts.gui();
         int h = GuiTheme.HEADER_HEIGHT;
         RenderUtil.roundedRect(context, x, y, x + width, y + h, GuiTheme.CORNER,
             GuiTheme.bgHeader(), true, collapsed);
@@ -339,7 +339,7 @@ public abstract class PanelFrame {
                 ScrollBar.isOverTrack(mouseX, mouseY, trackX, viewTop, view));
         }
         if (footerHeight() > 0) {
-            renderFooter(context, viewTop + view + 2, rowW);
+            renderFooter(context, viewTop + view + 2);
         }
     }
 

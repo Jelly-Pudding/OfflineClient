@@ -14,10 +14,6 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.phys.Vec3;
 
-import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.Map;
-
 // Lava a module pours and takes back up again. Only its own pours are ever scooped and a
 // pour whose flow could run into the player before the scoop never happens. The scoops
 // still owed when the module stops go on after it.
@@ -29,9 +25,6 @@ public final class LavaPours {
     public record Pour(BlockPos spot, Vec3 aim) {
     }
 
-    // Ticks a pour waits to be scooped once it is due before it is left where it is.
-    private static final int GIVE_UP = 100;
-
     public static final String NO_BUCKET = "You have no lava bucket.";
 
     private final BoolSetting takeBack = new BoolSetting("Take back",
@@ -42,7 +35,7 @@ public final class LavaPours {
         40, 5, 200, 5, " ticks").min(1).under(takeBack);
 
     // Where lava went down and the tick it did. Only kept whilst it is to be taken back.
-    private final Map<BlockPos, Integer> poured = new LinkedHashMap<>();
+    private final SpotLedger poured = new SpotLedger();
 
     // Borrows the empty buckets for the scoops that go on after the module stops.
     private final InventoryUtil.HotbarLoan afterStop = new InventoryUtil.HotbarLoan();
@@ -53,7 +46,7 @@ public final class LavaPours {
 
     // Shows both rows only whilst the parent holds the value.
     public <E extends Enum<E>> LavaPours under(EnumSetting<E> parent, E value) {
-        takeBack.under(parent, value);
+        Setting.under(settings(), parent, value);
         return this;
     }
 
@@ -77,7 +70,7 @@ public final class LavaPours {
             return false;
         }
         if (takeBack.isOn()) {
-            poured.put(pour.spot(), MC.player.tickCount);
+            poured.add(pour.spot());
         }
         return true;
     }
@@ -85,28 +78,16 @@ public final class LavaPours {
     // Scoops the oldest pour that is due. True when a bucket was used this tick. A pour made
     // whilst Take back was on is still scooped once it is switched off.
     public boolean scoopDue(InventoryUtil.HotbarLoan loan) {
-        int now = MC.player.tickCount;
-        int wait = takeBackAfter.getInt();
-        Iterator<Map.Entry<BlockPos, Integer>> it = poured.entrySet().iterator();
-        while (it.hasNext()) {
-            Map.Entry<BlockPos, Integer> entry = it.next();
-            int age = now - entry.getValue();
-            BlockPos pos = entry.getKey();
-            // The clock starts again on a respawn and an age below nought is out of date.
-            if (age < 0 || age > wait + GIVE_UP || !MC.level.getFluidState(pos).isSourceOfType(Fluids.LAVA)) {
-                it.remove();
-                continue;
-            }
-            if (age < wait) {
-                continue;
-            }
-            Vec3 aim = Buckets.scoopAim(pos);
-            if (aim != null && Buckets.fill(loan, aim)) {
-                it.remove();
-                return true;
-            }
-        }
-        return false;
+        return poured.undoDue(takeBackAfter.getInt(), LavaPours::stillLava, pos -> scoop(loan, pos));
+    }
+
+    private static boolean stillLava(BlockPos pos) {
+        return MC.level.getFluidState(pos).isSourceOfType(Fluids.LAVA);
+    }
+
+    private static boolean scoop(InventoryUtil.HotbarLoan loan, BlockPos pos) {
+        Vec3 aim = Buckets.scoopAim(pos);
+        return aim != null && Buckets.fill(loan, aim);
     }
 
     // A module calls this as it starts. Its own ticks scoop whatever is still owed.

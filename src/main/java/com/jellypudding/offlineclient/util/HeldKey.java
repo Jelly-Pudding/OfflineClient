@@ -29,4 +29,17 @@ public final class HeldKey {
             held = false;
         }
     }
+
+    public void set(boolean down) {
+        if (down) {
+            hold();
+        } else {
+            letGo();
+        }
+    }
+
+    // True from a hold made here until it is let go.
+    public boolean isHeld() {
+        return held;
+    }
 }

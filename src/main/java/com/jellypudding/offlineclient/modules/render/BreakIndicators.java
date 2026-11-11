@@ -14,7 +14,9 @@ import com.jellypudding.offlineclient.render.WorldToScreen;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ColorUtil;
+import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.RenderUtil;
 import com.jellypudding.offlineclient.util.WorldWatch;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -23,7 +25,6 @@ import net.minecraft.network.protocol.game.ClientboundBlockDestructionPacket;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
-import net.minecraft.world.phys.shapes.VoxelShape;
 
 import java.util.HashMap;
 import java.util.List;
@@ -58,9 +59,9 @@ public final class BreakIndicators extends Module {
 
     private final BoxStyle style = BoxStyle.shapeOnly(BoxStyle.Shape.BOTH);
     private final BoolSetting throughWalls = new BoolSetting("Through walls",
-        "Show boxes behind blocks.", true);
+        "Shows boxes behind blocks.", true);
     private final BoolSetting progressColor = new BoolSetting("Colour by progress",
-        "Blend from the start colours to the end colours as the block gives way.", true);
+        "Blends from the start colours to the end colours as the block gives way.", true);
     private final ColorSetting startLine = new ColorSetting("Start line colour",
         "Edge colour of a block that has just been hit.", 120, 0.9f, 0.99f, false)
         .under(progressColor);
@@ -77,13 +78,13 @@ public final class BreakIndicators extends Module {
         "Box colour when progress colouring is off.", 20, false)
         .unless(progressColor);
     private final BoolSetting grow = new BoolSetting("Grow",
-        "Start the box small and grow it to full size.", true);
+        "Starts the box small and grows it to full size.", true);
     private final BoolSetting names = new BoolSetting("Names",
-        "Show who is mining above the box.", true);
+        "Shows who is mining above the box.", true);
     private final NumberSetting scale = new NumberSetting("Scale",
         "Size of the name text.", 1, 0.5, 3, 0.1).min(0.1);
     private final BoolSetting self = new BoolSetting("Self",
-        "Also show blocks you are mining.", false);
+        "Also shows blocks you are mining.", false);
 
     // Filled on the netty thread and drained on the game thread.
     private final Queue<Stage> pending = new ConcurrentLinkedQueue<>();
@@ -190,7 +191,7 @@ public final class BreakIndicators extends Module {
 
     private String nameOf(int entityId) {
         if (mc.level.getEntity(entityId) instanceof Player player) {
-            return player.getGameProfile().name();
+            return EntityUtil.displayNameOf(player);
         }
         return null;
     }
@@ -209,9 +210,7 @@ public final class BreakIndicators extends Module {
 
     // The block's own outline. A slab or a fence gets a box its size.
     private AABB boxOf(Indicator indicator) {
-        VoxelShape shape = mc.level.getBlockState(indicator.pos).getShape(mc.level, indicator.pos);
-        AABB full = shape.isEmpty() ? DrawBatch.blockBox(indicator.pos)
-            : shape.bounds().move(indicator.pos).deflate(DrawBatch.BLOCK_INSET);
+        AABB full = BlockUtil.outlineBox(indicator.pos, mc.level.getBlockState(indicator.pos));
         if (!grow.isOn()) {
             return full;
         }

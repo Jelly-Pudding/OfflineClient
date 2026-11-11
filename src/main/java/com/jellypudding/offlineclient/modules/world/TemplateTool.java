@@ -1,5 +1,6 @@
 package com.jellypudding.offlineclient.modules.world;
 
+import com.jellypudding.offlineclient.config.BuildFrame;
 import com.jellypudding.offlineclient.config.BuildTemplate;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.Render3DEvent;
@@ -12,9 +13,8 @@ import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.CornerPicker;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
+import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.phys.BlockHitResult;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -22,14 +22,14 @@ import java.util.List;
 // Saves a build as a template for AutoBuild. Press the bind on two corners and
 // then on the block the build should grow from. The facing at the last press
 // becomes the front of the template.
-public final class TemplateTool extends Module {
+public final class TemplateTool extends Module implements CornerPicker.Taker {
 
     private static final String DEFAULT_NAME = "My build";
 
     private final TextSetting name = new TextSetting("Name",
         "The file the template is saved as. Click to type it.", DEFAULT_NAME);
     private final BoolSetting saveBlocks = new BoolSetting("Save block types",
-        "Remembers which block sits where. Off saves the shape alone.", true);
+        "Remembers which block sits where and which way it faces. Off saves the shape alone.", true);
     private final BoxStyle boxStyle = new BoxStyle(BoxStyle.Shape.LINES, 200);
 
     private final CornerPicker corners = new CornerPicker();
@@ -57,46 +57,45 @@ public final class TemplateTool extends Module {
         corners.clear();
     }
 
-    // Each press marks the next spot. A press on nothing switches the tool off.
     @Override
     public void onKeybind() {
-        if (!isEnabled() || !inGame()) {
+        BlockPos corner = CornerPicker.aimedCorner(this);
+        if (corner == null) {
             toggle();
             return;
         }
-        BlockHitResult hit = BlockUtil.aimedBlock();
-        if (hit == null) {
-            toggle();
-            return;
-        }
-        BlockPos pos = hit.getBlockPos().immutable();
+        markCorner(corner);
+    }
+
+    // Once both corners are down the next spot is the one the build grows from.
+    @Override
+    public void markCorner(BlockPos pos) {
         if (corners.done()) {
             save(pos);
             return;
         }
         corners.mark(pos);
-        if (corners.done()) {
-            ChatUtil.message("§bTemplateTool §7second corner at §f" + BlockUtil.text(pos)
+        if (!corners.done()) {
+            tell("first corner at §f" + BlockUtil.text(pos) + "§7.");
+            return;
+        }
+        // Saving walks every block of the box in one tick.
+        if (corners.withinLimit(CornerPicker.MOST_BLOCKS)) {
+            tell("second corner at §f" + BlockUtil.text(pos)
                 + "§7. Now press the bind on the block the build grows from.");
-        } else {
-            ChatUtil.message("§bTemplateTool §7first corner at §f" + BlockUtil.text(pos) + "§7.");
         }
     }
 
     private void save(BlockPos origin) {
-        Direction front = mc.player.getDirection();
-        Direction left = front.getCounterClockWise();
+        BuildFrame frame = BuildFrame.facing(origin, mc.player.getDirection());
         List<BuildTemplate.Entry> entries = new ArrayList<>();
         for (BlockPos pos : BlockPos.betweenClosed(corners.first(), corners.second())) {
             BlockState state = BlockUtil.state(pos);
-            if (state.isAir() || !state.getFluidState().isEmpty()) {
+            if (state.isAir() || state.getBlock() instanceof LiquidBlock) {
                 continue;
             }
-            BlockPos offset = pos.subtract(origin);
-            int forward = offset.getX() * front.getStepX() + offset.getZ() * front.getStepZ();
-            int sideways = offset.getX() * left.getStepX() + offset.getZ() * left.getStepZ();
-            entries.add(new BuildTemplate.Entry(sideways, offset.getY(), forward,
-                saveBlocks.isOn() ? state.getBlock() : null));
+            entries.add(new BuildTemplate.Entry(frame.localX(pos.getX(), pos.getZ()), frame.localY(pos.getY()),
+                frame.localZ(pos.getX(), pos.getZ()), saveBlocks.isOn() ? frame.toLocal(state) : null));
         }
         if (entries.isEmpty()) {
             disable("There are no blocks between the corners.");
@@ -104,7 +103,7 @@ public final class TemplateTool extends Module {
         }
         String file = name.getValue().isBlank() ? DEFAULT_NAME : name.getValue().trim();
         if (BuildTemplate.save(file, entries)) {
-            ChatUtil.message("§bTemplateTool §7saved §f" + entries.size() + "§7 blocks as §f" + file + "§7.");
+            tell("saved §f" + entries.size() + "§7 blocks as §f" + file + "§7.");
         } else {
             ChatUtil.error("Could not write the template file.");
         }
@@ -114,5 +113,11 @@ public final class TemplateTool extends Module {
     @Subscribe
     private void onRender3D(Render3DEvent event) {
         corners.draw(event.getBatch(), boxStyle);
+    }
+
+    // The key does more than switch the module and cannot be a held one.
+    @Override
+    public boolean keySwitches() {
+        return false;
     }
 }

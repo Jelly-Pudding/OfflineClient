@@ -5,6 +5,7 @@ import com.jellypudding.offlineclient.gui.WindowGuiScreen;
 import com.jellypudding.offlineclient.hud.HudElement;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
+import com.jellypudding.offlineclient.util.RenderUtil;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 
@@ -50,12 +51,7 @@ public final class WatermarkElement extends HudElement {
             write(context, font, OfflineClient.NAME, 0, 0, color.getColor());
             return;
         }
-        int x = 0;
-        for (int i = 0; i < OfflineClient.NAME.length(); i++) {
-            String letter = String.valueOf(OfflineClient.NAME.charAt(i));
-            write(context, font, letter, x, 0, color.rowColor(i));
-            x += font.width(letter);
-        }
+        RenderUtil.colouredLetters(context, font, OfflineClient.NAME, 0, 0, color::rowColor, 1f, textShadow());
     }
 
     private static String version() {

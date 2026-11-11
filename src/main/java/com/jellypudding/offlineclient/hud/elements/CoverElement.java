@@ -44,7 +44,7 @@ public final class CoverElement extends HudElement {
         String name = getName();
         color = new ColorSetting(name + " colour", "Colour of the box.", 0, 0, 0.08f, false);
         opacity = new NumberSetting(name + " opacity",
-            "How solid the box is. At a hundred nothing shows through it.", 100, 0, 100, 5, "%").min(0).max(100);
+            "How solid the box is. At a hundred nothing shows through it.", 100, 0, 100, 5, "%").max(100);
         onTop = new BoolSetting(name + " on top",
             "Draws the box over the tab list and the debug screen and any open screen.", true);
         text = new TextSetting(name + " text",
@@ -56,6 +56,11 @@ public final class CoverElement extends HudElement {
 
     @Override
     public boolean touchesEdges() {
+        return true;
+    }
+
+    @Override
+    public boolean liesOver() {
         return true;
     }
 

@@ -84,10 +84,12 @@ public final class BoxStyle {
         return this;
     }
 
-    // Makes every row of the style a sub option of one choice of an enum.
-    public <E extends Enum<E>> BoxStyle under(EnumSetting<E> parent, E value) {
-        shape.under(parent, value);
-        gate = () -> parent.is(value);
+    // Makes every row of the style a sub option of the given choices of an enum.
+    @SafeVarargs
+    @SuppressWarnings("varargs")
+    public final <E extends Enum<E>> BoxStyle under(EnumSetting<E> parent, E... values) {
+        shape.under(parent, values);
+        gate = () -> parent.isAny(values);
         return this;
     }
 
@@ -101,7 +103,9 @@ public final class BoxStyle {
         return fillOpacity.getFloat() / 100f;
     }
 
-    public int fillColor() {
+    // The fill colour already at the fill opacity for a module that draws the faces itself. The
+    // draws that take a colour want it raw and fade it themselves.
+    public int fadedFill() {
         return ColorUtil.fade(fillColor.getColor(), fillShare());
     }
 
@@ -175,7 +179,7 @@ public final class BoxStyle {
             batch.outlineFace(box, side, lineColor.getColor(), throughWalls);
         }
         if (drawsSides()) {
-            batch.solidFace(box, side, fillColor(), throughWalls);
+            batch.solidFace(box, side, fadedFill(), throughWalls);
         }
     }
 

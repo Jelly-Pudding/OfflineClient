@@ -7,153 +7,26 @@ import it.unimi.dsi.fastutil.longs.LongSet;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.SectionPos;
-import net.minecraft.resources.ResourceKey;
 import net.minecraft.tags.BlockTags;
-import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.EntityTypes;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BaseFireBlock;
-import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.FenceBlock;
-import net.minecraft.world.level.block.WallTorchBlock;
-import net.minecraft.world.level.block.entity.BlockEntityType;
-import net.minecraft.world.level.block.entity.BlockEntityTypes;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 
 import java.util.List;
-import java.util.Set;
 
-// What the world builds round the spawners it generates. A spawner's mob and dimension tell
-// which structure made it. Dungeon rooms and spider corridors are known by their blocks
-// whether or not their spawner still stands. MonsterRoomFeature and MineshaftPieces fill
-// both with cave air and a block a player breaks leaves plain air. Chunks from before cave
-// air existed hold none and are never judged.
+// The rooms the world builds round the spawners it generates. SpawnerPlace tells which structure
+// made a spawner. Dungeon rooms and spider corridors are known by their blocks whether or not
+// their spawner still stands. MonsterRoomFeature and MineshaftPieces fill both with cave air and
+// a block a player breaks leaves plain air. Chunks from before cave air existed hold none and
+// are never judged.
 public final class SpawnerRooms {
-
-    // The structure that made a spawner. Placed stands for a mob no structure spawns in that
-    // dimension. A player set that spawner down or changed its mob with an egg.
-    public enum Place {
-        DUNGEON("Dungeon", "in a dungeon", Level.OVERWORLD),
-        MINESHAFT("Mineshaft", "in a mineshaft", Level.OVERWORLD),
-        STRONGHOLD("Stronghold", "in a stronghold", Level.OVERWORLD),
-        FORTRESS("Fortress", "in a fortress", Level.NETHER),
-        BASTION("Bastion", "in a bastion", Level.NETHER),
-        MANSION("Mansion", "in a mansion", Level.OVERWORLD),
-        TRIAL_CHAMBER("Trial chamber", "in a trial chamber", Level.OVERWORLD),
-        PLACED("Placed or changed", "a player placed or changed", null);
-
-        private final String label;
-        private final String where;
-        private final ResourceKey<Level> home;
-
-        Place(String label, String where, ResourceKey<Level> home) {
-            this.label = label;
-            this.where = where;
-            this.home = home;
-        }
-
-        // The name the place picker shows.
-        public String label() {
-            return label;
-        }
-
-        // The words after a spawner such as in a dungeon.
-        public String where() {
-            return where;
-        }
-
-        // The place of a mob spawner from its mob and the dimension and the block under it.
-        public static Place of(EntityType<?> mob, ResourceKey<Level> dimension, BlockState below) {
-            Place place = byMob(mob, below);
-            return place.belongsIn(dimension) ? place : PLACED;
-        }
-
-        // The mansion spider spawner stands on birch planks. A dungeon floor is cobblestone and a
-        // stronghold library that cuts through one is oak.
-        private static Place byMob(EntityType<?> mob, BlockState below) {
-            if (mob == EntityTypes.ZOMBIE || mob == EntityTypes.SKELETON) {
-                return DUNGEON;
-            }
-            if (mob == EntityTypes.SPIDER) {
-                return below.is(Blocks.BIRCH_PLANKS) ? MANSION : DUNGEON;
-            }
-            if (mob == EntityTypes.CAVE_SPIDER) {
-                return MINESHAFT;
-            }
-            if (mob == EntityTypes.SILVERFISH) {
-                return STRONGHOLD;
-            }
-            if (mob == EntityTypes.BLAZE) {
-                return FORTRESS;
-            }
-            return mob == EntityTypes.MAGMA_CUBE ? BASTION : PLACED;
-        }
-
-        // A vanilla dimension only holds its own structures. Another dimension is taken on trust.
-        private boolean belongsIn(ResourceKey<Level> dimension) {
-            boolean vanilla = dimension.equals(Level.OVERWORLD) || dimension.equals(Level.NETHER)
-                || dimension.equals(Level.END);
-            return home == null || !vanilla || dimension.equals(home);
-        }
-
-        // True for a place whose room shows where a player broke a block.
-        public boolean hasRoom() {
-            return this == DUNGEON || this == MINESHAFT || this == STRONGHOLD;
-        }
-
-        // The count an untouched spawner of this place holds. The bastion and mansion templates
-        // save theirs at nought and every other spawner starts at twenty.
-        public int untouchedCount() {
-            return this == BASTION || this == MANSION ? TEMPLATE_COUNT : FRESH_COUNT;
-        }
-
-        // True for a container this place or a structure that often meets it makes by itself.
-        // Every structure with loot makes single chests. Double chests stand in the bastion and
-        // mansion templates and in the tents of abandoned camps. A camp is built on the surface
-        // and seldom lies within reach of a spawner. Its chests are counted. The Nether makes no
-        // other container. Trapped chests stand only in mansions and hoppers only in trial
-        // chambers.
-        public boolean makes(BlockEntityType<?> type, boolean doubleChest) {
-            if (type == BlockEntityTypes.CHEST) {
-                return !doubleChest || this == BASTION || this == MANSION;
-            }
-            if (home == Level.NETHER) {
-                return false;
-            }
-            if (type == BlockEntityTypes.TRAPPED_CHEST) {
-                return this == MANSION;
-            }
-            if (type == BlockEntityTypes.HOPPER) {
-                return this == TRIAL_CHAMBER;
-            }
-            return OVERWORLD_MADE.contains(type);
-        }
-
-        // Mineshafts cross every other place underground and carry chest minecarts.
-        public boolean makesCart(EntityType<?> type) {
-            return type == EntityTypes.CHEST_MINECART && home != Level.NETHER;
-        }
-
-        // True for a light the caves round this place or a structure that often meets it makes.
-        // Mineshaft beams and stronghold walls carry wall torches of their own.
-        public boolean makesLight(SeenBlocks world, BlockPos pos, BlockState state) {
-            if (CAVE_LIGHTS.contains(state.getBlock())) {
-                return true;
-            }
-            if (home != Level.OVERWORLD || !state.is(Blocks.WALL_TORCH)) {
-                return false;
-            }
-            BlockPos support = pos.relative(state.getValue(WallTorchBlock.FACING).getOpposite());
-            return TORCH_SUPPORTS.contains(world.at(support.getX(), support.getY(), support.getZ()).getBlock());
-        }
-    }
 
     // A room the scan recognised. The key is a dungeon's spawner spot or the floor of a
     // corridor's middle row at its lowest end. Standing means its spawner is there. Mined
     // means a player took the spawner. Disturbed means plain air where a block was broken.
-    public record Room(Place place, BlockPos key, AABB box, boolean standing, boolean mined, boolean disturbed,
+    public record Room(SpawnerPlace place, BlockPos key, AABB box, boolean standing, boolean mined, boolean disturbed,
                        int chests) {
     }
 
@@ -165,36 +38,6 @@ public final class SpawnerRooms {
             return last - first + 1;
         }
     }
-
-    // BaseSpawner starts every spawner at twenty. The templates save theirs at nought.
-    private static final int FRESH_COUNT = 20;
-    private static final int TEMPLATE_COUNT = 0;
-
-    // Containers that many Overworld structures make. They say nothing about a player near a
-    // spawner. Trial chambers make barrels dispensers pots and vaults. Villages camps ancient
-    // cities igloos trail ruins and jungle temples make the rest.
-    private static final Set<BlockEntityType<?>> OVERWORLD_MADE = Set.of(BlockEntityTypes.BARREL,
-        BlockEntityTypes.DISPENSER, BlockEntityTypes.DECORATED_POT, BlockEntityTypes.VAULT,
-        BlockEntityTypes.FURNACE, BlockEntityTypes.SMOKER, BlockEntityTypes.BLAST_FURNACE,
-        BlockEntityTypes.BREWING_STAND, BlockEntityTypes.CAMPFIRE, BlockEntityTypes.LECTERN);
-
-    // Lights the caves grow or leave by themselves. Buried ruined portals keep crying obsidian.
-    private static final Set<Block> CAVE_LIGHTS = Set.of(Blocks.LAVA, Blocks.FIRE, Blocks.SOUL_FIRE,
-        Blocks.MAGMA_BLOCK, Blocks.GLOW_LICHEN, Blocks.CAVE_VINES, Blocks.CAVE_VINES_PLANT,
-        Blocks.AMETHYST_CLUSTER, Blocks.LARGE_AMETHYST_BUD, Blocks.MEDIUM_AMETHYST_BUD,
-        Blocks.SMALL_AMETHYST_BUD, Blocks.SCULK_SENSOR, Blocks.SCULK_CATALYST, Blocks.REDSTONE_ORE,
-        Blocks.DEEPSLATE_REDSTONE_ORE, Blocks.BROWN_MUSHROOM, Blocks.SEA_PICKLE, Blocks.CRYING_OBSIDIAN);
-
-    // What the wall torches of mineshafts and strongholds hang on. Mineshaft beams are oak or
-    // dark oak planks. Stronghold walls are stone bricks of every kind and one crossing hangs
-    // its torch on a double smooth stone slab. The library and the storeroom use oak planks.
-    private static final Set<Block> TORCH_SUPPORTS = Set.of(Blocks.OAK_PLANKS, Blocks.DARK_OAK_PLANKS,
-        Blocks.STONE_BRICKS, Blocks.CRACKED_STONE_BRICKS, Blocks.MOSSY_STONE_BRICKS, Blocks.INFESTED_STONE_BRICKS,
-        Blocks.SMOOTH_STONE_SLAB);
-
-    // Light keeps these away from a spawner. Blazes silverfish and magma cubes spawn in any light.
-    private static final Set<EntityType<?>> LIGHT_SHY = Set.of(EntityTypes.ZOMBIE, EntityTypes.SKELETON,
-        EntityTypes.SPIDER, EntityTypes.CAVE_SPIDER);
 
     // A dungeon's inside reaches two or three blocks each way from its spawner and four up.
     private static final int SMALL_HALF = 2;
@@ -242,11 +85,6 @@ public final class SpawnerRooms {
     private SpawnerRooms() {
     }
 
-    // True for a mob that light keeps from spawning.
-    public static boolean lightShy(EntityType<?> mob) {
-        return LIGHT_SHY.contains(mob);
-    }
-
     // Every dungeon and spider corridor the scanned chunk owns. It waits for the chunks round it.
     public static void scan(ChunkScanner.View view, List<Room> out) {
         if (!view.complete()) {
@@ -287,14 +125,14 @@ public final class SpawnerRooms {
     }
 
     // The spider corridor a cobweb hangs in or null.
-    public static Room corridorThrough(SeenBlocks world, int x, int y, int z) {
+    private static Room corridorThrough(SeenBlocks world, int x, int y, int z) {
         Run run = bestRun(world, x, y, z, false);
         return run == null ? null : corridor(world, run);
     }
 
     // The room a structure spawner stands in or null when its place has none or the blocks
     // there do not match one.
-    public static Room around(Place place, SeenBlocks world, BlockPos spawner) {
+    public static Room around(SpawnerPlace place, SeenBlocks world, BlockPos spawner) {
         return switch (place) {
             case DUNGEON -> dungeon(world, spawner);
             case MINESHAFT -> {
@@ -444,7 +282,7 @@ public final class SpawnerRooms {
         // The feature could not replace a block like bedrock and left the room without a spawner.
         boolean mined = !standing && !middle.is(BlockTags.FEATURES_CANNOT_REPLACE);
         boolean disturbed = (plainAir || mined && middle.is(Blocks.AIR)) && !nearFlow(world, box);
-        return new Room(Place.DUNGEON, centre.immutable(), box, standing, mined, disturbed, chests);
+        return new Room(SpawnerPlace.DUNGEON, centre.immutable(), box, standing, mined, disturbed, chests);
     }
 
     // The cobweb corridor through a spot or null. A spawner spot is known to be the middle of
@@ -561,7 +399,7 @@ public final class SpawnerRooms {
         boolean disturbed = run.plainAir() && !nearFlow(world, box);
         // Generation skips the spawner now and then. Only broken webs with it tell of a player.
         boolean mined = !spawner && disturbed;
-        return new Room(Place.MINESHAFT, key, box, spawner, mined, disturbed, 0);
+        return new Room(SpawnerPlace.MINESHAFT, key, box, spawner, mined, disturbed, 0);
     }
 
     // A block the scan could not pass may cut a corridor short. Its spawner then stands in
@@ -598,7 +436,7 @@ public final class SpawnerRooms {
             return null;
         }
         AABB box = new AABB(spawner).inflate(PORTAL_ROOM_REACH, PORTAL_ROOM_DEPTH, PORTAL_ROOM_REACH);
-        return new Room(Place.STRONGHOLD, spawner.immutable(), box, true, false, plainAir, 0);
+        return new Room(SpawnerPlace.STRONGHOLD, spawner.immutable(), box, true, false, plainAir, 0);
     }
 
     // True when water lava or fire lies within reach of the box. Fire burns supports away and

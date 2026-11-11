@@ -25,7 +25,7 @@ public final class OpenWaterEsp extends Module {
     private final ColorSetting shallowColor = new ColorSetting("Shallow colour",
         "Colour whilst the water is too shallow for treasure.", 0, 0.79f, 0.88f, false);
     private final BoolSetting cross = new BoolSetting("Cross",
-        "Draw a cross over every face whilst the water is too shallow.", true);
+        "Draws a cross over every face whilst the water is too shallow.", true);
 
     // Null whilst no bobber is out.
     private AABB box;
@@ -53,7 +53,7 @@ public final class OpenWaterEsp extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        FishingHook bobber = inGame() ? mc.player.fishing : null;
+        FishingHook bobber = mc.player.fishing;
         if (bobber == null) {
             box = null;
             return;

@@ -17,7 +17,7 @@ public final class ItemPhysics extends Module {
     // A hair off the ground. The drop must not fight the floor for depth.
     private static final float LIFT = 0.001f;
 
-    // How far a drop can be turned from the one before it.
+    // Each drop turns by up to this many degrees from its own seed.
     private static final int SPREAD = 90;
 
     private final BoolSetting randomRotation = new BoolSetting("Random rotation",

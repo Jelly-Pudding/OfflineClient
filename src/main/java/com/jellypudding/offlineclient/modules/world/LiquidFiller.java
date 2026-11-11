@@ -8,6 +8,7 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.ListMode;
 import com.jellypudding.offlineclient.util.BlockMiner;
 import com.jellypudding.offlineclient.util.BlockUtil;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.WorldWatch;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -34,7 +35,7 @@ public final class LiquidFiller extends AreaPlacer {
     private final BoolSetting lava = new BoolSetting("Lava",
         "Fills lava.", true);
     private final BoolSetting flowing = new BoolSetting("Flowing",
-        "Also fill flowing liquid and not just the source blocks.", false);
+        "Also fills flowing liquid and not just the source blocks.", false);
     private final EnumSetting<Shape> shape = new EnumSetting<>("Shape",
         "The region searched for liquid.", Shape.SPHERE)
         .describe(Shape.SPHERE, "A ball of the given radius around you.")
@@ -84,7 +85,7 @@ public final class LiquidFiller extends AreaPlacer {
     // Runs before the fill round. One block put down earlier comes out again at a time.
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || mc.player.isSpectator()) {
+        if (mc.player.isSpectator()) {
             return;
         }
         if (world.changed()) {
@@ -93,7 +94,7 @@ public final class LiquidFiller extends AreaPlacer {
             return;
         }
         placed.removeIf(BlockUtil::isReplaceable);
-        if (!mineBack.isOn()) {
+        if (!mineBack.isOn() || Hands.taken()) {
             stopMining();
             return;
         }

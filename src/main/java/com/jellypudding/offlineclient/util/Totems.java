@@ -6,11 +6,12 @@ import com.jellypudding.offlineclient.event.events.EntityDeathEvent;
 import com.jellypudding.offlineclient.event.events.PacketReceiveEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.event.events.TotemPopEvent;
-import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.protocol.game.ClientboundEntityEventPacket;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.EntityEvent;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
 import java.util.Map;
@@ -40,13 +41,21 @@ public final class Totems {
 
     // Every totem you carry. The one in your offhand counts.
     public static int carried() {
-        LocalPlayer player = OfflineClient.MC.player;
-        if (player == null) {
+        if (OfflineClient.MC.player == null) {
             return 0;
         }
-        ItemStack offhand = player.getOffhandItem();
-        return (offhand.is(Items.TOTEM_OF_UNDYING) ? offhand.getCount() : 0)
-            + InventoryUtil.count(Items.TOTEM_OF_UNDYING, InventoryUtil.WHOLE_INVENTORY);
+        return InventoryUtil.countWithOffhand(Items.TOTEM_OF_UNDYING, InventoryUtil.WHOLE_INVENTORY);
+    }
+
+    // Whether either hand holds something that saves the entity from death. The game looks for death
+    // protection in both hands and a totem is only the usual one.
+    public static boolean inHand(LivingEntity entity) {
+        for (InteractionHand hand : InteractionHand.values()) {
+            if (entity.getItemInHand(hand).has(DataComponents.DEATH_PROTECTION)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // Totems the player has popped since they last died.

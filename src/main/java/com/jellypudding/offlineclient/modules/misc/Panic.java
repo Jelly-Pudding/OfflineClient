@@ -5,9 +5,12 @@ import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.module.ModuleManager;
 import com.jellypudding.offlineclient.setting.ActionSetting;
+import com.jellypudding.offlineclient.setting.Bind;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.Tally;
+import com.mojang.blaze3d.platform.InputConstants;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -18,17 +21,28 @@ public final class Panic extends Module {
         "Says in chat how many modules were turned off or back on.", true);
     private final ActionSetting restore = new ActionSetting("Restore",
         "Turns back on the modules Panic last switched off.", this::restore);
+    private final BoolSetting dormant = new BoolSetting("Dormant",
+        "The Panic key also puts the client to sleep until it is pressed again. No other client key works and a"
+            + " line that starts with the command prefix is thrown away unsent. What the client draws in play is"
+            + " hidden but lines it already wrote stay in chat. The second press brings the modules back.",
+        false);
     private final BoolSetting keyRestores = new BoolSetting("Key restores",
-        "Pressing Panic whilst every module is off turns back on the ones it switched off.", false);
+        "Pressing Panic whilst every module is off turns back on the ones it switched off.", false)
+        .visibleWhen(() -> !dormant.isOn());
 
     // Kept until a restore or the next panic that finds something to switch off. Never saved.
     private final List<Module> switchedOff = new ArrayList<>();
 
+    // Set by a dormant press of the key and cleared by the next. Only the key starts it and the
+    // key is the way back. Never saved and a restart wakes the client. Read through isAsleep.
+    private boolean asleep;
+
     public Panic() {
         super("Panic", "Turns every enabled module off at once.",
             Category.MISC);
-        addSettings(announce, restore, keyRestores);
-        searchTags("panic button", "disable all", "kill switch", "restore");
+        addSettings(announce, restore, dormant, keyRestores);
+        searchTags("panic button", "disable all", "kill switch", "restore", "dormant", "sleep", "boss key",
+            "hide client");
     }
 
     @Override
@@ -37,19 +51,75 @@ public final class Panic extends Module {
     }
 
     @Override
+    public boolean keySwitches() {
+        return false;
+    }
+
+    @Override
     public void onKeybind() {
-        if (keyRestores.isOn() && !switchedOff.isEmpty() && toSwitchOff().isEmpty()) {
+        if (dormant.isOn()) {
+            // Waking brings back what this press switched off and nothing from an earlier panic.
+            switchedOff.clear();
+            switchOffAll();
+            asleep = true;
+        } else if (keyRestores.isOn() && !switchedOff.isEmpty() && toSwitchOff().isEmpty()) {
             restore();
         } else {
             toggle();
         }
     }
 
+    // The client only sleeps whilst the switch is on and the key is bound. Without both there
+    // would be no way back. A reset of every module from the title screen takes both away.
+    public boolean isAsleep() {
+        return asleep && dormant.isOn() && getKeybind().isBound();
+    }
+
+    // True for a module the press that wakes the client will switch back on. The config holds
+    // such a module as on and a game closed whilst asleep loses nothing.
+    public boolean bringsBack(Module module) {
+        return isAsleep() && switchedOff.contains(module);
+    }
+
+    // True whilst the client sleeps and nothing of it may hear the key. A press of the Panic key
+    // is the one thing that gets through. It wakes the client.
+    public static boolean sleepsThrough(Bind input, int action) {
+        Panic panic = Modules.get(Panic.class);
+        if (panic == null || !panic.asleep) {
+            return false;
+        }
+        // The way back went whilst the client slept. The sleep is over and what Panic remembered
+        // goes with it.
+        if (!panic.isAsleep()) {
+            panic.asleep = false;
+            panic.switchedOff.clear();
+            return false;
+        }
+        if (action == InputConstants.PRESS && mc.gui.screen() == null && panic.getKeybind().getValue().answers(input)) {
+            panic.wake();
+        }
+        return true;
+    }
+
+    private void wake() {
+        asleep = false;
+        if (!switchedOff.isEmpty()) {
+            restore();
+        } else if (announce.isOn()) {
+            ChatUtil.message("§cPanic§7. The client is awake again.");
+        }
+    }
+
     @Override
     protected void onEnable() {
-        List<Module> on = toSwitchOff();
+        announce("Turned off", switchOffAll());
+        setEnabled(false);
+    }
+
+    // How many modules went off. They are remembered for the restore.
+    private int switchOffAll() {
         List<Module> off = new ArrayList<>();
-        for (Module module : on) {
+        for (Module module : toSwitchOff()) {
             try {
                 module.setEnabled(false);
                 off.add(module);
@@ -61,9 +131,10 @@ public final class Panic extends Module {
         if (!off.isEmpty()) {
             switchedOff.clear();
             switchedOff.addAll(off);
+            // A module that is only on whilst its key is down must not come back without the key.
+            switchedOff.removeIf(Module::holdsKey);
         }
-        announce("Turned off", off.size());
-        setEnabled(false);
+        return off.size();
     }
 
     // Every module that is on and can be switched off. Empty before the client has started.
@@ -93,9 +164,12 @@ public final class Panic extends Module {
             }
             try {
                 module.setEnabled(true);
-                count++;
             } catch (Exception e) {
                 OfflineClient.LOG.error("Panic could not turn {} back on", module.getName(), e);
+            }
+            // A locked module stays off.
+            if (module.isEnabled()) {
+                count++;
             }
         }
         switchedOff.clear();

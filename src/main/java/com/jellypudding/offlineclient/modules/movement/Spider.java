@@ -7,6 +7,7 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.DamageUtil;
 import com.jellypudding.offlineclient.util.MovementUtil;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -34,10 +35,10 @@ public final class Spider extends Module {
     // wall and no further.
     private static final double RELEASE_SPEED = 0.2;
 
-    // The server banks every block you are lowered and charges it on landing. A climb
-    // down rises this much for a tick before the bank reaches the drop that hurts.
+    // The server banks every block you are lowered and charges it on landing. A climb down
+    // rises this much for a tick before the bank comes within half a block of the drop that hurts.
     private static final double WIPE_RISE = 0.01;
-    private static final double SAFE_DROP = 2.5;
+    private static final double SAFE_DROP = DamageUtil.SAFE_FALL - 0.5;
 
     private final NumberSetting speed = new NumberSetting("Speed",
         "How fast you go up the wall in blocks a tick.",
@@ -52,7 +53,7 @@ public final class Spider extends Module {
     private final BoolSetting holdOn = new BoolSetting("Hold on",
         "Keeps you in place on a wall when you stop climbing. Move away from the wall to let go.", true);
     private final BoolSetting ceilings = new BoolSetting("Ceilings",
-        "Hang from ceilings and walk along them. Sneak to drop.", false);
+        "Lets you hang from ceilings and walk along them. Sneak to drop.", false);
     private final BoolSetting autoRound = new BoolSetting("Auto climb edges",
         "Climbs round a ceiling edge without you holding jump.", false)
         .under(ceilings);
@@ -67,7 +68,7 @@ public final class Spider extends Module {
     private boolean lowering;
 
     public Spider() {
-        super("Spider", "Climb up and down any wall like a spider.", Category.MOVEMENT);
+        super("Spider", "Lets you climb up and down any wall like a spider.", Category.MOVEMENT);
         addSettings(speed, sneak, descentSpeed, holdOn, ceilings, autoRound);
         searchTags("wall climb", "ceiling", "climb down");
     }
@@ -96,7 +97,7 @@ public final class Spider extends Module {
         hanging = false;
         clinging = false;
         lowering = false;
-        if (!inGame() || mc.player.isPassenger()) {
+        if (mc.player.isPassenger()) {
             rounding = false;
             return;
         }

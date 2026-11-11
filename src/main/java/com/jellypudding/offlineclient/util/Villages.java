@@ -35,7 +35,7 @@ public final class Villages {
         for (Entity entity : level.entitiesForRendering()) {
             ChunkPos at = entity.chunkPosition();
             if (StructureBeds.villager(entity.getType())
-                && Math.max(Math.abs(at.x() - centreX), Math.abs(at.z() - centreZ)) <= reach) {
+                && at.getChessboardDistance(centreX, centreZ) <= reach) {
                 return true;
             }
         }
@@ -53,7 +53,7 @@ public final class Villages {
     // The palette is only a first look. It can keep a block that has since gone.
     private static boolean holds(LevelChunk chunk, Predicate<BlockState> wanted) {
         for (LevelChunkSection section : chunk.getSections()) {
-            if (section == null || section.hasOnlyAir() || !section.maybeHas(wanted)) {
+            if (section.hasOnlyAir() || !section.maybeHas(wanted)) {
                 continue;
             }
             boolean[] found = {false};

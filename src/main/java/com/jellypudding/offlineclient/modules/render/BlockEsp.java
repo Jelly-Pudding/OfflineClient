@@ -9,9 +9,11 @@ import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.render.BoxStyle;
+import com.jellypudding.offlineclient.render.CaveSurface;
 import com.jellypudding.offlineclient.render.DrawBatch;
 import com.jellypudding.offlineclient.render.HeightBand;
 import com.jellypudding.offlineclient.setting.BoolSetting;
+import com.jellypudding.offlineclient.setting.ChoiceListSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
@@ -31,23 +33,58 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ChunkMap;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.Property;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.VoxelShape;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
 // Every loaded chunk in range is scanned once on a background thread.
-// It is scanned again only when the server sends a change for it.
+// It is scanned again only when the server changes it or the search changes.
 public final class BlockEsp extends Module {
 
     // Built on the scanner thread.
-    private record Target(int x, int y, int z, Block block) {
+    private record Target(int x, int y, int z, BlockState state) {
+
+        Block block() {
+            return state.getBlock();
+        }
+    }
+
+    // A property of a listed block and the values of it that show. Each is written name=value.
+    private record Constraint(Property<?> property, Set<String> shown) {
+
+        boolean admits(BlockState state) {
+            return shown.contains(property.value(state).toString());
+        }
+    }
+
+    // What the scanner thread looks for. Replaced whole and never changed.
+    private record Search(Set<Block> blocks, Map<Block, List<Constraint>> states) {
+
+        static final Search NOTHING = new Search(Set.of(), Map.of());
+
+        boolean wants(BlockState state) {
+            Block block = state.getBlock();
+            if (!blocks.contains(block)) {
+                return false;
+            }
+            for (Constraint constraint : states.getOrDefault(block, List.of())) {
+                if (!constraint.admits(state)) {
+                    return false;
+                }
+            }
+            return true;
+        }
     }
 
     // Hand tuned colours for the usual targets. Ores take the colour of their kind.
@@ -66,7 +103,7 @@ public final class BlockEsp extends Module {
         "Most blocks drawn at once with the nearest first.", 2000, 100, 5000, 100).min(1);
     private final HeightBand band = new HeightBand("blocks");
     private final RegistryListSetting<Block> blocks = new RegistryListSetting<>("Blocks",
-        "The blocks to find.", BuiltInRegistries.BLOCK,
+        "The blocks to find. Each box fits the block's own shape.", BuiltInRegistries.BLOCK,
         List.of(Blocks.DIAMOND_ORE, Blocks.DEEPSLATE_DIAMOND_ORE, Blocks.ANCIENT_DEBRIS,
             Blocks.EMERALD_ORE, Blocks.DEEPSLATE_EMERALD_ORE,
             Blocks.SPAWNER, Blocks.TRIAL_SPAWNER, Blocks.END_PORTAL_FRAME,
@@ -76,10 +113,17 @@ public final class BlockEsp extends Module {
         "Blocks with no look of their own take a colour worked out from the block.", true);
     private final BoxStyle defaultStyle = new BoxStyle("Default", BoxStyle.Shape.LINES, 167);
     private final BoolSetting defaultTracer = new BoolSetting("Default tracer",
-        "Draw a line to every group of blocks with no look of its own.", false);
+        "Draws a line to every group of blocks with no look of its own.", false);
     private final ColorSetting defaultTracerColor = new ColorSetting("Default tracer colour",
         "Colour of those lines.", 167, 1f, 1f, false)
         .under(defaultTracer, () -> defaultTracer.isOn() && !automatic.isOn());
+    private final BoolSetting caves = new BoolSetting("Caves",
+        "Shows cave air as one surface. Old caves and dungeons and mineshafts and strongholds hold it."
+            + " Caves made by 26.3 hold plain air.", false);
+    private final NumberSetting caveLimit = new NumberSetting("Cave limit",
+        "Most cave air blocks drawn at once with the nearest chunks first.", 10000, 1000, 50000, 1000).min(1)
+        .under(caves);
+    private final BoxStyle caveStyle = new BoxStyle("Cave", BoxStyle.Shape.SIDES, 200).under(caves);
 
     // The look of every block that has one. Kept after a block leaves the list.
     private final Map<Block, BlockLook> looks = new LinkedHashMap<>();
@@ -92,7 +136,7 @@ public final class BlockEsp extends Module {
         public JsonElement toJson() {
             JsonObject out = new JsonObject();
             for (Map.Entry<Block, BlockLook> entry : looks.entrySet()) {
-                if (entry.getValue().isOwn()) {
+                if (entry.getValue().isKept()) {
                     out.add(BuiltInRegistries.BLOCK.getKey(entry.getKey()).toString(),
                         entry.getValue().toJson());
                 }
@@ -120,19 +164,27 @@ public final class BlockEsp extends Module {
     }.internal();
 
     // Read from the scanner thread and replaced whole.
-    private volatile Set<Block> wanted = Set.of();
+    private volatile Search search = Search.NOTHING;
     // The heights the current scans read. A new band scans everything again.
     private HeightBand.Rows scannedRows;
 
     private final ChunkScanner<Target> scanner = new ChunkScanner<>();
     // Set from the settings screen and read on the next tick.
-    private volatile boolean listChanged = true;
+    private volatile boolean searchChanged = true;
     private final NearestCut<Target> drawn = new NearestCut<>(BlockEsp::distanceSqr);
+    // Cave air has a scan and a limit of its own and never pushes a listed block out.
+    private final CaveSurface caveSurface = new CaveSurface();
+    // Whether the cave surface scanned at the last tick.
+    private boolean cavesShown;
 
     // Where every drawn block stands and which run of touching blocks it belongs to.
     private final Long2ObjectOpenHashMap<Block> blockAt = new Long2ObjectOpenHashMap<>();
     private final Long2IntOpenHashMap groupOf = new Long2IntOpenHashMap();
     private final List<Vec3> groupCenters = new ArrayList<>();
+    // The drawn blocks that fill their whole space. Only these join with their neighbours.
+    private final Long2ObjectOpenHashMap<Block> fullAt = new Long2ObjectOpenHashMap<>();
+    // The box of every drawn block whose shape is smaller than its space.
+    private final Long2ObjectOpenHashMap<AABB> fitted = new Long2ObjectOpenHashMap<>();
 
     public BlockEsp() {
         super("BlockESP", "Highlights chosen blocks through walls.", Category.RENDER);
@@ -140,9 +192,11 @@ public final class BlockEsp extends Module {
         addSettings(band.settings());
         addSettings(blocks, automatic);
         addSettings(defaultStyle.settings());
-        addSettings(defaultTracer, defaultTracerColor, store);
-        searchTags("search", "block search", "ore esp", "archaeology", "suspicious sand", "suspicious gravel");
-        blocks.onChange(() -> listChanged = true);
+        addSettings(defaultTracer, defaultTracerColor, store, caves, caveLimit);
+        addSettings(caveStyle.settings());
+        searchTags("search", "block search", "ore esp", "archaeology", "suspicious sand", "suspicious gravel",
+            "cave finder", "cave air", "block state");
+        blocks.onChange(() -> searchChanged = true);
         groupOf.defaultReturnValue(-1);
     }
 
@@ -166,7 +220,7 @@ public final class BlockEsp extends Module {
 
     @Override
     protected void onEnable() {
-        listChanged = true;
+        searchChanged = true;
         reset();
     }
 
@@ -176,26 +230,42 @@ public final class BlockEsp extends Module {
     }
 
     private void reset() {
+        resetBlocks();
+        caveSurface.reset();
+    }
+
+    private void resetBlocks() {
         scanner.reset();
         drawn.clear();
         blockAt.clear();
         groupOf.clear();
         groupCenters.clear();
+        fullAt.clear();
+        fitted.clear();
     }
 
     private BlockLook lookFor(Block block) {
         return looks.computeIfAbsent(block, BlockLook::new);
     }
 
-    // True if the wanted blocks changed.
+    // True if what the scanner looks for changed. Cave air on the list is left to Caves whilst
+    // that is on.
     private boolean snapshot() {
-        Set<Block> next = new HashSet<>(blocks.resolved());
-        for (Block block : next) {
-            lookFor(block);
+        Set<Block> listed = new HashSet<>(blocks.resolved());
+        if (caves.isOn()) {
+            listed.remove(Blocks.CAVE_AIR);
         }
-        boolean differs = !next.equals(wanted);
+        Map<Block, List<Constraint>> states = new HashMap<>();
+        for (Block block : listed) {
+            List<Constraint> only = lookFor(block).constraints();
+            if (!only.isEmpty()) {
+                states.put(block, List.copyOf(only));
+            }
+        }
+        Search next = new Search(Set.copyOf(listed), Map.copyOf(states));
+        boolean differs = !next.equals(search);
         if (differs) {
-            wanted = Set.copyOf(next);
+            search = next;
         }
         return differs;
     }
@@ -217,17 +287,22 @@ public final class BlockEsp extends Module {
     @Subscribe
     private void onPacketReceive(PacketReceiveEvent event) {
         scanner.markChanged(event.getPacket());
+        if (caves.isOn()) {
+            caveSurface.markChanged(event.getPacket());
+        }
     }
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame()) {
-            return;
+        if (caves.isOn() != cavesShown) {
+            cavesShown = caves.isOn();
+            caveSurface.reset();
+            searchChanged = true;
         }
-        if (listChanged) {
-            listChanged = false;
+        if (searchChanged) {
+            searchChanged = false;
             if (snapshot()) {
-                reset();
+                resetBlocks();
             }
         }
         HeightBand.Rows rows = band.rows();
@@ -236,15 +311,17 @@ public final class BlockEsp extends Module {
             reset();
         }
 
-        Set<Block> query = wanted;
+        Search query = search;
         scanner.update(range.getInt(), (view, out) -> view.forEachMatching(
-            Math.max(view.minY(), rows.from()), Math.min(view.maxY(), rows.to()),
-            state -> query.contains(state.getBlock()),
-            (x, y, z, state) -> out.add(new Target(x, y, z, state.getBlock()))));
+            Math.max(view.minY(), rows.from()), Math.min(view.maxY(), rows.to()), query::wants,
+            (x, y, z, state) -> out.add(new Target(x, y, z, state))));
 
         // The nearest blocks win when there are more than the limit allows.
         if (drawn.update(scanner.results(), limit.getInt())) {
             regroup(drawn.result());
+        }
+        if (cavesShown) {
+            caveSurface.update(range.getInt(), rows, caveLimit.getInt());
         }
     }
 
@@ -255,13 +332,24 @@ public final class BlockEsp extends Module {
         return dx * dx + dy * dy + dz * dz;
     }
 
-    // Blocks of one kind that touch even at a corner count as one find.
+    // Blocks of one kind that touch even at a corner count as one find. Each block's box is
+    // worked out here from its own shape.
     private void regroup(List<Target> targets) {
         blockAt.clear();
         groupOf.clear();
         groupCenters.clear();
+        fullAt.clear();
+        fitted.clear();
+        BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
         for (Target target : targets) {
-            blockAt.put(key(target.x(), target.y(), target.z()), target.block());
+            long at = key(target.x(), target.y(), target.z());
+            blockAt.put(at, target.block());
+            VoxelShape shape = target.state().getShape(mc.level, cursor.set(target.x(), target.y(), target.z()));
+            if (shape.isEmpty() || Block.isShapeFullBlock(shape)) {
+                fullAt.put(at, target.block());
+            } else {
+                fitted.put(at, shape.bounds().move(target.x(), target.y(), target.z()));
+            }
         }
         LongArrayList pending = new LongArrayList();
         for (Target target : targets) {
@@ -311,6 +399,10 @@ public final class BlockEsp extends Module {
         return BlockPos.asLong(x, y, z);
     }
 
+    private static AABB cell(Target target) {
+        return new AABB(target.x(), target.y(), target.z(), target.x() + 1, target.y() + 1, target.z() + 1);
+    }
+
     @Subscribe
     private void onRender3D(Render3DEvent event) {
         DrawBatch batch = event.getBatch();
@@ -319,9 +411,11 @@ public final class BlockEsp extends Module {
             BlockLook look = looks.get(target.block());
             boolean own = look != null && look.isOwn();
             BoxStyle style = own ? look.style() : defaultStyle;
-            AABB box = new AABB(target.x(), target.y(), target.z(),
-                target.x() + 1, target.y() + 1, target.z() + 1);
-            int hidden = DrawBatch.sharedSides(blockAt, key(target.x(), target.y(), target.z()), target.block());
+            long at = key(target.x(), target.y(), target.z());
+            AABB fit = fitted.get(at);
+            // A block that fills its space joins its neighbours of the same kind into one shape.
+            AABB box = fit != null ? fit : cell(target);
+            int hidden = fit != null ? 0 : DrawBatch.sharedSides(fullAt, at, target.block());
             if (own || !automatic.isOn()) {
                 style.drawJoined(batch, box, hidden, true);
             } else {
@@ -330,12 +424,15 @@ public final class BlockEsp extends Module {
             }
 
             boolean wantsTracer = own ? look.tracesLines() : defaultTracer.isOn();
-            int group = groupOf.get(key(target.x(), target.y(), target.z()));
+            int group = groupOf.get(at);
             if (!wantsTracer || group < 0 || group >= traced.length || traced[group]) {
                 continue;
             }
             traced[group] = true;
             batch.tracer(groupCenters.get(group), tracerColor(look, own, target.block()), true);
+        }
+        if (cavesShown) {
+            caveSurface.draw(batch, caveStyle);
         }
     }
 
@@ -346,29 +443,52 @@ public final class BlockEsp extends Module {
         return automatic.isOn() ? autoColor(block) : defaultTracerColor.getColor();
     }
 
-    // The look of one block. Its own rows show whilst the toggle is ticked.
+    // Every value of every property of the block written name=value.
+    private static List<String> stateNames(Block block) {
+        List<String> names = new ArrayList<>();
+        for (Property<?> property : block.getStateDefinition().getProperties()) {
+            property.getAllValues().forEach(value -> names.add(value.toString()));
+        }
+        return names;
+    }
+
+    // The look of one block. Its own rows show whilst the toggle is ticked. The states it shows in
+    // can be picked whatever its look.
     private final class BlockLook {
 
+        private final Block block;
         private final BoolSetting own;
         private final BoxStyle style;
         private final BoolSetting tracer;
         private final ColorSetting tracerColor;
+        private final ChoiceListSetting states;
 
         private BlockLook(Block block) {
+            this.block = block;
             String label = sentence(BuiltInRegistries.BLOCK.getKey(block).getPath());
-            own = new BoolSetting(label, "Give " + label.toLowerCase(Locale.ROOT)
-                + " a look of its own instead of the default.", false)
+            own = new BoolSetting(label, "Gives these blocks a look of their own instead of the default.", false)
                 .visibleWhen(() -> blocks.contains(block));
             style = new BoxStyle(label, BoxStyle.Shape.LINES, 167).under(own);
             tracer = new BoolSetting(label + " tracer",
-                "Draw a line to every group of these.", false).under(own);
+                "Draws a line to every group of these.", false).under(own);
             tracerColor = new ColorSetting(label + " tracer colour",
                 "Colour of those lines.", 167, 1f, 1f, false)
                 .under(tracer, () -> own.isOn() && tracer.isOn());
+            Collection<String> names = stateNames(block);
+            states = new ChoiceListSetting(label + " states",
+                "Shows these blocks only in the picked states. A property with nothing picked lets every"
+                    + " value through. Click to pick them.", () -> names)
+                .onChange(() -> searchChanged = true)
+                .visibleWhen(() -> !names.isEmpty() && blocks.contains(block));
         }
 
         private boolean isOwn() {
             return own.isOn();
+        }
+
+        // A look with nothing of its own and no picked states is not saved.
+        private boolean isKept() {
+            return own.isOn() || !states.getValue().isEmpty();
         }
 
         private BoxStyle style() {
@@ -383,6 +503,25 @@ public final class BlockEsp extends Module {
             return tracerColor.getColor();
         }
 
+        // The picks grouped by property. A pick that names no property of the block is dropped.
+        private List<Constraint> constraints() {
+            Map<String, Set<String>> picked = new LinkedHashMap<>();
+            for (String pick : states.getValue()) {
+                int split = pick.indexOf('=');
+                if (split > 0) {
+                    picked.computeIfAbsent(pick.substring(0, split), name -> new HashSet<>()).add(pick);
+                }
+            }
+            List<Constraint> out = new ArrayList<>();
+            for (Map.Entry<String, Set<String>> entry : picked.entrySet()) {
+                Property<?> property = block.getStateDefinition().getProperty(entry.getKey());
+                if (property != null) {
+                    out.add(new Constraint(property, Set.copyOf(entry.getValue())));
+                }
+            }
+            return out;
+        }
+
         private void addTo(List<Setting<?>> out) {
             out.add(own);
             for (Setting<?> setting : style.settings()) {
@@ -390,13 +529,16 @@ public final class BlockEsp extends Module {
             }
             out.add(tracer);
             out.add(tracerColor);
+            out.add(states);
         }
 
         private JsonElement toJson() {
             JsonObject out = new JsonObject();
+            out.addProperty("own", own.isOn());
             out.add("style", style.toJson());
             out.add("tracer", tracer.toJson());
             out.add("tracerColour", tracerColor.toJson());
+            out.add("states", states.toJson());
             return out;
         }
 
@@ -405,7 +547,7 @@ public final class BlockEsp extends Module {
                 return;
             }
             JsonObject o = json.getAsJsonObject();
-            own.setValue(true);
+            own.setValue(!o.has("own") || o.get("own").getAsBoolean());
             if (o.has("style")) {
                 style.fromJson(o.get("style"));
             }
@@ -414,6 +556,9 @@ public final class BlockEsp extends Module {
             }
             if (o.has("tracerColour")) {
                 tracerColor.fromJson(o.get("tracerColour"));
+            }
+            if (o.has("states")) {
+                states.fromJson(o.get("states"));
             }
         }
     }

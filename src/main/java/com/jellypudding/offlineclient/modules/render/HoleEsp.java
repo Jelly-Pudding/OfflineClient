@@ -10,8 +10,8 @@ import com.jellypudding.offlineclient.render.DrawBatch;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
-import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ColorUtil;
+import com.jellypudding.offlineclient.util.Holes;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.Blocks;
@@ -44,22 +44,22 @@ public final class HoleEsp extends Module {
     private final NumberSetting vertical = new NumberSetting("Vertical range",
         "How far up and down to look for holes.", 4, 1, 16, 1, " blocks");
     private final NumberSetting minHeight = new NumberSetting("Min height",
-        "How many air blocks the hole must have above its floor.", 3, 1, 5, 1).min(1);
+        "How many air blocks the hole must have above its floor.", 3, 1, 5, 1);
     private final BoolSetting doubles = new BoolSetting("Doubles",
-        "Also show two block wide holes you can stand across.", true);
+        "Also shows two block wide holes you can stand across.", true);
     private final BoolSetting ignoreOwn = new BoolSetting("Ignore own",
-        "Hide the hole you are standing in.", false);
+        "Hides the hole you are standing in.", false);
     private final BoolSetting webs = new BoolSetting("Webs",
-        "Count holes that have cobwebs in them.", false);
+        "Counts holes that have cobwebs in them.", false);
     private final NumberSetting refresh = new NumberSetting("Refresh",
-        "Ticks between scans.", 2, 1, 20, 1, " ticks").min(1);
+        "Ticks between scans.", 2, 1, 20, 1, " ticks");
     private final NumberSetting height = new NumberSetting("Height",
         "How tall the drawn box is.", 0.3, 0.1, 1, 0.1).min(0.05);
     private final BoxStyle style = BoxStyle.shapeOnly(BoxStyle.Shape.BOTH);
     private final BoolSetting topFace = new BoolSetting("Top face",
-        "Tint the top of each box.", true).visibleWhen(style::drawsSides);
+        "Tints the top of each box.", true).visibleWhen(style::drawsSides);
     private final BoolSetting bottomFace = new BoolSetting("Bottom face",
-        "Tint the floor of each box.", false).visibleWhen(style::drawsSides);
+        "Tints the floor of each box.", false).visibleWhen(style::drawsSides);
     private final ColorSetting bedrockTop = new ColorSetting("Bedrock top",
         "Colour at the top of a bedrock hole.", 96, 1f, 1f, false);
     private final ColorSetting bedrockBottom = new ColorSetting("Bedrock bottom",
@@ -73,7 +73,7 @@ public final class HoleEsp extends Module {
     private final ColorSetting mixedBottom = new ColorSetting("Mixed bottom",
         "Colour the sides of a mixed hole fade down to.", 30, 1f, 1f, false);
     private final BoolSetting throughWalls = new BoolSetting("Through walls",
-        "Show holes behind blocks.", true);
+        "Shows holes behind blocks.", true);
 
     private final List<Hole> holes = new ArrayList<>();
     private int timer;
@@ -105,10 +105,6 @@ public final class HoleEsp extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame()) {
-            holes.clear();
-            return;
-        }
         if (timer > 0) {
             timer--;
             return;
@@ -145,63 +141,22 @@ public final class HoleEsp extends Module {
         }
     }
 
-    // Every side but the top must be bedrock or obsidian.
-    // One side may be an open block for a double hole if its own sides are safe too.
     private void check(BlockPos pos, Set<BlockPos> seen) {
-        int bedrock = 0;
-        int obsidian = 0;
-        BlockPos partner = null;
-
-        for (Direction side : Direction.values()) {
-            if (side == Direction.UP) {
-                continue;
-            }
-            BlockPos next = pos.relative(side);
-            Kind wall = wallAt(next);
-            if (wall == Kind.BEDROCK) {
-                bedrock++;
-            } else if (wall == Kind.OBSIDIAN) {
-                obsidian++;
-            } else if (side == Direction.DOWN || partner != null || !doubles.isOn() || !isOpen(next)) {
-                return;
-            } else {
-                // The other half of a double hole.
-                for (Direction other : Direction.values()) {
-                    if (other == Direction.UP || other == side.getOpposite()) {
-                        continue;
-                    }
-                    Kind otherWall = wallAt(next.relative(other));
-                    if (otherWall == Kind.BEDROCK) {
-                        bedrock++;
-                    } else if (otherWall == Kind.OBSIDIAN) {
-                        obsidian++;
-                    } else {
-                        return;
-                    }
-                }
-                partner = next;
-            }
-        }
-
-        int total = bedrock + obsidian;
-        if (partner == null && total != 5) {
+        List<BlockPos> cells = Holes.hole(pos, wall -> wallAt(wall) != null, this::isOpen, doubles.isOn());
+        if (cells.isEmpty()) {
             return;
         }
-        if (partner != null && total != 8) {
-            return;
-        }
+        seen.addAll(cells);
+        AABB box = AABB.encapsulatingFullBlocks(cells.getFirst(), cells.getLast())
+            .setMaxY(pos.getY() + height.getValue());
+        holes.add(new Hole(box, kindOf(cells)));
+    }
 
-        Kind kind = obsidian == 0 ? Kind.BEDROCK : bedrock == 0 ? Kind.OBSIDIAN : Kind.MIXED;
-        double top = height.getValue();
-        AABB box = new AABB(pos.getX(), pos.getY(), pos.getZ(),
-            pos.getX() + 1, pos.getY() + top, pos.getZ() + 1);
-        if (partner != null) {
-            box = box.minmax(new AABB(partner.getX(), partner.getY(), partner.getZ(),
-                partner.getX() + 1, partner.getY() + top, partner.getZ() + 1));
-            seen.add(partner);
-        }
-        seen.add(pos);
-        holes.add(new Hole(box, kind));
+    private Kind kindOf(List<BlockPos> cells) {
+        List<BlockPos> walls = new ArrayList<>(Holes.ringAround(cells));
+        cells.forEach(cell -> walls.add(cell.below()));
+        long bedrock = walls.stream().filter(wall -> wallAt(wall) == Kind.BEDROCK).count();
+        return bedrock == walls.size() ? Kind.BEDROCK : bedrock == 0 ? Kind.OBSIDIAN : Kind.MIXED;
     }
 
     // The block and the ones above it must have no collision.
@@ -226,7 +181,7 @@ public final class HoleEsp extends Module {
 
     // Null for blocks that do not survive a crystal.
     private Kind wallAt(BlockPos pos) {
-        return switch (BlockUtil.wallOf(mc.level.getBlockState(pos))) {
+        return switch (Holes.wallOf(mc.level.getBlockState(pos))) {
             case UNBREAKABLE -> Kind.BEDROCK;
             case BLAST_PROOF -> Kind.OBSIDIAN;
             case OPEN, WEAK -> null;

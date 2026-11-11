@@ -27,6 +27,11 @@ public abstract class MeshFilterModule extends Module {
     // The blocks the settings name right now.
     protected abstract Set<Block> chosenBlocks();
 
+    @Override
+    public ExclusivityGroup getExclusivityGroup() {
+        return ExclusivityGroup.MESH_FILTER;
+    }
+
     // Anything else the mesher reads from the subclass. True when it changed.
     protected boolean snapshotExtra() {
         return false;

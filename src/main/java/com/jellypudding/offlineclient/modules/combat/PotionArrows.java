@@ -10,6 +10,8 @@ import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.Hands;
+import com.jellypudding.offlineclient.util.Holes;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.Swap;
@@ -17,8 +19,6 @@ import com.jellypudding.offlineclient.util.ItemUtil;
 import com.jellypudding.offlineclient.util.RotationManager;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
-import net.minecraft.resources.Identifier;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.item.BowItem;
@@ -36,7 +36,7 @@ public final class PotionArrows extends Module {
 
     // The weakest draw that still fires. The arrow barely leaves the bow.
     private static final float RELEASE_POWER = 0.12f;
-    private static final float STRAIGHT_UP = -90;
+    private static final float STRAIGHT_UP = -RotationManager.STRAIGHT_DOWN;
 
     private final RegistryListSetting<MobEffect> effects = new RegistryListSetting<>("Effects",
         "Effects to shoot yourself with in this order.", BuiltInRegistries.MOB_EFFECT,
@@ -135,7 +135,7 @@ public final class PotionArrows extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || mc.player.isSpectator() || !allowed()) {
+        if (mc.player.isSpectator() || !allowed()) {
             return;
         }
         if (arrows.isEmpty()) {
@@ -154,6 +154,10 @@ public final class PotionArrows extends Module {
     }
 
     private void startDraw() {
+        // The draw waits whilst a meal or ShulkerPacker has the hotbar.
+        if (Hands.slotsTaken()) {
+            return;
+        }
         if (!bow.stillMine() && !bow.select(findBow())) {
             stop("Lost the bow.");
             return;
@@ -165,12 +169,10 @@ public final class PotionArrows extends Module {
         drawing = true;
     }
 
-    // The look packet goes out on its own. The release lands whilst the server
-    // still believes the bow points at the sky.
+    // The release lands whilst the server believes the bow points at the sky. The look turns
+    // back once the arrow is away.
     private void fire() {
-        mc.player.connection.send(new ServerboundMovePlayerPacket.Rot(
-            RotationManager.serverYaw(), STRAIGHT_UP, mc.player.onGround(),
-            mc.player.horizontalCollision));
+        RotationManager.glance(RotationManager.serverYaw(), STRAIGHT_UP);
         InputUtil.release(mc.options.keyUse);
         mc.gameMode.releaseUsingItem(mc.player);
         drawing = false;
@@ -190,7 +192,7 @@ public final class PotionArrows extends Module {
         if (onlyOnGround.isOn() && !mc.player.onGround()) {
             return stop("Not on the ground.");
         }
-        if (onlyInHoles.isOn() && !BlockUtil.playerInHole()) {
+        if (onlyInHoles.isOn() && !Holes.playerInHole()) {
             return stop("Not in a hole.");
         }
         return true;
@@ -223,11 +225,7 @@ public final class PotionArrows extends Module {
     // One arrow stack per wanted effect in the order the list gives them.
     private void collectArrows() {
         Set<Integer> taken = new HashSet<>();
-        for (Identifier id : effects.getValue()) {
-            if (!BuiltInRegistries.MOB_EFFECT.containsKey(id)) {
-                continue;
-            }
-            MobEffect effect = BuiltInRegistries.MOB_EFFECT.getValue(id);
+        for (MobEffect effect : effects.resolved()) {
             if (skipActive.isOn() && mc.player.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect))) {
                 continue;
             }

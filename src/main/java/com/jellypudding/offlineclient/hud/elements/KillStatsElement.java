@@ -1,27 +1,26 @@
 package com.jellypudding.offlineclient.hud.elements;
 
 import com.jellypudding.offlineclient.OfflineClient;
-import com.jellypudding.offlineclient.hud.HudElement;
+import com.jellypudding.offlineclient.hud.RowsElement;
 import com.jellypudding.offlineclient.hud.TextRow;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.util.KillTracker;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-// Your kills and deaths on this server. Each row lines up with the side the element is anchored to.
-public final class KillStatsElement extends HudElement {
+// Your kills and deaths on this server.
+public final class KillStatsElement extends RowsElement {
 
     private final BoolSetting deaths = new BoolSetting("Show deaths",
-        "Write how many times you have died.", true);
+        "Writes how many times you have died.", true);
     private final BoolSetting ratio = new BoolSetting("Show kill ratio",
-        "Write your kills for each death.", true);
+        "Writes your kills for each death.", true);
     private final BoolSetting streaks = new BoolSetting("Show streaks",
-        "Write your kills since you last died and the most you have managed.", true);
+        "Writes your kills since you last died and the most you have managed.", true);
     private final ColorSetting color = labelColor("Kill stats colour",
         "Colour of the row names. The numbers stay white.");
 
@@ -57,22 +56,8 @@ public final class KillStatsElement extends HudElement {
         return name + " §f" + value;
     }
 
-    private List<TextRow> rows(Font font) {
+    @Override
+    protected List<TextRow> rows(Font font) {
         return TextRow.lines(font, lines(), color);
-    }
-
-    @Override
-    public void render(GuiGraphicsExtractor context, Font font) {
-        TextRow.draw(context, font, rows(font), alignment());
-    }
-
-    @Override
-    public int width(Font font) {
-        return TextRow.widest(rows(font));
-    }
-
-    @Override
-    public int height(Font font) {
-        return TextRow.height(font, lines().size());
     }
 }

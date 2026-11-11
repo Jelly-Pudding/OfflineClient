@@ -2,25 +2,40 @@ package com.jellypudding.offlineclient.modules.player;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.Subscribe;
+import com.jellypudding.offlineclient.event.events.RightClickEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.friend.FriendManager;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
+import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.setting.TextSetting;
+import com.jellypudding.offlineclient.util.BlockUtil;
+import com.jellypudding.offlineclient.util.ChatPace;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.HotbarLoan;
+import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
+import com.jellypudding.offlineclient.util.SentLine;
+import com.jellypudding.offlineclient.util.SwingMode;
+import com.jellypudding.offlineclient.util.TextLines;
 import com.jellypudding.offlineclient.util.UseHold;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.BowItem;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.phys.BlockHitResult;
 
+import java.util.List;
 import java.util.Locale;
 
 public final class MiddleClickExtra extends Module {
@@ -46,8 +61,6 @@ public final class MiddleClickExtra extends Module {
         }
     }
 
-    private static final String NAME_TOKEN = "%player";
-
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
         "What a middle click does.", Mode.ADD_FRIEND)
         .describe(Mode.ADD_FRIEND, "Toggles the player under the crosshair as a friend.")
@@ -60,12 +73,12 @@ public final class MiddleClickExtra extends Module {
         .describe(Mode.ENCHANTED_APPLE, "Eats an enchanted golden apple.")
         .describe(Mode.CHORUS_FRUIT, "Eats a chorus fruit.");
     private final BoolSetting notify = new BoolSetting("Notify",
-        "Say in chat who was added or removed.", true).under(mode, Mode.ADD_FRIEND);
+        "Says in chat who was added or removed.", true).under(mode, Mode.ADD_FRIEND);
     private final BoolSetting sendMessage = new BoolSetting("Send message",
         "Sends a chat message to the player you add.", false).under(mode, Mode.ADD_FRIEND);
     private final TextSetting message = new TextSetting("Message",
-        "The message to send. The word %player becomes their name.",
-        "/msg %player I have added you as a friend.").under(sendMessage);
+        "The message to send. The word {player} becomes their name." + TextLines.LIVE_WORDS,
+        "/msg {player} I have added you as a friend.").under(sendMessage);
     private final BoolSetting quickSwap = new BoolSetting("Quick swap",
         "Also reaches into the main inventory by swapping the item into the hotbar and back.",
         false).under(mode, () -> !mode.is(Mode.ADD_FRIEND));
@@ -77,16 +90,38 @@ public final class MiddleClickExtra extends Module {
         .under(mode, () -> !mode.is(Mode.ADD_FRIEND));
     private final BoolSetting skipCreative = new BoolSetting("Skip in creative",
         "Leaves pick block alone in creative.", true);
+    private final BoolSetting rightPlace = new BoolSetting("Right click places",
+        "A right click on a block whilst a listed item is in your main hand places a block from your hotbar"
+            + " there and goes back to the item. An off hand holding anything but a totem keeps its right click.",
+        false);
+    private final RegistryListSetting<Item> placeWith = new RegistryListSetting<>("Place with",
+        "Items in your main hand that turn a right click into a placement. Click to pick them.",
+        BuiltInRegistries.ITEM, List.of(Items.WOODEN_SWORD, Items.COPPER_SWORD, Items.STONE_SWORD,
+            Items.GOLDEN_SWORD, Items.IRON_SWORD, Items.DIAMOND_SWORD, Items.NETHERITE_SWORD,
+            Items.WOODEN_PICKAXE, Items.COPPER_PICKAXE, Items.STONE_PICKAXE, Items.GOLDEN_PICKAXE,
+            Items.IRON_PICKAXE, Items.DIAMOND_PICKAXE, Items.NETHERITE_PICKAXE))
+        .under(rightPlace);
+    private final RegistryListSetting<Block> placeBlocks = new RegistryListSetting<>("Place blocks",
+        "Blocks to place. The one highest on the list that is in your hotbar goes down. Click to pick them.",
+        BuiltInRegistries.BLOCK, List.of(Blocks.OBSIDIAN))
+        .under(rightPlace);
+    private final BoolSetting warnNoBlock = new BoolSetting("Warn when no block",
+        "Says in chat when none of those blocks is in your hotbar.", true)
+        .under(rightPlace);
 
     private final HotbarLoan loan = new HotbarLoan();
+    private final SlotSwap slots = new SlotSwap();
     private final UseHold hold = new UseHold();
     private boolean using;
+    // A held use key repeats the right click. The missing block is told once until the key goes up.
+    private boolean toldNoBlock;
 
     public MiddleClickExtra() {
-        super("MiddleClickExtra", "Does something useful on a middle click.", Category.PLAYER);
+        super("MiddleClickExtra", "Does something useful on a middle click and can place blocks on a right click.",
+            Category.PLAYER);
         addSettings(mode, notify, sendMessage, message, quickSwap, swapBack, warnMissing,
-            skipCreative);
-        searchTags("friend", "add friend", "middle click pearl", "middle click bow");
+            skipCreative, rightPlace, placeWith, placeBlocks, warnNoBlock);
+        searchTags("friend", "add friend", "middle click pearl", "middle click bow", "right click place");
     }
 
     @Override
@@ -134,7 +169,7 @@ public final class MiddleClickExtra extends Module {
                 ? " §7is now a friend." : " §7is no longer a friend."));
         }
         if (added && sendMessage.isOn() && !message.isBlank()) {
-            ChatUtil.say(message.getValue().replace(NAME_TOKEN, name));
+            ChatPace.PLAYER.say(SentLine.of(message.getValue(), "player", name));
         }
     }
 
@@ -159,8 +194,46 @@ public final class MiddleClickExtra extends Module {
         loan.giveBack(swapBack.isOn());
     }
 
+    // After NoInteract has had its say about the click. The block goes down as if it had been in
+    // hand all along and the held slot comes back before anything else is sent.
+    @Subscribe(priority = Subscribe.LAST)
+    private void onRightClick(RightClickEvent event) {
+        if (!rightPlace.isOn() || !inGame() || using) {
+            return;
+        }
+        BlockHitResult hit = BlockUtil.aimedBlock();
+        if (hit == null || !placeWith.contains(mc.player.getMainHandItem().getItem()) || offHandUses()
+            || mc.player.isUsingItem() || Hands.slotsTaken()) {
+            return;
+        }
+        int slot = BlockUtil.findRankedBlockSlot(placeBlocks.getValue(), block -> true);
+        if (slot == -1) {
+            if (warnNoBlock.isOn() && !toldNoBlock) {
+                ChatUtil.error("No block to place in your hotbar.");
+            }
+            toldNoBlock = true;
+            return;
+        }
+        event.cancel();
+        mc.rightClickDelay = InputUtil.USE_DELAY;
+        slots.select(slot);
+        if (mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND, hit).consumesAction()) {
+            SwingMode.swingArm(InteractionHand.MAIN_HAND);
+        }
+        slots.restore();
+    }
+
+    // The game tries the off hand after the main hand. A totem there has no use.
+    private boolean offHandUses() {
+        ItemStack off = mc.player.getOffhandItem();
+        return !off.isEmpty() && !off.is(Items.TOTEM_OF_UNDYING);
+    }
+
     @Subscribe
     private void onTick(TickEvent event) {
+        if (!mc.options.keyUse.isDown()) {
+            toldNoBlock = false;
+        }
         if (!using) {
             return;
         }

@@ -8,6 +8,7 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.hud.HudManager.Placement;
 import com.jellypudding.offlineclient.modules.misc.ClickGuiModule;
 import com.jellypudding.offlineclient.modules.misc.HudModule;
+import com.jellypudding.offlineclient.render.ClientFonts;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.RenderUtil;
@@ -23,8 +24,10 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BooleanSupplier;
 
 // The draggable panel style of the ClickGUI. One panel per category with the
 // search bar floating over them and the tabs along the top.
@@ -55,9 +58,15 @@ public final class ClickGuiScreen extends GuiScreenBase {
 
     private static final String FAVOURITES = "Favourites";
 
+    // The panels on show. The last one is drawn on top.
     private final List<Panel> panels = new ArrayList<>();
+    // Every panel in the order they are tiled with the test for whether it is on show.
+    private final Map<Panel, BooleanSupplier> allPanels = new LinkedHashMap<>();
+    private final Map<Category, Panel> categoryPanels = new EnumMap<>(Category.class);
     private final Panel favourites;
     private int starred = -1;
+    // The count of changes to the hidden modules the category panels were last listed for.
+    private int hiddenSeen;
     private final List<ModuleRow> searchRows = new ArrayList<>();
     private final ScrollBar resultsScroll = new ScrollBar();
 
@@ -67,6 +76,7 @@ public final class ClickGuiScreen extends GuiScreenBase {
 
     private String tooltip;
     private String wrappedFor;
+    private Font wrappedWith;
     private List<String> wrappedLines = List.of();
 
     // Panels with no saved layout. Tiled once the screen size is known.
@@ -99,30 +109,26 @@ public final class ClickGuiScreen extends GuiScreenBase {
 
     public ClickGuiScreen() {
         JsonObject gui = OfflineClient.INSTANCE.getConfigManager().getGuiState();
-        if (gui.has(SEARCH_W)) {
-            searchWidth = Math.clamp(gui.get(SEARCH_W).getAsInt(),
-                SEARCH_WIDTH_MIN, SEARCH_WIDTH_MAX);
-        }
-        if (gui.has(SEARCH_X) && gui.has(SEARCH_Y)) {
-            searchX = gui.get(SEARCH_X).getAsInt();
-            searchY = gui.get(SEARCH_Y).getAsInt();
-            searchPlaced = gui.has(SEARCH_PLACED) && gui.get(SEARCH_PLACED).getAsBoolean();
-        }
+        searchPlaced = SavedLayout.read("the search bar", () -> restoreSearchBar(gui));
+        ClickGuiModule module = Modules.get(ClickGuiModule.class);
+        hiddenSeen = module.hiddenChanges();
         int startX = TILE_MARGIN;
         for (Category category : Category.values()) {
-            Panel panel = new Panel(category.getDisplayName(),
-                OfflineClient.INSTANCE.getModuleManager().getByCategory(category),
+            Panel panel = new Panel(category.getDisplayName(), module.shownIn(category),
                 settings, startX, TabStrip.bottom() + TILE_GAP);
-            if (!restorePanelStateSafely(panel)) {
+            if (!SavedLayout.read(panel.getTitle(), () -> restorePanelState(panel))) {
                 freshPanels.add(panel);
             }
-            panels.add(panel);
+            allPanels.put(panel, () -> module.showsCategory(category));
+            categoryPanels.put(category, panel);
             startX += GuiTheme.PANEL_WIDTH + TILE_GAP;
         }
         favourites = new Panel(FAVOURITES, Favourites.modules(), settings,
             TILE_MARGIN, TabStrip.bottom() + TILE_GAP);
-        restorePanelStateSafely(favourites);
-        syncFavourites();
+        SavedLayout.read(FAVOURITES, () -> restorePanelState(favourites));
+        // Favourites appears with the first star and goes with the last.
+        allPanels.put(favourites, () -> !favourites.getRows().isEmpty());
+        syncPanels();
 
         // The panel that was on top last time comes back on top.
         panels.sort(Comparator.comparingInt(panel -> layers.getOrDefault(panel, 0)));
@@ -131,36 +137,59 @@ public final class ClickGuiScreen extends GuiScreenBase {
         for (TabStrip.Tab tab : TabStrip.Tab.values()) {
             TabView.Source source = GuiSources.of(tab, this::saveState, this::reopen);
             if (source != null) {
-                views.put(tab, new TabView(source, settings));
+                views.put(tab, new TabView(source, this::setTooltip));
             }
         }
-        restoreTabState(gui);
+        SavedLayout.read("the tabs", () -> restoreTabState(gui));
         restoreSearch();
     }
 
-    // The panel appears with the first star and goes with the last.
-    private boolean syncFavourites() {
-        if (starred == Favourites.version()) {
+    // True when the bar was put somewhere by hand. A bar that was not goes back to the middle.
+    private boolean restoreSearchBar(JsonObject gui) {
+        if (gui.has(SEARCH_W)) {
+            searchWidth = Math.clamp(gui.get(SEARCH_W).getAsInt(), SEARCH_WIDTH_MIN, SEARCH_WIDTH_MAX);
+        }
+        if (!gui.has(SEARCH_X) || !gui.has(SEARCH_Y)) {
             return false;
         }
-        starred = Favourites.version();
-        List<Module> picked = Favourites.modules();
-        favourites.refresh(picked);
-        boolean listed = panels.contains(favourites);
-        if (picked.isEmpty() && listed) {
-            panels.remove(favourites);
-            return true;
-        }
-        if (!picked.isEmpty() && !listed) {
-            panels.add(favourites);
-            return true;
-        }
-        return false;
+        searchX = gui.get(SEARCH_X).getAsInt();
+        searchY = gui.get(SEARCH_Y).getAsInt();
+        return gui.has(SEARCH_PLACED) && gui.get(SEARCH_PLACED).getAsBoolean();
     }
 
-    private void restoreTabState(JsonObject gui) {
+    // Puts each panel on show or takes it off. A panel that comes back lands on top. True
+    // when one came or went.
+    private boolean syncPanels() {
+        if (starred != Favourites.version()) {
+            starred = Favourites.version();
+            favourites.refresh(Favourites.modules());
+        }
+        ClickGuiModule module = Modules.get(ClickGuiModule.class);
+        if (hiddenSeen != module.hiddenChanges()) {
+            hiddenSeen = module.hiddenChanges();
+            categoryPanels.forEach((category, panel) -> panel.refresh(module.shownIn(category)));
+        }
+        boolean changed = false;
+        for (var entry : allPanels.entrySet()) {
+            Panel panel = entry.getKey();
+            boolean listed = panels.contains(panel);
+            if (entry.getValue().getAsBoolean() == listed) {
+                continue;
+            }
+            if (listed) {
+                panels.remove(panel);
+            } else {
+                panels.add(panel);
+            }
+            changed = true;
+        }
+        return changed;
+    }
+
+    // True when the layout held the sizes of the boxes the tabs open.
+    private boolean restoreTabState(JsonObject gui) {
         if (!gui.has(TAB_STATE) || !gui.get(TAB_STATE).isJsonObject()) {
-            return;
+            return false;
         }
         JsonObject state = gui.getAsJsonObject(TAB_STATE);
         for (var entry : views.entrySet()) {
@@ -177,18 +206,10 @@ public final class ClickGuiScreen extends GuiScreenBase {
                 entry.getValue().setHeight(box.get("rows").getAsInt());
             }
         }
+        return true;
     }
 
-    // A hand edited or corrupt layout must never stop the GUI opening.
-    private boolean restorePanelStateSafely(Panel panel) {
-        try {
-            return restorePanelState(panel);
-        } catch (RuntimeException e) {
-            OfflineClient.LOG.warn("Ignoring a broken saved layout for {}", panel.getTitle(), e);
-            return false;
-        }
-    }
-
+    // True when the layout held a place for the panel.
     private boolean restorePanelState(Panel panel) {
         JsonObject gui = OfflineClient.INSTANCE.getConfigManager().getGuiState();
         if (!gui.has(panel.getTitle()) || !gui.get(panel.getTitle()).isJsonObject()) {
@@ -215,11 +236,12 @@ public final class ClickGuiScreen extends GuiScreenBase {
     @Override
     protected void saveState() {
         JsonObject gui = OfflineClient.INSTANCE.getConfigManager().getGuiState();
-        for (int layer = 0; layer < panels.size(); layer++) {
-            Panel panel = panels.get(layer);
+        for (Panel panel : allPanels.keySet()) {
             JsonObject state = new JsonObject();
             panel.writeFrame(state);
-            state.addProperty("layer", layer);
+            // A panel off show is saved above the rest and comes back on top.
+            int layer = panels.indexOf(panel);
+            state.addProperty("layer", layer < 0 ? panels.size() : layer);
             JsonArray expanded = new JsonArray();
             for (ModuleRow row : panel.getRows()) {
                 if (row.isExpanded()) {
@@ -249,7 +271,7 @@ public final class ClickGuiScreen extends GuiScreenBase {
     @Override
     protected void releaseDrags() {
         releaseOwn();
-        for (Panel panel : panels) {
+        for (Panel panel : allPanels.keySet()) {
             panel.releaseDrags();
         }
     }
@@ -293,11 +315,13 @@ public final class ClickGuiScreen extends GuiScreenBase {
         laidOutW = viewWidth();
         laidOutH = viewHeight();
         placeSearch(wasW, wasH);
+        // Walked in the order they were built. The stacking order changes with every click
+        // and would shuffle the tiles.
         List<Panel> loose = new ArrayList<>();
-        for (Panel panel : panels) {
+        for (Panel panel : allPanels.keySet()) {
             if (panel.isPlaced()) {
                 keepPlace(panel, wasW, wasH);
-            } else {
+            } else if (panels.contains(panel)) {
                 loose.add(panel);
             }
         }
@@ -456,7 +480,7 @@ public final class ClickGuiScreen extends GuiScreenBase {
     @Override
     protected void renderGui(GuiGraphicsExtractor context, int mouseX, int mouseY, float partialTicks) {
         tooltip = null;
-        Font font = OfflineClient.MC.font;
+        Font font = ClientFonts.gui();
         if (drawnAt != scale()) {
             layout();
         }
@@ -464,7 +488,7 @@ public final class ClickGuiScreen extends GuiScreenBase {
         if (openTab != null && (!showsTabs() || !openTab.isShown())) {
             openTab = null;
         }
-        if (syncFavourites()) {
+        if (syncPanels()) {
             layout();
         }
         if (openTab == null) {
@@ -494,8 +518,8 @@ public final class ClickGuiScreen extends GuiScreenBase {
             tabs.render(context, viewWidth(), mouseX, mouseY, openTab);
         }
 
-        if (tooltip != null && !tooltip.isEmpty() && hoverHelp()) {
-            RenderUtil.tooltip(context, font, wrap(tooltip), mouseX, mouseY,
+        if (tooltip != null && !tooltip.isEmpty() && GuiTheme.hoverHelp()) {
+            RenderUtil.tooltip(context, font, wrap(font, tooltip), mouseX, mouseY,
                 viewWidth(), viewHeight(), GuiTheme.bgTooltip(), GuiTheme.text());
         }
     }
@@ -508,7 +532,7 @@ public final class ClickGuiScreen extends GuiScreenBase {
         if (hud == null || OfflineClient.MC.player == null) {
             return;
         }
-        for (Placement placed : hud.getManager().shown(OfflineClient.MC.font, width, height, hud.overlayHidden())) {
+        for (Placement placed : hud.getManager().shown(ClientFonts.hud(), width, height, hud.overlayHidden())) {
             covered.add(RenderUtil.scaled(placed.left(), placed.top(),
                 placed.left() + placed.width(), placed.top() + placed.height(), scale()));
         }
@@ -529,7 +553,7 @@ public final class ClickGuiScreen extends GuiScreenBase {
     }
 
     private static boolean showsTabs() {
-        return OfflineClient.INSTANCE.getModuleManager().get(ClickGuiModule.class).showsTabs();
+        return Modules.get(ClickGuiModule.class).showsTabs();
     }
 
     private void renderSearch(GuiGraphicsExtractor context, Font font, int mouseX, int mouseY) {
@@ -613,10 +637,11 @@ public final class ClickGuiScreen extends GuiScreenBase {
         }
     }
 
-    private List<String> wrap(String text) {
-        if (!text.equals(wrappedFor)) {
+    private List<String> wrap(Font font, String text) {
+        if (!text.equals(wrappedFor) || font != wrappedWith) {
             wrappedFor = text;
-            wrappedLines = RenderUtil.wrap(OfflineClient.MC.font, text, TOOLTIP_WIDTH);
+            wrappedWith = font;
+            wrappedLines = RenderUtil.wrap(font, text, TOOLTIP_WIDTH);
         }
         return wrappedLines;
     }
@@ -628,6 +653,9 @@ public final class ClickGuiScreen extends GuiScreenBase {
 
     @Override
     protected boolean clickGui(double mx, double my, int button) {
+        if (settings.takeClick(button)) {
+            return true;
+        }
         settings.beginClick();
         pressedBar = false;
 
@@ -752,7 +780,8 @@ public final class ClickGuiScreen extends GuiScreenBase {
     @Override
     protected boolean releaseGui(double mx, double my, int button) {
         releaseOwn();
-        for (Panel panel : panels) {
+        // A panel taken off show whilst it was held still has to let go.
+        for (Panel panel : allPanels.keySet()) {
             panel.mouseReleased();
         }
         return false;
@@ -828,6 +857,11 @@ public final class ClickGuiScreen extends GuiScreenBase {
             return true;
         }
         return super.keyPressed(event);
+    }
+
+    @Override
+    public boolean keyReleased(KeyEvent event) {
+        return openTab != null && views.get(openTab).keyReleased(event) || super.keyReleased(event);
     }
 
     @Override

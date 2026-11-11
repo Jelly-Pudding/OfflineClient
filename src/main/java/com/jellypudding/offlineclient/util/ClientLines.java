@@ -1,7 +1,8 @@
 package com.jellypudding.offlineclient.util;
 
 import com.jellypudding.offlineclient.OfflineClient;
-import com.jellypudding.offlineclient.modules.misc.BetterChat;
+import com.jellypudding.offlineclient.hud.elements.ClientLinesElement;
+import com.jellypudding.offlineclient.modules.misc.Conceal;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.Style;
 
@@ -13,8 +14,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.Predicate;
 
-// The client's own chat lines whilst BetterChat sends them to a piece of the HUD of their own.
-// Every line is written and read on the game thread.
+// The client's own chat lines whilst the Client lines piece of the HUD is on and takes them out
+// of the chat. Every line is written and read on the game thread.
 public final class ClientLines {
 
     // One line and when it came on the wall clock.
@@ -55,18 +56,23 @@ public final class ClientLines {
         OfflineClient.MC.execute(() -> inChat(reply));
     }
 
-    // Keeps the line for the panel whilst BetterChat splits the client's lines from the chat.
-    // False leaves it to the chat. A line with a link in it stays there to be clicked.
+    // Keeps the line for the panel whilst its piece of the HUD shows. False leaves it to the chat.
+    // A line with a link in it stays there to be clicked.
     public static boolean take(Component text) {
-        BetterChat betterChat = Modules.get(BetterChat.class);
-        if (commands > 0 || betterChat == null || !betterChat.splitsClientLines() || clickable(text)) {
+        if (commands > 0 || !panelShows() || clickable(text)) {
             return false;
         }
-        LINES.addFirst(new Line(text, System.currentTimeMillis()));
+        // The chat hides names once as a line comes in and the panel keeps its lines the same way.
+        LINES.addFirst(new Line(EntityUtil.displayed(text), System.currentTimeMillis()));
         if (LINES.size() > KEPT) {
             LINES.removeLast();
         }
         return true;
+    }
+
+    // With the piece or the whole HUD off or Conceal hiding the HUD nothing would draw the line.
+    private static boolean panelShows() {
+        return Modules.hudShows(ClientLinesElement.class) && !Conceal.hides(Conceal.Part.OVERLAY);
     }
 
     private static boolean clickable(Component text) {

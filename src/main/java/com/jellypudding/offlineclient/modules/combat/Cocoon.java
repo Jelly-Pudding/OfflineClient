@@ -59,9 +59,9 @@ public final class Cocoon extends Module {
         .describe(Shape.BOX, "A box round your body.");
     private final NumberSetting ballRadius = new NumberSetting("Ball radius",
         "How far the ball reaches from your body. One and a half fills in the edges and two the corners.",
-        1, 1, 5, 0.5, " blocks").min(1).max(MAX_RADIUS).under(shape, Shape.BALL);
+        1, 1, 5, 0.5, " blocks").max(MAX_RADIUS).under(shape, Shape.BALL);
     private final NumberSetting boxRadius = new NumberSetting("Box radius",
-        "How far the box reaches from your body.", 1, 1, 4, 1, " blocks").min(1).max(MAX_RADIUS)
+        "How far the box reaches from your body.", 1, 1, 4, 1, " blocks").max(MAX_RADIUS)
         .under(shape, Shape.BOX);
     private final EnumSetting<Fill> fill = new EnumSetting<>("Fill",
         "Which blocks of the shape are filled.", Fill.SHELL)
@@ -75,11 +75,11 @@ public final class Cocoon extends Module {
         "Blocks never used for the walls. Click to pick them.", BuiltInRegistries.BLOCK,
         List.of(Blocks.TNT, Blocks.ANCIENT_DEBRIS, Blocks.DIAMOND_BLOCK, Blocks.NETHERITE_BLOCK));
     private final NumberSetting perRound = new NumberSetting("Blocks per round",
-        "How many blocks go down in one round.", 4, 1, 8, 1).min(1);
+        "How many blocks go down in one round.", 4, 1, 8, 1);
     private final NumberSetting delay = new NumberSetting("Delay",
-        "Ticks to wait between rounds.", 0, 0, 10, 1, " ticks").min(0);
+        "Ticks to wait between rounds.", 0, 0, 10, 1, " ticks");
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Send a look packet towards each block.", true);
+        "Sends a look packet towards each block.", true);
     private final BoolSetting centre = new BoolSetting("Centre",
         "Moves you to the middle of your block when the module turns on.", true);
     private final BoolSetting crouch = new BoolSetting("Crouch for roof",

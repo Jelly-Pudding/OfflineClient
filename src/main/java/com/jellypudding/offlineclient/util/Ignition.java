@@ -50,8 +50,7 @@ public final class Ignition {
 
     // Shows both rows only whilst the parent holds the value.
     public <E extends Enum<E>> Ignition under(EnumSetting<E> parent, E value) {
-        order.under(parent, value);
-        antiBreak.under(parent, value);
+        Setting.under(settings(), parent, value);
         return this;
     }
 
@@ -131,7 +130,7 @@ public final class Ignition {
     // Fire only goes into an empty space. Grass or a flower in the cell is broken first and the
     // fire follows on a later tick. True whilst the cell is being cleared.
     public static boolean clear(BlockPos cell) {
-        if (!BlockUtil.clearsInOneHit(cell)) {
+        if (!BreakTime.clearsInOneHit(cell)) {
             return false;
         }
         MC.gameMode.startDestroyBlock(cell, Direction.UP);

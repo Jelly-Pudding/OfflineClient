@@ -22,7 +22,7 @@ public final class NoKnockback extends Module {
         "How much vertical knockback to take. Over a hundred throws you further and under nought reverses it.",
         0, -100, 200, 1, "%");
     private final BoolSetting separateExplosions = new BoolSetting("Separate explosions",
-        "Give explosions their own pair of sliders.", false);
+        "Gives explosions their own pair of sliders.", false);
     private final NumberSetting explosionHorizontal = new NumberSetting("Explosion horizontal",
         "How much sideways push to take from explosions.", 100, -100, 200, 1, "%")
         .under(separateExplosions);

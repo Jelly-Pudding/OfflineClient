@@ -19,7 +19,6 @@ public final class TextMarkup {
     // A text box has no enter key of its own. A typed backslash and n breaks the line.
     public static final Pattern LINE_BREAK = Pattern.compile(Pattern.quote("\\n"));
 
-    private static final char CODE = '&';
     private static final char HEX = '#';
     // The ampersand and the character after it.
     private static final int CODE_LENGTH = 2;
@@ -52,7 +51,7 @@ public final class TextMarkup {
         StringBuilder run = new StringBuilder();
         int at = 0;
         while (at < text.length()) {
-            Code code = text.charAt(at) == CODE ? code(text, at, style) : null;
+            Code code = text.charAt(at) == FormatCodes.TYPED ? code(text, at, style) : null;
             if (code == null) {
                 run.append(text.charAt(at));
                 at++;

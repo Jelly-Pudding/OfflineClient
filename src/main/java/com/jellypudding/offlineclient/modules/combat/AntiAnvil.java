@@ -32,10 +32,10 @@ public final class AntiAnvil extends Module {
     private static final int ROOF_COLOR = 0xFFFF9040;
 
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Send a look packet towards the block.", true);
+        "Sends a look packet towards the block.", true);
     private final EnumSetting<SwingMode> swing = SwingMode.setting(SwingMode.BOTH);
     private final BoolSetting render = new BoolSetting("Show roof",
-        "Outline the block being placed.", true);
+        "Outlines the block being placed.", true);
 
     private final SlotSwap slots = new SlotSwap();
     private BlockPos roof;
@@ -66,7 +66,7 @@ public final class AntiAnvil extends Module {
     @Subscribe
     private void onTick(TickEvent event) {
         roof = null;
-        if (!inGame() || mc.player.isSpectator()) {
+        if (mc.player.isSpectator()) {
             return;
         }
         BlockPos feet = mc.player.blockPosition();

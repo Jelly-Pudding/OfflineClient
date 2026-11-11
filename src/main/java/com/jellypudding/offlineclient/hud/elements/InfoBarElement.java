@@ -1,7 +1,6 @@
 package com.jellypudding.offlineclient.hud.elements;
 
 import com.jellypudding.offlineclient.OfflineClient;
-import com.jellypudding.offlineclient.config.WaypointStore;
 import com.jellypudding.offlineclient.hud.HudElement;
 import com.jellypudding.offlineclient.hud.RowCache;
 import com.jellypudding.offlineclient.modules.render.Freecam;
@@ -10,6 +9,7 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.CompassPoint;
+import com.jellypudding.offlineclient.util.Dimension;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.LiveText;
 import com.jellypudding.offlineclient.util.Modules;
@@ -91,9 +91,9 @@ public final class InfoBarElement extends HudElement {
         if (coords.isOn()) {
             built.add(figures("XYZ", BlockUtil.text(pos)));
             String dimension = ServerInfo.dimension();
-            BlockPos there = otherDimension.isOn() ? WaypointStore.acrossPortal(player.position(), dimension) : null;
+            BlockPos there = otherDimension.isOn() ? Dimension.acrossPortal(player.position(), dimension) : null;
             if (there != null) {
-                built.add(figures(ServerInfo.dimensionName(WaypointStore.otherSide(dimension)),
+                built.add(figures(ServerInfo.dimensionName(Dimension.otherSide(dimension)),
                     there.getX() + " " + there.getZ()));
             }
         }

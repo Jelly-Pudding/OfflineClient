@@ -28,7 +28,8 @@ public final class SearchField {
     private boolean focused;
     private boolean selecting;
 
-    // Where the box and its text last drew. Clicks are measured against these.
+    // Where the box and its text last drew and in what font. Clicks are measured against these.
+    private Font font = OfflineClient.MC.font;
     private int boxX;
     private int boxY;
     private int boxWidth;
@@ -89,6 +90,7 @@ public final class SearchField {
     // A tally such as a match count sits left of the cross when given.
     public void render(GuiGraphicsExtractor context, Font font, int x, int y, int w,
                        int mouseX, int mouseY, String tally) {
+        this.font = font;
         boxX = x;
         boxY = y;
         boxWidth = w;
@@ -141,7 +143,6 @@ public final class SearchField {
         }
         focused = true;
         selecting = true;
-        Font font = OfflineClient.MC.font;
         boolean onText = mx < textX + text.drawnWidth(font, room) + TEXT_SLACK;
         text.click(font, textX, room, mx, false);
         return onText ? Click.TEXT : Click.SPACE;
@@ -150,7 +151,7 @@ public final class SearchField {
     // Stretches the selection from the press to the pointer.
     public void drag(double mx) {
         if (selecting) {
-            text.click(OfflineClient.MC.font, textX, room, mx, true);
+            text.click(font, textX, room, mx, true);
         }
     }
 

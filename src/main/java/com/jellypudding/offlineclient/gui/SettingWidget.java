@@ -1,6 +1,7 @@
 package com.jellypudding.offlineclient.gui;
 
 import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.render.ClientFonts;
 import com.jellypudding.offlineclient.setting.ActionSetting;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
@@ -70,12 +71,21 @@ public final class SettingWidget {
     // The tick in front of what an action did and the gap after it.
     private static final int TICK_ROOM = 9;
 
-    private static final String BIND_HELP =
-        "Click here and then press a key. DELETE unbinds. ESC cancels.";
+    // The way chip of a module's key and the gap between it and the key.
+    private static final String SWITCH_LABEL = "toggle";
+    private static final String HOLD_LABEL = "hold";
+    private static final String SWITCH_HELP =
+        "The key switches the module on and off. Click to keep the module on only whilst the key is down.";
+    private static final String HOLD_HELP =
+        "The module is on only whilst the key is down. Click to make the key switch it on and off.";
+    private static final int CHIP_GAP = 3;
     private static final String RANK_HELP =
         "Drag a row up or down to change the order. Click it to switch it on or off.";
     private static final String GRID_HELP =
         "Click or drag to paint cells. Right click rubs them out.";
+    private static final String HEX_HELP =
+        "Click to type the colour as a hex code such as " + ColorSetting.HEX_MARK + "33CCFF. The code can be"
+            + " copied there and pasted into another colour.";
 
     private SettingWidget() {
     }
@@ -93,6 +103,8 @@ public final class SettingWidget {
         void startEditing(NumberSetting setting);
 
         void startEditing(TextSetting setting);
+
+        void startEditing(ColorSetting setting);
 
         void startListening(KeybindSetting setting);
 
@@ -267,11 +279,12 @@ public final class SettingWidget {
     }
 
     // A bind row wants the help text and not the description of the key. It also names whatever
-    // else answers to the key. The choices of a ranked list explain how to move them and the
-    // cells of a grid how to paint.
-    private static String tooltipOf(Setting<?> setting, double my, int y) {
+    // else answers to the key and its way chip says what the two ways are. The choices of a
+    // ranked list explain how to move them and the cells of a grid how to paint.
+    private static String tooltipOf(Setting<?> setting, boolean overWay, double my, int y) {
         return switch (setting) {
-            case KeybindSetting bind -> BIND_HELP + KeyUse.alsoUsedBy(bind.getValue(), bind);
+            case KeybindSetting bind when overWay -> bind.isHold() ? HOLD_HELP : SWITCH_HELP;
+            case KeybindSetting bind -> BindCapture.HELP + KeyUse.alsoUsedBy(bind.getValue(), bind);
             case RankSetting<?> rank when entryAt(rank, my, y) >= 0 -> RANK_HELP;
             case GridSetting ignored when my >= y + GuiTheme.SETTING_HEIGHT -> GRID_HELP;
             default -> setting.getDescription();
@@ -301,7 +314,7 @@ public final class SettingWidget {
         return GuiTheme.textY(y, banded ? VALUE_BAND : GuiTheme.SETTING_HEIGHT);
     }
 
-    private static void render(GuiGraphicsExtractor context, Font font, Setting<?> setting,
+    private static void render(GuiGraphicsExtractor context, Font font, Setting<?> setting, boolean holdable,
                               int x, int y, int width, int mouseX, int mouseY,
                               boolean hoverAllowed, Host host) {
         int w = width;
@@ -309,8 +322,9 @@ public final class SettingWidget {
         int ty = GuiTheme.textY(y, GuiTheme.SETTING_HEIGHT);
         int nameY = textTop(setting, y);
         boolean hovered = hoverAllowed && isOver(mouseX, mouseY, x, y, w, h);
+        boolean overWay = hovered && holdable && overWayChip(font, (KeybindSetting) setting, host, mouseX, x, w);
         if (hovered) {
-            host.setTooltip(tooltipOf(setting, mouseY, y));
+            host.setTooltip(tooltipOf(setting, overWay, mouseY, y));
             int washed = litInParts(setting) ? GuiTheme.SETTING_HEIGHT : h;
             if (mouseY < y + washed) {
                 context.fill(x, y, x + w, y + washed, GuiTheme.HOVER_WASH);
@@ -331,10 +345,15 @@ public final class SettingWidget {
                 renderNumber(context, font, n, x, y, w, mouseX, mouseY, hoverAllowed, host);
             }
             case KeybindSetting k -> {
-                String label = host.isBinding(k) ? "press a key" : k.getKeyName();
-                int room = w - 2 * PAD - font.width(label) - 12;
+                String label = keyLabel(k, host);
+                int room = w - 2 * PAD - chipWidth(font, label) - 4;
+                if (holdable) {
+                    String way = wayLabel(k);
+                    chip(context, font, wayChipRight(font, label, x, w), y, way, false, overWay);
+                    room -= chipWidth(font, way) + CHIP_GAP;
+                }
                 context.text(font, trimEnd(font, k.getName(), room), x + PAD, ty, nameColor, false);
-                keyChip(context, font, x + w - PAD, y, label, host.isBinding(k));
+                chip(context, font, x + w - PAD, y, label, host.isBinding(k), true);
             }
             case EnumSetting<?> e -> {
                 context.text(font, e.getName(), x + PAD, ty, nameColor, false);
@@ -343,10 +362,20 @@ public final class SettingWidget {
                 context.text(font, value, x + w - PAD - font.width(value), ty,
                     GuiTheme.accentText(), false);
             }
+            // The hex code takes the place of the name whilst it is typed.
             case ColorSetting c -> {
                 int room = w - 2 * PAD - BOX - rainbowChipWidth(font) - 8;
-                context.text(font, trimEnd(font, c.getName(), room), x + PAD, nameY, nameColor, false);
-                renderColor(context, font, c, x, y, w);
+                boolean editing = host.isEditing(c);
+                boolean overSwatch = hovered && overSwatch(mouseX, mouseY, x, y, w);
+                if (editing) {
+                    host.getEditField().render(context, font, x + PAD, nameY, room, GuiTheme.accentText(), true);
+                } else {
+                    context.text(font, trimEnd(font, c.getName(), room), x + PAD, nameY, nameColor, false);
+                }
+                renderColor(context, font, c, x, y, w, editing || overSwatch);
+                if (overSwatch) {
+                    host.setTooltip(HEX_HELP);
+                }
             }
             case PickList<?> r -> {
                 String value = r.size() + " chosen";
@@ -520,6 +549,11 @@ public final class SettingWidget {
         return isOver(mx, my, rainbowChipX(font, x, w), y + 1, rainbowChipWidth(font), BOX);
     }
 
+    // The square at the end of a colour row that shows the colour.
+    private static boolean overSwatch(double mx, double my, int x, int y, int w) {
+        return isOver(mx, my, x + w - PAD - BOX, y + 1, BOX, BOX);
+    }
+
     // Top of the hue bar at index zero and of the two bars stacked below it.
     private static int barTop(int y, int index) {
         return y + GuiTheme.SETTING_HEIGHT - 4 + index * BAR_PITCH;
@@ -540,7 +574,7 @@ public final class SettingWidget {
     }
 
     private static void renderColor(GuiGraphicsExtractor context, Font font, ColorSetting c,
-                                    int x, int y, int w) {
+                                    int x, int y, int w, boolean swatchLit) {
         int chipX = rainbowChipX(font, x, w);
         int chipW = rainbowChipWidth(font);
         RenderUtil.roundedBorderedRect(context, chipX, y + 1, chipX + chipW, y + 1 + BOX, 2,
@@ -550,7 +584,8 @@ public final class SettingWidget {
         context.text(font, RAINBOW_LABEL, chipX + 3, y + 1 + (BOX - GuiTheme.TEXT_HEIGHT) / 2,
             c.isRainbow() ? GuiTheme.text() : GuiTheme.textFaint(), false);
 
-        box(context, x + w - PAD - BOX, y + 1, BOX, c.getColor());
+        RenderUtil.roundedBorderedRect(context, x + w - PAD - BOX, y + 1, x + w - PAD, y + 1 + BOX, 2,
+            c.getColor(), swatchLit ? GuiTheme.accentText() : GuiTheme.outline());
         int barX = x + PAD;
         int barW = w - 2 * PAD;
         RenderUtil.hueBar(context, barX, barTop(y, HUE_CHANNEL), barW, BAR_HEIGHT);
@@ -696,10 +731,12 @@ public final class SettingWidget {
     }
 
     // The strip left of the block carries a mark beside every row that differs from its
-    // default. The reset row closes the block whilst anything in it is changed.
-    public static void renderBlock(GuiGraphicsExtractor context, Font font, SettingBlock block,
+    // default. The reset row closes the block whilst anything in it is changed. The rows are
+    // drawn in the font a click measures them with.
+    public static void renderBlock(GuiGraphicsExtractor context, SettingBlock block,
                                    int rowX, int rowY, int rowW, int mouseX, int mouseY,
                                    boolean hoverAllowed, Host host) {
+        Font font = ClientFonts.gui();
         int cx = blockContentX(rowX);
         int cw = blockContentWidth(rowW);
         Layout layout = layout(block);
@@ -731,7 +768,7 @@ public final class SettingWidget {
                 sw -= FOLD_ZONE;
             }
             strip.wash(context, i, sx, y, sw, h);
-            render(context, font, setting, sx, y, sw, mouseX, mouseY, hoverAllowed, host);
+            render(context, font, setting, block.holdable(setting), sx, y, sw, mouseX, mouseY, hoverAllowed, host);
             strip.mark(context, i, y, h, textTop(setting, y), mouseX, mouseY, hoverAllowed, host);
             y += h;
         }
@@ -778,47 +815,71 @@ public final class SettingWidget {
                     return true;
                 }
                 drag.indent = sx - cx;
-                click(setting, mx, my, sx, y, cw - (sx - cx), button, host, drag);
+                click(setting, block.holdable(setting), mx, my, sx, y, cw - (sx - cx), button, host, drag);
                 return true;
             }
             y += h;
         }
         if (ResetFoot.shows(block) && ResetMarks.onLine(mx, my, rowX, cx + cw, y, GuiTheme.SETTING_HEIGHT)) {
-            ResetFoot.press(block, button);
+            ResetFoot.press(block, button, mx, cx + cw);
             return true;
         }
         return false;
     }
 
-    // The chip ends at the given right edge.
-    private static void keyChip(GuiGraphicsExtractor context, Font font, int right, int y,
-                                String label, boolean listening) {
-        int w = font.width(label) + 8;
+    private static String keyLabel(KeybindSetting bind, Host host) {
+        return host.isBinding(bind) ? BindCapture.LISTENING : bind.getValueString();
+    }
+
+    private static String wayLabel(KeybindSetting bind) {
+        return bind.isHold() ? HOLD_LABEL : SWITCH_LABEL;
+    }
+
+    private static int chipWidth(Font font, String label) {
+        return font.width(label) + 8;
+    }
+
+    // The way chip sits left of the key chip.
+    private static int wayChipRight(Font font, String keyLabel, int x, int w) {
+        return x + w - PAD - chipWidth(font, keyLabel) - CHIP_GAP;
+    }
+
+    private static boolean overWayChip(Font font, KeybindSetting bind, Host host, double mx, int x, int w) {
+        int right = wayChipRight(font, keyLabel(bind, host), x, w);
+        return mx >= right - chipWidth(font, wayLabel(bind)) && mx < right;
+    }
+
+    // The chip ends at the given right edge. A lit one stands out from the row and a listening
+    // one takes the accent.
+    private static void chip(GuiGraphicsExtractor context, Font font, int right, int y,
+                             String label, boolean listening, boolean lit) {
         int h = GuiTheme.SETTING_HEIGHT - 4;
-        int left = right - w;
+        int left = right - chipWidth(font, label);
         int top = y + 2;
         RenderUtil.roundedRect(context, left, top, right, top + h, 2,
-            listening ? GuiTheme.accentOn(GuiTheme.bgRow(), 0.5f) : GuiTheme.bgRowHover());
+            listening ? GuiTheme.accentOn(GuiTheme.bgRow(), 0.5f) : lit ? GuiTheme.bgRowHover() : GuiTheme.bgRow());
         context.guiRenderState.up();
         context.text(font, label, left + 4, GuiTheme.textY(top, h),
-            listening ? GuiTheme.accentText() : GuiTheme.text(), false);
+            listening ? GuiTheme.accentText() : lit ? GuiTheme.text() : GuiTheme.textDim(), false);
     }
 
     // The hit test has already been done by the caller.
-    private static void click(Setting<?> setting, double mx, double my, int x, int y, int width,
-                              int button, Host host, Drag drag) {
+    private static void click(Setting<?> setting, boolean holdable, double mx, double my, int x, int y,
+                              int width, int button, Host host, Drag drag) {
         // Only the left and the right button act on a setting.
         if (!InputUtil.isLeft(button) && !InputUtil.isRight(button)) {
             return;
         }
         switch (setting) {
+            case KeybindSetting k when holdable && overWayChip(ClientFonts.gui(), k, host, mx, x, width) ->
+                k.setHold(!k.isHold());
             case KeybindSetting k -> {
                 host.startListening(k);
                 return;
             }
             case BoolSetting b -> b.toggle();
             case NumberSetting n -> {
-                if (InputUtil.isLeft(button) && overNumberValue(OfflineClient.MC.font, mx, my, n, x, y, width)) {
+                if (InputUtil.isLeft(button) && overNumberValue(ClientFonts.gui(), mx, my, n, x, y, width)) {
                     host.startEditing(n);
                     return;
                 }
@@ -828,7 +889,11 @@ public final class SettingWidget {
             }
             case EnumSetting<?> e -> e.cycle(InputUtil.isLeft(button));
             case ColorSetting c -> {
-                if (InputUtil.isRight(button) || overRainbowChip(OfflineClient.MC.font, mx, my, x, y, width)) {
+                if (InputUtil.isLeft(button) && overSwatch(mx, my, x, y, width)) {
+                    host.startEditing(c);
+                    return;
+                }
+                if (InputUtil.isRight(button) || overRainbowChip(ClientFonts.gui(), mx, my, x, y, width)) {
                     c.setRainbow(!c.isRainbow());
                 } else if (my >= barTop(y, HUE_CHANNEL)) {
                     c.setRainbow(false);
@@ -907,10 +972,5 @@ public final class SettingWidget {
         if (on) {
             RenderUtil.tick(context, x + 2, y + 2, GuiTheme.contrastText(GuiTheme.accent()));
         }
-    }
-
-    private static void box(GuiGraphicsExtractor context, int x, int y, int size, int color) {
-        RenderUtil.roundedBorderedRect(context, x, y, x + size, y + size, 2,
-            color, GuiTheme.outline());
     }
 }

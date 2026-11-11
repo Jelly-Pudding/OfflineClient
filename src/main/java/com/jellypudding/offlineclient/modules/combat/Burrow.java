@@ -1,6 +1,7 @@
 package com.jellypudding.offlineclient.modules.combat;
 
 import com.jellypudding.offlineclient.event.Subscribe;
+import com.jellypudding.offlineclient.event.events.ClientTickEvent;
 import com.jellypudding.offlineclient.event.events.KeyPressEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
@@ -12,7 +13,7 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
-import com.jellypudding.offlineclient.util.InputUtil;
+import com.jellypudding.offlineclient.util.Holes;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.MoveGate;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
@@ -21,6 +22,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.util.Mth;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.level.block.AnvilBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 
@@ -37,11 +39,12 @@ public final class Burrow extends Module {
 
     public enum Lift { JUMP, PACKET }
 
-    public enum Source { LIST, HELD }
+    public enum Source { LIST, ANVIL, HELD }
 
     private final EnumSetting<Source> source = new EnumSetting<>("Block",
         "Where the block comes from.", Source.LIST)
         .describe(Source.LIST, "The first block from the list below that is in your hotbar.")
+        .describe(Source.ANVIL, "Any anvil in your hotbar whatever state it is in.")
         .describe(Source.HELD, "Whatever block is in your main hand.");
     private final RegistryListSetting<Block> blocks = new RegistryListSetting<>("Blocks",
         "Blocks to use in order of preference.",
@@ -52,7 +55,7 @@ public final class Burrow extends Module {
         .describe(Lift.JUMP, "Jumps for real.")
         .describe(Lift.PACKET, "Sends position packets to hop up without moving on screen.");
     private final BoolSetting automatic = new BoolSetting("Automatic",
-        "Burrow the moment the module turns on. Off waits for you to press jump.", true);
+        "Burrows the moment the module turns on. Off waits for you to press jump.", true);
     private final NumberSetting triggerHeight = new NumberSetting("Trigger height",
         "How high a jump has to carry you before the block goes in.", 1.02, 0.01, 1.4, 0.01, " blocks")
         .under(lift, Lift.JUMP);
@@ -61,11 +64,11 @@ public final class Burrow extends Module {
     private final NumberSetting timer = new NumberSetting("Timer",
         "Game speed whilst the module runs. One leaves it alone.", 1, 1, 10, 0.5, "x");
     private final BoolSetting onlyInHoles = new BoolSetting("Only in holes",
-        "Refuse to burrow unless you stand in a blast proof hole.", false);
+        "Refuses to burrow unless you stand in a blast proof hole.", false);
     private final BoolSetting center = new BoolSetting("Centre",
-        "Snap to the middle of your block first.", true);
+        "Snaps to the middle of your block first.", true);
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Send a look packet towards the block as it goes down.", true);
+        "Sends a look packet towards the block as it goes down.", true);
 
     private final SlotSwap slots = new SlotSwap();
     private BlockPos anchor;
@@ -109,13 +112,16 @@ public final class Burrow extends Module {
             disable("Not enough room above to burrow.");
             return;
         }
-        if (onlyInHoles.isOn() && !BlockUtil.playerInHole()) {
+        if (onlyInHoles.isOn() && !Holes.playerInHole()) {
             disable("Not in a hole.");
             return;
         }
         if (findSlot() == -1) {
-            disable(source.is(Source.HELD)
-                ? "No block in your main hand." : "No burrow block in your hotbar.");
+            disable(switch (source.getValue()) {
+                case LIST -> "No burrow block in your hotbar.";
+                case ANVIL -> "No anvil in your hotbar.";
+                case HELD -> "No block in your main hand.";
+            });
             return;
         }
         anchor = feet;
@@ -147,15 +153,23 @@ public final class Burrow extends Module {
         if (!inGame() || armed || event.getAction() != InputConstants.PRESS || mc.gui.screen() != null) {
             return;
         }
-        if (InputUtil.isKey(mc.options.keyJump, event.getKey())) {
+        if (event.isFor(mc.options.keyJump)) {
             anchor = mc.player.blockPosition();
             arm();
         }
     }
 
+    // Fires without a world as well. Leaving the server turns it off.
+    @Subscribe
+    private void onClientTick(ClientTickEvent event) {
+        if (mc.level == null) {
+            setEnabled(false);
+        }
+    }
+
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || mc.player.isSpectator() || anchor == null) {
+        if (mc.player.isSpectator() || anchor == null) {
             setEnabled(false);
             return;
         }
@@ -232,10 +246,11 @@ public final class Burrow extends Module {
     }
 
     private int findSlot() {
-        if (source.is(Source.HELD)) {
-            return mc.player.getMainHandItem().getItem() instanceof BlockItem
+        return switch (source.getValue()) {
+            case LIST -> BlockUtil.findRankedBlockSlot(blocks.getValue(), block -> true);
+            case ANVIL -> BlockUtil.findBlockSlot(block -> block instanceof AnvilBlock);
+            case HELD -> mc.player.getMainHandItem().getItem() instanceof BlockItem
                 ? InventoryUtil.selectedSlot() : -1;
-        }
-        return BlockUtil.findRankedBlockSlot(blocks.getValue(), block -> true);
+        };
     }
 }

@@ -7,14 +7,11 @@ import com.jellypudding.offlineclient.module.AreaPlacer;
 import com.jellypudding.offlineclient.render.BoxStyle;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
-import com.jellypudding.offlineclient.util.BlockMiner;
 import com.jellypudding.offlineclient.util.BlockUtil;
-import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.CornerPicker;
 import com.jellypudding.offlineclient.util.WorldWatch;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.Comparator;
@@ -22,15 +19,14 @@ import java.util.List;
 
 // Fills a box marked with two corners. The bottom layer goes in first and each layer has the
 // one below it to stand on.
-public final class Filler extends AreaPlacer {
+public final class Filler extends AreaPlacer implements CornerPicker.Taker {
 
     private static final int TARGET_COLOR = 0xFF60D060;
 
     // How often the whole box is looked over for spots still to fill.
     private static final int COUNT_TICKS = 20;
 
-    private final NumberSetting maxBlocks = new NumberSetting("Max blocks",
-        "The most blocks one box may hold.", 4096, 64, 16384, 64).min(1);
+    private final NumberSetting maxBlocks = CornerPicker.maxBlocks();
     private final BoolSetting replace = new BoolSetting("Replace",
         "Breaks blocks in the box that are not on the list before filling the space.", false);
     private final BoolSetting keepActive = new BoolSetting("Keep active",
@@ -39,8 +35,6 @@ public final class Filler extends AreaPlacer {
 
     private final CornerPicker corners = new CornerPicker();
     private final WorldWatch world = new WorldWatch();
-    // The block the Replace switch is breaking. Null whilst none is.
-    private BlockPos breaking;
     // Spots of the box still to fill or break at the last count and the ticks to the next one.
     private int left;
     private int countWait;
@@ -77,7 +71,6 @@ public final class Filler extends AreaPlacer {
     @Override
     protected void onDisable() {
         super.onDisable();
-        stopBreaking();
         clear();
         world.forget();
     }
@@ -88,21 +81,23 @@ public final class Filler extends AreaPlacer {
         countWait = 0;
     }
 
-    // The bind marks the block under the crosshair whilst the module is on. Pressing it with
-    // nothing in view turns the module off again.
     @Override
     public void onKeybind() {
-        BlockHitResult hit = isEnabled() && inGame() ? BlockUtil.aimedBlock() : null;
-        if (hit == null) {
+        BlockPos corner = CornerPicker.aimedCorner(this);
+        if (corner == null) {
             toggle();
             return;
         }
-        BlockPos pos = hit.getBlockPos().immutable();
+        markCorner(corner);
+    }
+
+    @Override
+    public void markCorner(BlockPos pos) {
         if (!corners.started() || corners.done()) {
-            stopBreaking();
+            stopDigging();
             clear();
             corners.mark(pos);
-            ChatUtil.message("§bFiller §7first corner at §f" + BlockUtil.text(pos) + "§7.");
+            tell("first corner at §f" + BlockUtil.text(pos) + "§7.");
             return;
         }
         corners.mark(pos);
@@ -111,19 +106,19 @@ public final class Filler extends AreaPlacer {
             return;
         }
         countWait = 0;
-        ChatUtil.message("§bFiller §7second corner at §f" + BlockUtil.text(pos) + "§7. §f" + corners.volume()
+        tell("second corner at §f" + BlockUtil.text(pos) + "§7. §f" + corners.volume()
             + "§7 blocks in the box.");
     }
 
     // Runs before the placing round. Blocks in the way come out first.
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || mc.player.isSpectator()) {
+        if (mc.player.isSpectator()) {
             return;
         }
         if (world.changed()) {
             // Corners taken in another world point at nothing here.
-            stopBreaking();
+            stopDigging();
             clear();
             return;
         }
@@ -141,13 +136,13 @@ public final class Filler extends AreaPlacer {
         if (replace.isOn()) {
             breakNext();
         } else {
-            stopBreaking();
+            stopDigging();
         }
     }
 
     private void finish() {
-        ChatUtil.message("§bFiller §7filled that box.");
-        stopBreaking();
+        tell("filled that box.");
+        stopDigging();
         clear();
         if (!keepActive.isOn()) {
             setEnabled(false);
@@ -176,22 +171,9 @@ public final class Filler extends AreaPlacer {
 
     // The top layers come out first. Sand and gravel never drop onto a cleared spot.
     private void breakNext() {
-        // Letting go at once keeps a block it is done with from passing for another module's block.
-        if (breaking != null && !inBreakReach(breaking)) {
-            stopBreaking();
-        }
-        if (breaking == null) {
-            Vec3 eye = mc.player.getEyePosition();
-            breaking = BlockUtil.positionsWithin(range.getValue()).stream()
-                .filter(this::inBreakReach)
-                .map(BlockPos::immutable)
-                .min(Comparator.<BlockPos>comparingInt(pos -> -pos.getY())
-                    .thenComparingDouble(pos -> eye.distanceToSqr(Vec3.atCenterOf(pos))))
-                .orElse(null);
-        }
-        if (breaking != null && !BlockMiner.minesOther(breaking) && !BlockMiner.mine(breaking, rotate.isOn())) {
-            breaking = null;
-        }
+        Vec3 eye = mc.player.getEyePosition();
+        dig(this::inBreakReach, Comparator.<BlockPos>comparingInt(pos -> -pos.getY())
+            .thenComparingDouble(pos -> eye.distanceToSqr(Vec3.atCenterOf(pos))));
     }
 
     // A block that is not on the list and can be dug from here. The block underfoot waits
@@ -202,13 +184,6 @@ public final class Filler extends AreaPlacer {
 
     private boolean inTheWay(BlockPos pos) {
         return !BlockUtil.isReplaceable(pos) && BlockUtil.diggable(pos) && !allowed(BlockUtil.state(pos).getBlock());
-    }
-
-    private void stopBreaking() {
-        if (breaking != null) {
-            BlockMiner.release(breaking);
-            breaking = null;
-        }
     }
 
     // Spots of the whole box that still want a block. Replace adds the blocks in the way.
@@ -225,8 +200,14 @@ public final class Filler extends AreaPlacer {
     @Subscribe
     private void onRender3D(Render3DEvent event) {
         corners.draw(event.getBatch(), boxStyle);
-        if (corners.done() && breaking != null) {
-            event.getBatch().outlineBlock(breaking, CornerPicker.COLOR, false);
+        if (corners.done() && digging() != null) {
+            event.getBatch().outlineBlock(digging(), CornerPicker.COLOR, false);
         }
+    }
+
+    // The key does more than switch the module and cannot be a held one.
+    @Override
+    public boolean keySwitches() {
+        return false;
     }
 }

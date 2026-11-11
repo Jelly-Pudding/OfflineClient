@@ -16,7 +16,7 @@ public final class NearFade {
     public NearFade(double defaultBlocks) {
         distance = new NumberSetting("Near fade",
             "Marks closer to the camera than this fade out. Nought keeps them solid.",
-            defaultBlocks, 0, 12, 0.5, " blocks").min(0);
+            defaultBlocks, 0, 12, 0.5, " blocks");
     }
 
     public NumberSetting setting() {

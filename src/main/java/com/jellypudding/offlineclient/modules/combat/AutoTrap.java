@@ -12,30 +12,25 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.Holes;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.TargetPriority;
+import com.jellypudding.offlineclient.util.UseBudget;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.phys.AABB;
 
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Set;
 
 public final class AutoTrap extends Module {
 
     public enum Top { FULL, TOP, FACE, NONE }
 
     public enum Bottom { PLATFORM, SINGLE, FULL, NONE }
-
-    // A corner sitting exactly on a block edge belongs to the block before it.
-    private static final double EDGE = 1.0E-5;
 
     private final NumberSetting targetRange = new NumberSetting("Target range",
         "How far away enemies are considered.", 4, 1, 10, 0.5, " blocks");
@@ -65,11 +60,11 @@ public final class AutoTrap extends Module {
     private final NumberSetting perRound = new NumberSetting("Blocks per round",
         "How many blocks to place in one round.", 2, 1, 4, 1);
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Send a look packet towards each block.", true);
+        "Sends a look packet towards each block.", true);
     private final BoolSetting toggleOff = new BoolSetting("Toggle off when done",
-        "Turn off once the target is boxed in.", false);
+        "Turns off once the target is boxed in.", false);
     private final BoolSetting render = new BoolSetting("Show blocks",
-        "Outline the spots still to fill.", true);
+        "Outlines the spots still to fill.", true);
     private final BoxStyle style = new BoxStyle(BoxStyle.Shape.BOTH, 280f).under(render);
     private final BoxStyle nextStyle = new BoxStyle("Next", BoxStyle.Shape.BOTH, 205f).under(render);
 
@@ -114,11 +109,11 @@ public final class AutoTrap extends Module {
     @Subscribe
     private void onTick(TickEvent event) {
         pending = List.of();
-        if (!inGame() || mc.player.isSpectator()) {
+        if (mc.player.isSpectator()) {
             return;
         }
         Player target = EntityUtil.bestEnemy(targetRange.getValue(), priority.getValue());
-        targetName = EntityUtil.nameOf(target);
+        targetName = EntityUtil.displayNameOf(target);
         if (target == null) {
             slots.restore();
             return;
@@ -137,6 +132,10 @@ public final class AutoTrap extends Module {
             timer--;
             return;
         }
+        int round = Math.min(perRound.getInt(), UseBudget.remaining());
+        if (round == 0) {
+            return;
+        }
 
         int slot = BlockUtil.findRankedBlockSlot(blocks.getValue(), block -> true);
         if (slot == -1) {
@@ -148,7 +147,7 @@ public final class AutoTrap extends Module {
         int done = 0;
         boolean rotated = false;
         for (BlockPos pos : missing) {
-            if (done >= perRound.getInt()) {
+            if (done >= round) {
                 break;
             }
             boolean turn = rotate.isOn() && !rotated;
@@ -167,45 +166,28 @@ public final class AutoTrap extends Module {
 
     // Furthest first. The near side is left open for as long as possible.
     private List<BlockPos> missingSpots(Player target) {
-        Set<BlockPos> spots = new LinkedHashSet<>();
-        for (BlockPos feet : columnsUnder(target)) {
-            addSpots(spots, feet);
-        }
-        List<BlockPos> result = new ArrayList<>(spots);
-        result.sort(Comparator.comparingDouble(BlockUtil::distanceTo).reversed());
-        return result;
-    }
-
-    // Every block column the feet overlap. Standing across an edge gives two or four.
-    private static Set<BlockPos> columnsUnder(Player target) {
-        AABB box = target.getBoundingBox();
-        Set<BlockPos> columns = new LinkedHashSet<>();
-        columns.add(BlockPos.containing(box.minX, box.minY, box.minZ));
-        columns.add(BlockPos.containing(box.minX, box.minY, box.maxZ - EDGE));
-        columns.add(BlockPos.containing(box.maxX - EDGE, box.minY, box.minZ));
-        columns.add(BlockPos.containing(box.maxX - EDGE, box.minY, box.maxZ - EDGE));
-        return columns;
-    }
-
-    private void addSpots(Set<BlockPos> spots, BlockPos feet) {
-        for (BlockPos pos : BlockUtil.trapSpots(feet, top.isAny(Top.FULL, Top.TOP),
+        List<BlockPos> feet = Holes.feetBlocks(target);
+        List<BlockPos> spots = new ArrayList<>();
+        for (BlockPos pos : Holes.trapSpots(feet, top.isAny(Top.FULL, Top.TOP),
             top.isAny(Top.FULL, Top.FACE), !bottom.is(Bottom.NONE))) {
             if (inReach(pos)) {
                 spots.add(pos);
             }
         }
         if (bottom.is(Bottom.PLATFORM)) {
-            for (Direction side : Direction.Plane.HORIZONTAL) {
-                addOpen(spots, feet.below().relative(side));
+            for (BlockPos side : Holes.ringAround(feet)) {
+                addOpen(spots, side.below());
             }
         } else if (bottom.is(Bottom.FULL)) {
-            for (Direction side : Direction.Plane.HORIZONTAL) {
-                addOpen(spots, feet.relative(side));
+            for (BlockPos side : Holes.ringAround(feet)) {
+                addOpen(spots, side);
             }
         }
+        spots.sort(Comparator.comparingDouble(BlockUtil::distanceTo).reversed());
+        return spots;
     }
 
-    private void addOpen(Set<BlockPos> spots, BlockPos pos) {
+    private void addOpen(List<BlockPos> spots, BlockPos pos) {
         if (!BlockUtil.blockFits(pos)) {
             return;
         }

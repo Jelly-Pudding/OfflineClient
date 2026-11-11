@@ -14,6 +14,7 @@ import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.TargetPriority;
+import com.jellypudding.offlineclient.util.UseBudget;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.block.Blocks;
@@ -52,11 +53,11 @@ public final class AutoWeb extends Module {
         "Blocks to web on every side of the target as well. Zero webs only their feet.",
         0, 0, 2, 1, " blocks");
     private final BoolSetting doubles = new BoolSetting("Upper body",
-        "Also web the block their head is in.", false);
+        "Also webs the block their head is in.", false);
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Send a look packet towards each web.", true);
+        "Sends a look packet towards each web.", true);
     private final BoolSetting render = new BoolSetting("Show webs",
-        "Outline the spots being webbed. Done ones fade.", true);
+        "Outlines the spots being webbed. Done ones fade.", true);
     private final BoxStyle style = new BoxStyle(BoxStyle.Shape.BOTH, 270f).under(render);
 
     // Spots still to web then spots already webbed. The outline lasts the whole tick.
@@ -98,7 +99,7 @@ public final class AutoWeb extends Module {
     private void onTick(TickEvent event) {
         pending.clear();
         done.clear();
-        if (!inGame() || mc.player.isSpectator()) {
+        if (mc.player.isSpectator()) {
             targetName = null;
             return;
         }
@@ -106,7 +107,7 @@ public final class AutoWeb extends Module {
             timer--;
         }
         Player target = EntityUtil.bestEnemy(targetRange.getValue(), priority.getValue());
-        targetName = EntityUtil.nameOf(target);
+        targetName = EntityUtil.displayNameOf(target);
         if (target == null) {
             return;
         }
@@ -122,9 +123,10 @@ public final class AutoWeb extends Module {
             return;
         }
 
+        int round = Math.min(perTick.getInt(), UseBudget.remaining());
         int placed = 0;
         for (BlockPos spot : pending) {
-            if (placed >= perTick.getInt()) {
+            if (placed >= round) {
                 break;
             }
             if (BlockUtil.placeWeb(slots, spot, rotate.isOn())) {

@@ -1,6 +1,5 @@
 package com.jellypudding.offlineclient.config;
 
-import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.jellypudding.offlineclient.util.ProxyTunnel;
 
@@ -8,6 +7,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 // One value per server address kept in its own file under offlineclient. Values are saved
@@ -39,7 +39,8 @@ public final class ServerStore<T> {
         return logins;
     }
 
-    // Proxy logins by proxy host. They stay out of config.json for the same reason.
+    // Proxy logins by the name of their proxy in the proxy list. They stay out of config.json for
+    // the same reason.
     public static synchronized ServerStore<ProxyTunnel.Login> proxyLogins() {
         if (proxyLogins == null) {
             proxyLogins = new ServerStore<>("proxies.json", ProxyTunnel.Login::parse, ProxyTunnel.Login::text);
@@ -82,21 +83,21 @@ public final class ServerStore<T> {
         return removed;
     }
 
+    // Changes the values of many servers with a single write.
+    public void edit(Consumer<Map<String, T>> change) {
+        change.accept(values);
+        save();
+    }
+
     // Every server with a saved value from A to Z.
     public List<String> servers() {
         return List.copyOf(values.keySet());
     }
 
+    // A value that cannot be read loses only its own server.
     private void load() {
-        DataFiles.readJson(file, this::decode).ifPresent(values::putAll);
-    }
-
-    private Map<String, T> decode(JsonElement root) {
-        Map<String, T> decoded = new TreeMap<>();
-        for (Map.Entry<String, JsonElement> entry : root.getAsJsonObject().entrySet()) {
-            decoded.put(entry.getKey(), parse.apply(entry.getValue().getAsString()));
-        }
-        return decoded;
+        DataFiles.readJson(file, root -> DataFiles.members(root, (server, value) -> parse.apply(value.getAsString()),
+            "entries of " + file.getFileName())).ifPresent(values::putAll);
     }
 
     private void save() {

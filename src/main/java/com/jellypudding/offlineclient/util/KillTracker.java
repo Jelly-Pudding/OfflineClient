@@ -6,12 +6,15 @@ import com.jellypudding.offlineclient.event.events.EntityDamageEvent;
 import com.jellypudding.offlineclient.event.events.EntityDeathEvent;
 import com.jellypudding.offlineclient.event.events.KillEvent;
 import com.jellypudding.offlineclient.event.events.PacketSendEvent;
+import com.jellypudding.offlineclient.event.events.SlainEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.protocol.game.ServerboundUseItemOnPacket;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.damagesource.DamageTypes;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.Block;
@@ -21,8 +24,9 @@ import net.minecraft.world.phys.Vec3;
 import java.util.HashMap;
 import java.util.Map;
 
-// Your kills and deaths as the server reports them. A player who dies soon after you
-// hurt them is your kill. The counts start again when you join another server.
+// Your kills and deaths as the server reports them. A player or mob that dies soon after you
+// hurt it is your kill. Only players count towards the numbers. The counts start again when you
+// join another server.
 public final class KillTracker {
 
     public static final KillTracker INSTANCE = new KillTracker();
@@ -38,7 +42,7 @@ public final class KillTracker {
     // A bed blows up from its head half. The half you clicked may be a block away.
     private static final double BLAST_REACH = 1.5;
 
-    // Victims by entity id with the tick you last hurt them.
+    // Players and mobs by entity id with the tick you last hurt them.
     private final Map<Integer, Long> hurtAt = new HashMap<>();
 
     // Beds and anchors you clicked with the tick of the click.
@@ -70,6 +74,11 @@ public final class KillTracker {
 
     public int bestStreak() {
         return bestStreak;
+    }
+
+    // True whilst a death of the player would count as your kill.
+    public boolean creditsYou(Player player) {
+        return hurtAt.containsKey(player.getId());
     }
 
     // Kills for each death. With no deaths yet it is the kills themselves.
@@ -115,7 +124,7 @@ public final class KillTracker {
 
     @Subscribe
     private void onDamage(EntityDamageEvent event) {
-        if (event.getEntity() instanceof Player victim && victim != MC.player && byYou(event.getSource())) {
+        if (event.getEntity() instanceof LivingEntity victim && victim != MC.player && byYou(event.getSource())) {
             hurtAt.put(victim.getId(), ticks);
         }
     }
@@ -138,16 +147,18 @@ public final class KillTracker {
 
     @Subscribe
     private void onDeath(EntityDeathEvent event) {
-        if (!(event.getEntity() instanceof Player player)) {
-            return;
-        }
+        Entity victim = event.getEntity();
         checkServer();
-        if (player == MC.player) {
+        if (victim == MC.player) {
             deaths++;
             streak = 0;
             return;
         }
-        if (hurtAt.remove(player.getId()) == null) {
+        if (hurtAt.remove(victim.getId()) == null) {
+            return;
+        }
+        OfflineClient.INSTANCE.getEventBus().post(new SlainEvent(victim));
+        if (!(victim instanceof Player player)) {
             return;
         }
         kills++;

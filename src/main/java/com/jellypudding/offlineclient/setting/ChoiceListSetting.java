@@ -10,6 +10,7 @@ import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 // An ordered list of names picked from whatever the supplier offers at the
@@ -19,6 +20,8 @@ public final class ChoiceListSetting extends Setting<Set<String>> implements Pic
     private final Supplier<Collection<String>> options;
 
     private Runnable onChange;
+    // What the picker shows for an entry. The entry itself is what is saved.
+    private Function<String, String> label = Function.identity();
 
     public ChoiceListSetting(String name, String description, Supplier<Collection<String>> options) {
         this(name, description, options, List.of());
@@ -33,6 +36,12 @@ public final class ChoiceListSetting extends Setting<Set<String>> implements Pic
 
     public ChoiceListSetting onChange(Runnable onChange) {
         this.onChange = onChange;
+        return this;
+    }
+
+    // Saves one form of each entry and shows another such as a song's title for its file.
+    public ChoiceListSetting labelled(Function<String, String> label) {
+        this.label = label;
         return this;
     }
 
@@ -113,7 +122,7 @@ public final class ChoiceListSetting extends Setting<Set<String>> implements Pic
 
     @Override
     public String displayName(String entry) {
-        return entry;
+        return label.apply(entry);
     }
 
     @Override

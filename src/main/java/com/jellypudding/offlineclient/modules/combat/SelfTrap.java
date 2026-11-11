@@ -11,6 +11,7 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
+import com.jellypudding.offlineclient.util.Holes;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -39,11 +40,11 @@ public final class SelfTrap extends Module {
     private final BoolSetting center = new BoolSetting("Centre",
         "Moves you to the middle of your block when the module turns on.", true);
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Send a look packet towards each block.", true);
+        "Sends a look packet towards each block.", true);
     private final BoolSetting toggleOff = new BoolSetting("Toggle off when done",
-        "Turn off once every spot is filled.", true);
+        "Turns off once every spot is filled.", true);
     private final BoolSetting render = new BoolSetting("Show blocks",
-        "Outline the spots still to fill.", true);
+        "Outlines the spots still to fill.", true);
     private final BoxStyle style = new BoxStyle(BoxStyle.Shape.BOTH, 0).under(render);
 
     private int timer;
@@ -80,10 +81,10 @@ public final class SelfTrap extends Module {
     @Subscribe
     private void onTick(TickEvent event) {
         pending = List.of();
-        if (!inGame() || mc.player.isSpectator()) {
+        if (mc.player.isSpectator()) {
             return;
         }
-        List<BlockPos> missing = BlockUtil.trapSpots(mc.player.blockPosition(),
+        List<BlockPos> missing = Holes.trapSpots(Holes.feetBlocks(mc.player),
             top.isAny(Top.TOP, Top.FULL), top.isAny(Top.FULL, Top.SIDES), bottom.isOn());
         pending = missing;
         if (missing.isEmpty()) {

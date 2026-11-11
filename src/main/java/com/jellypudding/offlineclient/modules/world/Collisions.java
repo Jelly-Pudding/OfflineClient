@@ -8,8 +8,8 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.DamageUtil;
+import com.jellypudding.offlineclient.util.LoadedChunks;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.SectionPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import net.minecraft.network.protocol.game.ServerboundMoveVehiclePacket;
@@ -41,20 +41,10 @@ public final class Collisions extends Module {
     private final BoolSetting ignoreBorder = new BoolSetting("Ignore border",
         "Walks through the world border instead of stopping at it.", false);
 
-    // The last spot inside a loaded chunk.
-    private double safeX;
-    private double safeZ;
-    private boolean haveSafe;
-
     public Collisions() {
         super("Collisions", "Turns fire and webs and other soft blocks into walls.", Category.WORLD);
         addSettings(blocks, magma, unloadedChunks, ignoreBorder);
         searchTags("collision", "hitbox", "world border", "magma");
-    }
-
-    @Override
-    protected void onEnable() {
-        haveSafe = false;
     }
 
     // Null leaves the block with the shape the game gave it. The ridden vehicle asks as well.
@@ -87,7 +77,7 @@ public final class Collisions extends Module {
     private boolean catchesFall(BlockState state) {
         Entity mover = mc.player.getRootVehicle();
         double fall = mover.fallDistance - Math.min(0, mover.getDeltaMovement().y);
-        return fall > DamageUtil.SAFE_FALL
+        return fall > DamageUtil.safeFall(mover)
             && (state.getFluidState().is(FluidTags.WATER) || state.is(BlockTags.FALL_DAMAGE_RESETTING));
     }
 
@@ -95,23 +85,15 @@ public final class Collisions extends Module {
         return ignoreBorder.isOn();
     }
 
-    // Walking out of the loaded world puts you back where you last stood.
+    // Walking out of the loaded world puts you back where this tick began. A teleport sets that
+    // spot too and you wait there for the chunk.
     @Subscribe
     private void onPreMotion(PreMotionEvent event) {
-        if (!unloadedChunks.isOn() || !inGame()) {
-            haveSafe = false;
+        if (!unloadedChunks.isOn() || !inGame() || LoadedChunks.has(mc.player.getX(), mc.player.getZ())
+            || !LoadedChunks.has(mc.player.xo, mc.player.zo)) {
             return;
         }
-        if (loaded(mc.player.getX(), mc.player.getZ())) {
-            safeX = mc.player.getX();
-            safeZ = mc.player.getZ();
-            haveSafe = true;
-            return;
-        }
-        if (!haveSafe) {
-            return;
-        }
-        mc.player.setPos(safeX, mc.player.getY(), safeZ);
+        mc.player.setPos(mc.player.xo, mc.player.getY(), mc.player.zo);
         Vec3 motion = mc.player.getDeltaMovement();
         mc.player.setDeltaMovement(0, motion.y, 0);
     }
@@ -122,14 +104,14 @@ public final class Collisions extends Module {
             return;
         }
         if (event.getPacket() instanceof ServerboundMovePlayerPacket move) {
-            if (!loaded(move.getX(mc.player.getX()), move.getZ(mc.player.getZ()))) {
+            if (!LoadedChunks.has(move.getX(mc.player.getX()), move.getZ(mc.player.getZ()))) {
                 event.cancel();
             }
             return;
         }
         if (event.getPacket() instanceof ServerboundMoveVehiclePacket move) {
             Vec3 where = move.movingTo().position();
-            if (loaded(where.x, where.z)) {
+            if (LoadedChunks.has(where.x, where.z)) {
                 return;
             }
             Entity vehicle = mc.player.getVehicle();
@@ -138,10 +120,5 @@ public final class Collisions extends Module {
             }
             event.cancel();
         }
-    }
-
-    private boolean loaded(double x, double z) {
-        return mc.level.getChunkSource().hasChunk(SectionPos.blockToSectionCoord(x),
-            SectionPos.blockToSectionCoord(z));
     }
 }

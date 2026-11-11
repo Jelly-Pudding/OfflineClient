@@ -24,15 +24,15 @@ public final class Zoom extends Module {
         "How far to zoom in.", 4, 2, 10, 0.5, "x").min(1);
     private final NumberSetting scrollSensitivity = new NumberSetting("Scroll sensitivity",
         "How much a wheel notch changes the zoom. Zero leaves the wheel to the hotbar.",
-        1, 0, 5, 0.1).min(0);
+        1, 0, 5, 0.1);
     private final BoolSetting smooth = new BoolSetting("Smooth",
-        "Ease into the zoom instead of snapping to it.", true);
+        "Eases into the zoom instead of snapping to it.", true);
     private final BoolSetting cinematic = new BoolSetting("Cinematic",
-        "Use the slow cinematic camera whilst zoomed.", false);
+        "Uses the slow cinematic camera whilst zoomed.", false);
     private final BoolSetting hideHud = new BoolSetting("Hide HUD",
-        "Hide the game overlay whilst zoomed.", false);
+        "Hides the game overlay whilst zoomed.", false);
     private final BoolSetting showHands = new BoolSetting("Show hands",
-        "Keep drawing your hands whilst zoomed.", false);
+        "Keeps drawing your hands whilst zoomed.", false);
 
     private double smoothed = 1;
 
@@ -43,6 +43,7 @@ public final class Zoom extends Module {
     public Zoom() {
         super("Zoom", "Zooms your view.", Category.RENDER);
         addSettings(factor, scrollSensitivity, smooth, cinematic, hideHud, showHands);
+        holdByDefault();
     }
 
     @Override

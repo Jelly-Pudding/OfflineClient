@@ -11,6 +11,7 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RankSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.Buckets;
+import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.Feeding;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
@@ -22,6 +23,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.alchemy.PotionContents;
@@ -57,7 +59,7 @@ public final class AutoExtinguish extends Module {
     // Ticks Nearby water rests after a walk that went nowhere.
     private static final int WALK_RETRY = 40;
 
-    // Ticks to wait after a drink whilst the effect lands.
+    // Ticks to wait after a drink or a throw whilst the effect lands.
     private static final int SETTLE_TICKS = 10;
 
     private final RankSetting<Remedy> remedies = new RankSetting<>("Remedies",
@@ -76,6 +78,8 @@ public final class AutoExtinguish extends Module {
     // Where the bucket poured its water. Null whilst nothing waits to be taken back.
     private BlockPos poured;
     private int pouredTick;
+    // Ticks ShulkerPacker has packed since the pour. They do not count towards giving the water up.
+    private int packedTicks;
     private int walkRest;
 
     public AutoExtinguish() {
@@ -94,6 +98,10 @@ public final class AutoExtinguish extends Module {
 
     public boolean isBusy() {
         return isEnabled() && feeding.isActive();
+    }
+
+    public boolean bottleLanding() {
+        return isEnabled() && feeding.isLanding();
     }
 
     @Override
@@ -119,7 +127,7 @@ public final class AutoExtinguish extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || mc.player.isSpectator() || mc.player.getAbilities().invulnerable) {
+        if (mc.player.isSpectator() || mc.player.getAbilities().invulnerable) {
             stopAll();
             return;
         }
@@ -144,7 +152,7 @@ public final class AutoExtinguish extends Module {
             walk();
             return;
         }
-        if (!burning() || mc.gui.screen() != null || pouring()) {
+        if (!EntityUtil.burnHurts(mc.player) || mc.gui.screen() != null || pouring()) {
             return;
         }
         for (Remedy remedy : remedies.ranked()) {
@@ -154,20 +162,12 @@ public final class AutoExtinguish extends Module {
         }
     }
 
-    // Burning in a way that hurts. Water and rain and powder snow put the fire out by
-    // themselves and fire resistance takes the harm away.
-    private boolean burning() {
-        LocalPlayer player = mc.player;
-        return player.isOnFire() && !player.hasEffect(MobEffects.FIRE_RESISTANCE)
-            && !player.isInWaterOrRain() && !player.isInPowderSnow;
-    }
-
     private boolean apply(Remedy remedy) {
         return switch (remedy) {
             case BREAK_FIRE -> breakFire();
             case WATER_BUCKET -> pour();
             case NEARBY_WATER -> walkToWater();
-            case FIRE_RESISTANCE -> drink();
+            case FIRE_RESISTANCE -> takeFireResistance();
         };
     }
 
@@ -189,7 +189,7 @@ public final class AutoExtinguish extends Module {
     // Pours a water bucket straight down. It only counts when the water lands on you.
     private boolean pour() {
         LocalPlayer player = mc.player;
-        if (!player.onGround() || player.isInLava() || !InventoryUtil.inventoryFree()) {
+        if (!player.onGround() || player.isInLava() || !InventoryUtil.inventoryFree() || Modules.packing()) {
             return false;
         }
         BlockPos feet = player.blockPosition();
@@ -208,6 +208,7 @@ public final class AutoExtinguish extends Module {
         }
         poured = spot;
         pouredTick = player.tickCount;
+        packedTicks = 0;
         return true;
     }
 
@@ -218,11 +219,16 @@ public final class AutoExtinguish extends Module {
     }
 
     // Takes the water back once the server has put the fire out. The emptied bucket is still in hand.
+    // Nothing moves whilst ShulkerPacker packs. The swap that sends the bucket home waits as well.
     private void collect() {
         if (poured == null) {
             return;
         }
-        int waited = mc.player.tickCount - pouredTick;
+        if (Modules.packing()) {
+            packedTicks++;
+            return;
+        }
+        int waited = mc.player.tickCount - pouredTick - packedTicks;
         if (waited < 0 || waited > COLLECT_GIVE_UP) {
             letGoOfPour();
             return;
@@ -256,7 +262,7 @@ public final class AutoExtinguish extends Module {
     }
 
     private void walk() {
-        if (!burning()) {
+        if (!EntityUtil.burnHurts(mc.player)) {
             trip.stop();
             return;
         }
@@ -267,11 +273,18 @@ public final class AutoExtinguish extends Module {
         }
     }
 
-    private boolean drink() {
-        if (!InventoryUtil.inventoryFree() || Modules.feeding(this)) {
+    // A splash bottle thrown at your feet works at once and goes before a drink. A bottle already
+    // thrown may still bring fire resistance and is waited for.
+    private boolean takeFireResistance() {
+        if (!InventoryUtil.inventoryFree() || Modules.feeding(this) || Modules.bottleLanding()
+            || Modules.packing()) {
             return false;
         }
-        int slot = InventoryUtil.findSlot(AutoExtinguish::drinkable, InventoryUtil.WHOLE_INVENTORY);
+        int splash = fireResistanceSlot(Items.SPLASH_POTION);
+        if (splash != -1) {
+            return feeding.throwDown(splash, SETTLE_TICKS);
+        }
+        int slot = fireResistanceSlot(Items.POTION);
         if (slot == -1) {
             return false;
         }
@@ -281,8 +294,8 @@ public final class AutoExtinguish extends Module {
 
     private void continueDrinking() {
         // A screen swallows the use key.
-        if (!burning() || mc.gui.screen() != null
-            || !drinkable(mc.player.getInventory().getSelectedItem())) {
+        if (!EntityUtil.burnHurts(mc.player) || mc.gui.screen() != null
+            || !resists(mc.player.getInventory().getSelectedItem(), Items.POTION)) {
             feeding.stop();
             return;
         }
@@ -291,7 +304,13 @@ public final class AutoExtinguish extends Module {
         }
     }
 
-    private static boolean drinkable(ItemStack stack) {
-        return stack.is(Items.POTION) && ItemUtil.carriesEffect(stack, MobEffects.FIRE_RESISTANCE.value());
+    // The inventory index of a bottle of that kind that gives fire resistance or minus one.
+    private static int fireResistanceSlot(Item bottle) {
+        return InventoryUtil.findSlot(stack -> resists(stack, bottle), InventoryUtil.WHOLE_INVENTORY);
+    }
+
+    // A bottle of that kind that gives fire resistance.
+    private static boolean resists(ItemStack stack, Item bottle) {
+        return stack.is(bottle) && ItemUtil.carriesEffect(stack, MobEffects.FIRE_RESISTANCE.value());
     }
 }

@@ -3,23 +3,31 @@ package com.jellypudding.offlineclient.command;
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.command.commands.BindCommand;
 import com.jellypudding.offlineclient.command.commands.BindsCommand;
+import com.jellypudding.offlineclient.command.commands.BookCommand;
+import com.jellypudding.offlineclient.command.commands.BuildCommand;
+import com.jellypudding.offlineclient.command.commands.CalcCommand;
 import com.jellypudding.offlineclient.command.commands.CenterCommand;
 import com.jellypudding.offlineclient.command.commands.ChatBotCommand;
 import com.jellypudding.offlineclient.command.commands.ChestsCommand;
 import com.jellypudding.offlineclient.command.commands.ChunkDistanceCommand;
 import com.jellypudding.offlineclient.command.commands.ClearCommand;
+import com.jellypudding.offlineclient.command.commands.CornersCommand;
 import com.jellypudding.offlineclient.command.commands.DamageCommand;
 import com.jellypudding.offlineclient.command.commands.DisconnectCommand;
 import com.jellypudding.offlineclient.command.commands.DismountCommand;
 import com.jellypudding.offlineclient.command.commands.DossierCommand;
 import com.jellypudding.offlineclient.command.commands.DropCommand;
 import com.jellypudding.offlineclient.command.commands.EnderChestCommand;
+import com.jellypudding.offlineclient.command.commands.EnemyCommand;
 import com.jellypudding.offlineclient.command.commands.ExportCommand;
+import com.jellypudding.offlineclient.command.commands.FakePlayerCommand;
+import com.jellypudding.offlineclient.command.commands.FallCommand;
 import com.jellypudding.offlineclient.command.commands.FindsCommand;
 import com.jellypudding.offlineclient.command.commands.FloorCommand;
 import com.jellypudding.offlineclient.command.commands.FlowTimeCommand;
 import com.jellypudding.offlineclient.command.commands.FovCommand;
 import com.jellypudding.offlineclient.command.commands.FriendCommand;
+import com.jellypudding.offlineclient.command.commands.GameModeCommand;
 import com.jellypudding.offlineclient.command.commands.GetPosCommand;
 import com.jellypudding.offlineclient.command.commands.GotoCommand;
 import com.jellypudding.offlineclient.command.commands.GuiCommand;
@@ -29,10 +37,13 @@ import com.jellypudding.offlineclient.command.commands.AutoLoginCommand;
 import com.jellypudding.offlineclient.command.commands.AutopilotCommand;
 import com.jellypudding.offlineclient.command.commands.JumpCommand;
 import com.jellypudding.offlineclient.command.commands.LoadoutCommand;
+import com.jellypudding.offlineclient.command.commands.LocateCommand;
+import com.jellypudding.offlineclient.command.commands.LookCommand;
 import com.jellypudding.offlineclient.command.commands.TpCommand;
 import com.jellypudding.offlineclient.command.commands.HelpCommand;
 import com.jellypudding.offlineclient.command.commands.HologramCommand;
 import com.jellypudding.offlineclient.command.commands.HudCommand;
+import com.jellypudding.offlineclient.command.commands.InputCommand;
 import com.jellypudding.offlineclient.command.commands.MacroCommand;
 import com.jellypudding.offlineclient.command.commands.MemoryCommand;
 import com.jellypudding.offlineclient.command.commands.ModulesCommand;
@@ -40,12 +51,15 @@ import com.jellypudding.offlineclient.command.commands.MuteCommand;
 import com.jellypudding.offlineclient.command.commands.NameCommand;
 import com.jellypudding.offlineclient.command.commands.NbtCommand;
 import com.jellypudding.offlineclient.command.commands.NoReturnCommand;
+import com.jellypudding.offlineclient.command.commands.PackCommand;
+import com.jellypudding.offlineclient.command.commands.PanoramaCommand;
+import com.jellypudding.offlineclient.command.commands.PathCommand;
 import com.jellypudding.offlineclient.command.commands.PeekCommand;
 import com.jellypudding.offlineclient.command.commands.PrefixCommand;
 import com.jellypudding.offlineclient.command.commands.ProfileCommand;
 import com.jellypudding.offlineclient.command.commands.ProxyCommand;
+import com.jellypudding.offlineclient.command.commands.ReconnectCommand;
 import com.jellypudding.offlineclient.command.commands.ResetCommand;
-import com.jellypudding.offlineclient.command.commands.RotationCommand;
 import com.jellypudding.offlineclient.command.commands.SaveSkinCommand;
 import com.jellypudding.offlineclient.command.commands.SayCommand;
 import com.jellypudding.offlineclient.command.commands.SeedCommand;
@@ -55,18 +69,23 @@ import com.jellypudding.offlineclient.command.commands.ToggleCommand;
 import com.jellypudding.offlineclient.command.commands.VClipCommand;
 import com.jellypudding.offlineclient.command.commands.VelocityCommand;
 import com.jellypudding.offlineclient.command.commands.WaypointCommand;
+import com.jellypudding.offlineclient.command.commands.WordsCommand;
 import com.jellypudding.offlineclient.command.commands.WorldCommand;
 import com.jellypudding.offlineclient.command.commands.XRayCommand;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.ChatSendEvent;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.util.BoundedMap;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.ClientLines;
+import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.core.Registry;
 import net.minecraft.resources.Identifier;
+import net.minecraft.util.StringUtil;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -81,6 +100,7 @@ public final class CommandManager {
         new BindCommand(),
         new SetCommand(),
         new FriendCommand(),
+        new EnemyCommand(),
         new MuteCommand(),
         new PrefixCommand(),
         new ProfileCommand(),
@@ -97,8 +117,10 @@ public final class CommandManager {
         new ChatBotCommand(),
         new NameCommand(),
         new ProxyCommand(),
+        new PackCommand(),
         new GetPosCommand(),
         new GotoCommand(),
+        new PathCommand(),
         new AutopilotCommand(),
         new NoReturnCommand(),
         new VClipCommand(),
@@ -110,35 +132,59 @@ public final class CommandManager {
         new DropCommand(),
         new DismountCommand(),
         new FovCommand(),
+        new GameModeCommand(),
         new ClearCommand(),
         new MemoryCommand(),
         new DisconnectCommand(),
+        new ReconnectCommand(),
         new PeekCommand(),
         new NbtCommand(),
         new HologramCommand(),
+        new FakePlayerCommand(),
         new SaveSkinCommand(),
+        new PanoramaCommand(),
         new ExportCommand(),
+        new BuildCommand(),
+        new CornersCommand(),
         new XRayCommand(),
         new SeedCommand(),
+        new LocateCommand(),
         ChunkDistanceCommand.render(),
-        new RotationCommand(),
+        new LookCommand(),
         new DamageCommand(),
+        FallCommand.hurt(),
+        FallCommand.die(),
+        new CalcCommand(),
         new EnderChestCommand(),
         new ChestsCommand(),
         new MacroCommand(),
         new LoadoutCommand(),
         new HudCommand(),
+        new WordsCommand(),
         new TpCommand(),
         ChunkDistanceCommand.simulation(),
         new FlowTimeCommand(),
         new JumpCommand(),
+        new InputCommand(),
         new VelocityCommand(),
-        new AuthorCommand()
+        new AuthorCommand(),
+        new BookCommand()
     );
 
     public static final String DEFAULT_PREFIX = ".";
 
+    // About as many links as a long chat history holds.
+    private static final int MOST_OFFERED = 4096;
+
+    // How much of a refused click the chat shows.
+    private static final int LONGEST_SHOWN = 120;
+
     private String prefix = DEFAULT_PREFIX;
+
+    // Client commands behind the links the client wrote. Anyone can put text behind a link in
+    // chat or in a book and only these run when clicked.
+    private final Set<String> offered = Collections.synchronizedSet(
+        Collections.newSetFromMap(new BoundedMap<>(MOST_OFFERED, true)));
 
     public CommandManager() {
         OfflineClient.INSTANCE.getEventBus().register(this);
@@ -167,15 +213,44 @@ public final class CommandManager {
         if (!message.startsWith(prefix) || message.length() <= prefix.length()) {
             return false;
         }
+        // A dormant client runs no command and sends none. A line with the prefix may hold a
+        // password and never leaves the machine. It is thrown away without a word.
+        if (Modules.dormant()) {
+            return true;
+        }
         String[] parts = message.substring(prefix.length()).trim().split("\\s+");
         ClientLines.inChat(() -> dispatch(parts));
+        return true;
+    }
+
+    // The command with the prefix in front for a link the client writes. A click on that link
+    // runs it. The command is written without the prefix.
+    public String offer(String command) {
+        String typed = prefix + command;
+        offered.add(typed);
+        return typed;
+    }
+
+    // Runs a clicked client command when the client wrote the link and refuses any other with a
+    // line saying why. False when the text is no client command and goes on to the server.
+    public boolean runClicked(String command) {
+        if (!command.startsWith(prefix) || command.length() <= prefix.length()) {
+            return false;
+        }
+        if (offered.contains(command) || Modules.dormant()) {
+            return run(command);
+        }
+        ChatUtil.message("§7The click did not run §f"
+            + StringUtil.truncateStringIfNecessary(StringUtil.filterText(command), LONGEST_SHOWN, true)
+            + "§7. A client command only runs from a link the client wrote. Type it if you mean it.");
         return true;
     }
 
     // A bare module name like .fastfall toggles the module even where a command shares the
     // name. Anything after it reads as a setting and .step height 5 is short for .set step
     // height 5. A word naming one of the module's settings wins over a command of the same
-    // name unless it stands alone and the command takes that word itself.
+    // name unless it stands alone and the command takes that word itself. The bare name of a
+    // module that cannot be switched is answered as the toggle command answers it.
     private void dispatch(String[] parts) {
         String name = parts[0];
         String[] args = Arrays.copyOfRange(parts, 1, parts.length);
@@ -198,6 +273,8 @@ public final class CommandManager {
             execute(command, args);
         } else if (module != null && args.length > 0) {
             runSet(name, args);
+        } else if (module != null) {
+            ToggleCommand.cannotSwitch(module);
         } else {
             ChatUtil.error("Unknown command. Try §f" + prefix + "help");
         }
@@ -251,6 +328,9 @@ public final class CommandManager {
     // Completions for the last token of the chat text as typed.
     public List<String> complete(String text) {
         if (!text.startsWith(prefix)) {
+            return List.of();
+        }
+        if (Modules.dormant()) {
             return List.of();
         }
         String[] tokens = text.substring(prefix.length()).split("\\s+", -1);

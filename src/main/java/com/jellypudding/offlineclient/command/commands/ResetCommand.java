@@ -9,6 +9,7 @@ import com.jellypudding.offlineclient.setting.Defaults;
 import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.setting.Setting;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.KeyUse;
 import com.jellypudding.offlineclient.util.Tally;
 
 import java.util.ArrayList;
@@ -63,11 +64,11 @@ public final class ResetCommand extends Command {
         }
     }
 
-    // The bind is left out. It has its own reset.
+    // The binds are left out because they have their own reset.
     private static void listChanged() {
         List<String> names = new ArrayList<>();
         for (Module module : OfflineClient.INSTANCE.getModuleManager().getAll()) {
-            if (Defaults.changed(module.getSettings()) > 0) {
+            if (Defaults.changed(settingsOf(module)) > 0) {
                 names.add("§b" + module.getName());
             }
         }
@@ -141,10 +142,10 @@ public final class ResetCommand extends Command {
         KeybindSetting bind = module.getKeybind();
         Defaults.Change change = Defaults.reset(module.getName() + " bind", List.of(bind));
         if (change == null) {
-            ChatUtil.message("§b" + module.getName() + " §7bind is already §f" + bind.getKeyName() + "§7.");
+            ChatUtil.message("§b" + module.getName() + " §7bind is already §f" + bind.getValueString() + "§7.");
             return;
         }
-        ChatUtil.undoable("§b" + module.getName() + " §7bind is back to §f" + bind.getKeyName() + "§7.", change);
+        ChatUtil.undoable("§b" + module.getName() + " §7bind is back to §f" + bind.getValueString() + "§7.", change);
     }
 
     // Binds and on or off states stay. Everything put back is one change.
@@ -152,10 +153,11 @@ public final class ResetCommand extends Command {
         List<Setting<?>> scope = new ArrayList<>();
         int modules = 0;
         for (Module module : OfflineClient.INSTANCE.getModuleManager().getAll()) {
-            if (Defaults.changed(module.getSettings()) > 0) {
+            List<Setting<?>> settings = settingsOf(module);
+            if (Defaults.changed(settings) > 0) {
                 modules++;
             }
-            scope.addAll(module.getSettings());
+            scope.addAll(settings);
         }
         Defaults.Change change = Defaults.reset("every module", scope);
         if (change == null) {
@@ -166,12 +168,13 @@ public final class ResetCommand extends Command {
             + Tally.counted(modules, "module") + "§7.", change);
     }
 
+    // A key row inside a module is a bind whichever module holds it.
+    private static List<Setting<?>> settingsOf(Module module) {
+        return module.getSettings().stream().filter(setting -> !(setting instanceof KeybindSetting)).toList();
+    }
+
     private static void resetBinds() {
-        List<Setting<?>> binds = new ArrayList<>();
-        for (Module module : OfflineClient.INSTANCE.getModuleManager().getAll()) {
-            binds.add(module.getKeybind());
-        }
-        Defaults.Change change = Defaults.reset("every bind", binds);
+        Defaults.Change change = Defaults.reset("every bind", KeyUse.keySettings());
         if (change == null) {
             ChatUtil.message("§7Every bind is already at its default.");
             return;

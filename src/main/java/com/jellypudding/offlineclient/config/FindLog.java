@@ -10,6 +10,7 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.Setting;
 import com.jellypudding.offlineclient.util.ServerInfo;
 import com.jellypudding.offlineclient.util.Tally;
+import com.jellypudding.offlineclient.util.TextCut;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.Vec3;
 
@@ -36,8 +37,21 @@ import java.util.function.Predicate;
 public final class FindLog {
 
     // One thing a module found. A module that marks whole chunks gives the block that stands
-    // for the chunk. The time is when this game or another one first saw it.
-    public record Find(String dimension, BlockPos pos, String kind, String detail, long found) {
+    // for the chunk. The content is text the find carries exactly such as the lines of a sign
+    // or the pages of a book. It is kept and saved but never shown. The time is when this game
+    // or another one first saw it. Every text is made whole or the file could not be written.
+    public record Find(String dimension, BlockPos pos, String kind, String detail, List<String> content,
+                       long found) {
+
+        public Find {
+            kind = TextCut.whole(kind);
+            detail = TextCut.whole(detail);
+            content = content.stream().map(TextCut::whole).toList();
+        }
+
+        public Find(String dimension, BlockPos pos, String kind, String detail, long found) {
+            this(dimension, pos, kind, detail, List.of(), found);
+        }
     }
 
     private static final String FOLDER = "finds";
@@ -210,13 +224,22 @@ public final class FindLog {
     // A find in the dimension you are in. True when nothing was there before. A find already
     // there takes the new kind and words and keeps its time.
     public boolean add(BlockPos pos, String kind, String detail) {
-        return add(ServerInfo.dimension(), pos, kind, detail);
+        return add(ServerInfo.dimension(), pos, kind, detail, List.of());
+    }
+
+    // The same for a find that carries exact text of its own.
+    public boolean add(BlockPos pos, String kind, String detail, List<String> content) {
+        return add(ServerInfo.dimension(), pos, kind, detail, content);
     }
 
     // The same for a find in any dimension of this server. For a module that learns of
-    // places in a dimension you are not in. A find you took away by hand this session stays
-    // away until its spot shows another kind.
+    // places in a dimension you are not in.
     public boolean add(String dimension, BlockPos pos, String kind, String detail) {
+        return add(dimension, pos, kind, detail, List.of());
+    }
+
+    // A find you took away by hand this session stays away until its spot shows another kind.
+    public boolean add(String dimension, BlockPos pos, String kind, String detail, List<String> content) {
         if (dimension.isEmpty() || OfflineClient.MC.level == null) {
             return false;
         }
@@ -232,7 +255,7 @@ public final class FindLog {
         Map<Long, Find> byKey = finds.computeIfAbsent(dimension, _ -> new LinkedHashMap<>());
         Find old = byKey.get(key);
         long found = old == null ? System.currentTimeMillis() : old.found();
-        Find find = new Find(dimension, pos.immutable(), kind, detail, found);
+        Find find = new Find(dimension, pos.immutable(), kind, detail, content, found);
         if (find.equals(old)) {
             return false;
         }

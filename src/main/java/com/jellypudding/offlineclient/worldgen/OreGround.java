@@ -17,7 +17,8 @@ import java.util.Set;
 
 // Works out the ground the ore features met from a finished world as a client receives it.
 // Anti xray sends a hidden ore as plain stone and the features after the ores covered some
-// of the ground. Both are turned back into what stood there when the ores went in.
+// of the ground. Both are turned back into what stood there when the ores went in. The ore
+// of a large vein stood there already and no ore feature can replace it.
 public final class OreGround implements OreSimulation.Ground {
 
     // The finished world as the client holds it.
@@ -63,13 +64,15 @@ public final class OreGround implements OreSimulation.Ground {
     private final Seen seen;
     private final BiomeResolver biomes;
     private final OreTables.Table table;
+    private final OreVeins veins;
     // One above the highest blocking block of each column once worked out.
     private final Long2IntOpenHashMap floors = new Long2IntOpenHashMap();
 
-    public OreGround(Seen seen, BiomeResolver biomes, OreTables.Table table) {
+    public OreGround(Seen seen, BiomeResolver biomes, OreTables.Table table, OreVeins veins) {
         this.seen = seen;
         this.biomes = biomes;
         this.table = table;
+        this.veins = veins;
     }
 
     @Override
@@ -89,7 +92,13 @@ public final class OreGround implements OreSimulation.Ground {
         }
         if (ore || OVERWORLD_STONE.contains(state.getBlock())
             || DECOYS.contains(state.getBlock()) && enclosed(x, y, z)) {
-            return y < 0 ? DEEPSLATE : STONE;
+            BlockState lump = veins.lump(x, y, z);
+            return lump != null ? lump : y < 0 ? DEEPSLATE : STONE;
+        }
+        if (state.is(Blocks.STONE) || state.is(Blocks.DEEPSLATE)) {
+            // Anti xray shows the ore of a large vein as the stone around it.
+            BlockState lump = veins.lump(x, y, z);
+            return lump != null ? lump : state;
         }
         if (state.is(BlockTags.CORAL_BLOCKS) || state.is(Blocks.ICE) && seen.block(x, y - 1, z).is(Blocks.WATER)) {
             // Reefs grow in water and the top layer freezes after the ores went in.

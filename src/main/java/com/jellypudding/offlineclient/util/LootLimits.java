@@ -38,7 +38,7 @@ public final class LootLimits {
 
     private static final int STACK = 64;
     // The slider for a shared count reaches a whole inventory of stacks.
-    private static final int MOST_STACKS = 36 * STACK;
+    private static final int MOST_STACKS = InventoryUtil.WHOLE_INVENTORY * STACK;
 
     private final BoolSetting limits = new BoolSetting("Limits",
         "Takes only what a limit below covers and only until you hold that many. Nought takes none.", false)
@@ -53,10 +53,10 @@ public final class LootLimits {
         .under(limits);
     private final Map<GearKind, NumberSetting> gearCounts = new EnumMap<>(GearKind.class);
     private final NumberSetting wood = new NumberSetting("Wood",
-        "How many logs and planks you keep together.", STACK, 0, MOST_STACKS, STACK).min(0)
+        "How many logs and planks you keep together.", STACK, 0, MOST_STACKS, STACK)
         .under(limits);
     private final NumberSetting food = new NumberSetting("Food",
-        "How many of the foods below you keep together.", STACK, 0, MOST_STACKS, STACK).min(0)
+        "How many of the foods below you keep together.", STACK, 0, MOST_STACKS, STACK)
         .under(limits);
     private final RegistryListSetting<Item> foods = new RegistryListSetting<>("Foods",
         "The foods the food count covers. Click to pick them.", BuiltInRegistries.ITEM, List.of(
@@ -67,7 +67,7 @@ public final class LootLimits {
         .only(item -> item.components().has(DataComponents.FOOD))
         .under(limits);
     private final NumberSetting blocks = new NumberSetting("Blocks",
-        "How many other full blocks you keep together.", 6 * STACK, 0, MOST_STACKS, STACK).min(0)
+        "How many other full blocks you keep together.", 6 * STACK, 0, MOST_STACKS, STACK)
         .under(limits);
     private final BoolSetting upgrade = new BoolSetting("Upgrade",
         "Once nothing more can be taken trades your worse gear and small stacks for better ones in the"
@@ -81,7 +81,7 @@ public final class LootLimits {
         for (GearKind kind : GearKind.values()) {
             String label = EnumSetting.label(kind);
             gearCounts.put(kind, new NumberSetting(label, "How many " + label.toLowerCase(Locale.ROOT)
-                + " you keep.", startingCount(kind), 0, 9, 1).min(0).under(gear));
+                + " you keep.", startingCount(kind), 0, 9, 1).under(gear));
         }
     }
 

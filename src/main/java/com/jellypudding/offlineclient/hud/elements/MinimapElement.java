@@ -3,9 +3,11 @@ package com.jellypudding.offlineclient.hud.elements;
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.hud.HudElement;
 import com.jellypudding.offlineclient.modules.render.Minimap;
+import com.jellypudding.offlineclient.render.ChunkTints;
 import com.jellypudding.offlineclient.render.MapMarks;
 import com.jellypudding.offlineclient.render.MapView;
 import com.jellypudding.offlineclient.render.TerrainPicture;
+import com.jellypudding.offlineclient.util.ExploredLand;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.TerrainLayer;
 import net.minecraft.client.gui.Font;
@@ -13,8 +15,8 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.phys.Vec3;
 
-// The land around you the Minimap module asks for. The module picks what shows and this decides
-// where it sits and how big it is.
+// The land around you. It is on whilst the Minimap module is. The module picks what shows and
+// this decides where it sits and how big it is.
 public final class MinimapElement extends HudElement {
 
     // The square before any stretch.
@@ -26,13 +28,19 @@ public final class MinimapElement extends HudElement {
     private final TerrainPicture cave = new TerrainPicture();
 
     public MinimapElement() {
-        super("Minimap", "Shows the Minimap module's map whilst that module is on.", true, 0, 0, Background.ON);
+        super("Minimap", "A map of the land around you. Its other options are in the Minimap module."
+            + " Turn on WorldMap to open the whole map.", Minimap.class, 0, 0, Background.ON);
     }
 
+    // A minimap that is switched off holds no textures. The next draw makes them afresh.
     @Override
     public boolean visible() {
-        return isActive() && Modules.active(Minimap.class) != null && OfflineClient.MC.player != null
-            && OfflineClient.MC.level != null;
+        if (!isActive()) {
+            land.close();
+            cave.close();
+            return false;
+        }
+        return OfflineClient.MC.player != null && OfflineClient.MC.level != null;
     }
 
     // Laid out in GUI pixels. A stretch shows more land and leaves the marks their size.
@@ -40,8 +48,8 @@ public final class MinimapElement extends HudElement {
     public void render(GuiGraphicsExtractor context, Font font) {
         Minimap minimap = Modules.active(Minimap.class);
         LocalPlayer player = OfflineClient.MC.player;
-        TerrainLayer explored = minimap == null ? null : minimap.explored();
-        if (explored == null || player == null) {
+        TerrainLayer explored = ExploredLand.here();
+        if (minimap == null || explored == null || player == null) {
             return;
         }
         int width = boxWidth();
@@ -53,21 +61,17 @@ public final class MinimapElement extends HudElement {
         MapView view = new MapView(at.x, at.z, minimap.blocksPerPixel(),
             minimap.turns() ? MapView.facingUp(yaw) : 0, 0, 0, width, height);
         // Only the top picture is tinted. A tint on a clear texel still lies over the land under it.
+        ChunkTints tints = minimap.overlay().tints();
         TerrainLayer underRoof = minimap.caveLand();
-        land.draw(context, view, explored, underRoof == null ? minimap.tints() : null, 0);
+        land.draw(context, view, explored, underRoof == null ? tints : null, 0);
         if (underRoof != null) {
-            cave.draw(context, view, underRoof, minimap.tints(), 0);
+            cave.draw(context, view, underRoof, tints, 0);
         }
         boolean shadow = textShadow();
         context.enableScissor(0, 0, width, height);
-        if (minimap.drawsMarks()) {
-            MapMarks.marks(context, font, view, minimap.marks(), true, false, shadow);
-        }
-        if (minimap.drawsEntities()) {
-            MapMarks.entities(context, font, view, shadow);
-        }
+        minimap.overlay().draw(context, font, view, true, false, shadow);
         MapMarks.self(context, view, at.x, at.z, yaw);
-        if (minimap.turns()) {
+        if (minimap.marksNorth()) {
             MapMarks.north(context, font, view, shadow);
         }
         context.disableScissor();

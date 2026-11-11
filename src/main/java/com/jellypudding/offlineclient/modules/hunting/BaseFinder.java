@@ -34,12 +34,14 @@ import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.ItemUtil;
 import com.jellypudding.offlineclient.util.NearestCut;
 import com.jellypudding.offlineclient.util.Notice;
+import com.jellypudding.offlineclient.util.OwnSimulation;
 import com.jellypudding.offlineclient.util.RenderUtil;
 import com.jellypudding.offlineclient.util.ServerInfo;
 import com.jellypudding.offlineclient.util.ServerWatch;
 import com.jellypudding.offlineclient.util.SignWords;
 import com.jellypudding.offlineclient.util.SpawnerMob;
 import com.jellypudding.offlineclient.util.Tally;
+import com.jellypudding.offlineclient.util.TextCut;
 import com.jellypudding.offlineclient.util.Villages;
 import com.jellypudding.offlineclient.util.WorldWatch;
 import com.jellypudding.offlineclient.worldgen.BaseBlocks;
@@ -129,6 +131,8 @@ public final class BaseFinder extends Module implements FindSource, ChunkPaint {
     // The writing quoted from a sign stops after this many characters.
     private static final int SIGN_QUOTE = 40;
 
+    private static final int GROWTH_COUNT = 3;
+
     // Well under the sea where nearly every dropped block lies in a cave or a tunnel.
     private static final int DROP_HEIGHT = 50;
     // Mined blocks lie in groups. Four together rarely come from anything else.
@@ -180,6 +184,16 @@ public final class BaseFinder extends Module implements FindSource, ChunkPaint {
     private final BoolSetting rooms = new BoolSetting("Bedrock rooms",
         "Marks chunks with a hollow two blocks tall sealed inside the bedrock layers. The world makes none. On "
             + "Paper the hollow must also hold a chest or sign or other block that anti xray never fakes.", true);
+    private final BoolSetting sideways = new BoolSetting("Sideways deepslate",
+        "Marks chunks with deepslate laid on its side. The world lays it upright everywhere but in ancient city "
+            + "pillars where deepslate tile stairs stand beside it.", true);
+    private final BoolSetting growth = new BoolSetting("Long growth",
+        "Marks chunks with kelp fourteen blocks tall reaching the surface or vines hanging eight blocks free or "
+            + "dripstone longer than the world makes. Plants only grow that far near players for a long time. Chunks "
+            + "you came near are never judged.",
+        true);
+    private final NumberSetting growthCount = new NumberSetting("Growth count",
+        "How many grown plants one chunk must hold.", GROWTH_COUNT, 1, 20, 1).under(growth);
     private final BoolSetting playerBlocks = new BoolSetting("Player blocks",
         "Marks chunks that hold enough of the blocks on the list.", true);
     private final RegistryCountSetting<Block> blockCounts = new RegistryCountSetting<>("Blocks",
@@ -189,10 +203,10 @@ public final class BaseFinder extends Module implements FindSource, ChunkPaint {
 
     private final NumberSetting floorMargin = new NumberSetting("Floor margin",
         "Block clues leave out this many layers at the bottom of the world. Raise it on a server that puts "
-            + "its own blocks down there.", 0, 0, 64, 1, " layers").min(0);
+            + "its own blocks down there.", 0, 0, 64, 1, " layers");
     private final NumberSetting ceilingMargin = new NumberSetting("Ceiling margin",
         "Block clues leave out this many layers at the top of the world. Raise it on a server that puts "
-            + "its own blocks up there.", 0, 0, 64, 1, " layers").min(0);
+            + "its own blocks up there.", 0, 0, 64, 1, " layers");
 
     private final BoolSetting decorations = new BoolSetting("Decorations",
         "Marks chunks with item frames or paintings or dressed armour stands. End ship frames and village "
@@ -206,6 +220,9 @@ public final class BaseFinder extends Module implements FindSource, ChunkPaint {
     private final BoolSetting boats = new BoolSetting("Boats",
         "Marks chunks with a boat or raft that nobody rides. The world places none. Your own boats never count.",
         true);
+    private final BoolSetting lostMobs = new BoolSetting("Lost mobs",
+        "Marks chunks with a mob in a dimension it cannot spawn in such as a cow in the nether. Mobs also wander "
+            + "through the portals players light.", false);
     private final BoolSetting pets = new BoolSetting("Pets and mounts",
         "Marks chunks with a tamed or saddled or leashed mob or one carrying a chest that is not yours. "
             + "Skeleton trap horses and strider jockeys and trader llamas never count.", true);
@@ -265,12 +282,14 @@ public final class BaseFinder extends Module implements FindSource, ChunkPaint {
     private final ActionSetting unmarkNewest = new ActionSetting("Unmark newest",
         "Forgets the newest mark in the dimension you are in.", this::unmarkNewest);
 
-    private final Map<BaseClue, BoolSetting> blockToggles = Map.of(BaseClue.SIGN, signs, BaseClue.PORTAL, portals,
-        BaseClue.BUBBLES, bubbles, BaseClue.SKY, sky, BaseClue.BEDROCK, bedrock, BaseClue.ROOF, roof,
-        BaseClue.SPAWNER, spawners, BaseClue.BED, beds, BaseClue.ROOM, rooms);
+    private final Map<BaseClue, BoolSetting> blockToggles = Map.ofEntries(Map.entry(BaseClue.SIGN, signs),
+        Map.entry(BaseClue.PORTAL, portals), Map.entry(BaseClue.BUBBLES, bubbles), Map.entry(BaseClue.SKY, sky),
+        Map.entry(BaseClue.BEDROCK, bedrock), Map.entry(BaseClue.ROOF, roof), Map.entry(BaseClue.SPAWNER, spawners),
+        Map.entry(BaseClue.BED, beds), Map.entry(BaseClue.ROOM, rooms), Map.entry(BaseClue.SIDEWAYS, sideways),
+        Map.entry(BaseClue.GROWTH, growth));
     private final Map<BaseClue, BoolSetting> entityToggles = Map.of(BaseClue.DECORATION, decorations,
         BaseClue.PEARL, pearls, BaseClue.NAMED, named, BaseClue.VILLAGER, villagers, BaseClue.BOAT, boats,
-        BaseClue.PET, pets);
+        BaseClue.PET, pets, BaseClue.LOST_MOB, lostMobs);
 
     private final ChunkScanner<BlockClues.Hit> scanner = new ChunkScanner<BlockClues.Hit>().onResult(this::landed);
     private final ChunkScanner<BlockPos> glowScanner = new ChunkScanner<>(0);
@@ -294,10 +313,10 @@ public final class BaseFinder extends Module implements FindSource, ChunkPaint {
 
     public BaseFinder() {
         super("BaseFinder", "Marks the chunks around you where players built or lived.", Category.HUNTING);
-        addSettings(signs, portals, bubbles, sky, skyHeight, bedrock, roof, spawners, beds, rooms, playerBlocks,
-            blockCounts, floorMargin, ceilingMargin);
-        addSettings(decorations, pearls, named, villagers, boats, pets, crowds, crowdSize, crowdMobs, crowdCounts,
-            drops, dropCount, dropHeight);
+        addSettings(signs, portals, bubbles, sky, skyHeight, bedrock, roof, spawners, beds, rooms, sideways, growth,
+            growthCount, playerBlocks, blockCounts, floorMargin, ceilingMargin);
+        addSettings(decorations, pearls, named, villagers, boats, pets, lostMobs, crowds, crowdSize, crowdMobs,
+            crowdCounts, drops, dropCount, dropHeight);
         addSettings(notice.settings());
         addSettings(alarm.settings());
         addSettings(blockColour, entityColour, markedColour);
@@ -308,7 +327,8 @@ public final class BaseFinder extends Module implements FindSource, ChunkPaint {
         addSettings(FindsScreen.settingsFor(finds));
         searchTags("base finder", "bases", "builds", "sky build", "nether roof", "portal", "stasis",
             "item frame", "villager", "boat", "spawner", "bedrock", "bubble column", "sign", "man made",
-            "player blocks", "factions", "bed", "stash", "mining", "dropped items");
+            "player blocks", "factions", "bed", "stash", "mining", "dropped items", "deepslate", "kelp", "vines",
+            "dripstone");
     }
 
     // Every mob the game counts as a creature such as cows and sheep and horses.
@@ -366,9 +386,6 @@ public final class BaseFinder extends Module implements FindSource, ChunkPaint {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame()) {
-            return;
-        }
         if (server.changed()) {
             ownDrops.clear();
         }
@@ -395,7 +412,7 @@ public final class BaseFinder extends Module implements FindSource, ChunkPaint {
     private BlockClues.Rules currentRules() {
         return new BlockClues.Rules(switchedOn(blockToggles), playerBlocks.isOn() ? blockCounts.counts() : Map.of(),
             skyHeight.getInt(), floorMargin.getInt(), ceilingMargin.getInt(), ServerInfo.runsPaper(),
-            mc.level.dimension());
+            mc.level.dimension(), growthCount.getInt());
     }
 
     private static Set<BaseClue> switchedOn(Map<BaseClue, BoolSetting> toggles) {
@@ -415,6 +432,10 @@ public final class BaseFinder extends Module implements FindSource, ChunkPaint {
             return;
         }
         for (BlockClues.Hit hit : hits) {
+            // Your own presence makes plants grow. The chunk may have grown for you.
+            if (hit.clue() == BaseClue.GROWTH && OwnSimulation.reached(chunk.pack())) {
+                continue;
+            }
             String what = switch (hit.clue()) {
                 case SIGN -> writing(hit.pos());
                 case SPAWNER -> loneSpawner(hit);
@@ -476,8 +497,7 @@ public final class BaseFinder extends Module implements FindSource, ChunkPaint {
         }
         List<String> lines = new ArrayList<>(front);
         lines.addAll(back);
-        String text = String.join(" ", lines);
-        return "a sign reading " + (text.length() > SIGN_QUOTE ? text.substring(0, SIGN_QUOTE) + "..." : text);
+        return "a sign reading " + TextCut.quote(String.join(" ", lines), SIGN_QUOTE);
     }
 
     // Marks the chunk unless it was judged before. Only a new mark is told and rings.
@@ -572,7 +592,8 @@ public final class BaseFinder extends Module implements FindSource, ChunkPaint {
             return "Nothing marked in this dimension";
         }
         String away = Notice.away(mc.player.position(), base.pos());
-        ChatUtil.component(Component.literal("§bBaseFinder §7nearest is §f" + base.detail() + "§7 " + away + " at ")
+        String words = "nearest is §f" + base.detail() + "§7 " + away + " at ";
+        ChatUtil.component(Component.literal(ChatUtil.from(getName(), words))
             .append(ChatUtil.walkLink(base.pos())).append("§7."));
         return away;
     }

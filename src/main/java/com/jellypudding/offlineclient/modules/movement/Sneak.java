@@ -6,10 +6,9 @@ import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.EnumSetting;
-import com.jellypudding.offlineclient.util.InputUtil;
+import com.jellypudding.offlineclient.util.HeldKey;
 import com.jellypudding.offlineclient.util.Modules;
-import net.minecraft.client.player.LocalPlayer;
-import java.lang.ref.WeakReference;
+import com.jellypudding.offlineclient.util.ServerSneak;
 
 // Legit mode holds the sneak key. Packet mode only tells the server.
 // Whilst flying the sneak key is the way down. Legit mode then tells the server instead.
@@ -29,11 +28,11 @@ public final class Sneak extends Module {
         .describe(WhilstFlying.TELL_SERVER, "Tells the server you sneak and leaves the fly keys alone.")
         .under(mode, Mode.LEGIT);
 
-    // Read from the packet thread.
-    private volatile Mode applied;
-    private volatile boolean forcing;
-    // The player the flag was sent for. Weak to avoid pinning a dead world.
-    private WeakReference<LocalPlayer> told = new WeakReference<>(null);
+    // Let go of once as a flight starts. A toggle the player then sets by hand stays as they set it.
+    private final HeldKey shift = new HeldKey(options -> options.keyShift);
+    private final ServerSneak serverSneak = new ServerSneak();
+    // The mode the last tick ran under.
+    private Mode applied;
 
     public Sneak() {
         super("Sneak", "Keeps you sneaking.", Category.MOVEMENT);
@@ -49,8 +48,6 @@ public final class Sneak extends Module {
     @Override
     protected void onEnable() {
         applied = null;
-        forcing = false;
-        told = new WeakReference<>(null);
     }
 
     @Override
@@ -59,64 +56,38 @@ public final class Sneak extends Module {
         applied = null;
     }
 
+    // A shift flag whilst riding dismounts the player. The server is never told one then.
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame()) {
-            return;
-        }
         if (applied != mode.getValue()) {
             Mode old = applied;
             applied = mode.getValue();
             undo(old);
         }
         if (applied == Mode.PACKET) {
-            tellServer(!mc.player.isPassenger());
+            serverSneak.want(!mc.player.isPassenger());
             return;
         }
         if (!flying()) {
-            tellServer(false);
-            setShift(true);
+            serverSneak.want(false);
+            shift.hold();
             return;
         }
-        setShift(InputUtil.physicallyHeld(mc.options.keyShift));
-        tellServer(whilstFlying.is(WhilstFlying.TELL_SERVER) && !mc.player.isPassenger());
-    }
-
-    // Keeps the server told the flag the mode wants.
-    // A shift flag whilst riding dismounts the player. The caller leaves it off then.
-    private void tellServer(boolean want) {
-        LocalPlayer player = mc.player;
-        // A respawn or a dimension change wipes what the server was told.
-        if (want == forcing && (!want || player == told.get())) {
-            return;
-        }
-        forcing = want;
-        told = new WeakReference<>(want ? player : null);
-        InputUtil.sendShift(want);
+        shift.letGo();
+        serverSneak.want(whilstFlying.is(WhilstFlying.TELL_SERVER) && !mc.player.isPassenger());
     }
 
     @Subscribe
     private void onPacketSend(PacketSendEvent event) {
-        if (forcing) {
-            InputUtil.keepShift(event);
-        }
+        serverSneak.keep(event);
     }
 
     private void undo(Mode old) {
-        if (old == null || !inGame()) {
+        if (old == null) {
             return;
         }
-        if (old == Mode.LEGIT) {
-            setShift(InputUtil.physicallyHeld(mc.options.keyShift));
-        }
-        tellServer(false);
-    }
-
-    // With toggle sneak turned on the game flips the key on every press.
-    private void setShift(boolean down) {
-        if (mc.options.keyShift.isDown() != down) {
-            mc.options.keyShift.setDown(down);
-        }
+        shift.letGo();
+        serverSneak.release();
     }
 
     private boolean flying() {

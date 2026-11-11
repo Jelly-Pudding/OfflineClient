@@ -100,9 +100,6 @@ public final class Dossier extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame()) {
-            return;
-        }
         long now = System.currentTimeMillis();
         PlayerLedger ledger = PlayerLedger.INSTANCE;
         // The settling counts down only once the file is read. Otherwise a slow read would let

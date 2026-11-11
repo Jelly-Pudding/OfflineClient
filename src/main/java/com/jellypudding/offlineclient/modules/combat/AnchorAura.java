@@ -1,6 +1,7 @@
 package com.jellypudding.offlineclient.modules.combat;
 
 import com.jellypudding.offlineclient.module.RespawnBlockAura;
+import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ExplosionUtil;
 import net.minecraft.core.BlockPos;
@@ -13,13 +14,28 @@ import net.minecraft.world.level.block.RespawnAnchorBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
+import java.util.List;
+
 // Only works where an anchor does not set a spawn point.
 public final class AnchorAura extends RespawnBlockAura {
 
     private static final float HUE = 170;
 
+    private final NumberSetting chargeDelay;
+    private final NumberSetting detonateDelay;
+
     public AnchorAura() {
-        super("AnchorAura", "Places respawn anchors near enemies and sets them off.", "anchors", HUE);
+        this(new NumberSetting("Charge delay",
+                "Ticks to wait after a blast before glowstone goes into the next anchor.", 2, 0, 20, 1, " ticks"),
+            new NumberSetting("Detonate delay",
+                "Ticks to wait after the glowstone before the anchor is set off.", 2, 0, 20, 1, " ticks"));
+    }
+
+    private AnchorAura(NumberSetting chargeDelay, NumberSetting detonateDelay) {
+        super("AnchorAura", "Places respawn anchors near enemies and sets them off.", "anchors", HUE,
+            List.of(), List.of(chargeDelay, detonateDelay));
+        this.chargeDelay = chargeDelay;
+        this.detonateDelay = detonateDelay;
         searchTags("respawn anchor", "glowstone", "nether", "cpvp");
     }
 
@@ -55,19 +71,15 @@ public final class AnchorAura extends RespawnBlockAura {
         // and the anchor is not full.
         boolean forcedTopUp = charge < RespawnAnchorBlock.MAX_CHARGES
             && mc.player.getOffhandItem().is(Items.GLOWSTONE);
-        int slot;
-        if (charge == 0 || forcedTopUp) {
-            slot = armGlowstone();
-        } else {
-            // An empty hand sets a charged anchor off just as well.
-            slot = armOther("(hotbar is all glowstone)");
-        }
+        boolean charging = charge == 0 || forcedTopUp;
+        // An empty hand sets a charged anchor off just as well.
+        int slot = charging ? armGlowstone() : armOther("(hotbar is all glowstone)");
         if (slot == -1) {
             return true;
         }
         if (look(Vec3.atCenterOf(best)) && BlockUtil.interact(best, BlockUtil.facingSide(best))) {
             swing.getValue().swing(InteractionHand.MAIN_HAND);
-            fired();
+            holdBreak(charging ? detonateDelay.getInt() : chargeDelay.getInt());
         }
         return true;
     }
@@ -94,35 +106,45 @@ public final class AnchorAura extends RespawnBlockAura {
     }
 
     @Override
-    protected void placeBest(LivingEntity target) {
-        BlockPos best = null;
-        float bestDamage = 0;
-        for (BlockPos pos : nearby(target)) {
-            if (!placeable(pos) || !inReach(pos, true)) {
-                continue;
-            }
-            if (!BlockUtil.unobstructed(pos, Blocks.RESPAWN_ANCHOR.defaultBlockState())) {
-                continue;
-            }
-            float damage = damageBeating(bestDamage, target, pos, pos);
-            if (damage == 0) {
-                continue;
-            }
-            bestDamage = damage;
-            best = pos.immutable();
-        }
+    protected boolean placeBest(LivingEntity target) {
+        BlockPos best = bestSpot(target, null);
         plan(best);
         if (best == null) {
             status = "(no safe spot)";
-            return;
+            return false;
         }
         if (armAmmo("(no anchors)") == -1 || !look(Vec3.atCenterOf(best))) {
-            return;
+            return true;
         }
         // The rotation has already been asked for. Placing must not ask again.
         if (BlockUtil.placeAny(best, false, false)) {
             swing.getValue().swing(InteractionHand.MAIN_HAND);
             placed();
         }
+        return true;
+    }
+
+    @Override
+    protected boolean spotWithout(LivingEntity target, BlockPos gone) {
+        return bestSpot(target, gone) != null;
+    }
+
+    // Where an anchor would hurt the target most. The block named as gone counts as mined out.
+    private BlockPos bestSpot(LivingEntity target, BlockPos gone) {
+        BlockPos best = null;
+        float bestDamage = 0;
+        for (BlockPos pos : nearby(target)) {
+            if (!placeable(pos, gone) || !inReach(pos, true)
+                || !BlockUtil.unobstructed(pos, Blocks.RESPAWN_ANCHOR.defaultBlockState())) {
+                continue;
+            }
+            float damage = damageBeating(bestDamage, target, pos, pos, gone);
+            if (damage == 0) {
+                continue;
+            }
+            bestDamage = damage;
+            best = pos.immutable();
+        }
+        return best;
     }
 }

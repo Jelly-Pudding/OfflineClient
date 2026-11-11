@@ -1,6 +1,7 @@
 package com.jellypudding.offlineclient.util;
 
 import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.render.DrawBatch;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
@@ -15,12 +16,8 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.monster.Shulker;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.ai.attributes.Attributes;
-import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.attribute.EnvironmentAttributes;
-import net.minecraft.world.effect.MobEffectUtil;
-import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.world.level.ClipContext;
@@ -66,6 +63,7 @@ import net.minecraft.world.level.block.entity.EnderChestBlockEntity;
 import net.minecraft.world.level.block.entity.ShulkerBoxBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.ChestType;
+import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
@@ -90,7 +88,7 @@ public final class BlockUtil {
     public static final float BLAST_PROOF = 600;
 
     // The widest cube scan that still fits in one tick.
-    private static final double MAX_SCAN_RANGE = 16;
+    public static final double MAX_SCAN_RANGE = 16;
 
     private static final AABB FULL_CUBE = new AABB(0, 0, 0, 1, 1, 1);
 
@@ -101,15 +99,6 @@ public final class BlockUtil {
     public static final List<Direction> BELOW_THEN_SIDES = List.of(
         Direction.DOWN, Direction.NORTH, Direction.SOUTH, Direction.WEST, Direction.EAST);
 
-    // The vanilla break time formula. Off the ground mines five times slower and
-    // the wrong tool takes over three times as long.
-    public static final float AIR_PENALTY = 5;
-    // The server finishes a block once the client reports this much progress.
-    public static final float SERVER_ACCEPTS = 0.7f;
-    private static final int RIGHT_TOOL_DIVISOR = 30;
-    private static final int WRONG_TOOL_DIVISOR = 100;
-    // Each level of Mining Fatigue multiplies the speed by this once more.
-    private static final double FATIGUE_BASE = 0.3;
     // A shulker box opens as far as its own size and its lid lifts half a block. The game trims
     // a sliver off the space it needs.
     private static final float SHULKER_SIZE = 1;
@@ -167,6 +156,21 @@ public final class BlockUtil {
         return cracks == null || cracks.isEmpty() ? -1 : cracks.last().getProgress();
     }
 
+    // True whilst someone other than you or a friend is breaking the block. Every crack the
+    // server sends carries the id of whoever makes it.
+    public static boolean minedByOthers(BlockPos pos) {
+        SortedSet<BlockDestructionProgress> cracks = MC.level.destructionProgress().get(pos.asLong());
+        if (cracks == null) {
+            return false;
+        }
+        for (BlockDestructionProgress crack : cracks) {
+            if (crack.getId() != MC.player.getId() && !EntityUtil.isFriend(MC.level.getEntity(crack.getId()))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     // The three coordinates with spaces between.
     public static String text(BlockPos pos) {
         return pos.getX() + " " + pos.getY() + " " + pos.getZ();
@@ -183,10 +187,6 @@ public final class BlockUtil {
         } catch (NumberFormatException e) {
             return null;
         }
-    }
-
-    public static double distanceTo(BlockPos pos) {
-        return MC.player.getEyePosition().distanceTo(Vec3.atCenterOf(pos));
     }
 
     private record Scored(BlockPos pos, double distanceSq) {
@@ -281,6 +281,10 @@ public final class BlockUtil {
         return Level.isInSpawnableBounds(pos) && isReplaceable(pos) ? pos : null;
     }
 
+    public static double distanceTo(BlockPos pos) {
+        return MC.player.getEyePosition().distanceTo(Vec3.atCenterOf(pos));
+    }
+
     // The reach the server measures with. Reach and AirPlace grow the client's own figure.
     public static double serverBlockReach() {
         return MC.player.getAttributeValue(Attributes.BLOCK_INTERACTION_RANGE);
@@ -324,6 +328,20 @@ public final class BlockUtil {
     public static boolean reaches(BlockPos pos, Vec3 eye, double range) {
         double distance = reachTo(pos, eye);
         return distance <= range && serverReaches(distance);
+    }
+
+    // How far away a spot may be. One out of sight gets the walls range.
+    public static double reachFor(Vec3 aim, double range, double wallsRange) {
+        return canSee(aim) ? range : wallsRange;
+    }
+
+    // Near enough to the eyes for a click on the block.
+    public static boolean inReach(BlockPos pos) {
+        return distanceTo(pos) <= serverBlockReach();
+    }
+
+    public static boolean inReach(BlockPos pos, double range, double wallsRange) {
+        return distanceTo(pos) <= reachFor(Vec3.atCenterOf(pos), range, wallsRange);
     }
 
     // The space a block placed by this click fills. A replaceable block is filled itself.
@@ -535,6 +553,24 @@ public final class BlockUtil {
         return best[0];
     }
 
+    // The position whose middle lies nearest the eyes of those that pass the test. Null when none
+    // does. A mutable position from a box walk is copied before it is kept.
+    public static BlockPos nearestOf(Iterable<BlockPos> positions, Predicate<BlockPos> test) {
+        Vec3 eye = MC.player.getEyePosition();
+        BlockPos best = null;
+        double bestDistanceSq = Double.MAX_VALUE;
+        for (BlockPos pos : positions) {
+            double distanceSq = eye.distanceToSqr(Vec3.atCenterOf(pos));
+            // A position no nearer than the best hit cannot win and is never tested.
+            if (distanceSq >= bestDistanceSq || !test.test(pos)) {
+                continue;
+            }
+            bestDistanceSq = distanceSq;
+            best = pos.immutable();
+        }
+        return best;
+    }
+
     public static boolean isBlastProof(BlockPos pos) {
         return isBlastProof(state(pos));
     }
@@ -542,90 +578,6 @@ public final class BlockUtil {
     // A crystal or a bed cannot break it.
     public static boolean isBlastProof(BlockState state) {
         return state.getBlock().getExplosionResistance() >= BLAST_PROOF;
-    }
-
-    // The blast proof block beside the target's feet that is closest to the player.
-    public static BlockPos cityBlock(Player target, double reach) {
-        BlockPos feet = target.blockPosition();
-        BlockPos best = null;
-        double bestDistance = reach;
-        for (Direction side : Direction.Plane.HORIZONTAL) {
-            BlockPos pos = feet.relative(side);
-            BlockState state = state(pos);
-            if (state.isAir() || !isBreakable(pos) || !isBlastProof(state)) {
-                continue;
-            }
-            double distance = distanceTo(pos);
-            if (distance <= bestDistance) {
-                bestDistance = distance;
-                best = pos;
-            }
-        }
-        return best;
-    }
-
-    // An end crystal only goes down on obsidian or bedrock.
-    public static boolean crystalBase(BlockState state) {
-        return state.is(Blocks.OBSIDIAN) || state.is(Blocks.BEDROCK);
-    }
-
-    // The server refuses a crystal whilst any entity touches its block or the one above.
-    public static AABB crystalSpace(BlockPos crystal) {
-        return new AABB(crystal.getX(), crystal.getY(), crystal.getZ(),
-            crystal.getX() + 1, crystal.getY() + 2, crystal.getZ() + 1);
-    }
-
-    // The click on top of the base that places a crystal.
-    public static BlockHitResult crystalClick(BlockPos base) {
-        return new BlockHitResult(Vec3.atCenterOf(base).add(0, 0.5, 0), Direction.UP, base, false);
-    }
-
-    // How well a block shields whoever stands beside it from a blast.
-    public enum Wall {
-        OPEN, WEAK, BLAST_PROOF, UNBREAKABLE;
-
-        public boolean holds() {
-            return this == BLAST_PROOF || this == UNBREAKABLE;
-        }
-    }
-
-    public static Wall wallOf(BlockState state) {
-        if (!blocksMotion(state)) {
-            return Wall.OPEN;
-        }
-        if (state.getBlock().defaultDestroyTime() < 0) {
-            return Wall.UNBREAKABLE;
-        }
-        return isBlastProof(state) ? Wall.BLAST_PROOF : Wall.WEAK;
-    }
-
-    public static boolean playerInHole() {
-        return inHole(MC.player.blockPosition());
-    }
-
-    // True when feet at this block stand in a hole walled with blast proof blocks.
-    // A two block hole counts when its second block is walled on its own.
-    public static boolean inHole(BlockPos feet) {
-        if (!isBlastProof(feet.below())) {
-            return false;
-        }
-        int open = 0;
-        for (Direction side : Direction.Plane.HORIZONTAL) {
-            BlockPos next = feet.relative(side);
-            if (isBlastProof(next)) {
-                continue;
-            }
-            open++;
-            if (!isBlastProof(next.below())) {
-                return false;
-            }
-            for (Direction other : Direction.Plane.HORIZONTAL) {
-                if (other != side.getOpposite() && !isBlastProof(next.relative(other))) {
-                    return false;
-                }
-            }
-        }
-        return open < 2;
     }
 
     // A hotbar slot holding something that survives a crystal and can be broken again.
@@ -680,34 +632,6 @@ public final class BlockUtil {
             }
         }
         return best;
-    }
-
-    // The open spots above the head and at head height around it.
-    public static List<BlockPos> trapSpots(BlockPos feet, boolean sealSides) {
-        return trapSpots(feet, true, sealSides, false);
-    }
-
-    // Any mix of the block over the head and the four at head height and the one underfoot.
-    public static List<BlockPos> trapSpots(BlockPos feet, boolean top, boolean sides, boolean bottom) {
-        List<BlockPos> spots = new ArrayList<>();
-        if (top) {
-            addOpen(spots, feet.above(2));
-        }
-        if (sides) {
-            for (Direction side : Direction.Plane.HORIZONTAL) {
-                addOpen(spots, feet.above().relative(side));
-            }
-        }
-        if (bottom) {
-            addOpen(spots, feet.below());
-        }
-        return spots;
-    }
-
-    private static void addOpen(List<BlockPos> spots, BlockPos pos) {
-        if (blockFits(pos)) {
-            spots.add(pos);
-        }
     }
 
     // No entity stands where the block would go. The server refuses a placement into one.
@@ -840,6 +764,13 @@ public final class BlockUtil {
         return center.add(side.getStepX() * halfX, side.getStepY() * halfY, side.getStepZ() * halfZ);
     }
 
+    // The outline the game gives the block pulled in off its faces as a drawn block is. A block
+    // without an outline gets a whole block.
+    public static AABB outlineBox(BlockPos pos, BlockState state) {
+        VoxelShape shape = state.getShape(MC.level, pos);
+        return shape.isEmpty() ? DrawBatch.blockBox(pos) : shape.bounds().move(pos).deflate(DrawBatch.BLOCK_INSET);
+    }
+
     public static Direction facingSide(BlockPos pos) {
         Vec3 eye = MC.player.getEyePosition();
         Direction best = Direction.UP;
@@ -852,20 +783,6 @@ public final class BlockUtil {
             }
         }
         return best;
-    }
-
-    // How far away a spot may be. One out of sight gets the walls range.
-    public static double reachFor(Vec3 aim, double range, double wallsRange) {
-        return canSee(aim) ? range : wallsRange;
-    }
-
-    // Near enough to the eyes for a click on the block.
-    public static boolean inReach(BlockPos pos) {
-        return distanceTo(pos) <= serverBlockReach();
-    }
-
-    public static boolean inReach(BlockPos pos, double range, double wallsRange) {
-        return distanceTo(pos) <= reachFor(Vec3.atCenterOf(pos), range, wallsRange);
     }
 
     // True when nothing solid sits between the eyes and the point.
@@ -906,8 +823,14 @@ public final class BlockUtil {
     // True when liquid beside or above the block would pour in once it came out. Liquid below
     // never flows up.
     public static boolean holdsBackLiquid(BlockPos pos) {
+        return holdsBackLiquid(pos, liquid -> true);
+    }
+
+    // The same for the liquids the test picks.
+    public static boolean holdsBackLiquid(BlockPos pos, Predicate<FluidState> picked) {
         for (Direction side : Direction.values()) {
-            if (side != Direction.DOWN && !state(pos.relative(side)).getFluidState().isEmpty()) {
+            FluidState liquid = state(pos.relative(side)).getFluidState();
+            if (side != Direction.DOWN && !liquid.isEmpty() && picked.test(liquid)) {
                 return true;
             }
         }
@@ -956,84 +879,9 @@ public final class BlockUtil {
         return shape.bounds().move(pos).intersects(below);
     }
 
-    public static boolean canInstantBreak(BlockPos pos) {
-        if (MC.player.getAbilities().instabuild) {
-            return true;
-        }
-        return state(pos).getDestroyProgress(MC.player, MC.level, pos) >= 1;
-    }
-
-    // Grass or a flower or snow or anything else in the way that one hit clears. Flowers
-    // cannot be built over like grass but still break in one hit.
-    public static boolean clearsInOneHit(BlockPos pos) {
-        BlockState state = state(pos);
-        return !state.isAir() && (state.canBeReplaced() || state.is(BlockTags.FLOWERS))
-            && state.getFluidState().isEmpty() && canInstantBreak(pos);
-    }
-
-    // True when a start and a stop sent together break the block. The server finishes it on
-    // the stop once a single tick of progress reaches its threshold.
-    public static boolean breaksInOneTick(BlockPos pos) {
-        if (MC.player.getAbilities().instabuild) {
-            return true;
-        }
-        return state(pos).getDestroyProgress(MC.player, MC.level, pos) >= SERVER_ACCEPTS;
-    }
-
-    // Progress one tick of mining with this tool would make by the vanilla dig speed maths.
-    // The tool need not be held and a packet miner can time one it swapped away.
-    public static float breakDelta(ItemStack tool, BlockPos pos) {
-        return breakDelta(tool, state(pos), pos);
-    }
-
-    // The same for a block the client has already cleared whilst the server still holds it.
-    public static float breakDelta(ItemStack tool, BlockState state, BlockPos pos) {
-        float hardness = state.getDestroySpeed(MC.level, pos);
-        if (hardness < 0) {
-            return 0;
-        }
-        if (hardness == 0) {
-            return 1;
-        }
-        Player player = MC.player;
-        float speed = ItemUtil.miningSpeed(tool, state);
-        if (MobEffectUtil.hasDigSpeed(player)) {
-            speed *= 1 + (MobEffectUtil.getDigSpeedAmplification(player) + 1) * 0.2f;
-        }
-        MobEffectInstance fatigue = player.getEffect(MobEffects.MINING_FATIGUE);
-        if (fatigue != null) {
-            speed *= (float) Math.pow(FATIGUE_BASE, fatigue.getAmplifier() + 1);
-        }
-        speed *= (float) player.getAttributeValue(Attributes.BLOCK_BREAK_SPEED);
-        if (player.isEyeInFluid(FluidTags.WATER)) {
-            speed *= (float) player.getAttributeValue(Attributes.SUBMERGED_MINING_SPEED);
-        }
-        if (!player.onGround()) {
-            speed /= AIR_PENALTY;
-        }
-        return speed / breakDivisor(hardness, ItemUtil.getsDrops(tool, state));
-    }
-
-    // The break speed over this is the share of the block mined each tick.
-    public static float breakDivisor(float hardness, boolean rightTool) {
-        return hardness * (rightTool ? RIGHT_TOOL_DIVISOR : WRONG_TOOL_DIVISOR);
-    }
-
-    public static int breakTicks(BlockPos pos) {
-        float perTick = state(pos).getDestroyProgress(MC.player, MC.level, pos);
-        if (perTick <= 0) {
-            return Integer.MAX_VALUE;
-        }
-        return (int) Math.ceil(1 / perTick);
-    }
-
-    // Ancient debris and gilded blackstone count too.
+    // Every block the ores tag names with ancient debris and gilded blackstone as well.
     public static boolean isOre(BlockState state) {
-        Block block = state.getBlock();
-        if (block == Blocks.ANCIENT_DEBRIS || block == Blocks.GILDED_BLACKSTONE) {
-            return true;
-        }
-        return BuiltInRegistries.BLOCK.getKey(block).getPath().endsWith("_ore");
+        return state.is(BlockTags.ORES) || state.is(Blocks.ANCIENT_DEBRIS) || state.is(Blocks.GILDED_BLACKSTONE);
     }
 
     // Iron ore and deepslate iron ore share a family.

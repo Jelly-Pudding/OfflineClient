@@ -54,7 +54,7 @@ public final class PearlTracker extends Module {
     private static final float STASIS_HUE = 190;
 
     private final BoolSetting ownPearls = new BoolSetting("Own pearls",
-        "Also track the pearls you throw.", false);
+        "Also tracks the pearls you throw.", false);
     private final BoolSetting ignoreFriends = new BoolSetting("Ignore friends",
         "Leaves out the pearls your friends throw.", false);
     private final BoolSetting path = new BoolSetting("Path",
@@ -109,9 +109,6 @@ public final class PearlTracker extends Module {
     private void onTick(TickEvent event) {
         flights.clear();
         resting.clear();
-        if (!inGame()) {
-            return;
-        }
         for (Entity entity : mc.level.entitiesForRendering()) {
             if (!(entity instanceof ThrownEnderpearl pearl) || !pearl.isAlive()) {
                 continue;

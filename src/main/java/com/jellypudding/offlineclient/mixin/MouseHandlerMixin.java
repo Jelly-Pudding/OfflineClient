@@ -1,14 +1,18 @@
 package com.jellypudding.offlineclient.mixin;
 
 import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.event.events.KeyPressEvent;
 import com.jellypudding.offlineclient.event.events.MouseScrollEvent;
 import com.jellypudding.offlineclient.modules.combat.AimAssist;
+import com.jellypudding.offlineclient.modules.misc.Panic;
 import com.jellypudding.offlineclient.modules.player.GUIMove;
 import com.jellypudding.offlineclient.modules.player.MiddleClickExtra;
 import com.jellypudding.offlineclient.modules.render.FreeLook;
 import com.jellypudding.offlineclient.modules.render.Freecam;
 import com.jellypudding.offlineclient.modules.render.Zoom;
+import com.jellypudding.offlineclient.setting.Bind;
 import com.jellypudding.offlineclient.util.ClickRate;
+import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.Modules;
 
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
@@ -28,9 +32,10 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(MouseHandler.class)
 public abstract class MouseHandlerMixin {
 
-    // The only option turnPlayer reads is the mouse sensitivity.
+    // The first option turnPlayer reads is the mouse sensitivity. The two after it are the invert switches.
     @ModifyExpressionValue(method = "turnPlayer(D)V",
-        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/OptionInstance;get()Ljava/lang/Object;"))
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/OptionInstance;get()Ljava/lang/Object;",
+            ordinal = 0))
     private Object zoomSensitivity(Object sensitivity) {
         Zoom zoom = Modules.active(Zoom.class);
         return zoom == null ? sensitivity : zoom.scaleSensitivity((Double) sensitivity);
@@ -60,7 +65,9 @@ public abstract class MouseHandlerMixin {
         at = @At("HEAD"),
         cancellable = true)
     private void onButton(long window, MouseButtonInfo info, int action, CallbackInfo ci) {
-        if (action == InputConstants.PRESS) {
+        boolean press = action == InputConstants.PRESS;
+        InputUtil.trackButton(info.button(), press);
+        if (press) {
             ClickRate.press(info.button());
         }
         // The pointer is hidden and off its last spot.
@@ -68,11 +75,27 @@ public abstract class MouseHandlerMixin {
             ci.cancel();
             return;
         }
-        if (info.button() == InputConstants.MOUSE_BUTTON_MIDDLE && action == InputConstants.PRESS) {
-            MiddleClickExtra extra = Modules.get(MiddleClickExtra.class);
-            if (extra != null) {
-                extra.onMiddleClick();
-            }
+        Bind input = Bind.of(info);
+        if (!input.isBound() || Panic.sleepsThrough(input, action)) {
+            return;
+        }
+        KeyPressEvent event = OfflineClient.INSTANCE.getEventBus().post(new KeyPressEvent(input, action));
+        if (event.isCancelled()) {
+            ci.cancel();
+            return;
+        }
+        if (!press || !InputUtil.isMiddle(info.button())) {
+            return;
+        }
+        // A middle click a bind answered in play is that bind's alone. Nothing picks a block or
+        // throws a pearl. Under a screen binds stand down and the click stays the screen's.
+        if (event.wasTaken() && OfflineClient.MC.gui.screen() == null) {
+            ci.cancel();
+            return;
+        }
+        MiddleClickExtra extra = Modules.get(MiddleClickExtra.class);
+        if (extra != null) {
+            extra.onMiddleClick();
         }
     }
 
@@ -84,6 +107,14 @@ public abstract class MouseHandlerMixin {
         }
         if (OfflineClient.INSTANCE.getEventBus().post(new MouseScrollEvent(vertical)).isCancelled()) {
             ci.cancel();
+        }
+    }
+
+    // The game asks here every frame whether the window has the focus.
+    @Inject(method = "handleAccumulatedMovement()V", at = @At("HEAD"))
+    private void onHandleMovement(CallbackInfo ci) {
+        if (!OfflineClient.MC.isWindowActive()) {
+            InputUtil.releaseButtons();
         }
     }
 

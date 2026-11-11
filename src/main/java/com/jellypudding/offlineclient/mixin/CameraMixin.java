@@ -1,6 +1,7 @@
 package com.jellypudding.offlineclient.mixin;
 
 import com.jellypudding.offlineclient.modules.combat.AimAssist;
+import com.jellypudding.offlineclient.modules.movement.ElytraFly;
 import com.jellypudding.offlineclient.modules.render.CameraTweaks;
 import com.jellypudding.offlineclient.modules.render.FreeLook;
 import com.jellypudding.offlineclient.modules.render.Freecam;
@@ -8,6 +9,7 @@ import com.jellypudding.offlineclient.modules.render.NoRender;
 import com.jellypudding.offlineclient.modules.render.WallHack;
 import com.jellypudding.offlineclient.modules.render.XRay;
 import com.jellypudding.offlineclient.modules.render.Zoom;
+import com.jellypudding.offlineclient.util.AwayView;
 import com.jellypudding.offlineclient.util.Modules;
 import com.llamalad7.mixinextras.injector.ModifyReturnValue;
 import net.minecraft.client.Camera;
@@ -16,8 +18,10 @@ import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
@@ -68,14 +72,14 @@ public abstract class CameraMixin {
         if (freeLook != null) {
             freeLook.restoreRotation();
         }
-        Freecam freecam = Modules.active(Freecam.class);
-        if (freecam == null) {
+        AwayView view = AwayView.active();
+        if (view == null) {
             return;
         }
         detached = true;
         float partialTicks = deltaTracker.getGameTimeDeltaPartialTick(true);
-        setPosition(freecam.getCamPos(partialTicks));
-        setRotation(freecam.getCamYaw(), freecam.getCamPitch());
+        setPosition(view.getCamPos(partialTicks));
+        setRotation(view.getCamYaw(), view.getCamPitch());
     }
 
     // Vanilla skips chunk sections that are boxed in by solid ground.
@@ -95,6 +99,32 @@ public abstract class CameraMixin {
     private float onCalculateFov(float original) {
         Zoom zoom = Modules.get(Zoom.class);
         return zoom == null ? original : zoom.applyZoom(original);
+    }
+
+    // The FOV effects option scales the zoom of speed and of water and lava. These two reads are
+    // all the game makes of it. Freecam's Still view and ElytraFly's Bounce hold it at nought.
+    @ModifyArg(method = "tickFov()V",
+        at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/client/player/AbstractClientPlayer;getFieldOfViewModifier(ZF)F"),
+        index = 1)
+    private float onSpeedFovScale(float scale) {
+        return offlineclient$fovScale(scale);
+    }
+
+    @ModifyArg(method = "modifyFovBasedOnDeathOrFluid(FF)F",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/util/Mth;lerp(FFF)F"),
+        index = 0)
+    private float onFluidFovScale(float scale) {
+        return offlineclient$fovScale(scale);
+    }
+
+    @Unique
+    private static float offlineclient$fovScale(float scale) {
+        Freecam freecam = Modules.get(Freecam.class);
+        ElytraFly elytraFly = Modules.get(ElytraFly.class);
+        boolean still = freecam != null && freecam.holdsViewStill()
+            || elytraFly != null && elytraFly.holdsFovStill();
+        return still ? 0 : scale;
     }
 
     // The distance vanilla wants before it walks the ray out and shortens it.

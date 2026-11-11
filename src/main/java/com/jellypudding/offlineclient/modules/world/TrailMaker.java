@@ -35,17 +35,17 @@ public final class TrailMaker extends AreaPlacer {
         .describe(Shape.PATCH, "A round patch centred on each block you walk on.");
     private final NumberSetting width = new NumberSetting("Width",
         "How many blocks wide the row is. An even width leans to your right.", 1, 1, 7, 1, " blocks")
-        .min(1).under(shape, Shape.ROW);
+        .under(shape, Shape.ROW);
     private final NumberSetting radius = new NumberSetting("Radius",
         "How far the patch reaches. One makes a plus and one and a half a three by three square."
             + " Two adds a tip to each side.", 1, 1, 4, 0.5, " blocks")
         .min(0).under(shape, Shape.PATCH);
     private final NumberSetting height = new NumberSetting("Height",
         "How many blocks tall the trail is. One lays it at your feet and more build a wall as high as you reach.",
-        1, 1, 8, 1, " blocks").min(1);
+        1, 1, 8, 1, " blocks");
     private final NumberSetting spacing = new NumberSetting("Spacing",
         "Blocks walked between one part of the trail and the next. Zero leaves no gaps.",
-        0, 0, 16, 1, " blocks").min(0);
+        0, 0, 16, 1, " blocks");
     private final BoolSetting onlyOnGround = new BoolSetting("Only on ground",
         "Leaves nothing where you jumped or fell through the air.", true);
 

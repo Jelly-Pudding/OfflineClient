@@ -7,6 +7,7 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.util.BlockMiner;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ExplosionUtil;
+import com.jellypudding.offlineclient.util.Holes;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import net.minecraft.core.BlockPos;
@@ -64,12 +65,12 @@ public final class AntiBed extends RespawnBlockBreaker {
 
     @Subscribe
     private void onStringTick(TickEvent event) {
-        if (!inGame() || mc.player.isSpectator() || !explodesHere()) {
+        if (mc.player.isSpectator() || !explodesHere()) {
             return;
         }
         BlockPos feet = mc.player.blockPosition();
         breakHeadBed(feet.above());
-        if (onlyInHole.isOn() && !BlockUtil.playerInHole()) {
+        if (onlyInHole.isOn() && !Holes.playerInHole()) {
             return;
         }
         if (stringAbove.isOn()) {

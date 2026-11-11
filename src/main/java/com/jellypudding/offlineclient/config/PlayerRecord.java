@@ -6,6 +6,7 @@ import com.google.gson.JsonObject;
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.ItemUtil;
 import com.jellypudding.offlineclient.util.ServerInfo;
 import com.jellypudding.offlineclient.util.Tally;
 import net.minecraft.client.multiplayer.PlayerInfo;
@@ -342,13 +343,8 @@ public final class PlayerRecord {
         }
         String[] parts = piece.split(" ", 2);
         boolean worn = slot.getType() == EquipmentSlot.Type.HUMANOID_ARMOR;
-        String slotWords = switch (slot) {
-            case MAINHAND -> "main hand";
-            case OFFHAND -> "offhand";
-            default -> slot.getName();
-        };
         return new Fact((worn ? "Wears " : "Holds ") + ChatUtil.withArticle(itemWords(parts[0])),
-            slotWords + (parts.length > 1 ? SEPARATOR + parts[1] : ""), null);
+            ItemUtil.slotWords(slot) + (parts.length > 1 ? SEPARATOR + parts[1] : ""), null);
     }
 
     private static String itemWords(String id) {

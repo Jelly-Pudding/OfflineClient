@@ -17,9 +17,9 @@ public final class Parkour extends Module {
         0.001, 0.001, 0.25, 0.001, " blocks");
     private final NumberSetting minDepth = new NumberSetting("Min depth",
         "How far the drop past the edge must be before it jumps.",
-        0.5, 0.05, 10, 0.05, " blocks").min(0.05);
+        0.5, 0.05, 10, 0.05, " blocks");
     private final BoolSetting whileSneaking = new BoolSetting("Jump whilst sneaking",
-        "Keep jumping at edges whilst you sneak.", false);
+        "Keeps jumping at edges whilst you sneak.", false);
 
     public Parkour() {
         super("Parkour", "Jumps for you at the edge of blocks.", Category.MOVEMENT);
@@ -35,7 +35,7 @@ public final class Parkour extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || !mc.player.onGround() || mc.options.keyJump.isDown()) {
+        if (!mc.player.onGround() || mc.options.keyJump.isDown()) {
             return;
         }
         if (mc.player.isShiftKeyDown() && !whileSneaking.isOn()) {

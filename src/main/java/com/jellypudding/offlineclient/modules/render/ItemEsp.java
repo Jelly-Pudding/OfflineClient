@@ -34,7 +34,7 @@ public final class ItemEsp extends Module {
     private static final double FANCY_LIFT = 0.05;
 
     private final BoolSetting boxes = new BoolSetting("Boxes",
-        "Draw a box around every item.", true);
+        "Draws a box around every item.", true);
     private final BoxStyle style = new BoxStyle(BoxStyle.Shape.LINES, 48).under(boxes);
     private final EnumSetting<Size> size = new EnumSetting<>("Box size",
         "How big the box around an item is.", Size.FANCY)
@@ -42,7 +42,7 @@ public final class ItemEsp extends Module {
         .describe(Size.FANCY, "A little larger and raised off the floor.")
         .under(boxes);
     private final BoolSetting tracers = new BoolSetting("Tracers",
-        "Draw a line to every item.", false);
+        "Draws a line to every item.", false);
     private final ColorSetting tracerColor = new ColorSetting("Tracer colour",
         "Colour of the lines.", 48, false).under(tracers);
     private final BoolSetting steadyView = new BoolSetting("Steady view",
@@ -54,7 +54,7 @@ public final class ItemEsp extends Module {
         "Furthest an item can be and still show.", 64, 8, 256, 8, " blocks").min(1)
         .under(limitRange);
     private final BoolSetting everything = new BoolSetting("Everything",
-        "Show every dropped item.", true);
+        "Shows every dropped item.", true);
     private final RegistryListSetting<Item> items = new RegistryListSetting<>("Items",
         "The items to show.", BuiltInRegistries.ITEM,
         List.of(Items.DIAMOND, Items.NETHERITE_INGOT, Items.ENCHANTED_GOLDEN_APPLE,
@@ -67,7 +67,7 @@ public final class ItemEsp extends Module {
     private int count;
 
     public ItemEsp() {
-        super("ItemESP", "See dropped items through walls.", Category.RENDER);
+        super("ItemESP", "Shows dropped items through walls.", Category.RENDER);
         addSettings(boxes);
         addSettings(style.settings());
         addSettings(size, tracers, tracerColor, steadyView, limitRange, range, everything, items);

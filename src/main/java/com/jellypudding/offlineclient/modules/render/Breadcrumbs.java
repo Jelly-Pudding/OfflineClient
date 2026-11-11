@@ -1,6 +1,5 @@
 package com.jellypudding.offlineclient.modules.render;
 
-import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.config.DataFiles;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.Render3DEvent;
@@ -15,10 +14,12 @@ import com.jellypudding.offlineclient.util.BoundedMap;
 import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.ServerInfo;
+import net.minecraft.client.Camera;
+import net.minecraft.core.SectionPos;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
+import org.joml.Vector3fc;
 
-import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
@@ -40,9 +41,25 @@ public final class Breadcrumbs extends Module {
     private static final double JUMP = 20;
     // A gap in a trail. Nothing is drawn to it or from it and the point after it always goes in.
     private static final Vec3 BREAK = new Vec3(Double.NaN, Double.NaN, Double.NaN);
+    // The game clips the view this many render distances out or at the cloud range if that is
+    // further. The trail skips fog and shows all the way out there.
+    private static final int FAR_PLANE_REACH = 4;
+    // The hurt tilt turns the view up to fourteen degrees off the camera's heading. That brings
+    // ground up to about half as far again past the far plane into the corners of the screen.
+    private static final double TILT_MARGIN = 1.5;
+
+    // What this frame can show. A segment with both ends further along the view than the far plane
+    // is never drawn by the game.
+    private record Sight(Vec3 eye, Vector3fc ahead, double far) {
+
+        // False for a break whose position is not a number.
+        private boolean beyond(Vec3 point) {
+            return (point.x - eye.x) * ahead.x() + (point.y - eye.y) * ahead.y() + (point.z - eye.z) * ahead.z() > far;
+        }
+    }
 
     private final BoolSetting throughWalls = new BoolSetting("Through walls",
-        "Show the trail through blocks.", true);
+        "Shows the trail through blocks.", true);
     private final ColorSetting color = new ColorSetting("Colour",
         "Trail colour.", 190, false);
     private final BoolSetting keepTrail = new BoolSetting("Keep trail",
@@ -114,9 +131,6 @@ public final class Breadcrumbs extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame()) {
-            return;
-        }
         String here = ServerInfo.worldKey();
         if (!here.equals(world)) {
             if (persist.isOn() && world != null) {
@@ -199,13 +213,21 @@ public final class Breadcrumbs extends Module {
     @Subscribe
     private void onRender3D(Render3DEvent event) {
         DrawBatch batch = event.getBatch();
-        draw(batch, trail, color.getColor());
+        Sight sight = sight();
+        draw(batch, trail, color.getColor(), sight);
         for (Deque<Vec3> points : otherTrails.values()) {
-            draw(batch, points, playerColor.getColor());
+            draw(batch, points, playerColor.getColor(), sight);
         }
     }
 
-    private void draw(DrawBatch batch, Deque<Vec3> points, int argb) {
+    private Sight sight() {
+        Camera camera = mc.gameRenderer.mainCamera();
+        double far = Math.max(mc.options.getEffectiveRenderDistance() * FAR_PLANE_REACH,
+            mc.options.cloudRange().get()) * SectionPos.SECTION_SIZE;
+        return new Sight(camera.position(), camera.forwardVector(), far * TILT_MARGIN);
+    }
+
+    private void draw(DrawBatch batch, Deque<Vec3> points, int argb, Sight sight) {
         int total = points.size();
         if (total < 2) {
             return;
@@ -213,12 +235,15 @@ public final class Breadcrumbs extends Module {
         boolean through = throughWalls.isOn();
         boolean fading = fade.isOn();
         Vec3 previous = BREAK;
+        boolean previousBeyond = false;
         int i = 0;
         for (Vec3 point : points) {
-            if (!isBreak(previous) && !isBreak(point)) {
+            boolean beyond = sight.beyond(point);
+            if (!isBreak(previous) && !isBreak(point) && !(previousBeyond && beyond)) {
                 batch.line(previous, point, fading ? ColorUtil.fade(argb, i / (float) total) : argb, through);
             }
             previous = point;
+            previousBeyond = beyond;
             i++;
         }
     }
@@ -242,25 +267,23 @@ public final class Breadcrumbs extends Module {
     }
 
     private void load() {
-        if (world == null) {
-            return;
+        if (world != null) {
+            DataFiles.readText(fileFor(world)).ifPresent(text -> text.lines().forEach(this::loadPoint));
         }
-        Path file = fileFor(world);
-        if (!Files.exists(file)) {
+    }
+
+    // A line that is not three numbers is left out.
+    private void loadPoint(String line) {
+        String[] parts = line.split(" ");
+        if (parts.length != 3) {
             return;
         }
         try {
-            for (String line : Files.readAllLines(file)) {
-                String[] parts = line.split(" ");
-                if (parts.length != 3) {
-                    continue;
-                }
-                trail.addLast(new Vec3(Double.parseDouble(parts[0]),
-                    Double.parseDouble(parts[1]), Double.parseDouble(parts[2])));
-                trim(trail);
-            }
-        } catch (IOException | NumberFormatException e) {
-            OfflineClient.LOG.error("Failed to read trail", e);
+            trail.addLast(new Vec3(Double.parseDouble(parts[0]), Double.parseDouble(parts[1]),
+                Double.parseDouble(parts[2])));
+            trim(trail);
+        } catch (NumberFormatException e) {
+            // A number that cannot be read leaves out only its own line.
         }
     }
 

@@ -4,7 +4,6 @@ import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.Render3DEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
-import com.jellypudding.offlineclient.mixin.MultiPlayerGameModeAccessor;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.ExclusivityGroup;
 import com.jellypudding.offlineclient.module.Module;
@@ -15,7 +14,9 @@ import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
+import com.jellypudding.offlineclient.util.Cooldowns;
 import com.jellypudding.offlineclient.util.FaceMode;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.PacketBreaker;
@@ -29,7 +30,10 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.BonemealSource;
+import net.minecraft.world.level.block.BonemealableBlock;
 import net.minecraft.world.level.block.CaveVines;
 import net.minecraft.world.level.block.ChorusFlowerBlock;
 import net.minecraft.world.level.block.CocoaBlock;
@@ -38,6 +42,7 @@ import net.minecraft.world.level.block.NetherWartBlock;
 import net.minecraft.world.level.block.PipeBlock;
 import net.minecraft.world.level.block.PitcherCropBlock;
 import net.minecraft.world.level.block.SeaPickleBlock;
+import net.minecraft.world.level.block.StemBlock;
 import net.minecraft.world.level.block.SweetBerryBushBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
@@ -46,8 +51,10 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -174,14 +181,26 @@ public final class AutoFarm extends Module {
     private static final List<String> PLANTS_ON = PLANT_NAMES.stream()
         .filter(name -> !name.endsWith("vines")).toList();
 
+    // The plants whose seed goes straight onto bare farmland or soul sand.
+    private static final List<String> SOWN_NAMES = List.of("Beetroots", "Carrots", "Melons", "Nether wart",
+        "Pitcher plants", "Potatoes", "Pumpkins", "Torchflowers", "Wheat");
+
+    // Melons and pumpkins want the block beside them left free and are sown by choice.
+    private static final List<String> SOWN_ON = List.of("Beetroots", "Carrots", "Nether wart", "Potatoes",
+        "Wheat");
+
     // Ticks a cut spot waits for its seed.
     private static final int PLANT_TICKS = 60;
+
+    // Ticks a spot that was given a seed is passed over. A seed the server turned down leaves
+    // the spot empty and it would otherwise be clicked again and again.
+    private static final int SEED_RETRY_TICKS = 20;
 
     private static final AABB NODE = new AABB(BlockPos.ZERO).deflate(0.3);
     private static final AABB SHELL = new AABB(BlockPos.ZERO).deflate(1 / 16.0);
 
     private final NumberSetting range = new NumberSetting("Range",
-        "How far from your eyes to farm.", 4.5, 1, 6, 0.1);
+        "How far from your eyes to farm.", 4.5, 1, 6, 0.1, " blocks");
     private final BoolSetting harvest = new BoolSetting("Harvest",
         "Takes the parts of a plant that have finished growing.", true);
     private final ChoiceListSetting harvestPlants = new ChoiceListSetting("Harvest plants",
@@ -192,12 +211,17 @@ public final class AutoFarm extends Module {
     private final ChoiceListSetting replantPlants = new ChoiceListSetting("Replant plants",
         "Which plants to put back.", () -> PLANT_NAMES, PLANTS_ON)
         .under(replant);
+    private final BoolSetting sow = new BoolSetting("Sow empty soil",
+        "Puts a seed on every empty farmland block in reach and nether wart on empty soul sand.", false);
+    private final ChoiceListSetting sowPlants = new ChoiceListSetting("Sow plants",
+        "Which plants go on empty soil. The first of them that you carry is sown.", () -> SOWN_NAMES, SOWN_ON)
+        .under(sow);
     private final BoolSetting bonemeal = new BoolSetting("Bonemeal",
         "Feeds bone meal to the crops that are still growing.", false);
     private final NumberSetting perTick = new NumberSetting("Blocks per tick",
-        "How many crops to cut each tick.", 4, 1, 16, 1);
+        "How many crops to cut each tick. " + PacketBreaker.PAPER_LIMIT, 4, 1, 16, 1);
     private final BoolSetting lineOfSight = new BoolSetting("Line of sight",
-        "Skip anything your eyes cannot see.", false);
+        "Skips anything your eyes cannot see.", false);
     private final EnumSetting<FaceMode> faceTarget = FaceMode.setting(FaceMode.SERVER);
     private final EnumSetting<SwingMode> swing = SwingMode.setting(SwingMode.BOTH);
     private final BoolSetting drawSpots = new BoolSetting("Draw spots",
@@ -206,7 +230,7 @@ public final class AutoFarm extends Module {
         "Colour of the tracked spots.", 180, 0.79f, 0.88f, false)
         .under(drawSpots);
     private final BoolSetting drawHarvest = new BoolSetting("Draw harvest",
-        "Marks the plants that are ready to take and how far the break has got.", true);
+        "Marks the plants that are ready to take.", true);
     private final ColorSetting harvestColor = new ColorSetting("Harvest colour",
         "Colour of the plants that are ready.", 120, 0.79f, 0.88f, false)
         .under(drawHarvest);
@@ -219,10 +243,10 @@ public final class AutoFarm extends Module {
     private final PacketBreaker breaker = new PacketBreaker();
     private final Map<BlockPos, Plant> spots = new HashMap<>();
     private final Map<BlockPos, Integer> spotExpiry = new HashMap<>();
+    private final Cooldowns<BlockPos> seeded = new Cooldowns<>();
 
     private List<BlockPos> shownHarvest = List.of();
-    private List<BlockPos> shownReplant = List.of();
-    private BlockPos mining;
+    private Collection<BlockPos> shownReplant = List.of();
 
     private int lastUse;
 
@@ -230,10 +254,10 @@ public final class AutoFarm extends Module {
 
     public AutoFarm() {
         super("AutoFarm", "Harvests the ripe crops in reach and replants them.", Category.WORLD);
-        addSettings(range, harvest, harvestPlants, replant, replantPlants, bonemeal, perTick,
+        addSettings(range, harvest, harvestPlants, replant, replantPlants, sow, sowPlants, bonemeal, perTick,
             lineOfSight, faceTarget, swing, drawSpots, spotColor, drawHarvest, harvestColor,
             drawReplant, replantColor);
-        searchTags("farm", "crops", "harvest", "replant", "wheat", "berries");
+        searchTags("farm", "crops", "harvest", "replant", "sow", "plant seeds", "wheat", "berries");
     }
 
     @Override
@@ -262,28 +286,28 @@ public final class AutoFarm extends Module {
         breaker.reset();
         spots.clear();
         spotExpiry.clear();
+        seeded.clear();
         shownHarvest = List.of();
         shownReplant = List.of();
-        mining = null;
         lastUse = 0;
     }
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || mc.player.isSpectator()) {
+        if (mc.player.isSpectator()) {
             loan.giveBack();
             return;
         }
         // A held attack or an open container means the player is busy by hand.
-        if (InputUtil.physicallyHeld(mc.options.keyAttack) || mc.player.isUsingItem()
-            || mc.gui.screen() != null) {
-            loan.giveBack();
+        if (InputUtil.physicallyHeld(mc.options.keyAttack) || Hands.taken() || mc.gui.screen() != null) {
+            loan.standAside();
             return;
         }
 
         if (breaker.tick(this::readyToMine)) {
             reset();
         }
+        seeded.tick();
         int now = mc.player.tickCount;
         spotExpiry.entrySet().removeIf(entry -> {
             boolean gone = entry.getValue() <= now;
@@ -304,27 +328,28 @@ public final class AutoFarm extends Module {
 
         List<BlockPos> toMine = new ArrayList<>();
         List<BlockPos> toInteract = new ArrayList<>();
-        List<BlockPos> toReplant = new ArrayList<>();
-        sort(scan, toMine, toInteract, toReplant);
+        List<BlockPos> toFeed = new ArrayList<>();
+        // Nearest first like the scan.
+        Map<BlockPos, Plant> toPlant = new LinkedHashMap<>();
+        sort(scan, toMine, toInteract, toPlant, toFeed);
         shownHarvest = toMine;
-        shownReplant = toReplant;
+        shownReplant = toPlant.keySet();
 
-        boolean acted = replant.isOn() && plantSeeds(toReplant, now);
+        boolean acted = plantSeeds(toPlant, now);
         if (!acted && harvest.isOn()) {
             acted = pickByHand(toInteract, now);
         }
         if (!acted && harvest.isOn()) {
             mineTick(toMine);
-        } else {
-            mining = null;
         }
         if (!acted && bonemeal.isOn()) {
-            feedTick(scan, now);
+            feedTick(toFeed, now);
         }
     }
 
     private void sort(List<BlockPos> scan, List<BlockPos> toMine, List<BlockPos> toInteract,
-                      List<BlockPos> toReplant) {
+                      Map<BlockPos, Plant> toPlant, List<BlockPos> toFeed) {
+        List<Plant> sowable = sow.isOn() ? sowable() : List.of();
         for (BlockPos pos : scan) {
             if (lineOfSight.isOn() && !BlockUtil.canSee(pos)) {
                 continue;
@@ -332,9 +357,10 @@ public final class AutoFarm extends Module {
             BlockState state = BlockUtil.state(pos);
             if (state.canBeReplaced()) {
                 Plant waiting = spots.get(pos);
-                if (waiting != null && replantPlants.contains(waiting.name())
-                    && waiting.surface().test(pos)) {
-                    toReplant.add(pos.immutable());
+                Plant seed = waiting != null && replant.isOn() && replantPlants.contains(waiting.name())
+                    && waiting.surface().test(pos) ? waiting : state.isAir() ? sown(pos, sowable) : null;
+                if (seed != null) {
+                    toPlant.put(pos, seed);
                 }
                 continue;
             }
@@ -351,25 +377,23 @@ public final class AutoFarm extends Module {
                     break;
                 }
             }
+            if (bonemeal.isOn() && takesBoneMeal(pos, state)) {
+                toFeed.add(pos.immutable());
+            }
         }
     }
 
-    // Creative with no turning can spam every crop at once. Anything else goes
-    // block by block because only one angle rides the packet each tick.
+    // Only the first crop of a tick is faced because only one angle rides the packet each tick.
     private void mineTick(List<BlockPos> toMine) {
-        boolean spam = mc.player.getAbilities().instabuild && faceTarget.is(FaceMode.OFF);
-        int limit = spam ? toMine.size() : perTick.getInt();
         int sent = 0;
-        mining = null;
         for (BlockPos pos : toMine) {
-            if (sent >= limit) {
+            if (sent >= perTick.getInt()) {
                 break;
             }
             if (!breaker.canSend(pos)) {
                 continue;
             }
             if (sent == 0) {
-                mining = pos;
                 faceTarget.getValue().face(BlockUtil.hitPoint(pos, BlockUtil.facingSide(pos)),
                     RotationPriority.MINE);
             }
@@ -406,18 +430,38 @@ public final class AutoFarm extends Module {
         return false;
     }
 
-    private boolean plantSeeds(List<BlockPos> toReplant, int now) {
-        if (toReplant.isEmpty() || now - lastUse < InputUtil.USE_DELAY) {
+    // The plants ticked for sowing whose seed is at hand. Creative conjures any seed.
+    private List<Plant> sowable() {
+        return PLANTS.stream()
+            .filter(plant -> sowPlants.contains(plant.name()))
+            .filter(plant -> mc.player.getAbilities().instabuild || mc.player.getMainHandItem().is(plant.seed())
+                || InventoryUtil.findSlot(plant.seed(), InventoryUtil.WHOLE_INVENTORY) != -1)
+            .toList();
+    }
+
+    // The first of the plants that grows on the soil under the empty spot. A crop the game would
+    // not let stand there for want of light is passed over. Null when none fits.
+    private Plant sown(BlockPos pos, List<Plant> sowable) {
+        for (Plant plant : sowable) {
+            if (plant.surface().test(pos)
+                && Block.byItem(plant.seed()).defaultBlockState().canSurvive(mc.level, pos)) {
+                return plant;
+            }
+        }
+        return null;
+    }
+
+    private boolean plantSeeds(Map<BlockPos, Plant> toPlant, int now) {
+        if (toPlant.isEmpty() || now - lastUse < InputUtil.USE_DELAY) {
             return false;
         }
-        for (BlockPos pos : toReplant) {
-            Plant plant = spots.get(pos);
-            if (plant == null) {
+        for (Map.Entry<BlockPos, Plant> spot : toPlant.entrySet()) {
+            BlockPos pos = spot.getKey();
+            Plant plant = spot.getValue();
+            if (seeded.contains(pos) || !holdSeed(plant.seed())) {
                 continue;
             }
-            if (!holdSeed(plant.seed())) {
-                continue;
-            }
+            seeded.put(pos, SEED_RETRY_TICKS);
             faceTarget.getValue().face(Vec3.atCenterOf(pos), RotationPriority.PLACE);
             if (BlockUtil.placeAny(pos, false, false)) {
                 swing.getValue().swing(InteractionHand.MAIN_HAND);
@@ -443,14 +487,11 @@ public final class AutoFarm extends Module {
         return InventoryUtil.freeHotbarSlot() != -1 && InventoryUtil.conjure(new ItemStack(seed)) != null;
     }
 
-    private void feedTick(List<BlockPos> scan, int now) {
-        if (now - lastUse < InputUtil.USE_DELAY) {
+    private void feedTick(List<BlockPos> toFeed, int now) {
+        if (toFeed.isEmpty() || now - lastUse < InputUtil.USE_DELAY) {
             return;
         }
-        BlockPos target = findGrowing(scan);
-        if (target == null) {
-            return;
-        }
+        BlockPos target = toFeed.getFirst();
         int slot = InventoryUtil.findSlot(Items.BONE_MEAL, InventoryUtil.WHOLE_INVENTORY);
         if (slot == -1 || !loan.select(slot)) {
             return;
@@ -463,18 +504,12 @@ public final class AutoFarm extends Module {
         }
     }
 
-    private BlockPos findGrowing(List<BlockPos> scan) {
-        for (BlockPos pos : scan) {
-            BlockState state = BlockUtil.state(pos);
-            if (state.getBlock() instanceof CropBlock crop && !crop.isMaxAge(state)) {
-                return pos;
-            }
-            if (state.getBlock() instanceof CocoaBlock
-                && state.getValue(CocoaBlock.AGE) < CocoaBlock.MAX_AGE) {
-                return pos;
-            }
-        }
-        return null;
+    // The crops and stems and cocoa of a farm that bone meal still grows.
+    private boolean takesBoneMeal(BlockPos pos, BlockState state) {
+        Block block = state.getBlock();
+        return block instanceof BonemealableBlock plant
+            && (block instanceof CropBlock || block instanceof StemBlock || block instanceof CocoaBlock)
+            && plant.isValidBonemealTarget(mc.level, pos, state, BonemealSource.INTERACTION);
     }
 
     private boolean readyToMine(BlockPos pos) {
@@ -514,7 +549,6 @@ public final class AutoFarm extends Module {
             for (BlockPos pos : shownHarvest) {
                 batch.outlineBox(SHELL.move(pos), colour, false);
             }
-            drawProgress(batch, colour);
         }
         if (drawReplant.isOn()) {
             int colour = replantColor.getColor();
@@ -522,18 +556,6 @@ public final class AutoFarm extends Module {
                 batch.outlineBox(SHELL.move(pos), colour, false);
             }
         }
-    }
-
-    // The break shell shrinks from the whole block down to nothing as it goes.
-    private void drawProgress(DrawBatch batch, int colour) {
-        if (mining == null || !(mc.gameMode instanceof MultiPlayerGameModeAccessor access)) {
-            return;
-        }
-        float progress = access.offlineclient$destroyProgress();
-        if (progress <= 0 || !mining.equals(access.offlineclient$destroyBlockPos())) {
-            return;
-        }
-        batch.solidBox(new AABB(BlockPos.ZERO).deflate(progress * 0.5).move(mining), colour, false);
     }
 
     private static BlockState below(BlockPos pos) {

@@ -2,6 +2,7 @@ package com.jellypudding.offlineclient.modules.combat;
 
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.Render3DEvent;
+import com.jellypudding.offlineclient.event.events.RightClickEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
@@ -9,20 +10,33 @@ import com.jellypudding.offlineclient.render.DrawBatch;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.Cooldowns;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.Hands;
+import com.jellypudding.offlineclient.util.InputUtil;
+import com.jellypudding.offlineclient.util.ItemUtil;
 import com.jellypudding.offlineclient.util.ProjectileUtil;
 import com.jellypudding.offlineclient.util.RotationManager;
+import com.jellypudding.offlineclient.util.RotationPriority;
+import com.jellypudding.offlineclient.util.ServerInfo;
 import com.jellypudding.offlineclient.util.SwingMode;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.tags.EntityTypeTags;
+import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.entity.projectile.ShulkerBullet;
 import net.minecraft.world.entity.projectile.arrow.AbstractArrow;
 import net.minecraft.world.entity.projectile.hurtingprojectile.AbstractHurtingProjectile;
+import net.minecraft.world.entity.projectile.throwableitemprojectile.AbstractThrownPotion;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.component.BlocksAttacks;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.HitResult;
@@ -31,8 +45,8 @@ import net.minecraft.world.phys.Vec3;
 import java.util.ArrayList;
 import java.util.List;
 
-// Flies every projectile in range forward and takes the first sidestep
-// that clears them all. Fireballs and wind charges and shulker bullets can be hit instead.
+// Flies every projectile in range forward and takes the first sidestep that clears them all or
+// raises a shield. Fireballs and wind charges and shulker bullets can be hit instead.
 public final class ArrowDodge extends Module {
 
     // Each axis of a sidestep at forty five degrees.
@@ -53,6 +67,13 @@ public final class ArrowDodge extends Module {
     // went takes a moment to come back.
     private static final int HIT_AGAIN_TICKS = 5;
 
+    // Ticks a raised shield stays up after the last threat. A flight that grazes the edge of the
+    // box comes and goes from one tick to the next.
+    private static final int SHIELD_HOLD_TICKS = 3;
+
+    // Runs before the modules that act on a click.
+    private static final int BEFORE_CLICKS = 100;
+
     private record Segment(Vec3 from, Vec3 to) {
     }
 
@@ -63,15 +84,23 @@ public final class ArrowDodge extends Module {
     private final NumberSetting steps = new NumberSetting("Steps",
         "How many ticks of flight to predict.", 40, 5, 120, 5, " ticks").min(1);
     private final NumberSetting margin = new NumberSetting("Margin",
-        "Extra space kept around you.", 0.4, 0, 2, 0.1);
+        "Extra space kept around you.", 0.4, 0, 2, 0.1, " blocks");
     private final EnumSetting<Move> move = new EnumSetting<>("Move",
         "How the sidestep is made.", Move.VELOCITY)
         .describe(Move.VELOCITY, "Pushes you sideways and lets the game carry you.")
         .describe(Move.PACKET, "Steps sideways at once with a position packet.");
     private final NumberSetting speed = new NumberSetting("Speed",
-        "How far each sidestep goes.", 0.35, 0.05, 1.5, 0.05).min(0.01);
-    private final BoolSetting everything = new BoolSetting("All projectiles",
-        "Dodge thrown items and fireballs as well as arrows.", false);
+        "How far each sidestep goes.", 0.35, 0.05, 1.5, 0.05, " blocks").min(0.01);
+    private final RegistryListSetting<EntityType<?>> projectiles = new RegistryListSetting<>("Projectiles",
+        "Kinds of projectile that are dodged or blocked. Click to pick them.", BuiltInRegistries.ENTITY_TYPE,
+        List.of(EntityTypes.ARROW, EntityTypes.SPECTRAL_ARROW, EntityTypes.TRIDENT))
+        .only(type -> Projectile.class.isAssignableFrom(type.getBaseClass()));
+    private final BoolSetting shield = new BoolSetting("Block with shield",
+        "Raises a shield held in either hand against a projectile about to hit you and keeps it up until the"
+            + " projectile has gone. One the shield cannot stop in time is still stepped from.", false);
+    private final BoolSetting faceIt = new BoolSetting("Face it",
+        "Turns you towards the projectile on the server side whilst the shield is up. A shield only stops what"
+            + " comes from the front.", true).under(shield);
     private final BoolSetting hitBack = new BoolSetting("Hit back",
         "Punches fireballs and wind charges back and breaks shulker bullets before they reach you.", true);
     private final NumberSetting hitRange = new NumberSetting("Hit range",
@@ -79,29 +108,39 @@ public final class ArrowDodge extends Module {
         .min(0.5).max(HIT_REACH).under(hitBack);
     private final EnumSetting<SwingMode> swing = SwingMode.setting(SwingMode.BOTH).under(hitBack);
     private final BoolSetting ignoreOwn = new BoolSetting("Ignore own",
-        "Never dodge what you fired yourself.", true);
+        "Never dodges what you fired yourself.", true);
     private final BoolSetting ignoreFriends = new BoolSetting("Ignore friends",
-        "Never dodge what a friend fired.", true);
+        "Never dodges what a friend fired.", true);
     private final BoolSetting groundCheck = new BoolSetting("Ground check",
-        "Only step onto blocks that will hold you up.", true);
+        "Only steps onto blocks that will hold you up.", true);
     private final BoolSetting draw = new BoolSetting("Draw paths",
-        "Show the predicted flight of every watched projectile.", false);
+        "Shows the predicted flight of every watched projectile.", false);
 
     // Every watched flight for drawing and the ones a sidestep has to clear.
     private final List<Segment> paths = new ArrayList<>();
     private final List<Segment> threats = new ArrayList<>();
     private final Cooldowns<Integer> struck = new Cooldowns<>();
     private boolean dodging;
+    // True whilst this module holds the use key for a shield. Ticks it stays up for nothing.
+    private boolean raised;
+    private int holdFor;
+    // True once Face it asked for a turn this tick. The angle the server heard shows on the next
+    // tick whether a module that asked later took the turn over.
+    private boolean turned;
 
     public ArrowDodge() {
-        super("ArrowDodge", "Sidesteps arrows and other projectiles aimed at you.", Category.COMBAT);
-        addSettings(range, steps, margin, move, speed, everything, hitBack, hitRange, swing, ignoreOwn,
-            ignoreFriends, groundCheck, draw);
-        searchTags("dodge", "arrow", "projectile", "anti projectile", "fireball", "shulker bullet");
+        super("ArrowDodge", "Sidesteps arrows and other projectiles aimed at you or blocks them.", Category.COMBAT);
+        addSettings(range, steps, margin, move, speed, projectiles, shield, faceIt, hitBack, hitRange, swing,
+            ignoreOwn, ignoreFriends, groundCheck, draw);
+        searchTags("dodge", "arrow", "projectile", "anti projectile", "fireball", "shulker bullet", "shield",
+            "auto shield", "block");
     }
 
     @Override
     public String getSuffix() {
+        if (raised) {
+            return "blocking";
+        }
         return dodging ? "dodging" : null;
     }
 
@@ -111,6 +150,7 @@ public final class ArrowDodge extends Module {
         threats.clear();
         struck.clear();
         dodging = false;
+        lower();
     }
 
     @Subscribe
@@ -118,15 +158,24 @@ public final class ArrowDodge extends Module {
         paths.clear();
         threats.clear();
         dodging = false;
-        if (!inGame() || mc.player.isSpectator()) {
+        boolean turnedBefore = turned;
+        turned = false;
+        if (mc.player.isSpectator()) {
+            lower();
             return;
         }
         struck.tick();
+        // Something else took the hand or wants it. The shield comes down at once.
+        if (raised && (!mc.player.isUsingItem() || !mayRaise())) {
+            lower();
+        }
 
         AABB body = mc.player.getBoundingBox().inflate(margin.getValue());
         double watch = range.getValue();
-        // The server throws away a plain hit whilst a spear is in hand.
-        boolean punches = hitBack.isOn() && !mc.player.getMainHandItem().has(DataComponents.PIERCING_WEAPON);
+        boolean punches = hitBack.isOn() && ItemUtil.landsPlainHit(mc.player.getMainHandItem());
+        Projectile soonest = null;
+        int soonestTick = Integer.MAX_VALUE;
+        Vec3 soonestFrom = null;
         for (Entity entity : mc.level.entitiesForRendering()) {
             if (!(entity instanceof Projectile projectile) || !watches(projectile)) {
                 continue;
@@ -145,8 +194,22 @@ public final class ArrowDodge extends Module {
                 continue;
             }
             threats.addAll(flight);
+            int impact = impactTick(flight, body);
+            if (impact >= 0 && impact < soonestTick) {
+                soonest = projectile;
+                soonestTick = impact;
+                soonestFrom = flight.get(impact).from();
+            }
         }
-        if (!meets(threats, body)) {
+        if (soonest == null) {
+            if (raised && --holdFor > 0) {
+                holdUp();
+            } else {
+                lower();
+            }
+            return;
+        }
+        if (block(soonest, soonestTick, soonestFrom, turnedBefore)) {
             return;
         }
 
@@ -167,8 +230,7 @@ public final class ArrowDodge extends Module {
     }
 
     private boolean watches(Projectile projectile) {
-        boolean kind = projectile instanceof AbstractArrow || everything.isOn()
-            || hitBack.isOn() && hittable(projectile);
+        boolean kind = projectiles.contains(projectile.getType()) || hitBack.isOn() && hittable(projectile);
         if (!kind) {
             return false;
         }
@@ -239,6 +301,109 @@ public final class ArrowDodge extends Module {
             flight.add(new Segment(previous, pos));
         }
         return flight;
+    }
+
+    // The tick of the flight on which it meets the box. Minus one when it never does.
+    private static int impactTick(List<Segment> flight, AABB box) {
+        for (int tick = 0; tick < flight.size(); tick++) {
+            Segment segment = flight.get(tick);
+            if (box.clip(segment.from(), segment.to()).isPresent()) {
+                return tick;
+            }
+        }
+        return -1;
+    }
+
+    // Raises a shield against the projectile or keeps it up. True whilst the shield is up in time
+    // for it and no sidestep is wanted. The server only counts a shield as up once it has been held
+    // for its delay and the trip there and back comes on top. The point is where the shot will be
+    // as it lands.
+    private boolean block(Projectile shot, int impactTick, Vec3 from, boolean turnedBefore) {
+        InteractionHand hand = shield.isOn() ? shieldHand() : null;
+        BlocksAttacks blocks = hand == null ? null : mc.player.getItemInHand(hand).get(DataComponents.BLOCKS_ATTACKS);
+        if (blocks == null || !mayRaise() || !stoppable(shot) || !faces(blocks, from, turnedBefore)) {
+            lower();
+            return false;
+        }
+        if (!raised) {
+            if (!mc.gameMode.useItem(mc.player, hand).consumesAction()) {
+                return false;
+            }
+            raised = true;
+        }
+        holdUp();
+        holdFor = SHIELD_HOLD_TICKS;
+        return mc.player.getTicksUsingItem() + impactTick >= blocks.blockDelayTicks() + ServerInfo.pingTicks();
+    }
+
+    // The server holds a shield up only against what comes within its widest angle of the yaw it
+    // holds for you. Face it asks for that yaw first. A turn that a stronger module wins this tick
+    // or that a module asking later takes over is not counted on.
+    private boolean faces(BlocksAttacks blocks, Vec3 from, boolean turnedBefore) {
+        float yaw = RotationManager.yawTo(from);
+        if (faceIt.isOn()) {
+            RotationManager.request(yaw, RotationManager.pitchTo(from), RotationPriority.ATTACK,
+                RotationManager.NO_STEP);
+            turned = true;
+        }
+        float widest = 0;
+        for (BlocksAttacks.DamageReduction reduction : blocks.damageReductions()) {
+            widest = Math.max(widest, reduction.horizontalBlockingAngle());
+        }
+        return Mth.degreesDifferenceAbs(RotationManager.facingYaw(), yaw) <= widest
+            && (!turnedBefore || Mth.degreesDifferenceAbs(RotationManager.serverYaw(), yaw) <= widest);
+    }
+
+    // A piercing arrow goes through a shield and a thrown potion splashes round it.
+    private static boolean stoppable(Projectile shot) {
+        return !(shot instanceof AbstractArrow arrow && arrow.getPierceLevel() > 0)
+            && !(shot instanceof AbstractThrownPotion);
+    }
+
+    // The offhand goes first and keeps the main hand free. A shield cooling down after an axe hit
+    // cannot be raised.
+    private InteractionHand shieldHand() {
+        for (InteractionHand hand : new InteractionHand[] {InteractionHand.OFF_HAND, InteractionHand.MAIN_HAND}) {
+            ItemStack held = mc.player.getItemInHand(hand);
+            if (held.has(DataComponents.BLOCKS_ATTACKS) && !mc.player.getCooldowns().isOnCooldown(held)) {
+                return hand;
+            }
+        }
+        return null;
+    }
+
+    // The use key stays down for the shield. Held down it would use the main hand item the moment
+    // the shield goes down under it unless the right click delay still runs.
+    private void holdUp() {
+        InputUtil.hold(mc.options.keyUse);
+        mc.rightClickDelay = InputUtil.USE_DELAY;
+    }
+
+    // A module that cuts the right click delay may tick after holdUp. Whilst the shield is up only
+    // the player's own finger on the use key clicks.
+    @Subscribe(priority = BEFORE_CLICKS)
+    private void onRightClick(RightClickEvent event) {
+        if (raised && !InputUtil.physicallyHeld(mc.options.keyUse)) {
+            event.cancel();
+        }
+    }
+
+    // A meal or ShulkerPacker or an item of your own in use keeps the use key.
+    private boolean mayRaise() {
+        return mc.gui.screen() == null && !Hands.slotsTaken() && (raised || !mc.player.isUsingItem());
+    }
+
+    // The shield comes down at once. A meal begun this tick would otherwise find it still in use.
+    private void lower() {
+        if (!raised) {
+            return;
+        }
+        raised = false;
+        InputUtil.release(mc.options.keyUse);
+        if (mc.player != null && mc.player.isUsingItem() && mc.player.getUseItem().has(DataComponents.BLOCKS_ATTACKS)
+            && !InputUtil.physicallyHeld(mc.options.keyUse)) {
+            mc.gameMode.releaseUsingItem(mc.player);
+        }
     }
 
     private static boolean meets(List<Segment> segments, AABB box) {

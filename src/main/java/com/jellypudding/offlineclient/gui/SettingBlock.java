@@ -25,6 +25,12 @@ public record SettingBlock(Object owner, String name, List<Setting<?>> settings,
             "The switch stays as it is.");
     }
 
+    // True for the bind of a module whose key switches it on and off. Only that key can be a
+    // held one.
+    public boolean holdable(Setting<?> row) {
+        return row == bind && owner instanceof Module module && module.keySwitches();
+    }
+
     // How many settings differ from their defaults. The bind is left out.
     public int changed() {
         return Defaults.changed(settings);

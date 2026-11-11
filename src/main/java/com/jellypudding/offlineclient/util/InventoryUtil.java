@@ -6,6 +6,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
+import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.entity.player.Inventory;
@@ -14,7 +15,11 @@ import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.enchantment.EnchantmentEffectComponents;
+import net.minecraft.world.item.enchantment.EnchantmentHelper;
 
+import java.lang.ref.WeakReference;
+import java.util.List;
 import java.util.Set;
 import java.util.function.Predicate;
 
@@ -23,6 +28,9 @@ public final class InventoryUtil {
     private static final Minecraft MC = OfflineClient.MC;
 
     public static final int HOTBAR_SIZE = 9;
+
+    // The hotbar slots named the way the number keys pick them.
+    public static final List<String> HOTBAR_NAMES = List.of("1", "2", "3", "4", "5", "6", "7", "8", "9");
 
     // The main grid starts here in inventory index and network slot order alike.
     public static final int MAIN_START = HOTBAR_SIZE;
@@ -129,6 +137,14 @@ public final class InventoryUtil {
             && !(screen instanceof CreativeModeInventoryScreen);
     }
 
+    // The container menu a click opened once its items are in. The menu live as the click went
+    // out is never it. The items follow the screen in a packet of their own and the menu counts
+    // from nought until then. Null whilst no such menu shows.
+    public static AbstractContainerMenu openedSince(int menuBefore) {
+        AbstractContainerMenu live = MC.player.containerMenu;
+        return containerOpen() && live.containerId != menuBefore && live.getStateId() != 0 ? live : null;
+    }
+
     // Plain storage only. A shift click there moves an inventory stack straight into the
     // container. Crafting and anvil and trade and mount screens put their own slots first.
     public static boolean isStorage(Screen screen) {
@@ -175,6 +191,12 @@ public final class InventoryUtil {
             click(fromNetworkSlot);
         }
         return carried().isEmpty() ? Swap.DONE : Swap.STRANDED;
+    }
+
+    // True for a worn piece the game will not let you take off. Only a creative player may.
+    public static boolean stuckOn(ItemStack worn) {
+        return !MC.player.isCreative()
+            && EnchantmentHelper.has(worn, EnchantmentEffectComponents.PREVENT_ARMOR_CHANGE);
     }
 
     // A pickup click on the survival inventory container.
@@ -243,6 +265,27 @@ public final class InventoryUtil {
             }
         }
         return total;
+    }
+
+    // The same with the offhand counted as well.
+    public static int countWithOffhand(Item item, int limit) {
+        return countWithOffhand(stack -> stack.is(item), limit);
+    }
+
+    public static int countWithOffhand(Predicate<ItemStack> test, int limit) {
+        ItemStack offhand = MC.player.getOffhandItem();
+        return count(test, limit) + (test.test(offhand) ? offhand.getCount() : 0);
+    }
+
+    // How many slots of the hotbar and the main grid hold nothing.
+    public static int emptySlots() {
+        int empty = 0;
+        for (int i = 0; i < WHOLE_INVENTORY; i++) {
+            if (MC.player.getInventory().getItem(i).isEmpty()) {
+                empty++;
+            }
+        }
+        return empty;
     }
 
     // The slot already in hand wins. Minus one when nothing matches.
@@ -316,49 +359,105 @@ public final class InventoryUtil {
     }
 
     // Holds an item from anywhere in the inventory. A stack outside the hotbar
-    // is moved in first and put back when the loan ends.
+    // is moved in first and put back when the loan ends. Loans nest. A later loan that lends
+    // its stack into the slot an earlier loan or slot swap chose covers it. Whilst covered the
+    // earlier one sends nothing home and picks no slot. Once the later stack goes home the
+    // earlier one is whole again.
     public static final class HotbarLoan {
+
+        // The loan whose stack sits in each hotbar slot. An entry only counts whilst its loan is
+        // still open there under the current connection.
+        private static final HotbarLoan[] LENT = new HotbarLoan[HOTBAR_SIZE];
 
         private int previousSlot = -1;
         private int lentFrom = -1;
         private int lentTo = -1;
 
-        // The hotbar slot the loan last selected.
+        // The hotbar slot the loan last selected and the loan whose stack sat there then.
         private int chosen = -1;
+        private HotbarLoan chosenOver;
+
+        // The loan whose stack the lent one pushed out of the hotbar.
+        private HotbarLoan lentOver;
+
+        // A give back came whilst the stack could not go home. A loan lent over it sends it home
+        // straight after its own.
+        private boolean owed;
+
+        // The connection the loan was made under. A respawn or a portal keeps it and only a leave
+        // hands out another. Held weakly to keep no closed connection alive.
+        private WeakReference<ClientPacketListener> session = new WeakReference<>(null);
 
         // Selects the given inventory index and borrows it into the hotbar when
         // it is not already there. False when the swap could not be made.
         public boolean select(int inventorySlot) {
-            if (MC.player == null || inventorySlot < 0) {
+            return select(inventorySlot, -1);
+        }
+
+        // The same but a full hotbar never gives up the spared slot. The one beside it goes
+        // instead. Minus one spares none.
+        public boolean select(int inventorySlot, int spared) {
+            int slot = borrow(inventorySlot, spared);
+            if (slot == -1) {
                 return false;
             }
+            // Picking the slot it already holds leaves a cover in place.
+            if (slot != chosen || !covered()) {
+                chosenOver = lentInto(slot);
+            }
+            chosen = slot;
+            MC.player.getInventory().setSelectedSlot(slot);
+            return true;
+        }
+
+        // Brings the given inventory index into the hotbar and leaves the held slot as it is. The
+        // hotbar slot it sits in or minus one when the swap could not be made.
+        public int borrow(int inventorySlot) {
+            return borrow(inventorySlot, -1);
+        }
+
+        // The same with a slot spared as select spares it. A give back still selects the slot
+        // held before the loan.
+        public int borrow(int inventorySlot, int spared) {
+            if (MC.player == null || inventorySlot < 0) {
+                return -1;
+            }
+            forgetAfterLeave();
             int slot = inventorySlot;
             if (slot >= HOTBAR_SIZE) {
                 if (lentFrom == slot) {
-                    // Already borrowed. A second swap would send it home again.
+                    // Already borrowed. A second swap would send it home again. Under another
+                    // loan's stack it is out of reach.
+                    if (lendCovered()) {
+                        return -1;
+                    }
                     slot = lentTo;
+                    owed = false;
                 } else {
                     if (!cursorFree()) {
-                        return false;
+                        return -1;
                     }
                     // Only one stack can be away from home at a time.
                     if (lentFrom != -1 && !returnLoan()) {
-                        return false;
+                        return -1;
                     }
                     // A full hotbar means the held slot gives up its place.
                     int hotbar = freeHotbarSlot(selectedSlot());
+                    if (hotbar == spared && !MC.player.getInventory().getItem(hotbar).isEmpty()) {
+                        hotbar = (hotbar + 1) % HOTBAR_SIZE;
+                    }
+                    lentOver = lentInto(hotbar);
                     swapWithHotbar(slot, hotbar);
                     lentFrom = slot;
                     lentTo = hotbar;
+                    LENT[hotbar] = this;
                     slot = hotbar;
                 }
             }
             if (previousSlot == -1) {
                 previousSlot = selectedSlot();
             }
-            chosen = slot;
-            MC.player.getInventory().setSelectedSlot(slot);
-            return true;
+            return slot;
         }
 
         // Puts the item in the main hand from the slots below the limit. True once it is there.
@@ -369,9 +468,10 @@ public final class InventoryUtil {
             return MC.player.getMainHandItem().is(item) || select(findSlot(item, limit));
         }
 
-        // True whilst the player is still on the slot the loan picked.
+        // True whilst the player is still on the slot the loan picked and no later loan covers it.
         public boolean stillMine() {
-            return chosen != -1 && MC.player != null && selectedSlot() == chosen;
+            forgetAfterLeave();
+            return chosen != -1 && MC.player != null && selectedSlot() == chosen && !covered();
         }
 
         // Returns a borrowed stack and goes back to the slot the player had held.
@@ -379,18 +479,22 @@ public final class InventoryUtil {
             giveBack(true);
         }
 
-        // A borrowed stack always goes home. The old slot only comes back when asked.
+        // A borrowed stack always goes home. The old slot only comes back when asked. No slot is
+        // picked whilst a later loan's stack sits in the slot this one picked or lent into. Its own
+        // stack then goes home straight after that loan's.
         public void giveBack(boolean reselect) {
             if (MC.player == null) {
                 forget();
                 return;
             }
-            returnLoan();
-            if (reselect && previousSlot != -1) {
+            boolean covered = covered() || lendCovered();
+            owed = !returnLoan();
+            if (reselect && !covered && previousSlot != -1) {
                 MC.player.getInventory().setSelectedSlot(previousSlot);
             }
             previousSlot = -1;
             chosen = -1;
+            chosenOver = null;
         }
 
         // Gives the loan back unless the player is dying. Respawn hands out a fresh inventory.
@@ -406,31 +510,101 @@ public final class InventoryUtil {
             }
         }
 
-        // False when the swap could not be sent. The loan then stays open.
+        // For a pause whilst something else has the hands. Short of a death a covered loan keeps
+        // everything until the loan over it gives its stack back. Otherwise it lets go as release
+        // does and the slot held before only comes back whilst the player is still on the one picked.
+        public void standAside() {
+            boolean dying = MC.player == null || MC.player.isDeadOrDying();
+            if (dying || !covered()) {
+                release(stillMine());
+            }
+        }
+
+        // False when the swap could not be sent or another loan's stack sits where this one lent.
+        // The loan then stays open.
         private boolean returnLoan() {
             if (lentFrom == -1) {
                 return true;
             }
-            if (!cursorFree()) {
+            if (lendCovered() || !cursorFree()) {
                 return false;
             }
             swapWithHotbar(lentFrom, lentTo);
+            int slot = lentTo;
+            LENT[slot] = lentOver;
             lentFrom = -1;
             lentTo = -1;
+            lentOver = null;
+            owed = false;
+            // The stack this loan pushed out is back. A loan that waited to send it home goes now.
+            HotbarLoan under = lentInto(slot);
+            if (under != null && under.owed) {
+                under.returnLoan();
+            }
             return true;
         }
 
         // True whilst a stack is still out of its home slot.
         public boolean isLent() {
+            forgetAfterLeave();
             return lentFrom != -1;
         }
 
-        // Drops the bookkeeping without touching the inventory. For a respawn.
+        // True whilst a later loan's stack sits in the slot this one picked.
+        private boolean covered() {
+            forgetAfterLeave();
+            return coveredSince(chosen, chosenOver, this);
+        }
+
+        // True whilst another loan's stack sits where this one lent its own.
+        private boolean lendCovered() {
+            HotbarLoan over = lentFrom == -1 ? null : lentInto(lentTo);
+            return over != null && over != this;
+        }
+
+        // True whilst the slot holds the stack of a loan that is neither the taker nor the one whose
+        // stack sat there when the slot was taken.
+        private static boolean coveredSince(int slot, HotbarLoan atTake, HotbarLoan taker) {
+            HotbarLoan over = slot == -1 ? null : lentInto(slot);
+            return over != null && over != atTake && over != taker;
+        }
+
+        // The open loan whose stack sits in the hotbar slot. Null whilst none does.
+        private static HotbarLoan lentInto(int slot) {
+            HotbarLoan loan = LENT[slot];
+            return loan != null && loan.lentTo == slot && loan.session.get() == MC.getConnection() ? loan : null;
+        }
+
+        // Another server or a later visit holds another inventory. A swap back would scramble two of
+        // its slots.
+        private void forgetAfterLeave() {
+            ClientPacketListener now = MC.getConnection();
+            if (session.get() != now) {
+                forget();
+                session = new WeakReference<>(now);
+            }
+        }
+
+        // Drops the bookkeeping without touching the inventory. For a respawn or a leave. Within one
+        // visit a stack owed home from under another loan's stack still goes once that loan gives its
+        // own back. A leave drops everything.
         public void forget() {
             previousSlot = -1;
+            chosen = -1;
+            chosenOver = null;
+            if (owed && session.get() == MC.getConnection() && lendCovered()) {
+                return;
+            }
+            int slot = lentTo;
+            HotbarLoan under = lentOver;
             lentFrom = -1;
             lentTo = -1;
-            chosen = -1;
+            lentOver = null;
+            owed = false;
+            // A loan beneath that waited for this one to go home first would wait for ever.
+            if (under != null && under.owed && under.lentTo == slot) {
+                under.forget();
+            }
         }
     }
 
@@ -439,12 +613,17 @@ public final class InventoryUtil {
 
         private int previous = -1;
 
-        // The slot this module last selected.
+        // The slot this module last selected and the loan whose stack sat there then.
         private int taken = -1;
+        private HotbarLoan takenOver;
 
         public void select(int slot) {
             if (MC.player == null || slot < 0 || slot >= HOTBAR_SIZE) {
                 return;
+            }
+            // Picking the slot it already holds leaves a cover in place.
+            if (slot != taken || !covered()) {
+                takenOver = HotbarLoan.lentInto(slot);
             }
             taken = slot;
             int selected = selectedSlot();
@@ -458,17 +637,25 @@ public final class InventoryUtil {
             sync();
         }
 
+        // Picks the slot held before again unless a later loan covers the slot taken.
         public void restore() {
-            if (previous != -1 && MC.player != null) {
+            if (previous != -1 && MC.player != null && !covered()) {
                 MC.player.getInventory().setSelectedSlot(previous);
                 sync();
             }
             previous = -1;
+            taken = -1;
+            takenOver = null;
         }
 
-        // True whilst the player is still on the slot this module chose.
+        // True whilst the player is still on the slot this module chose and no later loan covers it.
         public boolean stillMine() {
-            return MC.player != null && taken != -1 && selectedSlot() == taken;
+            return MC.player != null && taken != -1 && selectedSlot() == taken && !covered();
+        }
+
+        // True whilst a loan made after the select lends its stack into the slot taken.
+        public boolean covered() {
+            return HotbarLoan.coveredSince(taken, takenOver, null);
         }
 
         // Gives the slot back only if the player has not picked another since.
@@ -477,6 +664,14 @@ public final class InventoryUtil {
                 restore();
             }
             forget();
+        }
+
+        // For a pause whilst something else has the hands. A covered slot is kept whole until the
+        // loan over it gives its stack back.
+        public void standAside() {
+            if (!covered()) {
+                restoreIfMine();
+            }
         }
 
         // The instant mining path sends raw packets and never trips vanilla's own sync.
@@ -489,6 +684,7 @@ public final class InventoryUtil {
         public void forget() {
             previous = -1;
             taken = -1;
+            takenOver = null;
         }
 
         // The slot the player had before the first select. Minus one whilst none.

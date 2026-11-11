@@ -40,29 +40,32 @@ public final class ItemCounterElement extends HudElement {
     private record Counted(ItemStack stack, int count) {
     }
 
-    private final RegistryListSetting<Item> items = new RegistryListSetting<>("Counted items",
-        "The items whose totals are shown.", BuiltInRegistries.ITEM,
-        List.of(Items.TOTEM_OF_UNDYING, Items.ENCHANTED_GOLDEN_APPLE, Items.END_CRYSTAL,
-            Items.OBSIDIAN, Items.ENDER_PEARL));
-    private final NumberSetting leastDurability = new NumberSetting("Least durability",
-        "Leaves out items with less durability left than this such as a spent elytra. Nought counts"
-            + " every one.", 0, 0, 100, 1, "%").min(0).max(100);
-    private final BoolSetting worn = new BoolSetting("Count worn items",
-        "Also counts what you wear such as the elytra on your back.", true);
-    private final EnumSetting<HudLayout> layout = HudLayout.setting("Counter layout",
-        "Which way the totals are laid out.");
-    private final BoolSetting icons = new BoolSetting("Counter icons",
-        "Draw the item next to its total.", true);
-    private final EnumSetting<Empty> empty = new EnumSetting<>("Empty counts",
-        "What an item you carry none of shows.", Empty.HIDE)
-        .describe(Empty.HIDE, "Leaves the item out.")
-        .describe(Empty.ZERO, "Shows the item with a nought.")
-        .describe(Empty.GREY, "Shows the item greyed out.");
+    private final RegistryListSetting<Item> items;
+    private final NumberSetting leastDurability;
+    private final BoolSetting worn;
+    private final EnumSetting<HudLayout> layout;
+    private final BoolSetting icons;
+    private final EnumSetting<Empty> empty;
     // Each gathering walks the whole inventory once for every counted item.
     private final RowCache<Counted> counts = new RowCache<>(this::build);
 
-    public ItemCounterElement() {
-        super("Item counter", "How many of the items you pick you are carrying.", false, 50, 96);
+    public ItemCounterElement(int number) {
+        super("Item counter" + ordinal(number), "How many of the items you pick you are carrying.", false, 50, 96);
+        String name = getName();
+        items = new RegistryListSetting<>(name + " items", "The items whose totals are shown.",
+            BuiltInRegistries.ITEM, List.of(Items.TOTEM_OF_UNDYING, Items.ENCHANTED_GOLDEN_APPLE,
+                Items.END_CRYSTAL, Items.OBSIDIAN, Items.ENDER_PEARL));
+        leastDurability = new NumberSetting(name + " least durability",
+            "Leaves out items with less durability left than this such as a spent elytra. Nought counts"
+                + " every one.", 0, 0, 100, 1, "%").max(100);
+        worn = new BoolSetting(name + " worn items",
+            "Also counts what you wear such as the elytra on your back.", true);
+        layout = HudLayout.setting(name + " layout", "Which way the totals are laid out.");
+        icons = new BoolSetting(name + " icons", "Draws the item next to its total.", true);
+        empty = new EnumSetting<>(name + " empty counts", "What an item you carry none of shows.", Empty.HIDE)
+            .describe(Empty.HIDE, "Leaves the item out.")
+            .describe(Empty.ZERO, "Shows the item with a nought.")
+            .describe(Empty.GREY, "Shows the item greyed out.");
         add(items, leastDurability, worn, layout, icons, empty);
     }
 
@@ -100,11 +103,10 @@ public final class ItemCounterElement extends HudElement {
         return found;
     }
 
-    // The bag and the other hand and with Count worn items on whatever you wear.
+    // The bag and the other hand and whilst the worn items switch is on whatever you wear.
     private int count(Player player, Item item) {
         Predicate<ItemStack> counted = stack -> stack.is(item) && durableEnough(stack);
-        int total = InventoryUtil.count(counted, InventoryUtil.WHOLE_INVENTORY)
-            + countOf(player.getOffhandItem(), counted);
+        int total = InventoryUtil.countWithOffhand(counted, InventoryUtil.WHOLE_INVENTORY);
         if (worn.isOn()) {
             for (EquipmentSlot slot : ItemUtil.ARMOR_SLOTS) {
                 total += countOf(player.getItemBySlot(slot), counted);

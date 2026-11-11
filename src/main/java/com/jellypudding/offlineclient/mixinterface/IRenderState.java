@@ -22,6 +22,11 @@ public interface IRenderState {
 
     void offlineclient$setFlat(boolean flat);
 
+    // Paints the model with the Chams picture. The skin only cuts out its shape.
+    boolean offlineclient$isPicture();
+
+    void offlineclient$setPicture(boolean picture);
+
     boolean offlineclient$isForceVisible();
 
     void offlineclient$setForceVisible(boolean forceVisible);

@@ -1,6 +1,7 @@
 package com.jellypudding.offlineclient.mixin;
 
 import com.jellypudding.offlineclient.modules.movement.TridentBoost;
+import com.jellypudding.offlineclient.modules.render.Weather;
 import com.jellypudding.offlineclient.util.Modules;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
@@ -29,6 +30,13 @@ public abstract class TridentItemMixin {
             target = "Lnet/minecraft/world/entity/player/Player;isInWaterOrRain()Z"))
     private boolean wrapWetCheck(Player player, Operation<Boolean> original) {
         TridentBoost boost = Modules.get(TridentBoost.class);
-        return (boost != null && boost.allowsDryLand()) || original.call(player);
+        if (boost != null && boost.allowsDryLand()) {
+            return true;
+        }
+        // The integrated server thread reads its own real weather and leaves the flag alone.
+        if (!player.level().isClientSide()) {
+            return original.call(player);
+        }
+        return Weather.real(() -> original.call(player));
     }
 }

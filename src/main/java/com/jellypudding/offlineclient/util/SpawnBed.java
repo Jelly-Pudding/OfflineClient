@@ -1,6 +1,5 @@
 package com.jellypudding.offlineclient.util;
 
-import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.config.DataFiles;
@@ -100,24 +99,14 @@ public enum SpawnBed {
     private static Map<String, BlockPos> beds() {
         if (!loaded) {
             loaded = true;
-            DataFiles.readJson(file(), SpawnBed::decode).ifPresent(BEDS::putAll);
+            DataFiles.readJson(file(), root -> DataFiles.members(root,
+                (key, value) -> BlockUtil.parse(value.getAsString()), "spawn beds")).ifPresent(BEDS::putAll);
         }
         return BEDS;
     }
 
     private static Path file() {
         return DataFiles.path("spawn_beds.json");
-    }
-
-    private static Map<String, BlockPos> decode(JsonElement root) {
-        Map<String, BlockPos> decoded = new HashMap<>();
-        for (Map.Entry<String, JsonElement> entry : root.getAsJsonObject().entrySet()) {
-            BlockPos pos = BlockUtil.parse(entry.getValue().getAsString());
-            if (pos != null) {
-                decoded.put(entry.getKey(), pos);
-            }
-        }
-        return decoded;
     }
 
     private static void save() {

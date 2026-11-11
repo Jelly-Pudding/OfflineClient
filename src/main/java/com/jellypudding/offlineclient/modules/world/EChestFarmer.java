@@ -12,10 +12,12 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockMiner;
 import com.jellypudding.offlineclient.util.BlockUtil;
-import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.ChatWarning;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.ItemUtil;
+import com.jellypudding.offlineclient.util.Rebreak;
 import com.jellypudding.offlineclient.util.SwingMode;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -35,8 +37,11 @@ public final class EChestFarmer extends Module {
         "Obsidian you already carry counts towards the amount.", false).under(stopAtAmount);
     private final NumberSetting amount = new NumberSetting("Amount",
         "How much obsidian to gather.", 64, 8, 256, 8).min(1).max(2304).under(stopAtAmount);
+    private final BoolSetting instant = new BoolSetting("Instant rebreak",
+        "Breaks every chest after the first at once with a single packet. The first is mined the usual way.",
+        false);
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Turn towards the chest on the server side.", true);
+        "Turns towards the chest on the server side.", true);
     private final EnumSetting<SwingMode> swing = SwingMode.setting(SwingMode.BOTH);
     private final BoolSetting render = new BoolSetting("Show target",
         "Outlines where the chest goes.", true);
@@ -45,10 +50,12 @@ public final class EChestFarmer extends Module {
     private BlockPos target;
     private int startCount;
     private final SlotSwap slots = new SlotSwap();
+    private final Rebreak rebreak = new Rebreak();
+    private final ChatWarning outOfReach = new ChatWarning();
 
     public EChestFarmer() {
         super("EChestFarmer", "Places and breaks ender chests to farm obsidian.", Category.WORLD);
-        addSettings(stopAtAmount, countExisting, amount, rotate, swing, render);
+        addSettings(stopAtAmount, countExisting, amount, instant, rotate, swing, render);
         addSettings(targetBox.settings());
         searchTags("obsidian farm", "ender chest");
     }
@@ -62,6 +69,7 @@ public final class EChestFarmer extends Module {
     protected void onEnable() {
         target = null;
         startCount = obsidianCount();
+        outOfReach.clear();
     }
 
     @Override
@@ -73,14 +81,18 @@ public final class EChestFarmer extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || mc.player.isSpectator() || mc.gui.screen() != null) {
+        if (mc.player.isSpectator() || mc.gui.screen() != null) {
+            return;
+        }
+        // The chests take a hotbar slot and a turn and wait whilst something else has them.
+        if (Hands.taken()) {
+            BlockMiner.release();
             return;
         }
         if (target == null && !pickTarget()) {
             return;
         }
-        if (!BlockUtil.inReach(target)) {
-            ChatUtil.error("The chest spot is out of reach.");
+        if (!reachable(target)) {
             target = null;
             return;
         }
@@ -90,7 +102,7 @@ public final class EChestFarmer extends Module {
             return;
         }
         if (stopAtAmount.isOn() && gathered() >= amount.getInt()) {
-            ChatUtil.message("§bEChestFarmer §7gathered enough obsidian.");
+            tell("gathered enough obsidian.");
             setEnabled(false);
             return;
         }
@@ -117,7 +129,21 @@ public final class EChestFarmer extends Module {
         if (!state.canBeReplaced() && !state.is(Blocks.ENDER_CHEST)) {
             return false;
         }
+        if (!reachable(above)) {
+            return false;
+        }
         target = above.immutable();
+        return true;
+    }
+
+    // A centre within reach keeps the block the chest is clicked onto within the server's reach as
+    // well. Chat says once that a spot is out of reach and again only after one in reach.
+    private boolean reachable(BlockPos pos) {
+        if (!BlockUtil.inReach(pos)) {
+            outOfReach.say("The chest spot is out of reach.");
+            return false;
+        }
+        outOfReach.clear();
         return true;
     }
 
@@ -131,11 +157,15 @@ public final class EChestFarmer extends Module {
             return;
         }
         slots.select(slot);
+        if (instant.isOn() && rebreak.strike(target)) {
+            return;
+        }
         BlockMiner.mineWithHeld(target, rotate.isOn(), swing.getValue());
     }
 
     private void placeChest() {
         BlockMiner.release();
+        rebreak.emptied();
         int slot = InventoryUtil.hotbarSlot(stack -> stack.is(Items.ENDER_CHEST));
         if (slot == -1) {
             disable("No ender chests in the hotbar.");

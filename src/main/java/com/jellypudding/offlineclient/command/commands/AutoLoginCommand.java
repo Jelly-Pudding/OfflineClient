@@ -16,7 +16,7 @@ public final class AutoLoginCommand extends Command {
 
     public AutoLoginCommand() {
         super("autologin", "Saves the password AutoLogin types for the server and name you joined with.",
-            "autologin <set|remove|list> [password|server]");
+            "autologin <set|save|remove|list> [password|server]");
     }
 
     @Override
@@ -27,6 +27,7 @@ public final class AutoLoginCommand extends Command {
         }
         switch (args[0].toLowerCase(Locale.ROOT)) {
             case "set" -> set(args);
+            case "save" -> save();
             case "remove" -> remove(args);
             case "list" -> list();
             default -> usage();
@@ -58,6 +59,17 @@ public final class AutoLoginCommand extends Command {
         }
     }
 
+    // The link on the line that offers to keep a password typed by hand runs this.
+    private static void save() {
+        AutoLogin autoLogin = Modules.get(AutoLogin.class);
+        String key = autoLogin == null ? null : autoLogin.saveTyped();
+        if (key == null) {
+            ChatUtil.error("No password typed on this join is waiting to be saved.");
+        } else {
+            ChatUtil.message("§7Saved a password for §b" + key + "§7.");
+        }
+    }
+
     private void remove(String[] args) {
         if (args.length > 2) {
             usage("autologin remove [server]");
@@ -69,11 +81,7 @@ public final class AutoLoginCommand extends Command {
             usage("autologin remove <server>");
             return;
         }
-        if (ServerStore.logins().remove(server)) {
-            ChatUtil.message("§7Forgot the password for §b" + server + "§7.");
-        } else {
-            ChatUtil.error("No password is saved for " + server + ".");
-        }
+        forget(ServerStore.logins(), server, "password");
     }
 
     private static void list() {
@@ -88,7 +96,7 @@ public final class AutoLoginCommand extends Command {
     @Override
     public List<String> complete(String[] tokens, int index, String current) {
         if (index == 1) {
-            return CommandManager.filter(current, List.of("set", "remove", "list"));
+            return CommandManager.filter(current, List.of("set", "save", "remove", "list"));
         }
         if (index == 2 && tokens[1].equalsIgnoreCase("remove")) {
             return CommandManager.filter(current, ServerStore.logins().servers());

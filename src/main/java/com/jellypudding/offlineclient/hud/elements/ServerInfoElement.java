@@ -1,27 +1,26 @@
 package com.jellypudding.offlineclient.hud.elements;
 
 import com.jellypudding.offlineclient.OfflineClient;
-import com.jellypudding.offlineclient.hud.HudElement;
+import com.jellypudding.offlineclient.hud.RowsElement;
 import com.jellypudding.offlineclient.hud.TextRow;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.util.ServerInfo;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
 
 import java.util.ArrayList;
 import java.util.List;
 
-public final class ServerInfoElement extends HudElement {
+public final class ServerInfoElement extends RowsElement {
 
     private final BoolSetting address = new BoolSetting("Show address",
-        "Write the address you are connected to.", true);
+        "Writes the address you are connected to.", true);
     private final BoolSetting players = new BoolSetting("Show players online",
-        "Write how many are on the tab list.", true);
+        "Writes how many are on the tab list.", true);
     private final BoolSetting tps = new BoolSetting("Show server tps",
-        "Write how fast the server is ticking.", true);
+        "Writes how fast the server is ticking.", true);
     private final BoolSetting ping = new BoolSetting("Show ping",
-        "Write your own round trip time.", true);
+        "Writes your own round trip time.", true);
     private final ColorSetting color = labelColor("Server info colour",
         "Colour of the rows.");
 
@@ -56,23 +55,8 @@ public final class ServerInfoElement extends HudElement {
         return lines;
     }
 
-    private List<TextRow> rows(Font font) {
+    @Override
+    protected List<TextRow> rows(Font font) {
         return TextRow.lines(font, lines(), color);
-    }
-
-    // Each row lines up with the side of the screen the element is anchored to.
-    @Override
-    public void render(GuiGraphicsExtractor context, Font font) {
-        TextRow.draw(context, font, rows(font), alignment());
-    }
-
-    @Override
-    public int width(Font font) {
-        return TextRow.widest(rows(font));
-    }
-
-    @Override
-    public int height(Font font) {
-        return TextRow.height(font, lines().size());
     }
 }

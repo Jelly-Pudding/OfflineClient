@@ -7,9 +7,12 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.setting.TextSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.GlideSwitch;
+import com.jellypudding.offlineclient.util.Leave;
 import com.jellypudding.offlineclient.util.MovementUtil;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -18,6 +21,8 @@ import net.minecraft.world.phys.Vec3;
 
 // Flies at a chosen player on an elytra. It assumes a clear line.
 public final class AutoWasp extends Module {
+
+    public enum Who { NEAREST, NAME }
 
     public enum OnLoss { SWITCH_OFF, NEW_TARGET, DISCONNECT }
 
@@ -37,6 +42,16 @@ public final class AutoWasp extends Module {
 
     private static final double TINY = 1.0E-5;
 
+    private final EnumSetting<Who> who = new EnumSetting<>("Target",
+        "Who to fly at.", Who.NEAREST)
+        .describe(Who.NEAREST, "Flies at the closest player.")
+        .describe(Who.NAME, "Flies at the player whose name you type in.");
+    private final TextSetting name = new TextSetting("Name",
+        "The account name of the player to fly at.", "")
+        .under(who, Who.NAME);
+    private final BoolSetting onlyFriends = new BoolSetting("Only friends",
+        "Only follows players on your friend list.", false)
+        .under(who, Who.NEAREST);
     private final NumberSetting horizontalSpeed = new NumberSetting("Horizontal speed",
         "Blocks a tick along the ground.", 2, 0.1, 10, 0.1, " blocks").min(0);
     private final NumberSetting verticalSpeed = new NumberSetting("Vertical speed",
@@ -54,18 +69,16 @@ public final class AutoWasp extends Module {
         .under(approach, Approach.DIVE);
     private final NumberSetting diveSpeed = new NumberSetting("Dive speed",
         "Blocks a tick down during a dive.", 1.5, 0.1, 4, 0.1, " blocks")
-        .min(0.1).under(approach, Approach.DIVE);
+        .under(approach, Approach.DIVE);
     private final BoolSetting avoidLanding = new BoolSetting("Avoid landing",
         "Hovers above a target on the ground to keep your glide going.", true)
         .under(approach, Approach.STRAIGHT);
     private final BoolSetting predictMovement = new BoolSetting("Predict movement",
         "Aims where the target is heading rather than where they are.", true);
-    private final BoolSetting onlyFriends = new BoolSetting("Only friends",
-        "Only follows players on your friend list.", false);
     private final EnumSetting<OnLoss> onLoss = new EnumSetting<>("On target loss",
         "What happens when the target vanishes.", OnLoss.SWITCH_OFF)
         .describe(OnLoss.SWITCH_OFF, "Switches the module off.")
-        .describe(OnLoss.NEW_TARGET, "Picks the nearest player as the new target.")
+        .describe(OnLoss.NEW_TARGET, "Looks for a target again and switches off when there is none.")
         .describe(OnLoss.DISCONNECT, "Leaves the server.");
     private final NumberSetting offsetX = new NumberSetting("Offset x",
         "Blocks east of the target to aim at.", 0, -10, 10, 0.5, " blocks");
@@ -82,14 +95,14 @@ public final class AutoWasp extends Module {
 
     public AutoWasp() {
         super("AutoWasp", "Flies you at a player on your elytra.", Category.MOVEMENT);
-        addSettings(horizontalSpeed, verticalSpeed, approach, perchHeight, pullUpHeight, diveSpeed, avoidLanding,
-            predictMovement, onlyFriends, onLoss, offsetX, offsetY, offsetZ);
+        addSettings(who, name, onlyFriends, horizontalSpeed, verticalSpeed, approach, perchHeight, pullUpHeight,
+            diveSpeed, avoidLanding, predictMovement, onLoss, offsetX, offsetY, offsetZ);
         searchTags("wasp", "elytra chase", "follow", "dive");
     }
 
     @Override
     public String getSuffix() {
-        return target == null ? null : EntityUtil.nameOf(target);
+        return EntityUtil.displayNameOf(target);
     }
 
     // The target it chased belongs to the session it was chosen in.
@@ -104,7 +117,7 @@ public final class AutoWasp extends Module {
         jumped = false;
         diving = false;
         if (!pickTarget()) {
-            disable("AutoWasp found no player to follow.");
+            disable(noTarget());
         }
     }
 
@@ -137,10 +150,8 @@ public final class AutoWasp extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame()) {
-            return;
-        }
-        if (target == null || target.isRemoved()) {
+        // A player from a world since left is never marked as removed.
+        if (target == null || target.isRemoved() || target.level() != mc.level) {
             targetLost();
             if (!isEnabled()) {
                 return;
@@ -169,7 +180,7 @@ public final class AutoWasp extends Module {
             jumpTimer = 0;
             mc.player.setJumping(false);
             mc.player.setSprinting(true);
-            MovementUtil.sendStartGlide();
+            GlideSwitch.get().open();
         }
     }
 
@@ -179,24 +190,38 @@ public final class AutoWasp extends Module {
             case SWITCH_OFF -> setEnabled(false);
             case NEW_TARGET -> {
                 if (!pickTarget()) {
-                    disable("AutoWasp found no new player to follow.");
+                    disable(noTarget());
                 }
             }
             case DISCONNECT -> {
                 setEnabled(false);
-                ChatUtil.leaveServer("AutoWasp lost its target.");
+                Leave.QUIT.go("AutoWasp lost its target.");
             }
         }
     }
 
     private boolean pickTarget() {
         target = (Player) EntityUtil.nearest(Double.MAX_VALUE, entity -> entity instanceof Player player
-            && !player.isDeadOrDying() && player.getHealth() > 0
-            && (!onlyFriends.isOn() || EntityUtil.isFriend(player)));
+            && !player.isDeadOrDying() && player.getHealth() > 0 && wanted(player));
         if (target != null) {
             ChatUtil.message("AutoWasp is following " + EntityUtil.nameOf(target) + ".");
         }
         return target != null;
+    }
+
+    private String noTarget() {
+        if (!who.is(Who.NAME)) {
+            return "AutoWasp found no player to follow.";
+        }
+        return name.isBlank() ? "AutoWasp has no name to look for. Type one under Name."
+            : "AutoWasp sees no player called " + name.getValue() + ".";
+    }
+
+    private boolean wanted(Player player) {
+        if (who.is(Who.NAME)) {
+            return name.getValue().equalsIgnoreCase(EntityUtil.nameOf(player));
+        }
+        return !onlyFriends.isOn() || EntityUtil.isFriend(player);
     }
 
     // The climb turns into a dive at the perch once the target is no further off than the perch

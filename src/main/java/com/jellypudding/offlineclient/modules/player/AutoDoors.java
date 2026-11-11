@@ -9,12 +9,17 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.Cooldowns;
 import com.jellypudding.offlineclient.util.FaceMode;
+import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.MovementUtil;
+import com.jellypudding.offlineclient.util.ServerInfo;
+import com.jellypudding.offlineclient.util.Switches;
 import com.jellypudding.offlineclient.util.WorldWatch;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.ButtonBlock;
 import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.FenceGateBlock;
+import net.minecraft.world.level.block.LeverBlock;
 import net.minecraft.world.level.block.TrapDoorBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
@@ -28,7 +33,8 @@ import java.util.Iterator;
 import java.util.Map;
 
 // Opens doors and fence gates and trapdoors that stand in the way you are walking and
-// shuts them again once you are through. Only what the module opened is shut.
+// shuts them again once you are through. Only what the module opened is shut. An iron door
+// or trapdoor is worked through the button or lever that powers it.
 public final class AutoDoors extends Module {
 
     // How far past your body the way ahead reaches.
@@ -40,14 +46,19 @@ public final class AutoDoors extends Module {
     // Your body grown by this much has to be clear of a door before it shuts.
     private static final double CLEARANCE = 0.5;
 
+    // A button or lever this many blocks from an iron door can still power it.
+    private static final int SWITCH_REACH = 2;
+
     private final BoolSetting doors = new BoolSetting("Doors",
-        "Opens doors. Iron doors need redstone and are left alone.", true);
+        "Opens the doors a hand can open.", true);
     private final BoolSetting gates = new BoolSetting("Fence gates",
         "Opens fence gates.", true);
     private final BoolSetting trapdoors = new BoolSetting("Trapdoors",
         "Opens or shuts a trapdoor that blocks your way. One you can step onto is left alone.", true);
+    private final BoolSetting ironDoors = new BoolSetting("Iron doors",
+        "Opens an iron door or trapdoor in your way with the button or lever beside it.", false);
     private final BoolSetting closeBehind = new BoolSetting("Close behind",
-        "Shuts everything it opened once you are through.", true);
+        "Shuts everything it opened once you are through. A button lets its door shut by itself.", true);
     private final EnumSetting<FaceMode> face = FaceMode.setting(FaceMode.SERVER);
 
     // Whether each block the module moved was open before. The lower half stands for a whole door.
@@ -58,8 +69,8 @@ public final class AutoDoors extends Module {
     public AutoDoors() {
         super("AutoDoors", "Opens doors and gates in your way and shuts them behind you.",
             Category.PLAYER);
-        addSettings(doors, gates, trapdoors, closeBehind, face);
-        searchTags("door", "gate", "trapdoor", "open");
+        addSettings(doors, gates, trapdoors, ironDoors, closeBehind, face);
+        searchTags("door", "gate", "trapdoor", "open", "iron door", "button", "lever");
     }
 
     @Override
@@ -71,14 +82,16 @@ public final class AutoDoors extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || mc.player.isSpectator()) {
+        if (mc.player.isSpectator()) {
             return;
         }
         boolean respawned = clicked.tick();
         if (world.changed() || respawned) {
             moved.clear();
         }
-        if (mc.gui.screen() != null) {
+        // A door click takes no slot. ShulkerPacker sets down and opens a box with clicks and turns
+        // of its own.
+        if (mc.gui.screen() != null || Modules.packing()) {
             return;
         }
         Vec3 heading = MovementUtil.inputDirection();
@@ -114,34 +127,46 @@ public final class AutoDoors extends Module {
                 || crosses(state.cycle(BlockStateProperties.OPEN), pos, middle)) {
                 continue;
             }
+            BlockPos target = clickFor(key, state, false);
+            if (target == null) {
+                continue;
+            }
             moved.putIfAbsent(key, state.getValue(BlockStateProperties.OPEN));
-            click(pos.immutable(), key);
+            click(target, key);
             return true;
         }
         return false;
     }
 
     // Puts one block back the way it was once you are clear of it. A block someone else
-    // moved or one left out of reach is forgotten.
+    // moved or one left out of reach is forgotten. One whose click is still held may not show
+    // the server's answer yet and is kept.
     private void shutBehind(AABB path) {
         AABB body = mc.player.getBoundingBox().inflate(CLEARANCE);
         Iterator<Map.Entry<BlockPos, Boolean>> entries = moved.entrySet().iterator();
         while (entries.hasNext()) {
             Map.Entry<BlockPos, Boolean> entry = entries.next();
             BlockPos pos = entry.getKey();
+            if (clicked.contains(pos)) {
+                continue;
+            }
             BlockState state = BlockUtil.state(pos);
             if (!handles(state) || state.getValue(BlockStateProperties.OPEN) == entry.getValue()
                 || !BlockUtil.inReach(pos)) {
                 entries.remove();
                 continue;
             }
-            if (clicked.contains(pos) || inside(body, pos, state)
+            if (inside(body, pos, state)
                 || path != null && crosses(state.cycle(BlockStateProperties.OPEN), pos, path)) {
                 continue;
             }
-            click(pos, pos);
+            BlockPos target = clickFor(pos, state, true);
             entries.remove();
-            return;
+            // An iron door a button opened shuts when the button comes back out.
+            if (target != null) {
+                click(target, pos);
+                return;
+            }
         }
     }
 
@@ -153,20 +178,65 @@ public final class AutoDoors extends Module {
         return path.deflate(half * Math.abs(heading.z), 0, half * Math.abs(heading.x));
     }
 
+    // The game shows a door or a button moved at once. A lever only moves once the server says
+    // it did and reads as it was until then. The lever and its door are held for that long. A
+    // second click would put the lever back and the door would look as if it never opened.
     private void click(BlockPos pos, BlockPos key) {
-        clicked.put(key, CLICK_COOLDOWN);
+        boolean lever = BlockUtil.state(pos).getBlock() instanceof LeverBlock;
+        int hold = lever ? Math.max(CLICK_COOLDOWN, ServerInfo.answerTicks()) : CLICK_COOLDOWN;
+        clicked.put(key, hold);
+        if (lever) {
+            clicked.put(pos, hold);
+        }
         BlockUtil.interact(pos, face.getValue());
     }
 
     private boolean handles(BlockState state) {
         Block block = state.getBlock();
         if (block instanceof DoorBlock door) {
-            return doors.isOn() && door.type().canOpenByHand();
+            return door.type().canOpenByHand() ? doors.isOn() : ironDoors.isOn();
         }
         if (block instanceof FenceGateBlock) {
             return gates.isOn();
         }
-        return block instanceof TrapDoorBlock trapdoor && trapdoors.isOn() && trapdoor.getType().canOpenByHand();
+        if (block instanceof TrapDoorBlock trapdoor) {
+            return trapdoor.getType().canOpenByHand() ? trapdoors.isOn() : ironDoors.isOn();
+        }
+        return false;
+    }
+
+    private static boolean opensByHand(BlockState state) {
+        Block block = state.getBlock();
+        if (block instanceof DoorBlock door) {
+            return door.type().canOpenByHand();
+        }
+        return !(block instanceof TrapDoorBlock trapdoor) || trapdoor.getType().canOpenByHand();
+    }
+
+    // The block to click to move the door or gate or trapdoor at the key. That is the block itself
+    // or for an iron one the nearest button or lever in reach that powers it. Only a lever
+    // shuts one again. Null when there is nothing to click.
+    private BlockPos clickFor(BlockPos key, BlockState state, boolean shutting) {
+        if (opensByHand(state)) {
+            return key;
+        }
+        BlockPos top = state.getBlock() instanceof DoorBlock ? key.above() : key;
+        Iterable<BlockPos> around = BlockPos.betweenClosed(key.offset(-SWITCH_REACH, -SWITCH_REACH, -SWITCH_REACH),
+            top.offset(SWITCH_REACH, SWITCH_REACH, SWITCH_REACH));
+        return BlockUtil.nearestOf(around, pos -> {
+            BlockState found = BlockUtil.state(pos);
+            return !clicked.contains(pos) && flips(found, shutting) && BlockUtil.serverReaches(pos)
+                && (Switches.powers(mc.level, pos, found, key) || Switches.powers(mc.level, pos, found, top));
+        });
+    }
+
+    // A lever that is off opens and one that is on shuts. A button only goes in and one already
+    // in does nothing.
+    private static boolean flips(BlockState state, boolean shutting) {
+        if (state.getBlock() instanceof LeverBlock) {
+            return state.getValue(LeverBlock.POWERED) == shutting;
+        }
+        return !shutting && state.getBlock() instanceof ButtonBlock && !state.getValue(ButtonBlock.POWERED);
     }
 
     // Both halves of a door open together. The lower one names it.

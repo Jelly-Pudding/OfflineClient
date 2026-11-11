@@ -49,9 +49,9 @@ public final class InventoryTweaks extends Module {
     private enum Part { NONE, YOURS, CONTAINER }
 
     private final BoolSetting sort = new BoolSetting("Sort",
-        "Keep the inventory in a stable order.", true);
+        "Keeps the inventory in a stable order.", true);
     private final BoolSetting sortHotbar = new BoolSetting("Sort hotbar",
-        "Include the hotbar in the sorting.", false)
+        "Includes the hotbar in the sorting.", false)
         .under(sort);
     private final EnumSetting<SortWhen> sortWhen = new EnumSetting<>("Sort when",
         "When the sorting runs.", SortWhen.ALWAYS)
@@ -60,7 +60,7 @@ public final class InventoryTweaks extends Module {
         .describe(SortWhen.MIDDLE_CLICK, "Sorts the part of the screen you middle click.")
         .under(sort);
     private final BoolSetting sortContainer = new BoolSetting("Sort containers",
-        "Also sort the chest or barrel you have open.", false)
+        "Also sorts the chest or barrel you have open.", false)
         .under(sort, () -> sort.isOn() && !sortWhen.is(SortWhen.MIDDLE_CLICK));
     private final KeybindSetting sortKey = new KeybindSetting("Sort key",
         "The key that runs the sorting.", KeybindSetting.UNBOUND)
@@ -69,31 +69,30 @@ public final class InventoryTweaks extends Module {
         "The sorting does nothing in creative mode.", true)
         .under(sort);
     private final BoolSetting merge = new BoolSetting("Merge",
-        "Push split stacks of the same item back together.", true);
+        "Pushes split stacks of the same item back together.", true);
     private final BoolSetting dump = new BoolSetting("Dump junk",
-        "Move junk into a container the moment you open one.", false);
+        "Moves junk into a container the moment you open one.", false);
     private final EnumSetting<DumpFilter> dumpFilter = new EnumSetting<>("Dump filter",
-        "What the junk list means.", DumpFilter.WHITELIST)
+        "What Dump junk and the Dump button of ChestStealer and the Store and Both modes of ChestAura put into"
+            + " a container.", DumpFilter.WHITELIST)
         .describe(DumpFilter.WHITELIST, "Dumps only the listed items.")
         .describe(DumpFilter.BLACKLIST, "Dumps everything except the listed items.")
         .describe(DumpFilter.UNLISTED, "Dumps everything the ChestStealer list or limits turn away.")
         .describe(DumpFilter.MATCHING, "Dumps only items the open container already holds.")
         .describe(DumpFilter.EVERYTHING, "Dumps the whole inventory.")
-        .under(dump);
+        .under(dump, () -> true);
     private final RegistryListSetting<Item> junk = new RegistryListSetting<>("Junk",
         "Items the dump filter applies to. Click to pick them.", BuiltInRegistries.ITEM,
         ItemUtil.JUNK)
-        .under(dump, () -> dump.isOn() && dumpFilter.isAny(DumpFilter.WHITELIST, DumpFilter.BLACKLIST));
+        .under(dump, () -> dumpFilter.isAny(DumpFilter.WHITELIST, DumpFilter.BLACKLIST));
     private final NumberSetting delay = new NumberSetting("Delay",
-        "Ticks between clicks.", 2, 0, 20, 1, " ticks").min(0);
+        "Ticks between clicks.", 2, 0, 20, 1, " ticks");
     private final BoolSetting dragMove = new BoolSetting("Drag move",
         "Holding shift and dragging the left button moves every stack the cursor passes.", true);
     private final BoolSetting craftingCarry = new BoolSetting("Crafting carry",
         "Keeps items in your own crafting grid as four extra slots.", true);
     private final BoolSetting bundleScrolling = new BoolSetting("Bundle scrolling",
         "Scrolling over a bundle can reach every item inside it.", true);
-    private final BoolSetting frameInput = new BoolSetting("Frame input",
-        "Reads your keys and mining every drawn frame rather than every tick.", false);
 
     private int timer;
     // The last slot a dump click was sent for and what it held.
@@ -108,7 +107,7 @@ public final class InventoryTweaks extends Module {
         super("InventoryTweaks", "Sorts and merges your inventory whilst it is open.",
             Category.PLAYER);
         addSettings(sort, sortHotbar, sortContainer, sortWhen, sortKey, skipCreative, merge,
-            dump, dumpFilter, junk, delay, dragMove, craftingCarry, bundleScrolling, frameInput);
+            dump, dumpFilter, junk, delay, dragMove, craftingCarry, bundleScrolling);
         searchTags("sort", "tidy", "stack", "dump", "xcarry", "bundle");
     }
 
@@ -128,10 +127,6 @@ public final class InventoryTweaks extends Module {
 
     public boolean uncapsBundles() {
         return isEnabled() && bundleScrolling.isOn();
-    }
-
-    public boolean frameInput() {
-        return isEnabled() && frameInput.isOn();
     }
 
     // A middle click on a slot sorts the part of the screen it belongs to. False leaves the

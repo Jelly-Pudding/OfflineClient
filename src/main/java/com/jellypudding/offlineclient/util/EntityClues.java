@@ -53,7 +53,7 @@ public final class EntityClues {
     private static final List<Rule> RULES = List.of(new Rule(BaseClue.DECORATION, EntityClues::decoration),
         new Rule(BaseClue.PEARL, EntityClues::pearl), new Rule(BaseClue.BOAT, EntityClues::boat),
         new Rule(BaseClue.VILLAGER, EntityClues::villager), new Rule(BaseClue.NAMED, EntityClues::named),
-        new Rule(BaseClue.PET, EntityClues::pet));
+        new Rule(BaseClue.PET, EntityClues::pet), new Rule(BaseClue.LOST_MOB, EntityClues::lost));
 
     private EntityClues() {
     }
@@ -160,8 +160,8 @@ public final class EntityClues {
         return (mob.isSaddled() ? "a saddled " : "a tamed ") + kind;
     }
 
-    // A skeleton trap tames its horses and strider jockeys spawn saddled. A fox only shows
-    // whether it trusts you.
+    // A skeleton trap tames its horses and strider jockeys spawn saddled. A fox trusts
+    // whoever bred it and lives wild all the same.
     private static boolean kept(Mob mob) {
         if (mob instanceof Strider || mob instanceof Fox) {
             return false;
@@ -170,6 +170,17 @@ public final class EntityClues {
             return mob.isSaddled();
         }
         return EntityUtil.isPet(mob);
+    }
+
+    // A mob in a dimension it never turns up in by itself such as a cow in the nether. One with a
+    // player riding it or that is yours is passing through.
+    private static String lost(Entity entity) {
+        if (!(entity instanceof Mob mob) || EntityUtil.isYours(mob) || carriesPlayer(mob)
+            || !MobHomes.lost(mob.getType(), mob.level().dimension())) {
+            return null;
+        }
+        return ChatUtil.withArticle(typeName(mob)) + " that cannot spawn in the "
+            + ServerInfo.dimensionName(mob.level().dimension().identifier().toString());
     }
 
     private static boolean carriesPlayer(Entity entity) {

@@ -24,11 +24,11 @@ public final class SelfWeb extends Module {
         "How close an enemy has to be.", 4, 1, 10, 0.5, " blocks")
         .under(mode, Mode.ENEMY_NEAR);
     private final BoolSetting doubles = new BoolSetting("Upper body",
-        "Also web the block your head is in.", false);
+        "Also webs the block your head is in.", false);
     private final BoolSetting toggleOff = new BoolSetting("Toggle off when done",
-        "Turn off once the web is down.", true);
+        "Turns off once the web is down.", true);
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Send a look packet towards the web.", true);
+        "Sends a look packet towards the web.", true);
 
     private final SlotSwap slots = new SlotSwap();
 
@@ -40,7 +40,7 @@ public final class SelfWeb extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || mc.player.isSpectator()) {
+        if (mc.player.isSpectator()) {
             return;
         }
         if (mode.is(Mode.ENEMY_NEAR) && EntityUtil.nearestEnemy(range.getValue()) == null) {

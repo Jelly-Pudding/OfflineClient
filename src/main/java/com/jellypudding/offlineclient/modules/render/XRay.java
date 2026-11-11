@@ -34,9 +34,9 @@ public final class XRay extends MeshFilterModule {
     private final BoolSetting lava = new BoolSetting("Lava",
         "Shows lava before you dig into it.", true);
     private final BoolSetting water = new BoolSetting("Water",
-        "Show water.", false);
+        "Shows water.", false);
     private final BoolSetting exposedOnly = new BoolSetting("Exposed only",
-        "Only show ores that touch air or a cave.", false);
+        "Only shows ores that touch air or a cave.", false);
 
     // Alpha of the block being meshed on the current worker thread. Minus one
     // means the block is untouched.
@@ -46,7 +46,7 @@ public final class XRay extends MeshFilterModule {
     private volatile boolean exposed;
 
     public XRay() {
-        super("XRay", "See ores through the ground.", "How visible the hidden blocks stay.");
+        super("XRay", "Shows ores through the ground.", "How visible the hidden blocks stay.");
         addSettings(blocks, lava, water, exposedOnly, opacity);
         searchTags("ore", "wallhack");
     }

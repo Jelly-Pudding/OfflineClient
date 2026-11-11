@@ -7,7 +7,7 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 public final class LiquidInteract extends Module {
 
     private final BoolSetting flowing = new BoolSetting("Flowing",
-        "Also stop on flowing liquid and not just on source blocks.", false);
+        "Also stops on flowing liquid and not just on source blocks.", false);
 
     public LiquidInteract() {
         super("LiquidInteract", "Lets you aim at water and lava instead of looking through it.",

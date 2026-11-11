@@ -11,6 +11,8 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
+import com.jellypudding.offlineclient.util.DamageUtil;
+import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.MovementUtil;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -39,15 +41,12 @@ public final class VehicleFly extends Module {
 
     public enum Mode { FLY, GLIDE, SPEED }
 
-    // A drop longer than this starts to hurt.
-    private static final double SAFE_DROP = 3;
-
     // Vehicle physics never move this far in one tick. A jump this big came from the server.
     private static final double RESYNC_DISTANCE = 4;
 
     // The server banks every drop a vehicle packet makes. Only a ground flag wipes it.
     // A tick with a big drop is sent as several packets. None crosses the hurt line.
-    private static final double SAFE_PACKET_DROP = 2.5;
+    private static final double SAFE_PACKET_DROP = DamageUtil.SAFE_FALL - 0.5;
 
     private final RegistryListSetting<EntityType<?>> vehicles = new RegistryListSetting<>("Vehicles",
         "Which kinds of vehicle the module drives.", BuiltInRegistries.ENTITY_TYPE, rideableTypes());
@@ -58,16 +57,21 @@ public final class VehicleFly extends Module {
         .describe(Mode.SPEED, "Your keys drive it at the horizontal speed without flying.");
     private final NumberSetting horizontalSpeed = new NumberSetting("Horizontal speed",
         "How fast your keys drive it. 1 matches creative flight.", 1, 0.1, 5, 0.1, "x")
-        .min(0.1).under(mode, Mode.FLY, Mode.SPEED);
+        .under(mode, Mode.FLY, Mode.SPEED);
     private final BoolSetting instantStop = new BoolSetting("Instant stop",
         "The vehicle stops dead the moment you let go of the keys. Off lets it coast to a halt.", true)
         .under(mode, Mode.FLY, Mode.SPEED);
+    private final BoolSetting onlyOnGround = new BoolSetting("Only on ground",
+        "Out of water the speed only takes hold whilst the vehicle stands on a block. A jump or a fall"
+            + " keeps its own arc.", false).under(mode, Mode.SPEED);
+    private final BoolSetting inWater = new BoolSetting("In water",
+        "The speed takes hold in water as well.", true).under(mode, Mode.SPEED);
     private final NumberSetting verticalSpeed = new NumberSetting("Vertical speed",
         "How fast jump lifts it and sprint lowers it. 1 matches creative flight.", 1, 0.1, 5, 0.1, "x")
-        .min(0.1).under(mode, Mode.FLY, Mode.GLIDE);
+        .under(mode, Mode.FLY, Mode.GLIDE);
     private final NumberSetting fallSpeed = new NumberSetting("Fall speed",
         "Blocks a second the vehicle sinks whilst no key is held. 0 holds the height.", 0, 0, 10, 0.1, " blocks")
-        .min(0).under(mode, Mode.FLY, Mode.GLIDE);
+        .under(mode, Mode.FLY, Mode.GLIDE);
     private final BoolSetting fallProtection = new BoolSetting("Fall protection",
         "Tells the server the mount is on the ground. A landing after a long flight then never hurts it.", true)
         .under(mode, Mode.FLY, Mode.GLIDE);
@@ -94,8 +98,8 @@ public final class VehicleFly extends Module {
 
     public VehicleFly() {
         super("VehicleFly", "Flies or speeds the boat or mount you are riding.", Category.MOVEMENT);
-        addSettings(vehicles, mode, horizontalSpeed, instantStop, verticalSpeed, fallSpeed,
-            fallProtection, dismountSafety, faceView, maxJump, ignoreServerMoves);
+        addSettings(vehicles, mode, horizontalSpeed, instantStop, onlyOnGround, inWater, verticalSpeed,
+            fallSpeed, fallProtection, dismountSafety, faceView, maxJump, ignoreServerMoves);
         searchTags("boat fly", "vehicle fly", "horse fly", "entity control", "entity speed",
             "minecart", "strider", "camel", "pig");
     }
@@ -159,7 +163,7 @@ public final class VehicleFly extends Module {
     // The vehicle event only fires whilst riding. A dismount is noticed here.
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || !mc.player.isPassenger()) {
+        if (!mc.player.isPassenger()) {
             stop();
         }
     }
@@ -184,9 +188,9 @@ public final class VehicleFly extends Module {
         } else {
             blockDismount = dismountSafety.isOn() && dropIsUnsafe(vehicle);
             protecting = fallProtection.isOn();
-            vy = flightLift(vehicle);
+            vy = flightLift(vehicle) + gravityBeforeMove(vehicle);
         }
-        if (!mode.is(Mode.GLIDE)) {
+        if (!mode.is(Mode.GLIDE) && drives(vehicle)) {
             Vec3 heading = MovementUtil.inputDirection();
             if (heading.lengthSqr() > 0 || instantStop.isOn()) {
                 double h = horizontalSpeed.getValue() * MovementUtil.FLY_HORIZONTAL;
@@ -199,6 +203,18 @@ public final class VehicleFly extends Module {
             vehicle.setYRot(mc.player.getYRot());
         }
         vehicle.setDeltaMovement(vx, vy, vz);
+    }
+
+    // Speed can leave a vehicle to its own pace off the ground or in water. Nothing stands
+    // on the ground in water and its own switch decides there.
+    private boolean drives(Entity vehicle) {
+        if (!mode.is(Mode.SPEED)) {
+            return true;
+        }
+        if (vehicle.isInWater()) {
+            return inWater.isOn();
+        }
+        return !onlyOnGround.isOn() || vehicle.onGround();
     }
 
     private double flightLift(Entity vehicle) {
@@ -219,19 +235,22 @@ public final class VehicleFly extends Module {
     }
 
     // Corrects back towards the height the vehicle was left at.
-    // Vehicle physics keep pulling down. A flat zero would sink.
     private double holdHeight(Entity vehicle, double limit) {
         if (!holding || Math.abs(holdY - vehicle.getY()) > RESYNC_DISTANCE) {
             holdY = vehicle.getY();
             holding = true;
         }
-        double correction = holdY - vehicle.getY() + vehicle.getGravity();
-        return Math.clamp(correction, -limit, limit);
+        return Math.clamp(holdY - vehicle.getY(), -limit, limit);
+    }
+
+    // A boat takes its gravity off the speed before it moves. A mount moves first and falls after.
+    private static double gravityBeforeMove(Entity vehicle) {
+        return vehicle instanceof AbstractBoat ? vehicle.getGravity() : 0;
     }
 
     private boolean dropIsUnsafe(Entity vehicle) {
         AABB box = vehicle.getBoundingBox();
-        return mc.level.noCollision(vehicle, box.minmax(box.move(0, -SAFE_DROP, 0)));
+        return mc.level.noCollision(vehicle, box.minmax(box.move(0, -DamageUtil.SAFE_FALL, 0)));
     }
 
     // The server moved the vehicle itself. The next drop is measured from there.
@@ -263,8 +282,7 @@ public final class VehicleFly extends Module {
         if (!blockDismount || !input.shift()) {
             return;
         }
-        event.setPacket(new ServerboundPlayerInputPacket(new Input(input.forward(), input.backward(),
-            input.left(), input.right(), input.jump(), false, input.sprint())));
+        event.setPacket(new ServerboundPlayerInputPacket(InputUtil.withShift(input, false)));
     }
 
     private void protectLanding(PacketSendEvent event, ServerboundMoveVehiclePacket packet) {

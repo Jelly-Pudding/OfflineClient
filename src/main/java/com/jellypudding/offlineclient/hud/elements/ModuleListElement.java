@@ -6,6 +6,7 @@ import com.jellypudding.offlineclient.hud.RowCache;
 import com.jellypudding.offlineclient.hud.TextRow;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.modules.misc.HudModule;
+import com.jellypudding.offlineclient.render.ClientFonts;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ChoiceListSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
@@ -13,6 +14,7 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.Modules;
+import com.jellypudding.offlineclient.util.Tally;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 
@@ -25,8 +27,10 @@ import java.util.Map;
 import java.util.Set;
 
 // The modules that are on. Each row lines up with the side the element is anchored to and
-// glides to its new place when the order changes.
+// glides to its new place when the order changes. It can write only how many are on instead.
 public final class ModuleListElement extends HudElement {
+
+    public enum Shows { LIST, COUNT, LIST_THAT_FITS }
 
     public enum Sort { LONGEST, SHORTEST, ALPHABETICAL }
 
@@ -66,31 +70,41 @@ public final class ModuleListElement extends HudElement {
         }
     }
 
+    private final EnumSetting<Shows> shows = new EnumSetting<>("List shows",
+        "What the piece writes.", Shows.LIST)
+        .describe(Shows.LIST, "Every module that is on one to a line.")
+        .describe(Shows.COUNT, "Only how many modules are on.")
+        .describe(Shows.LIST_THAT_FITS,
+            "The list whilst it is no taller than the screen and only how many are on once it is.");
     private final EnumSetting<Sort> sort = new EnumSetting<>("List order",
         "How the rows are ordered.", Sort.LONGEST)
         .describe(Sort.LONGEST, "Longest name first. A row keeps its place when the word in brackets changes.")
         .describe(Sort.SHORTEST, "Shortest name first.")
-        .describe(Sort.ALPHABETICAL, "By name from A to Z.");
+        .describe(Sort.ALPHABETICAL, "By name from A to Z.")
+        .under(shows, Shows.LIST, Shows.LIST_THAT_FITS);
     private final ChoiceListSetting hidden = new ChoiceListSetting("Hidden modules",
-        "Modules left out of the list. Click to pick them.",
+        "Modules left out of the list and the count. Click to pick them.",
         () -> OfflineClient.INSTANCE.getModuleManager().togglableNames(Modules.get(HudModule.class)));
     private final ColorSetting color = new ColorSetting("List colour",
-        "Colour of the module names.", 200, false);
+        "Colour of the module names and of the count.", 200, false);
     private final BoolSetting keybinds = new BoolSetting("List keybinds",
-        "Writes the key bound to each module after its name.", false);
+        "Writes the key bound to each module after its name.", false)
+        .under(shows, Shows.LIST, Shows.LIST_THAT_FITS);
     private final ColorSetting keyColor = new ColorSetting("List keybind colour",
         "Colour of those keys.", 0, 0, 0.67f, false).under(keybinds);
     private final BoolSetting suffixes = new BoolSetting("List suffixes",
-        "Writes the extra word after a name such as the mode it is in.", true);
+        "Writes the extra word after a name such as the mode it is in.", true)
+        .under(shows, Shows.LIST, Shows.LIST_THAT_FITS);
     private final ColorSetting suffixColor = new ColorSetting("List suffix colour",
         "Colour of that word.", 0, 0, 0.67f, false).under(suffixes);
     private final ColorSetting bracketColor = new ColorSetting("List bracket colour",
         "Colour of the brackets round that word.", 0, 0, 0.67f, false).under(suffixes);
     private final BoolSetting slide = new BoolSetting("List slide",
-        "Slides a row in and out as its module turns on and off.", false);
+        "Slides a row in and out as its module turns on and off.", false)
+        .under(shows, Shows.LIST, Shows.LIST_THAT_FITS);
     private final BoolSetting sideBar = new BoolSetting("List side bar",
         "Draws a bar in the list colour on the side the rows line up with and on both sides of a centred list.",
-        false);
+        false).under(shows, Shows.LIST, Shows.LIST_THAT_FITS);
     // Each gathering walks every module and sorts the ones that are on.
     private final RowCache<Entry> entries = new RowCache<>(this::build);
 
@@ -101,8 +115,23 @@ public final class ModuleListElement extends HudElement {
     private boolean sampled;
 
     public ModuleListElement() {
-        super("Module list", "Enabled modules listed one to a line.", false, 100, 0, 0.5);
-        add(sort, hidden, color, keybinds, keyColor, suffixes, suffixColor, bracketColor, slide, sideBar);
+        super("Module list", "Enabled modules listed one to a line.", true, 100, 0, 0.5);
+        add(shows, sort, keybinds, keyColor, suffixes, suffixColor, bracketColor, slide, sideBar, hidden, color);
+    }
+
+    // True whilst only the count is written. The list gives way to it once it stands taller
+    // than the screen at its present stretch.
+    private boolean counting() {
+        if (shows.is(Shows.LIST_THAT_FITS)) {
+            Font font = ClientFonts.hud();
+            return TextRow.height(font, shown().size()) * scaleY()
+                > OfflineClient.MC.getWindow().getGuiScaledHeight();
+        }
+        return shows.is(Shows.COUNT);
+    }
+
+    private TextRow countRow(Font font) {
+        return TextRow.of(font, Tally.counted(shown().size(), "module") + " on", color.rowColor(0));
     }
 
     @Override
@@ -137,7 +166,7 @@ public final class ModuleListElement extends HudElement {
                 continue;
             }
             KeybindSetting bind = module.getKeybind();
-            built.add(entryOf(module.getName(), bind.isBound() ? bind.getKeyName() : null, module.getSuffix()));
+            built.add(entryOf(module.getName(), bind.isBound() ? bind.getValueString() : null, module.getSuffix()));
         }
         built.sort(order());
         return built;
@@ -153,7 +182,7 @@ public final class ModuleListElement extends HudElement {
         if (sort.is(Sort.ALPHABETICAL)) {
             return byName;
         }
-        Font font = OfflineClient.MC.font;
+        Font font = ClientFonts.hud();
         Comparator<Entry> byWidth = Comparator.comparingInt(entry -> font.width(entry.lead()));
         return (sort.is(Sort.LONGEST) ? byWidth.reversed() : byWidth).thenComparing(byName);
     }
@@ -213,6 +242,12 @@ public final class ModuleListElement extends HudElement {
 
     @Override
     public void render(GuiGraphicsExtractor context, Font font) {
+        if (counting()) {
+            // No row slides whilst the list is away.
+            slots.clear();
+            countRow(font).draw(context, font, 0, 0);
+            return;
+        }
         List<Entry> drawn = drawn();
         Set<String> on = new HashSet<>();
         for (Entry entry : shown()) {
@@ -305,6 +340,9 @@ public final class ModuleListElement extends HudElement {
 
     @Override
     public int width(Font font) {
+        if (counting()) {
+            return countRow(font).width();
+        }
         double align = alignment();
         int room = barRoom();
         return TextRow.widest(rows(font, drawn())) + (barLeft(align) ? room : 0) + (barRight(align) ? room : 0);
@@ -312,6 +350,6 @@ public final class ModuleListElement extends HudElement {
 
     @Override
     public int height(Font font) {
-        return TextRow.height(font, drawn().size());
+        return counting() ? font.lineHeight : TextRow.height(font, drawn().size());
     }
 }

@@ -8,7 +8,7 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import net.minecraft.SharedConstants;
 import net.minecraft.world.level.MoonPhase;
 
-// ClientClockManagerMixin answers the day clock with this time. The server keeps its own.
+// ClientClockInstanceMixin answers the day clock with this time. The server keeps its own.
 public final class TimeChanger extends Module {
 
     private final NumberSetting time = new NumberSetting("Time",

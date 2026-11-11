@@ -20,13 +20,8 @@ public final class HeldPacket<P extends Packet<?>> {
         return releasing;
     }
 
+    // Sends the held packet on. Nothing happens when none is held.
     public void release() {
-        release(() -> { });
-    }
-
-    // First runs inside the same guard just before the packet goes out. Nothing runs
-    // when no packet is held.
-    public void release(Runnable first) {
         P out = packet;
         packet = null;
         if (out == null || OfflineClient.MC.player == null) {
@@ -34,14 +29,14 @@ public final class HeldPacket<P extends Packet<?>> {
         }
         releasing = true;
         try {
-            first.run();
             OfflineClient.MC.player.connection.send(out);
         } finally {
             releasing = false;
         }
     }
 
-    public void drop() {
+    // Throws the held packet away. It never reaches the server.
+    public void discard() {
         packet = null;
     }
 }

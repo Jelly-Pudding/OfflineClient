@@ -7,19 +7,37 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
+import com.jellypudding.offlineclient.setting.TextSetting;
 import com.jellypudding.offlineclient.util.ChunkRebuild;
+import com.jellypudding.offlineclient.util.SignWords;
+import net.minecraft.client.resources.model.EquipmentClientInfo.LayerType;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.entity.SignText;
 
+import java.util.ArrayList;
+import java.util.EnumSet;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 // Each item is skipped in its own renderer mixin. ClearView covers what is drawn over the screen.
 public final class NoRender extends Module {
 
     public enum Banners { SHOW, POLE_ONLY, HIDE }
+
+    // Sign sides remembered before the answers are thrown away and worked out afresh.
+    private static final int SIGN_CACHE = 4096;
+
+    // The worn armour of people and mobs and of wolves and horses and llamas and nautiluses.
+    // Saddles and harnesses and wings stay drawn.
+    private static final Set<LayerType> ARMOUR_LAYERS = EnumSet.of(LayerType.HUMANOID, LayerType.HUMANOID_LEGGINGS,
+        LayerType.HUMANOID_BABY, LayerType.WOLF_BODY, LayerType.HORSE_BODY, LayerType.LLAMA_BODY,
+        LayerType.NAUTILUS_BODY);
 
     private final BoolSetting armour = new BoolSetting("Armour",
         "Nobody is drawn wearing armour.", false);
@@ -35,6 +53,10 @@ public final class NoRender extends Module {
         "Rockets still fly but the burst is not drawn.", false);
     private final BoolSetting signText = new BoolSetting("Sign text",
         "Signs are drawn blank.", false);
+    private final TextSetting signWords = new TextSetting("Only with words",
+        "Only a sign with one of these words on it is drawn blank. Separate the words with spaces. Leave it"
+            + " empty to blank every sign.", "")
+        .under(signText);
     private final EnumSetting<Banners> banners = new EnumSetting<>("Banners",
         "How banners are drawn.", Banners.SHOW)
         .describe(Banners.SHOW, "Banners are drawn as normal.")
@@ -75,14 +97,20 @@ public final class NoRender extends Module {
     private final ChunkRebuild rebuild = new ChunkRebuild();
     private int meshKey;
 
+    // Whether each sign side drawn carries a listed word. A sign keeps the same text object
+    // until it is edited and the answer is worked out once for each.
+    private final Map<SignText, Boolean> wordy = new IdentityHashMap<>();
+    private List<String> words = List.of();
+    private String wordsTyped = "";
+
     public NoRender() {
         super("NoRender", "Leaves out things in the world you do not need drawn.",
             Category.RENDER);
         addSettings(armour, beaconBeams, fallingBlocks, worldBorder, glint, fireworks,
-            signText, banners, itemFrames, enchantingBook, blockCracks, caveCulling, mapMarkers,
+            signText, signWords, banners, itemFrames, enchantingBook, blockCracks, caveCulling, mapMarkers,
             mapContents, barriers, textureRotations, blockEntities, entities, dropSpawnPackets,
             glowing, spawnerMobs, deadEntities, nametags);
-        searchTags("hide", "no armor", "beacon", "glint", "banner", "sign");
+        searchTags("hide", "no armor", "beacon", "glint", "banner", "sign", "censor signs");
     }
 
     // Culling and rotations are baked into the chunk meshes. They need a rebuild.
@@ -114,8 +142,8 @@ public final class NoRender extends Module {
         }
     }
 
-    public boolean hidesArmour() {
-        return isEnabled() && armour.isOn();
+    public boolean hidesArmour(LayerType layer) {
+        return isEnabled() && armour.isOn() && ARMOUR_LAYERS.contains(layer);
     }
 
     public boolean hidesBeaconBeams() {
@@ -138,8 +166,30 @@ public final class NoRender extends Module {
         return isEnabled() && fireworks.isOn();
     }
 
-    public boolean hidesSignText() {
-        return isEnabled() && signText.isOn();
+    // True for a sign whose writing is left out. With words typed that is only a sign with one
+    // of them on either side.
+    public boolean blanksSign(SignText front, SignText back) {
+        if (!isEnabled() || !signText.isOn()) {
+            return false;
+        }
+        String typed = signWords.getValue();
+        if (typed.isBlank()) {
+            return true;
+        }
+        if (!typed.equals(wordsTyped) || wordy.size() > SIGN_CACHE) {
+            wordsTyped = typed;
+            words = SignWords.words(typed);
+            wordy.clear();
+        }
+        return carriesWord(front) || carriesWord(back);
+    }
+
+    private boolean carriesWord(SignText side) {
+        return side != null && wordy.computeIfAbsent(side, text -> {
+            List<String> lines = new ArrayList<>();
+            SignWords.addLines(text, lines);
+            return SignWords.hasAnyWord(lines, words);
+        });
     }
 
     public Banners bannerMode() {

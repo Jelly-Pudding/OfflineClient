@@ -16,7 +16,7 @@ import net.minecraft.world.level.block.AnvilBlock;
 public final class SelfAnvil extends Module {
 
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Send a look packet towards the spot.", true);
+        "Sends a look packet towards the spot.", true);
 
     private final SlotSwap slots = new SlotSwap();
 
@@ -39,7 +39,7 @@ public final class SelfAnvil extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || mc.player.isSpectator()) {
+        if (mc.player.isSpectator()) {
             return;
         }
         BlockPos target = mc.player.blockPosition().above(2);

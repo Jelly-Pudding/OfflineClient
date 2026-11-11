@@ -15,6 +15,7 @@ import com.jellypudding.offlineclient.util.Ignition;
 import com.jellypudding.offlineclient.util.InventoryUtil.HotbarLoan;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.LavaPours;
+import com.jellypudding.offlineclient.util.SpotLedger;
 import com.jellypudding.offlineclient.util.TargetFilter;
 import com.jellypudding.offlineclient.util.TargetPriority;
 import com.jellypudding.offlineclient.util.TickRate;
@@ -23,14 +24,10 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 
-import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 // Pours lava or lights fire on players and mobs and dropped items near you. A pour whose flow
 // could run into you before it is scooped never happens. Only fire this aura lit is put out.
@@ -39,9 +36,6 @@ public final class LavaAura extends Module {
     public enum Method { LAVA, FIRE }
 
     public enum Spot { FEET, HEAD }
-
-    // Ticks one of our fires is remembered past its time when it cannot be reached.
-    private static final int GIVE_UP = 100;
 
     // Targets tried in one round. The flow test that keeps lava off you is costly.
     private static final int MAX_TRIES = 16;
@@ -54,8 +48,8 @@ public final class LavaAura extends Module {
         "How far away targets are considered.", 5, 1, 8, 0.5, " blocks");
     private final NumberSetting wallsRange = new NumberSetting("Walls range",
         "How far fire is lit with no clear view from your eyes. The server never checks.",
-        4.5, 0, 6, 0.1, " blocks").min(0).under(method, Method.FIRE);
-    private final EntityFilter filter = new EntityFilter("Burn", "burnt", true,
+        4.5, 0, 6, 0.1, " blocks").under(method, Method.FIRE);
+    private final EntityFilter filter = new EntityFilter("Burns", "burnt", true,
         EntityFilter.Pick.NONE, EntityFilter.Pick.NONE, List.of());
     private final BoolSetting burnFriends = new BoolSetting("Burn friends",
         "Also burns players on your friends list.", false)
@@ -64,7 +58,7 @@ public final class LavaAura extends Module {
     private final EnumSetting<TargetPriority> priority = TargetPriority.setting("Burns",
         TargetPriority.NEAREST);
     private final NumberSetting perRound = new NumberSetting("Targets per round",
-        "How many targets get lava or fire in one round.", 1, 1, 6, 1).min(1);
+        "How many targets get lava or fire in one round.", 1, 1, 6, 1);
     private final EnumSetting<Spot> spot = new EnumSetting<>("Spot",
         "Where the lava goes.", Spot.FEET)
         .describe(Spot.FEET, "Into the block they stand in.")
@@ -73,7 +67,7 @@ public final class LavaAura extends Module {
     private final BoolSetting skipBurning = new BoolSetting("Skip burning",
         "Leaves targets that are already on fire alone.", false);
     private final NumberSetting delay = new NumberSetting("Delay",
-        "Ticks to wait between rounds.", 10, 0, 40, 1, " ticks").min(0);
+        "Ticks to wait between rounds.", 10, 0, 40, 1, " ticks");
     private final LavaPours pours = new LavaPours().under(method, Method.LAVA);
     private final Ignition ignition = new Ignition().under(method, Method.FIRE);
     private final BoolSetting putOut = new BoolSetting("Put out",
@@ -83,7 +77,7 @@ public final class LavaAura extends Module {
         "Ticks a fire burns before it is punched out.", 40, 5, 200, 5, " ticks").min(1)
         .under(putOut);
     private final NumberSetting keepAway = new NumberSetting("Keep away",
-        "Never lights fire closer to you than this.", 2, 0, 6, 0.5, " blocks").min(0)
+        "Never lights fire closer to you than this.", 2, 0, 6, 0.5, " blocks")
         .under(method, Method.FIRE);
     private final BoolSetting rotate = new BoolSetting("Rotate",
         "Turns towards each fire on the server side. Lava always turns since the bucket pours where you look.", true)
@@ -96,7 +90,7 @@ public final class LavaAura extends Module {
     private final ChatWarning warning = new ChatWarning();
 
     // Fire this aura lit and the tick it did.
-    private final Map<BlockPos, Integer> lit = new LinkedHashMap<>();
+    private final SpotLedger lit = new SpotLedger();
 
     private int timer;
     private String targetName;
@@ -141,7 +135,7 @@ public final class LavaAura extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || mc.player.isSpectator()) {
+        if (mc.player.isSpectator()) {
             return;
         }
         if (pauseOnLag.isOn() && TickRate.INSTANCE.stalled()) {
@@ -172,7 +166,7 @@ public final class LavaAura extends Module {
             if (burn(target)) {
                 burnt++;
                 if (targetName == null) {
-                    targetName = nameOf(target);
+                    targetName = EntityUtil.displayNameOf(target);
                 }
             }
         }
@@ -195,7 +189,7 @@ public final class LavaAura extends Module {
             return false;
         }
         // Fire goes out in water and rain at once.
-        if (method.is(Method.FIRE) && entity.isInWaterOrRain()) {
+        if (method.is(Method.FIRE) && EntityUtil.inWaterOrRain(entity)) {
             return false;
         }
         if (skipBurning.isOn() && entity.isOnFire()) {
@@ -205,10 +199,6 @@ public final class LavaAura extends Module {
             return burnFriends.isOn() && filter.matches(entity) && targets.allows(entity);
         }
         return entity instanceof LivingEntity ? targets.attackable(entity, filter) : filter.matches(entity);
-    }
-
-    private static String nameOf(Entity entity) {
-        return entity instanceof Player player ? EntityUtil.nameOf(player) : entity.getName().getString();
     }
 
     private boolean burn(Entity target) {
@@ -253,7 +243,7 @@ public final class LavaAura extends Module {
         if (!ignition.use(slots, hand -> Ignition.strike(hit, hand, rotate.isOn()))) {
             return false;
         }
-        lit.put(cell, mc.player.tickCount);
+        lit.add(cell);
         return true;
     }
 
@@ -266,27 +256,13 @@ public final class LavaAura extends Module {
             && (BlockUtil.distanceTo(cell) <= wallsRange.getValue() || BlockUtil.canSee(cell));
     }
 
-    // Punches out the fires this aura lit once they have burnt for the set time.
+    // Punches out the oldest fire this aura lit once it has burnt for the set time. One goes out a tick.
     private void putOutFires() {
         if (!putOut.isOn()) {
             lit.clear();
             return;
         }
-        int now = mc.player.tickCount;
-        int wait = putOutAfter.getInt();
-        Iterator<Map.Entry<BlockPos, Integer>> it = lit.entrySet().iterator();
-        while (it.hasNext()) {
-            Map.Entry<BlockPos, Integer> entry = it.next();
-            BlockPos cell = entry.getKey();
-            int age = now - entry.getValue();
-            // The clock starts again on a respawn and an age below nought is out of date.
-            if (age < 0 || age > wait + GIVE_UP || !Ignition.isFire(cell)) {
-                it.remove();
-                continue;
-            }
-            if (age >= wait && BlockUtil.serverReaches(cell) && Ignition.putOut(cell)) {
-                it.remove();
-            }
-        }
+        lit.undoDue(putOutAfter.getInt(), Ignition::isFire,
+            cell -> BlockUtil.serverReaches(cell) && Ignition.putOut(cell));
     }
 }

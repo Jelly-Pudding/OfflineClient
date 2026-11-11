@@ -1,5 +1,6 @@
 package com.jellypudding.offlineclient.render;
 
+import com.jellypudding.offlineclient.OfflineClient;
 import com.mojang.renderpearl.api.pipeline.BlendFunction;
 import com.mojang.renderpearl.api.pipeline.ColorTargetState;
 import com.mojang.renderpearl.api.pipeline.RenderPipeline;
@@ -27,19 +28,35 @@ public final class EntityPipelines {
             .withDepthStencilState(Optional.empty())
             .build());
 
-    // One render type per skin. Only touched from the render thread.
-    private static final Map<Identifier, RenderType> TYPES = new HashMap<>();
+    private record Key(Identifier texture, boolean solid) {
+    }
+
+    // One render type per skin for each phase it can go in. Only touched from the render thread.
+    private static final Map<Key, RenderType> TYPES = new HashMap<>();
 
     private EntityPipelines() {
     }
 
     public static RenderType chams(Identifier texture) {
-        return TYPES.computeIfAbsent(texture, id -> RenderType.create("offlineclient:chams",
-            RenderSetup.builder(CHAMS)
-                .withTexture("Sampler0", id)
-                .useLightmap()
-                .useOverlay()
-                .sortOnUpload()
-                .createRenderSetup()));
+        return TYPES.computeIfAbsent(new Key(texture, solidPhase()), EntityPipelines::create);
+    }
+
+    // Improved transparency draws translucent models with pipelines of their own and the model types
+    // of the client have none. Whilst it is on they go in with the solid models.
+    static boolean solidPhase() {
+        return OfflineClient.MC.gameRenderer.useImprovedTransparency();
+    }
+
+    private static RenderType create(Key key) {
+        RenderSetup.RenderSetupBuilder setup = RenderSetup.builder(CHAMS)
+            .withTexture("Sampler0", key.texture())
+            .useLightmap()
+            .useOverlay()
+            .setOutline(RenderSetup.OutlineProperty.AFFECTS_OUTLINE)
+            .sortOnUpload();
+        if (key.solid()) {
+            setup.withForcedSolidModelPhase();
+        }
+        return RenderType.create("offlineclient:chams", setup.createRenderSetup());
     }
 }

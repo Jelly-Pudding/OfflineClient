@@ -11,8 +11,11 @@ import com.jellypudding.offlineclient.setting.ChoiceListSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.setting.RegistryListSetting;
+import com.jellypudding.offlineclient.util.AwayView;
 import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.EnchantText;
+import com.jellypudding.offlineclient.util.EntityColors;
 import com.jellypudding.offlineclient.util.EntityFilter;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.ItemUtil;
@@ -22,6 +25,7 @@ import com.jellypudding.offlineclient.util.RenderUtil;
 import com.jellypudding.offlineclient.util.SeenEffects;
 import com.jellypudding.offlineclient.util.ServerInfo;
 import com.jellypudding.offlineclient.util.Tally;
+import com.jellypudding.offlineclient.util.Teams;
 import com.jellypudding.offlineclient.util.Totems;
 import net.minecraft.SharedConstants;
 import net.minecraft.client.gui.Font;
@@ -30,11 +34,14 @@ import net.minecraft.client.gui.Hud;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.core.Holder;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.decoration.ItemFrame;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.item.PrimedTnt;
@@ -79,20 +86,27 @@ public final class Nametags extends Module {
     private final NumberSetting range = new NumberSetting("Range",
         "Furthest entity to tag.", 128, 16, 256, 8, " blocks").min(1);
     private final NumberSetting limit = new NumberSetting("Tag limit",
-        "How many of the nearest entities get a tag.", 50, 1, 100, 1).min(1);
-    private final EntityFilter filter = new EntityFilter("Tag", "tagged", true,
+        "How many of the nearest entities get a tag.", 50, 1, 100, 1);
+    private final EntityFilter filter = new EntityFilter("Tags", "tagged", true,
         EntityFilter.Pick.NONE, EntityFilter.Pick.ALL,
         List.of(EntityTypes.ITEM_FRAME, EntityTypes.GLOW_ITEM_FRAME));
+    private final BoolSetting namedOnly = new BoolSetting("Named mobs only",
+        "Leaves out every mob that carries no name tag.", false)
+        .visibleWhen(filter::wantsMobs);
+    private final RegistryListSetting<EntityType<?>> ids = new RegistryListSetting<>("Entity ids",
+        "Kinds of entity that get a tag with their network id. The server counts ids up as things"
+            + " appear. A low id is old and ids close together appeared together.",
+        BuiltInRegistries.ENTITY_TYPE, List.of());
     private final BoolSetting self = new BoolSetting("Self",
-        "Tag yourself whilst in third person or Freecam.", true);
+        "Tags you in third person and whilst Freecam or RemoteView has the camera.", true);
     private final BoolSetting ignoreFriends = new BoolSetting("Ignore friends",
         "Friends get no tag.", false);
     private final BoolSetting displayName = new BoolSetting("Display name",
-        "Show the server display name with any team prefix instead of the account name.", false);
+        "Shows the server display name with any team prefix instead of the account name.", false);
     private final BoolSetting gameMode = new BoolSetting("Game mode",
-        "Put the player's game mode in front of the name.", false);
+        "Puts the player's game mode in front of the name.", false);
     private final BoolSetting health = new BoolSetting("Health",
-        "Show hearts left including absorption.", true);
+        "Shows hearts left including absorption.", true);
     private final BoolSetting pops = new BoolSetting("Totem pops",
         "Writes how many totems the player has popped since they last died.", true);
     private final BoolSetting effects = new BoolSetting("Effects",
@@ -101,13 +115,13 @@ public final class Nametags extends Module {
         "Tags every mount with its full health and top speed and jump height or a llama's strength."
             + " Red marks the worst a wild horse spawns with and green the best.", false);
     private final BoolSetting ping = new BoolSetting("Ping",
-        "Show the player's latency.", true);
+        "Shows the player's latency.", true);
     private final BoolSetting pingByLatency = new BoolSetting("Ping by latency",
-        "Colour the ping green then amber then red as it climbs.", true).under(ping);
+        "Colours the ping green then amber then red as it climbs.", true).under(ping);
     private final ColorSetting pingColor = new ColorSetting("Ping colour",
         "Colour of the ping text.", 180, 0.88f, 0.67f, false).under(ping, () -> ping.isOn() && !pingByLatency.isOn());
     private final BoolSetting distance = new BoolSetting("Distance",
-        "Show how far away the player is.", false);
+        "Shows how far away the player is.", false);
     private final EnumSetting<DistanceColor> distanceColor = new EnumSetting<>("Distance colour mode",
         "How the distance text is coloured.", DistanceColor.GRADIENT)
         .describe(DistanceColor.GRADIENT, "Red up close through to green far away.")
@@ -117,9 +131,9 @@ public final class Nametags extends Module {
         "Colour of the distance text.", 0, 0f, 0.59f, false)
         .under(distance, () -> distance.isOn() && distanceColor.is(DistanceColor.FLAT));
     private final BoolSetting items = new BoolSetting("Held items",
-        "Show what they hold in each hand.", true);
+        "Shows what they hold in each hand.", true);
     private final BoolSetting armor = new BoolSetting("Armour",
-        "Show their armour next to the held items.", true);
+        "Shows their armour next to the held items.", true);
     private final NumberSetting itemSpacing = new NumberSetting("Item spacing",
         "Gap in pixels between the item icons.", 2, 0, 10, 1, " px");
     private final BoolSetting ignoreEmpty = new BoolSetting("Ignore empty slots",
@@ -131,9 +145,9 @@ public final class Nametags extends Module {
         .describe(Durability.NUMBER, "The points left written over the icon.")
         .describe(Durability.PERCENT, "The share left written over the icon.");
     private final BoolSetting showCount = new BoolSetting("Item count",
-        "Show how many are in a dropped stack.", true);
+        "Shows how many are in a dropped stack.", true);
     private final BoolSetting enchantments = new BoolSetting("Enchantments",
-        "Write the enchantments of each item by its icon.", false);
+        "Writes the enchantments of each item by its icon.", false);
     private final ChoiceListSetting shownEnchantments = new ChoiceListSetting("Shown enchantments",
         "Which enchantments are written. Join a world to fill the list.", ItemUtil::enchantmentIds,
         EnchantText.PROTECTIONS).under(enchantments);
@@ -143,11 +157,12 @@ public final class Nametags extends Module {
         .describe(EnchantPosition.ON_TOP, "Over each icon.")
         .under(enchantments);
     private final NumberSetting enchantLetters = new NumberSetting("Enchantment letters",
-        "How many letters of each enchantment name are kept.", 3, 1, 5, 1).min(1).under(enchantments);
+        "How many letters of each enchantment name are kept.", 3, 1, 5, 1).under(enchantments);
     private final NumberSetting enchantScale = new NumberSetting("Enchantment scale",
-        "Size of the enchantment text.", 1, 0.1, 2, 0.1).min(0.1).under(enchantments);
+        "Size of the enchantment text.", 1, 0.1, 2, 0.1).under(enchantments);
     private final ColorSetting nameColor = new ColorSetting("Name colour",
         "Colour of the name text.", 0, 0f, 1f, false);
+    private final BoolSetting teamColors = Teams.colorSwitch();
     private final ColorSetting gameModeColor = new ColorSetting("Game mode colour",
         "Colour of the game mode letters.", 46, 0.85f, 0.91f, false).under(gameMode);
     private final ColorSetting background = new ColorSetting("Background colour",
@@ -160,10 +175,10 @@ public final class Nametags extends Module {
             Category.RENDER);
         addSettings(scale, range, limit);
         addSettings(filter.settings());
-        addSettings(self, ignoreFriends, displayName, gameMode, health, pops, effects, mountStats, ping,
-            pingByLatency, pingColor, distance, distanceColor, flatDistanceColor, items, armor, itemSpacing,
+        addSettings(namedOnly, ids, self, ignoreFriends, displayName, gameMode, health, pops, effects, mountStats,
+            ping, pingByLatency, pingColor, distance, distanceColor, flatDistanceColor, items, armor, itemSpacing,
             ignoreEmpty, durability, showCount, enchantments, shownEnchantments, enchantPosition, enchantLetters,
-            enchantScale, nameColor, gameModeColor, background, backgroundOpacity);
+            enchantScale, nameColor, teamColors, gameModeColor, background, backgroundOpacity);
         searchTags("name tags", "player info");
     }
 
@@ -206,22 +221,26 @@ public final class Nametags extends Module {
             return filter.wantsPlayers() && showSelf();
         }
         if (entity instanceof Player player) {
-            if (!filter.matches(player)) {
-                return false;
-            }
-            if (ignoreFriends.isOn() && EntityUtil.isFriend(player)) {
-                return false;
-            }
-            return !Modules.hidesBot(AntiBot.View.NAMETAGS, player);
+            // The id list only stands in for the kind filter. A spectator has no body to tag.
+            boolean picked = filter.matches(player) || showsId(player) && player.isAlive() && !player.isSpectator();
+            return picked && !(ignoreFriends.isOn() && EntityUtil.isFriend(player))
+                && !Modules.hidesBot(AntiBot.View.NAMETAGS, player);
         }
-        if (mountStats.isOn() && Mounts.isMount(entity) && entity.isAlive()) {
+        if ((showsId(entity) || mountStats.isOn() && Mounts.isMount(entity)) && entity.isAlive()) {
             return true;
         }
-        return filter.matches(entity);
+        if (namedOnly.isOn() && filter.wantsMobs() && entity instanceof Mob && !entity.hasCustomName()) {
+            return false;
+        }
+        return filter.shows(entity);
+    }
+
+    private boolean showsId(Entity entity) {
+        return ids.contains(entity.getType());
     }
 
     private boolean showSelf() {
-        return self.isOn() && Freecam.ownBodyVisible();
+        return self.isOn() && AwayView.ownBodyVisible();
     }
 
     // The size of the tag over an entity or nought when it has none. EntityOwner stacks its label on it.
@@ -229,9 +248,8 @@ public final class Nametags extends Module {
         return isEnabled() && distance <= range.getValue() && wanted(entity) ? factor(distance) : 0;
     }
 
-    // Shrinks with distance down to half size.
     private float factor(double distance) {
-        return (float) (scale.getValue() * Math.clamp(1 - distance / 100.0, 0.5, 1));
+        return (float) (scale.getValue() * RenderUtil.labelShrink(distance));
     }
 
     // Items sit low and their tag hugs them. Everything else gets a little headroom.
@@ -249,7 +267,7 @@ public final class Nametags extends Module {
             case PrimedTnt tnt -> drawText(context, tag, fuseText(tnt.getFuse()), factor);
             case MinecartTNT cart -> drawText(context, tag, fuseText(cart.getFuse()), factor);
             case LivingEntity living -> drawLiving(context, tag, living, factor);
-            default -> drawText(context, tag, typeName(tag.entity()), factor);
+            default -> drawText(context, tag, EntityUtil.displayNameOf(tag.entity()), factor);
         }
     }
 
@@ -320,7 +338,7 @@ public final class Nametags extends Module {
     private void drawLiving(GuiGraphicsExtractor context, Tag tag, LivingEntity living, float factor) {
         List<String> parts = new ArrayList<>();
         List<Integer> colors = new ArrayList<>();
-        parts.add(typeName(living));
+        parts.add(EntityUtil.displayNameOf(living));
         colors.add(nameColor.getColor());
         addHealth(parts, colors, living);
         if (mountStats.isOn() && Mounts.isMount(living)) {
@@ -329,8 +347,12 @@ public final class Nametags extends Module {
         label(context, tag, factor, parts, colors);
     }
 
+    // An empty frame has nothing to name and is only tagged for its id.
     private void drawItem(GuiGraphicsExtractor context, Tag tag, ItemStack stack, float factor) {
         if (stack.isEmpty()) {
+            if (showsId(tag.entity())) {
+                drawText(context, tag, EntityUtil.displayNameOf(tag.entity()), factor);
+            }
             return;
         }
         List<String> parts = new ArrayList<>();
@@ -348,9 +370,18 @@ public final class Nametags extends Module {
         label(context, tag, factor, List.of(text), List.of(nameColor.getColor()));
     }
 
+    // The network id goes on the end for the kinds picked.
     private void label(GuiGraphicsExtractor context, Tag tag, float factor,
                        List<String> parts, List<Integer> colors) {
-        RenderUtil.label(context, mc.font, tag.screen().x, tag.screen().y, factor, parts, colors, backgroundColor());
+        List<String> words = parts;
+        List<Integer> tints = colors;
+        if (showsId(tag.entity())) {
+            words = new ArrayList<>(parts);
+            tints = new ArrayList<>(colors);
+            words.add(" #" + tag.entity().getId());
+            tints.add(RenderUtil.MUTED_TEXT);
+        }
+        RenderUtil.label(context, mc.font, tag.screen().x, tag.screen().y, factor, words, tints, backgroundColor());
     }
 
     private int backgroundColor() {
@@ -360,7 +391,7 @@ public final class Nametags extends Module {
     private static void addHealth(List<String> parts, List<Integer> colors, LivingEntity living) {
         float hp = EntityUtil.totalHealth(living);
         parts.add(String.format(Locale.ROOT, " %.0f", hp));
-        colors.add(ColorUtil.health(EntityUtil.healthShare(living)));
+        colors.add(ColorUtil.redToGreen(EntityUtil.healthShare(living)));
     }
 
     // Full health then speed and jump each coloured by how it compares with wild horses.
@@ -378,25 +409,30 @@ public final class Nametags extends Module {
 
     private String nameText(Player player) {
         if (player != mc.player && displayName.isOn()) {
-            return player.getDisplayName().getString();
+            return EntityUtil.displayed(player.getDisplayName()).getString();
         }
         return EntityUtil.displayNameOf(player);
     }
 
+    // A friend or a listed enemy first and then yourself and then the side the server puts a
+    // player on.
     private int playerNameColor(Player player) {
         if (EntityUtil.isFriend(player)) {
-            return EntityUtil.FRIEND_COLOR;
+            return EntityColors.friendColor();
         }
-        return player == mc.player ? 0xFFB0FFB0 : nameColor.getColor();
+        if (EntityUtil.isListedEnemy(player)) {
+            return EntityColors.enemyColor();
+        }
+        if (player == mc.player) {
+            return 0xFFB0FFB0;
+        }
+        int team = teamColors.isOn() ? Teams.colorOf(player) : 0;
+        return team != 0 ? team : nameColor.getColor();
     }
 
     private String gameModeText(Player player) {
         PlayerInfo info = tabEntry(player);
         return EntityUtil.gameModeLetter(info == null ? null : info.getGameMode());
-    }
-
-    private static String typeName(Entity entity) {
-        return entity.getType().getDescription().getString();
     }
 
     // Seconds with a tenth whilst short and whole minutes or hours beyond.
@@ -479,9 +515,8 @@ public final class Nametags extends Module {
             context.itemDecorations(font, stack, x, y);
             return;
         }
-        int left = stack.getMaxDamage() - stack.getDamageValue();
         String text = mode == Durability.NUMBER
-            ? String.valueOf(left) : Math.round(left * 100f / stack.getMaxDamage()) + "%";
+            ? String.valueOf(ItemUtil.usesLeft(stack)) : Math.round(ItemUtil.durabilityPercent(stack)) + "%";
         context.guiRenderState.up();
         smallText(context, font, text, x, y, 0.75f, ColorUtil.withAlpha(stack.getBarColor(), 255));
     }

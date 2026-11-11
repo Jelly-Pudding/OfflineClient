@@ -36,6 +36,15 @@ final class HopPath {
     private static final double NEAR = 2;
     private static final List<Vec3> NEARBY = nearby();
 
+    // A vanilla server tests the spot a move ends on with the box shrunk this much. A box
+    // pressed half as far into a block passes that test and still overlaps the block.
+    private static final double SERVER_SHRINK = 1.0E-5F;
+    private static final double PRESS = SERVER_SHRINK / 2;
+
+    // Down first as most movers stand on something.
+    private static final List<Vec3> PRESSES = List.of(new Vec3(0, -PRESS, 0), new Vec3(PRESS, 0, 0),
+        new Vec3(-PRESS, 0, 0), new Vec3(0, 0, PRESS), new Vec3(0, 0, -PRESS), new Vec3(0, PRESS, 0));
+
     private HopPath() {
     }
 
@@ -90,13 +99,55 @@ final class HopPath {
         return fits(mover, spot) && !BlockUtil.touchesLava(mover.level(), boxAt(mover, spot));
     }
 
-    // The server carries a box up or down first and then along the longer flat axis.
-    // Both servers settle a tie by going along x first.
+    // The first landing along a way past whatever blocks it. Null when nothing blocks the
+    // way or nothing behind it is free within the reach.
+    static Vec3 beyond(Entity mover, Vec3 from, Vec3 way, double reach) {
+        boolean blocked = !fits(mover, from);
+        for (double far = PLAN_STEP; far <= reach; far += PLAN_STEP) {
+            Vec3 spot = from.add(way.scale(far));
+            if (blocked && landing(mover, spot)) {
+                return spot;
+            }
+            blocked |= !fits(mover, spot);
+        }
+        return null;
+    }
+
+    // Where a vanilla server takes the mover for one inside a block. The spot itself when
+    // the box overlaps a block already and else the spot pressed a hair into a block the
+    // box touches. Null when it touches none.
+    static Vec3 lean(Entity mover, Vec3 at) {
+        if (!fits(mover, at)) {
+            return at;
+        }
+        for (Vec3 press : PRESSES) {
+            Vec3 pressed = at.add(press);
+            if (!fits(mover, pressed)) {
+                return pressed;
+            }
+        }
+        return null;
+    }
+
+    // True when the box and its riders have room all along the way the server carries them.
     static boolean clearWay(Entity mover, Vec3 from, Vec3 to) {
+        List<Vec3> turns = turns(from, to);
+        for (int leg = 1; leg < turns.size(); leg++) {
+            if (!swept(mover, turns.get(leg - 1), turns.get(leg))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    // The start then each spot where the server's way turns then the end. The server carries a
+    // box up or down first and then along the longer flat axis. Both servers settle a tie by
+    // going along x first.
+    private static List<Vec3> turns(Vec3 from, Vec3 to) {
         Vec3 level = new Vec3(from.x, to.y, from.z);
         boolean alongX = Math.abs(to.x - from.x) >= Math.abs(to.z - from.z);
         Vec3 corner = alongX ? new Vec3(to.x, to.y, from.z) : new Vec3(from.x, to.y, to.z);
-        return swept(mover, from, level) && swept(mover, level, corner) && swept(mover, corner, to);
+        return List.of(from, level, corner, to);
     }
 
     private static boolean swept(Entity mover, Vec3 from, Vec3 to) {
@@ -134,12 +185,11 @@ final class HopPath {
 
     // The way the server itself would carry the box with a stop at every turn.
     private static List<Vec3> corners(Vec3 from, Vec3 to, double hop, double drop) {
-        Vec3 level = new Vec3(from.x, to.y, from.z);
-        boolean alongX = Math.abs(to.x - from.x) >= Math.abs(to.z - from.z);
-        Vec3 corner = alongX ? new Vec3(to.x, to.y, from.z) : new Vec3(from.x, to.y, to.z);
-        List<Vec3> stops = new ArrayList<>(steps(from, level, hop, drop));
-        stops.addAll(steps(level, corner, hop, drop));
-        stops.addAll(steps(corner, to, hop, drop));
+        List<Vec3> turns = turns(from, to);
+        List<Vec3> stops = new ArrayList<>();
+        for (int leg = 1; leg < turns.size(); leg++) {
+            stops.addAll(steps(turns.get(leg - 1), turns.get(leg), hop, drop));
+        }
         return stops;
     }
 

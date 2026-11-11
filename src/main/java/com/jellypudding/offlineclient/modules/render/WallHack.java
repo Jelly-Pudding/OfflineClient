@@ -21,7 +21,7 @@ public final class WallHack extends MeshFilterModule {
             Blocks.DIORITE, Blocks.GRANITE, Blocks.DIRT, Blocks.GRASS_BLOCK,
             Blocks.NETHERRACK, Blocks.END_STONE));
     private final BoolSetting skipHidden = new BoolSetting("Skip hidden chunks",
-        "Let the game leave out chunks it thinks are out of sight.", false);
+        "Lets the game leave out chunks it thinks are out of sight.", false);
 
     public WallHack() {
         super("WallHack", "Makes the blocks you choose see through.",

@@ -4,6 +4,7 @@ import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.setting.Setting;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.SearchRank;
 import net.minecraft.client.Minecraft;
 
@@ -32,7 +33,7 @@ public abstract class Module {
         this.name = name;
         this.description = description;
         this.category = category;
-        this.keybind = new KeybindSetting("Bind", "Keyboard shortcut to toggle " + name + ".", defaultKey);
+        this.keybind = new KeybindSetting("Bind", "The key or mouse button for " + name + ".", defaultKey);
     }
 
     public String getName() {
@@ -59,12 +60,17 @@ public abstract class Module {
         this.tags = tags;
     }
 
+    // For the constructor of a module that is only wanted whilst its key is down. The key
+    // starts as a held one and the player can still make it a switch.
+    protected final void holdByDefault() {
+        keybind.holdByDefault();
+    }
+
     // Higher scores match the query better. The name outranks a tag and a tag outranks the
     // description. Only the strongest tag counts. Setting names are searched as well and a
     // half remembered setting still finds its module.
     public int searchScore(String query) {
-        List<String> settingNames = settings.stream().filter(setting -> !setting.isInternal())
-            .map(Setting::getName).toList();
+        List<String> settingNames = playerSettings().stream().map(Setting::getName).toList();
         return SearchRank.best(query, name, SearchRank.strongest(query, List.of(tags)), description,
             SearchRank.strongest(query, settingNames));
     }
@@ -79,13 +85,13 @@ public abstract class Module {
     }
 
     public List<String> settingIds() {
-        return settings.stream().filter(setting -> !setting.isInternal()).map(Setting::id).toList();
+        return playerSettings().stream().map(Setting::id).toList();
     }
 
     // Spaces and case are ignored. An internal setting is never found.
     public Setting<?> getSetting(String settingName) {
         String wanted = Setting.idFor(settingName);
-        for (Setting<?> setting : settings) {
+        for (Setting<?> setting : getSettings()) {
             if (!setting.isInternal() && setting.id().equals(wanted)) {
                 return setting;
             }
@@ -102,8 +108,22 @@ public abstract class Module {
     }
 
     public void setEnabled(boolean enabled) {
-        if (this.enabled == enabled) {
-            return;
+        if (switchTo(enabled)) {
+            OfflineClient.INSTANCE.getConfigManager().saveSoon();
+        }
+    }
+
+    // Switches the module for a held key. Nothing is written for it. The config holds a module
+    // that is only on whilst its key is down as off.
+    final void setHeld(boolean down) {
+        switchTo(down);
+    }
+
+    // True when the switch changed. Every way of switching a module on ends here and a locked
+    // module stays off whichever it was.
+    private boolean switchTo(boolean enabled) {
+        if (this.enabled == enabled || enabled && Modules.lockRefuses(this)) {
+            return false;
         }
         this.enabled = enabled;
 
@@ -115,7 +135,7 @@ public abstract class Module {
             OfflineClient.INSTANCE.getEventBus().unregister(this);
             onDisable();
         }
-        OfflineClient.INSTANCE.getConfigManager().saveSoon();
+        return true;
     }
 
     // Null when the module clashes with nothing.
@@ -123,21 +143,40 @@ public abstract class Module {
         return null;
     }
 
-    private void disableGroup() {
+    // True when the two cannot run at once. Modules of one group clash unless one of them says
+    // otherwise.
+    public boolean clashesWith(Module other) {
         ExclusivityGroup group = getExclusivityGroup();
+        return group != null && group == other.getExclusivityGroup();
+    }
+
+    // Every module switched off here is named in chat by the same rules as a key press.
+    private void disableGroup() {
         ModuleManager manager = OfflineClient.INSTANCE.getModuleManager();
-        if (group == null || manager == null) {
+        if (manager == null) {
             return;
         }
         for (Module other : manager.getAll()) {
-            if (other != this && other.isEnabled() && other.getExclusivityGroup() == group) {
+            if (other != this && other.isEnabled() && clashesWith(other) && other.clashesWith(this)) {
                 other.setEnabled(false);
+                ChatUtil.toggled(other);
             }
         }
     }
 
     public void onKeybind() {
         toggle();
+    }
+
+    // False for a module whose key does something other than switch it on and off. Such a key
+    // cannot be a held one.
+    public boolean keySwitches() {
+        return isTogglable();
+    }
+
+    // True for a key that keeps the module on only whilst it is down.
+    public final boolean holdsKey() {
+        return keySwitches() && keybind.isHold();
     }
 
     // Joins a target name and a status word for the module list.
@@ -194,7 +233,12 @@ public abstract class Module {
         setEnabled(false);
     }
 
-    protected boolean inGame() {
+    // Tells the player something in chat under the module's name.
+    protected final void tell(String words) {
+        ChatUtil.tell(getName(), words);
+    }
+
+    protected final boolean inGame() {
         return mc.player != null && mc.level != null;
     }
 

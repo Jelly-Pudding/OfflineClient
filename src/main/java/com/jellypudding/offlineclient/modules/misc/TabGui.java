@@ -3,31 +3,24 @@ package com.jellypudding.offlineclient.modules.misc;
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.KeyPressEvent;
-import com.jellypudding.offlineclient.event.events.Render2DEvent;
+import com.jellypudding.offlineclient.hud.elements.TabGuiElement;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.ColorSetting;
-import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.Modules;
 import com.mojang.blaze3d.platform.InputConstants;
-import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
 
 import java.util.ArrayList;
 import java.util.List;
 
-// A list you walk with the arrow keys without opening a screen. Handy mid fight.
+// A list you walk with the arrow keys without opening a screen. Handy mid fight. The TabGUI
+// element of the HUD draws it whilst this is on.
 public final class TabGui extends Module {
 
-    private static final int ROW = 11;
-    private static final int PAD = 3;
-    private static final int MIN_WIDTH = 60;
+    // One line of the list in the colour it is written in.
+    public record Row(String name, int colour) {
+    }
 
-    private final NumberSetting x = new NumberSetting("Left",
-        "How far in from the left edge it sits.", 0, 0, 400, 1, " px").min(0);
-    private final NumberSetting y = new NumberSetting("Top",
-        "How far down from the top edge it sits.", 0, 0, 400, 1, " px").min(0);
-    private final ColorSetting background = new ColorSetting("Background",
-        "Colour of the panel.", 240, 0.35f, 0.09f, false);
     private final ColorSetting text = new ColorSetting("Row colour",
         "Colour of a row you are not on.", 0, 0f, 0.85f, false);
     private final ColorSetting picked = new ColorSetting("Picked colour",
@@ -40,9 +33,9 @@ public final class TabGui extends Module {
     private int row;
 
     public TabGui() {
-        super("TabGUI", "A module list on screen you steer with the arrow keys. No menu to open.",
+        super("TabGUI", "A module list on screen you steer with the arrow keys and place with .hud edit.",
             Category.MISC);
-        addSettings(x, y, background, text, picked, on);
+        addSettings(text, picked, on);
         searchTags("tab gui", "arrow menu", "quick toggle");
     }
 
@@ -50,20 +43,32 @@ public final class TabGui extends Module {
     protected void onEnable() {
         open = null;
         row = 0;
+        Modules.tellHudOff(this);
     }
 
-    private List<String> rows() {
-        List<String> names = new ArrayList<>();
+    // The list as it stands. The row you are on takes the picked colour and in a category a
+    // module that is switched on takes the enabled colour.
+    public List<Row> rows() {
+        List<Row> rows = new ArrayList<>();
         if (open == null) {
-            for (Category category : Category.values()) {
-                names.add(category.getDisplayName());
+            Category[] categories = Category.values();
+            for (int i = 0; i < categories.length; i++) {
+                rows.add(new Row(categories[i].getDisplayName(), i == row ? picked.getColor() : text.getColor()));
             }
-        } else {
-            for (Module module : OfflineClient.INSTANCE.getModuleManager().getByCategory(open)) {
-                names.add(module.getName());
-            }
+            return rows;
         }
-        return names;
+        List<Module> modules = modules();
+        for (int i = 0; i < modules.size(); i++) {
+            Module module = modules.get(i);
+            int colour = i == row ? picked.getColor() : module.isEnabled() ? on.getColor() : text.getColor();
+            rows.add(new Row(module.getName(), colour));
+        }
+        return rows;
+    }
+
+    // The row the cursor is on.
+    public int cursor() {
+        return row;
     }
 
     private List<Module> modules() {
@@ -72,12 +77,13 @@ public final class TabGui extends Module {
     }
 
     // Up and down move the cursor. Right or enter opens a category or toggles a module. Left goes back.
+    // Nothing moves whilst the list is out of sight.
     @Subscribe
     private void onKeyPress(KeyPressEvent event) {
-        if (event.getAction() == InputConstants.RELEASE || OfflineClient.MC.gui.screen() != null) {
+        if (event.getAction() == InputConstants.RELEASE || mc.gui.screen() != null || !inSight()) {
             return;
         }
-        int count = rows().size();
+        int count = open == null ? Category.values().length : modules().size();
         if (count == 0) {
             return;
         }
@@ -89,6 +95,14 @@ public final class TabGui extends Module {
             default -> {
             }
         }
+    }
+
+    // The HUD draws the list whilst its piece is on. It goes when the game's own HUD is hidden and
+    // steps aside for the debug screen. Conceal only hides it and the keys keep working.
+    private boolean inSight() {
+        HudModule hud = Modules.active(HudModule.class);
+        return hud != null && !hud.overlayHidden() && !mc.gui.hud.isHidden()
+            && Modules.hudShows(TabGuiElement.class);
     }
 
     private void choose() {
@@ -109,37 +123,5 @@ public final class TabGui extends Module {
         }
         row = Math.max(0, List.of(Category.values()).indexOf(open));
         open = null;
-    }
-
-    @Subscribe
-    private void onRender2D(Render2DEvent event) {
-        GuiGraphicsExtractor context = event.getContext();
-        Font font = mc.font;
-        List<String> names = rows();
-        if (names.isEmpty()) {
-            return;
-        }
-        int left = x.getInt();
-        int top = y.getInt();
-        int wide = MIN_WIDTH;
-        for (String name : names) {
-            wide = Math.max(wide, font.width(name) + PAD * 2 + ROW);
-        }
-        int tall = names.size() * ROW + PAD * 2;
-        context.fill(left, top, left + wide, top + tall, background.getColor());
-        context.guiRenderState.up();
-
-        List<Module> modules = modules();
-        for (int i = 0; i < names.size(); i++) {
-            int rowTop = top + PAD + i * ROW;
-            int colour = i == row ? picked.getColor() : text.getColor();
-            if (open != null && i < modules.size() && modules.get(i).isEnabled()) {
-                colour = i == row ? picked.getColor() : on.getColor();
-            }
-            if (i == row) {
-                context.fill(left, rowTop - 1, left + wide, rowTop + ROW - 1, 0x30FFFFFF);
-            }
-            context.text(font, names.get(i), left + PAD, rowTop, colour, true);
-        }
     }
 }

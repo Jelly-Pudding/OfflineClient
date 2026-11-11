@@ -16,6 +16,7 @@ import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatWarning;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
+import com.jellypudding.offlineclient.util.MovementUtil;
 import com.jellypudding.offlineclient.util.UseBudget;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -72,7 +73,7 @@ public final class Scaffold extends Module {
     private final BoolSetting keepLevel = new BoolSetting("Keep level",
         "Stays on the level you last stood on whilst you jump. Jumping along then bridges flat.", false);
     private final BoolSetting tower = new BoolSetting("Tower",
-        "Hold jump to build straight up.", true)
+        "Holding jump builds straight up.", true)
         .visibleWhen(() -> layer.is(Layer.FLOOR));
     private final NumberSetting towerSpeed = new NumberSetting("Tower speed",
         "How hard each tower jump pushes you up.", 0.42, 0.3, 0.5, 0.01)
@@ -85,15 +86,13 @@ public final class Scaffold extends Module {
     private final BoolSetting airPlace = new BoolSetting("Air place",
         "Places straight into the air with nothing to lean on. With it on a tower climbs without landing.",
         false);
-    private final NumberSetting blocksPerTick = new NumberSetting("Blocks per tick",
-        "Most blocks placed in one tick. Paper takes nine in a short burst and the rest wait their turn.",
-        3, 1, 9, 1, " blocks");
+    private final NumberSetting blocksPerTick = UseBudget.blocksPerTick();
     private final NumberSetting reach = new NumberSetting("Reach",
         "When nothing touches the spot under you the nearest spot with support within this range is filled instead.",
         4, 0, 8, 0.5, " blocks")
         .under(airPlace, () -> !airPlace.isOn() && layer.is(Layer.FLOOR));
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Turn towards each block on the server side.", true);
+        "Turns towards each block on the server side.", true);
     private final BoolSetting swing = new BoolSetting("Swing",
         "Swings your arm on each placement.", false);
     private final BoolSetting autoSwitch = new BoolSetting("Auto switch",
@@ -102,9 +101,9 @@ public final class Scaffold extends Module {
         "Returns to the slot you had after every placement.", true)
         .under(autoSwitch);
     private final BoolSetting onlyOnClick = new BoolSetting("Only on click",
-        "Only place whilst you hold the use key down.", false);
+        "Only places whilst you hold the use key down.", false);
     private final BoolSetting down = new BoolSetting("Down",
-        "Sneak to build one level lower. When off sneaking pauses Scaffold.", true)
+        "Sneaking builds one level lower. When off sneaking pauses Scaffold.", true)
         .visibleWhen(() -> layer.is(Layer.FLOOR));
     private final BoolSetting showPlaced = new BoolSetting("Show placed",
         "Draws each placed block for a moment.", true);
@@ -154,7 +153,7 @@ public final class Scaffold extends Module {
         descending = false;
         rotatedThisTick = false;
         agePlaced();
-        if (!inGame() || mc.player.isSpectator() || mc.player.isPassenger()) {
+        if (mc.player.isSpectator() || mc.player.isPassenger()) {
             return;
         }
         // The input object is swapped for a silent one by Freecam.
@@ -220,7 +219,7 @@ public final class Scaffold extends Module {
     // A block placed under a moving player often lands beside them instead.
     private boolean towerAllowed() {
         return !mc.player.getAbilities().flying
-            && (towerWhilstMoving.isOn() || mc.player.input.getMoveVector().lengthSquared() <= 1.0E-6f);
+            && (towerWhilstMoving.isOn() || !MovementUtil.hasInput());
     }
 
     private boolean open(BlockPos target) {

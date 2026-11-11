@@ -18,7 +18,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.boss.enderdragon.EndCrystal;
 import net.minecraft.world.level.block.BedBlock;
-import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 // Simple mode raises the step height. Legit mode sends the packets of a real jump.
@@ -51,6 +50,9 @@ public final class Step extends Module {
         .describe(ActiveWhen.ALWAYS, "Steps up sneaking or not.")
         .describe(ActiveWhen.SNEAKING, "Only steps up whilst you sneak.")
         .describe(ActiveWhen.NOT_SNEAKING, "Never steps up whilst you sneak.");
+    private final BoolSetting sneakOffEdges = new BoolSetting("Sneak off edges",
+        "Sneaking only holds you at drops deeper than the step height. Does nothing whilst EdgeGuard is on.",
+        false);
     private final BoolSetting inWater = new BoolSetting("Whilst swimming",
         "Lifts you onto a bank you swim into. Reaches as high as the step does on land.", true);
     private final BoolSetting safeStep = new BoolSetting("Safe step",
@@ -96,9 +98,9 @@ public final class Step extends Module {
     private boolean vehicleWasOnGround;
 
     public Step() {
-        super("Step", "Step up full blocks without jumping.", Category.MOVEMENT);
-        addSettings(mode, height, activeWhen, inWater, safeStep, safeHealth, healthLimit,
-            safeCrystals, stepDown, downDistance, downSpeed, edgeGuardWins,
+        super("Step", "Lets you step up full blocks without jumping.", Category.MOVEMENT);
+        addSettings(mode, height, activeWhen, sneakOffEdges, inWater, safeStep, safeHealth,
+            healthLimit, safeCrystals, stepDown, downDistance, downSpeed, edgeGuardWins,
             downVehicles);
         searchTags("reverse step", "step down");
     }
@@ -129,12 +131,26 @@ public final class Step extends Module {
             && safeHeight > 0;
     }
 
+    // Read by PlayerMixin. How deep a drop a sneaker walks down. The game probes by the
+    // step height and a raised one would walk them off every drop it covers. EdgeGuard
+    // needs the plain depth to hold anyone.
+    public float edgeProbe(float plain) {
+        if (!isEnabled() || !sneakOffEdges.isOn() || Modules.enabled(EdgeGuard.class)) {
+            return plain;
+        }
+        return Math.max(plain, (float) maxRise());
+    }
+
+    // The tallest ledge the mode climbs.
+    private double maxRise() {
+        return mode.is(Mode.LEGIT) ? LEGIT_LIMIT : height.getValue();
+    }
+
     private boolean allowed() {
         boolean sneaking = mc.player.isShiftKeyDown();
         if (activeWhen.is(ActiveWhen.SNEAKING) && !sneaking) {
             return false;
         }
-        // The sneak edge check uses the step height as its drop probe.
         if (activeWhen.is(ActiveWhen.NOT_SNEAKING) && sneaking) {
             return false;
         }
@@ -150,23 +166,15 @@ public final class Step extends Module {
         return (float) ((EntityUtil.totalHealth(mc.player) - damage) / EntityUtil.HEART);
     }
 
-    // The worst a crystal around could do with the player's box moved by the offset.
-    // The box is put back before anything else can read it.
+    // The worst a crystal around could do to the player moved by the offset.
     private double crystalDamageAt(Vec3 offset) {
-        AABB box = mc.player.getBoundingBox();
-        mc.player.setBoundingBox(box.move(offset));
-        try {
-            double worst = 0;
-            for (Entity entity : mc.level.entitiesForRendering()) {
-                if (entity instanceof EndCrystal && entity.isAlive()) {
-                    worst = Math.max(worst,
-                        ExplosionUtil.crystalDamage(mc.player, entity.position(), offset));
-                }
+        double worst = 0;
+        for (Entity entity : mc.level.entitiesForRendering()) {
+            if (entity instanceof EndCrystal && entity.isAlive()) {
+                worst = Math.max(worst, ExplosionUtil.crystalDamage(mc.player, entity.position(), offset));
             }
-            return worst;
-        } finally {
-            mc.player.setBoundingBox(box);
         }
+        return worst;
     }
 
     // True when standing at the offset is no worse than where the player is now.
@@ -197,7 +205,7 @@ public final class Step extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || mc.player.isPassenger() || jesusLifting()) {
+        if (mc.player.isPassenger() || jesusLifting()) {
             legitStage = 0;
             return;
         }
@@ -252,10 +260,6 @@ public final class Step extends Module {
         return jesus != null && jesus.lifting();
     }
 
-    private static boolean pushing() {
-        return mc.player.input.getMoveVector().lengthSquared() >= 1.0E-6f;
-    }
-
     private static double ledgeRise() {
         return MovementUtil.ledgeRise(mc.player, MovementUtil.inputDirection());
     }
@@ -270,7 +274,7 @@ public final class Step extends Module {
             return;
         }
         if (mc.player.onClimbable() || mc.player.isInLava()
-            || mc.player.input.keyPresses.jump() || !pushing()) {
+            || mc.player.input.keyPresses.jump() || !MovementUtil.hasInput()) {
             return;
         }
         double rise = ledgeRise();
@@ -302,12 +306,11 @@ public final class Step extends Module {
     // The game only steps whilst the feet are on the ground.
     // A swimmer pushing against a bank is given the lift as speed instead.
     private void stepFromWater() {
-        if (!mc.player.horizontalCollision || mc.player.input.keyPresses.jump() || !pushing()) {
+        if (!mc.player.horizontalCollision || mc.player.input.keyPresses.jump() || !MovementUtil.hasInput()) {
             return;
         }
         double rise = ledgeRise();
-        double limit = mode.is(Mode.LEGIT) ? LEGIT_LIMIT : height.getValue();
-        if (rise <= 0 || rise > limit) {
+        if (rise <= 0 || rise > maxRise()) {
             return;
         }
         Vec3 velocity = mc.player.getDeltaMovement();

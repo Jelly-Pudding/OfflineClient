@@ -32,7 +32,7 @@ public final class FastFall extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || mc.player.onGround() || !MovementUtil.inPlainAir(mc.player)) {
+        if (mc.player.onGround() || !MovementUtil.inPlainAir(mc.player)) {
             return;
         }
         Vec3 velocity = mc.player.getDeltaMovement();

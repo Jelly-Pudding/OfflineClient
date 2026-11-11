@@ -8,6 +8,7 @@ import com.jellypudding.offlineclient.render.DrawBatch;
 import com.jellypudding.offlineclient.render.StickFigure;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.AwayView;
 import com.jellypudding.offlineclient.util.EntityColors;
 import com.jellypudding.offlineclient.util.EntityFilter;
 import net.minecraft.world.entity.Entity;
@@ -16,13 +17,13 @@ import java.util.List;
 
 public final class Skeletons extends Module {
 
-    private final EntityFilter filter = EntityFilter.living("Draw", "drawn", true,
+    private final EntityFilter filter = EntityFilter.living("Draws", "drawn", true,
         EntityFilter.Pick.NONE, List.of());
     private final BoolSetting self = new BoolSetting("Self",
-        "Also draw your own skeleton in third person.", false);
+        "Also draws your own skeleton in third person and whilst Freecam or RemoteView has the camera.", false);
     private final NumberSetting range = new NumberSetting("Range",
         "Furthest an entity can be and still show.", 128, 16, 256, 8, " blocks").min(1);
-    private final EntityColors colors = new EntityColors(EntityColors.Mode.TYPE);
+    private final EntityColors colors = new EntityColors(EntityColors.Mode.TYPE).withoutItems();
 
     public Skeletons() {
         super("Skeletons", "Draws players and mobs built like them as stick figures through walls.",
@@ -55,7 +56,7 @@ public final class Skeletons extends Module {
             return false;
         }
         if (entity == mc.player) {
-            return self.isOn() && Freecam.ownBodyVisible();
+            return self.isOn() && AwayView.ownBodyVisible();
         }
         return filter.matches(entity);
     }

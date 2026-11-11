@@ -5,12 +5,30 @@ import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.EnumSetting;
+import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.RotationManager;
+import com.jellypudding.offlineclient.util.RotationPriority;
+import net.minecraft.core.Direction;
 
 // Holds the view at a fixed angle. Snap rounds it to the nearest clean heading instead.
+// The server can be held looking one of the six ways apart from the view. A block that
+// turns by the look of whoever places it goes down by the look the server holds. Stairs
+// and observers follow that look and pistons and dispensers face against it.
 public final class Rotation extends Module {
 
     public enum Lock { OFF, FIXED, SNAP }
+
+    public enum Facing {
+        OFF(null), NORTH(Direction.NORTH), EAST(Direction.EAST), SOUTH(Direction.SOUTH), WEST(Direction.WEST),
+        UP(Direction.UP), DOWN(Direction.DOWN);
+
+        private final Direction way;
+
+        Facing(Direction way) {
+            this.way = way;
+        }
+    }
 
     private static final float YAW_SNAP = 45;
     private static final float PITCH_SNAP = 30;
@@ -31,11 +49,18 @@ public final class Rotation extends Module {
     private final NumberSetting pitch = new NumberSetting("Pitch angle",
         "Degrees to hold the pitch at. Down is positive.", 0, -90, 90, 5, "°")
         .under(pitchLock, Lock.FIXED);
+    private final EnumSetting<Facing> facing = new EnumSetting<>("Place facing",
+        "The way the server takes you to look whilst your view stays free. A block that turns by your"
+            + " look is placed as if you looked that way.", Facing.OFF);
+    private final KeybindSetting facingKey = new KeybindSetting("Facing key",
+        "Looks that way whilst held. With no key set you look that way all the time.", KeybindSetting.UNBOUND)
+        .under(facing, () -> !facing.is(Facing.OFF));
 
     public Rotation() {
-        super("Rotation", "Locks your view to a chosen angle.", Category.PLAYER);
-        addSettings(yawLock, yaw, pitchLock, pitch);
-        searchTags("yaw lock", "pitch lock", "look lock");
+        super("Rotation", "Locks your view to a chosen angle or places blocks as if you looked a chosen way.",
+            Category.PLAYER);
+        addSettings(yawLock, yaw, pitchLock, pitch, facing, facingKey);
+        searchTags("yaw lock", "pitch lock", "look lock", "block rotation", "redstone placement");
     }
 
     @Override
@@ -62,6 +87,17 @@ public final class Rotation extends Module {
             case SNAP -> mc.player.setXRot(snap(mc.player.getXRot(), PITCH_SNAP));
             case OFF -> { }
         }
+        faceServer();
+    }
+
+    // Straight up or down keeps the yaw of the view.
+    private void faceServer() {
+        Direction way = facing.getValue().way;
+        if (way == null || facingKey.isBound() && !(facingKey.isHeld() && mc.gui.screen() == null)) {
+            return;
+        }
+        float yaw = way.getAxis().isVertical() ? mc.player.getYRot() : way.toYRot();
+        RotationManager.requestExact(yaw, -way.getStepY() * RotationManager.STRAIGHT_DOWN, RotationPriority.PLACE);
     }
 
     private void setYaw(float angle) {

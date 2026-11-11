@@ -13,8 +13,8 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.MoveGate;
 import com.jellypudding.offlineclient.util.PacketNames;
+import com.jellypudding.offlineclient.util.PacketUtil;
 import com.jellypudding.offlineclient.util.WorldWatch;
-import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.PacketType;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
@@ -95,17 +95,17 @@ public final class Latency extends Module {
         () -> offer(PacketNames.playOutgoing(), NEVER_OUTGOING))
         .onChange(this::resolve);
     private final NumberSetting outgoingDelay = new NumberSetting("Outgoing delay",
-        "Ticks each packet to the server is held.", 10, 1, 100, 1, " ticks").min(1);
+        "Ticks each packet to the server is held.", 10, 1, 100, 1, " ticks");
     private final ChoiceListSetting incoming = new ChoiceListSetting("Incoming",
         "Packets from the server held before the game handles them. Click to pick them. An"
             + " inventory packet holds the rest of its group with it.",
         () -> offer(PacketNames.playIncoming(), NEVER_INCOMING))
         .onChange(this::resolve);
     private final NumberSetting incomingDelay = new NumberSetting("Incoming delay",
-        "Ticks each packet from the server is held.", 10, 1, 100, 1, " ticks").min(1);
+        "Ticks each packet from the server is held.", 10, 1, 100, 1, " ticks");
     private final NumberSetting jitter = new NumberSetting("Jitter",
         "Holds each packet up to this many ticks longer at random. The order never changes.",
-        0, 0, 20, 1, " ticks").min(0);
+        0, 0, 20, 1, " ticks");
     private final EnumSetting<SwitchOff> switchOff = new EnumSetting<>("On switch off",
         "What happens to the packets still held when Latency is switched off.", SwitchOff.SEND)
         .describe(SwitchOff.SEND, "Sends every held packet in order straight away.")
@@ -235,7 +235,7 @@ public final class Latency extends Module {
             leaving = event;
             return;
         }
-        if (retaken.remove(packet) || !holdOutgoing.contains(packet.type()) || !playing()) {
+        if (retaken.remove(packet) || !holdOutgoing.contains(packet.type()) || !PacketUtil.inPlay()) {
             return;
         }
         if (packet instanceof ServerboundAcceptTeleportationPacket) {
@@ -256,7 +256,7 @@ public final class Latency extends Module {
         if (packet instanceof ClientboundRespawnPacket || packet instanceof ClientboundLoginPacket) {
             world++;
         }
-        if (!holdIncoming.contains(packet.type()) || !playing()) {
+        if (!holdIncoming.contains(packet.type()) || !PacketUtil.inPlay()) {
             return;
         }
         event.cancel();
@@ -268,17 +268,11 @@ public final class Latency extends Module {
         return tick + delay.getInt() + extra;
     }
 
-    // Only the game protocol is held. A server switch runs configuration on the same kinds.
-    private static boolean playing() {
-        ClientPacketListener listener = OfflineClient.MC.getConnection();
-        return listener != null && listener.getConnection().getPacketListener() == listener;
-    }
-
     // A lost connection makes every held packet meaningless. A new world only makes what the
     // server sent before it meaningless. Positions from before it are dropped once its
     // teleport is answered.
     private void release() {
-        if (!playing()) {
+        if (!PacketUtil.inPlay()) {
             forget();
             return;
         }
@@ -338,7 +332,7 @@ public final class Latency extends Module {
             if (!event.isCancelled()) {
                 ((Packet<ClientGamePacketListener>) event.getPacket()).handle(OfflineClient.MC.getConnection());
             }
-            if (!playing()) {
+            if (!PacketUtil.inPlay()) {
                 forget();
                 return;
             }
@@ -356,7 +350,7 @@ public final class Latency extends Module {
     // A lost message would break the chain the server checks every later one against.
     private void dropAllButChat() {
         inbound.clear();
-        if (playing()) {
+        if (PacketUtil.inPlay()) {
             Held next;
             while ((next = outbound.poll()) != null) {
                 if (CHAT.contains(next.packet().type())) {

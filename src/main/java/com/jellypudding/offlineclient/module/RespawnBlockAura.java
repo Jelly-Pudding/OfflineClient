@@ -9,11 +9,18 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.setting.Setting;
+import com.jellypudding.offlineclient.util.BlastLimits;
+import com.jellypudding.offlineclient.util.BlockMiner;
 import com.jellypudding.offlineclient.util.BlockUtil;
+import com.jellypudding.offlineclient.util.CoverMiner;
 import com.jellypudding.offlineclient.util.EntityFilter;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.ExplosionUtil;
 import com.jellypudding.offlineclient.util.FaceMode;
+import com.jellypudding.offlineclient.util.Hands;
+import com.jellypudding.offlineclient.util.Holes;
+import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.Modules;
@@ -23,14 +30,15 @@ import com.jellypudding.offlineclient.util.TargetFilter;
 import com.jellypudding.offlineclient.util.TargetPriority;
 import com.jellypudding.offlineclient.util.Targeting;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.ItemUseAnimation;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.function.Predicate;
 
@@ -40,6 +48,10 @@ public abstract class RespawnBlockAura extends Module implements Targeting {
 
     // Ticks between attempts to pull ammunition up from the backpack.
     private static final int MOVE_DELAY = 4;
+
+    // Ticks before a search for a block worth mining that found none runs again. Each search
+    // is a whole spot search for every block in the way.
+    private static final int SEARCH_DELAY = 10;
 
     // Where a module is allowed to take its blocks from.
     public enum TakeFrom { HOTBAR, INVENTORY }
@@ -56,17 +68,18 @@ public abstract class RespawnBlockAura extends Module implements Targeting {
     protected final BoolSetting doPlace;
     protected final NumberSetting placeDelay;
     protected final BoolSetting airPlace;
+    protected final BoolSetting clearWay;
     protected final BoolSetting doBreak;
-    protected final NumberSetting breakDelay;
     protected final NumberSetting minDamage;
-    protected final NumberSetting maxSelfDamage;
-    protected final BoolSetting antiSuicide;
+    protected final BlastLimits limits = new BlastLimits(8, 20);
     protected final BoolSetting autoSwitch;
     protected final BoolSetting swapBack;
     protected final EnumSetting<TakeFrom> takeFrom;
     protected final NumberSetting moveSlot;
+    protected final BoolSetting onlyOnUse;
     protected final BoolSetting pauseOnEat;
     protected final BoolSetting pauseOnDrink;
+    protected final BoolSetting pauseOnUse;
     protected final BoolSetting pauseOnMine;
     protected final BoolSetting pauseOnSneak;
     protected final BoolSetting pauseOnCrystals;
@@ -77,22 +90,26 @@ public abstract class RespawnBlockAura extends Module implements Targeting {
     protected final ColorSetting armedColor;
 
     private final SlotSwap slots = new SlotSwap();
+    private final CoverMiner miner;
     private final List<BlockPos> planned = new ArrayList<>();
     private BlockPos armed;
     private int placeTimer;
     private int breakTimer;
     private int moveTimer;
+    private int searchTimer;
     private LivingEntity target;
     protected String status;
 
-    // The escape is safe because addSettings is final and never hands the module out.
+    // Each aura brings options of its own. Those for placing sit under Place and the delays
+    // under Break. The escape is safe because addSettings is final and never hands the module out.
     @SuppressWarnings("this-escape")
-    protected RespawnBlockAura(String name, String description, String noun, float hue) {
+    protected RespawnBlockAura(String name, String description, String noun, float hue,
+                               List<? extends Setting<?>> placeOptions, List<NumberSetting> breakDelays) {
         super(name, description, Category.COMBAT);
         targetRange = new NumberSetting("Target range",
             "How far away enemies are considered.", 10, 2, 16, 0.5, " blocks");
         priority = TargetPriority.setting("Targets", TargetPriority.LOW_HEALTH);
-        filter = EntityFilter.living("Attack", "attacked", true, EntityFilter.Pick.NONE,
+        filter = EntityFilter.mortal("Attacks", "attacked", true, EntityFilter.Pick.NONE,
             List.of());
         placeRange = new NumberSetting("Place range",
             "Reach for placing " + noun + ".", 4.5, 1, 6, 0.1, " blocks");
@@ -103,20 +120,25 @@ public abstract class RespawnBlockAura extends Module implements Targeting {
         breakWallsRange = new NumberSetting("Break walls range",
             "Reach for " + noun + " hidden behind blocks.", 4, 0, 6, 0.1, " blocks");
         lineOfSight = new BoolSetting("Line of sight",
-            "Never act on a spot your eyes cannot see.", false);
-        doPlace = new BoolSetting("Place", "Place " + noun + " near the target.", true);
+            "Never acts on a spot your eyes cannot see.", false);
+        doPlace = new BoolSetting("Place", "Places " + noun + " near the target.", true);
         placeDelay = new NumberSetting("Place delay",
             "Ticks to wait between placements.", 3, 0, 20, 1, " ticks").under(doPlace);
         airPlace = new BoolSetting("Air place",
-            "Also place on spots with no block beside them to lean on.", true).under(doPlace);
-        doBreak = new BoolSetting("Break", "Set off " + noun + " that are already down.", true);
-        breakDelay = new NumberSetting("Break delay",
-            "Ticks to wait between detonations.", 2, 0, 20, 1, " ticks").under(doBreak);
+            "Also places on spots with no block beside them to lean on.", true).under(doPlace);
+        for (Setting<?> option : placeOptions) {
+            option.under(doPlace);
+        }
+        clearWay = new BoolSetting("Clear the way",
+            "Mines what keeps the blast off the target whilst there is nowhere to place. That is the block"
+                + " they stand in or a block beside their head or web or string in their body.", false)
+            .under(doPlace);
+        doBreak = new BoolSetting("Break", "Sets off " + noun + " that are already down.", true);
+        for (NumberSetting delay : breakDelays) {
+            delay.under(doBreak);
+        }
         minDamage = new NumberSetting("Min damage",
-            "Only act when the enemy would take at least this much.", 6, 0, 20, 0.5);
-        maxSelfDamage = new NumberSetting("Max self damage",
-            "Never take more than this from your own blast.", 8, 0, 20, 0.5);
-        antiSuicide = new BoolSetting("Anti suicide", "Never set off a blast that could kill you.", true);
+            "Only acts when the enemy would take at least this much.", 6, 0, 20, 0.5);
         autoSwitch = new BoolSetting("Auto switch",
             "Swaps to the " + noun + " itself. Off only works whilst you already hold them.", true);
         swapBack = new BoolSetting("Swap back",
@@ -128,8 +150,13 @@ public abstract class RespawnBlockAura extends Module implements Targeting {
         moveSlot = new NumberSetting("Move slot",
             "The hotbar slot they are moved into.", 9, 1, 9, 1).max(9)
             .under(takeFrom, TakeFrom.INVENTORY);
+        onlyOnUse = new BoolSetting("Only on use key",
+            "Only places and sets off " + noun + " whilst you hold the use key. With food or a bow or a"
+                + " shield in hand the key uses that item and the pauses below still apply.", false);
         pauseOnEat = new BoolSetting("Pause on eat", "Holds off whilst you eat.", true);
         pauseOnDrink = new BoolSetting("Pause on drink", "Holds off whilst you drink.", true);
+        pauseOnUse = new BoolSetting("Pause on use",
+            "Holds off whilst you use anything else such as a bow or a shield.", true);
         pauseOnMine = new BoolSetting("Pause on mine", "Holds off whilst you mine a block.", true);
         pauseOnSneak = new BoolSetting("Pause on sneak",
             "Holds off whilst you sneak.", true);
@@ -141,13 +168,21 @@ public abstract class RespawnBlockAura extends Module implements Targeting {
         placementStyle = new BoxStyle(BoxStyle.Shape.BOTH, hue).under(render);
         armedColor = new ColorSetting("Armed colour", "Colour of the block about to go off.", 0, false)
             .under(render);
+        miner = new CoverMiner(() -> !faceTarget.is(FaceMode.OFF), swing::getValue).under(clearWay);
         addSettings(targetRange, priority);
         addSettings(filter.settings());
         addSettings(targets.settings());
         addSettings(placeRange, placeWallsRange, breakRange, breakWallsRange, lineOfSight,
-            doPlace, placeDelay, airPlace, doBreak, breakDelay, minDamage, maxSelfDamage,
-            antiSuicide, autoSwitch, swapBack, takeFrom, moveSlot, pauseOnEat, pauseOnDrink,
-            pauseOnMine, pauseOnSneak, pauseOnCrystals, faceTarget, swing, render);
+            doPlace, placeDelay, airPlace);
+        addSettings(placeOptions.toArray(new Setting<?>[0]));
+        addSettings(clearWay);
+        addSettings(miner.settings());
+        addSettings(doBreak);
+        addSettings(breakDelays.toArray(new Setting<?>[0]));
+        addSettings(minDamage);
+        addSettings(limits.settings());
+        addSettings(autoSwitch, swapBack, takeFrom, moveSlot, onlyOnUse, pauseOnEat, pauseOnDrink,
+            pauseOnUse, pauseOnMine, pauseOnSneak, pauseOnCrystals, faceTarget, swing, render);
         addSettings(placementStyle.settings());
         addSettings(armedColor);
     }
@@ -162,16 +197,20 @@ public abstract class RespawnBlockAura extends Module implements Targeting {
     // Sets off the best block already down. True whenever one worth using is there.
     protected abstract boolean detonateBest(LivingEntity target);
 
-    protected abstract void placeBest(LivingEntity target);
+    // Places on the best spot. False when no spot is worth a block.
+    protected abstract boolean placeBest(LivingEntity target);
+
+    // True when a spot worth a block would open up with this block mined out.
+    protected abstract boolean spotWithout(LivingEntity target, BlockPos gone);
 
     @Override
     public String getSuffix() {
-        return suffix(nameOf(target), status);
+        return suffix(target == null ? null : EntityUtil.displayNameOf(target), status);
     }
 
     // The enemy picked this tick. Null whilst there is none.
     @Override
-    public LivingEntity getTarget() {
+    public LivingEntity getFought() {
         return target;
     }
 
@@ -180,12 +219,14 @@ public abstract class RespawnBlockAura extends Module implements Targeting {
         placeTimer = 0;
         breakTimer = 0;
         moveTimer = 0;
+        searchTimer = 0;
         slots.forget();
         clear();
     }
 
     @Override
     protected void onDisable() {
+        miner.stop();
         slots.restore();
         clear();
     }
@@ -202,35 +243,107 @@ public abstract class RespawnBlockAura extends Module implements Targeting {
         planned.clear();
         armed = null;
         status = null;
-        if (!inGame() || mc.player.isSpectator()) {
+        if (mc.player.isSpectator()) {
+            miner.stop();
             target = null;
             return;
         }
         placeTimer = Math.max(0, placeTimer - 1);
         breakTimer = Math.max(0, breakTimer - 1);
         moveTimer = Math.max(0, moveTimer - 1);
+        searchTimer = Math.max(0, searchTimer - 1);
 
         if (!explodesHere()) {
+            miner.stop();
             target = null;
             status = safeHereStatus();
             return;
         }
         target = bestTarget();
         if (target == null) {
+            miner.stop();
             restoreSlot();
             return;
         }
         String pause = pauseReason();
         if (pause != null) {
+            miner.rest();
             restoreSlot();
             status = pause;
             return;
         }
         boolean acted = doBreak.isOn() && detonateBest(target);
-        if (!acted && doPlace.isOn() && placeTimer == 0) {
-            placeBest(target);
-        }
+        boolean stuck = !acted && doPlace.isOn() && placeTimer == 0 && !placeBest(target);
+        // The slot taken last goes back first. The miner took its tool before anything was placed.
         restoreSlot();
+        if (stuck && clearWay.isOn() && hasAmmo()) {
+            mineObstacle(target);
+        } else {
+            miner.stop();
+        }
+    }
+
+    // Works on the block in the way. A feeder or the packer has the hand first and another
+    // miner the server's break.
+    private void mineObstacle(LivingEntity target) {
+        if (Hands.slotsTaken()) {
+            miner.rest();
+            return;
+        }
+        if (miner.waiting()) {
+            miner.rest();
+            status = "(waiting to mine)";
+            return;
+        }
+        BlockPos obstacle = obstacle(target);
+        if (obstacle == null || BlockMiner.minesOther(obstacle)) {
+            miner.stop();
+            return;
+        }
+        plan(obstacle);
+        status = "(clearing the way)";
+        miner.drive(obstacle, true, () -> { });
+    }
+
+    // The first block in the way whose loss opens a spot. The blocks of their own body come
+    // first and then the ones beside their head from the nearest on. One already being
+    // mined is kept whilst it stands there.
+    private BlockPos obstacle(LivingEntity target) {
+        BlockPos head = Holes.headBlock(target);
+        List<BlockPos> candidates = new ArrayList<>();
+        for (BlockPos pos = target.blockPosition(); pos.getY() <= head.getY(); pos = pos.above()) {
+            candidates.add(pos);
+        }
+        List<BlockPos> sides = new ArrayList<>();
+        for (Direction side : Direction.Plane.HORIZONTAL) {
+            sides.add(head.relative(side));
+        }
+        sides.sort(Comparator.comparingDouble(BlockUtil::distanceTo));
+        candidates.addAll(sides);
+        BlockPos mined = miner.target();
+        if (mined != null && candidates.contains(mined) && inTheWay(mined)) {
+            return mined;
+        }
+        if (searchTimer > 0) {
+            return null;
+        }
+        for (BlockPos pos : candidates) {
+            if (inTheWay(pos) && spotWithout(target, pos)) {
+                return pos;
+            }
+        }
+        searchTimer = SEARCH_DELAY;
+        return null;
+    }
+
+    // Something that can be mined and that a placement cannot simply replace.
+    private boolean inTheWay(BlockPos pos) {
+        return BlockUtil.isBreakable(pos) && !BlockUtil.isReplaceable(pos) && inReach(pos, false);
+    }
+
+    private boolean hasAmmo() {
+        int limit = takeFrom.is(TakeFrom.INVENTORY) ? InventoryUtil.WHOLE_INVENTORY : InventoryUtil.HOTBAR_SIZE;
+        return InventoryUtil.findSlot(this::isAmmo, limit) != -1;
     }
 
     // Any living thing the filter allows that is not a friend.
@@ -241,24 +354,26 @@ public abstract class RespawnBlockAura extends Module implements Targeting {
         return best instanceof LivingEntity living ? living : null;
     }
 
-    private static String nameOf(LivingEntity target) {
-        if (target instanceof Player player) {
-            return EntityUtil.nameOf(player);
-        }
-        return target == null ? null : target.getName().getString();
-    }
-
     private String pauseReason() {
+        if (onlyOnUse.isOn() && !InputUtil.physicallyHeld(mc.options.keyUse)) {
+            return "(use key up)";
+        }
         if (mc.player.isUsingItem()) {
             ItemUseAnimation use = mc.player.getUseItem().getUseAnimation();
-            if (pauseOnEat.isOn() && use == ItemUseAnimation.EAT) {
-                return "(eating)";
-            }
-            if (pauseOnDrink.isOn() && use == ItemUseAnimation.DRINK) {
-                return "(drinking)";
+            if (use == ItemUseAnimation.EAT) {
+                if (pauseOnEat.isOn()) {
+                    return "(eating)";
+                }
+            } else if (use == ItemUseAnimation.DRINK) {
+                if (pauseOnDrink.isOn()) {
+                    return "(drinking)";
+                }
+            } else if (pauseOnUse.isOn()) {
+                return "(using an item)";
             }
         }
-        if (pauseOnMine.isOn() && mc.gameMode.isDestroying()) {
+        // Its own work on a block in the way is no reason to hold off.
+        if (pauseOnMine.isOn() && mc.gameMode.isDestroying() && miner.target() == null) {
             return "(mining)";
         }
         if (pauseOnSneak.isOn() && Modules.sneaking()) {
@@ -293,7 +408,7 @@ public abstract class RespawnBlockAura extends Module implements Targeting {
     }
 
     // What a blast at the block would deal the target. Nought unless it beats the best yet
-    // and the minimum and leaves you safe. The ignored blocks are gone by then.
+    // and the minimum and spares you and your friends. The ignored blocks are gone by then.
     protected float damageBeating(float best, LivingEntity target, BlockPos blastAt, BlockPos... ignored) {
         Vec3 centre = Vec3.atCenterOf(blastAt);
         float damage = ExplosionUtil.blastDamage(target, centre, ExplosionUtil.RESPAWN_BLOCK_POWER,
@@ -301,8 +416,7 @@ public abstract class RespawnBlockAura extends Module implements Targeting {
         if (damage < minDamage.getFloat() || damage <= best) {
             return 0;
         }
-        return ExplosionUtil.selfSafe(centre, ExplosionUtil.RESPAWN_BLOCK_POWER, maxSelfDamage.getFloat(),
-            antiSuicide.isOn(), ignored) ? damage : 0;
+        return limits.allows(centre, ExplosionUtil.RESPAWN_BLOCK_POWER, ignored) ? damage : 0;
     }
 
     protected Iterable<BlockPos> nearby(LivingEntity target) {
@@ -311,9 +425,11 @@ public abstract class RespawnBlockAura extends Module implements Targeting {
         return BlockUtil.positionsAround(target.blockPosition(), (int) Math.ceil(furthest));
     }
 
-    // True when the spot may be placed on given the air place setting.
-    protected boolean placeable(BlockPos pos) {
-        return BlockUtil.isReplaceable(pos) && (airPlace.isOn() || BlockUtil.findPlaceSupport(pos) != null);
+    // True when the spot may be placed on given the air place setting. The block named as
+    // gone counts as mined out. Null names none.
+    protected boolean placeable(BlockPos pos, BlockPos gone) {
+        return (pos.equals(gone) || BlockUtil.isReplaceable(pos))
+            && (airPlace.isOn() || BlockUtil.findPlaceSupport(pos) != null);
     }
 
     // Turns towards the point when asked to. False whilst the turn is still on its way.
@@ -355,7 +471,7 @@ public abstract class RespawnBlockAura extends Module implements Targeting {
     }
 
     private void moveUp(Predicate<ItemStack> test) {
-        if (moveTimer > 0 || !InventoryUtil.canClick()) {
+        if (moveTimer > 0 || Modules.packing() || !InventoryUtil.canClick()) {
             return;
         }
         int from = InventoryUtil.findSlot(test, InventoryUtil.WHOLE_INVENTORY);
@@ -381,8 +497,9 @@ public abstract class RespawnBlockAura extends Module implements Targeting {
         placeTimer = placeDelay.getInt();
     }
 
-    protected void fired() {
-        breakTimer = breakDelay.getInt();
+    // Keeps the next charge or detonation back for this many ticks.
+    protected void holdBreak(int ticks) {
+        breakTimer = ticks;
     }
 
     protected boolean breakReady() {

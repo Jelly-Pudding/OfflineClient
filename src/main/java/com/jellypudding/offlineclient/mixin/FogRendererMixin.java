@@ -10,12 +10,10 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.fog.FogData;
 import net.minecraft.client.renderer.fog.FogRenderer;
 import net.minecraft.util.ARGB;
-import org.joml.Vector4f;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(FogRenderer.class)
@@ -25,23 +23,16 @@ public class FogRendererMixin {
     @Unique
     private static final float OFFLINECLIENT_FAR = 1.0E7f;
 
-    // The colour every fog band is drawn in.
-    @ModifyVariable(
-        method = "updateBuffer(Ljava/nio/ByteBuffer;ILorg/joml/Vector4f;FFFFFF)V",
-        at = @At("HEAD"), argsOnly = true)
-    private Vector4f recolourFog(Vector4f vanilla) {
-        Ambience ambience = Modules.get(Ambience.class);
-        if (ambience == null || !ambience.paintsFog()) {
-            return vanilla;
-        }
-        int colour = ambience.fogColor();
-        return ARGB.vector4fFromARGB32(ARGB.opaque(colour));
-    }
-
     @Inject(method = "setupFog", at = @At("RETURN"))
     private void onSetupFog(Camera camera, int renderDistance, DeltaTracker deltaTracker,
                             float skyDarken, ClientLevel level,
                             CallbackInfoReturnable<FogData> cir) {
+        FogData data = cir.getReturnValue();
+        // The fog bands and the colour the frame is cleared with both read this one colour.
+        Ambience ambience = Modules.get(Ambience.class);
+        if (ambience != null && ambience.paintsFog()) {
+            data.color = ARGB.vector4fFromARGB32(ARGB.opaque(ambience.fogColor()));
+        }
         ClearView clearView = Modules.active(ClearView.class);
         if (clearView == null) {
             return;
@@ -49,10 +40,6 @@ public class FogRendererMixin {
         // The blue underwater is mostly the short water fog. Pushing it away clears the tint.
         boolean underwater = clearView.blocksWater() && camera.getFluidInCamera() == FogType.WATER;
         if (!clearView.blocksFog() && !underwater) {
-            return;
-        }
-        FogData data = cir.getReturnValue();
-        if (data == null) {
             return;
         }
         data.environmentalStart = OFFLINECLIENT_FAR;

@@ -6,12 +6,13 @@ import com.jellypudding.offlineclient.event.events.KnockbackEvent;
 import com.jellypudding.offlineclient.event.events.PostMotionEvent;
 import com.jellypudding.offlineclient.event.events.PreMotionEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
+import com.jellypudding.offlineclient.mixinterface.ISprintReport;
 import com.jellypudding.offlineclient.modules.combat.AutoPearl;
-import com.jellypudding.offlineclient.modules.combat.BowAimbot;
 import com.jellypudding.offlineclient.modules.movement.AntiPush;
 import com.jellypudding.offlineclient.modules.movement.Flight;
 import com.jellypudding.offlineclient.modules.movement.HighJump;
 import com.jellypudding.offlineclient.modules.movement.HoleSnap;
+import com.jellypudding.offlineclient.modules.movement.NoClip;
 import com.jellypudding.offlineclient.modules.movement.NoKnockback;
 import com.jellypudding.offlineclient.modules.movement.LongJump;
 import com.jellypudding.offlineclient.modules.movement.NoSlowdown;
@@ -19,16 +20,15 @@ import com.jellypudding.offlineclient.modules.movement.EdgeGuard;
 import com.jellypudding.offlineclient.modules.movement.Sprint;
 import com.jellypudding.offlineclient.modules.movement.Step;
 import com.jellypudding.offlineclient.modules.movement.VehicleFly;
-import com.jellypudding.offlineclient.modules.player.AutoEat;
-import com.jellypudding.offlineclient.modules.player.AutoGap;
 import com.jellypudding.offlineclient.modules.player.FastBreak;
 import com.jellypudding.offlineclient.modules.player.LiquidInteract;
 import com.jellypudding.offlineclient.modules.player.NoMiningTrace;
 import com.jellypudding.offlineclient.modules.player.PortalMenus;
 import com.jellypudding.offlineclient.modules.player.Reach;
 import com.jellypudding.offlineclient.modules.render.AntiBlind;
-import com.jellypudding.offlineclient.modules.render.Freecam;
 import com.jellypudding.offlineclient.modules.world.AirPlace;
+import com.jellypudding.offlineclient.util.AwayView;
+import com.jellypudding.offlineclient.util.CrosshairClip;
 import com.jellypudding.offlineclient.util.Modules;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
@@ -61,13 +61,20 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(LocalPlayer.class)
-public abstract class LocalPlayerMixin extends AbstractClientPlayer {
+public abstract class LocalPlayerMixin extends AbstractClientPlayer implements ISprintReport {
 
     @Shadow
     public float portalEffectIntensity;
 
     @Shadow
     public float oPortalEffectIntensity;
+
+    @Shadow
+    private boolean wasSprinting;
+
+    // The tick of the last jump. A body that has never jumped holds no tick it could reach.
+    @Unique
+    private int offlineclient$jumpTick = Integer.MIN_VALUE;
 
     // Never called. The compiler only wants a constructor for the parent.
     private LocalPlayerMixin(ClientLevel level, GameProfile profile) {
@@ -96,6 +103,11 @@ public abstract class LocalPlayerMixin extends AbstractClientPlayer {
         OfflineClient.INSTANCE.getEventBus().post(PostMotionEvent.INSTANCE);
     }
 
+    @Override
+    public boolean offlineclient$toldSprinting() {
+        return wasSprinting;
+    }
+
     // Vanilla closes any screen the moment the portal effect starts. With no
     // screen in sight that branch never runs.
     @ModifyExpressionValue(method = "handlePortalTransitionEffect(Z)V",
@@ -106,10 +118,10 @@ public abstract class LocalPlayerMixin extends AbstractClientPlayer {
         return Modules.active(PortalMenus.class) == null ? original : null;
     }
 
-    // Both the sprint start and the sprint stop ask this.
+    // The sprint start and the double tap sprint timer ask this.
     @Inject(method = "isSlowDueToUsingItem()Z", at = @At("HEAD"), cancellable = true)
     private void onSlowDueToUsingItem(CallbackInfoReturnable<Boolean> cir) {
-        if (offlineclient$noSlowdown()) {
+        if (Modules.itemsKeepSpeed()) {
             cir.setReturnValue(false);
         }
     }
@@ -120,32 +132,10 @@ public abstract class LocalPlayerMixin extends AbstractClientPlayer {
             target = "Lnet/minecraft/client/player/LocalPlayer;isUsingItem()Z",
             ordinal = 0))
     private boolean wrapModifyInputItemUse(LocalPlayer instance, Operation<Boolean> original) {
-        if (offlineclient$noSlowdown()) {
+        if (Modules.itemsKeepSpeed()) {
             return false;
         }
         return original.call(instance);
-    }
-
-    @Unique
-    private static boolean offlineclient$noSlowdown() {
-        NoSlowdown noSlowdown = Modules.get(NoSlowdown.class);
-        if (noSlowdown != null && noSlowdown.skipsItems()) {
-            return true;
-        }
-        Sprint sprint = Modules.get(Sprint.class);
-        if (sprint != null && sprint.keepsSpeedWhilstUsing()) {
-            return true;
-        }
-        BowAimbot bowAimbot = Modules.get(BowAimbot.class);
-        if (bowAimbot != null && bowAimbot.suppressesSlowdown()) {
-            return true;
-        }
-        AutoEat autoEat = Modules.get(AutoEat.class);
-        if (autoEat != null && autoEat.suppressesSlowdown()) {
-            return true;
-        }
-        AutoGap autoGap = Modules.get(AutoGap.class);
-        return autoGap != null && autoGap.suppressesSlowdown();
     }
 
     @Override
@@ -168,13 +158,19 @@ public abstract class LocalPlayerMixin extends AbstractClientPlayer {
         return super.getJumpPower() + (highJump == null ? 0f : highJump.getAdditionalJumpMotion());
     }
 
+    // Every jump goes through here. A second jump in one tick would add the sprint push twice
+    // and the game jumps on its own whilst the key is held.
     @Override
     public void jumpFromGround() {
+        if (tickCount == offlineclient$jumpTick) {
+            return;
+        }
         HoleSnap holeSnap = Modules.get(HoleSnap.class);
         if (holeSnap != null && holeSnap.cancelsJump()) {
             return;
         }
         super.jumpFromGround();
+        offlineclient$jumpTick = tickCount;
         LongJump longJump = Modules.get(LongJump.class);
         if (longJump != null) {
             longJump.onJump();
@@ -326,8 +322,10 @@ public abstract class LocalPlayerMixin extends AbstractClientPlayer {
     private void onMoveTowardsClosestSpace(CallbackInfo ci) {
         NoKnockback noKnockback = Modules.get(NoKnockback.class);
         AutoPearl autoPearl = Modules.get(AutoPearl.class);
+        NoClip noClip = Modules.get(NoClip.class);
         if (noKnockback != null && noKnockback.blocksBlockPush()
-            || autoPearl != null && autoPearl.holdsPhase()) {
+            || autoPearl != null && autoPearl.holdsPhase()
+            || noClip != null && noClip.holdsInBlock()) {
             ci.cancel();
         }
     }
@@ -410,15 +408,15 @@ public abstract class LocalPlayerMixin extends AbstractClientPlayer {
     }
 
 
-    // Freecam swaps the whole ray for one cast from the camera.
+    // A view that is away can swap the whole ray for one cast from the camera.
     @Inject(method = "raycastHitResult(FLnet/minecraft/world/entity/Entity;)Lnet/minecraft/world/phys/HitResult;",
         at = @At("HEAD"),
         cancellable = true)
     private void onPickFromCamera(float partialTicks, Entity camera,
                                   CallbackInfoReturnable<HitResult> cir) {
-        Freecam freecam = Modules.active(Freecam.class);
-        if (freecam != null && freecam.interactsFromCamera()) {
-            cir.setReturnValue(freecam.pick((LocalPlayer) (Object) this, partialTicks));
+        AwayView view = AwayView.active();
+        if (view != null && view.interactsFromCamera()) {
+            cir.setReturnValue(view.pick((LocalPlayer) (Object) this, partialTicks));
         }
     }
 
@@ -430,10 +428,6 @@ public abstract class LocalPlayerMixin extends AbstractClientPlayer {
                                     CallbackInfoReturnable<HitResult> cir) {
         LocalPlayer player = (LocalPlayer) (Object) this;
         HitResult result = cir.getReturnValue();
-        if (result == null || camera == null) {
-            return;
-        }
-
         NoMiningTrace noTrace = Modules.get(NoMiningTrace.class);
         if (noTrace != null && result instanceof EntityHitResult hit && noTrace.ignores(hit.getEntity())) {
             result = offlineclient$clip(player, camera, partialTicks, ClipContext.Fluid.NONE);
@@ -463,7 +457,19 @@ public abstract class LocalPlayerMixin extends AbstractClientPlayer {
         double range = player.blockInteractionRange();
         Vec3 eye = camera.getEyePosition(partialTicks);
         Vec3 end = eye.add(camera.getViewVector(partialTicks).scale(range));
-        return player.level().clip(
-            new ClipContext(eye, end, ClipContext.Block.OUTLINE, fluid, player));
+        return player.level().clip(new CrosshairClip(eye, end, fluid, player));
+    }
+
+    // The crosshair casts its block ray as Entity.pick does but with the shapes CrosshairClip hands
+    // out. Entities are then picked up to wherever it ends.
+    @WrapOperation(method = "pick(Lnet/minecraft/world/entity/Entity;DDF)Lnet/minecraft/world/phys/HitResult;",
+        at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/world/entity/Entity;pick(DFZ)Lnet/minecraft/world/phys/HitResult;"))
+    private static HitResult onPickBlock(Entity camera, double range, float partialTicks, boolean fluids,
+                                         Operation<HitResult> original) {
+        Vec3 eye = camera.getEyePosition(partialTicks);
+        Vec3 end = eye.add(camera.getViewVector(partialTicks).scale(range));
+        return camera.level().clip(new CrosshairClip(eye, end,
+            fluids ? ClipContext.Fluid.ANY : ClipContext.Fluid.NONE, camera));
     }
 }

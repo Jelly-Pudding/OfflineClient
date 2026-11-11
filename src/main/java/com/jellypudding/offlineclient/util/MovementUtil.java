@@ -25,10 +25,8 @@ public final class MovementUtil {
         Abilities abilities = player.getAbilities();
         abilities.flying = true;
         abilities.setFlyingSpeed(0);
-        Input keys = player.input.keyPresses;
-        double vy = (keys.jump() ? vertical : 0) - (keys.shift() ? vertical : 0);
         Vec3 heading = inputDirection();
-        player.setDeltaMovement(heading.x * horizontal, vy, heading.z * horizontal);
+        player.setDeltaMovement(heading.x * horizontal, verticalInput() * vertical, heading.z * horizontal);
     }
 
     // Creative and spectator players keep their flight but get the vanilla speed back.
@@ -44,7 +42,8 @@ public final class MovementUtil {
         }
     }
 
-    // The server opens the elytra on this packet alone.
+    // The server opens a glide on this command and closes one that is already open.
+    // GlideSwitch is the way to ask for either.
     public static void sendStartGlide() {
         LocalPlayer player = OfflineClient.MC.player;
         player.connection.send(new ServerboundPlayerCommandPacket(player,
@@ -76,8 +75,12 @@ public final class MovementUtil {
 
     public static final double GRAVITY = LivingEntity.DEFAULT_BASE_GRAVITY;
 
-    // The pace of a plain sprint on flat ground.
-    public static final double SPRINT_SPEED = 0.2873;
+    // The friction of plain ground. Ice is slicker and slime holds the push back.
+    public static final float GROUND_FRICTION = 0.6f;
+
+    // A plain sprint settles here on plain ground. The keys push 0.13 trimmed to 0.98 each tick
+    // and the ground keeps 0.6 times 0.91 of the speed.
+    public static final double SPRINT_SPEED = 0.2806;
 
     // Each level of Speed adds a fifth and each level of Slowness takes off
     // just under a sixth.
@@ -99,7 +102,23 @@ public final class MovementUtil {
 
     // True whilst any movement key is held.
     public static boolean hasInput() {
-        return inputDirection() != Vec3.ZERO;
+        LocalPlayer player = OfflineClient.MC.player;
+        return player != null && hasInput(player);
+    }
+
+    public static boolean hasInput(LocalPlayer player) {
+        Vec2 move = player.input.getMoveVector();
+        return move.x != 0 || move.y != 0;
+    }
+
+    // One whilst jump alone is held and minus one whilst sneak alone is.
+    public static int verticalInput() {
+        LocalPlayer player = OfflineClient.MC.player;
+        if (player == null) {
+            return 0;
+        }
+        Input keys = player.input.keyPresses;
+        return (keys.jump() ? 1 : 0) - (keys.shift() ? 1 : 0);
     }
 
     // True whilst nothing but gravity is acting on the player.
@@ -119,13 +138,10 @@ public final class MovementUtil {
     // The same for a player turned to the given yaw.
     public static Vec3 inputDirection(float facing) {
         LocalPlayer player = OfflineClient.MC.player;
-        if (player == null) {
+        if (player == null || !hasInput(player)) {
             return Vec3.ZERO;
         }
         Vec2 move = player.input.getMoveVector();
-        if (move.x == 0 && move.y == 0) {
-            return Vec3.ZERO;
-        }
         double yaw = Math.toRadians(facing);
         double sin = Math.sin(yaw);
         double cos = Math.cos(yaw);

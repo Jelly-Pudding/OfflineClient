@@ -2,8 +2,11 @@ package com.jellypudding.offlineclient.module;
 
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.TickEvent;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.MenuClicks;
+import com.jellypudding.offlineclient.util.Modules;
+import com.jellypudding.offlineclient.util.ThrowOut;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.item.Item;
@@ -43,6 +46,19 @@ public abstract class StationModule<M extends AbstractContainerMenu> extends Mod
     protected void closed() {
     }
 
+    // Runs every tick whilst no station of the module's kind is open. A module that opens
+    // its station by itself reaches out for it here.
+    protected void away() {
+    }
+
+    // True whilst the module may reach out for a station by itself. A meal and ShulkerPacker
+    // and an item in use come first and nothing is opened over another screen. A fight comes
+    // first too unless the module is there to serve one.
+    protected final boolean handsFree(boolean inFights) {
+        return inGame() && mc.gui.screen() == null && !mc.player.isSpectator() && !mc.player.isUsingItem()
+            && !Hands.slotsTaken() && (inFights || !Modules.fighting());
+    }
+
     @Override
     protected void onEnable() {
         menu = null;
@@ -70,14 +86,30 @@ public abstract class StationModule<M extends AbstractContainerMenu> extends Mod
         return ticks - clockStart >= STALL_TICKS;
     }
 
-    // Shift clicks a station slot into the inventory. When nothing moves the module stops and
-    // the message ends with what the move was for.
+    // Shift clicks a station slot into the inventory. When nothing moves the module cannot go
+    // on and the message ends with what the move was for.
     protected final boolean moveOut(M menu, int slot, String what) {
         if (MenuClicks.quickMoved(menu, slot)) {
             return true;
         }
-        disable("No room in the inventory " + what);
+        outOfRoom("No room in the inventory " + what);
         return false;
+    }
+
+    // The inventory had no room for a move. The module stops and says why unless it knows a
+    // better way to end its work.
+    protected void outOfRoom(String reason) {
+        disable(reason);
+    }
+
+    // Takes a finished stack out of a station slot. It goes into the inventory or onto the
+    // ground whilst the module's Throw out row is ticked. False once the module could not go on.
+    protected final boolean takeFinished(ThrowOut out, M menu, int slot, String what) {
+        if (!out.isOn()) {
+            return moveOut(menu, slot, what);
+        }
+        out.from(menu, slot);
+        return true;
     }
 
     @Subscribe
@@ -93,7 +125,11 @@ public abstract class StationModule<M extends AbstractContainerMenu> extends Mod
             awaitTicks = 0;
             clockStart = ticks;
         }
-        if (open == null || awaiting(open) || --wait > 0 || !open.getCarried().isEmpty()) {
+        if (open == null) {
+            away();
+            return;
+        }
+        if (awaiting(open) || --wait > 0 || !open.getCarried().isEmpty()) {
             return;
         }
         wait = pace;

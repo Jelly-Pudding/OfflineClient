@@ -14,16 +14,20 @@ import net.minecraft.client.gui.screens.Screen;
 import java.util.List;
 import java.util.Locale;
 
-// The bare name toggles the overlay like any module. This opens the drag editor or puts every
-// option of one piece back. The piece switch stays as it is.
+// The bare name toggles the overlay like any module and hudeditor alone opens the drag editor.
+// The word after hud opens the editor or puts every option of one piece back or adds and removes
+// a piece of a kind there can be several of. A reset leaves the piece switch as it is.
 public final class HudCommand extends Command {
 
     private static final String EDIT = "edit";
     private static final String RESET = "reset";
+    private static final String ADD = "add";
+    private static final String REMOVE = "remove";
 
     public HudCommand() {
-        super("hud", "Opens the editor where you drag the overlay pieces about or puts one piece back.",
-            "hud [edit|reset <piece>]", "hudeditor");
+        super("hud", "Puts one overlay piece back or adds and removes a piece. Edit and hudeditor open the editor"
+            + " where you drag the pieces about.", "hud <edit|reset <piece>|add <kind>|remove <piece>> or hudeditor",
+            "hudeditor");
     }
 
     @Override
@@ -35,6 +39,10 @@ public final class HudCommand extends Command {
             OfflineClient.MC.schedule(() -> OfflineClient.MC.gui.setScreen(editor));
         } else if (word.equals(RESET) && args.length > 1) {
             reset(words(args, 1));
+        } else if (word.equals(ADD) && args.length > 1) {
+            add(words(args, 1));
+        } else if (word.equals(REMOVE) && args.length > 1) {
+            remove(words(args, 1));
         } else {
             usage();
         }
@@ -47,6 +55,26 @@ public final class HudCommand extends Command {
             return;
         }
         resetAll(piece.getName(), piece.getOptions());
+    }
+
+    // The overlay says what came and how to take it back.
+    private static void add(String typed) {
+        HudModule hud = Modules.get(HudModule.class);
+        if (hud != null && !hud.families().add(typed)) {
+            ChatUtil.error("The overlay cannot add " + ChatUtil.withArticle(typed) + ". Try "
+                + String.join(" or ", hud.families().nouns()) + ".");
+        }
+    }
+
+    // The overlay says what went and how to bring it back.
+    private static void remove(String typed) {
+        HudModule hud = Modules.get(HudModule.class);
+        HudElement piece = piece(typed);
+        if (hud == null || piece == null) {
+            ChatUtil.error("There is no HUD piece called " + typed + ".");
+        } else if (!hud.families().remove(piece)) {
+            ChatUtil.error(piece.getName() + " always stays on the list. Switch it off to hide it.");
+        }
     }
 
     // Spaces and case are ignored. Null when no piece has the name.
@@ -69,12 +97,22 @@ public final class HudCommand extends Command {
     @Override
     public List<String> complete(String[] tokens, int index, String current) {
         if (index == 1) {
-            return CommandManager.filter(current, List.of(EDIT, RESET));
+            return CommandManager.filter(current, List.of(EDIT, RESET, ADD, REMOVE));
         }
-        if (index == 2 && tokens[1].equalsIgnoreCase(RESET)) {
-            return CommandManager.filter(current,
-                pieces().stream().map(element -> Setting.idFor(element.getName())).toList());
+        HudModule hud = Modules.get(HudModule.class);
+        if (index != 2 || hud == null) {
+            return List.of();
         }
-        return List.of();
+        List<String> offered = switch (tokens[1].toLowerCase(Locale.ROOT)) {
+            case RESET -> ids(pieces());
+            case REMOVE -> ids(hud.families().removable());
+            case ADD -> hud.families().nouns().stream().map(Setting::idFor).toList();
+            default -> List.of();
+        };
+        return CommandManager.filter(current, offered);
+    }
+
+    private static List<String> ids(List<HudElement> pieces) {
+        return pieces.stream().map(element -> Setting.idFor(element.getName())).toList();
     }
 }

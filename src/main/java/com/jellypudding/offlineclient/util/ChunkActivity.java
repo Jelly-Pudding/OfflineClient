@@ -98,9 +98,8 @@ public final class ChunkActivity {
     // nearly every chunk underground.
     private static final int ANTI_XRAY_SIGNS = 2;
 
-    // Ores the ores tag leaves out. Ore veins leave the raw blocks.
-    private static final Set<Block> EXTRA_ORES = Set.of(Blocks.ANCIENT_DEBRIS, Blocks.RAW_IRON_BLOCK,
-        Blocks.RAW_COPPER_BLOCK, Blocks.GILDED_BLACKSTONE);
+    // The raw blocks ore veins leave.
+    private static final Set<Block> VEIN_BLOCKS = Set.of(Blocks.RAW_IRON_BLOCK, Blocks.RAW_COPPER_BLOCK);
 
     private ChunkActivity() {
     }
@@ -217,7 +216,7 @@ public final class ChunkActivity {
 
     // Ores and the blocks ore veins leave. Anti xray engines hide these.
     private static boolean isOre(BlockState state) {
-        return state.is(BlockTags.ORES) || EXTRA_ORES.contains(state.getBlock());
+        return BlockUtil.isOre(state) || VEIN_BLOCKS.contains(state.getBlock());
     }
 
     // What a ticking chunk can lose with nobody there. Random ticks grow and decay and melt

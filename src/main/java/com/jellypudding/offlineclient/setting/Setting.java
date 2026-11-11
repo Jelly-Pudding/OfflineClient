@@ -65,7 +65,7 @@ public abstract class Setting<T> {
 
     // How the value reads in the interface and in chat.
     public String getValueString() {
-        return String.valueOf(value);
+        return String.valueOf(getValue());
     }
 
     public T getValue() {
@@ -143,6 +143,16 @@ public abstract class Setting<T> {
         return under(parent, () -> allowed.contains(parent.getValue()));
     }
 
+    // Makes the rows of a group sub options shown whilst the parent holds the value. A row that
+    // is a sub option already stays under its own row.
+    public static <E extends Enum<E>> void under(Setting<?>[] rows, EnumSetting<E> parent, E value) {
+        for (Setting<?> row : rows) {
+            if (row.parent == null) {
+                row.under(parent, value);
+            }
+        }
+    }
+
     // A sub option only shows whilst its parent does.
     public boolean isVisible() {
         return !internal && visibility.get() && (parent == null || parent.isVisible());
@@ -168,6 +178,11 @@ public abstract class Setting<T> {
 
     public boolean hasDefault() {
         return !noDefault;
+    }
+
+    // False for a row that keeps nothing of its own. The config leaves its value out.
+    public boolean saves() {
+        return true;
     }
 
     public Setting<?> getParent() {

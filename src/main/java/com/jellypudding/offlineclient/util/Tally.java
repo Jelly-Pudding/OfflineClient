@@ -1,6 +1,7 @@
 package com.jellypudding.offlineclient.util;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -9,10 +10,17 @@ import java.util.Map;
 // names keep the order they were first counted in.
 public final class Tally {
 
+    // The most names a short list spells out.
+    private static final int FEW = 3;
+
     private final Map<String, Integer> counts = new LinkedHashMap<>();
 
     public void add(String name) {
-        counts.merge(name, 1, Integer::sum);
+        add(name, 1);
+    }
+
+    public void add(String name, int count) {
+        counts.merge(name, count, Integer::sum);
     }
 
     public boolean isEmpty() {
@@ -48,7 +56,17 @@ public final class Tally {
         if (name.endsWith("f")) {
             return count + " " + name.substring(0, name.length() - 1) + "ves";
         }
+        if (name.length() > 1 && name.endsWith("y") && "aeiou".indexOf(name.charAt(name.length() - 2)) < 0) {
+            return count + " " + name.substring(0, name.length() - 1) + "ies";
+        }
         return count + " " + name + "s";
+    }
+
+    // The first few names and how many more there are such as Stone and Dirt and Sand and 2 more.
+    public static String firstFew(Collection<String> names) {
+        List<String> shown = names.stream().limit(FEW).toList();
+        String joined = String.join(" and ", shown);
+        return names.size() > shown.size() ? joined + " and " + (names.size() - shown.size()) + " more" : joined;
     }
 
     // What a clear button says such as Cleared 3 finds or Nothing to clear.

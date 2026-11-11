@@ -8,6 +8,7 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.Ignition;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.UseBudget;
@@ -33,16 +34,16 @@ public final class Flamethrower extends Module {
         List.of(EntityTypes.PIG, EntityTypes.COW, EntityTypes.SHEEP,
             EntityTypes.CHICKEN, EntityTypes.RABBIT));
     private final NumberSetting range = new NumberSetting("Range",
-        "How close an animal has to be.", 5, 1, 6, 0.1).min(1);
+        "How close an animal has to be.", 5, 1, 6, 0.1, " blocks");
     private final NumberSetting interval = new NumberSetting("Interval",
-        "Ticks between one light and the next.", 5, 1, 20, 1, " ticks").min(1);
+        "Ticks between one light and the next.", 5, 1, 20, 1, " ticks");
     private final BoolSetting babies = new BoolSetting("Babies",
         "Also sets fire to young animals.", false);
     private final Ignition ignition = new Ignition();
     private final BoolSetting saveDrops = new BoolSetting("Save drops",
         "Puts the fire out on a nearly dead animal to save its drops.", true);
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Turn towards the fire on the server side.", true);
+        "Turns towards the fire on the server side.", true);
 
     private final SlotSwap slots = new SlotSwap();
     private int ticks;
@@ -74,7 +75,7 @@ public final class Flamethrower extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || mc.player.isSpectator()) {
+        if (mc.player.isSpectator() || Hands.taken()) {
             return;
         }
         ticks++;
@@ -119,7 +120,7 @@ public final class Flamethrower extends Module {
         if (!entities.contains(entity.getType()) || !entity.isAlive()) {
             return false;
         }
-        if (entity.isInPowderSnow || entity.isInWaterOrRain() || entity.fireImmune()) {
+        if (entity.isInPowderSnow || EntityUtil.inWaterOrRain(entity) || entity.fireImmune()) {
             return false;
         }
         return babies.isOn() || !(entity instanceof LivingEntity living) || !living.isBaby();

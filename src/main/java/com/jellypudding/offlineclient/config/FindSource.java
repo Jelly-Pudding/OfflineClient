@@ -1,6 +1,6 @@
 package com.jellypudding.offlineclient.config;
 
-import com.jellypudding.offlineclient.setting.Setting;
+import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.util.Modules;
 
 import java.util.List;
@@ -18,12 +18,7 @@ public interface FindSource {
 
     // The log of the module with that name whatever its case and spaces. Null when none.
     static FindLog named(String name) {
-        String wanted = Setting.idFor(name);
-        for (FindLog log : logs()) {
-            if (Setting.idFor(log.name()).equals(wanted)) {
-                return log;
-            }
-        }
-        return null;
+        return OfflineClient.INSTANCE.getModuleManager().get(name) instanceof FindSource source
+            ? source.findLog() : null;
     }
 }

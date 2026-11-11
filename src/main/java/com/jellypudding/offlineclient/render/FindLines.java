@@ -53,7 +53,7 @@ public final class FindLines {
             2000, 50, 10000, 50, " blocks").min(1).under(tracers);
         hideWithin = new NumberSetting("Hide within",
             "Drops the line to a find once you are this close to it.", 16, 0, 64, 1, " blocks")
-            .min(0).under(tracers);
+            .under(tracers);
         drawRange = new NumberSetting("Draw range",
             "Finds further away than this get no box or column. They are still kept.",
             512, 16, 4096, 16, " blocks").min(1);

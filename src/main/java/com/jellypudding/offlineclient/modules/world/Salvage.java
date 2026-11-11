@@ -14,7 +14,6 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
-import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.ChunkScanner;
 import com.jellypudding.offlineclient.util.NearestCut;
 import com.jellypudding.offlineclient.util.Tally;
@@ -50,7 +49,7 @@ public final class Salvage extends Module {
         .under(targets, Targets.LIST);
     private final NumberSetting range = new NumberSetting("Range",
         "How many chunks out from your own to search.", 1, 0, 8, 1, " chunks")
-        .min(0).max(ChunkMap.MAX_VIEW_DISTANCE);
+        .max(ChunkMap.MAX_VIEW_DISTANCE);
     private final NumberSetting height = new NumberSetting("Height",
         "How far above and below your feet to search.", 30, 1, 128, 1, " blocks").min(0);
     private final EnumSetting<MiningTrip.Movement> movement = MiningTrip.movementSetting();
@@ -126,7 +125,7 @@ public final class Salvage extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || mc.player.isSpectator()) {
+        if (mc.player.isSpectator()) {
             return;
         }
         refreshTest();
@@ -160,7 +159,7 @@ public final class Salvage extends Module {
         boolean working = miner.collect(collectDrops.isOn()).tick(this::wanted, finder, rotate.isOn(), walk);
         // A chunk being searched again after a break leaves a gap in the list for a moment.
         if (!working && walk && scanner.idle()) {
-            ChatUtil.message("§bSalvage §7mined every block it could reach.");
+            tell("mined every block it could reach.");
             setEnabled(false);
         }
     }
@@ -194,10 +193,10 @@ public final class Salvage extends Module {
                 disable("Salvage found nothing to mine near you.");
                 return false;
             }
-            ChatUtil.message("§bSalvage §7found nothing yet and mines whatever comes in reach.");
+            tell("found nothing yet and mines whatever comes in reach.");
             return true;
         }
-        ChatUtil.message("§bSalvage §7found §f" + Tally.counted(near.size(), "block") + "§7 of §f"
+        tell("found §f" + Tally.counted(near.size(), "block") + "§7 of §f"
             + Tally.counted(kindsOf(near).size(), "kind") + "§7.");
         return true;
     }

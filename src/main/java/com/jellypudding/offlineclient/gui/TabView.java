@@ -1,7 +1,7 @@
 package com.jellypudding.offlineclient.gui;
 
-import com.jellypudding.offlineclient.OfflineClient;
-import com.jellypudding.offlineclient.setting.KeybindSetting;
+import com.jellypudding.offlineclient.render.ClientFonts;
+import com.jellypudding.offlineclient.setting.Bind;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.RenderUtil;
 import com.mojang.blaze3d.platform.InputConstants;
@@ -11,6 +11,7 @@ import net.minecraft.client.input.KeyEvent;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 
 // What a tab opens. A box under the tabs holding one row per entry with a
 // field to add another. Drag an edge to resize it.
@@ -72,11 +73,10 @@ public final class TabView {
             return List.of();
         }
 
-        default void bind(String name, int key) {
+        default void bind(String name, Bind key) {
         }
     }
 
-    private static final String LISTENING = "press a key";
     private static final int DROP_ZONE = 14;
     private static final int EMPTY_HEIGHT = 18;
     private static final int LINE = 10;
@@ -96,7 +96,7 @@ public final class TabView {
     private static final long REFRESH_MS = 500;
 
     private final Source source;
-    private final SettingWidget.Host host;
+    private final Consumer<String> tooltips;
     private final ScrollBar scrollBar = new ScrollBar();
     private final SearchField adder;
 
@@ -108,6 +108,7 @@ public final class TabView {
     private boolean sizeRight;
     private boolean sizeBottom;
 
+    private final BindCapture capture = new BindCapture();
     private String binding;
 
     private List<Entry> entries = List.of();
@@ -128,9 +129,9 @@ public final class TabView {
     private int wide = MIN_WIDTH;
     private int drawn = MIN_HEIGHT;
 
-    public TabView(Source source, SettingWidget.Host host) {
+    public TabView(Source source, Consumer<String> tooltips) {
         this.source = source;
-        this.host = host;
+        this.tooltips = tooltips;
         adder = new SearchField(source.addHint(), this::refresh);
         refresh();
     }
@@ -183,7 +184,7 @@ public final class TabView {
         if (hints.isEmpty()) {
             return 0;
         }
-        Font font = OfflineClient.MC.font;
+        Font font = ClientFonts.gui();
         int height = HINT_GAP;
         for (Hint hint : hints) {
             height += HINT_GAP + LINE + RenderUtil.wrap(font, hint.how(), hintRoom()).size() * LINE
@@ -264,12 +265,9 @@ public final class TabView {
     public boolean keyPressed(KeyEvent event) {
         int key = event.key();
         if (binding != null) {
-            int bind = KeybindSetting.fromPress(key);
-            if (bind != KeybindSetting.UNKNOWN) {
-                source.bind(binding, bind);
+            if (capture.keyPressed(event, this::bind)) {
+                stopListening();
             }
-            binding = null;
-            refresh();
             return true;
         }
         if (!adder.isFocused()) {
@@ -286,6 +284,24 @@ public final class TabView {
         }
         adder.keyPressed(event);
         return true;
+    }
+
+    // True when the key let go was the one a listening row was waiting for.
+    public boolean keyReleased(KeyEvent event) {
+        if (binding == null || !capture.keyReleased(event, this::bind)) {
+            return false;
+        }
+        stopListening();
+        return true;
+    }
+
+    private void bind(Bind bind) {
+        source.bind(binding, bind);
+    }
+
+    private void stopListening() {
+        binding = null;
+        refresh();
     }
 
     public boolean charTyped(char typed) {
@@ -318,7 +334,7 @@ public final class TabView {
         context.guiRenderState.up();
         renderGrabBands(context, mouseX, mouseY);
 
-        Font font = OfflineClient.MC.font;
+        Font font = ClientFonts.gui();
         int rowX = left + PAD;
         if (fieldHeight() > 0) {
             adder.render(context, font, rowX, top + PAD, rowRoom(), mouseX, mouseY, null);
@@ -386,7 +402,7 @@ public final class TabView {
                 context.text(font, example, x + CHIP_PAD, GuiTheme.textY(y, CHIP_HEIGHT),
                     over ? GuiTheme.text() : GuiTheme.accentText(), false);
                 if (over) {
-                    host.setTooltip(CHIP_TIP);
+                    tooltips.accept(CHIP_TIP);
                 }
                 chips.add(new Chip(x, y, w, example));
                 y += CHIP_STEP;
@@ -417,7 +433,7 @@ public final class TabView {
         context.guiRenderState.up();
 
         int textY = GuiTheme.textY(rowY, h - 1);
-        String detail = entry.name().equals(binding) ? LISTENING : entry.detail();
+        String detail = entry.name().equals(binding) ? BindCapture.LISTENING : entry.detail();
         int detailWidth = detail.isEmpty() ? 0 : font.width(detail) + 6;
         int detailX = rowX + rowW - DROP_ZONE - detailWidth;
         if (!detail.isEmpty()) {
@@ -436,7 +452,7 @@ public final class TabView {
             textY, overDrop ? GuiTheme.RED_TEXT : GuiTheme.textFaint(), false);
 
         if (hovered) {
-            host.setTooltip(overDrop ? source.dropHint(entry.name()) : entry.tip());
+            tooltips.accept(overDrop ? source.dropHint(entry.name()) : entry.tip());
         }
     }
 
@@ -487,6 +503,10 @@ public final class TabView {
 
     // True when the click belonged to the box.
     public boolean mouseClicked(double mx, double my, int button) {
+        if (binding != null && capture.mouseClicked(button, this::bind)) {
+            stopListening();
+            return true;
+        }
         boolean leftEdge = nearLeft(mx, my);
         boolean rightEdge = nearRight(mx, my);
         boolean bottom = nearBottom(mx, my);
@@ -533,7 +553,7 @@ public final class TabView {
     }
 
     private void clickRow(double mx, double my, int rowX, int viewTop, int rowW) {
-        Font font = OfflineClient.MC.font;
+        Font font = ClientFonts.gui();
         int rowY = viewTop - scrollBar.getOffset();
         for (Entry entry : entries()) {
             int h = GuiTheme.ROW_HEIGHT;
@@ -544,6 +564,7 @@ public final class TabView {
                     source.drop(entry.name());
                 } else if (source.bindable() && detailWidth > 0 && mx >= detailX) {
                     binding = entry.name();
+                    capture.begin();
                     return;
                 } else {
                     source.activate(entry.name());

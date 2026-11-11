@@ -9,11 +9,11 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 public final class Multitask extends Module {
 
     private final BoolSetting whileMining = new BoolSetting("Use whilst mining",
-        "Place and use items whilst you are breaking a block.", true);
+        "Lets you place and use items whilst you are breaking a block.", true);
     private final BoolSetting whileUsing = new BoolSetting("Mine whilst using",
-        "Break blocks whilst you are eating or drawing a bow.", true);
+        "Lets you break blocks whilst you are eating or drawing a bow.", true);
     private final BoolSetting attackWhileUsing = new BoolSetting("Attack whilst using",
-        "Hit entities whilst you eat or block or draw a bow.", true);
+        "Lets you hit entities whilst you eat or block or draw a bow.", true);
 
     public Multitask() {
         super("Multitask", "Lets you mine and place blocks whilst you eat or draw a bow.",

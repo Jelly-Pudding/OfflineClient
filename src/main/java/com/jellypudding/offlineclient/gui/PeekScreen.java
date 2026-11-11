@@ -2,6 +2,7 @@ package com.jellypudding.offlineclient.gui;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.modules.render.BetterTooltips;
+import com.jellypudding.offlineclient.render.ClientFonts;
 import com.jellypudding.offlineclient.render.ContainerPreview;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.RenderUtil;
@@ -11,6 +12,7 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.locale.Language;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 
@@ -34,7 +36,7 @@ public final class PeekScreen extends Screen {
         super(title);
         this.parent = parent;
         grid = new ContainerPreview(items, COLUMNS, background);
-        Font font = OfflineClient.MC.font;
+        Font font = ClientFonts.guiAtGameScale();
         gridWidth = grid.getWidth(font);
         gridHeight = grid.getHeight(font);
     }
@@ -54,17 +56,19 @@ public final class PeekScreen extends Screen {
 
     @Override
     public void extractBackground(GuiGraphicsExtractor context, int mouseX, int mouseY, float deltaTicks) {
-        GuiScreenBase.dimBackground(this, context);
+        GuiTheme.dimBackground(this, context);
     }
 
     @Override
     public void extractRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float partialTicks) {
-        Font font = OfflineClient.MC.font;
+        Font font = ClientFonts.guiAtGameScale();
         int x = left();
         int y = top();
         RenderUtil.roundedBorderedRect(context, x - PAD, y - TITLE_HEIGHT - PAD, x + gridWidth + PAD,
             y + gridHeight + PAD, GuiTheme.CORNER, GuiTheme.bgWindow(), GuiTheme.edge());
-        context.centeredText(font, getTitle(), width / 2, y - TITLE_HEIGHT - 1, GuiTheme.text());
+        // A name may come from anyone and is cut to the window.
+        context.centeredText(font, Language.getInstance().getVisualOrder(font.substrByWidth(getTitle(), gridWidth)),
+            width / 2, y - TITLE_HEIGHT - 1, GuiTheme.text());
         hovered = grid.drawAt(context, font, x, y, mouseX, mouseY);
         ItemStack stack = grid.item(hovered);
         if (!stack.isEmpty()) {

@@ -18,12 +18,14 @@ import com.jellypudding.offlineclient.util.BearingFix;
 import com.jellypudding.offlineclient.util.BearingTrail;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.ColorUtil;
+import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.Leak;
 import com.jellypudding.offlineclient.util.Notice;
 import com.jellypudding.offlineclient.util.PositionHistory;
 import com.jellypudding.offlineclient.util.RenderUtil;
 import com.jellypudding.offlineclient.util.RepostGate;
 import com.jellypudding.offlineclient.util.ServerInfo;
+import com.jellypudding.offlineclient.util.TrackedPlace;
 import com.jellypudding.offlineclient.util.WorldWatch;
 import com.mojang.datafixers.util.Either;
 import net.minecraft.client.multiplayer.PlayerInfo;
@@ -75,7 +77,7 @@ public final class Locator extends Module implements Leak.Source {
         private long readAt;
         private final RepostGate toldPlace = RepostGate.forChat();
         private final RepostGate toldEstimate = RepostGate.forChat();
-        private final RepostGate saved = RepostGate.forWaypoint();
+        private final TrackedPlace tracked = new TrackedPlace();
         private long lastSeen;
 
         private Target(UUID uuid) {
@@ -223,9 +225,6 @@ public final class Locator extends Module implements Leak.Source {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame()) {
-            return;
-        }
         if (world.changed()) {
             clear();
         }
@@ -308,32 +307,33 @@ public final class Locator extends Module implements Leak.Source {
         if (seen(target)) {
             return null;
         }
+        String name = EntityUtil.displayName(target.name);
         String here = ServerInfo.dimension();
         int y = mc.player.getBlockY();
         float strength = strength(target, now);
         return switch (target.kind) {
-            case EXACT -> exact.isOn() ? new Leak(target.name, "exact", target.block, true, here, target.placedAt,
+            case EXACT -> exact.isOn() ? new Leak(name, "exact", target.block, true, here, target.placedAt,
                 ColorUtil.fade(exactColor.getColor(), strength)) : null;
-            case CHUNK -> chunks.isOn() ? new Leak(target.name, "chunk", middle(target.chunk, y), false, here,
+            case CHUNK -> chunks.isOn() ? new Leak(name, "chunk", middle(target.chunk, y), false, here,
                 target.placedAt, ColorUtil.fade(chunkColor.getColor(), strength)) : null;
             case BEARING -> {
                 if (fix != null) {
-                    yield new Leak(target.name, "±" + Math.round(fix.radius()), BlockPos.containing(fix.x(), y, fix.z()),
+                    yield new Leak(name, "±" + Math.round(fix.radius()), BlockPos.containing(fix.x(), y, fix.z()),
                         false, here, target.readAt, ColorUtil.fade(farColor.getColor(), strength));
                 }
-                yield lastSpot(target, y, here);
+                yield lastSpot(target, name, y, here);
             }
         };
     }
 
     // Where a player now known only by yaw was last placed. Null when never or not shown.
-    private Leak lastSpot(Target target, int y, String here) {
+    private Leak lastSpot(Target target, String name, int y, String here) {
         if (target.placed == Kind.EXACT && exact.isOn()) {
-            return new Leak(target.name, "last seen", target.block, true, here, target.placedAt,
+            return new Leak(name, "last seen", target.block, true, here, target.placedAt,
                 ColorUtil.fade(exactColor.getColor(), GONE_STRENGTH));
         }
         if (target.placed == Kind.CHUNK && chunks.isOn()) {
-            return new Leak(target.name, "last chunk", middle(target.chunk, y), false, here, target.placedAt,
+            return new Leak(name, "last chunk", middle(target.chunk, y), false, here, target.placedAt,
                 ColorUtil.fade(chunkColor.getColor(), GONE_STRENGTH));
         }
         return null;
@@ -375,9 +375,9 @@ public final class Locator extends Module implements Leak.Source {
     }
 
     private void save(Target target, Leak leak, BearingFix fix, long now) {
-        double radius = fix == null ? 0 : fix.radius();
-        if (waypoints.isOn() && target.saved.due(leak.pos().getX(), leak.pos().getZ(), radius, now)) {
-            leak.saveAs(target.name.replace(" ", "") + WAYPOINT_SUFFIX, ServerInfo.dimension());
+        if (waypoints.isOn()) {
+            target.tracked.saveAs(leak, target.name.replace(" ", "") + WAYPOINT_SUFFIX, ServerInfo.dimension(),
+                fix == null ? 0 : fix.radius(), now);
         }
     }
 
@@ -533,8 +533,9 @@ public final class Locator extends Module implements Leak.Source {
             found.clear();
             labels(target, camera, event.getPartialTicks(), now, found);
             float strength = strength(target, now);
+            String name = EntityUtil.displayName(target.name);
             for (Label label : found) {
-                draw(event, target.name, label, camera, strength);
+                draw(event, name, label, camera, strength);
             }
         }
     }

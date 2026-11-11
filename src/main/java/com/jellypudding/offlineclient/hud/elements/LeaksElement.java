@@ -2,9 +2,10 @@ package com.jellypudding.offlineclient.hud.elements;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.gui.GuiTheme;
-import com.jellypudding.offlineclient.hud.HudElement;
 import com.jellypudding.offlineclient.hud.RowCache;
+import com.jellypudding.offlineclient.hud.RowsElement;
 import com.jellypudding.offlineclient.hud.TextRow;
+import com.jellypudding.offlineclient.render.ClientFonts;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ChatUtil;
@@ -12,7 +13,6 @@ import com.jellypudding.offlineclient.util.Leak;
 import com.jellypudding.offlineclient.util.RenderUtil;
 import com.jellypudding.offlineclient.util.ServerInfo;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
 
@@ -22,9 +22,8 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 // The places Locator and Eavesdrop and ItemCoords learnt from the server whilst they are
-// on. The newest come first and the nearest break a tie. Each row lines up with the side
-// the element is anchored to.
-public final class LeaksElement extends HudElement {
+// on. The newest come first and the nearest break a tie.
+public final class LeaksElement extends RowsElement {
 
     // The one row whilst nothing can fill the list.
     private static final String NO_SOURCE = "Switch on Locator or Eavesdrop or ItemCoords";
@@ -36,7 +35,7 @@ public final class LeaksElement extends HudElement {
     private static final int SAMPLE_COLOUR = 0xFF40FF40;
 
     private final NumberSetting limit = new NumberSetting("Leak rows",
-        "Most rows to draw.", 8, 1, 30, 1).min(1);
+        "Most rows to draw.", 8, 1, 30, 1);
     private final BoolSetting ages = new BoolSetting("Leak ages",
         "Writes how long ago each place was last known to be right.", true);
     // Each gathering asks every source and sorts what they hold.
@@ -50,17 +49,18 @@ public final class LeaksElement extends HudElement {
 
     @Override
     public boolean visible() {
-        return isActive() && !rows().isEmpty();
+        return isActive() && !rows(ClientFonts.hud()).isEmpty();
     }
 
-    private List<TextRow> rows() {
+    @Override
+    protected List<TextRow> rows(Font font) {
         List<TextRow> built = rows.get();
         if (!built.isEmpty() || !editing()) {
             return built;
         }
         long now = System.currentTimeMillis();
         Leak sample = new Leak("Steve", "exact", SAMPLE_POS, true, null, now - SAMPLE_AGE, SAMPLE_COLOUR);
-        return List.of(rowOf(OfflineClient.MC.font, sample, now));
+        return List.of(rowOf(font, sample, now));
     }
 
     private List<TextRow> build() {
@@ -68,7 +68,7 @@ public final class LeaksElement extends HudElement {
         if (player == null) {
             return List.of();
         }
-        Font font = OfflineClient.MC.font;
+        Font font = ClientFonts.hud();
         if (!Leak.anySourceOn()) {
             return List.of(TextRow.of(font, NO_SOURCE, RenderUtil.MUTED_TEXT));
         }
@@ -97,20 +97,5 @@ public final class LeaksElement extends HudElement {
             colors.add(RenderUtil.MUTED_TEXT);
         }
         return TextRow.of(font, parts, colors);
-    }
-
-    @Override
-    public void render(GuiGraphicsExtractor context, Font font) {
-        TextRow.draw(context, font, rows(), alignment());
-    }
-
-    @Override
-    public int width(Font font) {
-        return TextRow.widest(rows());
-    }
-
-    @Override
-    public int height(Font font) {
-        return TextRow.height(font, rows().size());
     }
 }

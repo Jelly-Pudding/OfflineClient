@@ -8,7 +8,7 @@ import com.jellypudding.offlineclient.mixin.MultiPlayerGameModeAccessor;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.ExclusivityGroup;
 import com.jellypudding.offlineclient.module.Module;
-import com.jellypudding.offlineclient.modules.combat.KillAura;
+import com.jellypudding.offlineclient.modules.combat.BowAimbot;
 import com.jellypudding.offlineclient.modules.movement.NoKnockback;
 import com.jellypudding.offlineclient.modules.movement.Speed;
 import com.jellypudding.offlineclient.modules.player.FastBreak;
@@ -23,43 +23,40 @@ import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.AxisWalker;
 import com.jellypudding.offlineclient.util.BlockMiner;
 import com.jellypudding.offlineclient.util.BlockUtil;
+import com.jellypudding.offlineclient.util.BreakTime;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.ColorUtil;
+import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.FaceMode;
+import com.jellypudding.offlineclient.util.Hands;
+import com.jellypudding.offlineclient.util.HeldKey;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.ItemUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
-import com.jellypudding.offlineclient.util.MenuClicks;
+import com.jellypudding.offlineclient.util.Leave;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.PacketBreaker;
-import com.jellypudding.offlineclient.util.PlacedBox;
+import com.jellypudding.offlineclient.util.PlaceWatch;
+import com.jellypudding.offlineclient.util.ProjectilePath;
 import com.jellypudding.offlineclient.util.ProjectileUtil;
 import com.jellypudding.offlineclient.util.RotationManager;
 import com.jellypudding.offlineclient.util.RotationPriority;
 import com.jellypudding.offlineclient.util.SlopePlan;
 import com.jellypudding.offlineclient.util.SwingMode;
 import com.jellypudding.offlineclient.util.TickRate;
+import com.jellypudding.offlineclient.util.UseBudget;
 import net.minecraft.client.multiplayer.MultiPlayerGameMode;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.boss.enderdragon.EndCrystal;
-import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.minecraft.world.inventory.Slot;
-import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.BowItem;
-import net.minecraft.world.item.Item;
-import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.item.enchantment.Enchantments;
-import net.minecraft.world.item.component.ItemContainerContents;
 import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.ShulkerBoxBlock;
+import net.minecraft.world.level.block.SignBlock;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.dimension.DimensionType;
 import net.minecraft.world.phys.Vec3;
@@ -107,14 +104,22 @@ public final class HighwayBuilder extends Module {
     // A torch on a railing only stands on it.
     private static final List<Direction> STAND_ONLY = List.of(Direction.DOWN);
 
-    // Ticks a grind may run before it is abandoned.
-    private static final int GRIND_LIMIT = 2400;
+    // The run ends once you stand this close to the last depth with nothing left to do.
+    private static final double END_SLACK = 0.3;
+
+    // An axis or a diagonal nearer than this is the one you stand on and not the next.
+    private static final double CROSSING_AHEAD = 1;
+
+    private static final List<Block> SIGNS = BuiltInRegistries.BLOCK.stream()
+        .filter(block -> block instanceof SignBlock).toList();
 
     public enum Movement { AUTO, MANUAL }
 
     public enum Rotation { NONE, MINE, PLACE, BOTH }
 
     public enum Sides { OPEN, RAILINGS, WALLS }
+
+    public enum StopAt { NEVER, LENGTH, AXIS, DIAGONAL }
 
     public enum Slope {
         FLAT(0), UP(1), DOWN(-1);
@@ -127,11 +132,9 @@ public final class HighwayBuilder extends Module {
         }
     }
 
-    private enum Stage { NONE, GRIND }
-
     // Why the module is not simply building or walking. The word follows the distance.
     private enum Status {
-        NONE(null), LAG("lag"), EATING("eating"), FIGHTING("fighting"), CRYSTAL("crystal"),
+        NONE(null), LAG("lag"), HANDS_BUSY("hands busy"), FIGHTING("fighting"), CRYSTAL("crystal"),
         RESTOCKING("restocking"), GRINDING("grinding"), STEPPING("stepping"),
         OUT_OF_REACH("out of reach"), BLOCKED("blocked"), NO_BLOCKS("no blocks");
 
@@ -147,10 +150,10 @@ public final class HighwayBuilder extends Module {
     }
 
     private final NumberSetting width = new NumberSetting("Width",
-        "How wide the highway is.", 4, 1, 5, 1, " blocks").min(1).max(9);
+        "How wide the highway is.", 4, 1, 5, 1, " blocks").max(9);
     // A taller tunnel's top row is past the server's reach from the floor.
     private final NumberSetting height = new NumberSetting("Height",
-        "How tall the tunnel is.", 3, 2, 5, 1, " blocks").min(2).max(8);
+        "How tall the tunnel is.", 3, 2, 5, 1, " blocks").max(8);
     private final EnumSetting<Slope> slope = new EnumSetting<>("Slope",
         "Turns the highway into stairs from just past the part already dug.", Slope.FLAT)
         .describe(Slope.FLAT, "Stays level at the height it has reached.")
@@ -191,6 +194,9 @@ public final class HighwayBuilder extends Module {
         BuiltInRegistries.BLOCK,
         List.of(Blocks.OBSIDIAN, Blocks.NETHERRACK, Blocks.BLACKSTONE, Blocks.BASALT,
             Blocks.COBBLESTONE, Blocks.COBBLED_DEEPSLATE));
+    private final RegistryListSetting<Block> keep = new RegistryListSetting<>("Leave standing",
+        "Blocks the highway never breaks. It starts as every kind of sign. Click to pick them.",
+        BuiltInRegistries.BLOCK, SIGNS);
     private final BoolSetting floor = new BoolSetting("Floor",
         "Fills the floor under the highway.", true);
     private final BoolSetting replaceFloor = new BoolSetting("Replace floor",
@@ -223,7 +229,7 @@ public final class HighwayBuilder extends Module {
     // The torch never goes above the top row of the tallest tunnel.
     private final NumberSetting torchHeight = new NumberSetting("Torch height",
         "Blocks of air under each torch. Zero stands it on the floor and more hangs it on the side.",
-        0, 0, 4, 1, " blocks").min(0).max(7)
+        0, 0, 4, 1, " blocks").max(7)
         .under(torches, () -> torches.isOn() && !sides.is(Sides.RAILINGS));
     private final EnumSetting<Rotation> rotation = new EnumSetting<>("Rotation",
         "When a look packet is sent.", Rotation.BOTH)
@@ -233,57 +239,34 @@ public final class HighwayBuilder extends Module {
         .describe(Rotation.BOTH, "Towards everything the module touches.");
     private final NumberSetting reach = new NumberSetting("Reach",
         "How far the nearest edge of a block may be from your eyes to break or place it. The server allows one block more than your normal reach.",
-        4.5, 1, 5.5, 0.1, " blocks").min(1);
+        4.5, 1, 5.5, 0.1, " blocks");
     private final NumberSetting breakDelay = new NumberSetting("Break delay",
-        "Ticks between one block break and the next.", 0, 0, 20, 1, " ticks").min(0);
+        "Ticks between one block break and the next.", 0, 0, 20, 1, " ticks");
     private final NumberSetting breaksPerTick = new NumberSetting("Breaks per tick",
-        "How many one hit blocks come out in a tick whilst no mining rotation is sent.",
-        1, 1, 16, 1).min(1);
+        "How many one hit blocks come out in a tick whilst no mining rotation is sent. " + PacketBreaker.PAPER_LIMIT,
+        1, 1, 16, 1)
+        .under(rotation, Rotation.NONE, Rotation.PLACE);
     private final BoolSetting doubleMine = new BoolSetting("Double mine",
-        "Breaks a second block with packets whilst the first is mined by hand.", true);
+        "Breaks a second block with packets whilst the first is mined by hand.", true)
+        .under(rotation, Rotation.MINE, Rotation.BOTH);
     private final NumberSetting savePickaxes = new NumberSetting("Save pickaxes",
         "Turns the module off once you are down to this many pickaxes. Zero never stops.",
-        1, 0, 36, 1).min(0).max(36);
+        1, 0, 36, 1).max(36);
     private final NumberSetting placeDelay = new NumberSetting("Place delay",
-        "Ticks between one placement and the next.", 0, 0, 20, 1, " ticks").min(0);
+        "Ticks between one placement and the next.", 0, 0, 20, 1, " ticks");
     private final NumberSetting placementsPerTick = new NumberSetting("Placements per tick",
-        "How many blocks may go down in one tick.", 1, 1, 8, 1).min(1);
-    private final BoolSetting restock = new BoolSetting("Restock hotbar",
-        "Moves blocks and a pickaxe up from your inventory when the hotbar runs dry.", true);
-    private final NumberSetting inventoryDelay = new NumberSetting("Inventory delay",
-        "Ticks between one inventory click and the next.", 3, 0, 20, 1, " ticks").min(0);
-    private final BoolSetting searchShulkers = new BoolSetting("Search shulkers",
-        "Sets a shulker box down behind you and takes the build blocks out of it.", true);
-    private final BoolSetting searchEnderChest = new BoolSetting("Search ender chest",
-        "Sets your ender chest down behind you and takes the build blocks out once the shulkers are empty. A Silk Touch pickaxe gets the chest back.",
-        false);
-    private final BoolSetting mineEnderChests = new BoolSetting("Mine ender chests",
-        "With obsidian on the list and no blocks left an ender chest goes down behind you and is mined for obsidian.",
-        true);
-    private final NumberSetting saveEnderChests = new NumberSetting("Save ender chests",
-        "Ender chests never used below this count.", 2, 0, 64, 1).min(0)
-        .under(mineEnderChests);
-    private final NumberSetting grindAmount = new NumberSetting("Grind amount",
-        "How much obsidian one grind gathers before building goes on.", 64, 8, 256, 8).min(1)
-        .under(mineEnderChests);
-    private final BoolSetting grindBlockade = new BoolSetting("Grind blockade",
-        "Walls you in with whatever blocks you have whilst the chests are ground.", true)
-        .under(mineEnderChests);
-    private final BoolSetting ejectShulkers = new BoolSetting("Eject useless shulkers",
-        "Drops any shulker box holding no blocks or pickaxes or food.", true);
-    private final NumberSetting emptySlots = new NumberSetting("Minimum empty slots",
-        "Free slots to keep clear after a restock.", 3, 0, 9, 1).min(0);
-    private final BoolSetting throwTrash = new BoolSetting("Throw out trash",
-        "Turns round and drops the listed items to keep room free.", false);
-    private final RegistryListSetting<Item> trash = new RegistryListSetting<>("Trash",
-        "The items thrown out. Click to pick them.", BuiltInRegistries.ITEM,
-        List.of(Items.NETHERRACK, Items.QUARTZ, Items.GOLD_NUGGET, Items.GOLDEN_SWORD,
-            Items.GLOWSTONE_DUST, Items.GLOWSTONE, Items.BLACKSTONE, Items.BASALT,
-            Items.GHAST_TEAR, Items.SOUL_SAND, Items.SOUL_SOIL, Items.ROTTEN_FLESH,
-            Items.MAGMA_BLOCK))
-        .under(throwTrash);
+        "How many blocks may go down in one tick.", 1, 1, 8, 1);
     private final BoolSetting crystalTraps = new BoolSetting("Shoot crystal traps",
         "Puts an arrow through any end crystal sitting in the way ahead.", true);
+    private final EnumSetting<StopAt> stopAt = new EnumSetting<>("Stop at",
+        "Where the highway ends by itself.", StopAt.NEVER)
+        .describe(StopAt.NEVER, "Nowhere. It runs until you stop it or it runs out.")
+        .describe(StopAt.LENGTH, "After the length you set.")
+        .describe(StopAt.AXIS, "Where the line next crosses the x or the z axis of the world.")
+        .describe(StopAt.DIAGONAL, "Where the line next crosses a diagonal of the world.");
+    private final NumberSetting stopLength = new NumberSetting("Length",
+        "Blocks from where the highway began to where it ends.", 1000, 8, 10000, 8, " blocks").min(1)
+        .under(stopAt, StopAt.LENGTH);
     private final BoolSetting stopWhenEmpty = new BoolSetting("Stop when empty",
         "Turns the module off once you run out of blocks.", true);
     private final BoolSetting disconnectOnStop = new BoolSetting("Disconnect on stop",
@@ -302,17 +285,15 @@ public final class HighwayBuilder extends Module {
         .under(renderPlace);
 
     private final AxisWalker walker = new AxisWalker();
+    private final HeldKey forward = new HeldKey(options -> options.keyUp);
+    private final PlaceWatch place = new PlaceWatch();
     private final SlotSwap slots = new SlotSwap();
     private final SlopePlan plan = new SlopePlan();
-    // The shulker box or ender chest a restock sets down and empties.
-    private final PlacedBox box = new PlacedBox(slots);
-    // True once a container set down for a restock would not open. None goes down again until the
-    // module is switched on again.
-    private boolean containersRefused;
+    private final HighwaySupplies supplies = new HighwaySupplies(slots, this::allowed, this::rotatesToPlace,
+        this::rotatesToMine);
 
     private int idleTicks;
     private double bestTravelled;
-    private boolean walking;
 
     private Status status = Status.NONE;
     // The block the walk last waited on. Named when the module gives up.
@@ -325,7 +306,6 @@ public final class HighwayBuilder extends Module {
 
     private int sinceBreak;
     private int sincePlace;
-    private int sinceInventory;
     private int blocksBroken;
     private int blocksPlaced;
 
@@ -354,18 +334,19 @@ public final class HighwayBuilder extends Module {
     // Second blocks taken down with packets whilst the hand works the first.
     private final PacketBreaker spares = new PacketBreaker();
 
-    private Stage stage = Stage.NONE;
-    // Where the ender chests of a grind go down.
-    private BlockPos grindPos;
-
-    // How much obsidian the running grind is heading for.
-    private int grindGoal;
-    private int stageTicks;
+    // The choice of Stop at the crossing was worked out for. Null before the first look of a run.
+    private StopAt crossingFor;
+    // How far along the line the next axis or diagonal lies. Infinite when none lies ahead.
+    private double crossing;
+    // Where the run ends by itself as of the last tick. Infinite whilst it has no end.
+    private double runEnd = Double.POSITIVE_INFINITY;
+    private long startedAt;
 
     private final Set<Integer> ignoredCrystals = new HashSet<>();
     private Entity crystal;
     private int crystalShots;
-    private boolean drawing;
+    private final HeldKey bowDraw = new HeldKey(options -> options.keyUse);
+    private boolean toldNoArrows;
 
     // Every block of the shell around the player this tick.
     private final List<BlockPos> stretch = new ArrayList<>();
@@ -373,14 +354,13 @@ public final class HighwayBuilder extends Module {
     public HighwayBuilder() {
         super("HighwayBuilder", "Digs and builds a highway along one line.", Category.WORLD);
         addSettings(width, height, slope, upKey, downKey, levelOut, levelHeight, diagonal, movement,
-            freeLook, stepToReach, skipUnreachable, reLevel, pauseOnLag, blocks, floor, replaceFloor,
+            freeLook, stepToReach, skipUnreachable, reLevel, pauseOnLag, blocks, keep, floor, replaceFloor,
             sides, replaceSides, clearAboveRailings, ceiling, replaceCeiling, fillLiquids, torches,
             torchSpacing, torchHeight, rotation, reach, breakDelay, breaksPerTick, doubleMine,
-            savePickaxes, placeDelay, placementsPerTick, restock, inventoryDelay,
-            searchShulkers, searchEnderChest, mineEnderChests, saveEnderChests, grindAmount,
-            grindBlockade, ejectShulkers, emptySlots, throwTrash, trash,
-            crystalTraps, stopWhenEmpty, disconnectOnStop, outline,
-            outlineColor, renderMine);
+            savePickaxes, placeDelay, placementsPerTick);
+        addSettings(supplies.settings());
+        addSettings(crystalTraps, stopAt, stopLength, stopWhenEmpty, disconnectOnStop, outline, outlineColor,
+            renderMine);
         addSettings(mineBox.settings());
         addSettings(renderPlace);
         addSettings(placeBox.settings());
@@ -413,22 +393,18 @@ public final class HighwayBuilder extends Module {
     @Override
     protected void onEnable() {
         walker.clear();
+        place.clear();
         slots.forget();
         mineTarget = null;
         placeTarget = null;
         spares.reset();
         crystal = null;
-        drawing = false;
         ignoredCrystals.clear();
         blocksBroken = 0;
         blocksPlaced = 0;
         sinceBreak = 0;
         sincePlace = 0;
-        sinceInventory = 0;
-        stage = Stage.NONE;
-        grindPos = null;
-        box.end();
-        containersRefused = false;
+        supplies.reset();
         if (inGame()) {
             lockAxis();
             warnAboutModules();
@@ -443,28 +419,27 @@ public final class HighwayBuilder extends Module {
         }
         BlockMiner.release();
         slots.restoreIfMine();
-        stopWalking();
-        releaseBow();
+        forward.letGo();
+        bowDraw.letGo();
         walker.clear();
         mineTarget = null;
         placeTarget = null;
         spares.reset();
-        stage = Stage.NONE;
-        grindPos = null;
-        box.end();
+        supplies.end();
         stretch.clear();
         passedBy.clear();
         unsteppable.clear();
         if (blocksBroken > 0 || blocksPlaced > 0 || leftUndone > 0) {
-            ChatUtil.message("§bHighwayBuilder §7" + totals());
+            tell(totals());
         }
     }
 
     // What the run did.
     private String totals() {
         String left = leftUndone > 0 ? "§7 and left §f" + leftUndone + "§7 it could not reach" : "";
-        return "covered §f" + (int) bestTravelled + "§7 blocks and broke §f" + blocksBroken
-            + "§7 and placed §f" + blocksPlaced + left + "§7.";
+        double seconds = (System.currentTimeMillis() - startedAt) / 1000.0;
+        return "covered §f" + (int) bestTravelled + "§7 blocks in §f" + ChatUtil.duration(seconds)
+            + "§7 and broke §f" + blocksBroken + "§7 and placed §f" + blocksPlaced + left + "§7.";
     }
 
     private void warnAboutModules() {
@@ -472,11 +447,10 @@ public final class HighwayBuilder extends Module {
             ChatUtil.error("Turn Speed off on a diagonal or you will drift off the line.");
         }
         if (!Modules.enabled(NoKnockback.class)) {
-            ChatUtil.message("§bHighwayBuilder §7works better with §fNoKnockback§7 on.");
+            tell("works better with §fNoKnockback§7 on.");
         }
         if (Modules.enabled(FastBreak.class)) {
-            ChatUtil.message("§bHighwayBuilder §7works better with §fFastBreak§7 off."
-                + " The server puts back blocks broken too early.");
+            tell("works better with §fFastBreak§7 off. The server puts back blocks broken too early.");
         }
     }
 
@@ -494,7 +468,10 @@ public final class HighwayBuilder extends Module {
         passedBy.clear();
         leftUndone = 0;
         toldLeft = false;
+        toldNoArrows = false;
         unsteppable.clear();
+        crossingFor = null;
+        startedAt = System.currentTimeMillis();
     }
 
     @Subscribe
@@ -516,8 +493,13 @@ public final class HighwayBuilder extends Module {
         placeTarget = null;
         outOfBlocks = false;
         status = Status.NONE;
-        if (!inGame()) {
-            stopWalking();
+        // A dead player still ticks and the server ignores every click it makes.
+        if (mc.player.isDeadOrDying()) {
+            stop("HighwayBuilder stopped because you died.");
+            return;
+        }
+        if (place.movedAway()) {
+            stop("HighwayBuilder stopped because you changed world.");
             return;
         }
         if (!walker.isLocked()) {
@@ -525,7 +507,8 @@ public final class HighwayBuilder extends Module {
         }
         status = pauseReason();
         if (status != Status.NONE) {
-            stopWalking();
+            forward.letGo();
+            bowDraw.letGo();
             BlockMiner.release();
             return;
         }
@@ -536,7 +519,7 @@ public final class HighwayBuilder extends Module {
         // Manual hands the walking back rather than leaving the key held. Standing still is
         // then no reason to give up.
         if (!auto) {
-            stopWalking();
+            forward.letGo();
             stepping = false;
             idleTicks = 0;
         }
@@ -548,25 +531,24 @@ public final class HighwayBuilder extends Module {
         walker.holdAxis(auto && !freeLook.isOn());
         trackProgress();
 
-        gatherStretch(here - BEHIND, here + AHEAD);
+        runEnd = endDepth(here);
+        gatherStretch(here - BEHIND, Math.min(here + AHEAD, runEnd + AxisWalker.BESIDE));
         countPassed(here);
         if (shootCrystal()) {
             status = Status.CRYSTAL;
             idleTicks = 0;
-            stopWalking();
+            forward.letGo();
             return;
         }
         if (levelUp(here)) {
-            stopWalking();
+            forward.letGo();
             return;
         }
-        if (tidyInventory()) {
-            status = switch (stage) {
-                case GRIND -> Status.GRINDING;
-                case NONE -> box.active() ? Status.RESTOCKING : Status.NONE;
-            };
+        if (supplies.tick()) {
+            status = supplies.grinding() ? Status.GRINDING
+                : supplies.restocking() ? Status.RESTOCKING : Status.NONE;
             idleTicks = 0;
-            stopWalking();
+            forward.letGo();
             return;
         }
         spares.tick(this::needsClearing);
@@ -575,7 +557,7 @@ public final class HighwayBuilder extends Module {
                 status = Status.STEPPING;
             }
             if (auto) {
-                stopWalking();
+                forward.letGo();
             }
             return;
         }
@@ -583,21 +565,61 @@ public final class HighwayBuilder extends Module {
         if (!isEnabled()) {
             return;
         }
+        if (here >= runEnd - END_SLACK) {
+            finish();
+            return;
+        }
         if (auto) {
             moveOn(here);
         }
     }
 
-    // Anything else with a claim on the hands takes the tick.
+    // How far along the line the highway ends by itself. Infinite whilst it has no end. The next
+    // axis or diagonal is looked for once when the run starts and again when Stop at changes. A
+    // crossing reached must not give way to the one after it.
+    private double endDepth(double here) {
+        StopAt choice = stopAt.getValue();
+        if (choice != crossingFor) {
+            crossingFor = choice;
+            crossing = choice == StopAt.AXIS || choice == StopAt.DIAGONAL
+                ? crossingAhead(here, choice == StopAt.DIAGONAL) : Double.POSITIVE_INFINITY;
+            if (choice != StopAt.NEVER && choice != StopAt.LENGTH && Double.isInfinite(crossing)) {
+                tell("has no " + (choice == StopAt.AXIS ? "axis" : "diagonal")
+                    + " ahead on this line and runs until you stop it.");
+            }
+        }
+        return choice == StopAt.LENGTH ? stopLength.getValue() : crossing;
+    }
+
+    // The depth at which the line next comes to block nought on x or z or for a diagonal to a
+    // block as far along x as along z. Infinite when it never does.
+    private double crossingAhead(double here, boolean diagonal) {
+        Vec3 start = walker.pointAt(0, 0, 0);
+        Vec3 step = walker.pointAt(1, 0, 0).subtract(start);
+        double[] depths = diagonal
+            ? new double[] {(start.z - start.x) / (step.x - step.z), (1 - start.x - start.z) / (step.x + step.z)}
+            : new double[] {(0.5 - start.x) / step.x, (0.5 - start.z) / step.z};
+        double next = Double.POSITIVE_INFINITY;
+        for (double depth : depths) {
+            // A line that never meets the mark divides by nought and gives no number to compare.
+            if (depth > here + CROSSING_AHEAD && depth < next) {
+                next = depth;
+            }
+        }
+        return next;
+    }
+
+    // Anything else with a claim on the hands takes the tick. The bow drawn at a crystal is the
+    // module's own use and the target BowAimbot picks for that draw is no fight.
     private Status pauseReason() {
         if (pauseOnLag.isOn() && TickRate.INSTANCE.stalled()) {
             return Status.LAG;
         }
-        if (Modules.feeding(null)) {
-            return Status.EATING;
+        if (Hands.slotsTaken() || mc.player.isUsingItem() && !bowDraw.isHeld()) {
+            return Status.HANDS_BUSY;
         }
-        KillAura aura = Modules.active(KillAura.class);
-        return aura != null && aura.getTarget() != null ? Status.FIGHTING : Status.NONE;
+        boolean fighting = bowDraw.isHeld() ? Modules.fighting(BowAimbot.class) : Modules.fighting();
+        return fighting ? Status.FIGHTING : Status.NONE;
     }
 
     private void countBreak() {
@@ -630,13 +652,7 @@ public final class HighwayBuilder extends Module {
     }
 
     private int pickaxeCount() {
-        int total = 0;
-        for (int i = 0; i < InventoryUtil.WHOLE_INVENTORY; i++) {
-            if (mc.player.getInventory().getItem(i).is(ItemTags.PICKAXES)) {
-                total++;
-            }
-        }
-        return total;
+        return InventoryUtil.count(stack -> stack.is(ItemTags.PICKAXES), InventoryUtil.WHOLE_INVENTORY);
     }
 
     private void trackProgress() {
@@ -656,7 +672,7 @@ public final class HighwayBuilder extends Module {
         if (walker.isDiagonal()) {
             if (!slope.is(Slope.FLAT) && !toldDiagonal) {
                 toldDiagonal = true;
-                ChatUtil.message("§bHighwayBuilder §7keeps a diagonal highway level.");
+                tell("keeps a diagonal highway level.");
             }
             return;
         }
@@ -668,7 +684,7 @@ public final class HighwayBuilder extends Module {
                 case DOWN -> "drops";
                 case FLAT -> "levels out";
             };
-            ChatUtil.message("§bHighwayBuilder §7" + change + " from §f" + (depth - (int) Math.round(here))
+            tell(change + " from §f" + (depth - (int) Math.round(here))
                 + "§7 blocks ahead.");
             return;
         }
@@ -683,7 +699,7 @@ public final class HighwayBuilder extends Module {
             if (end != null) {
                 bendAt(depth, Slope.FLAT);
                 slope.setValue(Slope.FLAT);
-                ChatUtil.message("§bHighwayBuilder §7levels out " + end + "§7.");
+                tell("levels out " + end + "§7.");
                 return;
             }
         }
@@ -842,7 +858,7 @@ public final class HighwayBuilder extends Module {
             if (sent >= breaksPerTick.getInt()) {
                 break;
             }
-            if (!needsClearing(pos) || !reaches(pos) || !BlockUtil.canInstantBreak(pos)) {
+            if (!needsClearing(pos) || !reaches(pos) || !BreakTime.canInstantBreak(pos)) {
                 continue;
             }
             BlockMiner.breakInstantly(pos);
@@ -870,40 +886,17 @@ public final class HighwayBuilder extends Module {
         if (game.isDestroying() || busy.equals(last)) {
             return;
         }
-        BlockPos best = null;
-        double bestDistance = Double.MAX_VALUE;
-        for (BlockPos pos : stretch) {
-            if (pos.equals(busy) || !needsClearing(pos) || !reaches(pos) || !spares.canSend(pos)) {
-                continue;
-            }
-            double distance = BlockUtil.distanceTo(pos);
-            if (distance < bestDistance) {
-                bestDistance = distance;
-                best = pos;
-            }
-        }
-        if (best != null) {
-            spares.send(best);
-            worked(best);
+        BlockPos spare = nearest(pos -> !pos.equals(busy) && needsClearing(pos) && spares.canSend(pos));
+        if (spare != null) {
+            spares.send(spare);
+            worked(spare);
             blocksBroken++;
         }
     }
 
     // The block in reach that passes the test with the nearest middle.
     private BlockPos nearest(Predicate<BlockPos> wanted) {
-        BlockPos best = null;
-        double bestDistance = Double.MAX_VALUE;
-        for (BlockPos pos : stretch) {
-            if (!reaches(pos) || !wanted.test(pos)) {
-                continue;
-            }
-            double distance = BlockUtil.distanceTo(pos);
-            if (distance < bestDistance) {
-                bestDistance = distance;
-                best = pos;
-            }
-        }
-        return best;
+        return BlockUtil.nearestOf(stretch, pos -> reaches(pos) && wanted.test(pos));
     }
 
     private enum Part { TUNNEL, FLOOR, WALL, ABOVE_WALL, CEILING, SIDE, OUTSIDE }
@@ -947,9 +940,11 @@ public final class HighwayBuilder extends Module {
         return y == topY && sides.is(Sides.WALLS) ? Part.CEILING : Part.OUTSIDE;
     }
 
-    // Anything in the tunnel or a shell block off the list when that shell is replaced.
+    // Anything in the tunnel or a shell block off the list when that shell is replaced. A block
+    // NoInteract keeps standing for the lava behind it is left like one that cannot be dug.
     private boolean needsClearing(BlockPos pos) {
-        if (!BlockUtil.diggable(pos) || BlockUtil.isStandingOn(pos)) {
+        if (!BlockUtil.diggable(pos) || BlockUtil.isStandingOn(pos)
+            || keep.contains(BlockUtil.state(pos).getBlock()) || BlockMiner.kept(pos)) {
             return false;
         }
         Part part = partOf(pos);
@@ -1009,12 +1004,17 @@ public final class HighwayBuilder extends Module {
             sincePlace++;
             return true;
         }
+        // Paper drops use packets past its limit. The rest of the round waits for a later tick.
+        int round = Math.min(placementsPerTick.getInt(), UseBudget.remaining());
+        if (round == 0) {
+            return true;
+        }
         if (!place(first)) {
             return false;
         }
         sincePlace = 0;
         int placed = 1;
-        while (placed < placementsPerTick.getInt()) {
+        while (placed < round) {
             BlockPos next = nearest(pos -> !pos.equals(first) && needsBlock(pos));
             if (next == null || !place(next)) {
                 break;
@@ -1124,323 +1124,10 @@ public final class HighwayBuilder extends Module {
         return true;
     }
 
-    // Moves what the build needs up into the hotbar and drops what it does not.
-    private boolean tidyInventory() {
-        if (stage == Stage.GRIND) {
-            return enderChestGrind();
-        }
-        if (box.active()) {
-            return shulkerRestock();
-        }
-        if (sinceInventory < inventoryDelay.getInt()) {
-            sinceInventory++;
-            return false;
-        }
-        if (restock.isOn() && restockHotbar()) {
-            return true;
-        }
-        if (searchShulkers.isOn() && !containersRefused && shulkerRestock()) {
-            return true;
-        }
-        if (mineEnderChests.isOn() && enderChestGrind()) {
-            return true;
-        }
-        if (searchEnderChest.isOn() && !containersRefused && enderChestRestock()) {
-            return true;
-        }
-        if (ejectShulkers.isOn() && dropUselessShulker()) {
-            return true;
-        }
-        return throwTrash.isOn() && dropTrash();
-    }
-
-    // Puts a shulker down behind you and empties it then mines it back.
-    private boolean shulkerRestock() {
-        if (!box.active()) {
-            return startRestock();
-        }
-        boolean going = box.tick(this::emptyShulker, rotatesToPlace(), rotatesToMine());
-        if (!going && box.wouldNotOpen()) {
-            containersRefused = true;
-            ChatUtil.error("HighwayBuilder could not open the container it set down."
-                + " Restocking from containers stops.");
-        }
-        return going;
-    }
-
-    private boolean startRestock() {
-        return setDownContainer(this::usefulShulker);
-    }
-
-    // Sets an ender chest down and empties it the way a shulker is emptied.
-    private boolean enderChestRestock() {
-        return setDownContainer(stack -> stack.is(Items.ENDER_CHEST));
-    }
-
-    // Puts the first matching container down behind you ready to be emptied.
-    private boolean setDownContainer(Predicate<ItemStack> which) {
-        if (hasBlocksSomewhere() || mc.player.getInventory().getFreeSlot() == -1) {
-            return false;
-        }
-        int slot = InventoryUtil.findSlot(which, InventoryUtil.WHOLE_INVENTORY);
-        if (slot == -1) {
-            return false;
-        }
-        if (slot >= InventoryUtil.HOTBAR_SIZE) {
-            return moveToHotbar(slot);
-        }
-        BlockPos spot = PlacedBox.spot();
-        return spot != null && box.setDown(slot, spot, rotatesToPlace());
-    }
-
-    // Sets ender chests down behind you and mines them back for obsidian until enough is held.
-    private boolean enderChestGrind() {
-        if (stage == Stage.NONE) {
-            if (hasBlocksSomewhere() || !allowed(Blocks.OBSIDIAN)
-                || enderChests() <= saveEnderChests.getInt()) {
-                return false;
-            }
-            BlockPos spot = PlacedBox.spot();
-            if (spot == null) {
-                return false;
-            }
-            grindPos = spot;
-            grindGoal = obsidian() + grindAmount.getInt();
-            stage = Stage.GRIND;
-            stageTicks = 0;
-            return true;
-        }
-        BlockState state = BlockUtil.state(grindPos);
-        boolean chestDown = state.is(Blocks.ENDER_CHEST);
-        if (++stageTicks > GRIND_LIMIT || obsidian() >= grindGoal
-            || (!chestDown && enderChests() <= saveEnderChests.getInt())) {
-            endGrind();
-            return false;
-        }
-        if (grindBlockade.isOn() && buildBlockade()) {
-            return true;
-        }
-        if (chestDown) {
-            if (!holdPlainPickaxe(state)) {
-                ChatUtil.error("HighwayBuilder needs a pickaxe without Silk Touch to grind ender chests.");
-                endGrind();
-                return false;
-            }
-            BlockMiner.mineWithHeld(grindPos, rotatesToMine());
-            return true;
-        }
-        BlockMiner.release();
-        if (!BlockUtil.isReplaceable(grindPos)) {
-            endGrind();
-            return false;
-        }
-        int slot = InventoryUtil.findSlot(Items.ENDER_CHEST, InventoryUtil.WHOLE_INVENTORY);
-        if (slot >= InventoryUtil.HOTBAR_SIZE) {
-            return moveToHotbar(slot);
-        }
-        slots.select(slot);
-        BlockUtil.placeAny(grindPos, rotatesToPlace(), true);
-        return true;
-    }
-
-    private void endGrind() {
-        stage = Stage.NONE;
-        grindPos = null;
-        BlockMiner.release();
-    }
-
-    // Fills the sides round you at foot and head height apart from the chest spot.
-    // True when a block went down this tick.
-    private boolean buildBlockade() {
-        BlockPos feet = mc.player.blockPosition();
-        for (int up = 0; up < 2; up++) {
-            for (Direction side : Direction.Plane.HORIZONTAL) {
-                BlockPos pos = feet.above(up).relative(side);
-                if (pos.equals(grindPos) || !BlockUtil.isReplaceable(pos)) {
-                    continue;
-                }
-                int slot = BlockUtil.findBlockSlot();
-                if (slot == -1) {
-                    return false;
-                }
-                slots.select(slot);
-                return BlockUtil.placeAny(pos, rotatesToPlace(), true);
-            }
-        }
-        return false;
-    }
-
-    // True once a pickaxe without Silk Touch is in hand. Only that breaks a chest into obsidian.
-    private boolean holdPlainPickaxe(BlockState state) {
-        int slot = ItemUtil.bestToolSlot(state, 1,
-            stack -> ItemUtil.enchantLevel(Enchantments.SILK_TOUCH, stack) == 0, InventoryUtil.HOTBAR_SIZE);
-        if (slot == -1) {
-            return false;
-        }
-        slots.select(slot);
-        return true;
-    }
-
-    private int enderChests() {
-        return InventoryUtil.count(Items.ENDER_CHEST, InventoryUtil.WHOLE_INVENTORY);
-    }
-
-    private int obsidian() {
-        return InventoryUtil.count(Items.OBSIDIAN, InventoryUtil.WHOLE_INVENTORY);
-    }
-
-    // Quick moves what the build needs out of the open container. False once nothing is left
-    // to take or the inventory has no more room to spare.
-    private boolean emptyShulker(AbstractContainerMenu menu) {
-        if (sinceInventory < inventoryDelay.getInt()) {
-            sinceInventory++;
-            return true;
-        }
-        int containerSlots = menu.slots.size() - InventoryUtil.WHOLE_INVENTORY;
-        if (containerSlots > 0 && freeSlots() > emptySlots.getInt()) {
-            for (int i = 0; i < containerSlots; i++) {
-                Slot slot = menu.slots.get(i);
-                if (!slot.hasItem() || !neededItem(slot.getItem())) {
-                    continue;
-                }
-                MenuClicks.quickMove(menu, i);
-                sinceInventory = 0;
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private boolean hasBlocksSomewhere() {
-        return InventoryUtil.findSlot(stack -> stack.getItem() instanceof BlockItem item
-            && allowed(item.getBlock()), InventoryUtil.WHOLE_INVENTORY) != -1;
-    }
-
-    private int freeSlots() {
-        int free = 0;
-        for (int i = 0; i < InventoryUtil.WHOLE_INVENTORY; i++) {
-            if (mc.player.getInventory().getItem(i).isEmpty()) {
-                free++;
-            }
-        }
-        return free;
-    }
-
-    private boolean neededItem(ItemStack stack) {
-        return (stack.getItem() instanceof BlockItem item && allowed(item.getBlock()))
-            || stack.is(ItemTags.PICKAXES) || stack.has(DataComponents.FOOD);
-    }
-
-    private boolean usefulShulker(ItemStack stack) {
-        if (!(stack.getItem() instanceof BlockItem item)
-            || !(item.getBlock() instanceof ShulkerBoxBlock)) {
-            return false;
-        }
-        ItemContainerContents contents = stack.get(DataComponents.CONTAINER);
-        if (contents == null) {
-            return false;
-        }
-        return contents.nonEmptyItemCopyStream().anyMatch(this::neededItem);
-    }
-
-    // A shulker with nothing the build wants is dead weight.
-    private boolean dropUselessShulker() {
-        for (int i = 0; i < InventoryUtil.WHOLE_INVENTORY; i++) {
-            ItemStack stack = mc.player.getInventory().getItem(i);
-            if (!(stack.getItem() instanceof BlockItem item)
-                || !(item.getBlock() instanceof ShulkerBoxBlock) || usefulShulker(stack)) {
-                continue;
-            }
-            InventoryUtil.throwStack(InventoryUtil.networkSlot(i));
-            sinceInventory = 0;
-            return true;
-        }
-        return false;
-    }
-
-    private boolean restockHotbar() {
-        if (BlockUtil.findBlockSlot(this::allowed) == -1) {
-            int from = InventoryUtil.findSlot(stack -> stack.getItem() instanceof BlockItem item
-                && allowed(item.getBlock()), InventoryUtil.WHOLE_INVENTORY);
-            if (from >= InventoryUtil.HOTBAR_SIZE) {
-                return moveToHotbar(from);
-            }
-        }
-        if (InventoryUtil.hotbarSlot(stack -> stack.is(ItemTags.PICKAXES)) == -1) {
-            int from = InventoryUtil.findSlot(stack -> stack.is(ItemTags.PICKAXES),
-                InventoryUtil.WHOLE_INVENTORY);
-            if (from >= InventoryUtil.HOTBAR_SIZE) {
-                return moveToHotbar(from);
-            }
-        }
-        return false;
-    }
-
-    private boolean moveToHotbar(int from) {
-        InventoryUtil.swap(InventoryUtil.networkSlot(from), InventoryUtil.networkSlot(spareHotbarSlot()));
-        sinceInventory = 0;
-        return true;
-    }
-
-    // An empty slot first then a tool then trash then the smallest stack of blocks.
-    private int spareHotbarSlot() {
-        int smallest = -1;
-        int smallestCount = Integer.MAX_VALUE;
-        int tool = -1;
-        int rubbish = -1;
-        for (int i = 0; i < InventoryUtil.HOTBAR_SIZE; i++) {
-            ItemStack stack = mc.player.getInventory().getItem(i);
-            if (stack.isEmpty()) {
-                return i;
-            }
-            if (trash.contains(stack.getItem())) {
-                rubbish = i;
-            } else if (stack.isDamageableItem() && !stack.is(ItemTags.PICKAXES)) {
-                tool = i;
-            } else if (stack.getItem() instanceof BlockItem && stack.getCount() < smallestCount) {
-                smallestCount = stack.getCount();
-                smallest = i;
-            }
-        }
-        if (tool != -1) {
-            return tool;
-        }
-        if (rubbish != -1) {
-            return rubbish;
-        }
-        return smallest == -1 ? InventoryUtil.HOTBAR_SIZE - 1 : smallest;
-    }
-
-    // The biggest trash block stack stays behind for plugging liquid and corners.
-    private boolean dropTrash() {
-        int keep = -1;
-        int keepCount = 0;
-        for (int i = 0; i < InventoryUtil.WHOLE_INVENTORY; i++) {
-            ItemStack stack = mc.player.getInventory().getItem(i);
-            if (stack.getItem() instanceof BlockItem && trash.contains(stack.getItem())
-                && stack.getCount() > keepCount) {
-                keepCount = stack.getCount();
-                keep = i;
-            }
-        }
-        for (int i = 0; i < InventoryUtil.WHOLE_INVENTORY; i++) {
-            ItemStack stack = mc.player.getInventory().getItem(i);
-            if (i == keep || stack.isEmpty() || !trash.contains(stack.getItem())) {
-                continue;
-            }
-            // Facing back and up keeps the pile off the line ahead. The look goes out first.
-            FaceMode.SPAM.faceExact(mc.player.getYRot() + 180, -25, RotationPriority.IDLE);
-            InventoryUtil.throwStack(InventoryUtil.networkSlot(i));
-            sinceInventory = 0;
-            return true;
-        }
-        return false;
-    }
-
     // An end crystal in the way is a trap. Three arrows and then it is left alone.
     private boolean shootCrystal() {
         if (!crystalTraps.isOn()) {
-            releaseBow();
+            bowDraw.letGo();
             return false;
         }
         if (crystal != null && (!crystal.isAlive() || outOfBand(crystal))) {
@@ -1453,7 +1140,7 @@ public final class HighwayBuilder extends Module {
             crystalShots = 0;
         }
         if (crystal == null) {
-            releaseBow();
+            bowDraw.letGo();
             return false;
         }
         int slot = InventoryUtil.hotbarSlot(stack -> stack.is(Items.BOW));
@@ -1462,11 +1149,22 @@ public final class HighwayBuilder extends Module {
             crystal = null;
             return false;
         }
+        // The bow draws nothing without an arrow and arrows can run out between shots.
+        if (mc.player.getProjectile(mc.player.getInventory().getItem(slot)).isEmpty()) {
+            if (!toldNoArrows) {
+                toldNoArrows = true;
+                tell("has no arrows for the crystal ahead.");
+            }
+            ignoredCrystals.add(crystal.getId());
+            crystal = null;
+            bowDraw.letGo();
+            return false;
+        }
         BlockMiner.release();
         slots.select(slot);
         aimAtCrystal();
         if (mc.player.getTicksUsingItem() >= BowItem.MAX_DRAW_DURATION) {
-            releaseBow();
+            bowDraw.letGo();
             crystalShots++;
             if (crystalShots >= CRYSTAL_SHOTS) {
                 ignoredCrystals.add(crystal.getId());
@@ -1474,35 +1172,13 @@ public final class HighwayBuilder extends Module {
             }
             return true;
         }
-        InputUtil.hold(mc.options.keyUse);
-        drawing = true;
+        bowDraw.hold();
         return true;
     }
 
-    private void releaseBow() {
-        if (drawing) {
-            InputUtil.release(mc.options.keyUse);
-            drawing = false;
-        }
-    }
-
     private Entity findCrystal() {
-        Entity best = null;
-        double bestDistance = Double.MAX_VALUE;
-        for (Entity entity : mc.level.entitiesForRendering()) {
-            if (!(entity instanceof EndCrystal) || ignoredCrystals.contains(entity.getId())) {
-                continue;
-            }
-            if (outOfBand(entity) || !mc.player.hasLineOfSight(entity)) {
-                continue;
-            }
-            double distance = mc.player.distanceTo(entity);
-            if (distance < bestDistance) {
-                bestDistance = distance;
-                best = entity;
-            }
-        }
-        return best;
+        return EntityUtil.nearest(Double.MAX_VALUE, entity -> entity instanceof EndCrystal
+            && !ignoredCrystals.contains(entity.getId()) && !outOfBand(entity) && mc.player.hasLineOfSight(entity));
     }
 
     private boolean outOfBand(Entity entity) {
@@ -1510,26 +1186,13 @@ public final class HighwayBuilder extends Module {
         return distance < CRYSTAL_NEAR || distance > CRYSTAL_FAR;
     }
 
+    // The arrow leaves from a little below the eyes.
     private void aimAtCrystal() {
         Vec3 at = crystal.getBoundingBox().getCenter();
-        RotationManager.requestExact(RotationManager.yawTo(at), bowPitch(mc.player.getEyePosition(), at),
-            RotationPriority.ATTACK);
-    }
-
-    // The lower of the two arcs that reach the point with no drag worked in.
-    private static float bowPitch(Vec3 from, Vec3 to) {
-        double dx = to.x - from.x;
-        double dz = to.z - from.z;
-        double flat = Math.sqrt(dx * dx + dz * dz);
-        double rise = to.y - from.y;
-        double g = ProjectileUtil.ARROW_GRAVITY;
-        double v2 = ProjectileUtil.BOW_SPEED * ProjectileUtil.BOW_SPEED;
-        double root = v2 * v2 - g * (g * flat * flat + 2 * rise * v2);
-        if (root < 0 || flat < 0.01) {
-            return (float) -Math.toDegrees(Math.atan2(rise, Math.max(flat, 0.01)));
-        }
-        double angle = Math.atan((v2 - Math.sqrt(root)) / (g * flat));
-        return (float) -Math.toDegrees(angle);
+        Vec3 start = mc.player.getEyePosition().subtract(0, ProjectilePath.BELOW_EYES, 0);
+        ProjectilePath.Arc arc = ProjectilePath.arrowArc(start, at, ProjectileUtil.BOW_SPEED);
+        float pitch = arc == null ? RotationManager.pitchTo(at) : arc.pitch();
+        RotationManager.requestExact(RotationManager.yawTo(at), pitch, RotationPriority.ATTACK);
     }
 
     // Nothing in reach was left to do. Steps aside for a block the line cannot reach and
@@ -1541,7 +1204,7 @@ public final class HighwayBuilder extends Module {
             walker.holdLane(step.lane());
             waitingOn = step.block();
             status = Status.STEPPING;
-            stopWalking();
+            forward.letGo();
             return;
         }
         walker.holdLane(homeLane());
@@ -1557,17 +1220,17 @@ public final class HighwayBuilder extends Module {
             idleTicks = 0;
         }
         if (freeLook.isOn()) {
-            stopWalking();
+            forward.letGo();
             if (go) {
                 walker.walkAlong(WALK_SPEED);
             }
+        } else if (go) {
+            forward.hold();
         } else {
-            walking = go;
-            if (go) {
-                mc.options.keyUp.setDown(true);
-            } else {
-                InputUtil.release(mc.options.keyUp);
-            }
+            forward.letGo();
+            // The key goes up whoever held it. That keeps an AutoWalk switched on before HighwayBuilder
+            // from carrying you past the block waited on. Both tick in the order they were switched on.
+            InputUtil.release(mc.options.keyUp);
         }
         if (go) {
             jumpStep(here);
@@ -1692,7 +1355,7 @@ public final class HighwayBuilder extends Module {
             leftUndone++;
             if (!toldLeft) {
                 toldLeft = true;
-                ChatUtil.message("§bHighwayBuilder §7left a block it cannot reach at §f"
+                tell("left a block it cannot reach at §f"
                     + BlockUtil.text(pos) + "§7.");
             }
         }
@@ -1704,13 +1367,6 @@ public final class HighwayBuilder extends Module {
         if (mc.player.onGround() && mc.player.horizontalCollision
             && plan.floorAt(depth + 1) > plan.floorAt(depth)) {
             mc.player.jumpFromGround();
-        }
-    }
-
-    private void stopWalking() {
-        if (walking) {
-            walking = false;
-            InputUtil.release(mc.options.keyUp);
         }
     }
 
@@ -1735,13 +1391,23 @@ public final class HighwayBuilder extends Module {
         return AxisWalker.rightLane(width.getInt());
     }
 
-    // The totals are read once turning off has counted the blocks passed by.
     private void stop(String reason) {
         ChatUtil.error(reason);
+        turnOff(reason);
+    }
+
+    // The highway came to the end Stop at set for it.
+    private void finish() {
+        tell("reached the end you set.");
+        turnOff("It reached the end you set.");
+    }
+
+    // The totals are read once turning off has counted the blocks passed by.
+    private void turnOff(String reason) {
         boolean leave = disconnectOnStop.isOn() && inGame();
         setEnabled(false);
         if (leave) {
-            ChatUtil.leaveServer("HighwayBuilder stopped.\n§7" + reason + "\n§7It " + totals());
+            Leave.QUIT.go("HighwayBuilder stopped.\n§7" + reason + "\n§7It " + totals());
         }
     }
 
@@ -1778,7 +1444,7 @@ public final class HighwayBuilder extends Module {
         int color = ColorUtil.withAlpha(outlineColor.getColor(), 255);
         int here = (int) Math.floor(walker.travelled());
         int first = here - BEHIND;
-        int last = here + AHEAD;
+        int last = (int) Math.min(here + AHEAD, Math.round(runEnd));
         double left = leftLane() - 0.5;
         double right = rightLane() + 0.5;
         for (int depth = first; depth <= last; depth++) {

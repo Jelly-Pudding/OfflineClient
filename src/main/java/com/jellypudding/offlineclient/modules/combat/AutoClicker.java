@@ -11,14 +11,13 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.AttackTimer;
 import com.jellypudding.offlineclient.util.BlockUtil;
-import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
-import com.jellypudding.offlineclient.util.InputUtil;
+import com.jellypudding.offlineclient.util.HeldKey;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.SwingMode;
 import com.jellypudding.offlineclient.util.WorldWatch;
-import net.minecraft.client.KeyMapping;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.LivingEntity;
@@ -48,7 +47,7 @@ public final class AutoClicker extends Module {
             "Hits the mob or player under your crosshair whilst you hold the attack button. "
                 + "Waits for the full attack cooldown between hits and never hits a friend.");
     private final NumberSetting leftDelay = new NumberSetting("Left delay",
-        "Ticks between taps of the attack button.", 2, 0, 60, 1, " ticks").min(0)
+        "Ticks between taps of the attack button.", 2, 0, 60, 1, " ticks")
         .under(left, Left.PRESS);
     private final EnumSetting<Right> right = new EnumSetting<>("Right click",
         "What happens to the use button.", Right.OFF)
@@ -56,7 +55,7 @@ public final class AutoClicker extends Module {
         .describe(Right.HOLD, "Keeps the use button held down. Blocks are placed and food eaten as if you held it yourself.")
         .describe(Right.PRESS, "Taps the use button on a timer.");
     private final NumberSetting rightDelay = new NumberSetting("Right delay",
-        "Ticks between taps of the use button.", 2, 0, 60, 1, " ticks").min(0)
+        "Ticks between taps of the use button.", 2, 0, 60, 1, " ticks")
         .under(right, Right.PRESS);
     private final EnumSetting<Target> useTarget = new EnumSetting<>("Target",
         "What the use button clicks.", Target.CROSSHAIR)
@@ -65,7 +64,7 @@ public final class AutoClicker extends Module {
         .under(right, Right.PRESS);
     private final KeybindSetting markKey = new KeybindSetting("Mark key",
         "Adds or removes the block you look at from the marked blocks.", KeybindSetting.UNBOUND)
-        .under(useTarget, Target.MARKED);
+        .heardWhilstOff().under(useTarget, Target.MARKED);
     private final BoxStyle markedStyle = new BoxStyle("Marked", BoxStyle.Shape.LINES, MARKED_HUE)
         .under(useTarget, Target.MARKED);
     private final NumberSetting stopAfter = new NumberSetting("Stop after",
@@ -76,8 +75,8 @@ public final class AutoClicker extends Module {
 
     private int leftTimer;
     private int rightTimer;
-    private boolean holdingAttack;
-    private boolean holdingUse;
+    private final HeldKey attackKey = new HeldKey(options -> options.keyAttack);
+    private final HeldKey useKey = new HeldKey(options -> options.keyUse);
     private int clicks;
 
     // The marked blocks in the order they were marked and the one clicked next. They belong to
@@ -90,7 +89,7 @@ public final class AutoClicker extends Module {
     private final Object marker = new Object() {
         @Subscribe
         private void onKeyPress(KeyPressEvent event) {
-            if (event.presses(markKey) && clicksMarked() && inGame() && mc.gui.screen() == null) {
+            if (clicksMarked() && inGame() && mc.gui.screen() == null && event.presses(markKey)) {
                 markAimed();
             }
         }
@@ -132,7 +131,7 @@ public final class AutoClicker extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || mc.player.isSpectator()) {
+        if (mc.player.isSpectator()) {
             letGo();
             return;
         }
@@ -149,15 +148,12 @@ public final class AutoClicker extends Module {
 
     private void tickLeft() {
         if (!left.is(Left.HOLD)) {
-            holdingAttack = release(mc.options.keyAttack, holdingAttack);
+            attackKey.letGo();
         }
         switch (left.getValue()) {
             case OFF -> {
             }
-            case HOLD -> {
-                InputUtil.hold(mc.options.keyAttack);
-                holdingAttack = true;
-            }
+            case HOLD -> attackKey.hold();
             case PRESS -> {
                 if (++leftTimer > leftDelay.getInt()) {
                     leftTimer = 0;
@@ -171,15 +167,12 @@ public final class AutoClicker extends Module {
 
     private void tickRight() {
         if (!right.is(Right.HOLD)) {
-            holdingUse = release(mc.options.keyUse, holdingUse);
+            useKey.letGo();
         }
         switch (right.getValue()) {
             case OFF -> {
             }
-            case HOLD -> {
-                InputUtil.hold(mc.options.keyUse);
-                holdingUse = true;
-            }
+            case HOLD -> useKey.hold();
             case PRESS -> {
                 if (++rightTimer > rightDelay.getInt()) {
                     rightTimer = 0;
@@ -199,7 +192,7 @@ public final class AutoClicker extends Module {
             || Modules.maceComboAirborne()) {
             return;
         }
-        if (mc.player.getAttackStrengthScale(0.5f) < 1) {
+        if (!AttackTimer.charged()) {
             return;
         }
         LivingEntity target = null;
@@ -235,7 +228,7 @@ public final class AutoClicker extends Module {
     // Switches the clicker off once Stop after is reached.
     private void counted() {
         if (stopAfter.getInt() > 0 && ++clicks >= stopAfter.getInt()) {
-            ChatUtil.message("§bAutoClicker §7stopped after §f" + clicks + "§7 clicks.");
+            tell("stopped after §f" + clicks + "§7 clicks.");
             setEnabled(false);
         }
     }
@@ -258,10 +251,10 @@ public final class AutoClicker extends Module {
         syncWorld();
         BlockPos pos = hit.getBlockPos().immutable();
         if (marked.remove(pos)) {
-            ChatUtil.message("§bAutoClicker §7unmarked §f" + BlockUtil.text(pos) + "§7.");
+            tell("unmarked §f" + BlockUtil.text(pos) + "§7.");
         } else {
             marked.add(pos);
-            ChatUtil.message("§bAutoClicker §7marked §f" + BlockUtil.text(pos) + "§7.");
+            tell("marked §f" + BlockUtil.text(pos) + "§7.");
         }
     }
 
@@ -274,15 +267,7 @@ public final class AutoClicker extends Module {
     }
 
     private void letGo() {
-        holdingAttack = release(mc.options.keyAttack, holdingAttack);
-        holdingUse = release(mc.options.keyUse, holdingUse);
-    }
-
-    // Always false afterwards. Only a key this module pressed is let go of.
-    private static boolean release(KeyMapping key, boolean held) {
-        if (held) {
-            InputUtil.release(key);
-        }
-        return false;
+        attackKey.letGo();
+        useKey.letGo();
     }
 }

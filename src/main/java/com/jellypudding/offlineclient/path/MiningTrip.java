@@ -4,6 +4,7 @@ import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.util.BlockMiner;
 import com.jellypudding.offlineclient.util.BlockUtil;
+import com.jellypudding.offlineclient.util.BreakTime;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.Cooldowns;
 import com.jellypudding.offlineclient.util.ServerInfo;
@@ -87,6 +88,12 @@ public final class MiningTrip {
         return this;
     }
 
+    // Whether a walk may dig through whatever stands in its way. Off it only goes round.
+    public MiningTrip digsThrough(boolean on) {
+        trip.finder().breakBlocks(on);
+        return this;
+    }
+
     public BlockPos target() {
         return target;
     }
@@ -144,7 +151,7 @@ public final class MiningTrip {
             trip.stop();
             // A block the server keeps refusing comes back every time it breaks.
             int patience = GIVE_UP_TICKS + ServerInfo.pingTicks();
-            if (++miningTicks - patience > BlockUtil.breakTicks(target)) {
+            if (++miningTicks - patience > BreakTime.breakTicks(target)) {
                 giveUp();
                 return true;
             }
@@ -161,7 +168,8 @@ public final class MiningTrip {
             letGo();
             return false;
         }
-        // The walker digs its own way through. The block mined before is let go only as a walk starts.
+        // The walker digs its own way through unless the caller said not to. The block mined
+        // before is let go only as a walk starts.
         if (!trip.active()) {
             BlockMiner.release();
             trip.start(target, GOAL_RADIUS);

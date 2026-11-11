@@ -165,7 +165,7 @@ public final class ItemUtil {
             + attributeValue(stack, Attributes.ATTACK_DAMAGE, slot)
             + toolSpeed(stack) + enchantmentLevels(stack);
         if (stack.isDamageableItem()) {
-            score *= (stack.getMaxDamage() - stack.getDamageValue()) / (double) stack.getMaxDamage();
+            score *= usesLeft(stack) / (double) stack.getMaxDamage();
         }
         return score;
     }
@@ -195,13 +195,18 @@ public final class ItemUtil {
         return stack.is(Items.GOLDEN_APPLE) || stack.is(Items.ENCHANTED_GOLDEN_APPLE);
     }
 
+    // False for a spear. The server drops a plain hit whilst the main hand holds one.
+    public static boolean landsPlainHit(ItemStack held) {
+        return !held.has(DataComponents.PIERCING_WEAPON);
+    }
+
     public static boolean nearlyBroken(ItemStack stack) {
         return nearlyBroken(stack, BREAK_MARGIN);
     }
 
     // True when this many durability points or fewer remain.
     public static boolean nearlyBroken(ItemStack stack, int margin) {
-        return stack.isDamageableItem() && stack.getMaxDamage() - stack.getDamageValue() <= margin;
+        return stack.isDamageableItem() && usesLeft(stack) <= margin;
     }
 
     // True when a potion or a tipped arrow carries the effect.
@@ -222,18 +227,37 @@ public final class ItemUtil {
         return false;
     }
 
+    // Durability points left before the stack breaks.
+    public static int usesLeft(ItemStack stack) {
+        return stack.getMaxDamage() - stack.getDamageValue();
+    }
+
     // How much of the durability is left out of a hundred.
     public static double durabilityPercent(ItemStack stack) {
-        return 100.0 * (stack.getMaxDamage() - stack.getDamageValue()) / stack.getMaxDamage();
+        return 100.0 * usesLeft(stack) / stack.getMaxDamage();
     }
 
     // True when the remaining durability is at or under this share of the whole.
     public static boolean wornBelow(ItemStack stack, double share) {
-        if (!stack.isDamageableItem()) {
-            return false;
+        return stack.isDamageableItem() && usesLeft(stack) <= stack.getMaxDamage() * share;
+    }
+
+    // True when both lists hold the same stacks slot by slot. Lists of two lengths never do.
+    public static boolean sameStacks(List<ItemStack> one, List<ItemStack> other) {
+        return one.size() == other.size() && sameContents(one, other);
+    }
+
+    // The same where a slot past the end of the shorter list counts as empty. The contents a box
+    // carries leave out the empty slots at its end and an open box shows every slot.
+    public static boolean sameContents(List<ItemStack> one, List<ItemStack> other) {
+        for (int i = 0; i < Math.max(one.size(), other.size()); i++) {
+            ItemStack a = i < one.size() ? one.get(i) : ItemStack.EMPTY;
+            ItemStack b = i < other.size() ? other.get(i) : ItemStack.EMPTY;
+            if (!ItemStack.matches(a, b)) {
+                return false;
+            }
         }
-        int max = stack.getMaxDamage();
-        return max - stack.getDamageValue() <= max * share;
+        return true;
     }
 
     // The level of an enchantment on a stack. Zero when absent.
@@ -285,8 +309,12 @@ public final class ItemUtil {
         return bestSlot;
     }
 
-    // As selectBestTool but a slot the player picked themselves is left alone.
+    // As selectBestTool but a slot the player picked themselves is left alone. A slot a later
+    // loan covers waits until that loan gives its stack back.
     public static void holdBestTool(BlockState state, InventoryUtil.SlotSwap slots) {
+        if (slots.covered()) {
+            return;
+        }
         if (slots.isHolding() && !slots.stillMine()) {
             slots.forget();
             return;
@@ -334,15 +362,20 @@ public final class ItemUtil {
 
     // Null for items that cannot be worn.
     public static EquipmentSlot equipSlot(ItemStack stack) {
-        Equippable equippable = stack.getItem().components().get(DataComponents.EQUIPPABLE);
+        Equippable equippable = stack.get(DataComponents.EQUIPPABLE);
         return equippable == null ? null : equippable.slot();
+    }
+
+    // The slot as a player reads it such as main hand or offhand or head.
+    public static String slotWords(EquipmentSlot slot) {
+        return slot == EquipmentSlot.MAINHAND ? "main hand" : slot.getName();
     }
 
     // Sums a flat attribute the item grants in a slot. Multiplier style
     // modifiers scale a base of zero.
     public static double attributeValue(ItemStack stack, Holder<Attribute> attribute, EquipmentSlot slot) {
-        ItemAttributeModifiers modifiers = stack.getItem().components()
-            .getOrDefault(DataComponents.ATTRIBUTE_MODIFIERS, ItemAttributeModifiers.EMPTY);
+        ItemAttributeModifiers modifiers = stack.getOrDefault(DataComponents.ATTRIBUTE_MODIFIERS,
+            ItemAttributeModifiers.EMPTY);
         double flat = 0;
         double scale = 1;
         for (ItemAttributeModifiers.Entry entry : modifiers.modifiers()) {

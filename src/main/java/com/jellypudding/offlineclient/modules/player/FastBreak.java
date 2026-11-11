@@ -12,6 +12,7 @@ import com.jellypudding.offlineclient.setting.ListMode;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
+import com.jellypudding.offlineclient.util.BreakTime;
 import com.jellypudding.offlineclient.util.PacketUtil;
 import net.minecraft.client.multiplayer.MultiPlayerGameMode;
 import net.minecraft.client.player.LocalPlayer;
@@ -49,10 +50,10 @@ public final class FastBreak extends Module {
         .describe(Mode.DAMAGE, "Reports the block finished as soon as the server would accept it.");
     private final NumberSetting speed = new NumberSetting("Speed",
         "Speeds up the break the client predicts. The server keeps its own timer.",
-        1, 1, 10, 0.1, "x").min(1).under(mode, Mode.NORMAL);
+        1, 1, 10, 0.1, "x").under(mode, Mode.NORMAL);
     private final NumberSetting hasteLevel = new NumberSetting("Haste level",
         "Level of the Haste effect. Above two is not recommended.", 2, 1, 5, 1, "")
-        .min(1).under(mode, Mode.HASTE);
+        .under(mode, Mode.HASTE);
     private final BoolSetting instamine = new BoolSetting("Instamine",
         "Removes a block on the first click when the server will finish it within two ticks.",
         true).under(mode, Mode.DAMAGE);
@@ -69,11 +70,11 @@ public final class FastBreak extends Module {
         "Ticks between breaking blocks. Vanilla waits " + VANILLA_DELAY + ".", 0, 0, VANILLA_DELAY, 1, " ticks");
     private final NumberSetting chance = new NumberSetting("Chance",
         "Share of blocks that get sped up. Below a hundred the timing looks less mechanical.",
-        100, 1, 100, 1, "%").min(1).max(100);
+        100, 1, 100, 1, "%").max(100);
     private final BoolSetting safeFirstClick = new BoolSetting("Safe first click",
         "A single click on a block that breaks instantly does nothing. Hold to break it.", false);
     private final BoolSetting airPenalty = new BoolSetting("No air penalty",
-        "Mine at full speed in the air. Vanilla mines five times slower off the ground.", true);
+        "Lets you mine at full speed in the air. Vanilla mines five times slower off the ground.", true);
 
     // Ticks the vanilla wait is left alone after a guarded click.
     private int guardTicks;
@@ -121,7 +122,7 @@ public final class FastBreak extends Module {
         float adjusted = vanilla;
         // Vanilla divides purely on being off the ground. Water has its own factor.
         if (claimsGround(mc.player)) {
-            adjusted *= BlockUtil.AIR_PENALTY;
+            adjusted *= BreakTime.AIR_PENALTY;
         }
         if (!mode.is(Mode.NORMAL) || !allows(state.getBlock()) || !lucky(aimedBlock())) {
             return adjusted;
@@ -160,7 +161,7 @@ public final class FastBreak extends Module {
         if (hardness <= 0) {
             return after;
         }
-        float divisor = BlockUtil.breakDivisor(hardness, mc.player.hasCorrectToolForDrops(state));
+        float divisor = BreakTime.breakDivisor(hardness, mc.player.hasCorrectToolForDrops(state));
         boolean instantBefore = before / divisor >= 1;
         boolean instantAfter = after / divisor >= 1;
         return instantBefore == instantAfter ? after : SAFE_PROGRESS * divisor;
@@ -171,7 +172,7 @@ public final class FastBreak extends Module {
         if (!isEnabled() || !mode.is(Mode.DAMAGE) || !allows(state.getBlock()) || !lucky(aimedBlock())) {
             return delta;
         }
-        return progress + delta >= BlockUtil.SERVER_ACCEPTS ? 1 : delta;
+        return progress + delta >= BreakTime.SERVER_ACCEPTS ? 1 : delta;
     }
 
     // True when a first click should remove the block outright with a start and
@@ -212,7 +213,7 @@ public final class FastBreak extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || mc.gameMode == null) {
+        if (mc.gameMode == null) {
             return;
         }
         if (mode.is(Mode.HASTE)) {

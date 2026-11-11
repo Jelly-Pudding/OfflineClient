@@ -2,21 +2,21 @@ package com.jellypudding.offlineclient.command.commands;
 
 import com.jellypudding.offlineclient.command.CommandManager;
 import com.jellypudding.offlineclient.command.KeyedCommand;
+import com.jellypudding.offlineclient.config.MacroLine;
 import com.jellypudding.offlineclient.config.MacroStore;
 import com.jellypudding.offlineclient.config.MacroStore.Macro;
-import com.jellypudding.offlineclient.setting.KeybindSetting;
+import com.jellypudding.offlineclient.setting.Bind;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.ServerInfo;
+import com.jellypudding.offlineclient.util.Tally;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.OptionalInt;
 
-// Lines are split on a semicolon. Several can go under one name.
+// Lines are split on a semicolon. Several can go under one name. A line can wait or repeat
+// another and the word cycle in front makes a macro that runs one line a press.
 public final class MacroCommand extends KeyedCommand<Macro> {
-
-    private static final String SPLIT = ";";
 
     // Where a macro runs on joining. Here is the server you are on.
     private static final String HERE = "here";
@@ -26,8 +26,8 @@ public final class MacroCommand extends KeyedCommand<Macro> {
     private static final String JOIN_USAGE = "macro join <name> <here|everywhere|off> [seconds]";
 
     public MacroCommand() {
-        super("macro", "Saves a list of lines under a name and a key or to run when you join.", "macro",
-            List.of("add", "run", "join"), "[name] [lines]", "m");
+        super("macro", "Saves a list of lines under a name and a key or to run when you join. A line can wait"
+                + " or repeat another.", "macro", List.of("add", "run", "stop", "join"), "[name] [lines]", "m");
     }
 
     @Override
@@ -40,6 +40,7 @@ public final class MacroCommand extends KeyedCommand<Macro> {
         switch (verb) {
             case "add" -> add(args);
             case "run" -> run(args);
+            case "stop" -> stop(args);
             case "join" -> join(args);
             default -> usage();
         }
@@ -48,7 +49,7 @@ public final class MacroCommand extends KeyedCommand<Macro> {
     @Override
     protected String summary(Macro macro) {
         String join = macro.joinText() == null ? "" : " §8" + macro.joinText();
-        return String.join("§8 " + SPLIT + " §7", macro.lines()) + join;
+        return macro.typedText() + join + (store().running(macro.name()) ? " §arunning" : "");
     }
 
     @Override
@@ -60,23 +61,21 @@ public final class MacroCommand extends KeyedCommand<Macro> {
     private void add(String[] args) {
         if (args.length < 3) {
             usage("macro add <name> <lines>");
+            ChatUtil.message("§7Put a semicolon between lines. §f" + MacroLine.WAIT + " 2s§7 pauses and §f"
+                + MacroLine.REPEAT + " 3 1s hello§7 says hello three times a second apart. Start with §f"
+                + MacroStore.CYCLE + "§7 to run one line a press.");
             return;
         }
-        String text = words(args, 2);
-        List<String> lines = new ArrayList<>();
-        for (String line : text.split(SPLIT)) {
-            if (!line.isBlank()) {
-                lines.add(line.trim());
-            }
-        }
-        if (lines.isEmpty()) {
-            ChatUtil.error("Give it something to run.");
+        MacroStore.Typed typed = MacroStore.typed(words(args, 2));
+        if (typed.problem() != null) {
+            ChatUtil.error(typed.problem());
             return;
         }
         Macro existing = store().find(args[1]);
-        store().add(existing == null
-            ? new Macro(args[1], KeybindSetting.UNBOUND, lines) : existing.withLines(lines));
-        ChatUtil.message("§b" + args[1] + " §7saved with §b" + lines.size() + " §7lines.");
+        store().add(existing == null ? new Macro(args[1], Bind.NONE, typed) : existing.with(typed));
+        String lines = "§b" + Tally.counted(typed.lines().size(), "line") + "§7";
+        ChatUtil.message(typed.cycles() ? "§b" + args[1] + " §7saved. Each press runs the next of its " + lines + "."
+            : "§b" + args[1] + " §7saved with " + lines + ".");
     }
 
     private void run(String[] args) {
@@ -87,6 +86,20 @@ public final class MacroCommand extends KeyedCommand<Macro> {
         Macro macro = find(args[1]);
         if (macro != null) {
             store().run(macro);
+        }
+    }
+
+    // Without a name every macro still running ends.
+    private void stop(String[] args) {
+        if (args.length > 2) {
+            usage("macro stop [name]");
+            return;
+        }
+        int stopped = store().stop(args.length == 2 ? args[1] : null);
+        if (stopped > 0) {
+            ChatUtil.message("§7Stopped §b" + Tally.counted(stopped, "macro") + "§7.");
+        } else {
+            ChatUtil.message(args.length == 2 ? "§b" + args[1] + " §7is not running." : "§7No macro is running.");
         }
     }
 
@@ -134,6 +147,9 @@ public final class MacroCommand extends KeyedCommand<Macro> {
     public List<String> complete(String[] tokens, int index, String current) {
         if (index == 3 && tokens[1].equalsIgnoreCase("join")) {
             return CommandManager.filter(current, List.of(HERE, EVERYWHERE, OFF));
+        }
+        if (index == 3 && tokens[1].equalsIgnoreCase("add")) {
+            return CommandManager.filter(current, List.of(MacroStore.CYCLE));
         }
         return super.complete(tokens, index, current);
     }

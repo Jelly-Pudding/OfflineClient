@@ -16,24 +16,24 @@ import com.jellypudding.offlineclient.util.RotationPriority;
 import com.jellypudding.offlineclient.util.SwingMode;
 import com.jellypudding.offlineclient.util.TargetFilter;
 import com.jellypudding.offlineclient.util.TargetPriority;
-import net.minecraft.world.InteractionHand;
+import com.jellypudding.offlineclient.util.Targeting;
 import net.minecraft.world.entity.Entity;
 
 import java.util.List;
 
-public final class TriggerBot extends Module {
+public final class TriggerBot extends Module implements Targeting {
 
     private final NumberSetting range = new NumberSetting("Range",
-        "Maximum reach in blocks.", 4.2, 1, 10, 0.05);
+        "Maximum reach.", 4.2, 1, 10, 0.05, " blocks");
     private final NumberSetting fov = new NumberSetting("FOV",
-        "Only hit what sits within this angle of your view. Small values act as a crosshair check.",
+        "Only hits what sits within this angle of your view. Small values act as a crosshair check.",
         30, 30, 360, 10, " degrees").min(1).max(360);
     private final EnumSetting<TargetPriority> priority =
         TargetPriority.setting("Attacks", TargetPriority.CLOSEST_ANGLE);
-    private final EntityFilter filter = EntityFilter.living("Swing at", "hit", true,
+    private final EntityFilter filter = EntityFilter.living("Swings at", "hit", true,
         EntityFilter.Pick.ALL, List.of());
     private final BoolSetting onlyOnClick = new BoolSetting("Only on click",
-        "Only swing whilst you hold the attack key down.", false);
+        "Only swings whilst you hold the attack key down.", false);
     private final BoolSetting whilstBlocking = new BoolSetting("Attack whilst blocking",
         "Swings even whilst you hold a shield up.", false);
     private final EnumSetting<FaceMode> faceTarget = FaceMode.setting(FaceMode.SPAM);
@@ -41,8 +41,10 @@ public final class TriggerBot extends Module {
     private final TargetFilter targets = new TargetFilter();
     private final AttackTimer timer = new AttackTimer();
 
+    private Entity target;
+
     public TriggerBot() {
-        super("TriggerBot", "Swings at whatever your crosshair is on.", Category.COMBAT);
+        super("TriggerBot", "Swings at whatever sits near your crosshair.", Category.COMBAT);
         addSettings(range, fov, priority);
         addSettings(filter.settings());
         addSettings(targets.settings());
@@ -51,14 +53,26 @@ public final class TriggerBot extends Module {
         searchTags("click aura", "trigger");
     }
 
+    // What it swings at near the crosshair. Null whilst nothing is in reach and whilst it holds off.
+    @Override
+    public Entity getFought() {
+        return target;
+    }
+
     @Override
     protected void onEnable() {
         timer.clear();
     }
 
+    @Override
+    protected void onDisable() {
+        target = null;
+    }
+
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || mc.gui.screen() != null || mc.player.isSpectator()) {
+        target = null;
+        if (mc.gui.screen() != null || mc.player.isSpectator()) {
             return;
         }
         boolean blocking = whilstBlocking.isOn() && mc.player.isBlocking();
@@ -69,18 +83,14 @@ public final class TriggerBot extends Module {
         if (onlyOnClick.isOn() && !mc.options.keyAttack.isDown()) {
             return;
         }
-        if (mc.player.getAttackStrengthScale(0.5f) < 1 || !timer.ready()) {
+        // Picked before the cooldown is read. Other modules stand aside for the target whilst the cooldown fills.
+        target = EntityUtil.bestInReach(range.getValue(), priority.getValue(), this::attackable);
+        if (target == null || !AttackTimer.charged() || !timer.ready()) {
             return;
         }
-        Entity target = EntityUtil.bestInReach(range.getValue(), priority.getValue(), this::attackable);
-        if (target == null) {
-            return;
-        }
-        // The look packet goes out first. The server sees a fair hit.
+        // Only Spam turns ahead of the hit. Server and Client turn in the movement packet after it.
         faceTarget.getValue().face(target.getBoundingBox().getCenter(), RotationPriority.ATTACK);
-        mc.gameMode.attack(mc.player, target);
-        swing.getValue().swing(InteractionHand.MAIN_HAND);
-        timer.spent();
+        timer.strike(target, swing.getValue());
     }
 
     private boolean attackable(Entity entity) {

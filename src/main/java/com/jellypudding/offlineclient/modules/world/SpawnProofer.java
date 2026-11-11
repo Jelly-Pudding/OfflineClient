@@ -21,7 +21,7 @@ public final class SpawnProofer extends AreaPlacer {
     public enum Mode { ALWAYS, POTENTIAL, BOTH }
 
     private final NumberSetting light = new NumberSetting("Light",
-        "Highest block light a spot may have.", 0, 0, 15, 1).min(0).max(15);
+        "Highest block light a spot may have.", 0, 0, 15, 1).max(15);
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
         "Which dark spots are worth blocking off.", Mode.BOTH)
         .describe(Mode.ALWAYS, "Only spots that stay dark in daylight.")

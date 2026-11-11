@@ -3,11 +3,9 @@ package com.jellypudding.offlineclient.util;
 import com.jellypudding.offlineclient.OfflineClient;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
-import net.minecraft.tags.BlockTags;
-import net.minecraft.core.Direction;
 import net.minecraft.world.entity.EntityTypes;
+import net.minecraft.world.entity.SpawnPlacementTypes;
 import net.minecraft.world.level.LightLayer;
-import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -23,14 +21,11 @@ public final class SpawnUtil {
     // Sky light at or above this leaves a spot too bright for a mob until dusk.
     private static final int NIGHT_ONLY_SKY_LIGHT = 8;
 
-    // The floor has to be a sturdy top face with two blocks above clear and dark enough.
+    // The game's own ground rule with a creeper as the mob. The floor block has to take a spawn
+    // and the spot and the block above it have to be open and safe. A creeper's box has to fit
+    // when asked and the block light has to be low enough.
     public static boolean spawnable(BlockPos pos, int maxLight, boolean hitbox) {
-        BlockPos below = pos.below();
-        BlockState floor = MC.level.getBlockState(below);
-        if (floor.isAir() || !floor.isFaceSturdy(MC.level, below, Direction.UP)) {
-            return false;
-        }
-        if (!isOpen(pos) || !isOpen(pos.above())) {
+        if (!SpawnPlacementTypes.ON_GROUND.isSpawnPositionOk(MC.level, pos, EntityTypes.CREEPER)) {
             return false;
         }
         if (hitbox && !MC.level.noCollision(EntityTypes.CREEPER
@@ -43,16 +38,6 @@ public final class SpawnUtil {
     // True for a spot the sun keeps clear. Mobs appear there once night falls.
     public static boolean nightOnly(BlockPos pos) {
         return MC.level.getBrightness(LightLayer.SKY, pos) >= NIGHT_ONLY_SKY_LIGHT;
-    }
-
-    // Matches the checks the game itself runs before spawning a mob.
-    private static boolean isOpen(BlockPos pos) {
-        BlockState state = MC.level.getBlockState(pos);
-        // A slab or a carpet is not a full block and a mob can stand there.
-        return !state.isCollisionShapeFullBlock(MC.level, pos)
-            && !state.isSignalSource()
-            && state.getFluidState().isEmpty()
-            && !state.is(BlockTags.PREVENT_MOB_SPAWNING_INSIDE);
     }
 
     // The vertical reach is separate. Caves are wide and shallow.

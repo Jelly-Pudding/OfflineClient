@@ -11,10 +11,11 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
-import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.ColorUtil;
+import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
+import net.minecraft.util.Mth;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.phys.AABB;
 
@@ -70,7 +71,7 @@ public final class NoReturn extends Module {
         }
         ChunkPos at = mc.player.chunkPosition();
         if (ClosedAreas.get().close(at.x(), at.z(), radius.getInt())) {
-            ChatUtil.message("§bNoReturn §7closed the area round §f" + BlockUtil.text(mc.player.blockPosition())
+            tell("closed the area round §f" + BlockUtil.text(mc.player.blockPosition())
                 + "§7.");
         }
     }
@@ -96,20 +97,15 @@ public final class NoReturn extends Module {
     // How many chunks round its centre an area closes. Nought keeps every chunk the server
     // would send you of the centre shut.
     public int reach(ClosedAreas.Area area) {
-        return area.radius() > 0 ? area.radius() : mc.options.getEffectiveRenderDistance() + SENT_PAST_VIEW;
+        return area.radius() > 0 ? area.radius() : Modules.renderDistance() + SENT_PAST_VIEW;
     }
 
     private boolean within(ClosedAreas.Area area, int chunkX, int chunkZ) {
-        return Math.max(Math.abs(chunkX - area.chunkX()), Math.abs(chunkZ - area.chunkZ())) <= reach(area);
+        return Mth.chessboardDistance(chunkX, chunkZ, area.chunkX(), area.chunkZ()) <= reach(area);
     }
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame()) {
-            here = List.of();
-            walls = List.of();
-            return;
-        }
         here = ClosedAreas.get().here();
         ChunkPos me = mc.player.chunkPosition();
         walls = here.stream().filter(area -> !within(area, me.x(), me.z())).toList();

@@ -21,7 +21,7 @@ public final class SoundBlocker extends Module {
         "The sounds to mute. Click to pick them.", BuiltInRegistries.SOUND_EVENT,
         List.of(SoundEvents.GENERIC_EXPLODE.value(), SoundEvents.RESPAWN_ANCHOR_DEPLETE.value()));
     private final BoolSetting blockAll = new BoolSetting("Block all",
-        "Mute everything instead of the chosen sounds.", false);
+        "Mutes everything instead of the chosen sounds.", false);
     private final BoolSetting keepUi = new BoolSetting("Keep menus",
         "Lets button clicks and menu sounds through.", true)
         .under(blockAll);

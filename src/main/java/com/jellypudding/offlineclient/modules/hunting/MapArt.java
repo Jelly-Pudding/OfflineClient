@@ -9,17 +9,23 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.render.BoxStyle;
 import com.jellypudding.offlineclient.render.DrawBatch;
 import com.jellypudding.offlineclient.setting.BoolSetting;
+import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.Notice;
 import com.jellypudding.offlineclient.util.ServerInfo;
 import com.jellypudding.offlineclient.util.ServerWatch;
 import com.mojang.blaze3d.platform.NativeImage;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Util;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.decoration.ItemFrame;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.material.MapColor;
 import net.minecraft.world.level.saveddata.maps.MapId;
 import net.minecraft.world.level.saveddata.maps.MapItemSavedData;
@@ -27,6 +33,7 @@ import net.minecraft.world.phys.AABB;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -42,21 +49,40 @@ public final class MapArt extends Module {
     private static final int CHECK_TICKS = 20;
     private static final String FOLDER = "maps";
     private static final String PNG = ".png";
+    // How solid the paint behind a map held twice is.
+    private static final float PAINT_SHARE = 0.5f;
 
     private final BoolSetting frames = new BoolSetting("Mark frames",
         "Draws a box around every item frame holding a map.", true);
     private final BoxStyle style = new BoxStyle(BoxStyle.Shape.LINES, 200).under(frames);
     private final BoolSetting tracers = new BoolSetting("Tracers",
         "Draws a line to every item frame holding a map.", false).under(frames);
+    private final BoolSetting markSaved = new BoolSetting("Mark saved maps",
+        "Gives a frame its own colour when the picture of its map was in the maps folder before"
+            + " you came across it this time.", false).under(frames);
+    private final ColorSetting savedColor = new ColorSetting("Saved colour",
+        "Colour of a frame whose map you had saved already.", 0, 0, 0.6f, false).under(markSaved);
     private final BoolSetting save = new BoolSetting("Save images",
         "Saves each map the server sends you as a picture in the maps folder of offlineclient."
             + " Each map is saved once.", true);
     private final EnumSetting<Notice.Where> messages = Notice.row(
         "Where it posts a line with a link to the folder whenever new maps are saved.", Notice.Where.CHAT)
         .under(save);
+    private final BoolSetting duplicates = new BoolSetting("Mark duplicates",
+        "Paints every map that an open container and your inventory hold more than one of.", false);
+    private final ColorSetting duplicateColor = new ColorSetting("Duplicate colour",
+        "Colour painted behind a map held more than once.", 0, false).under(duplicates);
 
+    // The maps of the current server looked up in the folder since you arrived.
+    private final Set<Integer> checked = new HashSet<>();
     // The maps of the current server already on disk or on their way there.
     private final Set<Integer> saved = new HashSet<>();
+    // The ones whose picture was on disk before this visit came across them.
+    private final Set<Integer> savedBefore = new HashSet<>();
+    // The maps the menu last asked about holds more than one of with its id and the tick they were counted in.
+    private Set<MapId> held = Set.of();
+    private int heldId;
+    private int heldAt = -1;
     private final ServerWatch server = new ServerWatch();
     private int wait;
     private int framed;
@@ -66,8 +92,8 @@ public final class MapArt extends Module {
             Category.HUNTING);
         addSettings(frames);
         addSettings(style.settings());
-        addSettings(tracers, save, messages);
-        searchTags("map art", "maps", "item frame", "map saver", "picture");
+        addSettings(tracers, markSaved, savedColor, save, messages, duplicates, duplicateColor);
+        searchTags("map art", "maps", "item frame", "map saver", "picture", "duplicate maps", "collected");
     }
 
     @Override
@@ -85,9 +111,36 @@ public final class MapArt extends Module {
         framed = 0;
     }
 
+    // Zero unless the stack is a map the menu holds more than one of. AbstractContainerScreenMixin
+    // paints the slot with it. The menu is counted once a tick.
+    public int duplicateColor(AbstractContainerMenu menu, ItemStack stack) {
+        MapId id = isEnabled() && duplicates.isOn() ? stack.get(DataComponents.MAP_ID) : null;
+        if (id == null) {
+            return 0;
+        }
+        if (menu.containerId != heldId || mc.player.tickCount != heldAt) {
+            heldId = menu.containerId;
+            heldAt = mc.player.tickCount;
+            held = heldTwice(menu);
+        }
+        return held.contains(id) ? ColorUtil.fade(duplicateColor.getColor(), PAINT_SHARE) : 0;
+    }
+
+    private static Set<MapId> heldTwice(AbstractContainerMenu menu) {
+        Map<MapId, Integer> counts = new HashMap<>();
+        for (Slot slot : menu.slots) {
+            MapId id = slot.getItem().get(DataComponents.MAP_ID);
+            if (id != null) {
+                counts.merge(id, slot.getItem().getCount(), Integer::sum);
+            }
+        }
+        counts.values().removeIf(count -> count < 2);
+        return counts.keySet();
+    }
+
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || !save.isOn()) {
+        if (!save.isOn() && !marksSaved()) {
             return;
         }
         if (wait > 0) {
@@ -97,7 +150,9 @@ public final class MapArt extends Module {
         wait = CHECK_TICKS;
         if (server.changed()) {
             // Two servers hand out the same map numbers.
+            checked.clear();
             saved.clear();
+            savedBefore.clear();
         }
         Path folder = DataFiles.path(FOLDER, DataFiles.keyName(ServerInfo.key()));
         int fresh = 0;
@@ -107,11 +162,16 @@ public final class MapArt extends Module {
             if (saved.contains(id) || blank(colors)) {
                 continue;
             }
-            saved.add(id);
             Path file = folder.resolve(id + PNG);
-            if (Files.exists(file)) {
+            if (checked.add(id) && Files.exists(file)) {
+                saved.add(id);
+                savedBefore.add(id);
                 continue;
             }
+            if (!save.isOn()) {
+                continue;
+            }
+            saved.add(id);
             byte[] copy = colors.clone();
             Util.ioPool().execute(() -> write(file, copy));
             fresh++;
@@ -122,6 +182,10 @@ public final class MapArt extends Module {
                 .append(ChatUtil.folderLink(folder))
                 .append(Component.literal("§7.")));
         }
+    }
+
+    private boolean marksSaved() {
+        return frames.isOn() && markSaved.isOn();
     }
 
     // A map nobody has drawn on yet has nothing worth keeping.
@@ -160,9 +224,16 @@ public final class MapArt extends Module {
             }
             found++;
             AABB box = EntityUtil.lerpedBox(frame, event.getPartialTicks());
-            style.draw(batch, box, true);
+            MapId id = frame.getFramedMapId(frame.getItem());
+            boolean before = markSaved.isOn() && id != null && savedBefore.contains(id.id());
+            int color = before ? savedColor.getColor() : style.lineColor();
+            if (before) {
+                style.draw(batch, box, color, true);
+            } else {
+                style.draw(batch, box, true);
+            }
             if (tracers.isOn()) {
-                batch.tracer(box.getCenter(), style.lineColor(), true);
+                batch.tracer(box.getCenter(), color, true);
             }
         }
         framed = found;

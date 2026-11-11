@@ -25,6 +25,10 @@ public interface PickList<T> {
 
     void remove(T entry);
 
+    default void removeAll(Collection<? extends T> entries) {
+        entries.forEach(this::remove);
+    }
+
     void clear();
 
     int size();

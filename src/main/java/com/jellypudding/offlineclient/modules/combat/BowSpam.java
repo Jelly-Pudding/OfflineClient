@@ -13,7 +13,6 @@ import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.UseBudget;
 import net.minecraft.world.InteractionHand;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.BowItem;
 import net.minecraft.world.item.CrossbowItem;
 import net.minecraft.world.item.ItemStack;
@@ -34,9 +33,9 @@ public final class BowSpam extends Module {
     private final NumberSetting charge = new NumberSetting("Charge",
         "Ticks to draw the bow before letting go.", 5, 3, 20, 1, " ticks");
     private final BoolSetting holdingUse = new BoolSetting("Whilst holding use",
-        "Only fire whilst you hold the use key down.", false);
+        "Only fires whilst you hold the use key down.", false);
     private final BoolSetting onlyWithTarget = new BoolSetting("Only with target",
-        "Hold fire until an enemy is in view.", false);
+        "Holds fire until an enemy is in view.", false);
     private final NumberSetting targetRange = new NumberSetting("Target range",
         "How far away enemies are considered.", 40, 5, 100, 1, " blocks")
         .under(onlyWithTarget);
@@ -44,7 +43,7 @@ public final class BowSpam extends Module {
         "How far off the crosshair a target still counts.", 30, 5, 90, 1, " degrees").min(1)
         .under(onlyWithTarget);
     private final BoolSetting crossbows = new BoolSetting("Crossbows",
-        "Fire every loaded crossbow in your hotbar as well. Each one is picked up and fired and put back.", true);
+        "Fires every loaded crossbow in your hotbar as well. Each one is picked up and fired and put back.", true);
     private final NumberSetting crossbowDelay = new NumberSetting("Crossbow delay",
         "Ticks to wait between firing one loaded crossbow and the next.", 10, 0, 20, 1, " ticks")
         .under(crossbows);
@@ -57,7 +56,7 @@ public final class BowSpam extends Module {
             + " full damage from one arrow every ten ticks.", 1, 1, 20, 1, " ticks")
         .under(rapidFire);
     private final BoolSetting searchInventory = new BoolSetting("Search inventory",
-        "Also fetch loaded crossbows from the rest of your inventory into a hotbar slot that is empty or holds a crossbow or arrows.", true)
+        "Also fetches loaded crossbows from the rest of your inventory into a hotbar slot that is empty or holds a crossbow or arrows.", true)
         .under(crossbows);
 
     private final SlotSwap slots = new SlotSwap();
@@ -87,7 +86,7 @@ public final class BowSpam extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || mc.player.isSpectator()) {
+        if (mc.player.isSpectator()) {
             return;
         }
         if (mc.player.containerMenu != mc.player.inventoryMenu) {
@@ -237,11 +236,9 @@ public final class BowSpam extends Module {
         return null;
     }
 
+    // The angle goes first. Only an enemy near the crosshair costs a ray.
     private boolean targetInView() {
-        Player target = EntityUtil.nearestEnemy(targetRange.getValue());
-        if (target == null || !mc.player.hasLineOfSight(target)) {
-            return false;
-        }
-        return EntityUtil.lookAngleTo(target) <= viewAngle.getValue();
+        return EntityUtil.nearest(targetRange.getValue(), entity -> EntityUtil.isEnemy(entity)
+            && EntityUtil.lookAngleTo(entity) <= viewAngle.getValue() && mc.player.hasLineOfSight(entity)) != null;
     }
 }

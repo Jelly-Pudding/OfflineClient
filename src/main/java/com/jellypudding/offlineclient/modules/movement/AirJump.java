@@ -7,7 +7,6 @@ import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.modules.render.Freecam;
 import com.jellypudding.offlineclient.setting.EnumSetting;
-import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.Modules;
 import com.mojang.blaze3d.platform.InputConstants;
 
@@ -47,10 +46,10 @@ public final class AirJump extends Module {
         if (event.getAction() != InputConstants.PRESS || !airborne()) {
             return;
         }
-        if (InputUtil.isKey(mc.options.keyJump, event.getKey())) {
+        if (event.isFor(mc.options.keyJump)) {
             level = mc.player.blockPosition().getY();
             mc.player.jumpFromGround();
-        } else if (InputUtil.isKey(mc.options.keyShift, event.getKey())) {
+        } else if (event.isFor(mc.options.keyShift)) {
             level--;
         }
     }

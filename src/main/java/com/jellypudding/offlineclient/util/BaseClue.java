@@ -18,6 +18,8 @@ public enum BaseClue {
     BED("bed", Source.BLOCKS),
     ROOM("bedrock room", Source.BLOCKS),
     PLAYER_BLOCKS("player blocks", Source.BLOCKS),
+    SIDEWAYS("sideways deepslate", Source.BLOCKS),
+    GROWTH("grown plants", Source.BLOCKS),
     DECORATION("decoration", Source.ENTITIES),
     PEARL("pearl", Source.ENTITIES),
     NAMED("named mob", Source.ENTITIES),
@@ -26,6 +28,7 @@ public enum BaseClue {
     PET("pet", Source.ENTITIES),
     CROWD("crowd", Source.ENTITIES),
     DROPS("dropped blocks", Source.ENTITIES),
+    LOST_MOB("lost mob", Source.ENTITIES),
     MARK("mark", Source.HAND);
 
     public enum Source { BLOCKS, ENTITIES, HAND }

@@ -23,7 +23,7 @@ public final class Throw extends Module {
 
     private final NumberSetting uses = new NumberSetting("Uses per click",
         "How many times one right click is used. On Paper at most nine use packets land at once.",
-        16, 2, 64, 1).min(2);
+        16, 2, 64, 1);
     private final BoolSetting blocks = new BoolSetting("Blocks too",
         "The extra uses also click the block or creature you aim at. Switched off they only use"
             + " the item in hand. A door or lever clicked an even number of times ends where it began.", false);
@@ -47,7 +47,7 @@ public final class Throw extends Module {
     // were never used. The budget is read again before each use.
     @Subscribe
     private void onRightClick(RightClickEvent event) {
-        if (repeating || event.isCancelled() || !inGame() || !InputUtil.physicallyHeld(mc.options.keyUse)) {
+        if (repeating || !inGame() || !InputUtil.physicallyHeld(mc.options.keyUse)) {
             return;
         }
         HitResult aimed = mc.hitResult;

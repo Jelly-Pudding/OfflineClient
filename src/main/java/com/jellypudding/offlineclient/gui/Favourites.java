@@ -1,8 +1,8 @@
 package com.jellypudding.offlineclient.gui;
 
-import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.config.ConfigManager;
 import com.jellypudding.offlineclient.module.Module;
 
 import java.util.ArrayList;
@@ -13,8 +13,6 @@ import java.util.Set;
 // The modules the user starred. Both ClickGUI styles read the same list and
 // it lives in the saved layout beside them.
 public final class Favourites {
-
-    private static final String KEY = "favourites";
 
     private static final Set<String> names = new LinkedHashSet<>();
     private static JsonObject source;
@@ -30,11 +28,7 @@ public final class Favourites {
         }
         source = gui;
         names.clear();
-        if (gui.has(KEY) && gui.get(KEY).isJsonArray()) {
-            for (var name : gui.getAsJsonArray(KEY)) {
-                names.add(name.getAsString());
-            }
-        }
+        names.addAll(ConfigManager.readFavourites(gui));
         version++;
         return names;
     }
@@ -48,8 +42,9 @@ public final class Favourites {
             names().add(module.getName());
         }
         version++;
-        save();
-        OfflineClient.INSTANCE.getConfigManager().saveSoon();
+        ConfigManager config = OfflineClient.INSTANCE.getConfigManager();
+        ConfigManager.writeFavourites(config.getGuiState(), names());
+        config.saveSoon();
     }
 
     // Bumped on every change. A panel watches it to know when to rebuild.
@@ -66,11 +61,5 @@ public final class Favourites {
             }
         }
         return picked;
-    }
-
-    private static void save() {
-        JsonArray array = new JsonArray();
-        names().forEach(array::add);
-        OfflineClient.INSTANCE.getConfigManager().getGuiState().add(KEY, array);
     }
 }

@@ -1,9 +1,11 @@
 package com.jellypudding.offlineclient.gui;
 
 import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.render.ClientFonts;
 import com.jellypudding.offlineclient.setting.CountedPickList;
 import com.jellypudding.offlineclient.setting.Defaults;
 import com.jellypudding.offlineclient.setting.PickList;
+import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.RenderUtil;
 import com.jellypudding.offlineclient.util.SearchRank;
 import com.mojang.blaze3d.platform.InputConstants;
@@ -23,7 +25,8 @@ import java.util.Map;
 
 // Two column picker for a list setting. Clicking an entry moves it across.
 // The left column holds what is on offer and the right what is picked. A list
-// with a count per entry shows it at the end of each picked row.
+// with a count per entry shows it at the end of each picked row. A list whose
+// offer splits into families gets a button for each under the search box.
 public final class ListPickerScreen<T> extends Screen implements ClientScreen {
 
     private record Entry<T>(T value, String name, String label, String id, ItemStack icon) {
@@ -45,6 +48,14 @@ public final class ListPickerScreen<T> extends Screen implements ClientScreen {
     private static final int BUTTON_HEIGHT = 16;
     private static final int BUTTON_GAP = 8;
     private static final int FOOTER = 34;
+    // The family buttons sit between the search box and the column headers.
+    private static final int GROUP_TOP = 38;
+    private static final int GROUP_HEIGHT = 14;
+    private static final int GROUP_GAP = 4;
+    // Room either side of a family label.
+    private static final int GROUP_PAD = 6;
+    // How far the families push the columns down.
+    private static final int GROUP_ROW = 20;
     // Space between a count and the name or the row edge.
     private static final int COUNT_GAP = 4;
     // An empty count box still needs something to aim at.
@@ -58,6 +69,7 @@ public final class ListPickerScreen<T> extends Screen implements ClientScreen {
     private final PickList<T> setting;
     // Null for a list without counts.
     private final CountedPickList<T> counted;
+    private final List<RegistryListSetting.Group<T>> groups;
 
     // Every entry on offer sorted by name. Built once.
     private final List<Entry<T>> all = new ArrayList<>();
@@ -84,8 +96,9 @@ public final class ListPickerScreen<T> extends Screen implements ClientScreen {
         this.parent = parent;
         this.setting = setting;
         this.counted = setting instanceof CountedPickList<T> list ? list : null;
+        this.groups = setting instanceof RegistryListSetting<T> list ? list.groups() : List.of();
 
-        Font font = OfflineClient.MC.font;
+        Font font = ClientFonts.guiAtGameScale();
         // Names are trimmed once for the narrowest a column gets. A list of
         // any size overflows and gives up the gutter.
         int room = COL_WIDTH - GuiTheme.SCROLL_GUTTER - LABEL_X - 2;
@@ -158,8 +171,57 @@ public final class ListPickerScreen<T> extends Screen implements ClientScreen {
         list.removeIf(entry -> SearchRank.best(query, entry.name(), entry.id()) == SearchRank.NO_MATCH);
     }
 
+    private int listTop() {
+        return groups.isEmpty() ? LIST_TOP : LIST_TOP + GROUP_ROW;
+    }
+
     private int listHeight() {
-        return Math.max(ROW_HEIGHT, height - LIST_TOP - FOOTER);
+        return Math.max(ROW_HEIGHT, height - listTop() - FOOTER);
+    }
+
+    private int groupWidth(RegistryListSetting.Group<T> group) {
+        return ClientFonts.guiAtGameScale().width(group.label()) + 2 * GROUP_PAD;
+    }
+
+    // The family buttons sit in a row centred over the columns.
+    private int groupX(int index) {
+        int row = -GROUP_GAP;
+        int before = 0;
+        for (int i = 0; i < groups.size(); i++) {
+            if (i == index) {
+                before = row + GROUP_GAP;
+            }
+            row += groupWidth(groups.get(i)) + GROUP_GAP;
+        }
+        return width / 2 - row / 2 + before;
+    }
+
+    // The family under the mouse or minus one.
+    private int groupAt(double mx, double my) {
+        for (int i = 0; i < groups.size(); i++) {
+            if (SettingWidget.isOver(mx, my, groupX(i), GROUP_TOP, groupWidth(groups.get(i)), GROUP_HEIGHT)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private boolean whollyChosen(RegistryListSetting.Group<T> group) {
+        return group.members().stream().allMatch(setting::isChosen);
+    }
+
+    // A press picks whatever the family still lacks. A family that is all picked is dropped.
+    private void pressGroup(RegistryListSetting.Group<T> group) {
+        stopUndo();
+        boolean drop = whollyChosen(group);
+        Defaults.record(setting.getName(), setting.asSetting(), () -> {
+            if (drop) {
+                setting.removeAll(group.members());
+            } else {
+                setting.addAll(group.members());
+            }
+        });
+        refresh();
     }
 
     private int leftX() {
@@ -177,7 +239,7 @@ public final class ListPickerScreen<T> extends Screen implements ClientScreen {
     }
 
     private int buttonY() {
-        return LIST_TOP + listHeight() + 8;
+        return listTop() + listHeight() + 8;
     }
 
     @Override
@@ -193,17 +255,28 @@ public final class ListPickerScreen<T> extends Screen implements ClientScreen {
 
     @Override
     public void extractBackground(GuiGraphicsExtractor context, int mouseX, int mouseY, float deltaTicks) {
-        GuiScreenBase.dimBackground(this, context);
+        GuiTheme.dimBackground(this, context);
     }
 
     @Override
     public void extractRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float partialTicks) {
         tooltip = null;
-        Font font = OfflineClient.MC.font;
+        Font font = ClientFonts.guiAtGameScale();
 
         context.centeredText(font, setting.getName(), width / 2, TITLE_Y, GuiTheme.text());
         search.render(context, font, width / 2 - SEARCH_WIDTH / 2, SEARCH_TOP, SEARCH_WIDTH,
             mouseX, mouseY, null);
+
+        int hoveredGroup = groupAt(mouseX, mouseY);
+        for (int i = 0; i < groups.size(); i++) {
+            RegistryListSetting.Group<T> group = groups.get(i);
+            GuiTheme.button(context, font, groupX(i), GROUP_TOP, groupWidth(group), GROUP_HEIGHT,
+                group.label(), i == hoveredGroup, true);
+            if (i == hoveredGroup) {
+                tooltip = whollyChosen(group) ? "Takes every " + group.noun() + " off the list."
+                    : "Picks every " + group.noun() + ".";
+            }
+        }
 
         renderColumn(context, font, leftX(), "available", available, leftBar, mouseX, mouseY, false);
         renderColumn(context, font, rightX(), "chosen", chosen, rightBar, mouseX, mouseY, true);
@@ -298,7 +371,7 @@ public final class ListPickerScreen<T> extends Screen implements ClientScreen {
     private void renderColumn(GuiGraphicsExtractor context, Font font, int x, String header,
                               List<Entry<T>> list, ScrollBar bar, int mouseX, int mouseY,
                               boolean picked) {
-        int top = LIST_TOP;
+        int top = listTop();
         int h = listHeight();
         int total = list.size() * ROW_HEIGHT;
         bar.update(mouseY, total, h);
@@ -414,6 +487,11 @@ public final class ListPickerScreen<T> extends Screen implements ClientScreen {
         if (search.click(mx, my) != SearchField.Click.MISSED) {
             return true;
         }
+        int group = groupAt(mx, my);
+        if (group >= 0) {
+            pressGroup(groups.get(group));
+            return true;
+        }
         if (clickColumn(mx, my, leftX(), available, leftBar, true)) {
             return true;
         }
@@ -425,21 +503,22 @@ public final class ListPickerScreen<T> extends Screen implements ClientScreen {
 
     private boolean clickColumn(double mx, double my, int x, List<Entry<T>> list,
                                 ScrollBar bar, boolean adding) {
+        int top = listTop();
         int h = listHeight();
-        if (!SettingWidget.isOver(mx, my, x, LIST_TOP, COL_WIDTH, h)) {
+        if (!SettingWidget.isOver(mx, my, x, top, COL_WIDTH, h)) {
             return false;
         }
         int total = list.size() * ROW_HEIGHT;
         int trackX = ScrollBar.trackX(x, COL_WIDTH);
-        if (total > h && ScrollBar.isOverTrack(mx, my, trackX, LIST_TOP, h)) {
+        if (total > h && ScrollBar.isOverTrack(mx, my, trackX, top, h)) {
             bar.beginDrag((int) my);
             return true;
         }
-        int index = (int) ((my - LIST_TOP + bar.getOffset()) / ROW_HEIGHT);
+        int index = (int) ((my - top + bar.getOffset()) / ROW_HEIGHT);
         if (index >= 0 && index < list.size()) {
             Entry<T> entry = list.get(index);
             int rowRight = x + ScrollBar.rowWidth(COL_WIDTH, total, h);
-            if (!adding && counted != null && mx >= countLeft(OfflineClient.MC.font, entry.value(), rowRight)) {
+            if (!adding && counted != null && mx >= countLeft(ClientFonts.guiAtGameScale(), entry.value(), rowRight)) {
                 startCount(entry.value());
                 return true;
             }
@@ -473,11 +552,11 @@ public final class ListPickerScreen<T> extends Screen implements ClientScreen {
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
         int dy = ScrollBar.wheelDelta(scrollY);
         int h = listHeight();
-        if (SettingWidget.isOver(mouseX, mouseY, leftX(), LIST_TOP, COL_WIDTH, h)) {
+        if (SettingWidget.isOver(mouseX, mouseY, leftX(), listTop(), COL_WIDTH, h)) {
             leftBar.scroll(dy, available.size() * ROW_HEIGHT, h);
             return true;
         }
-        if (SettingWidget.isOver(mouseX, mouseY, rightX(), LIST_TOP, COL_WIDTH, h)) {
+        if (SettingWidget.isOver(mouseX, mouseY, rightX(), listTop(), COL_WIDTH, h)) {
             rightBar.scroll(dy, chosen.size() * ROW_HEIGHT, h);
             return true;
         }

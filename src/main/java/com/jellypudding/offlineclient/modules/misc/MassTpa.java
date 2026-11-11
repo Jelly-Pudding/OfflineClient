@@ -1,6 +1,5 @@
 package com.jellypudding.offlineclient.modules.misc;
 
-import com.jellypudding.offlineclient.config.NameStore;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.PacketReceiveEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
@@ -9,8 +8,12 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.TextSetting;
+import com.jellypudding.offlineclient.util.ChatPace;
 import com.jellypudding.offlineclient.util.ChatUtil;
-import net.minecraft.client.multiplayer.PlayerInfo;
+import com.jellypudding.offlineclient.util.SentLine;
+import com.jellypudding.offlineclient.util.ServerInfo;
+import com.jellypudding.offlineclient.util.Shortcuts;
+import com.jellypudding.offlineclient.util.ShownChat;
 import net.minecraft.network.protocol.game.ClientboundSystemChatPacket;
 
 import java.util.ArrayList;
@@ -18,13 +21,16 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 
-// Asks everyone online for a teleport one after another. Whoever says yes first wins.
+// Asks everyone online for a teleport one after another. Whoever says yes first wins. A request
+// waits whilst the server would count it towards a kick for spam and a name that cannot stand as
+// one word of a command is passed over.
 public final class MassTpa extends Module {
 
     private final TextSetting command = new TextSetting("Command",
-        "The teleport command such as tpa or tpahere. Click to type it.", "tpa");
+        "The teleport command such as tpa sent once for each player with their name on the end or where you put"
+            + " {player}. Click to type it.", "tpa");
     private final NumberSetting delay = new NumberSetting("Delay",
-        "Ticks between one request and the next.", 20, 1, 200, 1, " ticks").min(1);
+        "Ticks between one request and the next.", 20, 1, 200, 1, " ticks");
     private final BoolSetting ignoreErrors = new BoolSetting("Ignore errors",
         "Keeps going when the server says the command does not exist.", false);
     private final BoolSetting stopWhenAccepted = new BoolSetting("Stop when accepted",
@@ -59,27 +65,20 @@ public final class MassTpa extends Module {
             setEnabled(false);
             return;
         }
-        String own = NameStore.ownName();
-        for (PlayerInfo info : mc.getConnection().getOnlinePlayers()) {
-            String name = info.getProfile().name();
-            if (!name.equalsIgnoreCase(own)) {
-                players.add(name);
-            }
+        if (command.isBlank()) {
+            disable("MassTPA needs a command such as tpa.");
+            return;
         }
+        players.addAll(ServerInfo.othersOnline());
         Collections.shuffle(players);
         if (players.isEmpty()) {
             disable("Nobody else is online.");
         }
     }
 
-    private String commandName() {
-        String name = command.getValue().trim();
-        return name.startsWith("/") ? name.substring(1) : name;
-    }
-
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || timer-- > 0) {
+        if (timer-- > 0) {
             return;
         }
         if (next >= players.size()) {
@@ -87,21 +86,33 @@ public final class MassTpa extends Module {
             setEnabled(false);
             return;
         }
-        mc.getConnection().sendCommand(commandName() + " " + players.get(next++));
+        if (!ChatPace.MACRO.say(SentLine.of(SentLine.naming(command.getValue()), "player", players.get(next)))) {
+            return;
+        }
+        next++;
         timer = delay.getInt() - 1;
     }
 
-    // Fired on the netty thread. The reply from the server says how it went.
+    // Fired on the netty thread. Telling the server's reply from a player's line reads the tab
+    // list on the game thread.
     @Subscribe
     private void onPacketReceive(PacketReceiveEvent event) {
-        if (!(event.getPacket() instanceof ClientboundSystemChatPacket packet)) {
+        if (event.getPacket() instanceof ClientboundSystemChatPacket packet) {
+            mc.schedule(() -> readReply(packet));
+        }
+    }
+
+    // The reply from the server says how it went.
+    private void readReply(ClientboundSystemChatPacket packet) {
+        String reply = ShownChat.serverText(packet);
+        if (reply == null) {
             return;
         }
-        String text = packet.content().getString().toLowerCase(Locale.ROOT);
+        String text = reply.toLowerCase(Locale.ROOT);
         if (!ignoreErrors.isOn() && (text.contains("/help") || text.contains("permission"))) {
-            mc.schedule(() -> stop("This server has no " + commandName() + " command."));
+            stop("This server has no " + Shortcuts.commandWord(command.getValue()) + " command.");
         } else if (stopWhenAccepted.isOn() && text.contains("accepted") && text.contains("request")) {
-            mc.schedule(() -> stop("Somebody accepted the request."));
+            stop("Somebody accepted the request.");
         }
     }
 

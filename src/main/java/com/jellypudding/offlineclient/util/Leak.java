@@ -5,9 +5,10 @@ import net.minecraft.core.BlockPos;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Pattern;
 
-// A place the server gave away without you seeing it. Locator and Eavesdrop and ItemCoords
-// hand theirs to the leaks list on the HUD and save them as waypoints the same way. The
+// A place the server gave away without you seeing it. Locator and Eavesdrop and EyeTracker and
+// ItemCoords hand theirs to the leaks list on the HUD and save them as waypoints the same way. The
 // height is only real when the server sent it. The dimension is null when the place could
 // lie in any of them. The time is when the place was last known to be right.
 public record Leak(String name, String detail, BlockPos pos, boolean knowsHeight, String dimension,
@@ -45,13 +46,29 @@ public record Leak(String name, String detail, BlockPos pos, boolean knowsHeight
     // Saves the place as a waypoint of that name or moves the one saved before. A place
     // that could lie in any dimension goes in the given one.
     public void saveAs(String waypoint, String anyDimension) {
-        WaypointStore.get().mark(waypoint, pos, savedIn(anyDimension), Modules.nextWaypointHue());
+        WaypointStore.get().markFind(waypoint, pos, savedIn(anyDimension), Modules.nextWaypointColour());
     }
 
     // Saves the place as a new waypoint named after the stem with the first number free
     // where it goes such as Wither2. Returns the name it took.
     public String saveFresh(String stem, String anyDimension) {
-        return WaypointStore.get().markFresh(stem, pos, savedIn(anyDimension), Modules.nextWaypointHue());
+        return WaypointStore.get().markFreshFind(stem, pos, savedIn(anyDimension), Modules.nextWaypointColour());
+    }
+
+    // The nearest waypoint named after the stem and a number that stands within reach of the
+    // place across the ground where it would go. Null when none does.
+    public String numberedNear(String stem, String anyDimension, double reach) {
+        Pattern numbered = Pattern.compile(Pattern.quote(stem) + "\\d+", Pattern.CASE_INSENSITIVE);
+        String nearest = null;
+        double best = reach;
+        for (WaypointStore.Waypoint waypoint : WaypointStore.get().in(savedIn(anyDimension))) {
+            double away = Math.hypot(waypoint.x() - pos.getX(), waypoint.z() - pos.getZ());
+            if (away <= best && numbered.matcher(waypoint.name()).matches()) {
+                nearest = waypoint.name();
+                best = away;
+            }
+        }
+        return nearest;
     }
 
     private String savedIn(String anyDimension) {

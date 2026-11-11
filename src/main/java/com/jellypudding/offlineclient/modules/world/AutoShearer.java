@@ -9,6 +9,7 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.ItemUtil;
 import com.jellypudding.offlineclient.util.Modules;
@@ -45,7 +46,7 @@ public final class AutoShearer extends Module {
         List.of(EntityTypes.SHEEP))
         .only(SHEARABLE::contains);
     private final NumberSetting range = new NumberSetting("Range",
-        "How close an animal has to be.", 5, 1, 6, 0.1);
+        "How close an animal has to be.", 5, 1, 6, 0.1, " blocks");
     private final BoolSetting leads = new BoolSetting("Leads",
         "Also shears animals on a lead and the first snip cuts the lead.", false);
     private final BoolSetting gear = new BoolSetting("Gear",
@@ -54,7 +55,7 @@ public final class AutoShearer extends Module {
     private final BoolSetting antiBreak = new BoolSetting("Anti break",
         "Never uses shears that are about to break.", true);
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Turn towards the animal on the server side.", true);
+        "Turns towards the animal on the server side.", true);
 
     private final InventoryUtil.HotbarLoan loan = new InventoryUtil.HotbarLoan();
     private int sheared;
@@ -82,12 +83,12 @@ public final class AutoShearer extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || mc.player.isSpectator() || mc.gui.screen() != null) {
+        if (mc.player.isSpectator() || mc.gui.screen() != null) {
             return;
         }
-        if (mc.player.isDeadOrDying()) {
-            // Respawn gives a fresh inventory. A borrowed slot could hold anything.
-            loan.forget();
+        // The shears make way whilst dying and whilst something else has the hands.
+        if (mc.player.isDeadOrDying() || Hands.taken()) {
+            loan.standAside();
             return;
         }
         // A sneaking click hands the leads you hold over to the animal instead.
@@ -105,9 +106,8 @@ public final class AutoShearer extends Module {
         }
     }
 
-    // The range goes first. The lead test searches the area around each animal.
     private boolean wanted(Entity entity, boolean sneaking) {
-        if (!entity.isAlive() || !entity.closerThan(mc.player, range.getValue())) {
+        if (!entity.isAlive()) {
             return false;
         }
         boolean ready = entity instanceof Shearable shearable && mobs.contains(entity.getType())
@@ -149,9 +149,9 @@ public final class AutoShearer extends Module {
         return loan.select(InventoryUtil.findSlot(this::usable, takeFrom.getValue().limit()));
     }
 
-    // Borrowed shears always go home. The slot you held only comes back whilst you have not picked another.
+    // Borrowed shears go home. The slot you held only comes back whilst you have not picked another.
     private void release() {
-        loan.giveBack(loan.stillMine());
+        loan.release(loan.stillMine());
     }
 
     private boolean usable(ItemStack stack) {

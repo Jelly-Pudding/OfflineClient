@@ -5,6 +5,7 @@ import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.ClientTickEvent;
 import com.jellypudding.offlineclient.event.events.PacketSendEvent;
 import com.jellypudding.offlineclient.modules.misc.Timer;
+import net.minecraft.SharedConstants;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.PositionAndRotation;
 import net.minecraft.network.protocol.Packet;
@@ -17,6 +18,8 @@ import net.minecraft.network.protocol.game.ServerboundPlayerInputPacket;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Input;
 import net.minecraft.world.phys.Vec3;
+
+import java.util.concurrent.TimeUnit;
 
 // A 26.3 server drops anyone whose second position arrives before a tick end packet.
 // Every module that moves the player by packet books its positions here. A packet
@@ -54,10 +57,17 @@ public enum MoveGate {
     // What the rest of a tick still sends once the fillers are out.
     private static final int HEADROOM = 20;
 
+    // What a tick of plain play on foot sends. A move and a tick end.
+    private static final int PLAY_PACKETS = 2;
+
+    // The fastest game speed a player on foot can keep up for good.
+    public static final float STEADY_SPEED =
+        PacketBudget.SUSTAINED / (PLAY_PACKETS * SharedConstants.TICKS_PER_SECOND);
+
     // Client ticks bunch after a slow frame and run fast under Timer. A burst sent soon
     // after the last position lands in the same server tick and is refused. Steady play
     // at normal speed never runs two ticks closer than half a server tick.
-    private static final double SERVER_TICK_NANOS = 50_000_000;
+    private static final double SERVER_TICK_NANOS = TimeUnit.MILLISECONDS.toNanos(SharedConstants.MILLIS_PER_TICK);
 
     // The server kicks anyone hanging in the air too long. It counts the ticks whose last
     // movement packet has no block near and drops no further than this.
@@ -76,6 +86,12 @@ public enum MoveGate {
 
     // Movement packets the server counts this tick.
     private static int counted;
+
+    // The packets of plain play that left this tick and in each of the two before it. The
+    // gate's own are bursts and count apart.
+    private static int plain;
+    private static int plainLastTick = PLAY_PACKETS;
+    private static int plainTickBefore = PLAY_PACKETS;
 
     // The positions the server was last sent and where it held them as this tick began.
     private static Vec3 lastPlayer;
@@ -125,9 +141,17 @@ public enum MoveGate {
         return vehicle ? vehicleFloatingTicks : playerFloatingTicks;
     }
 
-    // Packets the budget still has room for over its window.
+    // Packets a burst may still add in the budget's window.
     public static int spare() {
         return budget.spare();
+    }
+
+    // The game speed a timer may hold for as long as it likes. Every tick sends its packets
+    // and a rider sends more of them than a player on foot. The busier of the last two ticks
+    // counts. It gives way to whatever bursts have spent.
+    public static float steadySpeed() {
+        int aTick = Math.max(PLAY_PACKETS, Math.max(plainLastTick, plainTickBefore));
+        return budget.sustained() / (aTick * SharedConstants.TICKS_PER_SECOND);
     }
 
     // True when the gate dropped a position during this client tick. A look sent on its own
@@ -141,6 +165,19 @@ public enum MoveGate {
     public static boolean held(boolean vehicle) {
         return Modules.delays(vehicle ? GamePacketTypes.SERVERBOUND_MOVE_VEHICLE
             : GamePacketTypes.SERVERBOUND_MOVE_PLAYER_POS);
+    }
+
+    // Every server sweeps a player's box along a move and compares where it ends with
+    // where the packet says. False in creative where neither server holds a player to it.
+    public static boolean sweepChecked() {
+        LocalPlayer player = OfflineClient.MC.player;
+        return player != null && !player.isCreative();
+    }
+
+    // Vanilla lets a move its sweep could not follow stand for a player whose box already
+    // overlaps a block. Paper pulls every such move back.
+    public static boolean forgivesOverlap() {
+        return !ServerInfo.runsPaper();
     }
 
     // True whilst the server takes the player for one holding sneak.
@@ -379,7 +416,10 @@ public enum MoveGate {
             return;
         }
         delivered |= mine;
-        budget.record();
+        budget.record(mine);
+        if (!mine) {
+            plain++;
+        }
         track(packet);
     }
 
@@ -445,6 +485,9 @@ public enum MoveGate {
     private void onClientTick(ClientTickEvent event) {
         spent = false;
         counted = 0;
+        plainTickBefore = plainLastTick;
+        plainLastTick = plain;
+        plain = 0;
         tick++;
         if (join.joined()) {
             forgetSession();

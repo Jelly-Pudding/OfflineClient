@@ -21,7 +21,7 @@ public final class HighJump extends Module {
     private final JumpCarry carry = new JumpCarry();
 
     public HighJump() {
-        super("HighJump", "Jump higher than normal.", Category.MOVEMENT);
+        super("HighJump", "Lets you jump higher than normal.", Category.MOVEMENT);
         addSettings(boost, keepSpeed, inWater);
     }
 

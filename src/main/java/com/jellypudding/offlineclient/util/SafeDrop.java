@@ -25,9 +25,9 @@ public final class SafeDrop {
         if (!level.noCollision(player, box)) {
             return null;
         }
-        Vec3 fall = Entity.collideBoundingBox(player, new Vec3(0, -(DamageUtil.SAFE_FALL + 1), 0), box,
-            level, List.of());
-        if (-fall.y > DamageUtil.SAFE_FALL) {
+        double safe = DamageUtil.safeFall(player);
+        Vec3 fall = Entity.collideBoundingBox(player, new Vec3(0, -(safe + 1), 0), box, level, List.of());
+        if (-fall.y > safe) {
             return null;
         }
         boolean burns = level.getBlockStates(box.move(fall).expandTowards(0, -GROUND_PROBE, 0))

@@ -8,6 +8,7 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.Setting;
 import net.minecraft.ChatFormatting;
+import net.minecraft.SharedConstants;
 import net.minecraft.client.gui.components.toasts.SystemToast;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
@@ -16,6 +17,7 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Supplier;
 
 // How a module tells the player about a find. After a message one kind of find keeps
 // quiet for a while and the next message of that kind counts what turned up in between.
@@ -25,12 +27,11 @@ public final class Notice {
 
     public enum Where { OFF, CHAT, TOAST, BOTH }
 
-    private static final int TICKS_PER_SECOND = 20;
-
     private final String owner;
     private final EnumSetting<Where> where;
     private final BoolSetting coordinates;
     private final NumberSetting quiet;
+    private String verb = "found";
 
     // Kinds of find still inside their quiet time on the player's clock.
     private final Cooldowns<String> quieted = new Cooldowns<>();
@@ -51,7 +52,7 @@ public final class Notice {
         quiet = new NumberSetting("Quiet time",
             "How long one kind of find waits after a message before it can post another. "
                 + "The finds in between are counted in the next message.",
-            quietSeconds, 0, 60, 1, " seconds").min(0)
+            quietSeconds, 0, 60, 1, " seconds")
             .under(where, () -> !where.is(Where.OFF));
     }
 
@@ -71,8 +72,15 @@ public final class Notice {
     // Posts a module's own message where its row says. The words follow the module name in
     // chat and make the body of a toast.
     public static void post(EnumSetting<Where> where, Module owner, Component words) {
+        if (show(where, owner, words)) {
+            Modules.alert(Webhook.Alert.FIND, owner.getName() + " " + words.getString());
+        }
+    }
+
+    // The same for news that is no find. Webhook is left out. False when nothing showed.
+    public static boolean show(EnumSetting<Where> where, Module owner, Component words) {
         if (where.is(Where.OFF) || !where.isVisible() || OfflineClient.MC.player == null) {
-            return;
+            return false;
         }
         if (!where.is(Where.TOAST)) {
             ChatUtil.component(Component.literal("§b" + owner.getName() + " ").append(words));
@@ -80,7 +88,13 @@ public final class Notice {
         if (!where.is(Where.CHAT)) {
             toast(owner.getName(), ChatFormatting.stripFormatting(words.getString()));
         }
-        Modules.alert(Webhook.Alert.FIND, owner.getName() + " " + words.getString());
+        return true;
+    }
+
+    // The word between the module name and the find in chat such as heard for a sound.
+    public Notice verb(String verb) {
+        this.verb = verb;
+        return this;
     }
 
     // Makes the rows a sub option of a switch. Nothing is announced whilst that switch is off.
@@ -89,8 +103,14 @@ public final class Notice {
         return this;
     }
 
+    // Shows the rows only whilst the supplier answers true. Nothing is announced otherwise.
+    public Notice visibleWhen(Supplier<Boolean> visibility) {
+        where.visibleWhen(visibility);
+        return this;
+    }
+
     // Tells the player about a find unless its kind is still quiet. The kind is a short
-    // name the module picks and the words read after found such as a zombie spawner.
+    // name the module picks and the words read after the verb such as a zombie spawner.
     public void tell(String kind, String what, BlockPos pos) {
         tell(kind, what, pos, ServerInfo.dimension());
     }
@@ -113,7 +133,7 @@ public final class Notice {
         }
         Integer more = heldBack.remove(kind);
         if (quiet.getInt() > 0) {
-            quieted.put(kind, quiet.getInt() * TICKS_PER_SECOND);
+            quieted.put(kind, quiet.getInt() * SharedConstants.TICKS_PER_SECOND);
         }
         int count = more == null ? 0 : more;
         boolean here = dimension.equals(ServerInfo.dimension());
@@ -125,7 +145,7 @@ public final class Notice {
         if (!where.is(Where.CHAT)) {
             toast(what, away, pos, count);
         }
-        Modules.alert(Webhook.Alert.FIND, owner + " found " + what + " " + away + " at " + BlockUtil.text(pos)
+        Modules.alert(Webhook.Alert.FIND, owner + " " + verb + " " + what + " " + away + " at " + BlockUtil.text(pos)
             + (count > 0 ? " and " + count + " more" : ""));
     }
 
@@ -143,7 +163,7 @@ public final class Notice {
 
     // How far and which way the find lies. With coordinates on they follow.
     private void chat(String what, String away, BlockPos pos, String dimension, int more) {
-        MutableComponent line = Component.literal("§b" + owner + " §7found §f" + what + "§7 " + away);
+        MutableComponent line = Component.literal(ChatUtil.from(owner, verb + " §f" + what + "§7 " + away));
         if (coordinates.isOn()) {
             line.append("§7 at ").append(ChatUtil.walkLink(pos, dimension));
         }
@@ -156,8 +176,10 @@ public final class Notice {
             + (more > 0 ? " and " + more + " more" : ""));
     }
 
+    // NameProtect matches names case for case and runs before the capital goes on.
     private static void toast(String title, String body) {
+        String shown = EntityUtil.displayed(Component.literal(body)).getString();
         SystemToast.add(OfflineClient.MC.gui.toastManager(), SystemToast.SystemToastId.PERIODIC_NOTIFICATION,
-            Component.literal(title), Component.literal(ChatUtil.capitalised(body)));
+            Component.literal(title), Component.literal(ChatUtil.capitalised(shown)));
     }
 }

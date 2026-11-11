@@ -45,7 +45,8 @@ public final class ModelWireframe {
         return collector.quads;
     }
 
-    // Draws captured quads at an origin. The scale grows or shrinks them about the feet.
+    // Draws captured quads at an origin. The scale grows or shrinks them about the feet. The fill
+    // colour is drawn as given with no fill opacity worked in.
     public static void draw(DrawBatch batch, List<Vec3[]> quads, Vec3 origin, double scale,
                             BoxStyle.Shape shape, int line, int fill, boolean throughWalls) {
         Vec3[] corners = new Vec3[4];

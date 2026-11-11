@@ -10,8 +10,11 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
-import com.jellypudding.offlineclient.util.InputUtil;
+import com.jellypudding.offlineclient.util.MoveGate;
 import com.jellypudding.offlineclient.util.MovementUtil;
+import com.jellypudding.offlineclient.util.ServerSneak;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
@@ -24,10 +27,12 @@ public final class NoSlowdown extends Module {
 
     public enum WebMode { FULL_SPEED, TIMER, OFF }
 
-    // The friction of plain ground. Slime is stickier which drags the top speed down.
-    private static final float NORMAL_FRICTION = 0.6f;
-
     private static final String TIMER_KEY = "noslowdown";
+
+    // Lava keeps half the sideways speed each tick and plain ground a little more. A push
+    // this much above the one on land ends at the same pace.
+    private static final float LAVA_PUSH =
+        0.5f / (1 - MovementUtil.GROUND_FRICTION * LivingEntity.BASE_HORIZONTAL_AIR_DRAG);
 
     // Every climbable block but ladders and scaffolding.
     private static final Set<Block> VINES = Set.of(Blocks.VINE, Blocks.WEEPING_VINES,
@@ -42,47 +47,53 @@ public final class NoSlowdown extends Module {
     private final BoolSetting sneaking = new BoolSetting("Sneaking",
         "Sneaking no longer slows you down. You can even sprint whilst you sneak.", false);
     private final BoolSetting hunger = new BoolSetting("Hunger",
-        "Sprint with an empty hunger bar.", true);
+        "Lets you sprint with an empty hunger bar.", true);
     private final BoolSetting slowness = new BoolSetting("Slowness",
         "The slowness effect no longer slows you.", true);
     private final BoolSetting honey = new BoolSetting("Honey blocks",
-        "Walk over honey at full speed.", true);
+        "Lets you walk over honey at full speed.", true);
     private final BoolSetting soulSand = new BoolSetting("Soul sand",
-        "Walk over soul sand and soul soil at full speed.", true);
+        "Lets you walk over soul sand and soul soil at full speed.", true);
     private final BoolSetting slime = new BoolSetting("Slime blocks",
-        "Walk over slime blocks at full speed.", true);
+        "Lets you walk over slime blocks at full speed.", true);
     private final BoolSetting berryBushes = new BoolSetting("Berry bushes",
-        "Walk through berry bushes at full speed.", true);
+        "Lets you walk through berry bushes at full speed.", true);
     private final BoolSetting vines = new BoolSetting("Vines",
         "Vines of every kind no longer slow you or catch your fall. You can no longer climb them either.", false);
     private final EnumSetting<WebMode> webs = new EnumSetting<>("Cobwebs",
         "How cobwebs are handled.", WebMode.FULL_SPEED)
-        .describe(WebMode.FULL_SPEED, "Walk through cobwebs at full speed.")
-        .describe(WebMode.TIMER, "Speeds the game up whilst you are caught in a cobweb.")
+        .describe(WebMode.FULL_SPEED, "Lets you walk through cobwebs at full speed.")
+        .describe(WebMode.TIMER, "Speeds the game up whilst a cobweb holds you. Every tick sends its packets"
+            + " and the speed keeps to a pace the server never drops you for.")
         .describe(WebMode.OFF, "Cobwebs slow you as normal.");
     private final NumberSetting webTimer = new NumberSetting("Web timer",
-        "Game speed whilst in a cobweb.", 10, 1, 20, 0.5, "x")
-        .min(1).under(webs, WebMode.TIMER);
+        "Game speed whilst you walk in a cobweb. A fall through one always runs at the top pace and"
+            + " still stays slow next to a walk because a web holds a fall back far harder.",
+        MoveGate.STEADY_SPEED, 1, MoveGate.STEADY_SPEED, 0.5, "x")
+        .under(webs, WebMode.TIMER);
     private final BoolSetting fluidDrag = new BoolSetting("Fluid drag",
-        "Water and lava no longer drag on you. The server still caps how far you get.", false);
+        "Water and lava no longer slow you sideways. A sprint still ends at the surface as in the plain game.",
+        false);
+    private final BoolSetting buoyancy = new BoolSetting("Buoyancy",
+        "You still float and sink and swim up and down as usual. Off lets you fall through water and lava"
+            + " as through air.", true)
+        .under(fluidDrag);
 
-    // Whether the server has been told the sneak that air strict fakes.
-    private boolean strictTold;
+    // The sneak air strict tells the server.
+    private final ServerSneak strictSneak = new ServerSneak();
 
     public NoSlowdown() {
         super("NoSlowdown", "Keeps your full speed through everything that would normally slow you down.",
             Category.MOVEMENT);
         addSettings(items, airStrict, sneaking, hunger, slowness, honey, soulSand, slime,
-            berryBushes, vines, webs, webTimer, fluidDrag);
+            berryBushes, vines, webs, webTimer, fluidDrag, buoyancy);
         searchTags("noslow", "eating", "sneak speed", "soul sand", "honey", "cobweb", "NoWeb", "no web");
     }
 
     @Override
     protected void onDisable() {
         Timer.override(TIMER_KEY, 1f);
-        if (strictTold) {
-            tellShift(false);
-        }
+        strictSneak.release();
     }
 
     public boolean skipsItems() {
@@ -114,9 +125,19 @@ public final class NoSlowdown extends Module {
         return isEnabled() && webs.is(WebMode.FULL_SPEED);
     }
 
-    // Read by EntityMixin. True whilst the local player should read as out of every fluid.
+    // Read by LivingEntityMixin. True whilst water and lava let the whole land speed through.
     public boolean skipsFluidDrag() {
         return isEnabled() && fluidDrag.isOn();
+    }
+
+    // Read by EntityMixin. True whilst the local player should read as out of every fluid.
+    public boolean ignoresFluids() {
+        return skipsFluidDrag() && !buoyancy.isOn();
+    }
+
+    // Read by LivingEntityMixin. The sideways push a swimmer in lava gets from a land speed.
+    public float lavaPush(float push, float speed) {
+        return skipsFluidDrag() ? speed * LAVA_PUSH : push;
     }
 
     // True when the block under or around the feet should not drag the speed down.
@@ -136,7 +157,7 @@ public final class NoSlowdown extends Module {
     // The friction the ground under the player should have. Slime reads as plain ground.
     public float groundFriction(Block block, float friction) {
         if (block == Blocks.SLIME_BLOCK && skipsSlime()) {
-            return NORMAL_FRICTION;
+            return MovementUtil.GROUND_FRICTION;
         }
         return friction;
     }
@@ -152,27 +173,29 @@ public final class NoSlowdown extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame()) {
-            return;
-        }
-        boolean caught = webs.is(WebMode.TIMER) && BlockUtil.inCobweb(mc.player);
-        Timer.override(TIMER_KEY, caught ? webTimer.getFloat() : 1f);
-
-        boolean strict = items.isOn() && airStrict.isOn() && mc.player.isUsingItem();
-        if (strict != strictTold) {
-            tellShift(strict);
-        }
+        Timer.override(TIMER_KEY, webSpeed());
+        strictSneak.want(items.isOn() && airStrict.isOn() && mc.player.isUsingItem());
     }
 
-    private void tellShift(boolean shift) {
-        strictTold = shift;
-        InputUtil.sendShift(shift);
+    // The game speed a cobweb calls for. One whilst none holds whoever carries the player.
+    // A web takes far more of a fall than of a walk and the fall gets all the speed there is.
+    private float webSpeed() {
+        Entity mover = mc.player.getRootVehicle();
+        if (!webs.is(WebMode.TIMER) || !websHold(mover) || !BlockUtil.inCobweb(mover)) {
+            return 1f;
+        }
+        float pace = MoveGate.steadySpeed();
+        return mover.onGround() ? Math.min(webTimer.getFloat(), pace) : pace;
+    }
+
+    // A web holds a mount and not its rider and never a player who flies. The timer only
+    // helps a mount the client moves itself.
+    private static boolean websHold(Entity mover) {
+        return mover == mc.player ? !mc.player.getAbilities().flying : mover.isLocalInstanceAuthoritative();
     }
 
     @Subscribe
     private void onPacketSend(PacketSendEvent event) {
-        if (strictTold) {
-            InputUtil.keepShift(event);
-        }
+        strictSneak.keep(event);
     }
 }

@@ -55,6 +55,13 @@ public abstract class MultiPlayerGameModeMixin {
     @Shadow
     protected abstract void startPrediction(ClientLevel level, PredictiveAction action);
 
+    // The block the last BlockBreakEvent named and the player tick it went out on.
+    @Unique
+    private BlockPos offlineclient$postedPos;
+
+    @Unique
+    private int offlineclient$postedTick;
+
     @Inject(
         method = "attack(Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/world/entity/Entity;)V",
         at = @At("HEAD"))
@@ -70,7 +77,7 @@ public abstract class MultiPlayerGameModeMixin {
         at = @At("HEAD"), cancellable = true)
     private void onStartDestroyBlock(BlockPos pos, Direction direction,
                                      CallbackInfoReturnable<Boolean> cir) {
-        OfflineClient.INSTANCE.getEventBus().post(new BlockBreakEvent(pos));
+        offlineclient$postBreak(pos);
         if (Modules.toolHeldBack()) {
             cir.setReturnValue(false);
             return;
@@ -106,7 +113,7 @@ public abstract class MultiPlayerGameModeMixin {
             target = "Lnet/minecraft/world/level/block/state/BlockState;getDestroyProgress(Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/core/BlockPos;)F"))
     private float adjustProgress(float original) {
         FastBreak fastBreak = Modules.active(FastBreak.class);
-        if (fastBreak == null || destroyBlockPos == null || minecraft.level == null) {
+        if (fastBreak == null || minecraft.level == null) {
             return original;
         }
         BlockState state = minecraft.level.getBlockState(destroyBlockPos);
@@ -119,10 +126,22 @@ public abstract class MultiPlayerGameModeMixin {
         at = @At("HEAD"), cancellable = true)
     private void onContinueDestroyBlock(BlockPos pos, Direction direction,
                                         CallbackInfoReturnable<Boolean> cir) {
-        OfflineClient.INSTANCE.getEventBus().post(new BlockBreakEvent(pos));
+        offlineclient$postBreak(pos);
         if (Modules.toolHeldBack()) {
             cir.setReturnValue(false);
         }
+    }
+
+    // A click and a sweep onto a new block run both heads in one tick. Listeners hear of a block once a tick.
+    @Unique
+    private void offlineclient$postBreak(BlockPos pos) {
+        int tick = minecraft.player.tickCount;
+        if (tick == offlineclient$postedTick && pos.equals(offlineclient$postedPos)) {
+            return;
+        }
+        offlineclient$postedPos = pos.immutable();
+        offlineclient$postedTick = tick;
+        OfflineClient.INSTANCE.getEventBus().post(new BlockBreakEvent(pos));
     }
 
     // ElytraBoost swaps a real rocket for a client side one before it is spent.
@@ -138,29 +157,30 @@ public abstract class MultiPlayerGameModeMixin {
         }
     }
 
-    // NoInteract drops every block right click made with a chosen hand and every one that
-    // would put a protected item into a pot.
+    // NoInteract drops a block right click made with a chosen hand or a protected item before
+    // anything is sent. It says how the right click goes on.
     @Inject(
         method = "useItemOn(Lnet/minecraft/client/player/LocalPlayer;Lnet/minecraft/world/InteractionHand;Lnet/minecraft/world/phys/BlockHitResult;)Lnet/minecraft/world/InteractionResult;",
         at = @At("HEAD"), cancellable = true)
     private void onUseItemOn(LocalPlayer player, InteractionHand hand, BlockHitResult hit,
                              CallbackInfoReturnable<InteractionResult> cir) {
         NoInteract noInteract = Modules.active(NoInteract.class);
-        if (noInteract != null && noInteract.blocksUseWith(hand, hit.getBlockPos())) {
-            cir.setReturnValue(InteractionResult.FAIL);
+        InteractionResult dropped = noInteract == null ? null : noInteract.dropsBlockClick(hand, hit);
+        if (dropped != null) {
+            cir.setReturnValue(dropped);
         }
     }
 
-    // NoInteract drops every entity right click made with a chosen hand and every one that
-    // would put a protected item into an item frame.
+    // The same for an entity right click.
     @Inject(
         method = "interact(Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/world/entity/Entity;Lnet/minecraft/world/phys/EntityHitResult;Lnet/minecraft/world/InteractionHand;)Lnet/minecraft/world/InteractionResult;",
         at = @At("HEAD"), cancellable = true)
     private void onInteract(Player player, Entity target, EntityHitResult hit, InteractionHand hand,
                             CallbackInfoReturnable<InteractionResult> cir) {
         NoInteract noInteract = Modules.active(NoInteract.class);
-        if (noInteract != null && noInteract.blocksEntityUseWith(hand, target)) {
-            cir.setReturnValue(InteractionResult.FAIL);
+        InteractionResult dropped = noInteract == null ? null : noInteract.dropsEntityClick(hand, target, hit);
+        if (dropped != null) {
+            cir.setReturnValue(dropped);
         }
     }
 

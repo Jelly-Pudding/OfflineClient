@@ -1,16 +1,30 @@
 package com.jellypudding.offlineclient.util;
 
+import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.render.BoxStyle;
 import com.jellypudding.offlineclient.render.DrawBatch;
+import com.jellypudding.offlineclient.setting.NumberSetting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.BlockHitResult;
 
 // Two corners of a box marked one press at a time.
 public final class CornerPicker {
 
+    // A module that takes its box one corner at a time. A corner typed in a command goes in the
+    // same way as one marked with the bind.
+    public interface Taker {
+        void markCorner(BlockPos pos);
+    }
+
     // The colour of the marks in the two corners.
     public static final int COLOR = 0xFFFFD040;
+
+    // The most blocks any box may hold. A module that walks every block of a larger one would
+    // stall the game.
+    public static final int MOST_BLOCKS = 1 << 20;
 
     // A corner mark sits this far inside its block and the box this far outside the blocks.
     private static final double MARK_INSET = 0.3;
@@ -18,6 +32,21 @@ public final class CornerPicker {
 
     private BlockPos first;
     private BlockPos second;
+
+    // The block a press of the owner's bind marks next. Null when the press switches the owner
+    // instead because it is off or out of a world or nothing is aimed at.
+    public static BlockPos aimedCorner(Module owner) {
+        if (!owner.isEnabled() || OfflineClient.MC.player == null || OfflineClient.MC.level == null) {
+            return null;
+        }
+        BlockHitResult hit = BlockUtil.aimedBlock();
+        return hit == null ? null : hit.getBlockPos().immutable();
+    }
+
+    // The row that caps the box of a module that works through every block in it.
+    public static NumberSetting maxBlocks() {
+        return new NumberSetting("Max blocks", "The most blocks one box may hold.", 4096, 64, 16384, 64).min(1);
+    }
 
     // The first free corner takes the spot. A module decides what a third press does.
     public void mark(BlockPos pos) {

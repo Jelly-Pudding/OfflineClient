@@ -16,6 +16,7 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.ItemUtil;
 import com.jellypudding.offlineclient.util.Modules;
@@ -78,7 +79,7 @@ public final class AutoFish extends Module {
         .describe(BiteMode.BOTH, "Either signal reels the rod in.");
     private final NumberSetting validRange = new NumberSetting("Valid range",
         "How far from your bobber a splash may sound and still count as yours.",
-        1.5, 0.25, 8, 0.25, " blocks").min(0.25)
+        1.5, 0.25, 8, 0.25, " blocks")
         .under(biteMode, BiteMode.SOUND, BiteMode.BOTH);
     private final BoolSetting autoCast = new BoolSetting("Auto cast",
         "Casts the rod for you. Off only reels in and leaves the casting to you.", true);
@@ -87,44 +88,44 @@ public final class AutoFish extends Module {
         .under(autoCast);
     private final NumberSetting recastSpread = new NumberSetting("Recast spread",
         "The most ticks the recast delay shifts either way. The shift is random and usually small.",
-        0, 0, 30, 1, " ticks").min(0)
+        0, 0, 30, 1, " ticks")
         .under(autoCast);
     private final NumberSetting catchDelay = new NumberSetting("Catch delay",
         "Ticks to wait after a bite before reeling in.", 4, 0, 20, 1, " ticks");
     private final NumberSetting catchSpread = new NumberSetting("Catch spread",
         "The most ticks the catch delay shifts either way. Above 10 a quick bite can be missed.",
-        0, 0, 10, 1, " ticks").min(0);
+        0, 0, 10, 1, " ticks");
     private final NumberSetting retryDelay = new NumberSetting("Retry delay",
         "Ticks to wait after a cast or a reel in that the game refused.",
-        15, 0, 100, 1, " ticks").min(0);
+        15, 0, 100, 1, " ticks");
     private final NumberSetting patience = new NumberSetting("Patience",
         "Seconds to wait without a bite before reeling in and recasting.", 60, 10, 120, 1, "s");
     private final BoolSetting autoSwitch = new BoolSetting("Auto switch",
-        "Move to the best fishing rod you own. The whole inventory and the offhand are searched.",
-        true);
+        "Fishes with the best rod you own. One in the inventory moves to your main hand and one in the"
+            + " offhand is used where it is.", true);
     private final BoolSetting antiBreak = new BoolSetting("Anti break",
-        "Never use a rod that is about to break.", true);
+        "Never uses a rod that is about to break.", true);
     private final BoolSetting stopOutOfRods = new BoolSetting("Stop when out of rods",
-        "Switch the module off once no usable rod is left.", false);
+        "Switches the module off once no usable rod is left.", false);
     private final BoolSetting stopWhenFull = new BoolSetting("Stop when full",
-        "Switch the module off once your inventory has no free slot.", false);
+        "Switches the module off once your inventory has no free slot.", false);
     private final BoolSetting shallowWarning = new BoolSetting("Shallow water warning",
         "Warns in chat when the bobber is not in open water. Treasure needs open water.", true);
     private final BoolSetting mcmmoMode = new BoolSetting("mcMMO mode",
         "Swaps between two fishing spots to avoid the mcMMO overfishing penalty.", false);
     private final NumberSetting mcmmoRange = new NumberSetting("mcMMO range",
         "The MoveRange value of the plugin. The least distance between the two spots.",
-        3, 1, 50, 1, " blocks").min(1)
+        3, 1, 50, 1, " blocks")
         .under(mcmmoMode);
     private final BoolSetting mcmmoRangeBug = new BoolSetting("mcMMO range bug",
-        "Round the range down to an even number the way the plugin's own check does.", true)
+        "Rounds the range down to an even number the way the plugin's own check does.", true)
         .under(mcmmoMode);
     private final NumberSetting mcmmoLimit = new NumberSetting("mcMMO limit",
         "The OverFishLimit value of the plugin. Fish taken from one spot before switching.",
-        10, 2, 1000, 1, "").min(2)
+        10, 2, 1000, 1, "")
         .under(mcmmoMode);
     private final BoolSetting debugDraw = new BoolSetting("Debug draw",
-        "Draw the valid range around the bobber and every splash you hear.", false);
+        "Draws the valid range around the bobber and every splash you hear.", false);
     private final ColorSetting debugColor = new ColorSetting("Debug colour",
         "Colour of the debug drawing.", 0, 0.79f, 0.88f, false)
         .under(debugDraw);
@@ -203,7 +204,7 @@ public final class AutoFish extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || mc.player.isSpectator()) {
+        if (mc.player.isSpectator()) {
             return;
         }
         if (castTimer > 0) {
@@ -212,33 +213,25 @@ public final class AutoFish extends Module {
         if (mc.gui.screen() != null) {
             return;
         }
-        if (!pickRod()) {
+        InteractionHand hand = pickRod();
+        if (hand == null) {
             return;
         }
-        ItemStack held = mc.player.getMainHandItem();
-        if (!(held.getItem() instanceof FishingRodItem)) {
-            return;
-        }
-        // Reeling in wears the rod down as much as casting does.
-        if (antiBreak.isOn() && ItemUtil.nearlyBroken(held, NEARLY_BROKEN)) {
-            return;
-        }
-
         FishingHook bobber = mc.player.fishing;
         if (bobber == null || bobber.isRemoved()) {
-            tryCast();
+            tryCast(hand);
             return;
         }
         // The old bobber lingers for a tick or two after reeling.
         if (bobber.getId() == reeledId) {
             return;
         }
-        tryReel(bobber);
+        tryReel(bobber, hand);
     }
 
     // The patience clock is wound whilst no bobber is out. A cast made by
     // hand is timed the same as one made here.
-    private void tryCast() {
+    private void tryCast(InteractionHand hand) {
         reeling = false;
         splashHeard = false;
         reeledId = -1;
@@ -249,11 +242,11 @@ public final class AutoFish extends Module {
         if (!readyToCast()) {
             return;
         }
-        castTimer = useRod() ? shifted(recastDelay.getInt(), recastSpread.getInt())
+        castTimer = useRod(hand) ? shifted(recastDelay.getInt(), recastSpread.getInt())
             : retryDelay.getInt();
     }
 
-    private void tryReel(FishingHook bobber) {
+    private void tryReel(FishingHook bobber, InteractionHand hand) {
         boolean bite = bitten(bobber);
         if (bite && !reeling) {
             reeling = true;
@@ -276,7 +269,7 @@ public final class AutoFish extends Module {
             return;
         }
 
-        if (!useRod()) {
+        if (!useRod(hand)) {
             reelTimer = retryDelay.getInt();
             return;
         }
@@ -324,15 +317,15 @@ public final class AutoFish extends Module {
         }
     }
 
-    private boolean useRod() {
+    private boolean useRod(InteractionHand hand) {
         MultiPlayerGameMode gameMode = mc.gameMode;
         if (gameMode == null) {
             return false;
         }
-        if (!gameMode.useItem(mc.player, InteractionHand.MAIN_HAND).consumesAction()) {
+        if (!gameMode.useItem(mc.player, hand).consumesAction()) {
             return false;
         }
-        SwingMode.swingArm(InteractionHand.MAIN_HAND);
+        SwingMode.swingArm(hand);
         return true;
     }
 
@@ -352,10 +345,11 @@ public final class AutoFish extends Module {
         return Math.max(0, delay + Math.round(share * spread));
     }
 
-    // False whilst the hand is busy or the rod moved this tick.
-    private boolean pickRod() {
-        if (Modules.feeding(null)) {
-            return false;
+    // The hand to fish with. Null whilst the hands are taken or no hand holds a rod worth using
+    // or a rod moved this tick.
+    private InteractionHand pickRod() {
+        if (Hands.taken()) {
+            return null;
         }
         int best = -1;
         int bestScore = -1;
@@ -366,28 +360,41 @@ public final class AutoFish extends Module {
                 best = i;
             }
         }
-        if (rodScore(mc.player.getOffhandItem()) > bestScore) {
-            best = InventoryUtil.OFFHAND_SLOT;
-        }
-        outOfRods = best == -1;
+        boolean offhandBest = rodScore(mc.player.getOffhandItem()) > bestScore;
+        outOfRods = best == -1 && !offhandBest;
         if (outOfRods && stopOutOfRods.isOn()) {
             ChatUtil.message("AutoFish has run out of rods.");
             setEnabled(false);
-            return false;
+            return null;
         }
         if (stopWhenFull.isOn() && mc.player.getInventory().getFreeSlot() == -1) {
             ChatUtil.message("AutoFish has stopped because your inventory is full.");
             setEnabled(false);
-            return false;
+            return null;
         }
-        if (!autoSwitch.isOn() || best == -1) {
-            return true;
+        if (!autoSwitch.isOn()) {
+            return heldRod();
         }
-        if (best == InventoryUtil.OFFHAND_SLOT) {
-            return borrowOffhand();
+        // A rod in the offhand casts from there. Reeling in wears a rod down as much as casting
+        // does and one about to break scores as no rod at all.
+        if (offhandBest) {
+            return InteractionHand.OFF_HAND;
+        }
+        if (best == -1) {
+            return null;
         }
         int before = InventoryUtil.selectedSlot();
-        return loan.select(best) && InventoryUtil.selectedSlot() == before;
+        return loan.select(best) && InventoryUtil.selectedSlot() == before ? InteractionHand.MAIN_HAND : null;
+    }
+
+    // The main hand goes first as it does for a click made by hand.
+    private InteractionHand heldRod() {
+        for (InteractionHand hand : InteractionHand.values()) {
+            if (rodScore(mc.player.getItemInHand(hand)) >= 0) {
+                return hand;
+            }
+        }
+        return null;
     }
 
     // Minus one when the stack is no rod or no rod worth using.
@@ -404,17 +411,6 @@ public final class AutoFish extends Module {
             + ItemUtil.enchantLevel(Enchantments.UNBREAKING, stack) * UNBREAKING_WORTH
             + ItemUtil.enchantLevel(Enchantments.MENDING, stack)
             + keeps;
-    }
-
-    // Swaps the offhand rod into the hotbar. Always waits a tick afterwards.
-    private boolean borrowOffhand() {
-        if (!InventoryUtil.cursorFree()) {
-            return false;
-        }
-        int hotbar = InventoryUtil.freeHotbarSlot(InventoryUtil.selectedSlot());
-        InventoryUtil.swapWithHotbar(InventoryUtil.OFFHAND_SLOT, hotbar);
-        mc.player.getInventory().setSelectedSlot(hotbar);
-        return false;
     }
 
     private void checkWater(FishingHook bobber) {

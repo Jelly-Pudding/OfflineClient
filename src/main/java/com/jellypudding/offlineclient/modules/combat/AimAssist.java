@@ -43,11 +43,11 @@ public final class AimAssist extends Module {
         Items.MACE, Items.TRIDENT);
 
     private final NumberSetting range = new NumberSetting("Range",
-        "How far away a target can be.", 4.5, 1, 6, 0.05, " blocks").min(1);
+        "How far away a target can be.", 4.5, 1, 6, 0.05, " blocks");
     private final BoolSetting snap = new BoolSetting("Snap",
         "Holds the crosshair on the target every frame instead of turning at the turn speed.", false);
     private final NumberSetting speed = new NumberSetting("Turn speed",
-        "Degrees a second the view turns at.", 600, 10, 3600, 10, " degrees a second").min(10)
+        "Degrees a second the view turns at.", 600, 10, 3600, 10, " degrees a second")
         .unless(snap);
     private final NumberSetting fov = new NumberSetting("Field of view",
         "Only targets inside this cone in front of you are picked.", 120, 30, 360, 10, " degrees").min(1).max(360);
@@ -60,7 +60,7 @@ public final class AimAssist extends Module {
     private final NumberSetting ignoreMouse = new NumberSetting("Ignore mouse",
         "How much of your own mouse movement is swallowed whilst aiming.", 0, 0, 100, 1, "%");
     private final BoolSetting lineOfSight = new BoolSetting("Line of sight",
-        "Drop the target when the aim point is behind a block.", true);
+        "Drops the target when the aim point is behind a block.", true);
     private final BoolSetting lockOn = new BoolSetting("Lock on",
         "Stays on one target until it dies or leaves your range or your sight. It is followed even"
             + " outside the field of view.", false);
@@ -68,13 +68,13 @@ public final class AimAssist extends Module {
         "Stays on the locked target whilst it is hidden behind blocks.", false)
         .under(lockOn, () -> lockOn.isOn() && lineOfSight.isOn());
     private final BoolSetting whileUsing = new BoolSetting("Aim whilst using",
-        "Keep aiming whilst you eat or block or draw a bow.", false);
+        "Keeps aiming whilst you eat or block or draw a bow.", false);
     private final BoolSetting onlyHolding = new BoolSetting("Only whilst holding",
         "Aims only whilst your main hand holds one of the items below.", false);
     private final RegistryListSetting<Item> heldItems = new RegistryListSetting<>("Held items",
         "The items that let the aim work. Click to pick them.", BuiltInRegistries.ITEM, MELEE_WEAPONS)
         .under(onlyHolding);
-    private final EntityFilter filter = EntityFilter.living("Aim at", "aimed at", true,
+    private final EntityFilter filter = EntityFilter.living("Aims at", "aimed at", true,
         EntityFilter.Pick.NONE, List.of());
 
     private final TargetFilter targets = new TargetFilter();
@@ -95,7 +95,7 @@ public final class AimAssist extends Module {
 
     @Override
     public String getSuffix() {
-        return target instanceof Player player ? EntityUtil.nameOf(player) : null;
+        return target instanceof Player player ? EntityUtil.displayNameOf(player) : null;
     }
 
     @Override

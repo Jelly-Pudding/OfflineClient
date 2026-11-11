@@ -21,22 +21,23 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
-// Drops the incoming effect packets for the effects you pick. A blocked effect
-// keeps running on the server copy of you. Only the display of it goes away.
+// Drops the incoming effect packets for the effects you pick. A blocked effect keeps running
+// on the server copy of you whilst your client acts as though it were gone.
 public final class NoStatusEffects extends Module {
 
+    private final BoolSetting blockAll = new BoolSetting("Block all",
+        "Blocks every effect instead of the chosen ones.", false);
     private final RegistryListSetting<MobEffect> effects = new RegistryListSetting<>("Effects",
         "The effects to block. Click to pick them.", BuiltInRegistries.MOB_EFFECT,
         List.of(MobEffects.LEVITATION.value(), MobEffects.JUMP_BOOST.value(),
-            MobEffects.SLOW_FALLING.value(), MobEffects.DOLPHINS_GRACE.value()));
-    private final BoolSetting blockAll = new BoolSetting("Block all",
-        "Block every effect instead of the chosen ones.", false);
+            MobEffects.SLOW_FALLING.value(), MobEffects.DOLPHINS_GRACE.value()))
+        .unless(blockAll);
     private final BoolSetting selfOnly = new BoolSetting("You only",
-        "Leave the effects on other entities alone.", true);
+        "Leaves the effects on other entities alone.", true);
     private final BoolSetting clearActive = new BoolSetting("Clear active",
-        "Strip a blocked effect that is already running on you.", true);
+        "Strips a blocked effect that is already running on you.", true);
     private final BoolSetting hideParticles = new BoolSetting("Hide particles",
-        "Stop every effect particle around you.", true);
+        "Stops every effect particle around you.", true);
 
     private final AtomicInteger blocked = new AtomicInteger();
 
@@ -49,7 +50,7 @@ public final class NoStatusEffects extends Module {
     public NoStatusEffects() {
         super("NoStatusEffects", "Hides your chosen effects on your client whilst the server keeps them.",
             Category.PLAYER);
-        addSettings(effects, blockAll, selfOnly, clearActive, hideParticles);
+        addSettings(blockAll, effects, selfOnly, clearActive, hideParticles);
         searchTags("no levitation", "anti effect", "potion block", "effect particles");
     }
 
@@ -75,9 +76,6 @@ public final class NoStatusEffects extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame()) {
-            return;
-        }
         localId = mc.player.getId();
         if (hideParticles.isOn()) {
             clearParticles();

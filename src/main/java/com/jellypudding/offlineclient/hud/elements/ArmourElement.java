@@ -149,7 +149,7 @@ public final class ArmourElement extends HudElement {
             if (labelled(stack)) {
                 double share = ItemUtil.durabilityPercent(stack);
                 String label = wear.is(Wear.PERCENT) ? Math.round(share) + "%"
-                    : String.valueOf(stack.getMaxDamage() - stack.getDamageValue());
+                    : String.valueOf(ItemUtil.usesLeft(stack));
                 write(context, font, label, left + (column - font.width(label)) / 2, top + SLOT,
                     ColorUtil.redToGreen((float) share / 100f));
             }

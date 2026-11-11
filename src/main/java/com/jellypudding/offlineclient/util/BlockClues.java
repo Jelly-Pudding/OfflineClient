@@ -10,14 +10,20 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.SectionPos;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.AbstractBedBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.BubbleColumnBlock;
+import net.minecraft.world.level.block.RotatedPillarBlock;
 import net.minecraft.world.level.block.SignBlock;
+import net.minecraft.world.level.block.SpeleothemBlock;
+import net.minecraft.world.level.block.VineBlock;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BedPart;
+import net.minecraft.world.level.material.FluidState;
 
 import java.util.ArrayDeque;
 import java.util.Comparator;
@@ -38,9 +44,10 @@ public final class BlockClues {
     }
 
     // The settings a scan reads by. Needed holds how many of each picked block alone mark a chunk.
-    // The margins are layers left out at the bottom and top.
+    // The margins are layers left out at the bottom and top. Growth is how many grown plants mark
+    // a chunk.
     public record Rules(Set<BaseClue> clues, Map<Block, Integer> needed, int skyHeight, int floorMargin,
-                        int ceilingMargin, boolean paper, ResourceKey<Level> dimension) {
+                        int ceilingMargin, boolean paper, ResourceKey<Level> dimension, int growth) {
     }
 
     // The floor and the nether roof are each five layers of bedrock at most.
@@ -55,6 +62,18 @@ public final class BlockClues {
     private static final int MAX_ROOM = 128;
     // Thirds and sixths never add up to exactly one in floating point.
     private static final double ROUNDING = 1e-9;
+    // The one deepslate the world lays on its side stands in an ancient city pillar with deepslate
+    // tile stairs this close. Nothing the world does later takes those stairs away.
+    private static final int PILLAR_REACH = 2;
+    // Leaves hang vines four blocks free and a swamp camp hangs one five blocks free. A run this
+    // long grew three times or more and that takes about an hour near a player.
+    private static final int GROWN_VINE = 8;
+    // The world grows kelp ten long at most and ends it two under the surface. A column this long
+    // that reaches the air grew four times or more and that takes about half an hour near a player.
+    private static final int GROWN_KELP = 14;
+    // The world grows stalactites six long and stalagmites seven long at most.
+    private static final int GROWN_STALACTITE = 7;
+    private static final int GROWN_STALAGMITE = 8;
 
     // Rooms are told apart by their lowest corner. A room across a chunk border marks one chunk.
     private static final Comparator<BlockPos> CORNER_FIRST = Comparator.comparingInt((BlockPos pos) -> pos.getX())
@@ -116,6 +135,8 @@ public final class BlockClues {
         private final boolean settled;
         private final Set<BaseClue> found = EnumSet.noneOf(BaseClue.class);
         private final Picked picked = new Picked();
+        private final Growth growth = new Growth();
+        private final BlockGetter getter;
 
         private Reading(Rules rules, ChunkScanner.View view, List<Hit> out) {
             this.rules = rules;
@@ -124,6 +145,7 @@ public final class BlockClues {
             low = view.minY() + rules.floorMargin();
             high = view.maxY() - rules.ceilingMargin();
             settled = !rules.paper() || view.complete();
+            getter = new ViewBlocks(view);
         }
 
         private void run() {
@@ -146,6 +168,9 @@ public final class BlockClues {
             if (picked.enough(rules.needed())) {
                 out.add(new Hit(BaseClue.PLAYER_BLOCKS, picked.tops.get(picked.most()), picked.words()));
             }
+            if (growth.count >= rules.growth()) {
+                out.add(new Hit(BaseClue.GROWTH, growth.first, growth.words()));
+            }
         }
 
         // Signs and portals and bubbles and spawners and beds and the picked blocks in one pass.
@@ -166,6 +191,10 @@ public final class BlockClues {
                         once(BaseClue.SPAWNER, x, y, z, "a lone spawner");
                     } else if (bedHead(state) && view.complete() && !structureBed(x, y, z, block)) {
                         out.add(new Hit(BaseClue.BED, new BlockPos(x, y, z), "a lone " + name(block)));
+                    } else if (sideways(state) && view.complete() && !inPillar(x, y, z)) {
+                        once(BaseClue.SIDEWAYS, x, y, z, "deepslate laid on its side");
+                    } else if (growing(state) && view.complete()) {
+                        grown(x, y, z, state);
                     }
                     if (counting && picked(state) && shown(x, y, z)) {
                         picked.add(block, x, y, z);
@@ -176,7 +205,83 @@ public final class BlockClues {
         private boolean placedClue(BlockState state) {
             Block block = state.getBlock();
             return (block instanceof SignBlock && wants(BaseClue.SIGN)) || lit(state) || rising(state)
-                || (block == Blocks.SPAWNER && wants(BaseClue.SPAWNER)) || bedHead(state);
+                || (block == Blocks.SPAWNER && wants(BaseClue.SPAWNER)) || bedHead(state) || sideways(state)
+                || growing(state);
+        }
+
+        // Deepslate or a silverfish in it laid along x or z. Silverfish keep the way it lay.
+        private boolean sideways(BlockState state) {
+            return wants(BaseClue.SIDEWAYS) && (state.is(Blocks.DEEPSLATE) || state.is(Blocks.INFESTED_DEEPSLATE))
+                && state.getValue(RotatedPillarBlock.AXIS) != Direction.Axis.Y;
+        }
+
+        private boolean inPillar(int x, int y, int z) {
+            return SeenBlocks.near(view::get, x, y, z, PILLAR_REACH,
+                (bx, by, bz, state) -> state.is(Blocks.DEEPSLATE_TILE_STAIRS));
+        }
+
+        private boolean growing(BlockState state) {
+            return wants(BaseClue.GROWTH) && (kelp(state) || state.is(Blocks.VINE) || state.is(Blocks.POINTED_DRIPSTONE));
+        }
+
+        // A vine run or a dripstone is read from its top or base end and a kelp column from the top
+        // that reaches the air.
+        private void grown(int x, int y, int z, BlockState state) {
+            if (state.is(Blocks.VINE)) {
+                if (!hanging(x, y + 1, z) && hanging(x, y, z)) {
+                    int run = 0;
+                    while (hanging(x, y - run, z)) {
+                        run++;
+                    }
+                    if (run >= GROWN_VINE) {
+                        growth.add(x, y, z, "vines hanging " + run + " blocks free");
+                    }
+                }
+            } else if (state.is(Blocks.POINTED_DRIPSTONE)) {
+                Direction tip = state.getValue(SpeleothemBlock.TIP_DIRECTION);
+                if (pointing(view.get(x - tip.getStepX(), y - tip.getStepY(), z - tip.getStepZ()), tip)) {
+                    return;
+                }
+                int length = 1;
+                while (pointing(view.get(x, y + tip.getStepY() * length, z), tip)) {
+                    length++;
+                }
+                if (length >= (tip == Direction.DOWN ? GROWN_STALACTITE : GROWN_STALAGMITE)) {
+                    growth.add(x, y, z, "dripstone " + length + " blocks long");
+                }
+            } else if (view.get(x, y + 1, z).isAir()) {
+                int length = 1;
+                while (kelp(view.get(x, y - length, z))) {
+                    length++;
+                }
+                if (length >= GROWN_KELP) {
+                    growth.add(x, y, z, "kelp " + length + " blocks tall at the surface");
+                }
+            }
+        }
+
+        private static boolean pointing(BlockState state, Direction tip) {
+            return state.is(Blocks.POINTED_DRIPSTONE) && state.getValue(SpeleothemBlock.TIP_DIRECTION) == tip;
+        }
+
+        private static boolean kelp(BlockState state) {
+            return state.is(Blocks.KELP) || state.is(Blocks.KELP_PLANT);
+        }
+
+        // A vine with no face the game would let it cling to. It hangs from the vine above.
+        private boolean hanging(int x, int y, int z) {
+            BlockState vine = view.get(x, y, z);
+            if (!vine.is(Blocks.VINE)) {
+                return false;
+            }
+            BlockPos pos = new BlockPos(x, y, z);
+            for (Direction side : Direction.values()) {
+                if (side != Direction.DOWN && vine.getValue(VineBlock.getPropertyForFace(side))
+                    && VineBlock.isAcceptableNeighbour(getter, pos.relative(side), side)) {
+                    return false;
+                }
+            }
+            return true;
         }
 
         private boolean picked(BlockState state) {
@@ -357,6 +462,54 @@ public final class BlockClues {
             if (found.add(clue)) {
                 out.add(new Hit(clue, new BlockPos(x, y, z), what));
             }
+        }
+    }
+
+    // A scan view as the game's own block tests read a world.
+    private record ViewBlocks(ChunkScanner.View view) implements BlockGetter {
+
+        @Override
+        public BlockEntity getBlockEntity(BlockPos pos) {
+            return null;
+        }
+
+        @Override
+        public BlockState getBlockState(BlockPos pos) {
+            return view.get(pos);
+        }
+
+        @Override
+        public FluidState getFluidState(BlockPos pos) {
+            return view.get(pos).getFluidState();
+        }
+
+        @Override
+        public int getHeight() {
+            return view.maxY() - view.minY() + 1;
+        }
+
+        @Override
+        public int getMinY() {
+            return view.minY();
+        }
+    }
+
+    // The plants of one chunk grown past what the world makes them and the first of them.
+    private static final class Growth {
+        private int count;
+        private BlockPos first;
+        private String firstWords;
+
+        private void add(int x, int y, int z, String words) {
+            if (count++ == 0) {
+                first = new BlockPos(x, y, z);
+                firstWords = words;
+            }
+        }
+
+        // Such as 3 grown plants such as kelp 15 blocks tall at the surface.
+        private String words() {
+            return count == 1 ? firstWords : Tally.counted(count, "grown plant") + " such as " + firstWords;
         }
     }
 

@@ -4,10 +4,13 @@ import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.command.Command;
 import com.jellypudding.offlineclient.command.CommandManager;
 import com.jellypudding.offlineclient.config.DataFiles;
+import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.Tally;
 import com.mojang.serialization.Codec;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.commands.arguments.blocks.BlockStateParser;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.core.component.DataComponentPatch;
 import net.minecraft.nbt.CompoundTag;
@@ -15,24 +18,42 @@ import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.NbtUtils;
 import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.util.ProblemReporter;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.Property;
+import net.minecraft.world.level.storage.TagValueOutput;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.EntityHitResult;
 
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
 import java.util.StringJoiner;
 
-// Components are shown one to a line. The clipboard gets the give command that makes the item.
+// Values are shown one to a line. The clipboard gets the command that makes the item or the
+// entity or the block again. An entity and a block show what the server has told the client.
 public final class NbtCommand extends Command {
 
-    private static final List<String> MODES = List.of("full", "save");
+    private static final String FULL = "full";
+    private static final String SAVE = "save";
+    private static final String ENTITY = "entity";
+    private static final String BLOCK = "block";
+    private static final List<String> MODES = List.of(FULL, SAVE, ENTITY, BLOCK);
 
     // A component written this way was taken off the item rather than changed.
     private static final String REMOVED = "!";
 
+    // A copy summoned from the command stands where the command is run under an id of its own.
+    private static final List<String> OWN_TO_ONE_ENTITY = List.of("Pos", "UUID");
+
     public NbtCommand() {
-        super("nbt", "Shows the component data of the item you hold and copies a give command for it.",
-            "nbt [full|save]", "viewnbt", "components");
+        super("nbt", "Shows the data of the item you hold or of the entity or block you point at and copies a"
+                + " command that makes it.",
+            "nbt [full|save|entity|block]", "viewnbt", "components", "data");
     }
 
     @Override
@@ -41,25 +62,33 @@ public final class NbtCommand extends Command {
         if (player == null) {
             return;
         }
-        ItemStack stack = player.getMainHandItem();
-        if (stack.isEmpty()) {
-            ChatUtil.error("Your hand is empty.");
-            return;
-        }
         String mode = args.length == 0 ? "" : args[0].toLowerCase(Locale.ROOT);
         if (args.length > 1 || (!mode.isEmpty() && !MODES.contains(mode))) {
             usage();
             return;
         }
+        switch (mode) {
+            case ENTITY -> showEntity(player);
+            case BLOCK -> showBlock(player);
+            default -> showItem(player, mode);
+        }
+    }
+
+    private static void showItem(LocalPlayer player, String mode) {
+        ItemStack stack = player.getMainHandItem();
+        if (stack.isEmpty()) {
+            ChatUtil.error("Your hand is empty.");
+            return;
+        }
         CompoundTag changed = encode(player, DataComponentPatch.CODEC, stack.getComponentsPatch());
         String give = giveCommand(stack, changed);
-        if (mode.equals("save")) {
+        if (mode.equals(SAVE)) {
             save(stack, give);
             return;
         }
         OfflineClient.MC.keyboardHandler.setClipboard(give);
         String name = stack.getHoverName().getString();
-        if (mode.equals("full")) {
+        if (mode.equals(FULL)) {
             CompoundTag all = encode(player, DataComponentMap.CODEC, stack.getComponents());
             ChatUtil.message("§b" + name + " §7has §b" + Tally.counted(all.size(), "component")
                 + "§7. Its give command is on the clipboard.");
@@ -73,6 +102,62 @@ public final class NbtCommand extends Command {
         ChatUtil.message("§b" + name + " §7differs from a fresh one in §b" + Tally.counted(changed.size(), "component")
             + "§7. Its give command is on the clipboard.");
         show(changed);
+    }
+
+    // A player or anything else the summon command refuses puts its bare data on the clipboard.
+    private static void showEntity(LocalPlayer player) {
+        if (!(OfflineClient.MC.hitResult instanceof EntityHitResult hit)) {
+            ChatUtil.error("Point at an entity first.");
+            return;
+        }
+        Entity entity = hit.getEntity();
+        CompoundTag data;
+        try {
+            TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, player.registryAccess());
+            entity.saveWithoutId(output);
+            data = output.buildResult();
+        } catch (RuntimeException e) {
+            OfflineClient.LOG.warn("An entity could not be written out.", e);
+            ChatUtil.error("The client could not write that entity out. The game log says why.");
+            return;
+        }
+        EntityType<?> type = entity.getType();
+        boolean summons = type.canSummon();
+        CompoundTag copied = data.copy();
+        OWN_TO_ONE_ENTITY.forEach(copied::remove);
+        OfflineClient.MC.keyboardHandler.setClipboard(summons
+            ? "/summon " + EntityType.getKey(type) + " ~ ~ ~ " + copied : copied.toString());
+        ChatUtil.message("§b" + type.getDescription().getString() + " §7has §b" + Tally.counted(data.size(), "value")
+            + "§7. " + (summons ? "Its summon command" : "Its data") + " is on the clipboard.");
+        show(data);
+    }
+
+    // The state comes first and then whatever the block keeps inside that the server has sent.
+    private static void showBlock(LocalPlayer player) {
+        BlockHitResult hit = BlockUtil.aimedBlock();
+        if (hit == null) {
+            ChatUtil.error("Point at a block first.");
+            return;
+        }
+        BlockPos pos = hit.getBlockPos();
+        BlockState state = player.level().getBlockState(pos);
+        BlockEntity inside = player.level().getBlockEntity(pos);
+        CompoundTag data = inside == null ? new CompoundTag() : inside.saveWithoutMetadata(player.registryAccess());
+        OfflineClient.MC.keyboardHandler.setClipboard("/setblock " + BlockUtil.text(pos) + " "
+            + BlockStateParser.serialize(state) + (data.isEmpty() ? "" : data));
+        int values = state.getProperties().size() + data.size();
+        ChatUtil.message("§b" + state.getBlock().getName().getString() + " §7at §f" + BlockUtil.text(pos) + " §7has §b"
+            + Tally.counted(values, "value") + "§7. Its setblock command is on the clipboard.");
+        for (Property<?> property : state.getProperties()) {
+            String value = valueName(state, property);
+            ChatUtil.component(ChatUtil.copyOnClick(
+                Component.literal("§b" + property.getName() + " §f" + value), property.getName() + "=" + value));
+        }
+        show(data);
+    }
+
+    private static <T extends Comparable<T>> String valueName(BlockState state, Property<T> property) {
+        return property.getName(state.getValue(property));
     }
 
     private static <T> CompoundTag encode(LocalPlayer player, Codec<T> codec, T value) {
@@ -98,7 +183,7 @@ public final class NbtCommand extends Command {
         return command.toString();
     }
 
-    // Each line copies its own component when clicked.
+    // Each line copies its own value when clicked.
     private static void show(CompoundTag components) {
         for (String key : components.keySet().stream().sorted().toList()) {
             Tag value = components.get(key);

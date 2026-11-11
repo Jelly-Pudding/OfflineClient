@@ -1,5 +1,7 @@
 package com.jellypudding.offlineclient.mixin;
 
+import com.jellypudding.offlineclient.gui.TipButton;
+import com.jellypudding.offlineclient.modules.hunting.MapArt;
 import com.jellypudding.offlineclient.modules.misc.Conceal;
 import com.jellypudding.offlineclient.modules.player.ChestStealer;
 import com.jellypudding.offlineclient.modules.player.InventoryTweaks;
@@ -13,7 +15,6 @@ import com.jellypudding.offlineclient.util.MenuClicks;
 import com.jellypudding.offlineclient.util.Modules;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.input.KeyEvent;
@@ -30,6 +31,8 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+
+import java.util.function.Supplier;
 
 @Mixin(AbstractContainerScreen.class)
 public abstract class AbstractContainerScreenMixin extends Screen {
@@ -81,7 +84,7 @@ public abstract class AbstractContainerScreenMixin extends Screen {
         }
         ShulkerPacker packer = Modules.get(ShulkerPacker.class);
         if (packer != null && packer.showsButton(screen)) {
-            x = offlineclient$button("Pack", x, () -> packer.setEnabled(true));
+            x = offlineclient$button("Pack", x, () -> packer.setEnabled(true), packer::pressTip);
         }
         MenuTools tools = Modules.get(MenuTools.class);
         if (tools != null && tools.showsDesync(screen)) {
@@ -95,14 +98,20 @@ public abstract class AbstractContainerScreenMixin extends Screen {
     // Hands back where the next button starts.
     @Unique
     private int offlineclient$button(String label, int x, Runnable press) {
+        return offlineclient$button(label, x, press, () -> "");
+    }
+
+    // The tip says what a press would do and shows whilst the pointer rests on the button.
+    @Unique
+    private int offlineclient$button(String label, int x, Runnable press, Supplier<String> tip) {
         int width = Math.max(BUTTON_WIDTH, font.width(label) + BUTTON_PADDING);
-        addRenderableWidget(Button.builder(Component.literal(label), button -> press.run())
-            .bounds(x, topPos - BUTTON_HEIGHT - BUTTON_GAP, width, BUTTON_HEIGHT).build());
+        addRenderableWidget(new TipButton(x, topPos - BUTTON_HEIGHT - BUTTON_GAP, width, BUTTON_HEIGHT,
+            Component.literal(label), press, tip));
         return x + width + BUTTON_GAP;
     }
 
     // The paint goes down before the item and sits under it. The LootList row under the
-    // pointer paints its slot over ItemHighlight's colour.
+    // pointer paints its slot over ItemHighlight's colour and that over MapArt's.
     @Inject(method = "extractSlot", at = @At("HEAD"))
     private void onExtractSlot(GuiGraphicsExtractor graphics, Slot slot, int mouseX, int mouseY,
                                CallbackInfo ci) {
@@ -115,8 +124,26 @@ public abstract class AbstractContainerScreenMixin extends Screen {
         if (color == 0 && highlight != null) {
             color = highlight.colorFor(slot.getItem());
         }
+        MapArt maps = Modules.get(MapArt.class);
+        if (color == 0 && maps != null) {
+            color = maps.duplicateColor(getMenu(), slot.getItem());
+        }
         if (color != 0) {
             graphics.fill(slot.x, slot.y, slot.x + 16, slot.y + 16, color);
+        }
+    }
+
+    // A slot's tooltip goes through an overload that has lost the stack. BetterTooltips takes it here
+    // where the slot is known to hold an item and the tooltip is about to be set.
+    @Inject(method = "extractTooltip(Lnet/minecraft/client/gui/GuiGraphicsExtractor;II)V",
+        at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/client/gui/GuiGraphicsExtractor;setTooltipForNextFrame("
+                + "Lnet/minecraft/client/gui/Font;Ljava/util/List;Ljava/util/Optional;II"
+                + "Lnet/minecraft/resources/Identifier;Z)V"))
+    private void beforeSlotTooltip(GuiGraphicsExtractor graphics, int mouseX, int mouseY, CallbackInfo ci) {
+        BetterTooltips tooltips = Modules.get(BetterTooltips.class);
+        if (tooltips != null) {
+            tooltips.setHovered(hoveredSlot.getItem());
         }
     }
 

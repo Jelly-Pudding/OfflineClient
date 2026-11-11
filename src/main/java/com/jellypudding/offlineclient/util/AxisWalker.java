@@ -3,7 +3,6 @@ package com.jellypudding.offlineclient.util;
 import com.jellypudding.offlineclient.OfflineClient;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
@@ -27,7 +26,8 @@ public final class AxisWalker {
     // A block no further ahead than this is beside you. Walking on brings it no nearer.
     public static final double BESIDE = 0.5;
 
-    private Direction axis;
+    // The way the line runs. Null whilst no line is held.
+    private CompassPoint heading;
     private BlockPos origin;
     private int floorY;
 
@@ -47,12 +47,12 @@ public final class AxisWalker {
 
     // Takes the line from where the player faces snapped to the nearest eighth turn when asked.
     public void lock(boolean allowDiagonal) {
-        axis = MC.player.getDirection();
         origin = MC.player.blockPosition();
         floorY = origin.getY();
 
         float step = allowDiagonal ? 45f : 90f;
         float yaw = Math.round(Mth.wrapDegrees(MC.player.getYRot()) / step) * step;
+        heading = CompassPoint.nearest(yaw);
         double radians = Math.toRadians(yaw);
         alongX = round(-Math.sin(radians));
         alongZ = round(Math.cos(radians));
@@ -68,12 +68,12 @@ public final class AxisWalker {
     }
 
     public void clear() {
-        axis = null;
+        heading = null;
         heldLane = 0;
     }
 
     public boolean isLocked() {
-        return axis != null;
+        return heading != null;
     }
 
     public boolean isDiagonal() {
@@ -82,12 +82,7 @@ public final class AxisWalker {
 
     // Reads as north east for a diagonal and north for a straight line.
     public String heading() {
-        if (!diagonal) {
-            return axis.getName();
-        }
-        String northSouth = alongZ < 0 ? "north" : "south";
-        String eastWest = alongX > 0 ? "east" : "west";
-        return northSouth + " " + eastWest;
+        return heading.words();
     }
 
     public int floorY() {
@@ -123,7 +118,7 @@ public final class AxisWalker {
 
     // Keeps the footing on the held lane. The view follows the line only when asked.
     public void holdAxis(boolean steerView) {
-        if (axis == null || MC.player == null) {
+        if (heading == null || MC.player == null) {
             return;
         }
         if (steerView) {
@@ -146,7 +141,7 @@ public final class AxisWalker {
     // Walks along the line whatever way the player faces. The sideways part of the motion is
     // kept. It holds the player on the lane.
     public void walkAlong(double speed) {
-        if (axis == null || MC.player == null) {
+        if (heading == null || MC.player == null) {
             return;
         }
         Vec3 velocity = MC.player.getDeltaMovement();
@@ -157,7 +152,7 @@ public final class AxisWalker {
 
     // Blocks moved along the line since it was taken. Zero when unlocked.
     public double travelled() {
-        if (axis == null || MC.player == null) {
+        if (heading == null || MC.player == null) {
             return 0;
         }
         return alongOf(MC.player.getX(), MC.player.getZ());

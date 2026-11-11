@@ -32,6 +32,7 @@ import net.minecraft.world.item.enchantment.ItemEnchantments;
 import org.joml.Matrix3x2fStack;
 
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -74,6 +75,10 @@ public final class LootList extends Module {
     private static final Map<Integer, String> MIXED_BOOKS = Map.of(ANY_ARMOUR, "armour", ANY_TOOL, "tools",
         ANY_WEAPON, "weapons", ANY_GEAR, "any gear");
 
+    // One stack of each kind of gear to ask which kinds an enchantment fits. Each is built on first
+    // use since item components are bound after the classes load.
+    private static final Map<GearKind, ItemStack> SAMPLES = new EnumMap<>(GearKind.class);
+
     // Drinkable then splash then lingering.
     private static final List<Item> POTION_KINDS = List.of(Items.POTION, Items.SPLASH_POTION, Items.LINGERING_POTION);
     private static final List<String> POTION_GROUPS = List.of("Potions", "Splash potions", "Lingering potions");
@@ -112,6 +117,8 @@ public final class LootList extends Module {
         "Size of the list.", 1, 0.5, 2, 0.05).min(0.25);
 
     private List<Row> rows = List.of();
+    // The width of the widest row in the list's own units. Measured whenever the rows are built.
+    private int widest;
     private int scroll;
     // Where the list was drawn last in screen units. A width of nought means it was not drawn.
     private int left;
@@ -144,6 +151,7 @@ public final class LootList extends Module {
             return;
         }
         rows = build(screen.getMenu());
+        widest = measure(rows);
     }
 
     // The groups by rank with each heading above its rows.
@@ -171,6 +179,15 @@ public final class LootList extends Module {
             built.addAll(group.rows());
         }
         return built;
+    }
+
+    // The width of the widest row in the list's own units.
+    private int measure(List<Row> listed) {
+        int most = 0;
+        for (Row row : listed) {
+            most = Math.max(most, mc.font.width(row.text()) + (row.heading() ? 0 : ICON_SIZE + PADDING));
+        }
+        return most;
     }
 
     // A stack inside a shulker box moves with its box and is written dimmer.
@@ -217,7 +234,7 @@ public final class LootList extends Module {
         Holder<Enchantment> first = stored.keySet().iterator().next();
         Set<GearKind> kinds = EnumSet.noneOf(GearKind.class);
         for (GearKind kind : GearKind.values()) {
-            if (first.value().isSupportedItem(new ItemStack(kind.sample()))) {
+            if (first.value().isSupportedItem(sample(kind))) {
                 kinds.add(kind);
             }
         }
@@ -234,6 +251,10 @@ public final class LootList extends Module {
             return ANY_TOOL;
         }
         return WEAPONS.containsAll(kinds) ? ANY_WEAPON : ANY_GEAR;
+    }
+
+    private static ItemStack sample(GearKind kind) {
+        return SAMPLES.computeIfAbsent(kind, unbuilt -> new ItemStack(unbuilt.sample()));
     }
 
     private static String groupName(int rank) {
@@ -264,10 +285,6 @@ public final class LootList extends Module {
         }
         drawnScale = scale.getFloat();
         int room = side.is(Side.LEFT) ? leftPos - 2 * GAP : context.guiWidth() - leftPos - imageWidth - 2 * GAP;
-        int widest = 0;
-        for (Row row : rows) {
-            widest = Math.max(widest, font.width(row.text()) + (row.heading() ? 0 : ICON_SIZE + PADDING));
-        }
         int listWidth = Math.min(widest + 2 * PADDING, (int) (room / drawnScale));
         if (listWidth * drawnScale < MIN_WIDTH) {
             return;

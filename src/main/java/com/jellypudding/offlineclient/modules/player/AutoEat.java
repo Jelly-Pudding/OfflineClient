@@ -56,23 +56,23 @@ public final class AutoEat extends Module {
         .describe(Trigger.EITHER, "Eats when your food or your health drops to its value.")
         .describe(Trigger.BOTH, "Eats only when your food and your health have both dropped to their values.");
     private final NumberSetting hunger = new NumberSetting("Hunger",
-        "Start eating at or below this many food points. Full is 20.", 14, 1, 19, 1)
+        "Starts eating at or below this many food points. Full is 20.", 14, 1, 19, 1)
         .under(trigger, Trigger.HUNGER, Trigger.EITHER, Trigger.BOTH);
     private final NumberSetting injuredHunger = new NumberSetting("Injured hunger",
-        "Start eating at or below this many food points whilst you are hurt. "
+        "Starts eating at or below this many food points whilst you are hurt. "
             + "Regeneration needs a nearly full bar.", 19, 1, 20, 1)
         .under(trigger, Trigger.HUNGER, Trigger.EITHER, Trigger.BOTH);
     private final NumberSetting injuryThreshold = new NumberSetting("Injury threshold",
         "How much health you must be missing before Injured hunger takes over.",
-        1.5, 0.5, 10, 0.5, " hearts").min(0.5)
+        1.5, 0.5, 10, 0.5, " hearts")
         .under(trigger, Trigger.HUNGER, Trigger.EITHER, Trigger.BOTH);
     private final NumberSetting targetHunger = new NumberSetting("Target hunger",
         "Fills your bar up to this many food points and picks food that wastes none.",
         20, 1, 20, 1);
     private final NumberSetting health = new NumberSetting("Health",
-        "Start eating at or below this many hearts. A golden apple is reached for first and other food after. "
+        "Starts eating at or below this many hearts. A golden apple is reached for first and other food after. "
             + "Zero turns it off.",
-        5, 0, 10, 0.5, " hearts").min(0)
+        5, 0, 10, 0.5, " hearts")
         .under(trigger, Trigger.HEALTH, Trigger.EITHER, Trigger.BOTH);
     private final EnumSetting<Priority> priority = new EnumSetting<>("Priority",
         "Which food to reach for first.", Priority.BEST_HUNGER)
@@ -94,17 +94,15 @@ public final class AutoEat extends Module {
     private final BoolSetting tidyBowls = new BoolSetting("Tidy bowls",
         "Gathers empty bowls into your first backpack slot.", false);
     private final BoolSetting avoidClicks = new BoolSetting("Avoid clicks",
-        "Never eat whilst your crosshair is on something a right click would open.", true);
+        "Never eats whilst your crosshair is on something a right click would open.", true);
     private final BoolSetting offhand = new BoolSetting("Use offhand",
-        "Reach for food in your offhand first.", true);
+        "Reaches for food in your offhand first.", true);
     private final BoolSetting whileMoving = new BoolSetting("Eat whilst moving",
         "Eats whilst you move. Off waits for you to stand still.", true);
     private final BoolSetting pauseCombat = new BoolSetting("Pause combat",
         "Holds the combat modules back whilst you eat.", true);
     private final BoolSetting whileBusy = new BoolSetting("Eat in screens",
         "Keeps eating whilst a chest or inventory is open.", false);
-    private final BoolSetting noSlowdown = new BoolSetting("No slowdown",
-        "Keeps your full speed and sprint whilst you eat. Meals you start yourself count too.", false);
     private final BoolSetting pauseOnFire = new BoolSetting("Pause on fire",
         "Stops eating whilst you are burning.", false);
 
@@ -115,7 +113,7 @@ public final class AutoEat extends Module {
         super("AutoEat", "Eats for you when you get hungry or hurt.", Category.PLAYER);
         addSettings(trigger, hunger, injuredHunger, injuryThreshold, targetHunger, health,
             priority, avoid, takeFrom, swapBack, saveGapples, preferSoup, tidyBowls, avoidClicks,
-            offhand, whileMoving, pauseCombat, whileBusy, noSlowdown, pauseOnFire);
+            offhand, whileMoving, pauseCombat, whileBusy, pauseOnFire);
         searchTags("food", "golden apple", "gapple");
     }
 
@@ -125,17 +123,6 @@ public final class AutoEat extends Module {
 
     public boolean isBusy() {
         return isEnabled() && feeding.isActive();
-    }
-
-    // Read by LocalPlayerMixin to keep a meal from slowing you down.
-    public boolean suppressesSlowdown() {
-        return isEnabled() && noSlowdown.isOn() && eatingFood();
-    }
-
-    // True whilst any food is going down. A meal started by hand counts.
-    private boolean eatingFood() {
-        return mc.player != null && mc.player.isUsingItem()
-            && mc.player.getUseItem().has(DataComponents.FOOD);
     }
 
     @Override
@@ -150,7 +137,7 @@ public final class AutoEat extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || mc.player.isSpectator() || mc.player.getAbilities().instabuild) {
+        if (mc.player.isSpectator() || mc.player.getAbilities().instabuild) {
             feeding.stop();
             return;
         }
@@ -167,7 +154,8 @@ public final class AutoEat extends Module {
             continueEating();
             return;
         }
-        if (Modules.feeding(this)) {
+        // Another feeder has the use key and ShulkerPacker keeps count of every stack.
+        if (Modules.feeding(this) || Modules.packing()) {
             return;
         }
         // A carried stack would be dropped by a slot swap.
@@ -268,7 +256,7 @@ public final class AutoEat extends Module {
 
     // Soup servers want the empties in one place for a refill.
     private void moveBowl() {
-        if (!tidyBowls.isOn() || feeding.isActive() || !InventoryUtil.inventoryFree()) {
+        if (!tidyBowls.isOn() || feeding.isActive() || !InventoryUtil.inventoryFree() || Modules.packing()) {
             return;
         }
         if (mc.player.getInventory().getItem(BOWL_SLOT).is(Items.BOWL)) {

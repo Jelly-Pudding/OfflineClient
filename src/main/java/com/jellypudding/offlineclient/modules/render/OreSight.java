@@ -1,83 +1,63 @@
 package com.jellypudding.offlineclient.modules.render;
 
 import com.jellypudding.offlineclient.OfflineClient;
-import com.jellypudding.offlineclient.config.ServerStore;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.Render3DEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
-import com.jellypudding.offlineclient.render.BoxStyle;
-import com.jellypudding.offlineclient.render.DrawBatch;
-import com.jellypudding.offlineclient.setting.ChoiceListSetting;
-import com.jellypudding.offlineclient.setting.ColorSetting;
+import com.jellypudding.offlineclient.render.OreMarks;
+import com.jellypudding.offlineclient.render.OreMarks.Spot;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.Background;
 import com.jellypudding.offlineclient.util.BoundedMap;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.ChunkWindow;
-import com.jellypudding.offlineclient.util.ColorUtil;
-import com.jellypudding.offlineclient.util.NearestCut;
-import com.jellypudding.offlineclient.util.ServerInfo;
 import com.jellypudding.offlineclient.util.ServerWatch;
 import com.jellypudding.offlineclient.util.WorldWatch;
 import com.jellypudding.offlineclient.worldgen.OreGround;
 import com.jellypudding.offlineclient.worldgen.OreKind;
 import com.jellypudding.offlineclient.worldgen.OreSimulation;
 import com.jellypudding.offlineclient.worldgen.OreTables;
-import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+import com.jellypudding.offlineclient.worldgen.OreVeins;
+import com.jellypudding.offlineclient.worldgen.SeedWorld;
+import com.jellypudding.offlineclient.worldgen.SeedWorlds;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
 import net.minecraft.server.level.ChunkMap;
+import net.minecraft.util.Mth;
 import net.minecraft.world.level.ChunkPos;
-import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.phys.AABB;
 
 import java.util.ArrayList;
-import java.util.EnumMap;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.OptionalLong;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
 // Replays the ore step of world generation from the seed for every chunk that arrives.
 // Anti xray can hide an ore from the client but not from the seed. A chunk is worked out
-// once all eight of its neighbours have arrived because ore veins cross chunk edges.
+// once all eight of its neighbours have arrived because ore veins cross chunk edges. The
+// large veins are laid before the ore step and come from the seeded world.
 public final class OreSight extends Module {
 
-    // One worked out ore block. Built on the worker thread.
-    private record Spot(int x, int y, int z, OreKind kind) {
-    }
-
     // Replaying a chunk takes a few milliseconds. One quiet thread keeps it off the game.
-    private static final ExecutorService WORKER = Executors.newSingleThreadExecutor(runnable -> {
-        Thread thread = new Thread(runnable, "OfflineClient OreSight");
-        thread.setDaemon(true);
-        thread.setPriority(Thread.MIN_PRIORITY);
-        return thread;
-    });
+    private static final ExecutorService WORKER = Background.worker("OfflineClient OreSight");
 
     // A worked out chunk outlives Range. Replayed again it would meet ground the player has dug
     // and go out of step. This holds several times the chunks the widest Range covers.
     private static final int REMEMBERED_CHUNKS = 1024;
 
-    private static final Direction[] SIDES = Direction.values();
-
-    private final ChoiceListSetting ores = new ChoiceListSetting("Ores",
-        "The ores to show. The large iron and copper veins are left out.",
-        () -> List.of(labels()), List.of(OreKind.DIAMOND.label(), OreKind.ANCIENT_DEBRIS.label()));
+    private final OreMarks marks = new OreMarks(
+        "The ores to show. The large iron and copper veins are picks of their own.",
+        Arrays.asList(OreKind.values()));
     private final NumberSetting range = new NumberSetting("Range",
         "Chunk radius to work out around you.", 4, 1, 8, 1, " chunks").max(ChunkMap.MAX_VIEW_DISTANCE);
-    private final NumberSetting limit = new NumberSetting("Limit",
-        "Most ore blocks drawn at once with the nearest first.", 2000, 100, 5000, 100).min(1);
-    private final BoxStyle style = BoxStyle.shapeOnly(BoxStyle.Shape.LINES);
-    private final Map<OreKind, ColorSetting> colours = new EnumMap<>(OreKind.class);
 
     private final WorldWatch world = new WorldWatch();
     // Kept in access order. The chunks around the player stay whilst far ones drop out.
@@ -87,6 +67,10 @@ public final class OreSight extends Module {
     private OptionalLong seedInUse = OptionalLong.empty();
     // Null in a dimension without ores or whilst no seed is known.
     private OreSimulation simulation;
+    // The seeded world of a dimension with large veins. Null where there are none.
+    private CompletableFuture<SeedWorld> seeded;
+    // Null until the seeded world has been built. Only the worker reads the veins.
+    private OreVeins veins;
     // The missing seed is pointed out once on each server.
     private final ServerWatch told = new ServerWatch();
     // Set whenever a chunk result or the ore list changes.
@@ -95,35 +79,13 @@ public final class OreSight extends Module {
     private long shownCentre;
     private int shownRadius;
     private List<Spot> shown = List.of();
-    private final NearestCut<Spot> drawn = new NearestCut<>(
-        (spot, eye) -> eye.distanceToSqr(spot.x() + 0.5, spot.y() + 0.5, spot.z() + 0.5));
-    // The blocks drawn this frame. Touching boxes of one ore are joined.
-    private final List<Spot> visible = new ArrayList<>();
-    private final Long2ObjectOpenHashMap<OreKind> visibleAt = new Long2ObjectOpenHashMap<>();
 
     public OreSight() {
         super("OreSight", "Shows the ores the world seed placed even where anti xray hides them.", Category.RENDER);
-        addSettings(ores, range, limit);
-        addSettings(style.settings());
-        for (OreKind kind : OreKind.values()) {
-            float[] shade = ColorUtil.hsvOf(kind.colour());
-            ColorSetting colour = new ColorSetting(kind.label() + " colour",
-                "The colour " + kind.label().toLowerCase(Locale.ROOT) + " is drawn in.",
-                shade[0], shade[1], shade[2], false).visibleWhen(() -> ores.contains(kind.label()));
-            colours.put(kind, colour);
-            addSettings(colour);
-        }
+        addSettings(marks.picks(), range);
+        addSettings(marks.look());
         searchTags("ore", "seed", "xray", "ore finder", "anti xray");
-        ores.onChange(() -> stale = true);
-    }
-
-    private static String[] labels() {
-        OreKind[] kinds = OreKind.values();
-        String[] labels = new String[kinds.length];
-        for (int i = 0; i < kinds.length; i++) {
-            labels[i] = kinds[i].label();
-        }
-        return labels;
+        marks.picks().onChange(() -> stale = true);
     }
 
     @Override
@@ -146,7 +108,7 @@ public final class OreSight extends Module {
         cancelPending();
         worked.clear();
         shown = List.of();
-        drawn.clear();
+        marks.clear();
         stale = false;
     }
 
@@ -157,32 +119,22 @@ public final class OreSight extends Module {
         pending.clear();
     }
 
-    // A single player world gives its own seed. A server needs one saved with the seed command.
-    private static OptionalLong currentSeed() {
-        if (mc.hasSingleplayerServer()) {
-            return OptionalLong.of(mc.getSingleplayerServer().overworld().getSeed());
-        }
-        Long saved = ServerStore.seeds().get(ServerInfo.key());
-        return saved == null ? OptionalLong.empty() : OptionalLong.of(saved);
-    }
-
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame()) {
-            return;
-        }
-        OptionalLong seed = currentSeed();
+        OptionalLong seed = SeedWorlds.seed();
         if (world.changed() || !seed.equals(seedInUse)) {
             forget();
             seedInUse = seed;
             OreTables.Table table = OreTables.of(mc.level.dimension());
             simulation = seed.isEmpty() || table == null ? null : new OreSimulation(table, seed.getAsLong());
+            seeded = simulation == null || table.nether() ? null : SeedWorlds.of(mc.level.dimension());
+            veins = null;
         }
         if (seed.isEmpty()) {
             tellNoSeed();
             return;
         }
-        if (simulation == null) {
+        if (simulation == null || !veinsKnown()) {
             return;
         }
         collectFinished();
@@ -197,6 +149,7 @@ public final class OreSight extends Module {
             return out;
         });
         OreSimulation replayer = simulation;
+        OreVeins veinSource = veins;
         for (int dx = -radius; dx <= radius; dx++) {
             for (int dz = -radius; dz <= radius; dz++) {
                 int chunkX = centreX + dx;
@@ -207,7 +160,7 @@ public final class OreSight extends Module {
                 }
                 ChunkWindow window = ChunkWindow.capture(chunkX, chunkZ, 1);
                 if (window.complete()) {
-                    pending.put(key, WORKER.submit(() -> replay(replayer, window, chunkX, chunkZ)));
+                    pending.put(key, WORKER.submit(() -> replay(replayer, veinSource, window, chunkX, chunkZ)));
                 }
             }
         }
@@ -218,7 +171,25 @@ public final class OreSight extends Module {
             shownRadius = radius;
             shown = chosenSpots(centreX, centreZ, radius);
         }
-        drawn.update(shown, limit.getInt());
+        marks.update(shown);
+    }
+
+    // A chunk replayed without its veins would be kept that way. Replays wait until the seeded
+    // world is built. One that cannot be built leaves the large veins out and the player is told.
+    private boolean veinsKnown() {
+        if (veins != null) {
+            return true;
+        }
+        if (seeded != null && !seeded.isDone()) {
+            return false;
+        }
+        SeedWorld built = seeded == null ? null : seeded.getNow(null);
+        veins = built == null ? OreVeins.NONE : new OreVeins(built);
+        if (seeded != null && built == null) {
+            ChatUtil.error("OreSight could not read the world generation of the game and leaves the large veins"
+                + " out. The game log says why.");
+        }
+        return true;
     }
 
     private void tellNoSeed() {
@@ -228,14 +199,16 @@ public final class OreSight extends Module {
         }
     }
 
-    private static List<Spot> replay(OreSimulation simulation, ChunkWindow window, int chunkX, int chunkZ) {
+    private static List<Spot> replay(OreSimulation simulation, OreVeins veins, ChunkWindow window,
+                                     int chunkX, int chunkZ) {
         List<Spot> spots = new ArrayList<>();
-        OreGround ground = new OreGround(window::get, window::noiseBiome, simulation.table());
+        OreGround ground = new OreGround(window::get, window::noiseBiome, simulation.table(), veins);
         simulation.run(chunkX, chunkZ, ground, (ore, x, y, z) -> {
             if (ore.kind() != null) {
                 spots.add(new Spot(x, y, z, ore.kind()));
             }
         });
+        veins.run(chunkX, chunkZ, ground, (kind, x, y, z) -> spots.add(new Spot(x, y, z, kind)));
         return spots;
     }
 
@@ -275,7 +248,7 @@ public final class OreSight extends Module {
                 }
                 for (Spot spot : spots) {
                     long key = BlockPos.asLong(spot.x(), spot.y(), spot.z());
-                    if (ores.contains(spot.kind().label()) && taken.add(key)) {
+                    if (marks.picked(spot.kind()) && taken.add(key)) {
                         chosen.add(spot);
                     }
                 }
@@ -285,47 +258,11 @@ public final class OreSight extends Module {
     }
 
     private static boolean outOfRange(long key, int centreX, int centreZ, int radius) {
-        return Math.abs(ChunkPos.getX(key) - centreX) > radius || Math.abs(ChunkPos.getZ(key) - centreZ) > radius;
+        return Mth.chessboardDistance(ChunkPos.getX(key), ChunkPos.getZ(key), centreX, centreZ) > radius;
     }
 
     @Subscribe
     private void onRender3D(Render3DEvent event) {
-        BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
-        BlockPos.MutableBlockPos next = new BlockPos.MutableBlockPos();
-        visible.clear();
-        visibleAt.clear();
-        for (Spot spot : drawn.result()) {
-            pos.set(spot.x(), spot.y(), spot.z());
-            if (couldStillHold(pos, next, spot.kind())) {
-                visible.add(spot);
-                visibleAt.put(pos.asLong(), spot.kind());
-            }
-        }
-        DrawBatch batch = event.getBatch();
-        for (Spot spot : visible) {
-            int colour = colours.get(spot.kind()).getColor();
-            AABB box = new AABB(spot.x(), spot.y(), spot.z(), spot.x() + 1, spot.y() + 1, spot.z() + 1);
-            long key = BlockPos.asLong(spot.x(), spot.y(), spot.z());
-            style.drawJoined(batch, box, DrawBatch.sharedSides(visibleAt, key, spot.kind()), colour, colour, true);
-        }
-    }
-
-    // Dug out ground shows as air or fluid. Anti xray sends a block that touches open space
-    // as it really is and an exposed block of any other kind proves the replay wrong there.
-    private static boolean couldStillHold(BlockPos pos, BlockPos.MutableBlockPos next, OreKind kind) {
-        BlockState state = mc.level.getBlockState(pos);
-        if (state.isAir() || !state.getFluidState().isEmpty()) {
-            return false;
-        }
-        if (OreTables.kindOf(state.getBlock()) == kind) {
-            return true;
-        }
-        for (Direction side : SIDES) {
-            next.setWithOffset(pos, side);
-            if (!mc.level.getBlockState(next).isRedstoneConductor(mc.level, next)) {
-                return false;
-            }
-        }
-        return true;
+        marks.draw(event.getBatch());
     }
 }

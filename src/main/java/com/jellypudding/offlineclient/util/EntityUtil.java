@@ -3,11 +3,19 @@ package com.jellypudding.offlineclient.util;
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.modules.misc.NameProtect;
 import com.jellypudding.offlineclient.modules.misc.Timer;
+import com.jellypudding.offlineclient.modules.render.Weather;
 import net.minecraft.SharedConstants;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.syncher.SynchedEntityData;
+import net.minecraft.resources.Identifier;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.entity.AgeableMob;
+import net.minecraft.world.entity.Bucketable;
+import net.minecraft.world.entity.EntityReference;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
@@ -16,22 +24,20 @@ import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.NeutralMob;
 import net.minecraft.world.entity.OwnableEntity;
 import net.minecraft.world.entity.TamableAnimal;
-import net.minecraft.world.entity.ambient.AmbientCreature;
-import net.minecraft.world.entity.animal.allay.Allay;
-import net.minecraft.world.entity.animal.AgeableWaterCreature;
 import net.minecraft.world.entity.animal.equine.AbstractHorse;
 import net.minecraft.world.entity.animal.feline.Ocelot;
 import net.minecraft.world.entity.animal.fish.Pufferfish;
-import net.minecraft.world.entity.animal.fish.WaterAnimal;
 import net.minecraft.world.entity.animal.fox.Fox;
-import net.minecraft.world.entity.animal.golem.AbstractGolem;
+import net.minecraft.world.entity.animal.frog.Tadpole;
+import net.minecraft.world.entity.animal.goat.Goat;
+import net.minecraft.world.entity.animal.golem.CopperGolem;
+import net.minecraft.world.entity.animal.golem.IronGolem;
+import net.minecraft.world.entity.animal.golem.SnowGolem;
+import net.minecraft.world.entity.animal.happyghast.HappyGhast;
 import net.minecraft.world.entity.item.ItemEntity;
-import net.minecraft.world.entity.monster.Enemy;
-import net.minecraft.world.entity.monster.Shulker;
-import net.minecraft.world.entity.monster.cubemob.AbstractCubeMob;
-import net.minecraft.world.entity.monster.piglin.AbstractPiglin;
-import net.minecraft.world.entity.monster.zombie.ZombieVillager;
-import net.minecraft.world.entity.npc.villager.AbstractVillager;
+import net.minecraft.world.entity.monster.Enderman;
+import net.minecraft.world.entity.monster.cubemob.SulfurCube;
+import net.minecraft.world.entity.monster.zombie.ZombifiedPiglin;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.entity.projectile.throwableitemprojectile.ThrownEnderpearl;
@@ -44,6 +50,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.function.Predicate;
 
 public final class EntityUtil {
@@ -53,14 +60,8 @@ public final class EntityUtil {
 
     private static final double MOVING_SQR = 0.02 * 0.02;
 
-    // Friends are drawn in blue wherever they appear.
-    public static final int FRIEND_COLOR = 0xFF4080FF;
-    private static final int ITEM_COLOR = 0xFFFFE040;
-    private static final int HOSTILE_COLOR = 0xFFFF5030;
-    private static final int PASSIVE_COLOR = 0xFF60E060;
-    private static final int WATER_COLOR = 0xFF40C8FF;
-    private static final int AMBIENT_COLOR = 0xFFB080FF;
-    private static final int MOB_COLOR = 0xFFFF8020;
+    // The speed boost a zombified piglin carries whilst it is after someone.
+    private static final Identifier PIGLIN_CHASE_BOOST = Identifier.withDefaultNamespace("attacking");
 
     // Blocks at which a player reads as far away. Closer fades towards red.
     private static final float FADE_DISTANCE = 20;
@@ -70,6 +71,9 @@ public final class EntityUtil {
 
     // Hitbox reach is shorter than the centre distance. A reach scan runs this much wider.
     private static final double REACH_SCAN_MARGIN = 4;
+
+    // A dropped item is tiny. Its box is grown to be seen from afar.
+    private static final double ITEM_GROW = 0.1;
 
     // The server counts entity ids up from one. Ours count down from the top
     // of the range and the two never meet.
@@ -114,26 +118,72 @@ public final class EntityUtil {
         return String.format(Locale.ROOT, "%.1f", health / HEART) + " hearts";
     }
 
+    // Burning in a way that hurts. Water and rain and powder snow put the fire out by
+    // themselves and fire resistance takes the harm away.
+    public static boolean burnHurts(LivingEntity entity) {
+        return entity.isOnFire() && !entity.hasEffect(MobEffects.FIRE_RESISTANCE)
+            && !inWaterOrRain(entity) && !entity.isInPowderSnow;
+    }
+
+    // In water or in the rain that really falls and not the rain Weather shows.
+    public static boolean inWaterOrRain(Entity entity) {
+        return Weather.real(entity::isInWaterOrRain);
+    }
+
     // The holder on EntityType itself is deprecated. The lookup goes via the registry.
     public static boolean typeIs(Entity entity, TagKey<EntityType<?>> tag) {
         return BuiltInRegistries.ENTITY_TYPE.wrapAsHolder(entity.getType()).is(tag);
     }
 
-    // A mob somebody has tamed or saddled or won the trust of. Never a fair target.
+    // A mob somebody has tamed or saddled or won the trust of.
     public static boolean isPet(Mob mob) {
-        if (mob instanceof TamableAnimal tamable) {
-            return tamable.isTame();
+        return switch (mob) {
+            case TamableAnimal tamable -> tamable.isTame();
+            case AbstractHorse horse -> horse.isTamed();
+            case Ocelot ocelot -> ocelot.isTrusting();
+            case Fox fox -> trustsSomeone(fox);
+            default -> mob.isSaddled();
+        };
+    }
+
+    // What isKept covers put in words for the rows that go by it. Finishes a sentence that
+    // ends in mobs that.
+    public static final String KEPT_WORDS = "somebody tamed or saddled or built or let out of a bucket or"
+        + " kept a baby for good. Trusting foxes and ocelots and every snow golem and copper golem and"
+        + " happy ghast count as well.";
+
+    // A mob somebody keeps. A pet or one that was built or let out of a bucket or kept a
+    // baby for good. Never a fair target.
+    public static boolean isKept(Mob mob) {
+        if (isPet(mob) || mob instanceof AgeableMob ageable && ageable.isAgeLocked()) {
+            return true;
         }
-        if (mob instanceof AbstractHorse horse) {
-            return horse.isTamed();
-        }
-        if (mob instanceof Ocelot ocelot) {
-            return ocelot.isTrusting();
-        }
-        if (mob instanceof Fox fox) {
-            return OfflineClient.MC.player != null && fox.trusts(OfflineClient.MC.player);
-        }
-        return mob.isSaddled();
+        return switch (mob) {
+            // A camel takes a saddle without ever being tamed.
+            case AbstractHorse horse -> horse.isSaddled();
+            case IronGolem golem -> golem.isPlayerCreated();
+            // Players build these or raise them. An allay in a pillager cage is nobody's.
+            case SnowGolem _, CopperGolem _, HappyGhast _ -> true;
+            // The bucket flag of a tadpole is always set.
+            case Tadpole tadpole -> tadpole.isAgeLocked();
+            // A cube that carries a block is a ball to kick about.
+            case SulfurCube cube -> cube.fromBucket() && !cube.hasBodyItem();
+            case Bucketable bucketable -> bucketable.fromBucket();
+            default -> false;
+        };
+    }
+
+    // A fox is sent the two players it trusts and offers no way to ask whether it has any.
+    // They are the only entity references in the data it syncs.
+    private static boolean trustsSomeone(Fox fox) {
+        List<SynchedEntityData.DataValue<?>> changed = fox.getEntityData().getNonDefaultValues();
+        return changed != null && changed.stream().anyMatch(data -> data.value() instanceof Optional<?> held
+            && held.orElse(null) instanceof EntityReference<?>);
+    }
+
+    // A baby that grows up. A baby zombie stays small for life and fights like a grown one.
+    public static boolean isYoung(Mob mob) {
+        return mob instanceof Tadpole || mob instanceof AgeableMob ageable && ageable.isBaby();
     }
 
     // Your own pets and the mounts you ride or have ridden.
@@ -149,17 +199,41 @@ public final class EntityUtil {
             && pet.getOwnerReference().matches(player);
     }
 
-    // A mob that only fights once provoked.
+    // A mob of a kind that only fights once provoked. A golem a player built still joins
+    // fights and goes by the rule of its kind.
     public static boolean isNeutral(Mob mob) {
-        return mob instanceof NeutralMob || mob instanceof AbstractPiglin || mob instanceof Pufferfish;
+        return EntityKind.of(mob.getType()) == EntityKind.NEUTRAL;
     }
 
-    // True whilst a neutral mob has no quarrel with anyone.
+    // True whilst a neutral mob has no quarrel with anyone. The flag for a fight in progress
+    // covers them all and each species shows a rising temper in its own way.
     public static boolean isCalm(Mob mob) {
-        if (mob instanceof Pufferfish pufferfish) {
-            return pufferfish.getPuffState() == 0;
+        if (mob.isAggressive()) {
+            return false;
         }
-        return isNeutral(mob) && !mob.isAggressive();
+        return switch (mob) {
+            case Pufferfish fish -> fish.getPuffState() == 0;
+            case Enderman enderman -> !enderman.isCreepy();
+            case ZombifiedPiglin piglin
+                -> !piglin.getAttributes().hasModifier(Attributes.MOVEMENT_SPEED, PIGLIN_CHASE_BOOST);
+            case Goat goat -> goat.getRammingXHeadRot() == 0;
+            case NeutralMob temper -> !temper.isAngry();
+            default -> true;
+        };
+    }
+
+    // Something with no health of its own that a swing can land on such as a crystal or a boat.
+    // The server kicks for a hit on a dropped item or an experience orb and neither can be
+    // picked. Projectiles are left to ArrowDodge.
+    public static boolean canBeStruck(Entity entity) {
+        return !(entity instanceof LivingEntity) && !(entity instanceof Projectile) && entity.isAlive()
+            && entity.isPickable() && entity.isAttackable();
+    }
+
+    // True for whatever you ride and whoever rides along with you.
+    public static boolean ridesWithYou(Entity entity) {
+        Player player = OfflineClient.MC.player;
+        return player != null && player.isPassenger() && entity.getRootVehicle() == player.getRootVehicle();
     }
 
     // The account name of a player or null.
@@ -177,10 +251,23 @@ public final class EntityUtil {
         return entity instanceof Player player ? displayNameOf(player) : entity.getName().getString();
     }
 
+    // True when the typed text is the name the entity goes by or the name of its kind. A
+    // villager goes by its trade and a tagged mob by its tag.
+    public static boolean isCalled(Entity entity, String typed) {
+        return typed.equalsIgnoreCase(entity.getName().getString())
+            || typed.equalsIgnoreCase(entity.getType().getDescription().getString());
+    }
+
     // The same for an account name remembered without the player.
     public static String displayName(String name) {
         NameProtect nameProtect = Modules.get(NameProtect.class);
         return nameProtect == null || name == null ? name : nameProtect.display(name);
+    }
+
+    // Text as it shows on screen. NameProtect swaps every renamed name in it wherever the name stands.
+    public static Component displayed(Component text) {
+        NameProtect nameProtect = Modules.get(NameProtect.class);
+        return nameProtect == null ? text : nameProtect.filter(text);
     }
 
     // S C A or Sp for a game mode and a question mark when it is not known.
@@ -201,16 +288,37 @@ public final class EntityUtil {
             && OfflineClient.INSTANCE.getFriendManager().isFriend(nameOf(player));
     }
 
-    // A living player who is not a friend and not watching from spectator. AntiBot
-    // takes fake players out.
+    // A player on the enemies list. isEnemy is wider and takes in every player who is no friend.
+    public static boolean isListedEnemy(Entity entity) {
+        return entity instanceof Player player
+            && OfflineClient.INSTANCE.getFriendManager().isEnemy(nameOf(player));
+    }
+
+    // A living player who is neither you nor a friend and not watching from spectator. AntiBot
+    // takes fake players out. The ghost Blink leaves of you never counts but the practice dummy does.
     public static boolean isEnemy(Entity entity) {
-        return entity instanceof Player player && player.isAlive() && !player.isSpectator()
-            && !isFriend(player) && !Modules.isBot(player);
+        return entity instanceof Player player && player != OfflineClient.MC.player && player.isAlive()
+            && !player.isSpectator() && !isFriend(player) && !Modules.isBot(player)
+            && !Modules.isGhostBody(player);
     }
 
     // Someone else in view. You and the bodies only this client puts down never count.
     public static boolean isOtherPlayer(Entity entity) {
         return entity instanceof Player && entity != OfflineClient.MC.player && !Modules.isLocalBody(entity);
+    }
+
+    // Someone else in view whose account name matches whatever its case. Null when nobody does or
+    // there is no world.
+    public static Player otherPlayerNamed(String name) {
+        if (OfflineClient.MC.level == null) {
+            return null;
+        }
+        for (Player player : OfflineClient.MC.level.players()) {
+            if (isOtherPlayer(player) && nameOf(player).equalsIgnoreCase(name)) {
+                return player;
+            }
+        }
+        return null;
     }
 
     // Someone else in view whom AntiBot does not take for a fake player.
@@ -234,69 +342,9 @@ public final class EntityUtil {
         return projectile instanceof ThrownEnderpearl pearl ? PearlOwners.INSTANCE.nameOf(pearl) : null;
     }
 
-    // The broad families the filters in the render modules work with.
-    public enum Kind { PLAYER, HOSTILE, PASSIVE, WATER, AMBIENT, ITEM, OTHER }
-
-    // Hostile covers anything that hunts the player. Water is fish squid and dolphins.
-    // Ambient is bats. Passive is every other living thing.
-    public static Kind kindOf(Entity entity) {
-        if (entity instanceof Player) {
-            return Kind.PLAYER;
-        }
-        if (entity instanceof ItemEntity) {
-            return Kind.ITEM;
-        }
-        if (entity instanceof Enemy) {
-            return Kind.HOSTILE;
-        }
-        if (entity instanceof WaterAnimal || entity instanceof AgeableWaterCreature) {
-            return Kind.WATER;
-        }
-        if (entity instanceof AmbientCreature) {
-            return Kind.AMBIENT;
-        }
-        return entity instanceof LivingEntity ? Kind.PASSIVE : Kind.OTHER;
-    }
-
-    // The narrow families the per species switches work with. A shulker is a golem
-    // to the game and is picked out first.
-    public enum Species { WATER, BAT, SLIME, SHULKER, VILLAGER, ZOMBIE_VILLAGER, GOLEM, ALLAY, OTHER }
-
-    public static Species speciesOf(Entity entity) {
-        if (entity instanceof ZombieVillager) {
-            return Species.ZOMBIE_VILLAGER;
-        }
-        if (entity instanceof AbstractVillager) {
-            return Species.VILLAGER;
-        }
-        if (entity instanceof AbstractCubeMob) {
-            return Species.SLIME;
-        }
-        if (entity instanceof Shulker) {
-            return Species.SHULKER;
-        }
-        if (entity instanceof AbstractGolem) {
-            return Species.GOLEM;
-        }
-        if (entity instanceof Allay) {
-            return Species.ALLAY;
-        }
-        return switch (kindOf(entity)) {
-            case WATER -> Species.WATER;
-            case AMBIENT -> Species.BAT;
-            default -> Species.OTHER;
-        };
-    }
-
     // From the eyes to the nearest point of the hitbox. This is how the game measures reach.
     public static double reachDistance(Player from, Entity to) {
-        Vec3 eye = from.getEyePosition();
-        AABB box = to.getBoundingBox();
-        Vec3 closest = new Vec3(
-            Math.clamp(eye.x, box.minX, box.maxX),
-            Math.clamp(eye.y, box.minY, box.maxY),
-            Math.clamp(eye.z, box.minZ, box.maxZ));
-        return eye.distanceTo(closest);
+        return Math.sqrt(to.getBoundingBox().distanceToSqr(from.getEyePosition()));
     }
 
     // The entity reach the server measures with. Reach grows the client's own figure.
@@ -315,12 +363,17 @@ public final class EntityUtil {
             entity.getZ() - entity.zOld);
     }
 
-    // Your speed along the ground in blocks a second. It reads how far you moved on the last
+    // How far you move each second along each axis. It reads how far you moved on the last
     // tick since a rider has no motion of their own. Timer fits more ticks into each second.
-    public static double ownSpeed() {
+    public static Vec3 ownVelocity() {
         Player player = OfflineClient.MC.player;
-        return player == null ? 0
-            : velocityOf(player).horizontalDistance() * SharedConstants.TICKS_PER_SECOND * Timer.current();
+        return player == null ? Vec3.ZERO
+            : velocityOf(player).scale(SharedConstants.TICKS_PER_SECOND * Timer.current());
+    }
+
+    // Your speed along the ground in blocks a second.
+    public static double ownSpeed() {
+        return ownVelocity().horizontalDistance();
     }
 
     // Degrees between where you look and the middle of the target.
@@ -360,50 +413,22 @@ public final class EntityUtil {
         return entity.getBoundingBox().move(lerped.subtract(entity.position()));
     }
 
-    // Friends are blue. Players fade red to green with distance. Items are yellow.
-    // Hostile mobs are red and passive mobs green. Sea life is blue and bats are purple.
-    public static int colorOf(Entity entity) {
-        if (entity instanceof Player) {
-            return isFriend(entity) ? FRIEND_COLOR : distanceColor(entity);
-        }
-        return switch (kindOf(entity)) {
-            case ITEM -> ITEM_COLOR;
-            case HOSTILE -> HOSTILE_COLOR;
-            case PASSIVE -> PASSIVE_COLOR;
-            case WATER -> WATER_COLOR;
-            case AMBIENT -> AMBIENT_COLOR;
-            case PLAYER, OTHER -> MOB_COLOR;
-        };
+    // The box a mark is drawn round. A dropped item gets a grown one.
+    public static AABB markBox(Entity entity, float partialTicks) {
+        AABB box = lerpedBox(entity, partialTicks);
+        return entity instanceof ItemEntity ? box.inflate(ITEM_GROW) : box;
     }
 
     // Red within arm's reach through yellow to green at twice the fade distance.
     public static int distanceColor(Entity entity) {
         Player self = OfflineClient.MC.player;
-        float f = (self == null ? FADE_DISTANCE : self.distanceTo(entity)) / FADE_DISTANCE;
-        int r = (int) (Math.clamp(2 - f, 0, 1) * 255);
-        int g = (int) (Math.clamp(f, 0, 1) * 255);
-        return 0xFF000000 | r << 16 | g << 8;
+        float away = self == null ? FADE_DISTANCE : self.distanceTo(entity);
+        return ColorUtil.hsv(Math.clamp(away / (2 * FADE_DISTANCE), 0f, 1f) * ColorUtil.GREEN_HUE, 1f, 1f);
     }
 
     // The closest entity within the range that passes the test. Null when none does.
     public static Entity nearest(double range, Predicate<Entity> test) {
-        Minecraft mc = OfflineClient.MC;
-        if (mc.player == null || mc.level == null) {
-            return null;
-        }
-        Entity best = null;
-        double bestDistance = range;
-        for (Entity entity : mc.level.entitiesForRendering()) {
-            if (entity == mc.player || !test.test(entity)) {
-                continue;
-            }
-            double distance = mc.player.distanceTo(entity);
-            if (distance <= bestDistance) {
-                bestDistance = distance;
-                best = entity;
-            }
-        }
-        return best;
+        return best(range, TargetPriority.NEAREST, test);
     }
 
     // Friends and spectators never count. Null when nobody is close.
@@ -420,7 +445,8 @@ public final class EntityUtil {
         Entity best = null;
         double bestScore = Double.MAX_VALUE;
         for (Entity entity : mc.level.entitiesForRendering()) {
-            if (entity == mc.player || !test.test(entity) || mc.player.distanceTo(entity) > range) {
+            // The range goes first. The test may search the area around each entity.
+            if (entity == mc.player || mc.player.distanceTo(entity) > range || !test.test(entity)) {
                 continue;
             }
             double score = priority.score(entity);

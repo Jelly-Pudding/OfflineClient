@@ -60,12 +60,12 @@ public final class LogoutSpots extends Module {
     private static final double FLAT_HEIGHT = 0.01;
 
     private final BoolSetting fullHeight = new BoolSetting("Full height",
-        "Draw the whole body box. Off draws a flat square at the feet.", true);
+        "Draws the whole body box. Off draws a flat square at the feet.", true);
     private final BoxStyle style = new BoxStyle(BoxStyle.Shape.BOTH, 300f);
     private final BoolSetting tracers = new BoolSetting("Tracers",
-        "Draw a line to every spot.", false);
+        "Draws a line to every spot.", false);
     private final BoolSetting nametag = new BoolSetting("Nametag",
-        "Show the name and health above the box.", true);
+        "Shows the name and health above the box.", true);
     private final NumberSetting scale = new NumberSetting("Scale",
         "Size of the nametag.", 1, 0.5, 3, 0.1, "").min(0.1).under(nametag);
     private final ColorSetting nameColor = new ColorSetting("Name colour",
@@ -78,7 +78,7 @@ public final class LogoutSpots extends Module {
         "Saves a waypoint where a player in view logged out.", false);
     private final NumberSetting forgetAfter = new NumberSetting("Forget after",
         "Minutes before a spot is forgotten. Nought keeps it until the player returns.",
-        0, 0, 120, 5, " minutes").min(0);
+        0, 0, 120, 5, " minutes");
 
     // Kept even after a player walks out of view. The least recently seen player
     // drops when the store fills up.
@@ -139,9 +139,6 @@ public final class LogoutSpots extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame()) {
-            return;
-        }
         if (world.changed()) {
             clear();
         }
@@ -173,8 +170,8 @@ public final class LogoutSpots extends Module {
                 return;
             }
         }
-        WaypointStore.get().markFresh(WAYPOINT_PREFIX + spot.name(), feet, ServerInfo.dimension(),
-            Modules.nextWaypointHue());
+        WaypointStore.get().markFreshFind(WAYPOINT_PREFIX + spot.name(), feet, ServerInfo.dimension(),
+            Modules.nextWaypointColour());
     }
 
     private void forgetOld() {
@@ -231,8 +228,8 @@ public final class LogoutSpots extends Module {
     private void drawTag(GuiGraphicsExtractor context, Spot spot, Vec3 screen) {
         float fraction = spot.maxHealth() <= 0 ? 0 : spot.health() / spot.maxHealth();
         RenderUtil.label(context, mc.font, screen.x, screen.y, scale.getFloat(),
-            List.of(spot.name(), String.format(Locale.ROOT, " %.0f", spot.health())),
-            List.of(nameColor.getColor(), ColorUtil.health(fraction)),
+            List.of(EntityUtil.displayName(spot.name()), String.format(Locale.ROOT, " %.0f", spot.health())),
+            List.of(nameColor.getColor(), ColorUtil.redToGreen(fraction)),
             ColorUtil.fade(nameBackground.getColor(), nameBackgroundOpacity.getFloat() / 100f));
     }
 }

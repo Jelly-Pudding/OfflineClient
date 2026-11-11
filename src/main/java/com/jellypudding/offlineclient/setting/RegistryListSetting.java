@@ -18,6 +18,11 @@ import java.util.function.Predicate;
 // stored in the config and a resolved set is rebuilt on change.
 public final class RegistryListSetting<T> extends Setting<Set<Identifier>> implements PickList<T> {
 
+    // A family of entries the picker adds or drops in one press. The noun finishes the
+    // sentence Every such and such.
+    public record Group<T>(String label, String noun, List<T> members) {
+    }
+
     private final Registry<T> registry;
 
     // Resolved entries. Read from other threads and replaced whole.
@@ -56,6 +61,11 @@ public final class RegistryListSetting<T> extends Setting<Set<Identifier>> imple
     @Override
     public Collection<T> options() {
         return RegistryEntries.offered(registry, offered);
+    }
+
+    // The families the offer splits into. Empty for a registry that has none.
+    public List<Group<T>> groups() {
+        return RegistryEntries.groups(registry, options());
     }
 
     @Override
@@ -127,6 +137,20 @@ public final class RegistryListSetting<T> extends Setting<Set<Identifier>> imple
     public void remove(T entry) {
         Identifier id = registry.getKey(entry);
         if (id != null && value.remove(id)) {
+            rebuild();
+            changed();
+        }
+    }
+
+    // One rebuild for the lot like addAll.
+    @Override
+    public void removeAll(Collection<? extends T> entries) {
+        boolean removed = false;
+        for (T entry : entries) {
+            Identifier id = registry.getKey(entry);
+            removed |= id != null && value.remove(id);
+        }
+        if (removed) {
             rebuild();
             changed();
         }

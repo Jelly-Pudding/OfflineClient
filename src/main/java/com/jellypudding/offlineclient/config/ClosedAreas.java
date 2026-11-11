@@ -24,7 +24,8 @@ public final class ClosedAreas {
 
     private ClosedAreas(Path file) {
         this.file = file;
-        DataFiles.readJson(file, ClosedAreas::decode).ifPresent(areas::addAll);
+        DataFiles.readJson(file, root -> DataFiles.entries(root, ClosedAreas::area, "closed areas"))
+            .ifPresent(areas::addAll);
     }
 
     public static synchronized ClosedAreas get() {
@@ -75,14 +76,10 @@ public final class ClosedAreas {
         return gone.size();
     }
 
-    private static List<Area> decode(JsonElement root) {
-        List<Area> decoded = new ArrayList<>();
-        for (JsonElement element : root.getAsJsonArray()) {
-            JsonObject o = element.getAsJsonObject();
-            decoded.add(new Area(o.get("server").getAsString(), o.get("dimension").getAsString(),
-                o.get("x").getAsInt(), o.get("z").getAsInt(), o.get("radius").getAsInt()));
-        }
-        return decoded;
+    private static Area area(JsonElement element) {
+        JsonObject o = element.getAsJsonObject();
+        return new Area(o.get("server").getAsString(), o.get("dimension").getAsString(),
+            o.get("x").getAsInt(), o.get("z").getAsInt(), o.get("radius").getAsInt());
     }
 
     private void save() {

@@ -64,6 +64,11 @@ public final class BreakSlots {
         return pos.equals(INSTANCE.target);
     }
 
+    // True whilst a block stands on the target. A stop breaks it and an abort lets go of it.
+    public static boolean standsOnTarget(BlockPos pos) {
+        return isTarget(pos) && !BlockUtil.state(pos).isAir();
+    }
+
     // Ticks since the last start of any block. The server counts every stop from there.
     public static int sinceStart() {
         return clock() - INSTANCE.startTick;
@@ -71,7 +76,7 @@ public final class BreakSlots {
 
     // True when a stop sent now breaks a block with this much progress a tick outright.
     public static boolean stopFinishes(float perTick) {
-        return perTick * (sinceStart() + 1) >= BlockUtil.SERVER_ACCEPTS;
+        return perTick * (sinceStart() + 1) >= BreakTime.SERVER_ACCEPTS;
     }
 
     // True whilst the game is part way through breaking a different block by hand or for a
@@ -94,8 +99,8 @@ public final class BreakSlots {
     // Last of all because a packet another handler cancels never went out.
     @Subscribe(priority = Subscribe.LAST)
     private void onPacketSend(PacketSendEvent event) {
-        if (event.isCancelled() || !(event.getPacket() instanceof ServerboundPlayerActionPacket packet)
-            || MC.player == null || MC.level == null) {
+        if (!(event.getPacket() instanceof ServerboundPlayerActionPacket packet) || MC.player == null
+            || MC.level == null) {
             return;
         }
         switch (packet.getAction()) {

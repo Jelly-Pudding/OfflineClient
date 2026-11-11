@@ -11,13 +11,18 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.AxisWalker;
 import com.jellypudding.offlineclient.util.BlockMiner;
 import com.jellypudding.offlineclient.util.BlockUtil;
-import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.FaceMode;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
+import com.jellypudding.offlineclient.util.Modules;
+import com.jellypudding.offlineclient.util.PlaceWatch;
 import com.jellypudding.offlineclient.util.SwingMode;
+import com.jellypudding.offlineclient.util.UseBudget;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.world.entity.item.FallingBlockEntity;
+import net.minecraft.world.level.block.FallingBlock;
 import net.minecraft.world.phys.AABB;
 
 import java.util.ArrayList;
@@ -33,16 +38,22 @@ public final class Tunneller extends Module {
     // Depths looked at in one tick. Keeps a long clear stretch cheap.
     private static final int SCAN_DEPTHS = 8;
 
+    // How far over the roof falling sand or gravel is watched for.
+    private static final int FALL_WATCH = 16;
+
     private final NumberSetting width = new NumberSetting("Width",
-        "How wide the tunnel is.", 1, 1, 5, 1, " blocks").min(1).max(9);
+        "How wide the tunnel is.", 1, 1, 5, 1, " blocks").max(9);
     // Two blocks give you room to walk. Above eight blocks the top row is past the server's reach
     // from the floor.
     private final NumberSetting height = new NumberSetting("Height",
-        "How tall the tunnel is.", 2, 2, 5, 1, " blocks").min(2).max(8);
+        "How tall the tunnel is.", 2, 2, 5, 1, " blocks").max(8);
     private final NumberSetting length = new NumberSetting("Length",
         "How far to dig before stopping.", 64, 8, 512, 8, " blocks").min(1);
     private final BoolSetting wallLiquids = new BoolSetting("Wall off liquids",
         "Covers water and lava the tunnel breaks into with a block from your hotbar.", true);
+    private final BoolSetting fillFloor = new BoolSetting("Fill floor",
+        "Fills every hole in the tunnel floor ahead of you with a block from your hotbar. Without it a"
+            + " drop into a hole ends the tunnel.", true);
     private final BoolSetting torches = new BoolSetting("Torches",
         "Puts a torch on the floor as you go. Needs torches in your hotbar.", false);
     private final NumberSetting spacing = new NumberSetting("Torch spacing",
@@ -50,6 +61,7 @@ public final class Tunneller extends Module {
         .min(1).under(torches);
 
     private final AxisWalker walker = new AxisWalker();
+    private final PlaceWatch place = new PlaceWatch();
     private final SlotSwap slots = new SlotSwap();
     private int cleared;
     private int lastTorch;
@@ -59,7 +71,7 @@ public final class Tunneller extends Module {
 
     public Tunneller() {
         super("Tunneller", "Digs a straight tunnel the way you face.", Category.WORLD);
-        addSettings(width, height, length, wallLiquids, torches, spacing);
+        addSettings(width, height, length, wallLiquids, fillFloor, torches, spacing);
         searchTags("tunnel", "mine", "dig", "strip mine");
     }
 
@@ -85,6 +97,7 @@ public final class Tunneller extends Module {
     @Override
     protected void onEnable() {
         walker.clear();
+        place.clear();
         slots.forget();
         current = null;
         if (inGame()) {
@@ -111,8 +124,13 @@ public final class Tunneller extends Module {
     @Subscribe
     private void onTick(TickEvent event) {
         current = null;
-        if (!inGame()) {
-            InputUtil.release(mc.options.keyUp);
+        // A dead player still ticks and the server ignores every click it makes.
+        if (mc.player.isDeadOrDying()) {
+            disable("Tunneller stopped because you died.");
+            return;
+        }
+        if (place.movedAway()) {
+            disable("Tunneller stopped because you changed world.");
             return;
         }
         if (!walker.isLocked()) {
@@ -127,8 +145,23 @@ public final class Tunneller extends Module {
             return;
         }
 
+        // Digging and placing wait whilst something else has the hands. A fight FightBot or Protect
+        // walks to keeps the view and the forward key as well.
+        if (Hands.taken()) {
+            BlockMiner.release();
+            if (!Modules.fightsOnFoot()) {
+                walker.holdAxis();
+                // The key goes up whoever held it. That keeps an AutoWalk switched on before Tunneller from
+                // walking you on whilst the tunnel waits. Both tick in the order they were switched on.
+                InputUtil.release(mc.options.keyUp);
+            }
+            return;
+        }
         walker.holdAxis();
         if (wallLiquids.isOn() && sealLiquid()) {
+            return;
+        }
+        if (fillFloor.isOn() && fillHole()) {
             return;
         }
         current = nextBlock();
@@ -141,41 +174,53 @@ public final class Tunneller extends Module {
             return;
         }
         if (cleared >= length.getInt() && walker.travelled() >= length.getInt() - 1) {
-            ChatUtil.message("§bTunneller §7finished §f" + length.getInt() + "§7 blocks.");
+            tell("finished §f" + length.getInt() + "§7 blocks.");
             setEnabled(false);
             return;
         }
         BlockMiner.release();
-        mc.options.keyUp.setDown(true);
+        // Sand or gravel on its way down lands before you walk under it.
+        if (somethingFalling()) {
+            InputUtil.release(mc.options.keyUp);
+            return;
+        }
+        InputUtil.hold(mc.options.keyUp);
         placeTorch();
+    }
+
+    private boolean somethingFalling() {
+        AABB stretch = box(Math.max(1, standingDepth())).minmax(box(cleared + 1)).expandTowards(0, FALL_WATCH, 0);
+        return !mc.level.getEntitiesOfClass(FallingBlockEntity.class, stretch).isEmpty();
+    }
+
+    // The slice you stand in counted from where the tunnel began.
+    private int standingDepth() {
+        return (int) Math.floor(walker.travelled());
     }
 
     // The nearest block in reach in the first slice still to dig. A slice you stand in with nothing
     // left in reach is given up. Chat names the first block a run leaves.
     private BlockPos nextBlock() {
         double reach = mc.player.blockInteractionRange();
+        // Sand or gravel that dropped into the stretch already dug comes out first. Nothing else
+        // behind the face is touched and a torch put down there stays.
+        for (int depth = Math.max(1, standingDepth()); depth <= cleared; depth++) {
+            BlockPos fallen = BlockUtil.nearestOf(slice(depth),
+                pos -> BlockUtil.state(pos).getBlock() instanceof FallingBlock && BlockUtil.diggable(pos)
+                    && BlockUtil.reaches(pos, reach));
+            if (fallen != null) {
+                return fallen;
+            }
+        }
         for (int scanned = 0; scanned < SCAN_DEPTHS && cleared < length.getInt(); scanned++) {
             int depth = cleared + 1;
-            BlockPos best = null;
-            BlockPos outOfReach = null;
-            double bestDistance = Double.MAX_VALUE;
-            for (BlockPos pos : slice(depth)) {
-                if (!BlockUtil.diggable(pos)) {
-                    continue;
-                }
-                if (!BlockUtil.reaches(pos, reach)) {
-                    outOfReach = pos;
-                    continue;
-                }
-                double distance = BlockUtil.distanceTo(pos);
-                if (distance < bestDistance) {
-                    bestDistance = distance;
-                    best = pos;
-                }
-            }
+            List<BlockPos> face = slice(depth);
+            BlockPos best = BlockUtil.nearestOf(face, pos -> BlockUtil.diggable(pos) && BlockUtil.reaches(pos, reach));
             if (best != null) {
                 return best;
             }
+            BlockPos outOfReach = BlockUtil.nearestOf(face,
+                pos -> BlockUtil.diggable(pos) && !BlockUtil.reaches(pos, reach));
             if (outOfReach != null) {
                 // Walking closer may still bring it in reach.
                 if (depth > walker.travelled() + AxisWalker.BESIDE) {
@@ -183,13 +228,54 @@ public final class Tunneller extends Module {
                 }
                 if (!toldLeft) {
                     toldLeft = true;
-                    ChatUtil.message("§bTunneller §7left a block it cannot reach at §f"
+                    tell("left a block it cannot reach at §f"
                         + BlockUtil.text(outOfReach) + "§7.");
                 }
             }
             cleared++;
         }
         return null;
+    }
+
+    // A hole in the floor of the stretch ahead gets a block before you walk onto it. True when
+    // a block went down this tick or the server has to catch up first. The tunnel ends at a hole
+    // right ahead in the lane you walk with nothing in the hotbar to fill it. A hole beside that
+    // lane is left open then.
+    private boolean fillHole() {
+        double reach = mc.player.blockInteractionRange();
+        int here = Math.max(1, standingDepth());
+        for (int depth = here; depth <= cleared + 1; depth++) {
+            for (int lane = leftLane(); lane <= rightLane(); lane++) {
+                BlockPos floor = walker.blockAt(depth, lane, -1);
+                if (BlockUtil.isSolid(floor) || !BlockUtil.blockFits(floor)) {
+                    continue;
+                }
+                int slot = BlockUtil.findBlockSlot(block -> BlockUtil.isBuildingBlock(block, floor));
+                if (slot == -1) {
+                    if (lane == 0 && depth <= here + 1) {
+                        disable("Tunneller stopped at a hole in the floor with no block in the hotbar to fill it.");
+                        return true;
+                    }
+                    continue;
+                }
+                BlockUtil.Placement click = BlockUtil.reachablePlacement(floor, reach, false);
+                if (click == null) {
+                    continue;
+                }
+                // Paper drops use packets past its limit. The hole waits for the next tick.
+                if (UseBudget.remaining() == 0) {
+                    InputUtil.release(mc.options.keyUp);
+                    return true;
+                }
+                slots.select(slot);
+                boolean placed = click.place(FaceMode.SERVER, SwingMode.CLIENT);
+                slots.restoreIfMine();
+                if (placed) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     // A liquid touching the stretch just dug or about to be dug gets a block over it.

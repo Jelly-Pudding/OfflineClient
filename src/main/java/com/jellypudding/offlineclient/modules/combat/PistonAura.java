@@ -9,7 +9,10 @@ import com.jellypudding.offlineclient.render.BoxStyle;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.AttackTimer;
+import com.jellypudding.offlineclient.util.BlastLimits;
 import com.jellypudding.offlineclient.util.BlockUtil;
+import com.jellypudding.offlineclient.util.Crystals;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.ExplosionUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
@@ -20,7 +23,6 @@ import com.jellypudding.offlineclient.util.SwingMode;
 import com.jellypudding.offlineclient.util.TargetPriority;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.network.protocol.game.ServerboundAttackPacket;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityTypes;
@@ -58,7 +60,7 @@ public final class PistonAura extends Module {
                          BlockPos power, boolean torch, Vec3 blast) {
     }
 
-    private record Pending(BlockPos crystal, Vec3 blast, int firedAt) {
+    private record Pending(BlockPos crystal, Vec3 blast) {
     }
 
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode", "What the piston shoves.", Mode.CRYSTAL)
@@ -74,14 +76,9 @@ public final class PistonAura extends Module {
         "How far you can reach to hit the crystal.", 4.5, 1, 6, 0.1, " blocks")
         .under(mode, Mode.CRYSTAL);
     private final NumberSetting minDamage = new NumberSetting("Min damage",
-        "Only fire when the enemy would take at least this much.", 8, 0, 36, 0.5)
+        "Only fires when the enemy would take at least this much.", 8, 0, 36, 0.5)
         .under(mode, Mode.CRYSTAL);
-    private final NumberSetting maxSelfDamage = new NumberSetting("Max self damage",
-        "Never take more than this from the blast.", 6, 0, 36, 0.5)
-        .under(mode, Mode.CRYSTAL);
-    private final BoolSetting antiSuicide = new BoolSetting("Anti suicide",
-        "Never set off a blast that could kill you.", true)
-        .under(mode, Mode.CRYSTAL);
+    private final BlastLimits limits = new BlastLimits(6, 36).under(mode, Mode.CRYSTAL);
     private final NumberSetting delay = new NumberSetting("Delay",
         "Ticks to wait after one piston fires before the next goes down.", 4, 0, 20, 1, " ticks");
     private final EnumSetting<SwingMode> swing = SwingMode.setting(SwingMode.BOTH);
@@ -92,6 +89,9 @@ public final class PistonAura extends Module {
     private final SlotSwap slots = new SlotSwap();
     private Setup planned;
     private Pending pending;
+    // Ticks the pending crystal has been watched. A respawn or a change of world starts the
+    // player's own clock again and leaves this one running.
+    private int watched;
     private boolean turning;
     private int timer;
     private String targetName;
@@ -100,8 +100,9 @@ public final class PistonAura extends Module {
     public PistonAura() {
         super("PistonAura", "Fires pistons at an enemy in a hole to push a crystal into them or shove them out.",
             Category.COMBAT);
-        addSettings(mode, targetRange, priority, placeRange, breakRange, minDamage, maxSelfDamage,
-            antiSuicide, delay, swing, render);
+        addSettings(mode, targetRange, priority, placeRange, breakRange, minDamage);
+        addSettings(limits.settings());
+        addSettings(delay, swing, render);
         addSettings(style.settings());
         searchTags("piston crystal", "piston push", "cpvp", "hole");
     }
@@ -138,7 +139,7 @@ public final class PistonAura extends Module {
     private void onTick(TickEvent event) {
         status = null;
         turning = false;
-        if (!inGame() || mc.player.isSpectator()) {
+        if (mc.player.isSpectator()) {
             targetName = null;
             planned = null;
             pending = null;
@@ -150,7 +151,7 @@ public final class PistonAura extends Module {
             return;
         }
         Player target = EntityUtil.bestEnemy(targetRange.getValue(), priority.getValue());
-        targetName = EntityUtil.nameOf(target);
+        targetName = EntityUtil.displayNameOf(target);
         planned = null;
         if (target == null || timer > 0) {
             return;
@@ -163,8 +164,6 @@ public final class PistonAura extends Module {
         int piston = InventoryUtil.hotbarSlot(stack -> stack.is(Items.PISTON) || stack.is(Items.STICKY_PISTON));
         int block = InventoryUtil.hotbarSlot(stack -> stack.is(Items.REDSTONE_BLOCK));
         int torch = InventoryUtil.hotbarSlot(stack -> stack.is(Items.REDSTONE_TORCH));
-        int crystal = InventoryUtil.hotbarSlot(stack -> stack.is(Items.END_CRYSTAL));
-        InteractionHand crystalHand = crystalHand(crystal);
         if (piston == -1) {
             status = "(no pistons)";
             return;
@@ -173,7 +172,7 @@ public final class PistonAura extends Module {
             status = "(no redstone)";
             return;
         }
-        if (mode.is(Mode.CRYSTAL) && crystalHand == null) {
+        if (mode.is(Mode.CRYSTAL) && !Crystals.hasCrystals()) {
             status = "(no crystals)";
             return;
         }
@@ -199,7 +198,8 @@ public final class PistonAura extends Module {
             }
             swing.getValue().swing(InteractionHand.MAIN_HAND);
         }
-        if (planned.crystal() != null && !placeCrystal(crystalHand, crystal, planned.crystal().below())) {
+        if (planned.crystal() != null
+            && !Crystals.placeCrystal(slots, planned.crystal().below(), swing.getValue())) {
             status = "(crystal refused)";
             return;
         }
@@ -214,27 +214,9 @@ public final class PistonAura extends Module {
         swing.getValue().swing(InteractionHand.MAIN_HAND);
         timer = delay.getInt();
         if (planned.crystal() != null) {
-            pending = new Pending(planned.crystal(), planned.blast(), mc.player.tickCount);
+            pending = new Pending(planned.crystal(), planned.blast());
+            watched = 0;
         }
-    }
-
-    // The offhand when it holds crystals. Otherwise the main hand on the hotbar slot of them.
-    private InteractionHand crystalHand(int slot) {
-        if (mc.player.getOffhandItem().is(Items.END_CRYSTAL)) {
-            return InteractionHand.OFF_HAND;
-        }
-        return slot == -1 ? null : InteractionHand.MAIN_HAND;
-    }
-
-    private boolean placeCrystal(InteractionHand hand, int slot, BlockPos base) {
-        if (hand == InteractionHand.MAIN_HAND) {
-            slots.select(slot);
-        }
-        if (!mc.gameMode.useItemOn(mc.player, hand, BlockUtil.crystalClick(base)).consumesAction()) {
-            return false;
-        }
-        swing.getValue().swing(hand);
-        return true;
     }
 
     // A crystal on top of the wall beside the target with a piston behind it at head height.
@@ -245,11 +227,11 @@ public final class PistonAura extends Module {
         float bestDamage = 0;
         for (Direction side : Direction.Plane.HORIZONTAL) {
             BlockPos base = feet.relative(side);
-            if (!BlockUtil.crystalBase(BlockUtil.state(base))) {
+            if (!Crystals.crystalBase(BlockUtil.state(base))) {
                 continue;
             }
             BlockPos crystal = base.above();
-            Vec3 crystalHit = BlockUtil.crystalClick(base).getLocation();
+            Vec3 crystalHit = Crystals.crystalClick(base).getLocation();
             if (!BlockUtil.state(crystal).isAir() || !crystalFits(crystal)
                 || mc.player.getEyePosition().distanceTo(crystalHit) > placeRange.getValue()) {
                 continue;
@@ -369,7 +351,7 @@ public final class PistonAura extends Module {
     }
 
     private static boolean crystalFits(BlockPos crystal) {
-        return mc.level.getEntities((Entity) null, BlockUtil.crystalSpace(crystal)).isEmpty();
+        return mc.level.getEntities((Entity) null, Crystals.crystalSpace(crystal)).isEmpty();
     }
 
     private static AABB crystalBox(BlockPos crystal) {
@@ -385,13 +367,12 @@ public final class PistonAura extends Module {
     }
 
     private boolean selfSafe(Vec3 blast) {
-        return ExplosionUtil.selfSafe(blast, ExplosionUtil.CRYSTAL_POWER, maxSelfDamage.getFloat(),
-            antiSuicide.isOn());
+        return limits.allows(blast, ExplosionUtil.CRYSTAL_POWER);
     }
 
     // Hits the crystal once the head has carried it into place or the wait runs out.
     private void watchCrystal() {
-        int waited = mc.player.tickCount - pending.firedAt();
+        int waited = ++watched;
         EndCrystal crystal = pendingCrystal();
         if (crystal == null) {
             status = "(waiting)";
@@ -405,7 +386,7 @@ public final class PistonAura extends Module {
             return;
         }
         if (EntityUtil.reachDistance(mc.player, crystal) <= breakRange.getValue() && selfSafe(crystal.position())) {
-            mc.player.connection.send(new ServerboundAttackPacket(crystal.getId()));
+            AttackTimer.packetHit(crystal);
             swing.getValue().swing();
         }
         pending = null;

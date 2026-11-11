@@ -13,10 +13,14 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
 // What the client knows about the server it is playing on. The server command
 // and the HUD read it from here and always agree.
@@ -98,6 +102,15 @@ public final class ServerInfo {
         return ChatUtil.capitalised(words);
     }
 
+    // The ids of the dimensions there are to choose from. The three of the game come first and
+    // then every other one the server you are on has.
+    public static List<String> dimensions() {
+        ClientPacketListener connection = OfflineClient.MC.getConnection();
+        Stream<String> listed = connection == null ? Stream.empty()
+            : connection.levels().stream().map(level -> level.identifier().toString()).sorted();
+        return Stream.concat(Arrays.stream(Dimension.values()).map(Dimension::id), listed).distinct().toList();
+    }
+
     // The label the server has in your own server list. Null until you name it.
     public static String savedName() {
         ServerData data = OfflineClient.MC.getCurrentServer();
@@ -135,6 +148,24 @@ public final class ServerInfo {
     public static int online() {
         LocalPlayer player = OfflineClient.MC.player;
         return player == null ? 0 : player.connection.getListedOnlinePlayers().size();
+    }
+
+    // The names of everyone else the tab list shows in a new list. Hidden entries and blank
+    // names are left out.
+    public static List<String> othersOnline() {
+        List<String> names = new ArrayList<>();
+        LocalPlayer player = OfflineClient.MC.player;
+        if (player == null) {
+            return names;
+        }
+        String self = player.getGameProfile().name();
+        for (PlayerInfo info : player.connection.getListedOnlinePlayers()) {
+            String name = info.getProfile().name();
+            if (!name.isBlank() && !name.equalsIgnoreCase(self)) {
+                names.add(name);
+            }
+        }
+        return names;
     }
 
     // The commands the server lets you run in the words the game uses such as none or gamemaster.

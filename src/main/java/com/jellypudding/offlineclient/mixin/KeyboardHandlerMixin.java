@@ -2,7 +2,8 @@ package com.jellypudding.offlineclient.mixin;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.events.KeyPressEvent;
-import com.jellypudding.offlineclient.setting.KeybindSetting;
+import com.jellypudding.offlineclient.modules.misc.Panic;
+import com.jellypudding.offlineclient.setting.Bind;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.KeyboardHandler;
@@ -18,8 +19,9 @@ public class KeyboardHandlerMixin {
     // A handler that takes the key keeps it from the open screen and from the game's own keys.
     @Inject(method = "keyPress(JILnet/minecraft/client/input/KeyEvent;)V", at = @At("HEAD"), cancellable = true)
     private void onKeyPress(long windowHandle, int action, KeyEvent event, CallbackInfo ci) {
-        // An unbound keybind holds this same value.
-        if (event.key() == KeybindSetting.UNBOUND) {
+        Bind input = Bind.of(event);
+        // A key the keyboard has no code for reads the same as no bind at all.
+        if (!input.isBound()) {
             return;
         }
         // A debug combo belongs to the game. Any other key pressed with the debug key held still
@@ -27,7 +29,10 @@ public class KeyboardHandlerMixin {
         if (action == InputConstants.PRESS && InputUtil.isDebugCombo(event)) {
             return;
         }
-        if (OfflineClient.INSTANCE.getEventBus().post(new KeyPressEvent(event.key(), action)).isCancelled()) {
+        if (Panic.sleepsThrough(input, action)) {
+            return;
+        }
+        if (OfflineClient.INSTANCE.getEventBus().post(new KeyPressEvent(input, action)).isCancelled()) {
             ci.cancel();
         }
     }

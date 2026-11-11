@@ -120,8 +120,6 @@ public final class Collectibles extends Module {
     private static final double WALL_CLOTH_Z = 9;
     private static final double HALF = 0.5;
 
-    // A dropped item is tiny. Its box is grown to be seen from afar.
-    private static final double ITEM_GROW = 0.1;
     private static final double LABEL_LIFT = 0.3;
     // Text darker than this cannot be read on the label background. A black banner is labelled in grey.
     private static final float DARK_TEXT = 0.2f;
@@ -154,7 +152,7 @@ public final class Collectibles extends Module {
     private final NumberSetting scale = new NumberSetting("Scale",
         "Size of the labels.", 1, 0.5, 3, 0.1).min(0.1).under(labels);
     private final Notice notice = new Notice(this, Notice.Where.CHAT);
-    private final EntityColors colors = new EntityColors(EntityColors.Mode.SINGLE, GOLD_HUE);
+    private final EntityColors colors = new EntityColors(EntityColors.Mode.SINGLE, GOLD_HUE).withoutPlayers();
     // A find at your feet would hide under its own box.
     private final NearFade fade = new NearFade(3);
 
@@ -224,9 +222,6 @@ public final class Collectibles extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame()) {
-            return;
-        }
         if (world.changed()) {
             // Positions mean something different in every world.
             hung = List.of();
@@ -421,11 +416,6 @@ public final class Collectibles extends Module {
         return shelves.isOn() ? stocked : List.of();
     }
 
-    private static AABB boxOf(Entity entity, float partialTicks) {
-        AABB box = EntityUtil.lerpedBox(entity, partialTicks);
-        return entity instanceof ItemEntity ? box.inflate(ITEM_GROW) : box;
-    }
-
     @Subscribe
     private void onRender3D(Render3DEvent event) {
         if (!inGame()) {
@@ -436,7 +426,7 @@ public final class Collectibles extends Module {
             if (find.entity().isRemoved()) {
                 continue;
             }
-            AABB box = boxOf(find.entity(), event.getPartialTicks());
+            AABB box = EntityUtil.markBox(find.entity(), event.getPartialTicks());
             float strength = fade.strengthAt(box.getCenter());
             if (strength > 0) {
                 int color = ColorUtil.fade(colors.colorOf(find.entity()), strength);
@@ -479,7 +469,7 @@ public final class Collectibles extends Module {
             if (find.entity().isRemoved()) {
                 continue;
             }
-            AABB box = boxOf(find.entity(), event.getPartialTicks());
+            AABB box = EntityUtil.markBox(find.entity(), event.getPartialTicks());
             label(event, new Vec3((box.minX + box.maxX) / 2, box.maxY + LABEL_LIFT, (box.minZ + box.maxZ) / 2),
                 find.label(), colors.colorOf(find.entity()));
         }

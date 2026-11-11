@@ -10,9 +10,11 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.Cooldowns;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.TargetPriority;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
@@ -35,12 +37,12 @@ public final class AutoNametag extends Module {
         "The mobs to name.", BuiltInRegistries.ENTITY_TYPE,
         List.of(EntityTypes.VILLAGER, EntityTypes.HORSE, EntityTypes.WOLF, EntityTypes.CAT));
     private final NumberSetting range = new NumberSetting("Range",
-        "How close a mob has to be.", 5, 1, 6, 0.1);
+        "How close a mob has to be.", 5, 1, 6, 0.1, " blocks");
     private final EnumSetting<TargetPriority> priority = TargetPriority.setting("Names", TargetPriority.NEAREST);
     private final BoolSetting rename = new BoolSetting("Rename",
         "Also names mobs that already carry a different name.", true);
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Turn towards the mob on the server side.", true);
+        "Turns towards the mob on the server side.", true);
 
     private final Cooldowns<Integer> tried = new Cooldowns<>();
     private final SlotSwap slots = new SlotSwap();
@@ -70,12 +72,18 @@ public final class AutoNametag extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || mc.player.isSpectator() || mc.gui.screen() != null) {
+        if (mc.player.isSpectator() || mc.gui.screen() != null) {
             return;
         }
-        int slot = InventoryUtil.hotbarSlot(stack -> stack.is(Items.NAME_TAG));
+        // The tag takes a hotbar slot and waits whilst something else has the hands.
+        if (Hands.taken()) {
+            slots.standAside();
+            return;
+        }
+        // A tag with no name would only right click the mob.
+        int slot = InventoryUtil.hotbarSlot(stack -> stack.is(Items.NAME_TAG) && stack.has(DataComponents.CUSTOM_NAME));
         if (slot == -1) {
-            disable("No name tag in the hotbar.");
+            disable("No named name tag in the hotbar. Name one at an anvil.");
             return;
         }
         tried.tick();

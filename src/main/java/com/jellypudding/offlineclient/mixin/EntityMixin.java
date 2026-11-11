@@ -47,16 +47,15 @@ public abstract class EntityMixin {
         }
     }
 
-    // NoSlowdown fluid drag. The local player is never in water or lava as far as
-    // the physics and the swimming pose are concerned.
-    @Inject(method = {"isInWater()Z", "isInLava()Z", "isUnderWater()Z"},
-        at = @At("HEAD"), cancellable = true)
+    // NoSlowdown fluid drag without buoyancy. The local player is never in water or lava
+    // as far as the physics and the swimming pose are concerned.
+    @Inject(method = {"isInWater()Z", "isInLava()Z"}, at = @At("HEAD"), cancellable = true)
     private void onFluidCheck(CallbackInfoReturnable<Boolean> cir) {
         if ((Object) this != OfflineClient.MC.player) {
             return;
         }
         NoSlowdown noSlowdown = Modules.get(NoSlowdown.class);
-        if (noSlowdown != null && noSlowdown.skipsFluidDrag()) {
+        if (noSlowdown != null && noSlowdown.ignoresFluids()) {
             cir.setReturnValue(false);
         }
     }

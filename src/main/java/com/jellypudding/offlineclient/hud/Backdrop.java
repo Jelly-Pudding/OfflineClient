@@ -35,7 +35,7 @@ public final class Backdrop {
             false).under(on);
         opacity = new NumberSetting(name + " background opacity",
             "How solid the panel is from clear at nought to solid at a hundred.", OPACITY, 0, 100, 5, "%")
-            .min(0).max(100).under(on);
+            .max(100).under(on);
     }
 
     List<Setting<?>> settings() {

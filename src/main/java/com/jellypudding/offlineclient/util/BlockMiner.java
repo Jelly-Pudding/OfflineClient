@@ -1,6 +1,7 @@
 package com.jellypudding.offlineclient.util;
 
 import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.modules.player.NoInteract;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -30,7 +31,7 @@ public final class BlockMiner {
     }
 
     public static boolean mine(BlockPos pos, boolean rotate, SwingMode swing) {
-        if (MC.player == null || MC.level == null || MC.gameMode == null) {
+        if (MC.player == null || MC.level == null || MC.gameMode == null || refused(pos)) {
             return false;
         }
         Direction side = BlockUtil.facingSide(pos);
@@ -85,11 +86,31 @@ public final class BlockMiner {
         send(ServerboundPlayerActionPacket.Action.STOP_DESTROY_BLOCK, pos);
     }
 
+    // An abort on its own. Named on the server's target it wipes the cracks and lets go of the
+    // block. It breaks nothing and NoInteract has no say over it.
+    public static void sendAbort(BlockPos pos) {
+        send(ServerboundPlayerActionPacket.Action.ABORT_DESTROY_BLOCK, pos);
+    }
+
     private static void send(ServerboundPlayerActionPacket.Action action, BlockPos pos) {
-        if (MC.player == null || MC.level == null) {
+        if (MC.player == null || MC.level == null
+            || action != ServerboundPlayerActionPacket.Action.ABORT_DESTROY_BLOCK && refused(pos)) {
             return;
         }
         MC.player.connection.send(new ServerboundPlayerActionPacket(action, pos, BlockUtil.facingSide(pos)));
+    }
+
+    // True whilst NoInteract keeps the block standing for the lava it holds back. A module can
+    // leave such a block out before it tries. Nothing here breaks one.
+    public static boolean kept(BlockPos pos) {
+        NoInteract noInteract = Modules.active(NoInteract.class);
+        return noInteract != null && noInteract.holdsBackLava(pos);
+    }
+
+    // Every break a module makes passes here. The hand asks NoInteract on its own.
+    private static boolean refused(BlockPos pos) {
+        NoInteract noInteract = Modules.active(NoInteract.class);
+        return noInteract != null && noInteract.refusesBreak(pos);
     }
 
     // Keeps vanilla mining suppressed for another tick without touching a block.

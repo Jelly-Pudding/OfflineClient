@@ -31,21 +31,32 @@ public final class EntityFilter {
     // False hides the dropped item rows for a module that only aims at or hits things.
     private final boolean withItems;
 
-    // The verb reads as "Highlight" and the past form as "highlighted".
+    // The verb reads as "Highlights" and the past form as "highlighted".
     // They make the descriptions fit whatever the module does to an entity.
     public EntityFilter(String verb, String past, boolean playersDefault, Pick mobsDefault,
                         Pick itemsDefault, List<EntityType<?>> othersDefault) {
-        this(verb, past, playersDefault, mobsDefault, itemsDefault, othersDefault, true);
+        this(verb, past, playersDefault, mobsDefault, itemsDefault, othersDefault, true,
+            "Other kinds of entity that are " + past + " such as crystals and boats.");
     }
 
     // A filter with no dropped item rows.
     public static EntityFilter living(String verb, String past, boolean playersDefault,
                                       Pick mobsDefault, List<EntityType<?>> othersDefault) {
-        return new EntityFilter(verb, past, playersDefault, mobsDefault, Pick.NONE, othersDefault, false);
+        return new EntityFilter(verb, past, playersDefault, mobsDefault, Pick.NONE, othersDefault, false,
+            "Other kinds of entity that are " + past + " such as crystals and boats.");
+    }
+
+    // The same for a module whose work only reaches what has health such as a blast.
+    public static EntityFilter mortal(String verb, String past, boolean playersDefault,
+                                      Pick mobsDefault, List<EntityType<?>> othersDefault) {
+        return new EntityFilter(verb, past, playersDefault, mobsDefault, Pick.NONE, othersDefault, false,
+            "Other kinds of entity that are " + past + " such as armour stands. A kind with no health is"
+                + " left alone.");
     }
 
     private EntityFilter(String verb, String past, boolean playersDefault, Pick mobsDefault,
-                         Pick itemsDefault, List<EntityType<?>> othersDefault, boolean withItems) {
+                         Pick itemsDefault, List<EntityType<?>> othersDefault, boolean withItems,
+                         String othersText) {
         this.withItems = withItems;
         players = new BoolSetting("Players", verb + " other players.", playersDefault);
         mobs = new EnumSetting<>("Mobs", "Which mobs are " + past + ".", mobsDefault)
@@ -62,8 +73,7 @@ public final class EntityFilter {
         itemTypes = new RegistryListSetting<>("Item types", "The items whose drops are " + past + ".",
             BuiltInRegistries.ITEM, List.of());
         itemTypes.under(items, Pick.CHOSEN);
-        others = new RegistryListSetting<>("Other entities",
-            "Other kinds of entity that are " + past + " such as crystals and boats.",
+        others = new RegistryListSetting<>("Other entities", othersText,
             BuiltInRegistries.ENTITY_TYPE, othersDefault);
     }
 
@@ -78,6 +88,22 @@ public final class EntityFilter {
         return players.isOn();
     }
 
+    public boolean wantsMobs() {
+        return !mobs.is(Pick.NONE);
+    }
+
+    // What a render module marks. A stand in wears a player's skin and shows with the players.
+    public boolean shows(Entity entity) {
+        return standsIn(entity) && players.isOn() && entity.isAlive() || matches(entity);
+    }
+
+    // Something of the player kind that is no player such as a mannequin.
+    private static boolean standsIn(Entity entity) {
+        return !(entity instanceof Player) && EntityKind.of(entity) == EntityKind.PLAYER;
+    }
+
+    // What a module acts on. A stand in is a prop and neither a player nor a mob to fight.
+    // It only counts once its kind is picked under other entities.
     public boolean matches(Entity entity) {
         Player self = OfflineClient.MC.player;
         if (self == null || entity == self) {
@@ -85,6 +111,9 @@ public final class EntityFilter {
         }
         if (entity instanceof Player player) {
             return players.isOn() && player.isAlive() && !player.isSpectator();
+        }
+        if (standsIn(entity)) {
+            return entity.isAlive() && others.contains(entity.getType());
         }
         if (entity instanceof ItemEntity drop) {
             return picked(items, itemTypes, drop.getItem().getItem()) || others.contains(entity.getType());

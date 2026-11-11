@@ -168,7 +168,7 @@ public final class ProxyTunnel extends ChannelDuplexHandler {
     // Why this connection cannot go through the proxy. Null when it can.
     private String refusal() {
         if (host.isEmpty()) {
-            return "The proxy has no host. Type it in the Proxy settings.";
+            return "No proxy is picked. Pick one in the Proxies tab.";
         }
         if (kind == Kind.SOCKS_4 && !(target.getAddress() instanceof Inet4Address)) {
             return "A SOCKS4 proxy only reaches IPv4 addresses.";

@@ -1,12 +1,13 @@
 package com.jellypudding.offlineclient.command;
 
 import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.config.ServerStore;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.ActionSetting;
 import com.jellypudding.offlineclient.setting.Defaults;
 import com.jellypudding.offlineclient.setting.Setting;
+import com.jellypudding.offlineclient.util.Armed;
 import com.jellypudding.offlineclient.util.ChatUtil;
-import com.jellypudding.offlineclient.util.ClientLines;
 import com.jellypudding.offlineclient.util.Hop;
 import com.jellypudding.offlineclient.util.Tally;
 import net.minecraft.world.phys.Vec3;
@@ -112,13 +113,7 @@ public abstract class Command {
 
     // Hops the player there and says how it went once the trip is over.
     protected static void hopTo(Vec3 spot, String done) {
-        Hop.travel(spot, result -> ClientLines.inChat(() -> {
-            if (result == Hop.Result.MOVED) {
-                ChatUtil.message(done);
-            } else {
-                ChatUtil.error(result.problem());
-            }
-        }));
+        Hop.travel(spot, Hop.telling(done));
     }
 
     // Runs an action named in a command. One that throws work away wants the command a
@@ -126,7 +121,7 @@ public abstract class Command {
     protected static void press(ActionSetting action) {
         int before = ChatUtil.written();
         if (!action.press()) {
-            ChatUtil.message("§7Send it again within §f" + ActionSetting.CONFIRM_SECONDS
+            ChatUtil.message("§7Send it again within §f" + Armed.CONFIRM_SECONDS
                 + "§7 seconds to " + action.confirmWords() + ".");
             return;
         }
@@ -153,6 +148,15 @@ public abstract class Command {
         String prefix = OfflineClient.INSTANCE.getCommandManager().getPrefix();
         OfflineClient.MC.schedule(() -> OfflineClient.MC.gui.hud.getChat().getRecentChat()
             .removeIf(line -> line.startsWith(prefix) && line.contains(secret)));
+    }
+
+    // Takes what a store keeps for one server or host out of it and says whether there was one.
+    protected static void forget(ServerStore<?> store, String key, String noun) {
+        if (store.remove(key)) {
+            ChatUtil.message("§7Forgot the " + noun + " for §b" + key + "§7.");
+        } else {
+            ChatUtil.error("No " + noun + " is saved for " + key + ".");
+        }
     }
 
     // Null after telling the player there is no module with that name.

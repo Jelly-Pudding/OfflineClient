@@ -46,23 +46,23 @@ public final class Portals extends Module {
         .max(ChunkMap.MAX_VIEW_DISTANCE);
     private final BoxStyle style = BoxStyle.shapeOnly(BoxStyle.Shape.LINES);
     private final BoolSetting nether = new BoolSetting("Nether portals",
-        "Show nether portals.", true);
+        "Shows nether portals.", true);
     private final ColorSetting netherColor = new ColorSetting("Nether colour",
         "Colour of nether portals.", 276, 0.69f, 1f, false).under(nether);
     private final BoolSetting end = new BoolSetting("End portals",
-        "Show the black portal blocks in a stronghold.", true);
+        "Shows the black portal blocks in a stronghold.", true);
     private final ColorSetting endColor = new ColorSetting("End colour",
         "Colour of end portals.", 156, 0.69f, 1f, false).under(end);
     private final BoolSetting frames = new BoolSetting("End portal frames",
-        "Show the frame blocks around a stronghold portal.", true);
+        "Shows the frame blocks around a stronghold portal.", true);
     private final ColorSetting frameColor = new ColorSetting("Frame colour",
         "Colour of end portal frames.", 210, 0.75f, 1f, false).under(frames);
     private final BoolSetting gateways = new BoolSetting("End gateways",
-        "Show the gateways that throw you to the outer islands.", true);
+        "Shows the gateways that throw you to the outer islands.", true);
     private final ColorSetting gatewayColor = new ColorSetting("Gateway colour",
         "Colour of end gateways.", 50, 0.75f, 1f, false).under(gateways);
     private final BoolSetting tracers = new BoolSetting("Tracers",
-        "Draw a line to every portal.", false);
+        "Draws a line to every portal.", false);
 
     private final ChunkScanner<Spot> scanner = new ChunkScanner<>();
     private List<Group> groups = List.of();
@@ -123,9 +123,6 @@ public final class Portals extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame()) {
-            return;
-        }
         scanner.update(range.getInt(), (view, out) -> view.forEachMatching(
             state -> isPortal(state.getBlock()),
             (x, y, z, state) -> out.add(new Spot(new BlockPos(x, y, z), state.getBlock()))));

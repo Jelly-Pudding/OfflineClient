@@ -19,7 +19,6 @@ public final class Trip {
     private final PathWalker walker = new PathWalker();
 
     private PathGoal goal;
-    private BlockPos target;
     private int searches;
     private State state = State.IDLE;
 
@@ -37,9 +36,12 @@ public final class Trip {
 
     // Radius nought means the exact block.
     public boolean start(BlockPos target, double radius) {
+        return start(radius <= 0 ? new PathGoal.Spot(target) : new PathGoal.Around(target, radius));
+    }
+
+    public boolean start(PathGoal goal) {
         stop();
-        this.target = target.immutable();
-        goal = radius <= 0 ? new PathGoal.Spot(target) : new PathGoal.Around(target, radius);
+        this.goal = goal;
         searches = 0;
         state = State.WALKING;
         return search();
@@ -90,8 +92,7 @@ public final class Trip {
     }
 
     private boolean nearTarget(LocalPlayer player) {
-        return player.distanceToSqr(target.getX() + 0.5, target.getY(), target.getZ() + 0.5)
-            <= CLOSE_ENOUGH * CLOSE_ENOUGH;
+        return goal.distance(player.position()) <= CLOSE_ENOUGH;
     }
 
     private State end(State outcome) {

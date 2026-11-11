@@ -1,7 +1,7 @@
 package com.jellypudding.offlineclient.mixin;
 
 import com.jellypudding.offlineclient.modules.misc.BetterTab;
-import com.jellypudding.offlineclient.modules.misc.NameProtect;
+import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.Modules;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.llamalad7.mixinextras.injector.ModifyReturnValue;
@@ -36,12 +36,9 @@ public class PlayerTabOverlayMixin {
         method = "getNameForDisplay(Lnet/minecraft/client/multiplayer/PlayerInfo;)Lnet/minecraft/network/chat/Component;",
         at = @At("RETURN"))
     private Component onGetNameForDisplay(Component original, PlayerInfo info) {
-        NameProtect nameProtect = Modules.get(NameProtect.class);
-        if (nameProtect != null) {
-            original = nameProtect.filter(original);
-        }
+        Component shown = EntityUtil.displayed(original);
         BetterTab tab = Modules.get(BetterTab.class);
-        return tab == null ? original : tab.decorate(original, info);
+        return tab == null ? shown : tab.decorate(shown, info);
     }
 
     // Vanilla caps the list at eighty sorted players.

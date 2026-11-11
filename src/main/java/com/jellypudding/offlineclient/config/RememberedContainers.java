@@ -3,15 +3,13 @@ package com.jellypudding.offlineclient.config;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.util.BlockUtil;
+import com.jellypudding.offlineclient.util.ItemUtil;
 import com.jellypudding.offlineclient.util.ServerInfo;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.RegistryOps;
 import net.minecraft.world.item.ItemStack;
 
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -34,6 +32,7 @@ public final class RememberedContainers
     }
 
     private static final String FILE = "containers.json";
+    private static final String WHAT = "remembered containers";
     // Every container of a big storage hall and more. Each save reads and writes the whole file
     // and the least recently used make room for new ones.
     private static final int MAX_CONTAINERS = 2048;
@@ -41,7 +40,7 @@ public final class RememberedContainers
     private static final int MOST_SLOTS = 256;
 
     public RememberedContainers() {
-        super(FILE, MAX_CONTAINERS, "remembered containers");
+        super(FILE, MAX_CONTAINERS, WHAT);
     }
 
     // A container just opened counts as seen this moment whatever it holds.
@@ -52,7 +51,7 @@ public final class RememberedContainers
     // What an open container holds this tick. Nothing is written whilst it holds the same.
     public void update(Spot spot, List<ItemStack> items) {
         Container old = get(spot);
-        if (old == null || !same(old.items(), items)) {
+        if (old == null || !ItemUtil.sameStacks(old.items(), items)) {
             opened(spot, items);
         }
     }
@@ -63,31 +62,11 @@ public final class RememberedContainers
         return values().stream().filter(container -> container.spot().dimension().equals(dimension)).toList();
     }
 
-    private static boolean same(List<ItemStack> one, List<ItemStack> two) {
-        if (one.size() != two.size()) {
-            return false;
-        }
-        for (int i = 0; i < one.size(); i++) {
-            if (!ItemStack.matches(one.get(i), two.get(i))) {
-                return false;
-            }
-        }
-        return true;
-    }
-
     // One broken container is left out rather than the whole file.
     @Override
     protected void parse(JsonElement root, Map<Spot, Container> into, RegistryOps<JsonElement> ops) {
-        for (JsonElement element : root.getAsJsonArray()) {
-            try {
-                Container container = fromJson(element.getAsJsonObject(), ops);
-                if (container != null) {
-                    into.put(container.spot(), container);
-                }
-            } catch (RuntimeException e) {
-                OfflineClient.LOG.warn("Left out a broken remembered container", e);
-            }
-        }
+        DataFiles.entries(root, element -> fromJson(element.getAsJsonObject(), ops), WHAT)
+            .forEach(container -> into.put(container.spot(), container));
     }
 
     @Override
@@ -106,40 +85,19 @@ public final class RememberedContainers
         if (pos == null || size < 0 || size > MOST_SLOTS) {
             return null;
         }
-        List<ItemStack> items = new ArrayList<>(Collections.nCopies(size, ItemStack.EMPTY));
-        for (JsonElement entry : object.getAsJsonArray("items")) {
-            JsonObject slot = entry.getAsJsonObject();
-            int index = slot.get("slot").getAsInt();
-            if (index >= 0 && index < size) {
-                ItemStack.CODEC.parse(ops, slot.get("item")).result().ifPresent(stack -> items.set(index, stack));
-            }
-        }
+        List<ItemStack> items = SlotStacks.decode(object.getAsJsonArray("items"), size, ops);
         Spot spot = new Spot(object.get("dimension").getAsString(), pos);
-        return new Container(spot, List.copyOf(items), object.get("seen").getAsLong());
+        return new Container(spot, items, object.get("seen").getAsLong());
     }
 
     // Where the container stands and when it was seen and its stacks by slot.
     private static JsonObject toJson(Container container, RegistryOps<JsonElement> ops) {
-        JsonArray items = new JsonArray();
-        for (int i = 0; i < container.items().size(); i++) {
-            ItemStack stack = container.items().get(i);
-            if (stack.isEmpty()) {
-                continue;
-            }
-            int index = i;
-            ItemStack.CODEC.encodeStart(ops, stack).result().ifPresent(json -> {
-                JsonObject slot = new JsonObject();
-                slot.addProperty("slot", index);
-                slot.add("item", json);
-                items.add(slot);
-            });
-        }
         JsonObject object = new JsonObject();
         object.addProperty("dimension", container.spot().dimension());
         object.addProperty("pos", BlockUtil.text(container.spot().pos()));
         object.addProperty("seen", container.seen());
         object.addProperty("size", container.items().size());
-        object.add("items", items);
+        object.add("items", SlotStacks.encode(container.items(), ops));
         return object;
     }
 }

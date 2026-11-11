@@ -17,7 +17,8 @@ import net.minecraft.world.phys.Vec3;
 public final class Glide extends Module {
 
     private final NumberSetting fallSpeed = new NumberSetting("Fall speed",
-        "Blocks you drop per tick whilst gliding.", 0.125, 0.005, 0.3, 0.005);
+        "Blocks you drop each tick whilst gliding. A server that bans flying kicks a drop of 0.03 or less.",
+        0.045, 0.005, 0.3, 0.005);
     private final NumberSetting boost = new NumberSetting("Horizontal boost",
         "How much further your keys carry you through the air.", 1.2, 1, 3, 0.05, "x");
     private final NumberSetting minHeight = new NumberSetting("Minimum height",
@@ -61,9 +62,6 @@ public final class Glide extends Module {
     @Subscribe
     private void onTick(TickEvent event) {
         gliding = false;
-        if (!inGame()) {
-            return;
-        }
         if (pauseOnSneak.isOn() && mc.player.isShiftKeyDown()) {
             return;
         }
@@ -76,9 +74,7 @@ public final class Glide extends Module {
         }
 
         gliding = true;
-        // Vanilla takes gravity off this value again before it moves the player.
-        double target = mc.player.getGravity() - fallSpeed.getValue();
-        mc.player.setDeltaMovement(velocity.x, Math.max(velocity.y, target), velocity.z);
+        mc.player.setDeltaMovement(velocity.x, Math.max(velocity.y, -fallSpeed.getValue()), velocity.z);
     }
 
     @Subscribe

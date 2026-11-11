@@ -30,9 +30,6 @@ public final class AutoDrop extends Module {
 
     public enum Order { ALL, TURNS }
 
-    // The hotbar slots numbered the way the keys are.
-    private static final List<String> HOTBAR = List.of("1", "2", "3", "4", "5", "6", "7", "8", "9");
-
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
         "What gets thrown away.", Mode.JUNK)
         .describe(Mode.JUNK, "Throws the listed junk as it arrives.")
@@ -42,13 +39,13 @@ public final class AutoDrop extends Module {
         "The items to throw away. Click to pick them.", BuiltInRegistries.ITEM, ItemUtil.JUNK)
         .under(mode, Mode.JUNK);
     private final BoolSetting hotbar = new BoolSetting("Hotbar too",
-        "Also throw junk that lands in your hotbar.", true)
+        "Also throws junk that lands in your hotbar.", true)
         .under(mode, Mode.JUNK);
     private final BoolSetting worn = new BoolSetting("Worn too",
-        "Also throw junk you are wearing or holding in the offhand.", false)
+        "Also throws junk you are wearing or holding in the offhand.", false)
         .under(mode, Mode.JUNK);
     private final BoolSetting fullStacksOnly = new BoolSetting("Full stacks only",
-        "Only throw a stack once it has filled up.", false)
+        "Only throws a stack once it has filled up.", false)
         .under(mode, Mode.JUNK);
     private final BoolSetting mainHand = new BoolSetting("Main hand",
         "Throws the stack in your main hand.", true)
@@ -57,7 +54,7 @@ public final class AutoDrop extends Module {
         "Throws the stack in your offhand whilst no container is open.", false)
         .under(mode, Mode.HANDS);
     private final ChoiceListSetting slots = new ChoiceListSetting("Slots",
-        "The hotbar slots to throw numbered from the left. Click to pick them.", () -> HOTBAR)
+        "The hotbar slots to throw numbered from the left. Click to pick them.", () -> InventoryUtil.HOTBAR_NAMES)
         .under(mode, Mode.SLOTS);
     private final EnumSetting<Order> order = new EnumSetting<>("Order",
         "How the picked slots take their turn.", Order.ALL)
@@ -65,7 +62,7 @@ public final class AutoDrop extends Module {
         .describe(Order.TURNS, "Throws the picked slots one after another.")
         .under(mode, Mode.SLOTS);
     private final NumberSetting perTurn = new NumberSetting("Slots each time",
-        "How many of the picked slots are thrown each time.", 1, 1, 9, 1).min(1)
+        "How many of the picked slots are thrown each time.", 1, 1, 9, 1)
         .under(order, Order.TURNS);
     private final BoolSetting keepTools = new BoolSetting("Keep tools",
         "Never throws a bucket or anything that wears out like tools and armour.", true)
@@ -86,7 +83,7 @@ public final class AutoDrop extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || mc.player.isSpectator()) {
+        if (mc.player.isSpectator() || Modules.packing()) {
             return;
         }
         if (timer > 0) {
@@ -171,8 +168,8 @@ public final class AutoDrop extends Module {
     // Hotbar indexes counted from nought on the left.
     private List<Integer> pickedSlots() {
         List<Integer> picked = new ArrayList<>();
-        for (int i = 0; i < HOTBAR.size(); i++) {
-            if (slots.contains(HOTBAR.get(i))) {
+        for (int i = 0; i < InventoryUtil.HOTBAR_SIZE; i++) {
+            if (slots.contains(InventoryUtil.HOTBAR_NAMES.get(i))) {
                 picked.add(i);
             }
         }

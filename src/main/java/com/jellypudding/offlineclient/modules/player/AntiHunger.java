@@ -5,6 +5,7 @@ import com.jellypudding.offlineclient.event.events.PacketSendEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
+import com.jellypudding.offlineclient.util.GlideSwitch;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.PacketUtil;
 import net.minecraft.client.multiplayer.MultiPlayerGameMode;
@@ -12,15 +13,16 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket;
 
-// The server charges no walking exhaustion to airborne players and charges
-// a sprint jump four times what a walking jump costs.
+// The server charges a jump only when it saw you leave the ground and charges a sprint only on
+// the ground. Walking costs nothing unless the server is set to charge it. A sprint jump costs
+// four times what a walking jump costs.
 public final class AntiHunger extends Module {
 
     private final BoolSetting sprint = new BoolSetting("Sprint",
         "Never tells the server you are sprinting. A sprint jump then costs the same as a walking jump.",
         true);
     private final BoolSetting onGround = new BoolSetting("On ground",
-        "Stops walking from costing hunger by telling the server you are in the air.", true);
+        "Stops jumps and running from costing hunger by telling the server you are in the air.", true);
 
     public AntiHunger() {
         super("AntiHunger", "Slows down how fast you get hungry.", Category.PLAYER);
@@ -60,8 +62,9 @@ public final class AntiHunger extends Module {
         if (player.fallDistance > 0.5) {
             return;
         }
-        // A glide only ends when the server hears about the landing.
-        if (player.isFallFlying()) {
+        // A glide only ends when the server hears about the landing. It can still hold one
+        // open a moment after the client has shut its own.
+        if (player.isFallFlying() || GlideSwitch.get().serverGlides()) {
             return;
         }
         // The server slows mining a lot for airborne players.

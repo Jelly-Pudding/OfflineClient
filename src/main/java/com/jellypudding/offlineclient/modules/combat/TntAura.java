@@ -9,16 +9,19 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RankSetting;
+import com.jellypudding.offlineclient.util.BlastLimits;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.BoundedMap;
 import com.jellypudding.offlineclient.util.ChatWarning;
 import com.jellypudding.offlineclient.util.Cooldowns;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.ExplosionUtil;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.Ignition;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.TargetPriority;
+import com.jellypudding.offlineclient.util.TntChain;
 import com.jellypudding.offlineclient.util.UseBudget;
 import com.jellypudding.offlineclient.util.UseClick;
 import net.minecraft.core.BlockPos;
@@ -32,14 +35,16 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
-import net.minecraft.world.phys.shapes.VoxelShape;
 
+import java.util.EnumMap;
+import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-// Sets lit TNT on enemies and lights the TNT you place. Lit TNT drops to the ground before
-// it goes off and TNT set over a head lands at the feet below.
+// Sets lit TNT on enemies and lights the TNT you place or pass. Lit TNT drops to the ground
+// before it goes off and TNT set over a head lands at the feet below.
 public final class TntAura extends Module {
 
     // Fire comes from flint and steel or a fire charge in the order Light with sets.
@@ -59,11 +64,21 @@ public final class TntAura extends Module {
         }
     }
 
-    // Lit TNT is 0.98 tall and goes off a sixteenth of the way up.
-    private static final double BLAST_HEIGHT = 0.98 * 0.0625;
+    // What setting off TNT at a spot comes to. Each reason to leave TNT unlit is told once until
+    // no TNT is left unlit for it.
+    private enum Verdict {
+        LIGHT(null),
+        HURTS_YOU("TNT is left unlit. It and the TNT it sets off would hurt you more than you allow."),
+        REACHES_FRIEND("TNT is left unlit. It or the TNT it sets off would reach a friend."),
+        UNCHECKED("TNT is left unlit. It could set off TNT that cannot be judged from here such as a TNT minecart"
+            + " or a TNT cube.");
 
-    // How far the guess follows lit TNT down before it stops looking for ground.
-    private static final int MAX_FALL = 32;
+        private final String reason;
+
+        Verdict(String reason) {
+            this.reason = reason;
+        }
+    }
 
     // Ticks a TNT just lit is left alone. It stays on screen until the server says it is gone.
     private static final int LIT_TICKS = 20;
@@ -74,39 +89,48 @@ public final class TntAura extends Module {
     // Placed TNT still to be lit. The oldest drop off past this.
     private static final int MAX_WAITING = 64;
 
+    private static final String NO_LIGHTER = "Nothing in your offhand or hotbar can light TNT.";
+
     private final BoolSetting enemies = new BoolSetting("Enemies",
-        "Drops lit TNT on enemies in range. Above their head first and beside their feet otherwise.", true);
+        "Drops lit TNT on enemies in range. Above their head first and beside their feet otherwise."
+            + " Never where the blast would reach a friend.", true);
     private final NumberSetting targetRange = new NumberSetting("Target range",
         "How far away enemies are considered.", 5, 1, 8, 0.5, " blocks")
         .under(enemies);
     private final EnumSetting<TargetPriority> priority = TargetPriority.setting("Blows up",
         TargetPriority.NEAREST).under(enemies);
     private final NumberSetting delay = new NumberSetting("Delay",
-        "Ticks to wait between one TNT and the next.", 20, 0, 80, 1, " ticks").min(0)
+        "Ticks to wait between one TNT and the next.", 20, 0, 80, 1, " ticks")
         .under(enemies);
-    private final NumberSetting maxSelfDamage = new NumberSetting("Max self damage",
-        "Never drop TNT whose blast would hurt you by more than this where you stand.", 6, 0, 20, 0.5)
-        .min(0).under(enemies);
-    private final BoolSetting antiSuicide = new BoolSetting("Anti suicide",
-        "Never drop TNT whose blast could kill you where you stand.", true)
-        .under(enemies);
+    private final BoolSetting lightAny = new BoolSetting("Light any",
+        "Lights every unlit TNT block in reach. TNT stays unlit when it or the TNT it sets off would reach a"
+            + " friend or hurt you past the limits below.", false);
+    private final BlastLimits limits = BlastLimits.selfOnly(6, 20)
+        .visibleWhen(() -> enemies.isOn() || lightAny.isOn());
     private final BoolSetting lightPlaced = new BoolSetting("Light placed",
         "Lights each TNT you place from either hand or through another module such as TrailMaker."
             + " The fuse is yours to walk away from.", false);
     private final NumberSetting lightAfter = new NumberSetting("Light after",
         "Ticks a placed TNT waits before it is lit. One out of reach by then is lit once you come back.",
-        0, 0, 40, 1, " ticks").min(0).under(lightPlaced);
+        0, 0, 40, 1, " ticks").under(lightPlaced);
     private final RankSetting<Lighter> lighters = new RankSetting<>("Set off with",
         "What sets the TNT off. The first one on the list that is at hand and fits is used."
             + " Fire takes its lighter from Light with.",
         Lighter.class, Lighter::icon);
     private final Ignition ignition = new Ignition();
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Send a look packet towards each block.", true);
+        "Sends a look packet towards each block.", true);
 
     private final SlotSwap slots = new SlotSwap();
     private final Cooldowns<BlockPos> justLit = new Cooldowns<>();
     private final ChatWarning warning = new ChatWarning();
+    private final Map<Verdict, ChatWarning> told = new EnumMap<>(Verdict.class);
+
+    // The TNT round you as this tick found it and what each spot and each group judged this tick
+    // came to. The TNT is read the first time something asks.
+    private TntChain chain;
+    private final Map<BlockPos, Verdict> verdicts = new HashMap<>();
+    private final Map<List<TntChain.Blast>, Verdict> weighed = new IdentityHashMap<>();
 
     // Placed TNT and the tick it is due to be lit.
     private final Map<BlockPos, Integer> waiting = new BoundedMap<>(MAX_WAITING);
@@ -116,29 +140,37 @@ public final class TntAura extends Module {
 
     private int timer;
     private String targetName;
+    // TNT in reach that Light any left unlit on the last tick.
+    private int spared;
 
     public TntAura() {
-        super("TntAura", "Places lit TNT on enemies and lights the TNT you place.", Category.COMBAT);
-        addSettings(enemies, targetRange, priority, delay, maxSelfDamage, antiSuicide, lightPlaced, lightAfter,
-            lighters);
+        super("TntAura", "Places lit TNT on enemies and lights TNT around you.", Category.COMBAT);
+        addSettings(enemies, targetRange, priority, delay, lightPlaced, lightAfter, lightAny);
+        addSettings(limits.settings());
+        addSettings(lighters);
         addSettings(ignition.settings());
         addSettings(rotate);
-        searchTags("tnt", "auto tnt", "explode", "bomb", "ignite");
+        searchTags("tnt", "auto tnt", "explode", "bomb", "ignite", "light tnt");
     }
 
     @Override
     public String getSuffix() {
-        return targetName != null ? targetName : count(waiting.size(), "waiting");
+        if (targetName != null) {
+            return targetName;
+        }
+        return spared > 0 ? spared + " left unlit" : count(waiting.size(), "waiting");
     }
 
     @Override
     protected void onEnable() {
         timer = 0;
         targetName = null;
+        spared = 0;
         slots.forget();
         justLit.clear();
         waiting.clear();
         warning.clear();
+        told.clear();
     }
 
     @Override
@@ -151,9 +183,9 @@ public final class TntAura extends Module {
     @Subscribe
     private void onTick(TickEvent event) {
         targetName = null;
-        if (!inGame()) {
-            return;
-        }
+        chain = null;
+        verdicts.clear();
+        weighed.clear();
         // The clock starts again on a respawn and every waiting TNT is out of date.
         if (justLit.tick()) {
             waiting.clear();
@@ -163,9 +195,15 @@ public final class TntAura extends Module {
         }
         if (!lightPlaced.isOn()) {
             waiting.clear();
-        } else {
+        }
+        // A meal or ShulkerPacker or an item in use has the hands.
+        if (Hands.slotsTaken() || mc.player.isUsingItem()) {
+            return;
+        }
+        if (lightPlaced.isOn()) {
             lightWaiting();
         }
+        spared = lightAny.isOn() ? lightAll() : 0;
         if (enemies.isOn()) {
             attack();
         }
@@ -217,7 +255,7 @@ public final class TntAura extends Module {
                 continue;
             }
             if (firstLighter(spot) == null) {
-                warning.say("Nothing in your offhand or hotbar can light TNT.");
+                warning.say(NO_LIGHTER);
                 continue;
             }
             if (!blowUp(spot)) {
@@ -227,6 +265,42 @@ public final class TntAura extends Module {
         }
     }
 
+    // Every unlit TNT block in reach goes up nearest first whilst a lighter and the use limit last.
+    // Placed TNT still waiting is left to its own time. The count left unlit for safety comes back.
+    private int lightAll() {
+        Map<Verdict, Integer> unlit = new EnumMap<>(Verdict.class);
+        boolean lighting = true;
+        for (BlockPos spot : BlockUtil.positionsWithin(BlockUtil.serverBlockReach())) {
+            if (!BlockUtil.state(spot).is(Blocks.TNT) || justLit.contains(spot) || waiting.containsKey(spot)) {
+                continue;
+            }
+            Verdict verdict = verdict(spot);
+            if (verdict != Verdict.LIGHT) {
+                unlit.merge(verdict, 1, Integer::sum);
+            } else if (lighting && firstLighter(spot) == null) {
+                warning.say(NO_LIGHTER);
+                lighting = false;
+            } else if (lighting) {
+                lighting = blowUp(spot);
+            }
+        }
+        int left = 0;
+        for (Verdict verdict : Verdict.values()) {
+            if (verdict.reason == null) {
+                continue;
+            }
+            int count = unlit.getOrDefault(verdict, 0);
+            ChatWarning reason = told.computeIfAbsent(verdict, key -> new ChatWarning());
+            if (count > 0) {
+                reason.say(verdict.reason);
+            } else {
+                reason.clear();
+            }
+            left += count;
+        }
+        return left;
+    }
+
     private void attack() {
         if (timer > 0) {
             timer--;
@@ -234,7 +308,7 @@ public final class TntAura extends Module {
         }
         Player enemy = (Player) EntityUtil.best(targetRange.getValue(), priority.getValue(),
             entity -> EntityUtil.isEnemy(entity) && spotFor(entity) != null);
-        targetName = EntityUtil.nameOf(enemy);
+        targetName = EntityUtil.displayNameOf(enemy);
         if (enemy == null) {
             return;
         }
@@ -250,7 +324,7 @@ public final class TntAura extends Module {
         List<BlockPos> spots = List.of(feet.above(2),
             feet.north(), feet.south(), feet.west(), feet.east());
         for (BlockPos spot : spots) {
-            if (!justLit.contains(spot) && fits(spot) && safe(spot)) {
+            if (!justLit.contains(spot) && fits(spot) && verdict(spot) == Verdict.LIGHT) {
                 return spot;
             }
         }
@@ -262,24 +336,33 @@ public final class TntAura extends Module {
         return BlockUtil.inReach(spot) && (BlockUtil.state(spot).is(Blocks.TNT) || BlockUtil.blockFits(spot));
     }
 
-    private boolean safe(BlockPos spot) {
-        return ExplosionUtil.selfSafe(blastPoint(spot), ExplosionUtil.TNT_POWER, maxSelfDamage.getFloat(),
-            antiSuicide.isOn());
+    private Verdict verdict(BlockPos spot) {
+        return verdicts.computeIfAbsent(spot, this::judge);
     }
 
-    // Lit TNT never floats. It drops onto the first block with a top and blows there.
-    private Vec3 blastPoint(BlockPos spot) {
-        BlockPos cell = spot;
-        for (int fallen = 0; fallen < MAX_FALL; fallen++) {
-            BlockPos below = cell.below();
-            VoxelShape floor = BlockUtil.state(below).getCollisionShape(mc.level, below);
-            if (!floor.isEmpty()) {
-                return new Vec3(spot.getX() + 0.5, below.getY() + floor.max(Direction.Axis.Y) + BLAST_HEIGHT,
-                    spot.getZ() + 0.5);
-            }
-            cell = below;
+    private Verdict judge(BlockPos spot) {
+        if (chain == null) {
+            chain = TntChain.around(mc.player.blockPosition());
         }
-        return Vec3.atBottomCenterOf(cell);
+        List<TntChain.Blast> blasts = chain.blastsFrom(spot);
+        return blasts == null ? Verdict.UNCHECKED : weighed.computeIfAbsent(blasts, this::weigh);
+    }
+
+    // Every blast that may follow adds to what you would take. One that reaches a friend at all is
+    // refused. The TNT blocks are gone before the later blasts.
+    private Verdict weigh(List<TntChain.Blast> blasts) {
+        BlockPos[] gone = blasts.stream().map(TntChain.Blast::block).toArray(BlockPos[]::new);
+        float hurt = 0;
+        for (TntChain.Blast blast : blasts) {
+            if (!ExplosionUtil.friendsSafe(blast.at(), ExplosionUtil.TNT_POWER, 0)) {
+                return Verdict.REACHES_FRIEND;
+            }
+            hurt += ExplosionUtil.blastDamage(mc.player, blast.at(), ExplosionUtil.TNT_POWER, Vec3.ZERO, gone);
+            if (!limits.selfTakes(hurt)) {
+                return Verdict.HURTS_YOU;
+            }
+        }
+        return Verdict.LIGHT;
     }
 
     // Places the TNT unless it is already there and lights it straight after. Each click is a

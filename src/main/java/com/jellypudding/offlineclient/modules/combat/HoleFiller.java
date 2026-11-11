@@ -15,10 +15,11 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.Holes;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.SwingMode;
+import com.jellypudding.offlineclient.util.UseBudget;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.player.Player;
@@ -44,7 +45,7 @@ public final class HoleFiller extends Module {
         List.of(Blocks.OBSIDIAN, Blocks.CRYING_OBSIDIAN, Blocks.NETHERITE_BLOCK,
             Blocks.RESPAWN_ANCHOR, Blocks.COBWEB));
     private final BoolSetting nearEnemies = new BoolSetting("Near enemies only",
-        "Only fill holes an enemy could reach. Off fills every hole in range.", true);
+        "Only fills holes an enemy could reach. Off fills every hole in range.", true);
     private final NumberSetting targetRange = new NumberSetting("Target range",
         "How close an enemy has to be to a hole for it to count.", 5, 1, 12, 0.5, " blocks")
         .under(nearEnemies);
@@ -67,14 +68,14 @@ public final class HoleFiller extends Module {
     private final NumberSetting delay = new NumberSetting("Delay",
         "Ticks to wait between placing rounds.", 1, 0, 10, 1, " ticks");
     private final BoolSetting genuineOnly = new BoolSetting("Genuine holes",
-        "Only fill holes that are blast proof on every side.", true);
+        "Only fills holes that are blast proof on every side.", true);
     private final BoolSetting doubles = new BoolSetting("Two wide holes",
-        "Also count a hole whose one open side is the other half of a two wide hole.", true)
+        "Also counts a hole whose one open side is the other half of a two wide hole.", true)
         .under(genuineOnly);
     private final BoolSetting ownHole = new BoolSetting("Keep own hole",
-        "Never fill the hole you stand in or next to.", true);
+        "Never fills the hole you stand in or next to.", true);
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Send a look packet towards each block.", true);
+        "Sends a look packet towards each block.", true);
     private final EnumSetting<SwingMode> swing = SwingMode.setting(SwingMode.BOTH);
     private final BoolSetting render = new BoolSetting("Render",
         "Draws the holes waiting to be filled.", true);
@@ -122,7 +123,7 @@ public final class HoleFiller extends Module {
     @Subscribe
     private void onTick(TickEvent event) {
         holes.clear();
-        if (!inGame() || mc.player.isSpectator()) {
+        if (mc.player.isSpectator()) {
             enemies.clear();
             return;
         }
@@ -141,6 +142,10 @@ public final class HoleFiller extends Module {
             timer--;
             return;
         }
+        int round = Math.min(perRound.getInt(), UseBudget.remaining());
+        if (round == 0) {
+            return;
+        }
 
         int slot = BlockUtil.findRankedBlockSlot(blocks.getValue(), block -> true);
         if (slot == -1) {
@@ -151,7 +156,7 @@ public final class HoleFiller extends Module {
 
         int placed = 0;
         for (BlockPos pos : holes) {
-            if (placed >= perRound.getInt()) {
+            if (placed >= round) {
                 break;
             }
             if (BlockUtil.placeAny(pos, rotate.isOn(), false)) {
@@ -185,15 +190,9 @@ public final class HoleFiller extends Module {
         }
     }
 
-    // True when the player already stands in a hole that is blast proof on every side.
+    // True when the player already stands in a one block hole that is blast proof on every side.
     private boolean walledIn(Player player) {
-        BlockPos feet = player.blockPosition();
-        for (Direction side : Direction.Plane.HORIZONTAL) {
-            if (!blastProof(feet.relative(side))) {
-                return false;
-            }
-        }
-        return blastProof(feet.below());
+        return !Holes.hole(player.blockPosition(), this::blastProof, this::open, false).isEmpty();
     }
 
     private void collectHoles(boolean everything) {
@@ -230,41 +229,10 @@ public final class HoleFiller extends Module {
 
     // True when the spot is really a hole.
     private boolean floored(BlockPos pos) {
-        if (!BlockUtil.isSolid(pos.below())) {
-            return false;
-        }
         if (!genuineOnly.isOn()) {
-            return true;
+            return BlockUtil.isSolid(pos.below());
         }
-        if (!blastProof(pos.below())) {
-            return false;
-        }
-        BlockPos gap = null;
-        for (Direction side : Direction.Plane.HORIZONTAL) {
-            BlockPos wall = pos.relative(side);
-            if (blastProof(wall)) {
-                continue;
-            }
-            if (gap != null || !doubles.isOn()) {
-                return false;
-            }
-            gap = wall;
-        }
-        return gap == null || isOtherHalf(gap, pos);
-    }
-
-    // The far half of a two wide hole. Walled on its own three sides.
-    private boolean isOtherHalf(BlockPos half, BlockPos pos) {
-        if (!open(half) || !blastProof(half.below())) {
-            return false;
-        }
-        for (Direction side : Direction.Plane.HORIZONTAL) {
-            BlockPos wall = half.relative(side);
-            if (!wall.equals(pos) && !blastProof(wall)) {
-                return false;
-            }
-        }
-        return true;
+        return !Holes.hole(pos, this::blastProof, this::open, doubles.isOn()).isEmpty();
     }
 
     private boolean blastProof(BlockPos pos) {

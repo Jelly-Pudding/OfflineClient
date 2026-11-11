@@ -163,20 +163,12 @@ public final class SculkRange extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame()) {
-            sneakKey.letGo();
-            return;
-        }
         scanner.update(range.getInt(), (view, out) -> view.forEachMatching(SculkRange::isSculk,
             (x, y, z, state) -> out.add(new Listener(new BlockPos(x, y, z), kindOf(state)))));
         List<Listener> all = scanner.results();
         judge(all);
         // Sneaking on a mount only gets you off it.
-        if (sneak.isOn() && heard && !mc.player.isPassenger()) {
-            sneakKey.hold();
-        } else {
-            sneakKey.letGo();
-        }
+        sneakKey.set(sneak.isOn() && heard && !mc.player.isPassenger());
         int level = mc.player.blockPosition().getY();
         if (shape.is(Shape.RINGS) && (all != ringSource || level != ringLevel)) {
             ringSource = all;
@@ -402,6 +394,6 @@ public final class SculkRange extends Module {
             || (danger != Danger.TRODDEN && !mc.player.isPassenger() && Modules.sneaking())) {
             return;
         }
-        RenderUtil.underCrosshair(event.getContext(), mc.font, danger.text, danger.color);
+        RenderUtil.underCrosshair(event.getContext(), danger.text, danger.color);
     }
 }

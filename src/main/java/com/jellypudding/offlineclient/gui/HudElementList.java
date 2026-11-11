@@ -3,7 +3,9 @@ package com.jellypudding.offlineclient.gui;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.hud.GamePartElement;
 import com.jellypudding.offlineclient.hud.HudElement;
+import com.jellypudding.offlineclient.render.ClientFonts;
 import com.jellypudding.offlineclient.util.RenderUtil;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -13,7 +15,8 @@ import java.util.List;
 import java.util.Set;
 
 // A panel in the HUD editor. Every piece it lists has a switch beside it and its
-// own settings underneath.
+// own settings underneath. The game's own parts come last under a heading and the foot
+// says how the editor works.
 public final class HudElementList extends PanelFrame {
 
     private static final int PILL_WIDTH = 16;
@@ -22,7 +25,14 @@ public final class HudElementList extends PanelFrame {
     private static final int PAD = 5;
     private static final int TOP = 6;
 
+    private static final String GAME_HEADING = "The game's HUD";
+    private static final int HEADING_HEIGHT = GuiTheme.SETTING_HEIGHT;
+
     private final List<HudElement> elements;
+    // The first of the game's own parts. The heading goes above its row. Null when the list
+    // has none.
+    private final HudElement firstGamePart;
+    private final HudFoot foot;
     // Where the panel keeps its place and its open rows between visits.
     private final String stateKey;
     private final Set<String> expanded = new HashSet<>();
@@ -31,19 +41,22 @@ public final class HudElementList extends PanelFrame {
 
     private HudElement hovered;
 
-    public HudElementList(String title, int x, String stateKey, List<HudElement> elements,
-                          SettingWidget.Host host) {
+    HudElementList(String title, int x, String stateKey, List<HudElement> elements, SettingWidget.Host host,
+                   HudFoot foot) {
         super(title, x, TOP, GuiTheme.PANEL_WIDTH);
         this.elements = elements;
         this.stateKey = stateKey;
         this.host = host;
-        restore();
+        this.foot = foot;
+        firstGamePart = elements.stream().filter(GamePartElement.class::isInstance).findFirst().orElse(null);
+        SavedLayout.read(title, this::restore);
     }
 
-    private void restore() {
+    // True when the layout held the panel.
+    private boolean restore() {
         JsonObject gui = OfflineClient.INSTANCE.getConfigManager().getGuiState();
         if (!gui.has(stateKey) || !gui.get(stateKey).isJsonObject()) {
-            return;
+            return false;
         }
         JsonObject state = gui.getAsJsonObject(stateKey);
         readFrame(state);
@@ -52,6 +65,7 @@ public final class HudElementList extends PanelFrame {
                 expanded.add(name.getAsString());
             }
         }
+        return true;
     }
 
     public void save() {
@@ -75,19 +89,33 @@ public final class HudElementList extends PanelFrame {
         return GuiTheme.ROW_HEIGHT + SettingWidget.blockHeight(SettingBlock.of(element));
     }
 
+    private int headingAbove(HudElement element) {
+        return element == firstGamePart ? HEADING_HEIGHT : 0;
+    }
+
     @Override
     protected int contentHeight() {
         int height = 0;
         for (HudElement element : elements) {
-            height += rowHeight(element);
+            height += headingAbove(element) + rowHeight(element);
         }
         return height;
     }
 
     @Override
+    protected int footerHeight() {
+        return foot.height(ClientFonts.gui(), getWidth());
+    }
+
+    @Override
+    protected void renderFooter(GuiGraphicsExtractor context, int top) {
+        foot.render(context, ClientFonts.gui(), getX(), top, getWidth());
+    }
+
+    @Override
     protected void renderContent(GuiGraphicsExtractor context, int viewTop, int view,
                                  int rowWidth, int mouseX, int mouseY) {
-        Font font = OfflineClient.MC.font;
+        Font font = ClientFonts.gui();
         hovered = null;
         boolean inView = mouseX >= getX() && mouseX < getX() + rowWidth
             && mouseY >= viewTop && mouseY < viewTop + view;
@@ -95,6 +123,11 @@ public final class HudElementList extends PanelFrame {
             SettingWidget.blockContentWidth(rowWidth), mouseX, mouseY);
         int y = viewTop - getScrollOffset();
         for (HudElement element : elements) {
+            if (element == firstGamePart) {
+                context.text(font, SettingWidget.trimEnd(font, GAME_HEADING, rowWidth - PAD * 2), getX() + PAD,
+                    GuiTheme.textY(y, HEADING_HEIGHT), GuiTheme.textDim(), false);
+            }
+            y += headingAbove(element);
             int h = rowHeight(element);
             if (y + h > viewTop && y < viewTop + view) {
                 renderRow(context, font, element, y, rowWidth, mouseX, mouseY, inView);
@@ -137,7 +170,7 @@ public final class HudElementList extends PanelFrame {
             over ? GuiTheme.text() : GuiTheme.textFaint());
 
         if (expanded.contains(element.getName())) {
-            SettingWidget.renderBlock(context, font, block, getX(), y + GuiTheme.ROW_HEIGHT, rowWidth,
+            SettingWidget.renderBlock(context, block, getX(), y + GuiTheme.ROW_HEIGHT, rowWidth,
                 mouseX, mouseY, inView, host);
         }
     }
@@ -147,6 +180,7 @@ public final class HudElementList extends PanelFrame {
                                    int view, int rowWidth) {
         int y = viewTop - getScrollOffset();
         for (HudElement element : elements) {
+            y += headingAbove(element);
             int h = rowHeight(element);
             if (SettingWidget.isOver(mx, my, getX(), y, rowWidth, GuiTheme.ROW_HEIGHT)) {
                 clickRow(element, mx, button, rowWidth);

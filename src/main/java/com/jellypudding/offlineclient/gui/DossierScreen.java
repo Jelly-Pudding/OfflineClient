@@ -6,7 +6,8 @@ import com.jellypudding.offlineclient.config.PlayerRecord;
 import com.jellypudding.offlineclient.config.PlayerRecord.Fact;
 import com.jellypudding.offlineclient.config.PlayerRecord.Place;
 import com.jellypudding.offlineclient.config.WaypointStore;
-import com.jellypudding.offlineclient.setting.ActionSetting;
+import com.jellypudding.offlineclient.render.ClientFonts;
+import com.jellypudding.offlineclient.util.Armed;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.Modules;
@@ -26,7 +27,6 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
 
 // Every player Dossier recorded on this server in one window. The rows narrow to who is online
 // or away or to a search. A click on a player opens their record with their gear and their log.
@@ -87,7 +87,6 @@ public final class DossierScreen extends ListWindow {
     private static final int FORGET_WIDTH = 56;
     // Ages and distances move as you play. The rows are worked out again this often.
     private static final long REFRESH_MS = 500;
-    private static final long CONFIRM_MS = TimeUnit.SECONDS.toMillis(ActionSetting.CONFIRM_SECONDS);
     private static final String SEPARATOR = " · ";
     private static final String LIST_HINT = "Click a player to open their record. Go walks to where they were "
         + "last seen. Waypoint marks it. Copy takes the record. The cross forgets them.";
@@ -112,10 +111,9 @@ public final class DossierScreen extends ListWindow {
     private String openedName = "";
     // The search of the list kept whilst a record is open.
     private String listSearch = "";
-    // The player whose forget was pressed once and when that press runs out.
-    private UUID armed;
+    // The player whose forget was pressed once and their name.
+    private final Armed<UUID> armed = new Armed<>();
     private String armedName = "";
-    private long armedUntil;
     private boolean stale = true;
     private long refreshedAt;
 
@@ -140,10 +138,6 @@ public final class DossierScreen extends ListWindow {
 
     private int forgetX() {
         return cornerX() - 4 - FORGET_WIDTH;
-    }
-
-    private boolean isArmed(UUID id) {
-        return id.equals(armed) && System.currentTimeMillis() < armedUntil;
     }
 
     // The rows are worked out again when something here changes and twice a second for the
@@ -201,7 +195,7 @@ public final class DossierScreen extends ListWindow {
             : "seen at " + BlockUtil.text(place.pos()) + SEPARATOR + PlayerRecord.where(place, now);
         List<Action> buttons = new ArrayList<>(here(place) ? List.of(Action.GO, Action.WAYPOINT) : List.of());
         buttons.add(Action.COPY);
-        buttons.add(isArmed(each.id()) ? Action.CONFIRM : Action.FORGET);
+        buttons.add(armed.isArmed(each.id()) ? Action.CONFIRM : Action.FORGET);
         return new RowList.Row<>(each, each.name() + SEPARATOR + status,
             listed.live() == null ? GuiTheme.text() : GuiTheme.GREEN, detail, buttons,
             "Click to open the record of " + each.name() + ".");
@@ -266,9 +260,9 @@ public final class DossierScreen extends ListWindow {
     @Override
     protected void renderView(GuiGraphicsExtractor context, int mouseX, int mouseY) {
         refresh();
-        Font font = OfflineClient.MC.font;
+        Font font = ClientFonts.gui();
         footer.begin();
-        if (armed != null && isArmed(armed)) {
+        if (armed.isArmed()) {
             footer.show("Click confirm to forget " + armedName + ".", GuiTheme.RED_TEXT);
         }
         footer.showStatus();
@@ -346,7 +340,7 @@ public final class DossierScreen extends ListWindow {
         if (overBack) {
             footer.show("Returns to every player on record.", GuiTheme.text());
         }
-        boolean warns = isArmed(opened);
+        boolean warns = armed.isArmed(opened);
         boolean overForget = SettingWidget.isOver(mouseX, mouseY, forgetX(), y, FORGET_WIDTH, SearchField.HEIGHT);
         if (warns) {
             RowList.warning(context, font, forgetX(), y, FORGET_WIDTH, SearchField.HEIGHT, "confirm");
@@ -428,14 +422,11 @@ public final class DossierScreen extends ListWindow {
 
     // The first press arms the forget and a second one within a few seconds forgets.
     private void forgetOrArm(UUID id, String name) {
-        if (!isArmed(id)) {
-            armed = id;
+        if (!armed.press(id)) {
             armedName = name;
-            armedUntil = System.currentTimeMillis() + CONFIRM_MS;
             changed();
             return;
         }
-        armed = null;
         PlayerLedger.INSTANCE.forgetPlayer(id);
         footer.say("Forgot " + name);
         if (id.equals(opened)) {
@@ -446,7 +437,7 @@ public final class DossierScreen extends ListWindow {
 
     // Named after the player with the first free number such as Steve2.
     private static String addWaypoint(String name, Place place) {
-        return WaypointStore.get().markFresh(name, place.pos(), place.dimension(), Modules.nextWaypointHue());
+        return WaypointStore.get().markFresh(name, place.pos(), place.dimension(), Modules.nextWaypointColour());
     }
 
     @Override
@@ -457,8 +448,8 @@ public final class DossierScreen extends ListWindow {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
-        double mx = latched.toView(mouseX);
-        double my = latched.toView(mouseY);
+        double mx = toView(mouseX);
+        double my = toView(mouseY);
         RowList<?> shown = opened == null ? players : record;
         return shown.scroll(mx, my, scrollY) || super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
     }

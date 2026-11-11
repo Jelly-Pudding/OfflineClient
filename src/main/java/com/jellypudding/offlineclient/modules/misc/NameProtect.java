@@ -1,6 +1,8 @@
 package com.jellypudding.offlineclient.modules.misc;
 
 import com.jellypudding.offlineclient.config.NameStore;
+import com.jellypudding.offlineclient.event.Subscribe;
+import com.jellypudding.offlineclient.event.events.ClientTickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
@@ -8,6 +10,7 @@ import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.TextSetting;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import net.minecraft.ChatFormatting;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
@@ -32,6 +35,11 @@ public final class NameProtect extends Module {
 
     // One name swapped for another. A null colour keeps whatever style the text had.
     private record Rename(String from, String to, Integer colour) {
+    }
+
+    // Every rename in force by real name and the same renames with the longest names first. A
+    // name that starts with another one is then never half swapped.
+    private record Renames(Map<String, Rename> byName, List<Rename> longestFirst) {
     }
 
     // The settings for one renamed player. The name row folds the rest away.
@@ -80,13 +88,16 @@ public final class NameProtect extends Module {
         "Draws everyone with the default skin. Nobody is recognised on a stream.", false);
     private final NumberSetting renameCount = new NumberSetting("Renames",
         "How many other players get a name of your choosing. A row opens for each.",
-        0, 0, SLOTS, 1).min(0).max(SLOTS);
+        0, 0, SLOTS, 1).max(SLOTS);
     private final Slot[] slots = new Slot[SLOTS];
     private final BoolSetting renameAll = new BoolSetting("Rename everyone",
         "Gives every other player on your screen a numbered name like Player1.", false);
 
     // The number handed to each player the blanket rename has met.
     private final Map<String, String> numbered = new HashMap<>();
+    // Built on first use. Every name drawn in a frame asks for it. A tick drops it to take in the
+    // settings and a tab list packet drops it to take in who is online.
+    private Renames renames;
 
     public NameProtect() {
         super("NameProtect", "Hides your own name and renames other players on your screen.",
@@ -103,6 +114,18 @@ public final class NameProtect extends Module {
     @Override
     protected void onDisable() {
         numbered.clear();
+        renames = null;
+    }
+
+    @Subscribe
+    private void onClientTick(ClientTickEvent event) {
+        renames = null;
+    }
+
+    // ClientPacketListenerMixin calls this once the game has applied a tab list packet. Rename
+    // everyone numbers whoever is on that list.
+    public void onTabListChange() {
+        renames = null;
     }
 
     // Read by AbstractClientPlayerMixin for every skin lookup.
@@ -115,12 +138,8 @@ public final class NameProtect extends Module {
         if (!isEnabled()) {
             return name;
         }
-        for (Rename rename : renames()) {
-            if (rename.from().equals(name)) {
-                return rename.to();
-            }
-        }
-        return name;
+        Rename rename = renames().byName().get(name);
+        return rename == null ? name : rename.to();
     }
 
     // The same player keeps the same number for as long as the module is on.
@@ -141,29 +160,37 @@ public final class NameProtect extends Module {
         return alias.isBlank() ? DEFAULT_ALIAS : alias.getValue().trim();
     }
 
-    // Every rename to apply. Longer names go first. A name that starts with
-    // another one is then never half swapped.
-    private List<Rename> renames() {
-        List<Rename> all = new ArrayList<>();
+    private Renames renames() {
+        if (renames == null) {
+            renames = build();
+        }
+        return renames;
+    }
+
+    // The first rename of a name wins. Yours comes first and then the rows in order.
+    private Renames build() {
+        Map<String, Rename> byName = new HashMap<>();
         if (renameSelf.isOn()) {
-            all.add(new Rename(NameStore.ownName(), ownAlias(), colored.isOn() ? color.getColor() : null));
+            String own = NameStore.ownName();
+            byName.put(own, new Rename(own, ownAlias(), colored.isOn() ? color.getColor() : null));
         }
         for (Slot slot : slots) {
             Rename rename = slot.rename();
             if (rename != null && !isOwn(rename.from())) {
-                all.add(rename);
+                byName.putIfAbsent(rename.from(), rename);
             }
         }
         if (renameAll.isOn() && mc.getConnection() != null) {
             for (PlayerInfo info : mc.getConnection().getOnlinePlayers()) {
                 String name = info.getProfile().name();
-                if (!isOwn(name) && all.stream().noneMatch(rename -> rename.from().equals(name))) {
-                    all.add(new Rename(name, numberFor(name), null));
+                if (!isOwn(name) && !byName.containsKey(name)) {
+                    byName.put(name, new Rename(name, numberFor(name), null));
                 }
             }
         }
-        all.sort(Comparator.comparingInt((Rename rename) -> rename.from().length()).reversed());
-        return all;
+        List<Rename> longestFirst = new ArrayList<>(byName.values());
+        longestFirst.sort(Comparator.comparingInt((Rename rename) -> rename.from().length()).reversed());
+        return new Renames(byName, longestFirst);
     }
 
     // Styles and click actions survive. A painted rename takes its colour and nothing else.
@@ -171,7 +198,7 @@ public final class NameProtect extends Module {
         if (!isEnabled()) {
             return message;
         }
-        List<Rename> renames = renames();
+        List<Rename> renames = renames().longestFirst();
         String text = message.getString();
         if (renames.stream().noneMatch(rename -> text.contains(rename.from()))) {
             return message;
@@ -184,10 +211,13 @@ public final class NameProtect extends Module {
         return result;
     }
 
-    // Copies the text across with every whole word rename swapped in.
+    // Copies the text across with every whole word rename swapped in. A colour code acts only
+    // inside the piece of text that holds it. Each piece cut off starts in the style the codes
+    // before it left in force.
     private static void append(MutableComponent result, String text, Style style,
                                List<Rename> renames) {
         int from = 0;
+        Style inForce = style;
         while (true) {
             Rename hit = null;
             int at = -1;
@@ -201,16 +231,45 @@ public final class NameProtect extends Module {
             if (hit == null) {
                 break;
             }
-            if (at > from) {
-                result.append(Component.literal(text.substring(from, at)).setStyle(style));
-            }
-            Style painted = hit.colour() == null ? style
-                : style.withColor(TextColor.fromRgb(hit.colour() & 0xFFFFFF));
-            result.append(Component.literal(hit.to()).setStyle(painted));
+            inForce = appendPiece(result, text, from, at, inForce, style);
+            Style named = hit.colour() == null ? inForce
+                : inForce.withColor(TextColor.fromRgb(hit.colour() & 0xFFFFFF));
+            result.append(Component.literal(hit.to()).setStyle(named));
             from = at + hit.from().length();
         }
-        if (from < text.length()) {
-            result.append(Component.literal(text.substring(from)).setStyle(style));
+        appendPiece(result, text, from, text.length(), inForce, style);
+    }
+
+    // Copies the text from one index to the other across and hands back the style its codes
+    // leave in force. A reset code goes back to the style of the whole part as it does uncut.
+    private static Style appendPiece(MutableComponent result, String text, int from, int to,
+                                     Style startStyle, Style own) {
+        Style base = startStyle;
+        Style current = startStyle;
+        int start = from;
+        for (int i = from; i + 1 < to; i++) {
+            if (text.charAt(i) != ChatFormatting.PREFIX_CODE) {
+                continue;
+            }
+            ChatFormatting code = ChatFormatting.getByCode(text.charAt(++i));
+            if (code == ChatFormatting.RESET) {
+                if (!base.equals(own)) {
+                    appendLiteral(result, text.substring(start, i - 1), base);
+                    start = i - 1;
+                    base = own;
+                }
+                current = own;
+            } else if (code != null) {
+                current = current.applyLegacyFormat(code);
+            }
+        }
+        appendLiteral(result, text.substring(start, to), base);
+        return current;
+    }
+
+    private static void appendLiteral(MutableComponent result, String text, Style style) {
+        if (!text.isEmpty()) {
+            result.append(Component.literal(text).setStyle(style));
         }
     }
 }

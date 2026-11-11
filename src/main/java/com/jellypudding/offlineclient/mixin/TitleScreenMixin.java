@@ -1,7 +1,12 @@
 package com.jellypudding.offlineclient.mixin;
 
 import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.gui.NamesTab;
+import com.jellypudding.offlineclient.gui.ProxiesTab;
 import com.jellypudding.offlineclient.gui.RecoveryScreen;
+import com.jellypudding.offlineclient.gui.TabScreen;
+import com.jellypudding.offlineclient.gui.TabView;
+import com.jellypudding.offlineclient.modules.misc.Conceal;
 import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.RenderUtil;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
@@ -38,6 +43,19 @@ public abstract class TitleScreenMixin extends Screen {
 
     @Shadow
     private long fadeInStart;
+
+    // The client's buttons sit in a row in the top right corner above the logo.
+    @Unique
+    private static final int RECOVERY_WIDTH = 58;
+
+    @Unique
+    private static final int LIST_WIDTH = 46;
+
+    @Unique
+    private static final int CORNER_HEIGHT = 16;
+
+    @Unique
+    private static final int CORNER_GAP = 4;
 
     @Unique
     private int offlineclient$creditColorFrom;
@@ -82,7 +100,22 @@ public abstract class TitleScreenMixin extends Screen {
                 Component.literal("Recovery"),
                 button -> minecraft.gui.setScreen(
                     new RecoveryScreen(this)))
-            .bounds(width - 62, 4, 58, 16)
+            .bounds(width - RECOVERY_WIDTH - CORNER_GAP, CORNER_GAP, RECOVERY_WIDTH, CORNER_HEIGHT)
+            .build());
+        if (!Conceal.hides(Conceal.Part.SCREENS)) {
+            offlineclient$listButton("Names", 1, new NamesTab());
+            offlineclient$listButton("Proxies", 2, new ProxiesTab());
+        }
+    }
+
+    // A button left of Recovery that opens one list of the GUI before there is a world to open
+    // the GUI in. Place one is the nearest.
+    @Unique
+    private void offlineclient$listButton(String label, int place, TabView.Source source) {
+        int right = width - RECOVERY_WIDTH - CORNER_GAP - (place - 1) * (LIST_WIDTH + CORNER_GAP);
+        addRenderableWidget(Button.builder(Component.literal(label),
+                button -> minecraft.gui.setScreen(new TabScreen(this, label, source)))
+            .bounds(right - LIST_WIDTH - CORNER_GAP, CORNER_GAP, LIST_WIDTH, CORNER_HEIGHT)
             .build());
     }
 

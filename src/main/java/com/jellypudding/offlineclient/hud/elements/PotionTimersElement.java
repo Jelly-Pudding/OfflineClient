@@ -9,18 +9,17 @@ import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.ColorUtil;
+import com.jellypudding.offlineclient.util.EffectText;
 import net.minecraft.SharedConstants;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.Hud;
-import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.util.ARGB;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectCategory;
 import net.minecraft.world.effect.MobEffectInstance;
-import net.minecraft.world.effect.MobEffectUtil;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.player.Player;
 
@@ -40,9 +39,6 @@ public final class PotionTimersElement extends HudElement {
     }
 
     private static final int SECONDS_PER_MINUTE = 60;
-
-    // Roman numerals for the levels a potion can reach.
-    private static final String[] LEVELS = {"", " II", " III", " IV", " V", " VI"};
 
     // A potion of Speed II and a long one of Fire Resistance stand in whilst the editor is
     // open and no effect is on you.
@@ -66,7 +62,7 @@ public final class PotionTimersElement extends HudElement {
     private static final double MIDDLE = 0.5;
 
     private static final Comparator<MobEffectInstance> NAMES =
-        Comparator.comparing(PotionTimersElement::plainName, String.CASE_INSENSITIVE_ORDER);
+        Comparator.comparing(EffectText::plainName, String.CASE_INSENSITIVE_ORDER);
     // A beacon or a conduit keeps topping its effect up. Those sit below the rest and an endless
     // effect sits below every timed one. Ties go by name and rows never swap on their own.
     private static final Comparator<MobEffectInstance> SOONEST = Comparator
@@ -161,28 +157,9 @@ public final class PotionTimersElement extends HudElement {
         shown.sort(comparator());
         List<Line> built = new ArrayList<>(shown.size());
         for (MobEffectInstance effect : shown) {
-            built.add(new Line(effect, nameOf(effect) + " " + timeOf(effect)));
+            built.add(new Line(effect, EffectText.name(effect) + " " + EffectText.timeLeft(effect)));
         }
         return built;
-    }
-
-    private static String plainName(MobEffectInstance effect) {
-        return effect.getEffect().value().getDisplayName().getString();
-    }
-
-    private static String nameOf(MobEffectInstance effect) {
-        String name = plainName(effect);
-        int level = effect.getAmplifier();
-        return level > 0 && level < LEVELS.length ? name + LEVELS[level]
-            : level > 0 ? name + " " + (level + 1) : name;
-    }
-
-    // Hours and minutes and seconds at the speed the world runs. An endless effect shows the
-    // infinity sign.
-    private static String timeOf(MobEffectInstance effect) {
-        ClientLevel level = OfflineClient.MC.level;
-        float tickRate = level == null ? SharedConstants.TICKS_PER_SECOND : level.tickRateManager().tickrate();
-        return MobEffectUtil.formatDuration(effect, 1, tickRate).getString();
     }
 
     // The colour goes on as the rows are drawn. A rainbow keeps moving between rebuilds and a

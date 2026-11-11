@@ -1,7 +1,7 @@
 package com.jellypudding.offlineclient.gui;
 
-import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.modules.misc.ClickGuiModule;
+import com.jellypudding.offlineclient.render.ClientFonts;
 import com.jellypudding.offlineclient.setting.ActionSetting;
 import com.jellypudding.offlineclient.setting.Defaults;
 import com.jellypudding.offlineclient.setting.Setting;
@@ -54,10 +54,8 @@ final class ResetMarks {
     private ResetMarks() {
     }
 
-    // Before the client builds its modules the marks show.
     static boolean shown() {
-        ClickGuiModule gui = Modules.get(ClickGuiModule.class);
-        return gui == null || gui.showsResetMarks();
+        return Modules.get(ClickGuiModule.class).showsResetMarks();
     }
 
     // How many settings of a block differ from their defaults. Nought whilst the marks are hidden.
@@ -204,7 +202,7 @@ final class ResetMarks {
             }
             changed = changedCount;
             hidden = hiddenCount;
-            foot = marksShown ? ResetFoot.state(block.owner(), changed) : ResetFoot.State.ABSENT;
+            foot = ResetFoot.state(block.owner(), changed);
         }
 
         private static Map<Setting<?>, Integer> indexOf(SettingBlock block) {
@@ -291,7 +289,7 @@ final class ResetMarks {
         }
 
         boolean hasFoot() {
-            return foot != ResetFoot.State.ABSENT;
+            return ResetFoot.shows(block, foot);
         }
 
         // A green wash under a row that was just put back or brought back.
@@ -388,7 +386,7 @@ final class ResetMarks {
     // A long default is cut short. Typed text keeps the quotes round it.
     private static String defaultWords(Setting<?> setting) {
         String text = setting.defaultText();
-        Font font = OfflineClient.MC.font;
+        Font font = ClientFonts.gui();
         if (text == null || font.width(text) <= DEFAULT_ROOM) {
             return text;
         }

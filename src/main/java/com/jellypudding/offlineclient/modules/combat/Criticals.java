@@ -1,8 +1,8 @@
 package com.jellypudding.offlineclient.modules.combat;
 
 import com.jellypudding.offlineclient.event.Subscribe;
+import com.jellypudding.offlineclient.event.events.ClientTickEvent;
 import com.jellypudding.offlineclient.event.events.PacketSendEvent;
-import com.jellypudding.offlineclient.event.events.PostMotionEvent;
 import com.jellypudding.offlineclient.event.events.PreMotionEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
@@ -18,6 +18,7 @@ import com.jellypudding.offlineclient.util.MaceSmash;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.MoveGate;
 import com.jellypudding.offlineclient.util.SprintPause;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.protocol.game.ServerboundAttackPacket;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
@@ -61,7 +62,7 @@ public final class Criticals extends Module {
 
     private final NumberSetting height = new NumberSetting("Height",
         "How far the faked fall is. Each block past eight adds one damage.",
-        20, 2, 100, 1, " blocks").min(2).under(mace);
+        20, 2, 100, 1, " blocks").under(mace);
 
     private final BoolSetting skipShields = new BoolSetting("Skip shields",
         "Hits normally when the target holds up a shield or plays in creative.", true).under(mace);
@@ -71,20 +72,22 @@ public final class Criticals extends Module {
         false).under(mace);
 
     private final NumberSetting hits = new NumberSetting("Hits",
-        "How many smashes land one after another.", 3, 2, 5, 1).min(2).under(totemBypass);
+        "How many smashes land one after another.", 3, 2, 5, 1).under(totemBypass);
 
     private final NumberSetting heightStep = new NumberSetting("Height step",
         "How much further each smash after the first falls. It has to hit harder than the last.",
-        9, 1, 30, 1, " blocks").min(1).under(totemBypass);
+        9, 1, 30, 1, " blocks").under(totemBypass);
 
     private final BoolSetting stopSprint = new BoolSetting("Stop sprinting",
         "Drops sprint for the hit and takes it straight back. A sprinting player cannot crit.",
         true);
 
-    private final SprintPause sprintPause = new SprintPause();
     private final ChatWarning warning = new ChatWarning();
 
     private final HeldPacket<ServerboundAttackPacket> held = new HeldPacket<>();
+    // The player whose hit is held. The id of its target means nothing to the next player.
+    // It is let go with the hold. A player kept here keeps its whole world alive.
+    private LocalPlayer heldBy;
     private Stage stage = Stage.IDLE;
     private boolean waitingForPeak;
     private double lastY;
@@ -115,13 +118,13 @@ public final class Criticals extends Module {
     protected void onEnable() {
         clearHeld();
         warning.clear();
+        SprintPause.attach(this);
     }
 
     @Override
     protected void onDisable() {
         clearHeld();
-        // Leaving mid hit would leave the server believing the sprint had ended.
-        sprintPause.resume();
+        SprintPause.detach(this);
     }
 
     // Read by Knockback. True whilst a hit held back for a critical goes out.
@@ -140,6 +143,10 @@ public final class Criticals extends Module {
     }
 
     private void onAttackPacket(PacketSendEvent event, ServerboundAttackPacket attack) {
+        // A hit on yourself is only ever a request to be kicked.
+        if (attack.entityId() == mc.player.getId()) {
+            return;
+        }
         if (stage != Stage.IDLE) {
             return;
         }
@@ -154,12 +161,12 @@ public final class Criticals extends Module {
         }
         switch (mode.getValue()) {
             case PACKET, SUBTLE -> {
-                held.hold(event, attack);
+                hold(event, attack);
                 offset = -(mode.is(Mode.PACKET) ? CRIT_DIP : SUBTLE_DIP);
                 stage = Stage.DIP;
             }
             case MINI_JUMP, FULL_JUMP -> {
-                held.hold(event, attack);
+                hold(event, attack);
                 stage = Stage.JUMP;
                 jump();
             }
@@ -203,7 +210,7 @@ public final class Criticals extends Module {
             warning.say("Totem bypass needs " + smash.followTicks() + " ticks but the hurt window lasts ten. Only "
                 + smash.hits() + " hits go out.");
         }
-        held.hold(event, attack);
+        hold(event, attack);
         smashTarget = attack.entityId();
         struck = false;
         stage = Stage.SMASH;
@@ -218,7 +225,7 @@ public final class Criticals extends Module {
         }
         struck = true;
         if (hit == 0) {
-            held.release(this::dropSprint);
+            letOut();
             return;
         }
         if (!mc.player.getMainHandItem().is(Items.MACE)) {
@@ -239,9 +246,9 @@ public final class Criticals extends Module {
             return;
         }
         if (result == Hop.Result.LEFT) {
-            held.drop();
+            held.discard();
         } else if (!struck) {
-            held.release(this::dropSprint);
+            letOut();
         }
         resetStage();
     }
@@ -280,13 +287,18 @@ public final class Criticals extends Module {
         }
     }
 
+    // A respawn or a change of world or server replaces the player. A hit held for the player
+    // it replaced is dropped.
+    @Subscribe
+    private void onClientTick(ClientTickEvent event) {
+        if (stage != Stage.IDLE && heldBy != mc.player) {
+            clearHeld();
+        }
+    }
+
     // The dip the hit needs rides on the one position packet this tick allows.
     @Subscribe
     private void onPreMotion(PreMotionEvent event) {
-        if (!inGame()) {
-            clearHeld();
-            return;
-        }
         if (stage != Stage.DIP) {
             return;
         }
@@ -302,7 +314,7 @@ public final class Criticals extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (stage == Stage.IDLE || !inGame()) {
+        if (stage == Stage.IDLE) {
             return;
         }
         switch (stage) {
@@ -331,33 +343,39 @@ public final class Criticals extends Module {
     // Sends the held hit now that the server sees a fall.
     private void release() {
         resetStage();
-        held.release(this::dropSprint);
+        letOut();
     }
 
     private void clearHeld() {
         resetStage();
-        held.drop();
+        held.discard();
     }
 
     private void resetStage() {
         stage = Stage.IDLE;
+        heldBy = null;
         waitingForPeak = false;
         sendTimer = 0;
         offset = 0;
         waited = 0;
     }
 
-    // The server refuses a critical hit to anyone it believes is sprinting.
-    // Dropping sprint for the swing keeps the client from stuttering.
-    private void dropSprint() {
+    // The client plays the hit out the moment it is held. It must not slow itself for a
+    // hit the server is going to see without a sprint.
+    private void hold(PacketSendEvent event, ServerboundAttackPacket attack) {
+        held.hold(event, attack);
+        heldBy = mc.player;
         if (stopSprint.isOn()) {
-            sprintPause.pause();
+            SprintPause.willHide();
         }
     }
 
-    // The attack packet has gone out by this point.
-    @Subscribe
-    private void onPostMotion(PostMotionEvent event) {
-        sprintPause.resume();
+    // The server refuses a critical hit to anyone it believes is sprinting. The stop goes
+    // out with the hit and the start straight behind it.
+    private void letOut() {
+        if (stopSprint.isOn()) {
+            SprintPause.hide();
+        }
+        held.release();
     }
 }

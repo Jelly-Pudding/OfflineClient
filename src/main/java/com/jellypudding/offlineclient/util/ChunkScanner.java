@@ -25,7 +25,6 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.function.BiConsumer;
 import java.util.function.Predicate;
@@ -35,12 +34,7 @@ import java.util.function.Predicate;
 public final class ChunkScanner<T> {
 
     // Two workers keep one slow module from stalling another.
-    private static final ExecutorService POOL = Executors.newFixedThreadPool(2, runnable -> {
-        Thread thread = new Thread(runnable, "OfflineClient ChunkScanner");
-        thread.setDaemon(true);
-        thread.setPriority(Thread.MIN_PRIORITY);
-        return thread;
-    });
+    private static final ExecutorService POOL = Background.workers("OfflineClient ChunkScanner", 2);
 
     // The client chunk cache holds chunks this many rings past the radius the server gives
     // and reaches at least the smallest radius plus those rings.
@@ -110,7 +104,7 @@ public final class ChunkScanner<T> {
                 int lowY = Math.max(0, fromY - baseY);
                 int highY = Math.min(SectionPos.SECTION_MAX_INDEX, toY - baseY);
                 LevelChunkSection section = sections[index];
-                if (lowY > highY || section == null || !section.maybeHas(wanted)) {
+                if (lowY > highY || !section.maybeHas(wanted)) {
                     continue;
                 }
                 for (int y = lowY; y <= highY; y++) {
@@ -314,10 +308,10 @@ public final class ChunkScanner<T> {
     }
 
     private void dropOutOfRange(int centerX, int centerZ, int radius) {
-        partial.removeIf(pos -> outOfRange(pos, centerX, centerZ, radius));
-        stale |= results.keySet().removeIf(pos -> outOfRange(pos, centerX, centerZ, radius));
+        partial.removeIf(pos -> pos.getChessboardDistance(centerX, centerZ) > radius);
+        stale |= results.keySet().removeIf(pos -> pos.getChessboardDistance(centerX, centerZ) > radius);
         pending.entrySet().removeIf(entry -> {
-            if (outOfRange(entry.getKey(), centerX, centerZ, radius)) {
+            if (entry.getKey().getChessboardDistance(centerX, centerZ) > radius) {
                 entry.getValue().cancel(true);
                 return true;
             }
@@ -331,10 +325,6 @@ public final class ChunkScanner<T> {
             all.addAll(list);
         }
         return all;
-    }
-
-    private static boolean outOfRange(ChunkPos pos, int centerX, int centerZ, int radius) {
-        return Math.abs(pos.x() - centerX) > radius || Math.abs(pos.z() - centerZ) > radius;
     }
 
     private void collectFinished() {

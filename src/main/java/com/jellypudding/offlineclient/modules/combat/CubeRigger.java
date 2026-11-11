@@ -12,16 +12,21 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.setting.TextSetting;
+import com.jellypudding.offlineclient.util.AttackTimer;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.ChatWarning;
 import com.jellypudding.offlineclient.util.Cooldowns;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.Ignition;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
+import com.jellypudding.offlineclient.util.ItemUtil;
+import com.jellypudding.offlineclient.util.SwingMode;
 import com.jellypudding.offlineclient.util.TargetPriority;
+import com.jellypudding.offlineclient.util.TntChain;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.tags.ItemTags;
@@ -31,6 +36,7 @@ import net.minecraft.world.entity.monster.cubemob.SulfurCube;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.Vec3;
 
@@ -79,20 +85,27 @@ public final class CubeRigger extends Module {
     private final BoolSetting load = new BoolSetting("Load TNT",
         "Pushes TNT into empty cubes near you.", false);
     private final NumberSetting loadDelay = new NumberSetting("Load delay",
-        "Ticks between one round of loading and the next.", 1, 0, 20, 1, " ticks").min(0).under(load);
+        "Ticks between one round of loading and the next.", 1, 0, 20, 1, " ticks").under(load);
+    private final BoolSetting clearOthers = new BoolSetting("Clear others",
+        "Also loads TNT into cubes that hold another block. The block they held drops out beside them.",
+        false).under(load);
     private final BoolSetting light = new BoolSetting("Light",
         "Lights TNT cubes near you. A lit cube goes off six seconds later.", false);
     private final NumberSetting lightDelay = new NumberSetting("Light delay",
-        "Ticks between one round of lighting and the next.", 1, 0, 20, 1, " ticks").min(0).under(light);
+        "Ticks between one round of lighting and the next.", 1, 0, 20, 1, " ticks").under(light);
     private final BoolSetting rigInstead = new BoolSetting("Rig instead",
         "Rigs the cubes rather than lighting them. It needs shears in your hotbar.", false).under(light);
     private final Ignition ignition = new Ignition().under(light);
+    private final BoolSetting fireAspect = new BoolSetting("Fire Aspect",
+        "Hits a TNT cube with a Fire Aspect weapon from your hotbar when nothing in Light with is at hand."
+            + " The cube catches fire and lights a tick later.", false)
+        .under(light, () -> light.isOn() && !rigInstead.isOn());
     private final NumberSetting range = new NumberSetting("Range",
         "How far away the cubes that are loaded and lit can be. The server takes clicks up to three blocks"
-            + " past your own reach.", 4.5, 1, 6, 0.1, " blocks").min(1)
+            + " past your own reach.", 4.5, 1, 6, 0.1, " blocks")
         .visibleWhen(this::auraOn);
     private final NumberSetting perRound = new NumberSetting("Cubes per round",
-        "How many cubes are loaded or lit in one round.", 1, 1, 8, 1).min(1)
+        "How many cubes are loaded or lit in one round.", 1, 1, 8, 1)
         .visibleWhen(this::auraOn);
     private final BoolSetting spareNamed = new BoolSetting("Spare named",
         "Leaves cubes with a name tag or on a lead alone. Tag the cubes of your own farm.", true)
@@ -101,7 +114,7 @@ public final class CubeRigger extends Module {
         "Leaves every cube near a point alone. Useful round your own cube farm.", false)
         .visibleWhen(this::auraOn);
     private final TextSetting safeCentre = new TextSetting("Safe centre",
-        "The middle of the safe zone as three numbers for x and y and z.", "").under(safeZone);
+        "The middle of the safe zone as three numbers for x and y and z.", "").secret().under(safeZone);
     private final ActionSetting centreHere = new ActionSetting("Centre here",
         "Makes the block you stand in the middle of the safe zone.", this::markCentre).under(safeZone);
     private final NumberSetting safeRadius = new NumberSetting("Safe radius",
@@ -109,7 +122,7 @@ public final class CubeRigger extends Module {
     private final BoolSetting nextBucket = new BoolSetting("Next bucket",
         "After you let a cube out of a bucket the next cube bucket in your hotbar is picked.", true);
     private final NumberSetting bucketDelay = new NumberSetting("Bucket delay",
-        "Ticks before the next cube bucket is picked.", 1, 0, 20, 1, " ticks").min(0).under(nextBucket);
+        "Ticks before the next cube bucket is picked.", 1, 0, 20, 1, " ticks").under(nextBucket);
     private final BoolSetting rotate = new BoolSetting("Rotate",
         "Turns towards each cube on the server side.", true);
     private final BoolSetting render = new BoolSetting("Show rigged",
@@ -139,10 +152,11 @@ public final class CubeRigger extends Module {
 
     public CubeRigger() {
         super("CubeRigger", "Turns sulfur cubes into bombs and traps.", Category.COMBAT);
-        addSettings(rigOnClick, fill, fillWith, swapBack, load, loadDelay, light, lightDelay, rigInstead);
+        addSettings(rigOnClick, fill, fillWith, swapBack, load, loadDelay, clearOthers, light, lightDelay,
+            rigInstead);
         addSettings(ignition.settings());
-        addSettings(range, perRound, spareNamed, safeZone, safeCentre, centreHere, safeRadius, nextBucket,
-            bucketDelay, rotate, render);
+        addSettings(fireAspect, range, perRound, spareNamed, safeZone, safeCentre, centreHere, safeRadius,
+            nextBucket, bucketDelay, rotate, render);
         addSettings(style.settings());
         searchTags("sulfur cube", "tnt cube", "bomb", "trap", "mine");
     }
@@ -178,9 +192,9 @@ public final class CubeRigger extends Module {
 
     @Subscribe
     private void onRightClick(RightClickEvent event) {
-        if (event.isCancelled() || !rigOnClick.isOn() || !inGame()
+        if (!rigOnClick.isOn() || !inGame()
             || !(mc.hitResult instanceof EntityHitResult hit) || !(hit.getEntity() instanceof SulfurCube cube)
-            || !explosive(cube)) {
+            || !TntChain.unlitTntCube(cube)) {
             return;
         }
         InteractionHand hand = heldLighter();
@@ -205,7 +219,7 @@ public final class CubeRigger extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || mc.player.isSpectator()) {
+        if (mc.player.isSpectator()) {
             return;
         }
         // A respawn starts the clock again and every time counted on it is dropped.
@@ -266,7 +280,8 @@ public final class CubeRigger extends Module {
         }
         boolean loading = load.isOn() && loadTimer == 0;
         boolean lighting = light.isOn() && lightTimer == 0;
-        if (!loading && !lighting) {
+        // A meal or ShulkerPacker or an item in use has the hands.
+        if (!loading && !lighting || Hands.slotsTaken() || mc.player.isUsingItem()) {
             return;
         }
         int done = 0;
@@ -276,15 +291,21 @@ public final class CubeRigger extends Module {
                 break;
             }
             SulfurCube cube = (SulfurCube) entity;
-            if (loading && !cube.hasBodyItem() && loadTnt(cube)) {
+            if (loading && loadRound(cube)) {
                 done++;
                 loadTimer = loadDelay.getInt();
-            } else if (lighting && explosive(cube) && lightUp(cube)) {
+            } else if (lighting && TntChain.unlitTntCube(cube) && lightUp(cube)) {
                 done++;
                 lightTimer = lightDelay.getInt();
             }
         }
         finishClicks();
+    }
+
+    // An empty cube takes TNT. One that holds another block swallows the TNT in its place and drops
+    // the block whilst Clear others is on.
+    private boolean loadRound(SulfurCube cube) {
+        return (!cube.hasBodyItem() || clearOthers.isOn() && holdsOther(cube)) && loadTnt(cube);
     }
 
     private boolean loadTnt(SulfurCube cube) {
@@ -298,6 +319,10 @@ public final class CubeRigger extends Module {
 
     private boolean lightUp(SulfurCube cube) {
         if (!ignition.atHand()) {
+            if (!rigInstead.isOn() && fireAspect.isOn() && burn(cube)) {
+                handled.put(cube.getId(), HANDLED_TICKS);
+                return true;
+            }
             warning.say(NO_LIGHTER);
             return false;
         }
@@ -312,6 +337,29 @@ public final class CubeRigger extends Module {
             warning.say(problem);
         }
         return problem == null;
+    }
+
+    // A Fire Aspect hit sets the cube on fire and the first burn lights it on its next tick. The burn
+    // only lights a cube that still holds its TNT. A sheared cube is never rigged by it. The hit goes
+    // out as a bare packet and no module that picks weapons for a hit swaps the sword away.
+    private boolean burn(SulfurCube cube) {
+        int slot = InventoryUtil.hotbarSlot(CubeRigger::burns);
+        if (slot == -1 || EntityUtil.inWaterOrRain(cube)) {
+            return false;
+        }
+        slots.select(slot);
+        if (rotate.isOn()) {
+            BlockUtil.faceVector(cube.getBoundingBox().getCenter());
+        }
+        AttackTimer.packetHit(cube);
+        SwingMode.swingArm(InteractionHand.MAIN_HAND);
+        return true;
+    }
+
+    // A weapon with Fire Aspect that has hits to spare and lands a plain hit.
+    private static boolean burns(ItemStack stack) {
+        return ItemUtil.enchantLevel(Enchantments.FIRE_ASPECT, stack) > 0 && !ItemUtil.nearlyBroken(stack)
+            && ItemUtil.landsPlainHit(stack);
     }
 
     // Clicks the cube with the first stack the test accepts. One in the offhand needs no swap.
@@ -423,15 +471,14 @@ public final class CubeRigger extends Module {
         return "Set to " + here;
     }
 
-    // A grown cube holding TNT that nobody has lit yet. Babies never take a lighter.
-    private static boolean explosive(SulfurCube cube) {
-        return !cube.isBaby() && !cube.isPrimed()
-            && cube.getBodyArmorItem().is(ItemTags.SULFUR_CUBE_ARCHETYPE_EXPLOSIVE);
+    // A grown cube that swallowed something other than TNT.
+    private static boolean holdsOther(SulfurCube cube) {
+        return cube.hasBodyItem() && !TntChain.holdsTnt(cube);
     }
 
     // Primed with no TNT inside. A cube lit the plain way still holds its TNT.
     private static boolean rigged(SulfurCube cube) {
-        return cube.isPrimed() && !cube.getBodyArmorItem().is(ItemTags.SULFUR_CUBE_ARCHETYPE_EXPLOSIVE);
+        return cube.isPrimed() && !TntChain.holdsTnt(cube);
     }
 
     // The hand holding flint and steel or a fire charge. The main hand goes first as it does in the game.

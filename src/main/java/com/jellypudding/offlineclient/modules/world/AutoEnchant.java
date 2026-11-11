@@ -5,6 +5,7 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.MenuClicks;
+import com.jellypudding.offlineclient.util.ThrowOut;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.inventory.EnchantmentMenu;
 import net.minecraft.world.item.Item;
@@ -36,6 +37,8 @@ public final class AutoEnchant extends StationModule<EnchantmentMenu> {
         .describe(Offer.MIDDLE, "The offer in the middle.")
         .describe(Offer.BOTTOM, "The dearest offer at the bottom.")
         .describe(Offer.BEST, "The dearest offer you have the levels and lapis for.");
+    private final ThrowOut throwOut = new ThrowOut(
+        "Throws each item the module enchanted on the ground instead of into your inventory.");
 
     // The item in the table is one the module put in.
     private boolean placedByUs;
@@ -45,6 +48,7 @@ public final class AutoEnchant extends StationModule<EnchantmentMenu> {
         super("AutoEnchant", "Enchants the items you pick whilst an enchanting table is open.",
             EnchantmentMenu.class, PACE);
         addSettings(items, offer);
+        addSettings(throwOut.settings());
         searchTags("enchanting table", "lapis");
     }
 
@@ -106,8 +110,12 @@ public final class AutoEnchant extends StationModule<EnchantmentMenu> {
         startClock();
     }
 
+    // Only an item the module put in and enchanted is a finished one. Anything else in the
+    // slot is yours and goes back into the inventory.
     private void takeOut(EnchantmentMenu menu, ItemStack held) {
-        if (!moveOut(menu, ITEM_SLOT, "for " + held.getHoverName().getString() + ".")) {
+        String what = "for " + held.getHoverName().getString() + ".";
+        boolean finished = placedByUs && !held.isEnchantable();
+        if (!(finished ? takeFinished(throwOut, menu, ITEM_SLOT, what) : moveOut(menu, ITEM_SLOT, what))) {
             return;
         }
         if (placedByUs) {

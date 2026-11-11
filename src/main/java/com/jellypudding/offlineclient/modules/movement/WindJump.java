@@ -51,10 +51,6 @@ public final class WindJump extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame()) {
-            setEnabled(false);
-            return;
-        }
         if (launch.tick()) {
             setEnabled(false);
             return;

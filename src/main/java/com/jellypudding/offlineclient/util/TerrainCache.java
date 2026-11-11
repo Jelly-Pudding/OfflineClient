@@ -345,8 +345,7 @@ public final class TerrainCache {
             cave.keepNear(centreX, centreZ, radius);
             for (LongIterator keys = caveRead.iterator(); keys.hasNext(); ) {
                 long key = keys.nextLong();
-                if (Math.abs(ChunkPos.getX(key) - centreX) > radius
-                    || Math.abs(ChunkPos.getZ(key) - centreZ) > radius) {
+                if (Mth.chessboardDistance(ChunkPos.getX(key), ChunkPos.getZ(key), centreX, centreZ) > radius) {
                     keys.remove();
                 }
             }

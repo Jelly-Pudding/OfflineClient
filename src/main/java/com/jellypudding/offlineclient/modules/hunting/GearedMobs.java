@@ -77,7 +77,7 @@ public final class GearedMobs extends Module {
     private final NumberSetting scale = new NumberSetting("Scale",
         "Size of the labels.", 1, 0.5, 3, 0.1).min(0.1).under(labels);
     private final Notice notice = new Notice(this, Notice.Where.CHAT);
-    private final EntityColors colors = new EntityColors(EntityColors.Mode.SINGLE);
+    private final EntityColors colors = new EntityColors(EntityColors.Mode.SINGLE).withoutPlayers().withoutItems();
     // A mob walking up to you would hide behind its own box.
     private final NearFade fade = new NearFade(3);
 
@@ -134,9 +134,6 @@ public final class GearedMobs extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame()) {
-            return;
-        }
         List<Suspect> suspects = new ArrayList<>();
         for (Entity entity : mc.level.entitiesForRendering()) {
             if (!(entity instanceof Mob mob) || ignored(mob)) {

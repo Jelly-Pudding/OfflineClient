@@ -5,10 +5,12 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.projectile.LlamaSpit;
 import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.entity.projectile.arrow.AbstractArrow;
 import net.minecraft.world.entity.projectile.arrow.ThrownTrident;
 import net.minecraft.world.entity.projectile.hurtingprojectile.AbstractHurtingProjectile;
+import net.minecraft.world.entity.projectile.hurtingprojectile.WitherSkull;
 import net.minecraft.world.entity.projectile.hurtingprojectile.windcharge.AbstractWindCharge;
 import net.minecraft.world.entity.projectile.throwableitemprojectile.AbstractThrownPotion;
 import net.minecraft.world.entity.projectile.throwableitemprojectile.ThrowableItemProjectile;
@@ -36,21 +38,31 @@ public final class ProjectilePath {
         ARROW,
         // Thrown items. Fall and slow down first and then move.
         THROWN,
-        // Fireballs and wind charges. Fall then move then slow down.
+        // Fireballs and wind charges. Speed up along the heading and slow down first and then move.
         HURTING,
         // Fishing bobbers. Fall then move then slow down.
         BOBBER
     }
 
+    // The push is the speed a fireball gains along its heading each tick.
     public record Launch(double power, double gravity, double airDrag, double waterDrag,
-                         double pitchOffset, Motion motion, boolean stopsInWater) {
+                         double pitchOffset, Motion motion, boolean stopsInWater, double push) {
+
+        public Launch(double power, double gravity, double airDrag, double waterDrag,
+                      double pitchOffset, Motion motion, boolean stopsInWater) {
+            this(power, gravity, airDrag, waterDrag, pitchOffset, motion, stopsInWater, 0);
+        }
 
         public Launch withPower(double newPower) {
-            return new Launch(newPower, gravity, airDrag, waterDrag, pitchOffset, motion, stopsInWater);
+            return new Launch(newPower, gravity, airDrag, waterDrag, pitchOffset, motion, stopsInWater, push);
         }
 
         private Launch weightless() {
-            return new Launch(power, 0, airDrag, waterDrag, pitchOffset, motion, stopsInWater);
+            return new Launch(power, 0, airDrag, waterDrag, pitchOffset, motion, stopsInWater, push);
+        }
+
+        private Launch pushed(double newAirDrag, double newPush) {
+            return new Launch(power, gravity, newAirDrag, waterDrag, pitchOffset, motion, stopsInWater, newPush);
         }
     }
 
@@ -66,6 +78,10 @@ public final class ProjectilePath {
         0.8, -20, Motion.THROWN, false);
     public static final Launch WIND_CHARGE = new Launch(1.5, 0, 1, 1, 0, Motion.HURTING, false);
     private static final Launch EXPLOSIVE = new Launch(0, 0, 0.95, 0.8, 0, Motion.HURTING, false);
+    // A charged wither skull slows down harder in the air than other fireballs.
+    private static final double DANGEROUS_SKULL_DRAG = 0.73;
+    // Llama spit is gone the moment it touches water.
+    private static final Launch LLAMA_SPIT = new Launch(0, 0.06, ProjectileUtil.AIR_DRAG, 0, 0, Motion.ARROW, true);
 
     // The ticks of a flight one after another and how it ended. The landing is the block
     // face it struck and stays null when it hit an entity or ran out of steps.
@@ -85,6 +101,10 @@ public final class ProjectilePath {
 
     // A heading and a pitch in degrees.
     public record Aim(float yaw, float pitch) {
+    }
+
+    // A pitch in degrees and the ticks a flight at it takes to get there.
+    public record Arc(float pitch, double ticks) {
     }
 
     // Where a projectile is at one moment in its flight.
@@ -114,8 +134,14 @@ public final class ProjectilePath {
         if (projectile instanceof AbstractWindCharge) {
             return WIND_CHARGE;
         }
-        if (projectile instanceof AbstractHurtingProjectile) {
-            return EXPLOSIVE;
+        // The server sends each fireball's push along with its motion.
+        if (projectile instanceof AbstractHurtingProjectile hurting) {
+            double drag = hurting instanceof WitherSkull skull && skull.isDangerous()
+                ? DANGEROUS_SKULL_DRAG : EXPLOSIVE.airDrag();
+            return EXPLOSIVE.pushed(drag, hurting.accelerationPower);
+        }
+        if (projectile instanceof LlamaSpit) {
+            return LLAMA_SPIT;
         }
         return null;
     }
@@ -149,6 +175,75 @@ public final class ProjectilePath {
         }
         double y = -Math.sqrt(power * power - sideways);
         return new Aim((float) Math.toDegrees(Math.atan2(-x, z)), (float) Math.toDegrees(-Math.asin(y / power)));
+    }
+
+    // The lowest arc that lands an arrow or a thrown trident loosed at this speed on the point.
+    // Null when the point is out of reach.
+    public static Arc arrowArc(Vec3 from, Vec3 to, double speed) {
+        double dx = to.x - from.x;
+        double dz = to.z - from.z;
+        double distance = Math.sqrt(dx * dx + dz * dz);
+        double height = to.y - from.y;
+        if (distance < 0.01) {
+            return null;
+        }
+
+        double previous = -90;
+        double previousHeight = Double.NaN;
+        for (double angle = -89; angle <= 89; angle += 1) {
+            double h = heightAt(angle, distance, speed);
+            if (Double.isNaN(h)) {
+                continue;
+            }
+            if (h >= height && !Double.isNaN(previousHeight)) {
+                double low = previous;
+                double high = angle;
+                for (int i = 0; i < 16; i++) {
+                    double mid = (low + high) / 2;
+                    double midHeight = heightAt(mid, distance, speed);
+                    if (Double.isNaN(midHeight) || midHeight < height) {
+                        low = mid;
+                    } else {
+                        high = mid;
+                    }
+                }
+                return arc(high, distance, speed);
+            }
+            if (h >= height) {
+                return arc(angle, distance, speed);
+            }
+            previous = angle;
+            previousHeight = h;
+        }
+        return null;
+    }
+
+    // The game counts pitch downwards. Ten degrees above the level is a pitch of minus ten.
+    private static Arc arc(double angleDegrees, double distance, double speed) {
+        return new Arc((float) -angleDegrees, flightTicks(angleDegrees, distance, speed));
+    }
+
+    // Ticks an arrow needs to travel the horizontal distance or NaN if it never gets there.
+    private static double flightTicks(double angleDegrees, double distance, double speed) {
+        double horizontal = speed * Math.cos(Math.toRadians(angleDegrees));
+        double reach = horizontal / (1 - ProjectileUtil.AIR_DRAG);
+        if (horizontal <= 0 || distance >= reach) {
+            return Double.NaN;
+        }
+        return Math.log(1 - distance / reach) / Math.log(ProjectileUtil.AIR_DRAG);
+    }
+
+    // Height an arrow reaches at the horizontal distance using the closed
+    // form of the per tick drag and gravity update.
+    private static double heightAt(double angleDegrees, double distance, double speed) {
+        double ticks = flightTicks(angleDegrees, distance, speed);
+        if (Double.isNaN(ticks)) {
+            return Double.NaN;
+        }
+        double vertical = speed * Math.sin(Math.toRadians(angleDegrees));
+        double terminal = ProjectileUtil.ARROW_GRAVITY / (1 - ProjectileUtil.AIR_DRAG);
+        double fallen = 1 - Math.pow(ProjectileUtil.AIR_DRAG, ticks);
+        return (vertical + terminal) * fallen / (1 - ProjectileUtil.AIR_DRAG) - terminal * ticks;
     }
 
     // The position and speed a projectile starts with when loosed at this yaw and pitch.
@@ -261,7 +356,11 @@ public final class ProjectilePath {
                 Vec3 moved = velocity.subtract(0, launch.gravity(), 0).scale(drag);
                 yield new Shot(pos.add(moved), moved);
             }
-            case HURTING, BOBBER -> {
+            case HURTING -> {
+                Vec3 pushed = velocity.add(velocity.normalize().scale(launch.push())).scale(drag);
+                yield new Shot(pos.add(pushed), pushed);
+            }
+            case BOBBER -> {
                 Vec3 fallen = velocity.subtract(0, launch.gravity(), 0);
                 yield new Shot(pos.add(fallen), fallen.scale(drag));
             }

@@ -9,10 +9,16 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.TextSetting;
+import com.jellypudding.offlineclient.util.BookLimits;
+import com.jellypudding.offlineclient.util.BookPace;
+import com.jellypudding.offlineclient.util.BookText;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.FormatCodes;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.MenuClicks;
 import com.jellypudding.offlineclient.util.Recipes;
+import com.jellypudding.offlineclient.util.ServerInfo;
+import com.jellypudding.offlineclient.util.Tally;
 import net.minecraft.client.gui.screens.inventory.BookEditScreen;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
@@ -49,8 +55,8 @@ public final class BookBot extends Module {
     private static final char WIDE_CHARACTER = 0x4E00;
     private static final char MIDDLE_CHARACTER = 0x00A9;
 
-    // Lines of text on one book page.
-    private static final int PAGE_LINES = 14;
+    // A book holds no more characters than this. The rest of a longer file is never read.
+    private static final int MOST_READ = WritableBookContent.MAX_PAGES * WritableBookContent.PAGE_EDIT_LENGTH;
 
     // Ticks the server is given to write a book or fill the crafting grid.
     private static final int SERVER_WAIT = 40;
@@ -79,7 +85,8 @@ public final class BookBot extends Module {
         "Breaks lines between words the way the book screen would.", true)
         .under(mode, Mode.FILE);
     private final NumberSetting delay = new NumberSetting("Delay",
-        "Ticks between books.", 20, 1, 200, 1, " ticks").min(1);
+        "Ticks between books. Paper needs about a second between books and longer whilst it lags.",
+        20, 1, 200, 1, " ticks");
     private final BoolSetting sign = new BoolSetting("Sign",
         "Signs the book and locks it against editing.", true);
     private final TextSetting title = new TextSetting("Title",
@@ -101,6 +108,10 @@ public final class BookBot extends Module {
     // True from a recipe request until its result shows in the grid.
     private boolean crafting;
     private int craftTicks;
+    // True once chat has said that pages were left off a book.
+    private boolean toldLeftOff;
+    // True once chat has said that Paper held a book back.
+    private boolean toldPace;
 
     public BookBot() {
         super("BookBot", "Writes book after book for you.", Category.MISC);
@@ -116,10 +127,12 @@ public final class BookBot extends Module {
 
     @Override
     protected void onEnable() {
-        timer = delay.getInt();
         written = 0;
         awaiting = -1;
         crafting = false;
+        toldLeftOff = false;
+        toldPace = false;
+        timer = delay.getInt();
     }
 
     @Override
@@ -129,7 +142,7 @@ public final class BookBot extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || mc.gui.screen() != null) {
+        if (mc.gui.screen() != null) {
             return;
         }
         if (awaiting != -1) {
@@ -145,12 +158,15 @@ public final class BookBot extends Module {
             if (craftQuills.isOn() && craftQuill()) {
                 return;
             }
-            ChatUtil.message("§bBookBot §7has no blank books left.");
+            tell("has no blank books left.");
             setEnabled(false);
             return;
         }
         if (timer > 0) {
             timer--;
+            return;
+        }
+        if (waitsForPaper()) {
             return;
         }
         timer = delay.getInt();
@@ -160,6 +176,18 @@ public final class BookBot extends Module {
             return;
         }
         send(text);
+    }
+
+    // True whilst Paper would still kick for another book edit. Chat tells the player once each run.
+    private boolean waitsForPaper() {
+        if (BookPace.INSTANCE.ready()) {
+            return false;
+        }
+        if (!toldPace) {
+            toldPace = true;
+            tell("waits for Paper between books. Paper kicks a player who writes faster.");
+        }
+        return true;
     }
 
     // The server writes a book a moment after the packet. Once it shows written it can be thrown.
@@ -282,19 +310,32 @@ public final class BookBot extends Module {
         return String.valueOf(WIDE_CHARACTER).repeat(count);
     }
 
+    // No ampersand. ColourCodes turns one in front of a code letter into a section sign that weighs
+    // more and the layout has no byte to spare.
     private String narrow(int count) {
         StringBuilder text = new StringBuilder(count);
         while (text.length() < count) {
             int codePoint = random.nextInt(0x21, 0x7F);
-            text.appendCodePoint(codePoint);
+            if (codePoint != FormatCodes.TYPED) {
+                text.appendCodePoint(codePoint);
+            }
         }
         return text.toString();
     }
 
     // Null when the file cannot be read. A message says why.
     private List<String> fromFile() {
-        Path path = DataFiles.path(file.getValue());
-        Optional<String> text = DataFiles.readText(path);
+        String name = file.getValue().strip();
+        if (name.isEmpty()) {
+            ChatUtil.error("BookBot needs the name of a file.");
+            return null;
+        }
+        Path path = DataFiles.inside(DataFiles.path(), name);
+        if (path == null) {
+            ChatUtil.error("BookBot cannot use " + name + " as a file in the offlineclient folder.");
+            return null;
+        }
+        Optional<String> text = DataFiles.readText(path, MOST_READ);
         if (text.isEmpty()) {
             ChatUtil.error("Could not read " + path.getFileName() + " from the offlineclient folder.");
             return null;
@@ -317,7 +358,7 @@ public final class BookBot extends Module {
                 page.append('\n');
             }
             page.append(line.getString());
-            if (++lineCount == PAGE_LINES) {
+            if (++lineCount == BookText.PAGE_LINES) {
                 result.add(page.toString());
                 page.setLength(0);
                 lineCount = 0;
@@ -332,17 +373,29 @@ public final class BookBot extends Module {
         return result;
     }
 
+    // Each cut looks one character past the page to keep a character made of two halves whole.
     private static List<String> cutPages(String text) {
         List<String> result = new ArrayList<>();
-        int page = WritableBookContent.PAGE_EDIT_LENGTH;
-        for (int start = 0; start < text.length() && result.size() < WritableBookContent.MAX_PAGES; start += page) {
-            result.add(text.substring(start, Math.min(text.length(), start + page)));
+        int start = 0;
+        while (start < text.length() && result.size() < WritableBookContent.MAX_PAGES) {
+            int end = Math.min(text.length(), start + WritableBookContent.PAGE_EDIT_LENGTH + 1);
+            String page = BookLimits.cutPage(text.substring(start, end));
+            result.add(page);
+            start += page.length();
         }
         return result;
     }
 
-    // The packet refuses a longer title and the connection drops with it.
+    // The packet refuses a longer title and the connection drops with it. Paper kicks a player for
+    // pages past its allowance and those are left off the end.
     private void send(List<String> text) {
+        List<String> pages = BookLimits.fit(text, ServerInfo.runsPaper());
+        int left = text.size() - pages.size();
+        if (left > 0 && !toldLeftOff) {
+            toldLeftOff = true;
+            tell("left the last " + Tally.counted(left, "page")
+                + " off. Paper kicks a player for a book any heavier.");
+        }
         String count = number.isOn() ? " " + (written + 1) : "";
         String base = title.getValue();
         int room = WrittenBookContent.TITLE_MAX_LENGTH - count.length();
@@ -350,7 +403,7 @@ public final class BookBot extends Module {
         Optional<String> signed = sign.isOn() ? Optional.of(name) : Optional.empty();
         awaiting = InventoryUtil.selectedSlot();
         awaitTicks = 0;
-        mc.player.connection.send(new ServerboundEditBookPacket(awaiting, text, signed));
+        mc.player.connection.send(new ServerboundEditBookPacket(awaiting, pages, signed));
         written++;
     }
 }

@@ -14,6 +14,7 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.AlertSound;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.Notice;
 import com.jellypudding.offlineclient.util.Tally;
 import com.jellypudding.offlineclient.util.WorldWatch;
@@ -68,7 +69,7 @@ public final class StashFinder extends Module implements FindSource {
         BuiltInRegistries.BLOCK, List.of(Blocks.TUFF_BRICKS, Blocks.BARREL));
     private final NumberSetting minimumDistance = new NumberSetting("Minimum distance",
         "Chunks closer than this to the world origin are never recorded.",
-        0, 0, 10000, 100, " blocks").min(0);
+        0, 0, 10000, 100, " blocks");
     private final FindLog finds = FindLog.byChunk(this);
     private final Notice notice = new Notice(this, Notice.Where.BOTH);
     private final AlertSound alarm = new AlertSound("Rings when a new stash is found.", SoundEvents.BELL_BLOCK);
@@ -112,16 +113,13 @@ public final class StashFinder extends Module implements FindSource {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame()) {
-            return;
-        }
         if (world.changed()) {
             // Chunk coordinates mean something different in every world.
             scanned.clear();
         }
 
         tick++;
-        int radius = mc.options.getEffectiveRenderDistance();
+        int radius = Modules.renderDistance();
         int side = 2 * radius + 1;
         int area = side * side;
         int centerX = mc.player.chunkPosition().x();
@@ -176,7 +174,7 @@ public final class StashFinder extends Module implements FindSource {
             if (!counts(blockEntity)) {
                 continue;
             }
-            counts.add(ChatUtil.words(BuiltInRegistries.BLOCK_ENTITY_TYPE.getKey(blockEntity.getType())));
+            counts.add(ChatUtil.words(blockEntity.getType()));
             where = nearerMiddle(where, blockEntity.getBlockPos(), middleX, middleZ);
         }
         if (counts.total() < minimum.getInt()) {
@@ -189,7 +187,12 @@ public final class StashFinder extends Module implements FindSource {
         if (old != null && old.detail().equals(detail)) {
             return;
         }
-        if (finds.add(where, KIND, detail)) {
+        boolean fresh = finds.add(where, KIND, detail);
+        // A stash you took away by hand stays away.
+        if (!fresh && old == null) {
+            return;
+        }
+        if (fresh) {
             alarm.ring();
         }
         notice.tell(KIND, detail, where);

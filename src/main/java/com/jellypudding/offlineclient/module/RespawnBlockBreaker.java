@@ -18,6 +18,10 @@ public abstract class RespawnBlockBreaker extends Module {
 
     private static final int TARGET_COLOR = 0xFFFF4040;
 
+    // The breaker whose block the miner is on. Two blocks mined at once restart each other and
+    // the other breaker waits its turn whilst this is set.
+    private static RespawnBlockBreaker breaking;
+
     protected final NumberSetting range;
     protected final BoolSetting onlyDangerous;
     private final BoolSetting autoTool;
@@ -32,15 +36,15 @@ public abstract class RespawnBlockBreaker extends Module {
     protected RespawnBlockBreaker(String name, String description, String noun) {
         super(name, description, Category.COMBAT);
         range = new NumberSetting("Range",
-            "How far around you to watch for " + noun + ".", 4.5, 1, 6, 0.1).min(1);
+            "How far around you to watch for " + noun + ".", 4.5, 1, 6, 0.1, " blocks");
         onlyDangerous = new BoolSetting("Only dangerous",
-            "Ignore " + noun + " too far away to hurt you.", true);
+            "Ignores " + noun + " too far away to hurt you.", true);
         autoTool = new BoolSetting("Auto tool",
             "Holds the tool AutoTool would pick or else your fastest one.", true);
         rotate = new BoolSetting("Rotate",
-            "Turn towards the block on the server side.", true);
+            "Turns towards the block on the server side.", true);
         render = new BoolSetting("Show target",
-            "Outline the block being broken.", true);
+            "Outlines the block being broken.", true);
         addSettings(range, onlyDangerous, autoTool, rotate, render);
     }
 
@@ -65,6 +69,12 @@ public abstract class RespawnBlockBreaker extends Module {
         return ExclusivityGroup.MINING;
     }
 
+    // A bed and an anchor guard against different threats and take turns with the miner.
+    @Override
+    public boolean clashesWith(Module other) {
+        return !(other instanceof RespawnBlockBreaker) && super.clashesWith(other);
+    }
+
     @Override
     protected void onEnable() {
         current = null;
@@ -78,11 +88,14 @@ public abstract class RespawnBlockBreaker extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || mc.player.isSpectator()) {
+        if (mc.player.isSpectator()) {
             return;
         }
         if (!explodesHere()) {
             stop();
+            return;
+        }
+        if (breaking != null && breaking != this) {
             return;
         }
         if (current != null && !isThreat(current)) {
@@ -97,7 +110,9 @@ public abstract class RespawnBlockBreaker extends Module {
         if (autoTool.isOn()) {
             ItemUtil.selectBestTool(BlockUtil.state(current), slots);
         }
-        if (!BlockMiner.mine(current, rotate.isOn())) {
+        if (BlockMiner.mine(current, rotate.isOn())) {
+            breaking = this;
+        } else {
             stop();
         }
     }
@@ -105,6 +120,9 @@ public abstract class RespawnBlockBreaker extends Module {
     private void stop() {
         if (current != null) {
             BlockMiner.release();
+        }
+        if (breaking == this) {
+            breaking = null;
         }
         slots.restore();
         current = null;

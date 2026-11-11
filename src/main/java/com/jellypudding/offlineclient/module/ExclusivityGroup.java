@@ -1,6 +1,6 @@
 package com.jellypudding.offlineclient.module;
 
-// Modules that cannot run at once. Switching one on switches the rest off.
+// Modules that clash by default. Switching one on switches off the rest it clashes with.
 public enum ExclusivityGroup {
 
     // Drives BlockMiner. The server only tracks one breaking block per player.
@@ -16,5 +16,8 @@ public enum ExclusivityGroup {
     EDGE,
 
     // Decides what happens after a death. One respawns at once and the other stays behind as a ghost.
-    RESPAWN
+    RESPAWN,
+
+    // Picks the blocks the chunk mesher keeps. Only one list can be read at a time.
+    MESH_FILTER
 }

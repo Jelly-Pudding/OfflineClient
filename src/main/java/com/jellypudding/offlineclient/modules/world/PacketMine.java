@@ -20,11 +20,15 @@ import com.jellypudding.offlineclient.util.BlockMiner;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.BreakArea;
 import com.jellypudding.offlineclient.util.BreakSlots;
+import com.jellypudding.offlineclient.util.BreakTime;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.ItemUtil;
+import com.jellypudding.offlineclient.util.LifeWatch;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.PacketBreaker;
+import com.jellypudding.offlineclient.util.Rebreak;
 import com.jellypudding.offlineclient.util.RotationManager;
 import com.jellypudding.offlineclient.util.RotationPriority;
 import com.jellypudding.offlineclient.util.SwingMode;
@@ -56,14 +60,17 @@ public final class PacketMine extends Module {
     public enum Side { LEFT, RIGHT }
 
     private final NumberSetting delay = new NumberSetting("Delay",
-        "Ticks to wait after a click before the packets go out.", 1, 0, 20, 1, " ticks").min(0);
+        "Ticks to wait after a click before the packets go out.", 1, 0, 20, 1, " ticks");
     private final BoolSetting autoTool = new BoolSetting("Auto tool",
         "Holds the tool AutoTool would pick or else your fastest one.", true);
     private final BoolSetting notOnUse = new BoolSetting("Not on use",
         "Holds off the tool swap and the break packets whilst you are using an item.", true).under(autoTool);
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Turn towards the block on the server side.", true);
+        "Turns towards the block on the server side.", true);
     private final EnumSetting<SwingMode> swing = SwingMode.setting(SwingMode.BOTH);
+    private final BoolSetting hideCracks = new BoolSetting("Hide cracks",
+        "Wipes the cracks other players see on a block you break. A new crack can still flash for a moment.",
+        false);
     private final EnumSetting<BreakArea> area = new EnumSetting<>("Area",
         "The blocks that come down around each one you click.", BreakArea.SINGLE)
         .describe(BreakArea.SINGLE, "Only the block you click.")
@@ -101,7 +108,7 @@ public final class PacketMine extends Module {
         "Fires at the spot to catch a replacement the moment it lands.", true)
         .under(rebreak);
     private final NumberSetting rebreakDelay = new NumberSetting("Rebreak delay",
-        "Ticks between the shots at the spot.", 0, 0, 20, 1, " ticks").min(0)
+        "Ticks between the shots at the spot.", 0, 0, 20, 1, " ticks")
         .under(instantRebreak);
     private final BoolSetting onlyPickaxe = new BoolSetting("Only pickaxe",
         "Only fires whilst a pickaxe is in your main hand.", true).under(instantRebreak);
@@ -146,6 +153,7 @@ public final class PacketMine extends Module {
 
     private final SlotSwap slots = new SlotSwap();
     private final PacketBreaker areaBreaker = new PacketBreaker();
+    private final LifeWatch body = new LifeWatch();
 
     // Only a fresh press picks a target.
     private boolean attackHeld;
@@ -153,8 +161,8 @@ public final class PacketMine extends Module {
     public PacketMine() {
         super("PacketMine", "Breaks each block you click and any area around it whilst you do other things.",
             Category.WORLD);
-        addSettings(delay, autoTool, notOnUse, rotate, swing, area, side, plane, rightTool, listMode, blocks,
-            rebreak, instantRebreak, rebreakDelay, onlyPickaxe, render);
+        addSettings(delay, autoTool, notOnUse, rotate, swing, hideCracks, area, side, plane, rightTool, listMode,
+            blocks, rebreak, instantRebreak, rebreakDelay, onlyPickaxe, render);
         addSettings(miningBox.settings());
         addSettings(readyBox.settings());
         addSettings(areaBox.settings());
@@ -183,6 +191,11 @@ public final class PacketMine extends Module {
     @Override
     public ExclusivityGroup getExclusivityGroup() {
         return ExclusivityGroup.MINING;
+    }
+
+    // True whilst a clicked block waits in the queue or its spot is kept for a rebreak.
+    public boolean hasTarget() {
+        return !queue.isEmpty();
     }
 
     @Override
@@ -214,6 +227,7 @@ public final class PacketMine extends Module {
         if (attackHeld || BlockMiner.isSelfCall() || !inGame() || mc.player.isSpectator()) {
             return;
         }
+        forgetOldBody();
         BlockPos pos = event.getPos().immutable();
         if (queued(pos) || !BlockUtil.isBreakable(pos) || Modules.toolRefuses(BlockUtil.state(pos), true)) {
             return;
@@ -233,6 +247,15 @@ public final class PacketMine extends Module {
         return hit != null && hit.getBlockPos().equals(pos) ? hit.getDirection() : BlockUtil.facingSide(pos);
     }
 
+    // A respawn or a join or a portal hands out a body whose tick count starts again at nought. A
+    // block timed by the old one would never be let go.
+    private void forgetOldBody() {
+        if (body.changed()) {
+            queue.clear();
+            areaBreaker.reset();
+        }
+    }
+
     private boolean queued(BlockPos pos) {
         for (Target target : queue) {
             if (target.pos.equals(pos)) {
@@ -245,26 +268,39 @@ public final class PacketMine extends Module {
     @Subscribe
     private void onTick(TickEvent event) {
         trail.tick();
-        if (!inGame() || mc.player.isSpectator()) {
+        if (mc.player.isSpectator()) {
             queue.clear();
             return;
         }
+        forgetOldBody();
         queue.removeIf(this::finished);
         if (queue.isEmpty()) {
             slots.restoreIfMine();
             return;
         }
-        // The server breaks a block with whatever is in hand and the tool stays put whilst you eat.
-        if (holdsOff()) {
-            return;
-        }
         Target head = queue.getFirst();
-        // The clicked block goes first. A stop at a kept spot has to reach the server
-        // before anything around it moves the server's target.
-        boolean sent = driveCentre(head);
-        sent |= breakArea(head);
-        if (sent) {
-            swing.getValue().swing();
+        // The server breaks a block with whatever is in hand and the tool stays put whilst you eat.
+        if (!holdsOff()) {
+            // The clicked block goes first. A stop at a kept spot has to reach the server
+            // before anything around it moves the server's target.
+            boolean sent = driveCentre(head);
+            sent |= breakArea(head);
+            if (sent) {
+                swing.getValue().swing();
+            }
+        }
+        if (hideCracks.isOn()) {
+            wipeCracks(head);
+        }
+    }
+
+    // The server shows others the cracks of the block it holds as its target. An abort that names
+    // that block wipes them and leaves a parked block to finish. One that names any other block
+    // would make the server let go of its target.
+    private void wipeCracks(Target head) {
+        BlockPos shown = BreakSlots.isTarget(head.pos) ? head.pos : areaBreaker.slowBlock();
+        if (shown != null && BreakSlots.standsOnTarget(shown)) {
+            BlockMiner.sendAbort(shown);
         }
     }
 
@@ -305,8 +341,10 @@ public final class PacketMine extends Module {
         if (target.cleared && !target.mining) {
             return target == queue.getFirst() && !rebreak.isOn() && areaDone(target);
         }
-        // A block AutoTool keeps standing for want of a Silk Touch tool leaves like one that cannot break.
-        if (!target.mining && (!BlockUtil.isBreakable(target.pos) || Modules.toolRefuses(state, true))) {
+        // A block AutoTool keeps standing for want of a Silk Touch tool leaves like one that cannot
+        // break. A block NoInteract keeps for the lava behind it leaves the same way.
+        if (!target.mining && (!BlockUtil.isBreakable(target.pos) || Modules.toolRefuses(state, true)
+            || BlockMiner.kept(target.pos))) {
             return true;
         }
         return target.mining && progress(target) > 2
@@ -316,14 +354,15 @@ public final class PacketMine extends Module {
     // Nothing is left around the block or nothing has come down for too long.
     private boolean areaDone(Target target) {
         BlockPos slow = areaBreaker.slowBlock();
-        int patience = PATIENCE_TICKS + (slow == null ? 0 : BlockUtil.breakTicks(slow));
+        int patience = PATIENCE_TICKS + (slow == null ? 0 : BreakTime.breakTicks(slow));
         return target.areaLeft == 0 || target.areaStall > patience;
     }
 
     // The pair goes out once the server has an angle on the block and room to take it. A block
-    // put back at a kept spot waits whilst AutoTool keeps it standing for want of a Silk Touch tool.
+    // put back at a kept spot waits whilst AutoTool keeps it standing for want of a Silk Touch tool
+    // or NoInteract keeps it for the lava behind it.
     private boolean start(Target target, BlockState state) {
-        if (Modules.toolRefuses(state, true)) {
+        if (Modules.toolRefuses(state, true) || BlockMiner.kept(target.pos)) {
             return false;
         }
         Vec3 aim = BlockUtil.hitPoint(target.pos, BlockUtil.facingSide(target.pos));
@@ -332,10 +371,10 @@ public final class PacketMine extends Module {
         }
         holdTool(state);
         // A slow start elsewhere would leave a break by hand unanswered and the block would come back.
-        if (!BlockUtil.canInstantBreak(target.pos) && BreakSlots.busyElsewhere(target.pos)) {
+        if (!BreakTime.canInstantBreak(target.pos) && BreakSlots.busyElsewhere(target.pos)) {
             return false;
         }
-        if (!BlockUtil.breaksInOneTick(target.pos) && !BreakSlots.parkingFree()) {
+        if (!BreakTime.breaksInOneTick(target.pos) && !BreakSlots.parkingFree()) {
             return false;
         }
         BlockMiner.breakInstantly(target.pos);
@@ -360,14 +399,11 @@ public final class PacketMine extends Module {
         return true;
     }
 
-    // A stop at the empty spot breaks a replacement the moment it lands. The server counts it
-    // from the last start and only whilst the spot is its target. Once the blocks around it
-    // are done a start on the empty spot makes it the target again.
+    // A stop at the empty spot breaks a replacement the moment it lands. Once the blocks around
+    // it are done a start on the empty spot makes it the server's target again.
     private void poke(Target target) {
-        if (BreakSlots.isTarget(target.pos)) {
-            BlockMiner.sendStop(target.pos);
-        } else if (target.areaLeft == 0 && !BreakSlots.busyElsewhere(target.pos)) {
-            BlockMiner.sendStart(target.pos);
+        if (BreakSlots.isTarget(target.pos) || target.areaLeft == 0) {
+            Rebreak.poke(target.pos);
         }
     }
 
@@ -419,7 +455,8 @@ public final class PacketMine extends Module {
             return false;
         }
         BlockState state = BlockUtil.state(pos);
-        if (!listMode.getValue().admits(blocks.contains(state.getBlock())) || Modules.toolRefuses(state, true)) {
+        if (!listMode.getValue().admits(blocks.contains(state.getBlock())) || Modules.toolRefuses(state, true)
+            || BlockMiner.kept(pos)) {
             return false;
         }
         return !rightTool.isOn() || ItemUtil.suits(mc.player.getMainHandItem(), state);
@@ -444,8 +481,9 @@ public final class PacketMine extends Module {
         }
     }
 
+    // A feeder or ShulkerPacker always keeps the slot. Your own use only does under Not on use.
     private boolean holdsOff() {
-        return autoTool.isOn() && notOnUse.isOn() && mc.player.isUsingItem();
+        return autoTool.isOn() && (Hands.slotsTaken() || notOnUse.isOn() && mc.player.isUsingItem());
     }
 
     @Subscribe
@@ -480,7 +518,7 @@ public final class PacketMine extends Module {
         if (style.drawsSides() && done > 0) {
             AABB filled = new AABB(box.minX, box.minY, box.minZ,
                 box.maxX, box.minY + (box.maxY - box.minY) * done, box.maxZ);
-            batch.solidBox(filled, style.fillColor(), true);
+            batch.solidBox(filled, style.fadedFill(), true);
         }
     }
 }

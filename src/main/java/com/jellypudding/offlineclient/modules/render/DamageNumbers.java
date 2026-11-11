@@ -23,7 +23,6 @@ import net.minecraft.world.phys.Vec3;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 // Health is read once a tick and a drop shows whilst the entity flashes from a hit. The server
@@ -52,8 +51,10 @@ public final class DamageNumbers extends Module {
     private static final int YOUR_HIT_TICKS = 3;
     // A smaller drop is rounding in the health the server sends.
     private static final float SMALLEST = 0.05f;
+    // Places a drop of health is written to.
+    private static final int PLACES = 1;
 
-    private final EntityFilter filter = EntityFilter.living("Show hits on", "given numbers", true,
+    private final EntityFilter filter = EntityFilter.living("Shows hits on", "given numbers", true,
         EntityFilter.Pick.ALL, List.of());
     private final NumberSetting scale = new NumberSetting("Scale",
         "Size of the numbers.", 1, 0.5, 3, 0.1).min(0.1);
@@ -101,9 +102,6 @@ public final class DamageNumbers extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame()) {
-            return;
-        }
         if (world.changed()) {
             clear();
         }
@@ -137,17 +135,11 @@ public final class DamageNumbers extends Module {
     }
 
     private void lost(LivingEntity living, float amount) {
-        String text = amountText(amount);
+        String text = ChatUtil.decimal(amount, PLACES);
         pops.add(new Pop(living.position().add(0, living.getBbHeight() + OVER_HEAD, 0), text));
         if (yourHitAt.remove(living.getId()) != null && yourHits.isOn()) {
             ChatUtil.message("§7Your hit took §f" + text + " §7health off §f" + living.getName().getString() + "§7.");
         }
-    }
-
-    // Whole numbers lose their point.
-    private static String amountText(float amount) {
-        String text = String.format(Locale.ROOT, "%.1f", amount);
-        return text.endsWith(".0") ? text.substring(0, text.length() - 2) : text;
     }
 
     @Subscribe

@@ -2,6 +2,7 @@ package com.jellypudding.offlineclient.mixin;
 
 import com.jellypudding.offlineclient.mixinterface.IRenderState;
 import com.jellypudding.offlineclient.modules.render.Chams;
+import com.jellypudding.offlineclient.render.ChamsPicture;
 import com.jellypudding.offlineclient.render.EntityPipelines;
 import com.jellypudding.offlineclient.util.Modules;
 import com.llamalad7.mixinextras.injector.ModifyReturnValue;
@@ -50,6 +51,12 @@ public abstract class LivingEntityRendererMixin {
             return original;
         }
         IRenderState extra = (IRenderState) state;
+        if (extra.offlineclient$isPicture()) {
+            RenderType picture = ChamsPicture.renderType(getTextureLocation(state), extra.offlineclient$isChams());
+            if (picture != null) {
+                return picture;
+            }
+        }
         Identifier texture = extra.offlineclient$isFlat() ? Chams.BLANK : getTextureLocation(state);
         if (extra.offlineclient$isChams()) {
             return EntityPipelines.chams(texture);

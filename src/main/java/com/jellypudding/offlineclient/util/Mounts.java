@@ -31,10 +31,6 @@ public final class Mounts {
     // The forward key after the game trims it.
     private static final double RIDER_INPUT = 0.98;
 
-    // Ordinary ground with the drag across and down before a mount's own modifiers.
-    private static final double GROUND_FRICTION = 0.6;
-    private static final double AIR_DRAG = 0.91;
-    private static final double FALL_DRAG = 0.98;
     // Ground slicker than ordinary scales the push by this over the friction cubed.
     private static final double GRIP = 0.21600002;
 
@@ -69,11 +65,12 @@ public final class Mounts {
     private static final double WORST_STRENGTH = 1;
     private static final double BEST_STRENGTH = 5;
 
-    private static final double DEFAULT_GRAVITY = Attributes.GRAVITY.value().getDefaultValue();
-    private static final double SLOWEST = steady(RIDER_INPUT * WORST_SPEED, GROUND_FRICTION * AIR_DRAG);
-    private static final double FASTEST = steady(RIDER_INPUT * BEST_SPEED, GROUND_FRICTION * AIR_DRAG);
-    private static final double LOWEST = rise(WORST_JUMP, DEFAULT_GRAVITY, FALL_DRAG);
-    private static final double HIGHEST = rise(BEST_JUMP, DEFAULT_GRAVITY, FALL_DRAG);
+    // The share of its speed a mount keeps each tick on ordinary ground before its own modifiers.
+    private static final double GROUND_KEPT = MovementUtil.GROUND_FRICTION * LivingEntity.BASE_HORIZONTAL_AIR_DRAG;
+    private static final double SLOWEST = steady(RIDER_INPUT * WORST_SPEED, GROUND_KEPT);
+    private static final double FASTEST = steady(RIDER_INPUT * BEST_SPEED, GROUND_KEPT);
+    private static final double LOWEST = rise(WORST_JUMP, MovementUtil.GRAVITY, LivingEntity.BASE_VERTICAL_AIR_DRAG);
+    private static final double HIGHEST = rise(BEST_JUMP, MovementUtil.GRAVITY, LivingEntity.BASE_VERTICAL_AIR_DRAG);
 
     private Mounts() {
     }
@@ -126,7 +123,8 @@ public final class Mounts {
             return Double.NaN;
         }
         double gravity = mount.getGravity();
-        double drag = modified(FALL_DRAG, mount.getAttributeValue(Attributes.AIR_DRAG_MODIFIER));
+        double drag = modified(LivingEntity.BASE_VERTICAL_AIR_DRAG,
+            mount.getAttributeValue(Attributes.AIR_DRAG_MODIFIER));
         double power = mount.getAttributeValue(Attributes.JUMP_STRENGTH) + mount.getJumpBoostPower();
         // A camel's dash adds to the small fall the ground holds it against. A horse's jump replaces it.
         double lift = mount instanceof Camel ? CAMEL_DASH_LIFT * power - gravity * drag : power;
@@ -156,9 +154,10 @@ public final class Mounts {
 
     // The push a mount gets on ordinary ground under its own friction and drag modifiers.
     private static double overGround(LivingEntity mount, double input, double speed) {
-        double friction = modified(GROUND_FRICTION, mount.getAttributeValue(Attributes.FRICTION_MODIFIER));
-        double drag = modified(AIR_DRAG, mount.getAttributeValue(Attributes.AIR_DRAG_MODIFIER));
-        double grip = friction > GROUND_FRICTION ? GRIP / (friction * friction * friction) : 1;
+        double friction = modified(MovementUtil.GROUND_FRICTION, mount.getAttributeValue(Attributes.FRICTION_MODIFIER));
+        double drag = modified(LivingEntity.BASE_HORIZONTAL_AIR_DRAG,
+            mount.getAttributeValue(Attributes.AIR_DRAG_MODIFIER));
+        double grip = friction > MovementUtil.GROUND_FRICTION ? GRIP / (friction * friction * friction) : 1;
         return steady(input * speed * grip, friction * drag);
     }
 

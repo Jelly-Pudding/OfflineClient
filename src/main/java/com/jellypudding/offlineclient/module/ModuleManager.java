@@ -2,6 +2,7 @@ package com.jellypudding.offlineclient.module;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.Subscribe;
+import com.jellypudding.offlineclient.event.events.ClientTickEvent;
 import com.jellypudding.offlineclient.event.events.KeyPressEvent;
 import com.jellypudding.offlineclient.modules.combat.AimAssist;
 import com.jellypudding.offlineclient.modules.combat.AnchorAura;
@@ -25,6 +26,7 @@ import com.jellypudding.offlineclient.modules.combat.Blocker;
 import com.jellypudding.offlineclient.modules.combat.BowAimbot;
 import com.jellypudding.offlineclient.modules.combat.BowSpam;
 import com.jellypudding.offlineclient.modules.combat.Burrow;
+import com.jellypudding.offlineclient.modules.combat.ChorusHold;
 import com.jellypudding.offlineclient.modules.combat.Cocoon;
 import com.jellypudding.offlineclient.modules.combat.Confuse;
 import com.jellypudding.offlineclient.modules.combat.Criticals;
@@ -51,17 +53,21 @@ import com.jellypudding.offlineclient.modules.combat.TntAura;
 import com.jellypudding.offlineclient.modules.combat.TpAura;
 import com.jellypudding.offlineclient.modules.render.RemoteView;
 import com.jellypudding.offlineclient.modules.world.AutoBuild;
+import com.jellypudding.offlineclient.modules.world.MapPrinter;
 import com.jellypudding.offlineclient.modules.world.TemplateTool;
 import com.jellypudding.offlineclient.modules.combat.FightBot;
 import com.jellypudding.offlineclient.modules.combat.Protect;
 import com.jellypudding.offlineclient.modules.combat.Surround;
 import com.jellypudding.offlineclient.modules.combat.TriggerBot;
+import com.jellypudding.offlineclient.modules.combat.Wrecker;
 import com.jellypudding.offlineclient.modules.hunting.BaseFinder;
+import com.jellypudding.offlineclient.modules.hunting.BookReader;
 import com.jellypudding.offlineclient.modules.hunting.CaveTracks;
 import com.jellypudding.offlineclient.modules.hunting.Collectibles;
 import com.jellypudding.offlineclient.modules.hunting.Dossier;
 import com.jellypudding.offlineclient.modules.hunting.Earshot;
 import com.jellypudding.offlineclient.modules.hunting.Eavesdrop;
+import com.jellypudding.offlineclient.modules.hunting.EyeTracker;
 import com.jellypudding.offlineclient.modules.hunting.GearedMobs;
 import com.jellypudding.offlineclient.modules.hunting.ItemCoords;
 import com.jellypudding.offlineclient.modules.hunting.Locator;
@@ -86,19 +92,24 @@ import com.jellypudding.offlineclient.modules.misc.BookBot;
 import com.jellypudding.offlineclient.modules.misc.ChatAlerts;
 import com.jellypudding.offlineclient.modules.misc.ChatBot;
 import com.jellypudding.offlineclient.modules.misc.ClickGuiModule;
+import com.jellypudding.offlineclient.modules.misc.ColourCodes;
 import com.jellypudding.offlineclient.modules.misc.Conceal;
 import com.jellypudding.offlineclient.modules.misc.Derp;
 import com.jellypudding.offlineclient.modules.misc.FakePlayer;
 import com.jellypudding.offlineclient.modules.misc.Honker;
 import com.jellypudding.offlineclient.modules.misc.HudModule;
+import com.jellypudding.offlineclient.modules.misc.Inspector;
 import com.jellypudding.offlineclient.modules.misc.Latency;
+import com.jellypudding.offlineclient.modules.misc.Linger;
 import com.jellypudding.offlineclient.modules.misc.NameProtect;
 import com.jellypudding.offlineclient.modules.misc.MessageAura;
+import com.jellypudding.offlineclient.modules.misc.ModuleLock;
 import com.jellypudding.offlineclient.modules.misc.Notebot;
 import com.jellypudding.offlineclient.modules.misc.Notifier;
 import com.jellypudding.offlineclient.modules.misc.PacketCanceller;
 import com.jellypudding.offlineclient.modules.misc.PacketLogger;
 import com.jellypudding.offlineclient.modules.misc.Panic;
+import com.jellypudding.offlineclient.modules.misc.Playlist;
 import com.jellypudding.offlineclient.modules.misc.Privacy;
 import com.jellypudding.offlineclient.modules.misc.Proxy;
 import com.jellypudding.offlineclient.modules.misc.MassTpa;
@@ -107,6 +118,7 @@ import com.jellypudding.offlineclient.modules.misc.SkinDerp;
 import com.jellypudding.offlineclient.modules.misc.ServerSpoof;
 import com.jellypudding.offlineclient.modules.misc.SoundBlocker;
 import com.jellypudding.offlineclient.modules.misc.Spam;
+import com.jellypudding.offlineclient.modules.misc.Stasis;
 import com.jellypudding.offlineclient.modules.misc.Streamers;
 import com.jellypudding.offlineclient.modules.misc.TabGui;
 import com.jellypudding.offlineclient.modules.misc.Timer;
@@ -140,6 +152,7 @@ import com.jellypudding.offlineclient.modules.movement.NoKnockback;
 import com.jellypudding.offlineclient.modules.movement.NoReturn;
 import com.jellypudding.offlineclient.modules.movement.NoSlowdown;
 import com.jellypudding.offlineclient.modules.movement.Parkour;
+import com.jellypudding.offlineclient.modules.movement.PathfinderModule;
 import com.jellypudding.offlineclient.modules.movement.QuickClimb;
 import com.jellypudding.offlineclient.modules.movement.Slippy;
 import com.jellypudding.offlineclient.modules.movement.Sneak;
@@ -173,6 +186,7 @@ import com.jellypudding.offlineclient.modules.player.FastBreak;
 import com.jellypudding.offlineclient.modules.player.FastPlace;
 import com.jellypudding.offlineclient.modules.player.Follow;
 import com.jellypudding.offlineclient.modules.player.FastUse;
+import com.jellypudding.offlineclient.modules.player.FrameInput;
 import com.jellypudding.offlineclient.modules.player.Throw;
 import com.jellypudding.offlineclient.modules.player.AutoSwitch;
 import com.jellypudding.offlineclient.modules.player.GUIMove;
@@ -183,6 +197,7 @@ import com.jellypudding.offlineclient.modules.player.InventoryTweaks;
 import com.jellypudding.offlineclient.modules.player.LiquidInteract;
 import com.jellypudding.offlineclient.modules.player.Loadouts;
 import com.jellypudding.offlineclient.modules.player.LootList;
+import com.jellypudding.offlineclient.modules.player.MenuClicker;
 import com.jellypudding.offlineclient.modules.player.MenuTools;
 import com.jellypudding.offlineclient.modules.player.MiddleClickExtra;
 import com.jellypudding.offlineclient.modules.player.Multitask;
@@ -191,7 +206,6 @@ import com.jellypudding.offlineclient.modules.player.NoMiningTrace;
 import com.jellypudding.offlineclient.modules.player.NoRotate;
 import com.jellypudding.offlineclient.modules.player.NoStatusEffects;
 import com.jellypudding.offlineclient.modules.player.PortalMenus;
-import com.jellypudding.offlineclient.modules.player.PotionSaver;
 import com.jellypudding.offlineclient.modules.player.Reach;
 import com.jellypudding.offlineclient.modules.player.Rotation;
 import com.jellypudding.offlineclient.modules.player.ShulkerPacker;
@@ -212,8 +226,10 @@ import com.jellypudding.offlineclient.modules.render.CityEsp;
 import com.jellypudding.offlineclient.modules.render.ClearView;
 import com.jellypudding.offlineclient.modules.render.Confetti;
 import com.jellypudding.offlineclient.modules.render.DamageNumbers;
+import com.jellypudding.offlineclient.modules.render.DebugDrawings;
 import com.jellypudding.offlineclient.modules.render.EntityOwner;
 import com.jellypudding.offlineclient.modules.render.Esp;
+import com.jellypudding.offlineclient.modules.render.FarmRanges;
 import com.jellypudding.offlineclient.modules.render.FeetEsp;
 import com.jellypudding.offlineclient.modules.render.FreeLook;
 import com.jellypudding.offlineclient.modules.render.Freecam;
@@ -233,6 +249,7 @@ import com.jellypudding.offlineclient.modules.render.NoHurtCam;
 import com.jellypudding.offlineclient.modules.render.NoRender;
 import com.jellypudding.offlineclient.modules.render.NoShieldOverlay;
 import com.jellypudding.offlineclient.modules.render.OpenWaterEsp;
+import com.jellypudding.offlineclient.modules.render.OreProbe;
 import com.jellypudding.offlineclient.modules.render.OreSight;
 import com.jellypudding.offlineclient.modules.render.PearlTracker;
 import com.jellypudding.offlineclient.modules.render.PopChams;
@@ -241,6 +258,7 @@ import com.jellypudding.offlineclient.modules.render.Radar;
 import com.jellypudding.offlineclient.modules.render.SculkRange;
 import com.jellypudding.offlineclient.modules.render.Skeletons;
 import com.jellypudding.offlineclient.modules.render.SpawnEsp;
+import com.jellypudding.offlineclient.modules.render.SteadyFrames;
 import com.jellypudding.offlineclient.modules.render.TimeChanger;
 import com.jellypudding.offlineclient.modules.render.Tracers;
 import com.jellypudding.offlineclient.modules.render.Trail;
@@ -251,15 +269,18 @@ import com.jellypudding.offlineclient.modules.render.VoidEsp;
 import com.jellypudding.offlineclient.modules.render.Waypoints;
 import com.jellypudding.offlineclient.modules.render.Weather;
 import com.jellypudding.offlineclient.modules.render.WallHack;
+import com.jellypudding.offlineclient.modules.render.WorldMap;
 import com.jellypudding.offlineclient.modules.render.XRay;
 import com.jellypudding.offlineclient.modules.render.Zoom;
 import com.jellypudding.offlineclient.modules.world.AirPlace;
 import com.jellypudding.offlineclient.modules.world.Arson;
+import com.jellypudding.offlineclient.modules.world.AutoBooks;
 import com.jellypudding.offlineclient.modules.world.AutoBreed;
 import com.jellypudding.offlineclient.modules.world.AutoBrewer;
 import com.jellypudding.offlineclient.modules.world.AutoCraft;
 import com.jellypudding.offlineclient.modules.world.AutoEnchant;
 import com.jellypudding.offlineclient.modules.world.AutoFarm;
+import com.jellypudding.offlineclient.modules.world.AutoInteract;
 import com.jellypudding.offlineclient.modules.world.AutoLibrarian;
 import com.jellypudding.offlineclient.modules.world.AutoMason;
 import com.jellypudding.offlineclient.modules.world.AutoMount;
@@ -276,9 +297,9 @@ import com.jellypudding.offlineclient.modules.world.AutoSmelter;
 import com.jellypudding.offlineclient.modules.world.AutoSmith;
 import com.jellypudding.offlineclient.modules.world.AutoTrade;
 import com.jellypudding.offlineclient.modules.world.AutoWither;
+import com.jellypudding.offlineclient.modules.world.BlockSwap;
 import com.jellypudding.offlineclient.modules.world.BonemealAura;
 import com.jellypudding.offlineclient.modules.world.BrushReader;
-import com.jellypudding.offlineclient.modules.world.BuildHeight;
 import com.jellypudding.offlineclient.modules.world.Collisions;
 import com.jellypudding.offlineclient.modules.world.EChestFarmer;
 import com.jellypudding.offlineclient.modules.world.EndermanLook;
@@ -298,18 +319,21 @@ import com.jellypudding.offlineclient.modules.world.Scaffold;
 import com.jellypudding.offlineclient.modules.world.SpawnProofer;
 import com.jellypudding.offlineclient.modules.world.Staircase;
 import com.jellypudding.offlineclient.modules.world.TillAura;
+import com.jellypudding.offlineclient.modules.world.ToolAura;
 import com.jellypudding.offlineclient.modules.world.TrailMaker;
 import com.jellypudding.offlineclient.modules.world.TreeAura;
 import com.jellypudding.offlineclient.modules.world.Tunneller;
 import com.jellypudding.offlineclient.modules.world.VeinMiner;
 import com.jellypudding.offlineclient.modules.world.WaxAura;
+import com.jellypudding.offlineclient.setting.Setting;
 import com.jellypudding.offlineclient.util.ChatUtil;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 public final class ModuleManager {
@@ -319,6 +343,9 @@ public final class ModuleManager {
 
     // Lookup by type without walking the name map.
     private final Map<Class<? extends Module>, Module> byType = new ConcurrentHashMap<>();
+
+    // The modules a held key switched on and has not yet let go of.
+    private final Set<Module> heldOn = new LinkedHashSet<>();
 
     public ModuleManager() {
         registerCombat();
@@ -354,6 +381,7 @@ public final class ModuleManager {
         add(new Hitboxes());
         add(new AutoClicker());
         add(new MaceCombo());
+        add(new Wrecker());
         add(new TpAura());
         add(new AntiBot());
 
@@ -377,6 +405,7 @@ public final class ModuleManager {
         add(new Cocoon());
         add(new Burrow());
         add(new AutoPearl());
+        add(new ChorusHold());
         add(new AutoWeb());
         add(new SelfWeb());
         add(new AutoAnvil());
@@ -440,6 +469,7 @@ public final class ModuleManager {
         add(new NoReturn());
 
         add(new AutoWalk());
+        add(new PathfinderModule());
         add(new Autopilot());
         add(new VehicleFly());
         add(new TridentBoost());
@@ -469,11 +499,13 @@ public final class ModuleManager {
         add(new TrialEsp());
         add(new XRay());
         add(new OreSight());
+        add(new OreProbe());
         add(new WallHack());
         add(new HoleEsp());
         add(new FeetEsp());
         add(new CityEsp());
         add(new SpawnEsp());
+        add(new FarmRanges());
         add(new SculkRange());
 
         add(new Fullbright());
@@ -483,6 +515,7 @@ public final class ModuleManager {
         add(new Weather());
         add(new TimeChanger());
         add(new Ambience());
+        add(new SteadyFrames());
 
         add(new Freecam());
         add(new FreeLook());
@@ -497,8 +530,10 @@ public final class ModuleManager {
         add(new Trail());
         add(new Radar());
         add(new Minimap());
+        add(new WorldMap());
         add(new Highways());
         add(new ChunkBorders());
+        add(new DebugDrawings());
         add(new VoidEsp());
         add(new Portals());
 
@@ -528,7 +563,6 @@ public final class ModuleManager {
         add(new Ghost());
         add(new AutoSleep());
         add(new AntiHunger());
-        add(new PotionSaver());
         add(new NoStatusEffects());
         add(new AntiCactus());
 
@@ -538,6 +572,7 @@ public final class ModuleManager {
         add(new FastUse());
         add(new Reach());
         add(new Multitask());
+        add(new FrameInput());
         add(new NoMiningTrace());
         add(new LiquidInteract());
         add(new NoInteract());
@@ -547,6 +582,7 @@ public final class ModuleManager {
 
         add(new InventoryTweaks());
         add(new MenuTools());
+        add(new MenuClicker());
         add(new AutoReplenish());
         add(new Loadouts());
         add(new ChestStealer());
@@ -578,10 +614,10 @@ public final class ModuleManager {
         add(new AutoBuild());
         add(new AutoWither());
         add(new TemplateTool());
+        add(new MapPrinter());
         add(new BuildRandom());
         add(new TrailMaker());
         add(new InstantBunker());
-        add(new BuildHeight());
 
         add(new Nuker());
         add(new VeinMiner());
@@ -597,6 +633,7 @@ public final class ModuleManager {
         add(new LavaCast());
         add(new SpawnProofer());
         add(new Painter());
+        add(new BlockSwap());
         add(new Kaboom());
         add(new Arson());
         add(new Collisions());
@@ -604,11 +641,13 @@ public final class ModuleManager {
         add(new AutoFarm());
         add(new BrushReader());
         add(new TillAura());
+        add(new ToolAura());
         add(new BonemealAura());
         add(new TreeAura());
         add(new WaxAura());
         add(new AutoBreed());
         add(new AutoShearer());
+        add(new AutoInteract());
         add(new AxolotlHunter());
         add(new Flamethrower());
 
@@ -625,6 +664,7 @@ public final class ModuleManager {
         add(new AutoSmith());
         add(new AutoMason());
         add(new AutoRename());
+        add(new AutoBooks());
         add(new AutoTrade());
         add(new AutoLibrarian());
         add(new AutoSign());
@@ -643,10 +683,12 @@ public final class ModuleManager {
         add(new Locator());
         add(new Dossier());
         add(new Eavesdrop());
+        add(new EyeTracker());
         add(new Earshot());
         add(new GearedMobs());
         add(new Collectibles());
         add(new ItemCoords());
+        add(new BookReader());
         add(new MapArt());
     }
 
@@ -656,13 +698,17 @@ public final class ModuleManager {
         add(new TabGui());
         add(new Panic());
         add(new Triggers());
+        add(new ModuleLock());
 
         add(new AutoReconnect());
+        add(new Linger());
         add(new AutoLogin());
         add(new AutoLog());
+        add(new Stasis());
         add(new AntiAfk());
         add(new Timer());
         add(new FakePlayer());
+        add(new Inspector());
 
         add(new BetterChat());
         add(new BetterTab());
@@ -681,7 +727,9 @@ public final class ModuleManager {
 
         add(new BetterBeacons());
         add(new SoundBlocker());
+        add(new Playlist());
         add(new BookBot());
+        add(new ColourCodes());
         add(new Notebot());
         add(new Honker());
 
@@ -699,17 +747,13 @@ public final class ModuleManager {
     }
 
     private void add(Module module) {
-        modules.put(key(module.getName()), module);
+        modules.put(Setting.idFor(module.getName()), module);
         byType.put(module.getClass(), module);
     }
 
-    public Module get(String name) {
-        return modules.get(key(name));
-    }
-
     // Spaces and case are ignored.
-    private static String key(String name) {
-        return name.toLowerCase(Locale.ROOT).replace(" ", "");
+    public Module get(String name) {
+        return modules.get(Setting.idFor(name));
     }
 
     // The registered module of the given type. A concrete class hits the
@@ -771,19 +815,55 @@ public final class ModuleManager {
         return result;
     }
 
+    // What the config writes for the switch of a module. One that is only on whilst its key is
+    // down is written as off. One a dormant Panic will bring back is written as on.
+    public boolean savesAsOn(Module module) {
+        return module.savesEnabledState() && !heldOn.contains(module)
+            && (module.isEnabled() || get(Panic.class).bringsBack(module));
+    }
+
+    // A held key switches a module that is off on until it is let go and says nothing in chat.
+    // On a module that is already on it is a plain switch like any other key.
     @Subscribe
     private void onKeyPress(KeyPressEvent event) {
         if (OfflineClient.MC.gui.screen() != null) {
             return;
         }
         for (Module module : modules.values()) {
-            if (event.presses(module.getKeybind())) {
-                boolean was = module.isEnabled();
-                module.onKeybind();
-                if (module.isEnabled() != was) {
-                    ChatUtil.toggled(module);
-                }
+            if (!event.presses(module.getKeybind())) {
+                continue;
+            }
+            if (module.holdsKey() && !module.isEnabled()) {
+                hold(module);
+                continue;
+            }
+            boolean was = module.isEnabled();
+            module.onKeybind();
+            if (module.isEnabled() != was) {
+                ChatUtil.toggled(module);
             }
         }
+    }
+
+    // Listed before it is switched on. Whatever saves the config in between writes it as off.
+    private void hold(Module module) {
+        heldOn.add(module);
+        module.setHeld(true);
+        if (!module.isEnabled()) {
+            heldOn.remove(module);
+        }
+    }
+
+    // Asked every tick and not on the release. A key let go under a screen or outside the
+    // window still ends the hold.
+    @Subscribe
+    private void onClientTick(ClientTickEvent event) {
+        heldOn.removeIf(module -> {
+            if (module.getKeybind().isHeld()) {
+                return false;
+            }
+            module.setHeld(false);
+            return true;
+        });
     }
 }

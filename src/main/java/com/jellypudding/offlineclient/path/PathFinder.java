@@ -1,8 +1,13 @@
 package com.jellypudding.offlineclient.path;
 
 import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.modules.movement.PathfinderModule;
+import com.jellypudding.offlineclient.util.Background;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChunkWindow;
+import com.jellypudding.offlineclient.util.DamageUtil;
+import com.jellypudding.offlineclient.util.Modules;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.FluidTags;
@@ -27,7 +32,6 @@ import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
 // An A star walk over block positions run on a worker thread. The caller starts
@@ -43,6 +47,13 @@ public final class PathFinder {
     private static final double WEB = 3;
     private static final double SOUL_SAND = 1;
     private static final double BREAK = 5;
+    private static final double PLACE = 3;
+
+    // A drop that stands for any drop at all. No world is that deep.
+    private static final int ANY_FALL = 512;
+
+    // A step height a hair short of a whole block still climbs one.
+    private static final double STEP_SLACK = 0.01;
 
     // The nodes a search may open before it settles for the closest it got. Then the
     // radius in chunks it may search around the start.
@@ -54,12 +65,7 @@ public final class PathFinder {
     private static final int[] STEP_Z = {-1, 0, 1, 0, -1, 1, 1, -1};
 
     // Searching is heavy. One worker handles every module in turn.
-    private static final ExecutorService POOL = Executors.newSingleThreadExecutor(runnable -> {
-        Thread thread = new Thread(runnable, "OfflineClient PathFinder");
-        thread.setDaemon(true);
-        thread.setPriority(Thread.MIN_PRIORITY);
-        return thread;
-    });
+    private static final ExecutorService POOL = Background.worker("OfflineClient PathFinder");
 
     // Nodes from the player to the goal. A search that ran out goes only as close as it managed.
     public record Result(List<BlockPos> nodes) {
@@ -68,7 +74,15 @@ public final class PathFinder {
     record Step(BlockPos to, double cost) {
     }
 
-    private int maxFall = 3;
+    // What a walk may count on. The drop it may take and the drop that lands unhurt. The liquids
+    // Jesus holds the player up on and the blocks Step lifts them and whether the hotbar may lay a floor.
+    record Means(int maxFall, int safeFall, boolean swim, boolean breakBlocks, boolean onWater, boolean onLava,
+                 int stepUp, boolean bridge, boolean pillar) {
+    }
+
+    // A caller that set the drop itself keeps it whatever NoFall would allow.
+    private int maxFall;
+    private boolean fallChosen;
     private boolean swim = true;
     private boolean breakBlocks;
 
@@ -76,6 +90,7 @@ public final class PathFinder {
 
     public PathFinder maxFall(int blocks) {
         this.maxFall = blocks;
+        fallChosen = true;
         return this;
     }
 
@@ -91,7 +106,24 @@ public final class PathFinder {
 
     // The rules a walker checks the live world against on the client thread.
     public Rules liveRules() {
-        return new Rules(ChunkWindow.live(), maxFall, swim, breakBlocks);
+        return new Rules(ChunkWindow.live(), means());
+    }
+
+    // Read on the client thread as a search starts and on every tick of a walk. A module
+    // switched on or off part way changes the walk from the next tick.
+    private Means means() {
+        LocalPlayer player = OfflineClient.MC.player;
+        boolean onWater = PathWalker.unsneaked(() -> Modules.walksOn(Blocks.WATER.defaultBlockState()));
+        boolean onLava = PathWalker.unsneaked(() -> Modules.walksOn(Blocks.LAVA.defaultBlockState()));
+        int safeFall = (int) DamageUtil.safeFall(player);
+        int fall = fallChosen ? maxFall : Modules.fallsFree() ? ANY_FALL : safeFall;
+        int stepUp = player == null ? 0 : (int) (player.maxUpStep() + STEP_SLACK);
+        boolean bridge = PathfinderModule.bridges();
+        boolean pillar = PathfinderModule.pillars();
+        // The hotbar is only looked through for a walk that may lay blocks at all.
+        boolean lays = (bridge || pillar) && player != null && PathWalker.blockSlot(player.blockPosition()) != -1;
+        return new Means(fall, safeFall, swim && !onWater, breakBlocks, onWater, onLava, stepUp, lays && bridge,
+            lays && pillar);
     }
 
     // The block an entity counts as standing in.
@@ -106,7 +138,7 @@ public final class PathFinder {
             return false;
         }
         BlockPos from = start.immutable();
-        Rules rules = new Rules(ChunkWindow.capture(from, AREA_CHUNKS), maxFall, swim, breakBlocks);
+        Rules rules = new Rules(ChunkWindow.capture(from, AREA_CHUNKS), means());
         running = POOL.submit(() -> new Search(rules, goal, from, NODE_BUDGET).run());
         return true;
     }
@@ -148,19 +180,44 @@ public final class PathFinder {
     public static final class Rules {
 
         private final ChunkWindow view;
-        private final int maxFall;
-        private final boolean swim;
-        private final boolean breakBlocks;
+        private final Means means;
 
-        Rules(ChunkWindow view, int maxFall, boolean swim, boolean breakBlocks) {
+        Rules(ChunkWindow view, Means means) {
             this.view = view;
-            this.maxFall = maxFall;
-            this.swim = swim;
-            this.breakBlocks = breakBlocks;
+            this.means = means;
         }
 
         boolean canStand(BlockPos pos) {
             return entryCost(pos) >= 0;
+        }
+
+        // True when a slip into the spot ends in a fall that hurts. NoFall takes the hurt
+        // out of any fall that has somewhere to land.
+        boolean deepDrop(BlockPos pos) {
+            return landingBelow(pos, means.maxFall() == ANY_FALL ? ANY_FALL : means.safeFall()) == null;
+        }
+
+        // True where the floor of a spot is a liquid Jesus holds the player up on.
+        boolean afloat(BlockPos pos) {
+            return holdsUp(view.get(pos.below()));
+        }
+
+        // Blocks the player walks up without a jump.
+        int stepUp() {
+            return means.stepUp();
+        }
+
+        // The floor a walk has to lay before the player can stand in the spot. Null when the
+        // spot has one or the walk lays none.
+        BlockPos missingFloor(BlockPos pos) {
+            return (means.bridge() || means.pillar()) && wantsFloor(pos) ? pos.below() : null;
+        }
+
+        // Room to stand with nothing under it but a block from the hotbar can go there.
+        private boolean wantsFloor(BlockPos pos) {
+            BlockState floor = view.get(pos.below());
+            return fitsAt(pos) && !canFloat(view.get(pos)) && !unknown(floor) && floor.canBeReplaced()
+                && !holdsUp(floor);
         }
 
         boolean canStep(BlockPos from, BlockPos to) {
@@ -174,20 +231,33 @@ public final class PathFinder {
             return false;
         }
 
-        // The first block to dig out of the way of a spot. Null when nothing is in
-        // the way or breaking is switched off.
-        BlockPos blocking(BlockPos pos) {
-            if (!breakBlocks) {
+        // The first block to dig out of the way of the step from prev to the node. Null when
+        // nothing is in the way or breaking is switched off.
+        BlockPos blocking(BlockPos prev, BlockPos node) {
+            if (!means.breakBlocks()) {
                 return null;
             }
-            if (spaceCost(pos, false) < 0 && spaceCost(pos, true) >= 0) {
-                return pos;
+            // A drop passes the side column from head height down to the landing. The face the
+            // player sees goes first.
+            if (node.getY() < prev.getY() && (node.getX() != prev.getX() || node.getZ() != prev.getZ())) {
+                for (int y = prev.getY() + 1; y >= node.getY(); y--) {
+                    BlockPos pos = node.atY(y);
+                    if (mustDig(pos)) {
+                        return pos;
+                    }
+                }
+                return null;
             }
-            BlockPos head = pos.above();
-            if (spaceCost(head, false) < 0 && spaceCost(head, true) >= 0) {
-                return head;
+            if (mustDig(node)) {
+                return node;
             }
-            return null;
+            BlockPos head = node.above();
+            return mustDig(head) ? head : null;
+        }
+
+        // True for a block that stops the player and may be broken.
+        private boolean mustDig(BlockPos pos) {
+            return spaceCost(pos, false) < 0 && spaceCost(pos, true) >= 0;
         }
 
         // Every spot reachable from here in one move.
@@ -204,44 +274,69 @@ public final class PathFinder {
                 double level = entryCost(side);
                 if (level >= 0) {
                     out.add(new Step(side, base + level));
+                } else if (!diagonal && means.bridge() && !afloat(from) && wantsFloor(side)) {
+                    out.add(new Step(side, base + PLACE));
                 }
                 if (!diagonal) {
-                    addJump(from, side, base, out);
+                    addRise(from, side, base, out);
                 }
                 addDrop(side, base, out);
             }
             addClimb(from, out);
         }
 
-        // A hop onto the block above the neighbour. The head has to clear first.
-        private void addJump(BlockPos from, BlockPos side, double base, List<Step> out) {
-            if (spaceCost(from.above(2), false) < 0) {
-                return;
-            }
-            double cost = entryCost(side.above());
-            if (cost >= 0) {
-                out.add(new Step(side.above(), base + cost + JUMP));
+        // A hop onto the block above the neighbour or a walk up as many blocks as the
+        // player steps without one. The head has to clear all the way first.
+        private void addRise(BlockPos from, BlockPos side, double base, List<Step> out) {
+            for (int rise = 1; rise <= Math.max(1, means.stepUp()); rise++) {
+                if (spaceCost(from.above(rise + 1), false) < 0) {
+                    return;
+                }
+                double cost = entryCost(side.above(rise));
+                if (cost >= 0) {
+                    out.add(new Step(side.above(rise), base + cost + (rise > means.stepUp() ? JUMP : 0)));
+                    return;
+                }
             }
         }
 
-        // Walks off an edge. The first spot with a floor inside the fall limit
-        // is where the player lands.
+        // Walks off an edge and lands inside the fall limit. The drop pays for the two blocks of the
+        // side column the player walks into and the landing for itself and the spot above it.
         private void addDrop(BlockPos side, double base, List<Step> out) {
-            if (maxFall <= 0 || spaceCost(side, breakBlocks) < 0
-                || spaceCost(side.above(), breakBlocks) < 0) {
+            if (means.maxFall() <= 0) {
                 return;
             }
-            for (int drop = 1; drop <= maxFall; drop++) {
+            double feet = spaceCost(side, means.breakBlocks());
+            if (feet < 0) {
+                return;
+            }
+            double head = spaceCost(side.above(), means.breakBlocks());
+            if (head < 0) {
+                return;
+            }
+            BlockPos landing = landingBelow(side, means.maxFall());
+            if (landing == null) {
+                return;
+            }
+            int drop = side.getY() - landing.getY();
+            // After a drop of one the spot above the landing is the side and the landing pays for it.
+            double passed = drop > 1 ? head + feet : head;
+            out.add(new Step(landing, base + passed + entryCost(landing) + FALL * drop));
+        }
+
+        // The first spot with a floor that a player who drops into the spot comes down to.
+        // Null when a block or the limit stops the fall before one.
+        private BlockPos landingBelow(BlockPos side, int limit) {
+            for (int drop = 1; drop <= limit; drop++) {
                 BlockPos landing = side.below(drop);
-                double cost = entryCost(landing);
-                if (cost >= 0) {
-                    out.add(new Step(landing, base + cost + FALL * drop));
-                    return;
+                if (entryCost(landing) >= 0) {
+                    return landing;
                 }
                 if (spaceCost(landing, false) < 0) {
-                    return;
+                    return null;
                 }
             }
+            return null;
         }
 
         // Ladders and vines and swimming let the player move straight up or down.
@@ -254,6 +349,8 @@ public final class PathFinder {
                 }
             } else if (canFloat(view.get(up)) && entryCost(up) >= 0) {
                 out.add(new Step(up, CLIMB));
+            } else if (means.pillar() && !afloat(from) && wantsFloor(up)) {
+                out.add(new Step(up, CLIMB + PLACE));
             }
             if (canFloat(view.get(down)) && entryCost(down) >= 0) {
                 out.add(new Step(down, CLIMB));
@@ -261,7 +358,7 @@ public final class PathFinder {
         }
 
         private boolean canFloat(BlockState state) {
-            return climbable(state) || (swim && state.getFluidState().is(FluidTags.WATER));
+            return climbable(state) || (means.swim() && state.getFluidState().is(FluidTags.WATER));
         }
 
         // A diagonal needs both of the sides beside it open or the player would clip
@@ -278,11 +375,11 @@ public final class PathFinder {
         // Minus one when the player cannot stand in the spot. Otherwise the extra
         // cost of getting into it which is nought on plain ground.
         private double entryCost(BlockPos pos) {
-            double feet = spaceCost(pos, breakBlocks);
+            double feet = spaceCost(pos, means.breakBlocks());
             if (feet < 0) {
                 return -1;
             }
-            double head = spaceCost(pos.above(), breakBlocks);
+            double head = spaceCost(pos.above(), means.breakBlocks());
             if (head < 0) {
                 return -1;
             }
@@ -291,10 +388,16 @@ public final class PathFinder {
                 return extra;
             }
             BlockState floor = view.get(pos.below());
-            if (!solidFloor(floor)) {
+            if (!solidFloor(floor) && !holdsUp(floor)) {
                 return -1;
             }
             return floor.getBlock() == Blocks.SOUL_SAND ? extra + SOUL_SAND : extra;
+        }
+
+        // A liquid Jesus makes a floor of.
+        private boolean holdsUp(BlockState floor) {
+            FluidState fluid = floor.getFluidState();
+            return means.onWater() && fluid.is(FluidTags.WATER) || means.onLava() && fluid.is(FluidTags.LAVA);
         }
 
         // Minus one when the player cannot move through the block.
@@ -311,7 +414,7 @@ public final class PathFinder {
             }
             FluidState fluid = state.getFluidState();
             if (!fluid.isEmpty()) {
-                return swim && fluid.is(FluidTags.WATER) ? WATER : -1;
+                return means.swim() && fluid.is(FluidTags.WATER) ? WATER : -1;
             }
             return state.getBlock() instanceof WebBlock ? WEB : 0;
         }
@@ -367,9 +470,9 @@ public final class PathFinder {
 
         private Result run() {
             cost.put(start.asLong(), 0d);
-            open.add(new Node(start.asLong(), goal.heuristic(start)));
+            open.add(new Node(start.asLong(), heuristic(start)));
             BlockPos closest = start;
-            double closestScore = goal.heuristic(start);
+            double closestScore = heuristic(start);
             List<Step> steps = new ArrayList<>();
 
             for (int expanded = 0; expanded < budget && !open.isEmpty(); expanded++) {
@@ -384,7 +487,7 @@ public final class PathFinder {
                 if (goal.reached(pos)) {
                     return new Result(trace(pos));
                 }
-                double here = goal.heuristic(pos);
+                double here = heuristic(pos);
                 if (here < closestScore) {
                     closestScore = here;
                     closest = pos;
@@ -410,8 +513,12 @@ public final class PathFinder {
                 }
                 cost.put(key, total);
                 previous.put(key, from);
-                open.add(new Node(key, total + goal.heuristic(step.to())));
+                open.add(new Node(key, total + heuristic(step.to())));
             }
+        }
+
+        private double heuristic(BlockPos pos) {
+            return goal.heuristic(pos, rules.stepUp());
         }
 
         private List<BlockPos> trace(BlockPos end) {

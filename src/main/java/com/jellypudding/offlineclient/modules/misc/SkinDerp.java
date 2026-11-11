@@ -27,10 +27,10 @@ public final class SkinDerp extends Module {
         .describe(Pattern.PEEL, "Takes the layers off one by one and puts them back.")
         .describe(Pattern.CHASE, "Shows one layer at a time in turn.");
     private final NumberSetting chance = new NumberSetting("Chance",
-        "How likely each tick is to flip the layers.", 25, 1, 100, 1, "%").min(1).max(100)
+        "How likely each tick is to flip the layers.", 25, 1, 100, 1, "%").max(100)
         .under(pattern, Pattern.RANDOM);
     private final NumberSetting delay = new NumberSetting("Delay",
-        "Ticks between changes.", 4, 1, 40, 1, " ticks").min(1)
+        "Ticks between changes.", 4, 1, 40, 1, " ticks")
         .under(pattern, Pattern.BLINK, Pattern.PEEL, Pattern.CHASE);
     private final BoolSetting keepCape = new BoolSetting("Keep cape",
         "Leaves your cape showing.", false);
@@ -68,9 +68,6 @@ public final class SkinDerp extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame()) {
-            return;
-        }
         if (pattern.is(Pattern.RANDOM)) {
             if (ThreadLocalRandom.current().nextInt(100) >= chance.getInt()) {
                 return;

@@ -6,22 +6,33 @@ import com.jellypudding.offlineclient.hud.HudElement;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.module.ModuleManager;
 import com.jellypudding.offlineclient.modules.combat.AntiBot;
+import com.jellypudding.offlineclient.modules.combat.AutoArmor;
+import com.jellypudding.offlineclient.modules.combat.AutoCity;
 import com.jellypudding.offlineclient.modules.combat.AutoPearl;
+import com.jellypudding.offlineclient.modules.combat.AutoTotem;
 import com.jellypudding.offlineclient.modules.combat.CrystalAura;
-import com.jellypudding.offlineclient.modules.combat.Knockback;
+import com.jellypudding.offlineclient.modules.combat.FightBot;
 import com.jellypudding.offlineclient.modules.combat.MaceCombo;
+import com.jellypudding.offlineclient.modules.combat.Offhand;
 import com.jellypudding.offlineclient.modules.combat.PistonAura;
+import com.jellypudding.offlineclient.modules.combat.Protect;
 import com.jellypudding.offlineclient.modules.hunting.NewChunks;
 import com.jellypudding.offlineclient.modules.misc.AntiPacketKick;
+import com.jellypudding.offlineclient.modules.misc.AntiSpam;
 import com.jellypudding.offlineclient.modules.misc.AutoReconnect;
 import com.jellypudding.offlineclient.modules.misc.BetterChat;
 import com.jellypudding.offlineclient.modules.misc.FakePlayer;
 import com.jellypudding.offlineclient.modules.misc.HudModule;
 import com.jellypudding.offlineclient.modules.misc.Latency;
+import com.jellypudding.offlineclient.modules.misc.ModuleLock;
+import com.jellypudding.offlineclient.modules.misc.Panic;
 import com.jellypudding.offlineclient.modules.misc.Webhook;
 import com.jellypudding.offlineclient.modules.movement.Autopilot;
 import com.jellypudding.offlineclient.modules.movement.Fetch;
 import com.jellypudding.offlineclient.modules.movement.Flight;
+import com.jellypudding.offlineclient.modules.movement.Jesus;
+import com.jellypudding.offlineclient.modules.movement.NoFall;
+import com.jellypudding.offlineclient.modules.movement.NoSlowdown;
 import com.jellypudding.offlineclient.modules.movement.Sneak;
 import com.jellypudding.offlineclient.modules.player.AutoEat;
 import com.jellypudding.offlineclient.modules.player.AutoExtinguish;
@@ -32,7 +43,11 @@ import com.jellypudding.offlineclient.modules.player.ChestLink;
 import com.jellypudding.offlineclient.modules.player.NoInteract;
 import com.jellypudding.offlineclient.modules.player.ShulkerPacker;
 import com.jellypudding.offlineclient.modules.render.PearlTracker;
+import com.jellypudding.offlineclient.modules.render.SteadyFrames;
 import com.jellypudding.offlineclient.modules.render.Waypoints;
+import com.jellypudding.offlineclient.modules.world.PacketMine;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.protocol.PacketType;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
@@ -40,6 +55,7 @@ import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.shapes.Shapes;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -47,6 +63,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.IntSupplier;
 
 // Module lookup for mixins and other hot paths. ModuleManager is null until the
 // client has started and this hands back null instead of throwing.
@@ -111,6 +128,17 @@ public final class Modules {
         return pearl != null && pearl != asker && pearl.isBusy();
     }
 
+    // True whilst a bottle AutoPotion or AutoExtinguish threw at your feet may still be landing. It may
+    // bring the effect another feeder is about to take. The use key and the hotbar are free meanwhile.
+    public static boolean bottleLanding() {
+        AutoPotion potion = get(AutoPotion.class);
+        if (potion != null && potion.bottleLanding()) {
+            return true;
+        }
+        AutoExtinguish extinguish = get(AutoExtinguish.class);
+        return extinguish != null && extinguish.bottleLanding();
+    }
+
     // True whilst AutoEat or AutoGap is eating with Pause combat on.
     public static boolean feedersPauseCombat() {
         AutoEat autoEat = get(AutoEat.class);
@@ -127,10 +155,36 @@ public final class Modules {
         return crystals != null && crystals.isActing();
     }
 
+    // True whilst CrystalAura has someone to fight.
+    public static boolean crystalsHaveTarget() {
+        CrystalAura crystals = active(CrystalAura.class);
+        return crystals != null && crystals.hasTarget();
+    }
+
     // True whilst PistonAura turns for a piston or waits on the crystal it pushes.
     public static boolean pistonFiring() {
         PistonAura piston = active(PistonAura.class);
         return piston != null && piston.isFiring();
+    }
+
+    // True whilst the crystal on the spot is the one AutoCity sets off with the block it is
+    // about to break.
+    public static boolean cityHolds(BlockPos crystal) {
+        AutoCity city = active(AutoCity.class);
+        return city != null && city.holds(crystal);
+    }
+
+    // True whilst AutoCity needs its tool to stay in hand for the block to come down.
+    public static boolean cityKeepsTool() {
+        AutoCity city = active(AutoCity.class);
+        return city != null && city.keepsTool();
+    }
+
+    // True whilst PacketMine has a block to break or a spot it keeps for a rebreak. Both lean
+    // on the server's one break target.
+    public static boolean packetMining() {
+        PacketMine mine = active(PacketMine.class);
+        return mine != null && mine.hasTarget();
     }
 
     // True whilst MaceCombo is between its throw and its smash.
@@ -139,11 +193,10 @@ public final class Modules {
         return combo != null && combo.isAirborne();
     }
 
-    // True whilst Knockback sends the sprint start that earns a hit its knockback or Fetch
-    // sends the one its pull needs.
+    // True whilst the sprint start that earns a hit its knockback goes out or Fetch sends
+    // the one its pull needs.
     public static boolean renewingSprint() {
-        Knockback knockback = active(Knockback.class);
-        if (knockback != null && knockback.sendingStart()) {
+        if (SprintPause.lending()) {
             return true;
         }
         Fetch fetch = active(Fetch.class);
@@ -177,6 +230,13 @@ public final class Modules {
         return autoTool != null ? autoTool.hotbarPick(state) : ItemUtil.bestToolSlot(state);
     }
 
+    // The inventory slot of the chestplate to put on in place of an elytra. AutoArmor's rules decide
+    // whilst it is on and the given pick does otherwise. Minus one puts none on.
+    public static int chestplateSlot(IntSupplier ownPick) {
+        AutoArmor autoArmor = active(AutoArmor.class);
+        return autoArmor != null ? autoArmor.bestChestplate() : ownPick.getAsInt();
+    }
+
     // True whilst AutoTool holds back a break that would snap the tool in hand.
     public static boolean toolHeldBack() {
         AutoTool autoTool = active(AutoTool.class);
@@ -194,6 +254,12 @@ public final class Modules {
     public static boolean keepsFromThrow(ItemStack stack) {
         NoInteract noInteract = active(NoInteract.class);
         return noInteract != null && noInteract.keeps(stack);
+    }
+
+    // True whilst NoInteract is on and keeps every right click off the block.
+    public static boolean keepsFromUse(BlockPos pos) {
+        NoInteract noInteract = active(NoInteract.class);
+        return noInteract != null && noInteract.blocksUse(pos);
     }
 
     // True whilst PearlTracker is on and names a pearl after a player who joined or left with it.
@@ -220,13 +286,29 @@ public final class Modules {
         return enabled(ShulkerPacker.class);
     }
 
+    // True whilst AutoExtinguish is on. It puts you out by the player's order of remedies and a
+    // fire resistance potion is one of them.
+    public static boolean putsOutFire() {
+        return enabled(AutoExtinguish.class);
+    }
+
+    // True whilst the Offhand module or a locked AutoTotem keeps the offhand. Anything else that
+    // filled it would trade it back and forth with them.
+    public static boolean keepsOffhand() {
+        if (enabled(Offhand.class)) {
+            return true;
+        }
+        AutoTotem autoTotem = get(AutoTotem.class);
+        return autoTotem != null && autoTotem.isLocked();
+    }
+
     // The sneak key held or Sneak keeping the player down.
     public static boolean sneaking() {
         return OfflineClient.MC.player.isShiftKeyDown() || enabled(Sneak.class);
     }
 
-    // The entity the first combat module that is on and fighting has picked. Null whilst none
-    // of them has one.
+    // The living thing the first combat module that is on and fighting one has picked. Null
+    // whilst none of them has one.
     public static LivingEntity target() {
         for (Targeting module : all(Targeting.class)) {
             LivingEntity target = module.isEnabled() ? module.getTarget() : null;
@@ -235,6 +317,54 @@ public final class Modules {
             }
         }
         return null;
+    }
+
+    // True whilst a combat module that is on has something to fight. A crystal or a boat counts.
+    public static boolean fighting() {
+        return all(Targeting.class).stream().anyMatch(Modules::fights);
+    }
+
+    // The same leaving out the modules of one kind.
+    public static boolean fighting(Class<? extends Targeting> besides) {
+        return all(Targeting.class).stream().anyMatch(module -> !besides.isInstance(module) && fights(module));
+    }
+
+    private static boolean fights(Targeting module) {
+        return module.isEnabled() && module.getFought() != null;
+    }
+
+    // True whilst FightBot or Protect is on. A walk of theirs is how they fight.
+    public static boolean walksToFight() {
+        return enabled(FightBot.class) || enabled(Protect.class);
+    }
+
+    // True whilst FightBot or Protect has something to fight. They walk to it and need the view
+    // and the movement keys.
+    public static boolean fightsOnFoot() {
+        FightBot bot = get(FightBot.class);
+        Protect guard = get(Protect.class);
+        return bot != null && fights(bot) || guard != null && fights(guard);
+    }
+
+    // True whilst Jesus would hold the player up on a liquid in that state lying under
+    // their feet. The module answers by its own rules.
+    public static boolean walksOn(BlockState liquid) {
+        Jesus jesus = get(Jesus.class);
+        LocalPlayer player = OfflineClient.MC.player;
+        return jesus != null && player != null
+            && !jesus.adjustShape(player, liquid, player.blockPosition().below(2), Shapes.empty()).isEmpty();
+    }
+
+    // True whilst NoFall takes the hurt out of a drop of any height.
+    public static boolean fallsFree() {
+        NoFall noFall = get(NoFall.class);
+        return noFall != null && noFall.takesAnyDrop();
+    }
+
+    // True whilst NoSlowdown keeps your speed whilst an item is in use.
+    public static boolean itemsKeepSpeed() {
+        NoSlowdown noSlowdown = get(NoSlowdown.class);
+        return noSlowdown != null && noSlowdown.skipsItems();
     }
 
     // True whilst AntiBot is on and takes the entity for a fake player.
@@ -255,6 +385,12 @@ public final class Modules {
         return entity instanceof FakePlayer.Body;
     }
 
+    // True for a body that is only a picture such as the copy Blink leaves where you set off.
+    // Nothing hits it and nobody fights it.
+    public static boolean isGhostBody(Entity entity) {
+        return entity instanceof FakePlayer.Body body && body.isGhost();
+    }
+
     // True whilst the HUD is on and its element of this kind is switched on.
     public static boolean hudShows(Class<? extends HudElement> type) {
         HudModule hud = active(HudModule.class);
@@ -262,11 +398,40 @@ public final class Modules {
             .anyMatch(element -> type.isInstance(element) && element.isActive());
     }
 
-    // The hue the next saved waypoint takes. The Waypoints module picks it whether or not it
+    // A module that draws as a piece of the HUD says why nothing shows whilst the HUD is off.
+    public static void tellHudOff(Module module) {
+        if (!enabled(HudModule.class)) {
+            ChatUtil.tell(module.getName(), "shows on the HUD. Turn on the §bHUD §7module to see it.");
+        }
+    }
+
+    // The colour the next saved waypoint takes. The Waypoints module picks it whether or not it
     // is switched on and without it the colour comes from the name.
-    public static int nextWaypointHue() {
+    public static WaypointStore.Colour nextWaypointColour() {
         Waypoints waypoints = get(Waypoints.class);
-        return waypoints == null ? WaypointStore.Waypoint.AUTO_HUE : waypoints.nextHue();
+        return waypoints == null ? WaypointStore.Colour.AUTO : waypoints.nextColour();
+    }
+
+    // True whilst Panic has put the whole client to sleep. Nothing of the client acts or draws
+    // or answers until its key wakes it.
+    public static boolean dormant() {
+        Panic panic = get(Panic.class);
+        return panic != null && panic.isAsleep();
+    }
+
+    // True whilst ModuleLock is on and keeps the module off.
+    public static boolean lockHolds(Module module) {
+        ModuleLock lock = active(ModuleLock.class);
+        return lock != null && lock.holds(module);
+    }
+
+    // The same after telling the player why the module stays off.
+    public static boolean lockRefuses(Module module) {
+        if (!lockHolds(module)) {
+            return false;
+        }
+        get(ModuleLock.class).refuse(module);
+        return true;
     }
 
     // The module only whilst it is switched on. Null otherwise.
@@ -297,16 +462,29 @@ public final class Modules {
         return newChunks == null ? null : newChunks.verdict(ChunkPos.pack(chunkX, chunkZ));
     }
 
+    // Your render distance within the server's limit. The server sends these chunks and the
+    // client holds them even whilst SteadyFrames draws fewer. Asking the game first hands
+    // SteadyFrames the distance it trims.
+    public static int renderDistance() {
+        int drawn = OfflineClient.MC.options.getEffectiveRenderDistance();
+        SteadyFrames steadyFrames = active(SteadyFrames.class);
+        return steadyFrames == null ? drawn : steadyFrames.own();
+    }
+
     // The distance and time an autopilot flight has left for the Info bar. Empty whilst none flies.
     public static Optional<String> autopilotLeft() {
         Autopilot autopilot = active(Autopilot.class);
         return autopilot == null ? Optional.empty() : Optional.ofNullable(autopilot.left());
     }
 
-    // True whilst BetterChat hides the chat of that player.
+    // True whilst BetterChat hides the chat of that player or AntiSpam has muted them.
     public static boolean mutes(String name) {
         BetterChat betterChat = get(BetterChat.class);
-        return betterChat != null && betterChat.mutes(name);
+        if (betterChat != null && betterChat.mutes(name)) {
+            return true;
+        }
+        AntiSpam antiSpam = get(AntiSpam.class);
+        return antiSpam != null && antiSpam.mutes(name);
     }
 
     // Hands a line to Webhook whilst it is on. It goes out whilst the switch for its kind is on.

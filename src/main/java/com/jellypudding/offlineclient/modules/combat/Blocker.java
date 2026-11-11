@@ -14,12 +14,15 @@ import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
-import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.CrystalGuard;
+import com.jellypudding.offlineclient.util.Crystals;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.ExplosionUtil;
+import com.jellypudding.offlineclient.util.Holes;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.SwingMode;
 import com.jellypudding.offlineclient.util.Tally;
+import com.jellypudding.offlineclient.util.UseBudget;
 import com.jellypudding.offlineclient.util.WorldWatch;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -29,18 +32,21 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.piston.PistonBaseBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 // A piston cannot fire through obsidian and a crystal needs an empty block to stand in.
-// The spots you keep go first then pistons aimed into the hole and then the crystal spots
-// that would hurt most.
+// The spots you keep go first then pistons aimed into the hole then the blocks round a
+// side somebody is mining and then the crystal spots that would hurt most.
 public final class Blocker extends Module {
 
     // Crystal spots are looked for from one below your feet to two above.
@@ -72,6 +78,12 @@ public final class Blocker extends Module {
         10, 0, 20, 0.5, " blocks").under(crystals);
     private final BoolSetting pistons = new BoolSetting("Pistons",
         "Puts a block in front of any piston aimed into your hole.", true);
+    private final BoolSetting mined = new BoolSetting("Mined blocks",
+        "Walls in a block of your surround or trap that someone else is mining and hits a crystal put"
+            + " beside it.", true);
+    private final NumberSetting mineTime = new NumberSetting("Mine time",
+        "Ticks a block has to be mined at before it is walled in.", 10, 0, 60, 1, " ticks")
+        .under(mined);
     private final NumberSetting placeRange = new NumberSetting("Place range",
         "How far you can reach to place.", 4.5, 1, 6, 0.1, " blocks");
     private final NumberSetting perRound = new NumberSetting("Blocks per round",
@@ -79,7 +91,7 @@ public final class Blocker extends Module {
     private final NumberSetting delay = new NumberSetting("Delay",
         "Ticks to wait between placing rounds.", 0, 0, 10, 1, " ticks");
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Send a look packet towards each block as it goes down.", true);
+        "Sends a look packet towards each block as it goes down.", true);
     private final EnumSetting<SwingMode> swing = SwingMode.setting(SwingMode.BOTH);
     private final KeybindSetting keepKey = new KeybindSetting("Keep spot key",
         "Marks the block you look at and fills it again the moment it breaks.", KeybindSetting.UNBOUND);
@@ -94,15 +106,18 @@ public final class Blocker extends Module {
     // The spots you marked with the keep key. They belong to the world they were marked in.
     private final Set<BlockPos> kept = new LinkedHashSet<>();
     private final WorldWatch world = new WorldWatch();
+    private final CrystalGuard guard = new CrystalGuard();
+    // The tick each block of the cover was first seen mined by somebody else.
+    private final Map<BlockPos, Integer> minedSince = new HashMap<>();
     private int timer;
 
     public Blocker() {
         super("Blocker", "Fills the spots around your hole that crystals and pistons would use.",
             Category.COMBAT);
-        addSettings(blocks, onlyInHole, crystals, minDamage, radius, enemyRange, pistons, keepKey, clearSpots,
-            placeRange, perRound, delay, rotate, swing, render);
+        addSettings(blocks, onlyInHole, crystals, minDamage, radius, enemyRange, pistons, mined, mineTime,
+            keepKey, clearSpots, placeRange, perRound, delay, rotate, swing, render);
         addSettings(style.settings());
-        searchTags("anti crystal", "anti piston", "face place", "hole");
+        searchTags("anti crystal", "anti piston", "anti city", "reinforce", "face place", "hole");
     }
 
     @Override
@@ -115,6 +130,8 @@ public final class Blocker extends Module {
         timer = 0;
         slots.forget();
         pending = List.of();
+        minedSince.clear();
+        guard.forget();
     }
 
     @Override
@@ -126,7 +143,7 @@ public final class Blocker extends Module {
     @Subscribe
     private void onTick(TickEvent event) {
         pending = List.of();
-        if (!inGame() || mc.player.isSpectator() || mc.player.isDeadOrDying()) {
+        if (mc.player.isSpectator() || mc.player.isDeadOrDying()) {
             return;
         }
         syncWorld();
@@ -135,9 +152,12 @@ public final class Blocker extends Module {
             addFillable(spots, pos);
         }
         // Kept spots are filled wherever you stand. The rest wait for a hole whilst Only in holes is on.
-        if (!onlyInHole.isOn() || BlockUtil.playerInHole()) {
+        if (!onlyInHole.isOn() || Holes.playerInHole()) {
             if (pistons.isOn()) {
                 pistonSpots(spots);
+            }
+            if (mined.isOn()) {
+                minedSpots(spots);
             }
             if (crystals.isOn() && enemyNear()) {
                 crystalSpots(spots);
@@ -152,6 +172,10 @@ public final class Blocker extends Module {
             timer--;
             return;
         }
+        int round = Math.min(perRound.getInt(), UseBudget.remaining());
+        if (round == 0) {
+            return;
+        }
         int slot = BlockUtil.findRankedBlockSlot(blocks.getValue(), block -> true);
         if (slot == -1) {
             slots.restore();
@@ -161,7 +185,7 @@ public final class Blocker extends Module {
         int placed = 0;
         boolean turned = false;
         for (BlockPos pos : pending) {
-            if (placed >= perRound.getInt()) {
+            if (placed >= round) {
                 break;
             }
             // The rotation manager keeps the first turn of a tick.
@@ -190,10 +214,10 @@ public final class Blocker extends Module {
         BlockPos pos = hit.getBlockPos().immutable();
         syncWorld();
         if (kept.remove(pos)) {
-            ChatUtil.message("§bBlocker §7forgot the spot at §f" + BlockUtil.text(pos) + "§7.");
+            tell("forgot the spot at §f" + BlockUtil.text(pos) + "§7.");
         } else {
             kept.add(pos);
-            ChatUtil.message("§bBlocker §7keeps the spot at §f" + BlockUtil.text(pos) + "§7 filled.");
+            tell("keeps the spot at §f" + BlockUtil.text(pos) + "§7 filled.");
         }
     }
 
@@ -235,6 +259,54 @@ public final class Blocker extends Module {
         }
     }
 
+    // The blocks beside and over and under each block of your cover that somebody else has
+    // mined at for long enough. With those filled the gap it leaves is no use to a crystal.
+    // A crystal already standing in one of them is hit whilst the wall still holds.
+    private void minedSpots(Set<BlockPos> spots) {
+        guard.tick();
+        Set<BlockPos> cover = cover();
+        int now = mc.player.tickCount;
+        minedSince.keySet().removeIf(pos -> !cover.contains(pos) || !BlockUtil.minedByOthers(pos));
+        for (BlockPos pos : cover) {
+            if (BlockUtil.isReplaceable(pos) || !BlockUtil.minedByOthers(pos)) {
+                continue;
+            }
+            int since = minedSince.computeIfAbsent(pos, key -> now);
+            // The clock starts again at nought on a respawn.
+            if (now < since) {
+                minedSince.put(pos, now);
+            } else if (now - since >= mineTime.getInt()) {
+                wallIn(spots, pos);
+            }
+        }
+    }
+
+    private void wallIn(Set<BlockPos> spots, BlockPos block) {
+        for (Direction way : Direction.values()) {
+            BlockPos beside = block.relative(way);
+            if (!BlockUtil.isReplaceable(beside)) {
+                continue;
+            }
+            guard.clear(new AABB(beside), rotate.isOn(), swing.getValue());
+            addFillable(spots, beside);
+        }
+    }
+
+    // The ring round your feet and the one round your head and the blocks over and under you.
+    private static Set<BlockPos> cover() {
+        List<BlockPos> body = Holes.feetBlocks(mc.player);
+        Set<BlockPos> cover = new LinkedHashSet<>();
+        for (BlockPos side : Holes.ringAround(body)) {
+            cover.add(side);
+            cover.add(side.above());
+        }
+        for (BlockPos block : body) {
+            cover.add(block.above(2));
+            cover.add(block.below());
+        }
+        return cover;
+    }
+
     // Every empty block on obsidian or bedrock around the hole where a crystal would
     // hurt at least the minimum. The worst go first.
     private void crystalSpots(Set<BlockPos> spots) {
@@ -243,7 +315,7 @@ public final class Blocker extends Module {
         List<Spot> found = new ArrayList<>();
         for (BlockPos pos : BlockPos.betweenClosed(feet.offset(-r, LOWEST_SPOT, -r),
             feet.offset(r, HIGHEST_SPOT, r))) {
-            if (!BlockUtil.crystalBase(BlockUtil.state(pos.below()))
+            if (!Crystals.crystalBase(BlockUtil.state(pos.below()))
                 || !BlockUtil.state(pos).isAir() || !fillable(pos)) {
                 continue;
             }

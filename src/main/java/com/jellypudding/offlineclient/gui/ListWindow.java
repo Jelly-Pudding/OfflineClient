@@ -17,14 +17,13 @@ import java.util.function.Function;
 
 // A centred window with a search box over a list and tabs down the side. It follows the
 // ClickGUI scale like every other panel and goes back to the screen it was opened over.
-abstract class ListWindow extends Screen implements ClientScreen {
+abstract class ListWindow extends ScaledScreen {
 
     protected static final int MARGIN = WindowParts.MARGIN;
     // Room under the title bar and under the toolbar.
     private static final int GAP = 5;
 
     protected final Screen parent;
-    protected final LatchedScale latched = new LatchedScale();
     protected final SearchField search = SearchField.sticky("type to search", this::changed);
     protected final Footer footer = new Footer();
     private final TextInput textInput = new TextInput(this);
@@ -51,14 +50,6 @@ abstract class ListWindow extends Screen implements ClientScreen {
 
     // Lets go of every scroll bar the window has.
     protected abstract void releaseLists();
-
-    protected final int viewWidth() {
-        return (int) latched.toView(width);
-    }
-
-    protected final int viewHeight() {
-        return (int) latched.toView(height);
-    }
 
     protected final int windowWidth() {
         return WindowParts.width(viewWidth());
@@ -112,11 +103,6 @@ abstract class ListWindow extends Screen implements ClientScreen {
         footer.say("Copied " + spot);
     }
 
-    @Override
-    public boolean isPauseScreen() {
-        return false;
-    }
-
     // The search box always takes the keys.
     @Override
     public boolean isTyping() {
@@ -125,23 +111,20 @@ abstract class ListWindow extends Screen implements ClientScreen {
 
     @Override
     public void extractBackground(GuiGraphicsExtractor context, int mouseX, int mouseY, float deltaTicks) {
-        GuiScreenBase.dimBackground(this, context);
+        GuiTheme.dimBackground(this, context);
     }
 
     @Override
-    public void extractRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float partialTicks) {
-        latched.refresh();
-        context.pose().pushMatrix();
-        context.pose().scale(latched.get(), latched.get());
-        renderView(context, (int) latched.toView(mouseX), (int) latched.toView(mouseY));
-        context.pose().popMatrix();
+    protected final void renderScaled(GuiGraphicsExtractor context, double mouseX, double mouseY,
+                                      float partialTicks) {
+        renderView(context, (int) mouseX, (int) mouseY);
     }
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-        latched.hold(true);
-        double mx = latched.toView(event.x());
-        double my = latched.toView(event.y());
+        holdScale(true);
+        double mx = toView(event.x());
+        double my = toView(event.y());
         return click(mx, my) || super.mouseClicked(event, doubleClick);
     }
 
@@ -149,13 +132,13 @@ abstract class ListWindow extends Screen implements ClientScreen {
     public boolean mouseReleased(MouseButtonEvent event) {
         releaseLists();
         search.release();
-        latched.hold(false);
+        holdScale(false);
         return super.mouseReleased(event);
     }
 
     @Override
     public boolean mouseDragged(MouseButtonEvent event, double dragX, double dragY) {
-        search.drag(latched.toView(event.x()));
+        search.drag(toView(event.x()));
         return super.mouseDragged(event, dragX, dragY);
     }
 

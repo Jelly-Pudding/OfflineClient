@@ -22,7 +22,6 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.Tag;
-import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.ComponentSerialization;
 import net.minecraft.network.chat.MutableComponent;
@@ -144,10 +143,8 @@ public final class HologramCommand extends Command {
             ChatUtil.message("§7You have no saved holograms.");
             return;
         }
-        String load = OfflineClient.INSTANCE.getCommandManager().getPrefix() + "hologram load ";
         for (String name : names) {
-            MutableComponent row = Component.literal("§b" + name)
-                .withStyle(style -> style.withClickEvent(new ClickEvent.SuggestCommand(load + name)));
+            MutableComponent row = ChatUtil.typeLink(Component.literal("§b" + name), "hologram load " + name);
             List<Component> lines = TextMarkup.lines(HologramPresets.get().find(name));
             for (int i = 0; i < lines.size(); i++) {
                 row.append(i == 0 ? " " : " §8| ").append(lines.get(i));

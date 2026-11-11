@@ -13,7 +13,7 @@ import java.util.List;
 // EntityRendererMixin flags them and LivingEntityRendererMixin forces the body to render.
 public final class TrueSight extends Module {
 
-    private final EntityFilter filter = EntityFilter.living("Reveal", "revealed", true,
+    private final EntityFilter filter = EntityFilter.living("Reveals", "revealed", true,
         EntityFilter.Pick.ALL, List.of());
     private final NumberSetting strength = new NumberSetting("Strength",
         "How solid the invisible entity looks.", 0.4, 0.1, 1, 0.05).min(0.05).max(1);

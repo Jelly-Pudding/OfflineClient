@@ -1,0 +1,50 @@
+package com.jellypudding.offlineclient.command.commands;
+
+import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.command.Command;
+import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.RotationManager;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.util.Mth;
+
+import java.util.Locale;
+import java.util.OptionalDouble;
+
+// A bare rotation switches the Rotation module. The alias still reaches this command once a yaw
+// and a pitch follow it.
+public final class LookCommand extends Command {
+
+    public LookCommand() {
+        super("look", "Prints where you look or points you somewhere.", "look [yaw] [pitch]", "rot", "rotation");
+    }
+
+    @Override
+    public void execute(String[] args) {
+        LocalPlayer player = OfflineClient.MC.player;
+        if (player == null) {
+            return;
+        }
+        if (args.length == 0) {
+            ChatUtil.message("§7Yaw §b" + round(player.getYRot())
+                + " §7pitch §b" + round(player.getXRot()));
+            return;
+        }
+        if (args.length != 2) {
+            usage();
+            return;
+        }
+        OptionalDouble yaw = number(args[0]);
+        OptionalDouble pitch = yaw.isPresent() ? number(args[1]) : OptionalDouble.empty();
+        if (pitch.isEmpty()) {
+            return;
+        }
+        player.setYRot(Mth.wrapDegrees((float) yaw.getAsDouble()));
+        player.setXRot(RotationManager.clampPitch((float) pitch.getAsDouble()));
+        ChatUtil.message("§7Looking at yaw §b" + round(player.getYRot())
+            + " §7pitch §b" + round(player.getXRot()));
+    }
+
+    private static String round(float value) {
+        return String.format(Locale.ROOT, "%.1f", value);
+    }
+}

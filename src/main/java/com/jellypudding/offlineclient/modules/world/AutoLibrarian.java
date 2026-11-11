@@ -10,6 +10,7 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.TextSetting;
+import com.jellypudding.offlineclient.util.AlertSound;
 import com.jellypudding.offlineclient.util.BlockMiner;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
@@ -19,7 +20,9 @@ import com.jellypudding.offlineclient.util.HeldKey;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.ItemUtil;
+import com.jellypudding.offlineclient.util.Leave;
 import com.jellypudding.offlineclient.util.MenuClicks;
+import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.RotationPriority;
 import com.jellypudding.offlineclient.util.SwingMode;
 import com.jellypudding.offlineclient.util.Tally;
@@ -27,6 +30,7 @@ import net.minecraft.client.gui.screens.inventory.MerchantScreen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.Holder;
+import net.minecraft.sounds.SoundEvents;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.npc.villager.Villager;
@@ -63,6 +67,8 @@ public final class AutoLibrarian extends Module {
     private static final int HIRE_REACH = 2;
     // A villager that takes no job in this many ticks is passed over.
     private static final int HIRE_TICKS = 600;
+    // A reroll can take an hour and the alarm has to reach a player who stepped away.
+    private static final int FOUND_RINGS = 3;
 
     public enum Update { OFF, REMOVE, PRICE }
 
@@ -79,18 +85,22 @@ public final class AutoLibrarian extends Module {
         64, 1, 64, 1, " emeralds").max(64);
     private final EnumSetting<Update> updateBooks = new EnumSetting<>("Update books",
         "What to do with a book on the list once a villager has learnt it.", Update.OFF)
-        .describe(Update.OFF, "Leave the list alone.")
+        .describe(Update.OFF, "Leaves the list alone.")
         .describe(Update.REMOVE, "Strikes it off the list.")
         .describe(Update.PRICE, "Lowers its price to this deal. The next villager has to beat it.");
     private final BoolSetting lockIn = new BoolSetting("Lock in",
-        "Buys the book once and the villager keeps the trade. Needs emeralds and paper or a book.", false);
+        "Buys the book once and the villager keeps the trade. Needs emeralds and a book.", false);
+    private final BoolSetting leave = new BoolSetting("Log out when found",
+        "Leaves the server the moment a wanted book turns up.", false);
+    private final AlertSound alarm = new AlertSound("", "Rings when a wanted book turns up.",
+        SoundEvents.PLAYER_LEVELUP, FOUND_RINGS);
     private final BoolSetting hire = new BoolSetting("Hire",
         "Places a lectern by a jobless villager and waits for it to become a librarian.", false);
     private final NumberSetting range = new NumberSetting("Range",
-        "How far the villager and its lectern may be.", 5, 1, 6, 0.1);
+        "How far the villager and its lectern may be.", 5, 1, 6, 0.1, " blocks");
     private final NumberSetting spareUses = new NumberSetting("Spare uses",
         "Stops using a tool once this many uses are left. Nought never stops.",
-        1, 0, 100, 1, " uses").min(0);
+        1, 0, 100, 1, " uses");
     private final EnumSetting<FaceMode> faceTarget = FaceMode.setting(FaceMode.SERVER);
     private final EnumSetting<SwingMode> swing = SwingMode.setting(SwingMode.BOTH);
 
@@ -107,7 +117,9 @@ public final class AutoLibrarian extends Module {
 
     public AutoLibrarian() {
         super("AutoLibrarian", "Rerolls a librarian until it sells a book you want.", Category.WORLD);
-        addSettings(wanted, maxPrice, updateBooks, lockIn, hire, range, spareUses, faceTarget, swing);
+        addSettings(wanted, maxPrice, updateBooks, lockIn, leave);
+        addSettings(alarm.settings());
+        addSettings(hire, range, spareUses, faceTarget, swing);
         searchTags("villager trainer", "enchanted book", "lectern");
     }
 
@@ -152,7 +164,7 @@ public final class AutoLibrarian extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || mc.player.isSpectator()) {
+        if (mc.player.isSpectator()) {
             return;
         }
         if (cooldown > 0) {
@@ -188,7 +200,7 @@ public final class AutoLibrarian extends Module {
             lectern = spot;
             hiring = true;
             stage = Stage.PLACE_LECTERN;
-            ChatUtil.message("§bAutoLibrarian §7puts a lectern down for a jobless villager.");
+            tell("puts a lectern down for a jobless villager.");
             return;
         }
         if (jobless != null) {
@@ -262,14 +274,14 @@ public final class AutoLibrarian extends Module {
         }
         if (trainable(villager)) {
             hiring = false;
-            ChatUtil.message("§bAutoLibrarian §7hired a librarian.");
+            tell("hired a librarian.");
             stage = Stage.FIND_LECTERN;
             return;
         }
         if (++waited >= HIRE_TICKS) {
             hiring = false;
             spent.add(villager.getId());
-            ChatUtil.message("§bAutoLibrarian §7that villager took no job. Looking for another.");
+            tell("that villager took no job. Looking for another.");
             stage = Stage.FIND_VILLAGER;
         }
     }
@@ -335,7 +347,7 @@ public final class AutoLibrarian extends Module {
             return;
         }
         if (menu.getTraderXp() > 0) {
-            ChatUtil.message("§bAutoLibrarian §7that librarian has traded before. Looking for another.");
+            tell("that librarian has traded before. Looking for another.");
             spent.add(villager.getId());
             closeTrade();
             stage = Stage.FIND_VILLAGER;
@@ -350,7 +362,7 @@ public final class AutoLibrarian extends Module {
                     accept(menu, index, book, match, offer.getCostA().getCount());
                     return;
                 }
-                ChatUtil.message("§bAutoLibrarian §7offered §f" + book.getHoverName().getString()
+                tell("offered §f" + book.getHoverName().getString()
                     + "§7 for §f" + offer.getCostA().getCount() + "§7. Rerolling.");
                 break;
             }
@@ -389,15 +401,33 @@ public final class AutoLibrarian extends Module {
     }
 
     private void accept(MerchantMenu menu, int index, ItemStack book, Wish wish, int price) {
-        ChatUtil.message("§bAutoLibrarian §7found §f" + book.getHoverName().getString() + "§7.");
+        String found = ChatUtil.from(getName(), "found §f" + book.getHoverName().getString() + "§7.");
         if (lockIn.isOn()) {
             // Buying once fixes the offers for good.
-            MenuClicks.selectTrade(menu, index);
-            MenuClicks.quickMove(menu, MenuClicks.TRADE_RESULT_SLOT);
+            if (MenuClicks.selectTrade(menu, index)) {
+                MenuClicks.quickMove(menu, MenuClicks.TRADE_RESULT_SLOT);
+            } else {
+                found += " It could not pay for the book and the villager is not locked in.";
+            }
         }
+        ChatUtil.message(found);
         updateWanted(wish, price);
         closeTrade();
         setEnabled(false);
+        // The module is off by now and the rings finish by themselves.
+        alarm.ring();
+        if (leave.isOn()) {
+            boolean stopped = Modules.stopReconnecting();
+            Leave.QUIT.go("AutoLibrarian found " + deal(book, wish, price) + "."
+                + (stopped ? "\n§7AutoReconnect was turned off." : ""));
+        }
+    }
+
+    // The wanted enchantment at the level the book carries and what it costs.
+    private static String deal(ItemStack book, Wish wish, int price) {
+        int level = EnchantmentHelper.getEnchantmentsForCrafting(book).getLevel(wish.enchantment());
+        return Enchantment.getFullname(wish.enchantment(), level).getString()
+            + " for " + price + (price == 1 ? " emerald" : " emeralds");
     }
 
     // Strikes the book off the list or asks the next villager for a better price.
@@ -426,7 +456,7 @@ public final class AutoLibrarian extends Module {
             kept.add(token);
         }
         wanted.setValue(String.join(" ", kept));
-        ChatUtil.message("§bAutoLibrarian §7wanted books updated.");
+        tell("wanted books updated.");
     }
 
     private void closeTrade() {

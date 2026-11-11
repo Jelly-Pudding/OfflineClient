@@ -94,7 +94,7 @@ public final class Buckets {
     }
 
     // Uses the held item with the view turned to the aim for the one call.
-    private static boolean useFacing(Vec3 aim) {
+    public static boolean useFacing(Vec3 aim) {
         return RotationManager.whileFacing(RotationManager.yawTo(aim), RotationManager.pitchTo(aim),
             InputUtil::useMainHand);
     }

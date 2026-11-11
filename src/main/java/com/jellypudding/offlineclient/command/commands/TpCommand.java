@@ -44,17 +44,16 @@ public final class TpCommand extends Command {
     // A spot inside a block or in lava gives way to the nearest one with room for you or
     // for what you ride.
     private static void toPlayer(LocalPlayer self, String name) {
-        for (Player other : OfflineClient.MC.level.players()) {
-            if (EntityUtil.isOtherPlayer(other) && other.getGameProfile().name().equalsIgnoreCase(name)) {
-                Vec3 spot = Hop.nearestFit(Hop.mover(self), other.position());
-                if (spot == null) {
-                    ChatUtil.error("There is no room near " + name);
-                    return;
-                }
-                hopTo(spot, "§7Moved you to §b" + name);
-                return;
-            }
+        Player other = EntityUtil.otherPlayerNamed(name);
+        if (other == null) {
+            ChatUtil.error("Nobody nearby is called " + name);
+            return;
         }
-        ChatUtil.error("Nobody nearby is called " + name);
+        Vec3 spot = Hop.nearestFit(Hop.mover(self), other.position());
+        if (spot == null) {
+            ChatUtil.error("There is no room near " + name);
+            return;
+        }
+        hopTo(spot, "§7Moved you to §b" + name);
     }
 }

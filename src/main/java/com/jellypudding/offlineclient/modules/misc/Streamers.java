@@ -12,11 +12,11 @@ import com.jellypudding.offlineclient.setting.ChoiceListSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.JoinWatch;
+import com.jellypudding.offlineclient.util.ServerInfo;
 import com.jellypudding.offlineclient.util.Tally;
 import com.jellypudding.offlineclient.util.Web;
 import net.minecraft.ChatFormatting;
 import net.minecraft.SharedConstants;
-import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.HoverEvent;
@@ -96,7 +96,7 @@ public final class Streamers extends Module {
     private final BoolSetting newPlayers = new BoolSetting("New players",
         "Checks each player who joins after you.", true);
     private final NumberSetting recheck = new NumberSetting("Recheck",
-        "Minutes between checks of everyone online. Nought checks only once.", 10, 0, 60, 1, " minutes").min(0);
+        "Minutes between checks of everyone online. Nought checks only once.", 10, 0, 60, 1, " minutes");
     private final NumberSetting skipAbove = new NumberSetting("Skip above",
         "Skips the check of everyone whilst more players than this are online.", 50, 5, 500, 5, " players")
         .min(1);
@@ -146,7 +146,7 @@ public final class Streamers extends Module {
         }
         if (settle > 0) {
             if (--settle == 0) {
-                seen.addAll(online());
+                seen.addAll(ServerInfo.othersOnline());
                 sinceCheck = 0;
                 if (onJoin.isOn()) {
                     everyone(true);
@@ -166,7 +166,7 @@ public final class Streamers extends Module {
     }
 
     private void lookForNewPlayers() {
-        List<String> now = online();
+        List<String> now = ServerInfo.othersOnline();
         List<String> fresh = new ArrayList<>();
         for (String name : now) {
             if (!seen.contains(name)) {
@@ -188,7 +188,7 @@ public final class Streamers extends Module {
             return "Pick a site first";
         }
         // A run with nobody to check would leave its reply waiting for the next run.
-        if (online().isEmpty()) {
+        if (ServerInfo.othersOnline().isEmpty()) {
             return "Nobody else is online";
         }
         told.clear();
@@ -200,33 +200,17 @@ public final class Streamers extends Module {
     // Queues everyone online unless there are too many. Hands back a few words about it and
     // says them in chat when the player should hear why nothing happens.
     private String everyone(boolean sayWhenSkipped) {
-        List<String> names = online();
+        List<String> names = ServerInfo.othersOnline();
         if (names.size() > skipAbove.getInt()) {
             String skipped = "Skipped with " + names.size() + " players online";
             if (sayWhenSkipped) {
-                ChatUtil.message("§bStreamers §7" + skipped + ".");
+                tell(skipped + ".");
             }
             asked = false;
             return skipped;
         }
         queue(names);
         return "Checking " + Tally.counted(names.size(), "player");
-    }
-
-    // Everyone in the tab list but you.
-    private List<String> online() {
-        List<String> names = new ArrayList<>();
-        if (mc.getConnection() == null || mc.player == null) {
-            return names;
-        }
-        String self = mc.player.getGameProfile().name();
-        for (PlayerInfo info : mc.getConnection().getOnlinePlayers()) {
-            String name = info.getProfile().name();
-            if (!name.equalsIgnoreCase(self)) {
-                names.add(name);
-            }
-        }
-        return names;
     }
 
     private List<Site> picked() {
@@ -283,7 +267,7 @@ public final class Streamers extends Module {
         if (asked) {
             asked = false;
             if (foundLive.get() == 0) {
-                mc.execute(() -> ChatUtil.message("§bStreamers §7found nobody live."));
+                mc.execute(() -> tell("found nobody live."));
             }
         }
     }
@@ -313,7 +297,7 @@ public final class Streamers extends Module {
             // A check still under way when the module goes off says nothing.
             mc.execute(() -> {
                 if (isEnabled()) {
-                    ChatUtil.component(Component.literal("§bStreamers §f" + name + "§7 is live on ")
+                    ChatUtil.component(Component.literal(ChatUtil.from(getName(), "§f" + name + "§7 is live on "))
                         .append(link(site.label, watch)).append("§7."));
                 }
             });

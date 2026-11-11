@@ -13,12 +13,15 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.CrosshairClip;
 import com.jellypudding.offlineclient.util.Hop;
 import net.minecraft.client.Camera;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.ItemUseAnimation;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.block.state.BlockState;
@@ -73,16 +76,14 @@ public final class ClickTp extends Module {
 
     @Subscribe
     private void onRightClick(RightClickEvent event) {
-        if (!event.isCancelled() && trigger.isAny(Trigger.USE, Trigger.BOTH) && ready() && useIsFree()
-            && teleport(false)) {
+        if (trigger.isAny(Trigger.USE, Trigger.BOTH) && ready() && useIsFree() && teleport(false)) {
             event.cancel();
         }
     }
 
     @Subscribe
     private void onLeftClick(LeftClickEvent event) {
-        if (!event.isCancelled() && trigger.isAny(Trigger.ATTACK, Trigger.BOTH) && ready() && !onEntity()
-            && teleport(true)) {
+        if (trigger.isAny(Trigger.ATTACK, Trigger.BOTH) && ready() && !onEntity() && teleport(true)) {
             event.cancel();
         }
     }
@@ -109,13 +110,20 @@ public final class ClickTp extends Module {
         return inGame() && !mc.player.isDeadOrDying() && !Hop.travelling() && mc.gui.screen() == null;
     }
 
-    // A use on an entity or a placement or an item such as food keeps its normal meaning.
+    // A use on an entity or a placement or an item such as food or a shield keeps its normal meaning.
+    // The game tries the off hand as well when the main hand has no use for the click.
     private boolean useIsFree() {
-        if (onEntity() || mc.player.getMainHandItem().getUseAnimation() != ItemUseAnimation.NONE) {
+        if (onEntity()) {
             return false;
         }
-        return !(mc.hitResult instanceof BlockHitResult hit && hit.getType() == HitResult.Type.BLOCK
-            && mc.player.getMainHandItem().getItem() instanceof BlockItem);
+        boolean onBlock = mc.hitResult instanceof BlockHitResult hit && hit.getType() == HitResult.Type.BLOCK;
+        for (InteractionHand hand : InteractionHand.values()) {
+            ItemStack held = mc.player.getItemInHand(hand);
+            if (held.getUseAnimation() != ItemUseAnimation.NONE || onBlock && held.getItem() instanceof BlockItem) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private boolean onEntity() {
@@ -185,6 +193,6 @@ public final class ClickTp extends Module {
         Vec3 to = from.add(Vec3.directionFromRotation(camera.xRot(), camera.yRot())
             .scale(range.getValue()));
         ClipContext.Fluid fluid = water.isOn() ? ClipContext.Fluid.WATER : ClipContext.Fluid.NONE;
-        return mc.level.clip(new ClipContext(from, to, ClipContext.Block.OUTLINE, fluid, mc.player));
+        return mc.level.clip(new CrosshairClip(from, to, fluid, mc.player));
     }
 }

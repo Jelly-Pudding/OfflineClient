@@ -8,6 +8,7 @@ import it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongList;
 import it.unimi.dsi.fastutil.objects.ObjectIterator;
 import net.minecraft.core.SectionPos;
+import net.minecraft.util.Mth;
 import net.minecraft.world.level.ChunkPos;
 
 import java.util.Arrays;
@@ -284,7 +285,7 @@ public final class TerrainLayer {
                 }
                 int x = baseX + (index & CHUNK_MASK);
                 int z = baseZ + (index >> REGION_SHIFT);
-                if (Math.abs(x - chunkX) <= radius && Math.abs(z - chunkZ) <= radius) {
+                if (Mth.chessboardDistance(x, z, chunkX, chunkZ) <= radius) {
                     empty = false;
                     continue;
                 }

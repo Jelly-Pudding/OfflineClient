@@ -15,28 +15,27 @@ import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.SwingMode;
 import com.jellypudding.offlineclient.util.TargetFilter;
 import com.jellypudding.offlineclient.util.TargetPriority;
-import net.minecraft.world.InteractionHand;
+import com.jellypudding.offlineclient.util.Targeting;
 import net.minecraft.world.entity.Entity;
 
 import java.util.List;
 
 // Runs at whatever it is set on and hits it until one of you is dead.
-public final class FightBot extends Module {
+public final class FightBot extends Module implements Targeting {
 
     private final NumberSetting range = new NumberSetting("Range",
-        "How close a target has to be before the hits start.", 4.25, 1, 6, 0.05).min(1);
+        "How close a target has to be before the hits start.", 4.25, 1, 6, 0.05, " blocks");
     private final NumberSetting distance = new NumberSetting("Distance",
-        "How close the bot walks. Keep it under the range.", 3, 1, 6, 0.05).min(0.5);
+        "How close the bot walks. Keep it under the range.", 3, 1, 6, 0.05, " blocks").min(0.5);
     private final NumberSetting searchRange = new NumberSetting("Search range",
         "How far away a target is picked up.", 32, 8, 64, 1, " blocks").min(1);
     private final EnumSetting<TargetPriority> priority =
         TargetPriority.setting("Attacks", TargetPriority.NEAREST);
-    private final BoolSetting usePath = new BoolSetting("Use pathfinder",
-        "Finds a way round what is in between instead of running straight at the target.", false);
+    private final BoolSetting usePath = Chase.pathSwitch(false);
     private final EnumSetting<SwingMode> swing = SwingMode.setting(SwingMode.BOTH);
     private final BoolSetting pauseInContainers = new BoolSetting("Pause in containers",
         "Holds off whilst a chest or another container is open.", true);
-    private final EntityFilter filter = EntityFilter.living("Fight", "fought", true,
+    private final EntityFilter filter = EntityFilter.living("Fights", "fought", true,
         EntityFilter.Pick.NONE, List.of());
     private final TargetFilter targets = new TargetFilter();
     private final AttackTimer timer = new AttackTimer();
@@ -60,7 +59,13 @@ public final class FightBot extends Module {
 
     @Override
     public String getSuffix() {
-        return target == null ? null : target.getName().getString();
+        return target == null ? null : EntityUtil.displayNameOf(target);
+    }
+
+    // What it runs after and hits. Null between fights and whilst it holds off.
+    @Override
+    public Entity getFought() {
+        return target;
     }
 
     @Override
@@ -77,7 +82,8 @@ public final class FightBot extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || mc.player.isSpectator() || mc.player.isDeadOrDying()) {
+        target = null;
+        if (mc.player.isSpectator() || mc.player.isDeadOrDying()) {
             chase.stop();
             return;
         }
@@ -91,12 +97,10 @@ public final class FightBot extends Module {
             return;
         }
         chase.tick(target, distance.getValue(), usePath.isOn());
-        if (!timer.ready() || EntityUtil.reachDistance(mc.player, target) > range.getValue()) {
-            return;
+        if (AttackTimer.charged() && timer.ready()
+            && EntityUtil.reachDistance(mc.player, target) <= range.getValue()) {
+            timer.strike(target, swing.getValue());
         }
-        mc.gameMode.attack(mc.player, target);
-        swing.getValue().swing(InteractionHand.MAIN_HAND);
-        timer.spent();
     }
 
     private boolean attackable(Entity entity) {

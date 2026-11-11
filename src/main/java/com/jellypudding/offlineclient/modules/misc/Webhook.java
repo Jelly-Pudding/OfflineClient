@@ -5,21 +5,28 @@ import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.ClientTickEvent;
 import com.jellypudding.offlineclient.event.events.EntityDamageEvent;
+import com.jellypudding.offlineclient.event.events.PacketReceiveEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.ActionSetting;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.TextSetting;
+import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatSender;
-import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.HurtReport;
 import com.jellypudding.offlineclient.util.PlayerAlarm;
 import com.jellypudding.offlineclient.util.ServerInfo;
+import com.jellypudding.offlineclient.util.TextLines;
 import com.jellypudding.offlineclient.util.Web;
 import net.minecraft.ChatFormatting;
 import net.minecraft.SharedConstants;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.game.ClientboundDisguisedChatPacket;
+import net.minecraft.network.protocol.game.ClientboundPlayerChatPacket;
+import net.minecraft.network.protocol.game.ClientboundPlayerCombatKillPacket;
+import net.minecraft.network.protocol.game.ClientboundSystemChatPacket;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayDeque;
@@ -28,16 +35,23 @@ import java.util.Locale;
 import java.util.Map;
 
 // Lines wait on the game thread and leave together at most once every two seconds. The
-// services that take webhooks turn away posts that come faster.
+// services that take webhooks turn away posts that come faster. A post turned away for coming
+// too soon goes again once the wait the service asked for is over.
 public final class Webhook extends Module {
 
     // What a line is about. Each kind has a switch of its own.
-    public enum Alert { FIND, ALARM, MENTION, DAMAGE, HUNGER, STOPPED, DISCONNECT }
+    public enum Alert { FIND, ALARM, MENTION, CHAT, DAMAGE, DEATH, HUNGER, STOPPED, DISCONNECT }
 
     private static final int GAP_TICKS = 2 * SharedConstants.TICKS_PER_SECOND;
 
+    // A service asking for a longer wait is asked again after a minute.
+    private static final int LONGEST_WAIT_TICKS = SharedConstants.TICKS_PER_MINUTE;
+
     // The longest post the services take.
     private static final int MOST_CHARS = 2000;
+
+    // Lines of one kind a flood leaves waiting behind the posts. The eldest give way first.
+    private static final int MOST_WAITING = 500;
 
     // How long you stand on one spot before you count as stopped.
     private static final int STILL_TICKS = 30 * SharedConstants.TICKS_PER_SECOND;
@@ -46,15 +60,22 @@ public final class Webhook extends Module {
     private static final double STILL_REACH = 0.5;
 
     private final TextSetting address = new TextSetting("Address",
-        "The webhook address the alerts go to. Click to type it.", "");
+        "The webhook address the alerts go to. Click to type it.", "").secret();
     private final BoolSetting finds = new BoolSetting("Finds",
         "Sends each find the hunting modules announce.", true);
     private final BoolSetting alarms = new BoolSetting("Alarms",
         "Sends a line whenever one of the Notifier alarms rings.", true);
     private final BoolSetting mentions = new BoolSetting("Mentions",
         "Sends the chat lines ChatAlerts picks out.", true);
+    private final BoolSetting allChat = new BoolSetting("All chat",
+        "Sends every chat line the server shows you.", false);
+    private final TextLines skip = new TextLines("Skip",
+        "How many words keep a chat line back.",
+        "A chat line holding this text is not sent. Click to type it.").plain().under(allChat);
     private final BoolSetting damage = new BoolSetting("Damage",
         "Sends a line whenever you take damage.", false);
+    private final BoolSetting deaths = new BoolSetting("Deaths",
+        "Sends where you died and what killed you.", false);
     private final BoolSetting hunger = new BoolSetting("Hunger",
         "Sends a line when your food runs out.", false);
     private final BoolSetting stopped = new BoolSetting("Stopped",
@@ -65,14 +86,18 @@ public final class Webhook extends Module {
         "Sends a test line to the address.", this::test);
 
     private final Map<Alert, BoolSetting> switches = Map.of(Alert.FIND, finds, Alert.ALARM, alarms,
-        Alert.MENTION, mentions, Alert.DAMAGE, damage, Alert.HUNGER, hunger, Alert.STOPPED, stopped,
-        Alert.DISCONNECT, disconnects);
+        Alert.MENTION, mentions, Alert.CHAT, allChat, Alert.DAMAGE, damage, Alert.DEATH, deaths,
+        Alert.HUNGER, hunger, Alert.STOPPED, stopped, Alert.DISCONNECT, disconnects);
 
-    private final Deque<String> waiting = new ArrayDeque<>();
+    // Alerts leave ahead of chat lines. A flood of chat never holds an alarm back.
+    private final Deque<String> alertLines = new ArrayDeque<>();
+    private final Deque<String> chatLines = new ArrayDeque<>();
     private final PlayerAlarm.Watcher rings = new PlayerAlarm.Watcher();
     private final HurtReport hurts = new HurtReport(true);
-    // Set whilst a post is on its way. The answer comes back on another thread.
-    private volatile boolean posting;
+    // Posts on their way. Waiting lines leave only once every answer is back.
+    private int posting;
+    // A post the service turned away for coming too soon. It goes again before anything else.
+    private String refused;
     // Set whilst you play in a world. A disconnected screen without it is a join that failed.
     private boolean playing;
     private int gap;
@@ -82,14 +107,18 @@ public final class Webhook extends Module {
 
     public Webhook() {
         super("Webhook", "Sends the alerts you pick to a webhook address.", Category.MISC);
-        addSettings(address, finds, alarms, mentions, damage, hunger, stopped, disconnects, sendTest);
-        searchTags("discord", "phone", "alerts", "afk", "notify");
+        addSettings(address, finds, alarms, mentions, allChat);
+        addSettings(skip.settings());
+        addSettings(damage, deaths, hunger, stopped, disconnects, sendTest);
+        searchTags("discord", "phone", "alerts", "afk", "notify", "chat log", "death");
     }
 
     @Override
     protected void onEnable() {
         rings.sync();
-        waiting.clear();
+        alertLines.clear();
+        chatLines.clear();
+        refused = null;
         hurts.clear();
         stillAt = null;
         stillTicks = 0;
@@ -99,9 +128,15 @@ public final class Webhook extends Module {
 
     // Queues a line about one kind of alert whilst its switch is on. Colour codes are taken out.
     public void send(Alert alert, String text) {
-        if (switches.get(alert).isOn() && !address.isBlank()) {
-            waiting.addLast(ChatFormatting.stripFormatting(text));
+        if (!switches.get(alert).isOn() || address.isBlank()) {
+            return;
         }
+        Deque<String> lines = alert == Alert.CHAT ? chatLines : alertLines;
+        if (lines.size() >= MOST_WAITING) {
+            lines.removeFirst();
+        }
+        String plain = ChatFormatting.stripFormatting(text);
+        lines.addLast(plain.length() > MOST_CHARS ? plain.substring(0, MOST_CHARS) : plain);
     }
 
     // Called as the disconnected screen opens. The game leaves the world and opens the screen in one
@@ -116,6 +151,51 @@ public final class Webhook extends Module {
             + ChatSender.plain(reason).replace('\n', ' ').trim());
     }
 
+    // Fired on the netty thread. The lines wait on the game thread with the rest.
+    @Subscribe
+    private void onPacketReceive(PacketReceiveEvent event) {
+        Packet<?> packet = event.getPacket();
+        if (packet instanceof ClientboundPlayerCombatKillPacket death && deaths.isOn()) {
+            mc.schedule(() -> died(death));
+        }
+        Component line = allChat.isOn() ? shownLine(packet) : null;
+        if (line != null) {
+            mc.schedule(() -> chat(line));
+        }
+    }
+
+    // A chat line the way the chat shows it. Null for any other packet.
+    private static Component shownLine(Packet<?> packet) {
+        return switch (packet) {
+            case ClientboundSystemChatPacket system when !system.overlay() -> system.content();
+            case ClientboundPlayerChatPacket chat -> chat.chatType().decorate(
+                chat.unsignedContent().orElseGet(() -> Component.literal(chat.body().content())));
+            case ClientboundDisguisedChatPacket disguised -> disguised.chatType().decorate(disguised.message());
+            default -> null;
+        };
+    }
+
+    private void chat(Component line) {
+        String text = line.getString(MOST_CHARS);
+        String lower = text.toLowerCase(Locale.ROOT);
+        for (String word : skip.all()) {
+            if (lower.contains(word.trim().toLowerCase(Locale.ROOT))) {
+                return;
+            }
+        }
+        send(Alert.CHAT, text);
+    }
+
+    // The server tells the player who died. Another player's death is no concern here.
+    private void died(ClientboundPlayerCombatKillPacket death) {
+        if (!deaths.isOn() || mc.player == null || death.playerId() != mc.player.getId()) {
+            return;
+        }
+        String cause = death.message().getString(MOST_CHARS).replace('\n', ' ').trim();
+        send(Alert.DEATH, "You died at " + BlockUtil.text(mc.player.blockPosition()) + " in the "
+            + ServerInfo.dimensionName(ServerInfo.dimension()) + "." + (cause.isEmpty() ? "" : " " + cause));
+    }
+
     @Subscribe
     private void onDamage(EntityDamageEvent event) {
         if (damage.isOn()) {
@@ -125,7 +205,8 @@ public final class Webhook extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame()) {
+        // A world Linger holds has dropped already and nothing in it changes.
+        if (Linger.holding()) {
             return;
         }
         playing = true;
@@ -166,25 +247,39 @@ public final class Webhook extends Module {
             gap--;
             return;
         }
-        if (waiting.isEmpty() || posting) {
+        if (posting > 0) {
+            return;
+        }
+        String text = refused == null ? joined() : refused;
+        refused = null;
+        if (text.isEmpty()) {
             return;
         }
         gap = GAP_TICKS;
-        post(joined(), false);
+        post(text, false);
     }
 
-    // As many waiting lines as fit one post. The rest wait for the next.
+    // As many waiting lines as fit one post. Chat lines only join once every alert is out. The
+    // rest wait for the next post.
     private String joined() {
         StringBuilder text = new StringBuilder();
-        while (!waiting.isEmpty()) {
-            String line = waiting.peekFirst();
+        take(alertLines, text);
+        if (alertLines.isEmpty()) {
+            take(chatLines, text);
+        }
+        return text.toString();
+    }
+
+    // No line is longer than a post.
+    private static void take(Deque<String> lines, StringBuilder text) {
+        while (!lines.isEmpty()) {
+            String line = lines.peekFirst();
             if (!text.isEmpty() && text.length() + 1 + line.length() > MOST_CHARS) {
-                break;
+                return;
             }
-            waiting.removeFirst();
+            lines.removeFirst();
             text.append(text.isEmpty() ? "" : "\n").append(line);
         }
-        return text.length() > MOST_CHARS ? text.substring(0, MOST_CHARS) : text.toString();
     }
 
     private String test() {
@@ -195,21 +290,29 @@ public final class Webhook extends Module {
         return "Sending a test line";
     }
 
-    // The answer to a test is said in chat. Any other post that fails goes in the game log.
     private void post(String text, boolean test) {
         JsonObject body = new JsonObject();
         body.addProperty("content", text);
         String to = address.getValue();
-        posting = true;
+        posting++;
         Web.later("webhook", () -> {
             Web.Page answer = Web.postJson(to, body.toString());
-            posting = false;
-            if (test) {
-                mc.execute(() -> ChatUtil.message(answer.ok() ? "§bWebhook §7took the test line."
-                    : "§bWebhook §cgot no good answer from that address."));
-            } else if (!answer.ok()) {
-                OfflineClient.LOG.warn("The webhook answered {}", answer.status());
-            }
+            mc.execute(() -> answered(text, test, answer));
         });
+    }
+
+    // The answer to a test is said in chat. Any other post that fails goes in the game log.
+    private void answered(String text, boolean test, Web.Page answer) {
+        posting--;
+        if (test) {
+            tell(answer.ok() ? "took the test line."
+                : "§cgot no good answer from that address.");
+        } else if (answer.tooSoon()) {
+            refused = text;
+            long asked = Math.ceilDiv(answer.retryAfter().toMillis(), SharedConstants.MILLIS_PER_TICK);
+            gap = Math.max(gap, Math.clamp(asked, GAP_TICKS, LONGEST_WAIT_TICKS));
+        } else if (!answer.ok()) {
+            OfflineClient.LOG.warn("The webhook answered {}", answer.status());
+        }
     }
 }

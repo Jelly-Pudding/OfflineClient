@@ -24,6 +24,7 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.ExperienceOrb;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.Item;
@@ -37,8 +38,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.function.Consumer;
 
-// Picks up dropped items from afar. Hop mode hops to each one and waits beside it. Pull
-// mode sprint jumps on the spot. Each jump adds a push along the yaw and the server's
+// Picks up dropped items and experience orbs from afar. Hop mode hops to each one and
+// waits beside it. Pull mode sprint jumps on the spot. Each jump adds a push along the yaw and the server's
 // next tick carries the pickup reach that far out before it puts the player back.
 public final class Fetch extends Module {
 
@@ -73,6 +74,8 @@ public final class Fetch extends Module {
         "Fetches only the listed items.", "Fetches everything except the listed items.");
     private final RegistryListSetting<Item> items = new RegistryListSetting<>("Items",
         "The items the list applies to. Click to pick them.", BuiltInRegistries.ITEM, List.of());
+    private final BoolSetting orbs = new BoolSetting("Experience orbs",
+        "Fetches experience orbs as well.", false);
     private final BoolSetting comeBack = new BoolSetting("Come back",
         "Hops back to where you started once every item is in.", true).under(mode, Mode.HOP);
     private final BoolSetting stayOn = new BoolSetting("Stay on",
@@ -89,7 +92,7 @@ public final class Fetch extends Module {
     private final List<ItemStack> traded = new ArrayList<>();
     private Stage stage = Stage.IDLE;
     private Vec3 home;
-    private ItemEntity fetching;
+    private Entity fetching;
     private int waited;
     private boolean sendingStart;
     // Counts the times Fetch was switched on. A trip from an earlier run reports to nobody.
@@ -97,7 +100,7 @@ public final class Fetch extends Module {
 
     public Fetch() {
         super("Fetch", "Picks up dropped items from far away.", Category.MOVEMENT);
-        addSettings(mode, range, listMode, items, comeBack, stayOn, tradeUp);
+        addSettings(mode, range, listMode, items, orbs, comeBack, stayOn, tradeUp);
         searchTags("item magnet", "collect items", "pickup");
     }
 
@@ -129,9 +132,6 @@ public final class Fetch extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame()) {
-            return;
-        }
         // A death or a new world leaves the drops and the way home behind.
         if (world.changed() || mc.player.isDeadOrDying()) {
             forget();
@@ -158,9 +158,14 @@ public final class Fetch extends Module {
             return;
         }
         Entity mover = Hop.mover(mc.player);
-        ItemEntity item = nearestWanted(mover.position(), false);
+        Entity item = nearestWanted(mover.position(), false);
         if (item == null) {
             goHome(mover);
+            return;
+        }
+        // One of a heap already in reach wants no hop. The server takes one orb at a time.
+        if (reaches(mover, mover.position(), item) && roomFor(item)) {
+            awaitPickup(item);
             return;
         }
         Hop.Plan trip = tripTo(mover, item);
@@ -176,9 +181,16 @@ public final class Fetch extends Module {
         trip.go(thisRun(this::arrived));
     }
 
+    private void awaitPickup(Entity item) {
+        makeRoom(item);
+        fetching = item;
+        stage = Stage.WAITING;
+        waited = 0;
+    }
+
     // The way to a spot where the pickup reach takes in the item. Null when the item has no
     // room or there is no such spot or no way there.
-    private Hop.Plan tripTo(Entity mover, ItemEntity item) {
+    private Hop.Plan tripTo(Entity mover, Entity item) {
         Vec3 spot = Hop.nearestFit(mover, item.position());
         if (spot == null || !reaches(mover, spot, item) || !roomFor(item)) {
             return null;
@@ -203,9 +215,7 @@ public final class Fetch extends Module {
 
     private void arrived(Hop.Result result) {
         if (result == Hop.Result.MOVED) {
-            makeRoom(fetching);
-            stage = Stage.WAITING;
-            waited = 0;
+            awaitPickup(fetching);
             return;
         }
         warning.say(result.problem());
@@ -256,38 +266,43 @@ public final class Fetch extends Module {
 
     // The closest wanted item within range of where the trip began. A pull only reaches
     // items lying level with the feet beyond the normal pickup reach.
-    private ItemEntity nearestWanted(Vec3 from, boolean level) {
+    private Entity nearestWanted(Vec3 from, boolean level) {
         Vec3 start = home == null ? from : home;
-        ItemEntity best = null;
+        Entity best = null;
         double bestDistance = Double.MAX_VALUE;
         for (Entity entity : mc.level.entitiesForRendering()) {
-            if (!(entity instanceof ItemEntity item) || !wanted(item)
-                || item.position().distanceTo(start) > range.getValue()) {
+            if (!wanted(entity) || entity.position().distanceTo(start) > range.getValue()) {
                 continue;
             }
-            if (level && (Math.abs(item.getY() - from.y) > PULL_LEVEL
-                || item.position().subtract(from).horizontalDistance() <= PICKUP_REACH)) {
+            if (level && (Math.abs(entity.getY() - from.y) > PULL_LEVEL
+                || entity.position().subtract(from).horizontalDistance() <= PICKUP_REACH)) {
                 continue;
             }
-            double distance = item.distanceToSqr(from);
+            double distance = entity.distanceToSqr(from);
             if (distance < bestDistance) {
                 bestDistance = distance;
-                best = item;
+                best = entity;
             }
         }
         return best;
     }
 
-    private boolean wanted(ItemEntity item) {
-        return item.isAlive() && item.getAge() >= SETTLE_TICKS && !tried.contains(item.getId())
+    private boolean wanted(Entity entity) {
+        if (!entity.isAlive() || tried.contains(entity.getId())) {
+            return false;
+        }
+        if (entity instanceof ExperienceOrb) {
+            return orbs.isOn();
+        }
+        return entity instanceof ItemEntity item && item.getAge() >= SETTLE_TICKS
             && listMode.getValue().admits(items.contains(item.getItem().getItem()))
             && traded.stream().noneMatch(stack -> ItemStack.matches(stack, item.getItem()));
     }
 
     // True when the inventory takes the item or Trade up has a worse piece to throw for it.
-    // Nothing is thrown before the item is in reach.
-    private boolean roomFor(ItemEntity item) {
-        return takes(item.getItem()) || worsePiece(item.getItem()) != -1;
+    // Nothing is thrown before the item is in reach. An orb takes no room.
+    private boolean roomFor(Entity entity) {
+        return !(entity instanceof ItemEntity item) || takes(item.getItem()) || worsePiece(item.getItem()) != -1;
     }
 
     private boolean takes(ItemStack stack) {
@@ -297,7 +312,10 @@ public final class Fetch extends Module {
 
     // Trade up throws the worse piece once the item is in reach and still lies there with no
     // room for it. A trip that ends after Fetch was switched off throws nothing.
-    private void makeRoom(ItemEntity item) {
+    private void makeRoom(Entity entity) {
+        if (!(entity instanceof ItemEntity item)) {
+            return;
+        }
         ItemStack stack = item.getItem();
         int worst = !isEnabled() || item.isRemoved() || takes(stack) ? -1 : worsePiece(stack);
         if (worst == -1) {
@@ -350,7 +368,7 @@ public final class Fetch extends Module {
     }
 
     // True when the server's pickup reach round the mover at the spot takes in the item.
-    private static boolean reaches(Entity mover, Vec3 spot, ItemEntity item) {
+    private static boolean reaches(Entity mover, Vec3 spot, Entity item) {
         return Hop.boxAt(mover, spot).inflate(PICKUP_REACH, 0, PICKUP_REACH).intersects(item.getBoundingBox());
     }
 
@@ -372,7 +390,7 @@ public final class Fetch extends Module {
             return;
         }
         Vec3 at = mc.player.position();
-        ItemEntity item = nearestWanted(at, true);
+        Entity item = nearestWanted(at, true);
         if (item == null) {
             finish();
             return;
@@ -398,10 +416,7 @@ public final class Fetch extends Module {
             return;
         }
         if (jump(at, RotationManager.yawTo(item.position()), jumps)) {
-            makeRoom(item);
-            fetching = item;
-            stage = Stage.WAITING;
-            waited = 0;
+            awaitPickup(item);
         }
     }
 

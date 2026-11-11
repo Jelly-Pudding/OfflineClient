@@ -4,7 +4,9 @@ import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.hud.HudElement;
 import com.jellypudding.offlineclient.hud.RowCache;
 import com.jellypudding.offlineclient.hud.TextRow;
+import com.jellypudding.offlineclient.render.ClientFonts;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.ClientLines;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -17,9 +19,9 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-// The client's own messages whilst BetterChat sends them here. The newest sits at the bottom
-// the way chat does. A line fades once its time is up and the open chat shows every row
-// whatever its age. A long line wraps onto rows of its own.
+// The client's own messages. Whilst this is on they come here and stay out of the chat. The
+// newest sits at the bottom the way chat does. A line fades once its time is up and the open
+// chat shows every row whatever its age. A long line wraps onto rows of its own.
 public final class ClientLinesElement extends HudElement {
 
     // One wrapped row and how strongly it shows from nought to one.
@@ -34,19 +36,23 @@ public final class ClientLinesElement extends HudElement {
     // Lines wrap at about the width of the chat.
     private static final int WRAP_WIDTH = 320;
 
-    // Two lines stand in whilst the editor is open and nothing has come yet.
-    private static final List<Component> SAMPLE = List.of(
-        Component.literal("§7The client's own messages show here."),
-        Component.literal("§bSteve §7entered your render distance."));
+    // The lines a bind writes as it switches a module stand in whilst the editor is open and
+    // nothing has come yet.
+    private static final List<Component> SAMPLE = List.of(sample("Sprint", true), sample("Flight", false));
 
     private final NumberSetting fade = new NumberSetting("Client lines fade",
-        "Seconds a line stays before it fades away.", 10, 1, 60, 1, " seconds").min(1);
+        "Seconds a line stays before it fades away.", 10, 1, 60, 1, " seconds");
     private final NumberSetting rows = new NumberSetting("Client lines rows",
-        "How many lines the panel shows at once.", 6, 1, 20, 1).min(1);
+        "How many lines the panel shows at once.", 6, 1, 20, 1);
     private final RowCache<Row> shown = new RowCache<>(this::build);
 
+    private static Component sample(String module, boolean on) {
+        return ChatUtil.tagged(Component.literal(ChatUtil.toggledText(module, on)));
+    }
+
     public ClientLinesElement() {
-        super("Client lines", "The client's own messages in a panel of their own.", false, 25, 12);
+        super("Client lines", "Moves the client's own messages out of the chat and lists them here."
+            + " Replies to commands you type and lines with a link stay in the chat.", false, 25, 12);
         add(fade, rows);
     }
 
@@ -62,13 +68,13 @@ public final class ClientLinesElement extends HudElement {
         }
         List<Row> sample = new ArrayList<>();
         for (Component line : SAMPLE) {
-            sample.addAll(wrapped(OfflineClient.MC.font, line, 1).reversed());
+            sample.addAll(wrapped(ClientFonts.hud(), line, 1).reversed());
         }
         return sample;
     }
 
     private List<Row> build() {
-        Font font = OfflineClient.MC.font;
+        Font font = ClientFonts.hud();
         boolean chatOpen = OfflineClient.MC.gui.screen() instanceof ChatScreen;
         long now = System.currentTimeMillis();
         List<Row> newestFirst = new ArrayList<>();

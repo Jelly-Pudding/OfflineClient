@@ -2,6 +2,7 @@ package com.jellypudding.offlineclient.modules.render;
 
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.ClientTickEvent;
+import com.jellypudding.offlineclient.event.events.EntityDamageEvent;
 import com.jellypudding.offlineclient.event.events.LeftClickEvent;
 import com.jellypudding.offlineclient.event.events.MouseScrollEvent;
 import com.jellypudding.offlineclient.event.events.PacketReceiveEvent;
@@ -16,11 +17,11 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.AwayView;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.ChunkRebuild;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.InputUtil;
-import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.RotationManager;
 import com.jellypudding.offlineclient.util.RotationPriority;
 import net.minecraft.client.CameraType;
@@ -31,9 +32,6 @@ import net.minecraft.network.protocol.game.ClientboundPlayerCombatKillPacket;
 import net.minecraft.network.protocol.game.ClientboundRespawnPacket;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.player.Input;
-import net.minecraft.world.entity.projectile.ProjectileUtil;
-import net.minecraft.world.level.ClipContext;
-import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
@@ -41,7 +39,7 @@ import net.minecraft.world.phys.Vec3;
 
 // CameraMixin positions the camera and MouseHandlerMixin routes the mouse here.
 // LocalPlayerMixin aims the crosshair and VisGraphMixin keeps chunk insides drawn.
-public final class Freecam extends Module {
+public final class Freecam extends Module implements AwayView {
 
     public enum Start { INSIDE, IN_FRONT, ABOVE }
 
@@ -56,8 +54,6 @@ public final class Freecam extends Module {
 
     public enum InputTarget { CAMERA, PLAYER }
 
-    public enum InteractFrom { PLAYER, CAMERA }
-
     private final NumberSetting speed = new NumberSetting("Horizontal speed",
         "How fast the camera moves along.", 1, 0.1, 5, 0.1);
     private final NumberSetting verticalSpeed = new NumberSetting("Vertical speed",
@@ -66,15 +62,11 @@ public final class Freecam extends Module {
         "Who the keys and the mouse steer.", InputTarget.CAMERA)
         .describe(InputTarget.CAMERA, "The camera moves and your body stands still.")
         .describe(InputTarget.PLAYER, "Your body keeps moving whilst the camera hangs where you left it.");
-    private final EnumSetting<InteractFrom> interactFrom = new EnumSetting<>("Interact from",
-        "Where clicks are aimed from.", InteractFrom.PLAYER)
-        .describe(InteractFrom.PLAYER, "Clicks go where your body looks.")
-        .describe(InteractFrom.CAMERA, "Clicks go where the camera looks. The server still checks reach from your body.");
+    private final EnumSetting<InteractFrom> interactFrom = AwayView.interactFromSetting();
     private final NumberSetting scrollSensitivity = new NumberSetting("Scroll sensitivity",
         "How much of the speed one wheel notch adds or takes away. Nought leaves the wheel to the hotbar.",
-        0.5, 0, 2, 0.1, "x").min(0);
-    private final BoolSetting hideHand = new BoolSetting("Hide hand",
-        "Hides the held item whilst the camera is away.", true);
+        0.5, 0, 2, 0.1, "x");
+    private final BoolSetting hideHand = AwayView.hideHandSetting();
     private final BoolSetting blockClicks = new BoolSetting("Block clicks",
         "Clicks do nothing whilst the camera is away.", true);
     private final BoolSetting rotate = new BoolSetting("Rotate",
@@ -117,33 +109,28 @@ public final class Freecam extends Module {
     private ClientInput realInput;
     // The player the camera was seeded from. A respawn or a portal hands out a new one.
     private LocalPlayer seededFor;
-    private float lastHealth;
     private boolean sneakingAtStart;
     private CameraType savedView;
-    private double savedFovScale;
-    private boolean savedBobbing;
     private boolean viewChanged;
-    // Whether this run switched bobbing and the FOV effects off. The setting may change meanwhile.
-    private boolean stilled;
     // Set on the netty thread and acted on next tick.
     private volatile String stopReason;
 
     public Freecam() {
-        super("Freecam", "Fly the camera around whilst your character stays still.", Category.RENDER);
+        super("Freecam", "Lets you fly the camera around whilst your character stays still.", Category.RENDER);
         addSettings(start, speed, verticalSpeed, inputTarget, interactFrom, scrollSensitivity, hideHand,
             blockClicks, rotate, staySneaking, stillView, tracer, tracerColor, disableOnDamage, disableOnDeath,
             disableOnLeave, clickToWalk, doubleClick, reloadChunks);
         searchTags("free camera", "spectator", "detach");
     }
 
-    // The player's own model is only on screen in third person or Freecam.
-    public static boolean ownBodyVisible() {
-        return Modules.enabled(Freecam.class) || !mc.options.getCameraType().isFirstPerson();
-    }
-
     @Override
     public String getSuffix() {
         return speed.getValueString();
+    }
+
+    // Read by GameRendererMixin and CameraMixin. The saved options stay as the player set them.
+    public boolean holdsViewStill() {
+        return isEnabled() && stillView.isOn() && viewChanged;
     }
 
     // Consulted by MinecraftMixin before the game handles an attack.
@@ -156,10 +143,12 @@ public final class Freecam extends Module {
         return isEnabled() && inputTarget.is(InputTarget.CAMERA);
     }
 
+    @Override
     public boolean interactsFromCamera() {
         return isEnabled() && interactFrom.is(InteractFrom.CAMERA);
     }
 
+    @Override
     public boolean hidesHand() {
         return isEnabled() && hideHand.isOn();
     }
@@ -181,7 +170,8 @@ public final class Freecam extends Module {
         event.cancel();
     }
 
-    // Death and dimension changes arrive on the netty thread.
+    // Death and respawns arrive on the netty thread. The server sends a respawn for a dimension
+    // change too.
     @Subscribe
     private void onPacketReceive(PacketReceiveEvent event) {
         if (event.getPacket() instanceof ClientboundPlayerCombatKillPacket packet) {
@@ -189,7 +179,15 @@ public final class Freecam extends Module {
                 stopReason = "you died";
             }
         } else if (event.getPacket() instanceof ClientboundRespawnPacket) {
-            stopReason = "you changed dimension";
+            stopReason = "you respawned or changed dimension";
+        }
+    }
+
+    // A hit that only takes absorption hearts leaves the health as it was but still sends this.
+    @Subscribe
+    private void onDamage(EntityDamageEvent event) {
+        if (disableOnDamage.isOn() && event.getEntity() == mc.player) {
+            setEnabled(false);
         }
     }
 
@@ -200,6 +198,7 @@ public final class Freecam extends Module {
 
     @Override
     protected void onEnable() {
+        AwayView.claim(this);
         seededFor = null;
         stopReason = null;
         viewChanged = false;
@@ -216,7 +215,6 @@ public final class Freecam extends Module {
         prevCamPos = camPos;
         camYaw = mc.player.getYRot();
         camPitch = mc.player.getXRot();
-        lastHealth = mc.player.getHealth();
         sneakingAtStart = mc.player.isShiftKeyDown();
         seededFor = mc.player;
         takeView();
@@ -231,21 +229,14 @@ public final class Freecam extends Module {
         };
     }
 
-    // The camera always looks out from first person and the view stays still.
+    // The camera always looks out from first person.
     private void takeView() {
         if (viewChanged) {
             return;
         }
         viewChanged = true;
         savedView = mc.options.getCameraType();
-        savedFovScale = mc.options.fovEffectScale().get();
-        savedBobbing = mc.options.bobView().get();
         mc.options.setCameraType(CameraType.FIRST_PERSON);
-        stilled = stillView.isOn();
-        if (stilled) {
-            mc.options.fovEffectScale().set(0.0);
-            mc.options.bobView().set(false);
-        }
     }
 
     private void giveBackView() {
@@ -254,10 +245,6 @@ public final class Freecam extends Module {
         }
         viewChanged = false;
         mc.options.setCameraType(savedView);
-        if (stilled) {
-            mc.options.fovEffectScale().set(savedFovScale);
-            mc.options.bobView().set(savedBobbing);
-        }
     }
 
     // Hands the player an input object that reads no keys. Only the sneak
@@ -289,9 +276,6 @@ public final class Freecam extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame()) {
-            return;
-        }
         if (mc.player != seededFor) {
             init();
         }
@@ -303,14 +287,6 @@ public final class Freecam extends Module {
             return;
         }
         syncInput();
-
-        float healthNow = mc.player.getHealth();
-        if (disableOnDamage.isOn() && healthNow < lastHealth) {
-            lastHealth = healthNow;
-            setEnabled(false);
-            return;
-        }
-        lastHealth = healthNow;
         if (rotate.isOn()) {
             faceCrosshair();
         }
@@ -327,8 +303,7 @@ public final class Freecam extends Module {
         if (!trip.active()) {
             return false;
         }
-        if (InputUtil.physicallyHeld(mc.options.keyUp) || InputUtil.physicallyHeld(mc.options.keyDown)
-            || InputUtil.physicallyHeld(mc.options.keyLeft) || InputUtil.physicallyHeld(mc.options.keyRight)) {
+        if (InputUtil.steering()) {
             trip.stop();
             return false;
         }
@@ -449,38 +424,18 @@ public final class Freecam extends Module {
         camPitch = RotationManager.clampPitch(camPitch + (float) (deltaPitch * InputUtil.MOUSE_TURN));
     }
 
+    @Override
     public Vec3 getCamPos(float partialTicks) {
         return Mth.lerp(partialTicks, prevCamPos, camPos);
     }
 
+    @Override
     public float getCamYaw() {
         return camYaw;
     }
 
+    @Override
     public float getCamPitch() {
         return camPitch;
-    }
-
-    // The crosshair ray cast from the camera instead of the eyes. Blocks and
-    // entities use their own reach and the nearer hit wins like vanilla.
-    public HitResult pick(LocalPlayer player, float partialTicks) {
-        Vec3 start = getCamPos(partialTicks);
-        Vec3 direction = Vec3.directionFromRotation(camPitch, camYaw);
-
-        double blockRange = player.blockInteractionRange();
-        HitResult result = mc.level.clip(new ClipContext(start, start.add(direction.scale(blockRange)),
-            ClipContext.Block.OUTLINE, ClipContext.Fluid.NONE, player));
-
-        double entityRange = player.entityInteractionRange();
-        Vec3 entityEnd = start.add(direction.scale(entityRange));
-        AABB bounds = new AABB(start, entityEnd).inflate(1);
-        EntityHitResult entityHit = ProjectileUtil.getEntityHitResult(player, start, entityEnd, bounds,
-            entity -> !entity.isSpectator() && entity.isPickable(), entityRange * entityRange);
-        if (entityHit == null) {
-            return result;
-        }
-        boolean nearer = result.getType() == HitResult.Type.MISS
-            || entityHit.getLocation().distanceToSqr(start) < result.getLocation().distanceToSqr(start);
-        return nearer ? entityHit : result;
     }
 }

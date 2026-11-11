@@ -18,12 +18,12 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 public final class BlockSelection extends Module {
 
     private final BoolSetting trueShape = new BoolSetting("True shape",
-        "Follow every edge of stairs and fences and slabs rather than a plain cube round them.", true);
+        "Follows every edge of stairs and fences and slabs rather than a plain cube round them.", true);
     private final BoolSetting singleSide = new BoolSetting("Single side",
-        "Only mark the face you are looking at.", false);
+        "Only marks the face you are looking at.", false);
     private final BoxStyle style = BoxStyle.white(BoxStyle.Shape.BOTH);
     private final BoolSetting hideInside = new BoolSetting("Hide inside",
-        "Draw nothing whilst your head is inside the block you are looking at.", true);
+        "Draws nothing whilst your head is inside the block you are looking at.", true);
 
     public BlockSelection() {
         super("BlockSelection", "Recolours the outline on the block you are looking at.", Category.RENDER);
@@ -67,7 +67,7 @@ public final class BlockSelection extends Module {
                 new Vec3(pos.getX() + x2, pos.getY() + y2, pos.getZ() + z2), line, false));
         }
         if (style.drawsSides()) {
-            int fill = style.fillColor();
+            int fill = style.fadedFill();
             for (AABB part : shape.toAabbs()) {
                 batch.solidBox(part.move(pos), fill, false);
             }

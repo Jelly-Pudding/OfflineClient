@@ -1,9 +1,9 @@
 package com.jellypudding.offlineclient.mixin;
 
-import com.jellypudding.offlineclient.modules.render.Freecam;
 import com.jellypudding.offlineclient.modules.render.HandView;
 import com.jellypudding.offlineclient.modules.render.NoShieldOverlay;
 import com.jellypudding.offlineclient.modules.render.Zoom;
+import com.jellypudding.offlineclient.util.AwayView;
 import com.jellypudding.offlineclient.util.Modules;
 
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
@@ -39,9 +39,9 @@ public abstract class FirstPersonHandsAndItemsRendererMixin {
 
     @Inject(method = SUBMIT_HANDS, at = @At("HEAD"), cancellable = true)
     private void onSubmitHands(CallbackInfo ci) {
-        Freecam freecam = Modules.get(Freecam.class);
+        AwayView view = AwayView.active();
         Zoom zoom = Modules.get(Zoom.class);
-        if ((freecam != null && freecam.hidesHand()) || (zoom != null && zoom.hidesHand())) {
+        if ((view != null && view.hidesHand()) || (zoom != null && zoom.hidesHand())) {
             ci.cancel();
         }
     }

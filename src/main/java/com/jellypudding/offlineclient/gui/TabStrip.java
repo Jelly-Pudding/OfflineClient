@@ -1,6 +1,6 @@
 package com.jellypudding.offlineclient.gui;
 
-import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.render.ClientFonts;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.RenderUtil;
@@ -19,6 +19,7 @@ public final class TabStrip {
         MACROS("Macros"),
         WAYPOINTS("Waypoints"),
         NAMES("Names"),
+        PROXIES("Proxies"),
         HUD("HUD"),
         PROFILES("Profiles");
 
@@ -27,7 +28,8 @@ public final class TabStrip {
 
         Tab(String label) {
             this.label = label;
-            this.setting = new BoolSetting(label + " tab", "Show the " + label + " tab.", true);
+            this.setting = new BoolSetting(label + " tab",
+                "Shows the " + label + " tab in the row across the top of the GUI.", true);
         }
 
         public String getLabel() {
@@ -66,7 +68,7 @@ public final class TabStrip {
 
     // Laid out every frame because a tab can be switched off at any time.
     private void layout(int screenWidth) {
-        Font font = OfflineClient.MC.font;
+        Font font = ClientFonts.gui();
         slots.clear();
         int total = 0;
         for (Tab tab : Tab.values()) {
@@ -105,7 +107,7 @@ public final class TabStrip {
         if (slots.isEmpty()) {
             return;
         }
-        Font font = OfflineClient.MC.font;
+        Font font = ClientFonts.gui();
         Slot first = slots.getFirst();
         Slot last = slots.getLast();
         int left = first.x();

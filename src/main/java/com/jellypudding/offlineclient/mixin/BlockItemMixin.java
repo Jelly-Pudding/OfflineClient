@@ -1,7 +1,10 @@
 package com.jellypudding.offlineclient.mixin;
 
+import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.event.events.BlockPlaceEvent;
 import com.jellypudding.offlineclient.modules.world.NoGhostBlocks;
 import com.jellypudding.offlineclient.util.Modules;
+import net.minecraft.world.InteractionResult;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.block.state.BlockState;
@@ -26,6 +29,17 @@ public abstract class BlockItemMixin {
         NoGhostBlocks noGhostBlocks = Modules.get(NoGhostBlocks.class);
         if (noGhostBlocks != null && noGhostBlocks.holdsPlacements()) {
             cir.setReturnValue(true);
+        }
+    }
+
+    // A block you place has gone down on your screen.
+    @Inject(
+        method = "place(Lnet/minecraft/world/item/context/BlockPlaceContext;)Lnet/minecraft/world/InteractionResult;",
+        at = @At("RETURN"))
+    private void onPlaced(BlockPlaceContext context, CallbackInfoReturnable<InteractionResult> cir) {
+        if (context.getLevel().isClientSide() && context.getPlayer() == OfflineClient.MC.player
+            && cir.getReturnValue().consumesAction()) {
+            OfflineClient.INSTANCE.getEventBus().post(new BlockPlaceEvent(context.getClickedPos()));
         }
     }
 }

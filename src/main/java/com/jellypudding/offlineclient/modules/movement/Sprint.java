@@ -3,7 +3,7 @@ package com.jellypudding.offlineclient.modules.movement;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.ClientTickEvent;
 import com.jellypudding.offlineclient.event.events.PacketSendEvent;
-import com.jellypudding.offlineclient.event.events.PostMotionEvent;
+import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.modules.player.InvWalk;
@@ -23,6 +23,16 @@ public final class Sprint extends Module {
         RAGE
     }
 
+    public enum OnHit {
+        VANILLA,
+        KEEP_SPRINT,
+        DROP_SPRINT
+    }
+
+    // Runs after the modules that hold a hit back for a tick. A hit one of them holds is
+    // asked for on the tick it really leaves.
+    private static final int AFTER_HELD_HITS = -50;
+
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
         "Which sprint rules to keep.", Mode.STRICT)
         .describe(Mode.STRICT, "Sprints only when the game allows it.")
@@ -35,19 +45,16 @@ public final class Sprint extends Module {
         "Keeps the sprint on whilst you stand still.", false).under(mode, Mode.RAGE);
     private final BoolSetting stopInWater = new BoolSetting("Stop in water",
         "Stops sprinting in water.", true).under(mode, Mode.RAGE);
-    private final BoolSetting whilstUsing = new BoolSetting("Whilst using items",
-        "Keeps your sprint and speed whilst you eat or drink or block.", false);
-    private final BoolSetting sprintThroughHits = new BoolSetting("Sprint through hits",
-        "Hitting something no longer stops your sprint or slows you down.", false);
-    private final BoolSetting stopOnHit = new BoolSetting("Stop on hit",
-        "Drops the sprint for each hit to allow crits and sweeps.", false);
-
-    private final SprintPause sprintPause = new SprintPause();
+    private final EnumSetting<OnHit> onHit = new EnumSetting<>("On hit",
+        "What a hit does to your sprint.", OnHit.VANILLA)
+        .describe(OnHit.VANILLA, "A sprinting hit knocks further back and ends your sprint as in the plain game.")
+        .describe(OnHit.KEEP_SPRINT, "A sprinting hit knocks further back and you keep your sprint and your speed.")
+        .describe(OnHit.DROP_SPRINT, "Tells the server the sprint stopped for each hit. A hit whilst you fall"
+            + " lands as a crit and you keep your speed but give up the extra knockback.");
 
     public Sprint() {
         super("Sprint", "Sprints for you whenever you move.", Category.MOVEMENT);
-        addSettings(mode, anyDirection, whilstHungry, whilstStill, stopInWater, whilstUsing,
-            sprintThroughHits, stopOnHit);
+        addSettings(mode, anyDirection, whilstHungry, whilstStill, stopInWater, onHit);
         searchTags("auto sprint", "omnidirectional");
     }
 
@@ -57,8 +64,13 @@ public final class Sprint extends Module {
     }
 
     @Override
+    protected void onEnable() {
+        SprintPause.attach(this);
+    }
+
+    @Override
     protected void onDisable() {
-        sprintPause.resume();
+        SprintPause.detach(this);
     }
 
     // Read by ClientInputMixin.
@@ -81,17 +93,12 @@ public final class Sprint extends Module {
         if (stopInWater.isOn() && player.isInWater()) {
             return false;
         }
-        return whilstStill.isOn() || moving(player);
+        return whilstStill.isOn() || MovementUtil.hasInput(player);
     }
 
-    // Read by LocalPlayerMixin. An item in use does not slow you.
-    public boolean keepsSpeedWhilstUsing() {
-        return isEnabled() && whilstUsing.isOn();
-    }
-
-    // Read by PlayerMixin. True whilst a landed hit must not halve the speed.
+    // Read by PlayerMixin. True whilst a landed hit must not cost the client its sprint or speed.
     public boolean keepsSprintOnHit() {
-        return isEnabled() && sprintThroughHits.isOn();
+        return isEnabled() && !onHit.is(OnHit.VANILLA);
     }
 
     // Read by LivingEntityMixin. The sprint jump push follows the keys rather than the camera.
@@ -108,13 +115,28 @@ public final class Sprint extends Module {
 
     // Read by LivingEntityMixin. A still player must not be pushed by the sprint jump.
     public boolean jumpBoost(boolean sprinting, LocalPlayer player) {
-        return sprinting && (!rage() || moving(player));
+        return sprinting && (!rage() || MovementUtil.hasInput(player));
     }
 
     // Runs at the end of the client tick.
     // The player tick reevaluates and clears any sprint set earlier.
     @Subscribe
     private void onClientTick(ClientTickEvent event) {
+        sprint();
+    }
+
+    // Ahead of every other module's tick. It only puts right what came in between ticks. A
+    // sprint the server called off for a moment between a stop and a start is called off
+    // here a little later and the game would report that as a stop. The sprint is back on
+    // before the report and nothing goes out.
+    @Subscribe(priority = Subscribe.FIRST)
+    private void onTick(TickEvent event) {
+        if (SprintPause.staleStop()) {
+            sprint();
+        }
+    }
+
+    private void sprint() {
         if (!inGame() || (mc.gui.screen() != null && !screenAllowsSprint())) {
             return;
         }
@@ -122,33 +144,27 @@ public final class Sprint extends Module {
             mc.player.setSprinting(rageWantsSprint(mc.player));
             return;
         }
-        if (mc.player.input.hasForwardImpulse()
-            && (!mc.player.isUsingItem() || whilstUsing.isOn())) {
+        if (mc.player.input.hasForwardImpulse() && (!mc.player.isUsingItem() || Modules.itemsKeepSpeed())) {
             mc.player.setSprinting(true);
         }
     }
 
-    // The server refuses a critical hit to anyone it believes is sprinting.
-    @Subscribe(priority = 100)
+    @Subscribe(priority = AFTER_HELD_HITS)
     private void onPacketSend(PacketSendEvent event) {
-        if (stopOnHit.isOn() && event.getPacket() instanceof ServerboundAttackPacket) {
-            sprintPause.pause();
+        if (!(event.getPacket() instanceof ServerboundAttackPacket)) {
+            return;
         }
-    }
-
-    // The attack packet has gone out by this point.
-    @Subscribe
-    private void onPostMotion(PostMotionEvent event) {
-        sprintPause.resume();
+        switch (onHit.getValue()) {
+            case KEEP_SPRINT -> SprintPause.renew();
+            case DROP_SPRINT -> SprintPause.hide();
+            case VANILLA -> {
+            }
+        }
     }
 
     // A screen only keeps the sprint whilst InvWalk lets the sprint key through.
     private boolean screenAllowsSprint() {
         InvWalk invWalk = Modules.active(InvWalk.class);
         return invWalk != null && invWalk.allowsSprint();
-    }
-
-    private static boolean moving(LocalPlayer player) {
-        return player.input.getMoveVector().lengthSquared() > 1e-5f;
     }
 }

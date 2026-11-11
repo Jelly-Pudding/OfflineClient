@@ -1,7 +1,6 @@
 package com.jellypudding.offlineclient.modules.player;
 
 import com.jellypudding.offlineclient.event.Subscribe;
-import com.jellypudding.offlineclient.event.events.PacketSendEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
@@ -10,11 +9,11 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.ItemUtil;
 import com.jellypudding.offlineclient.util.RotationManager;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.network.protocol.game.ServerboundUseItemPacket;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.Item;
@@ -28,12 +27,23 @@ import java.util.List;
 // The offhand mode is the way to mend items that sit in the inventory.
 public final class AutoMend extends Module {
 
-    private static final EquipmentSlot[] REPAIRABLE = {
-        EquipmentSlot.MAINHAND, EquipmentSlot.OFFHAND,
-        EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET
-    };
-
     public enum Mode { BOTTLES, ALL_BOTTLES, OFFHAND }
+
+    public enum Gear {
+        ARMOUR(EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET),
+        HANDS(EquipmentSlot.MAINHAND, EquipmentSlot.OFFHAND),
+        BOTH(EquipmentSlot.MAINHAND, EquipmentSlot.OFFHAND,
+            EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET);
+
+        private final List<EquipmentSlot> slots;
+
+        Gear(EquipmentSlot... slots) {
+            this.slots = List.of(slots);
+        }
+    }
+
+    // Start below and Repair up to are shares out of a hundred.
+    private static final double PERCENT = 100;
 
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
         "How the gear is repaired.", Mode.BOTTLES)
@@ -43,16 +53,30 @@ public final class AutoMend extends Module {
                 + "Good for levels or for gear kept in the inventory.")
         .describe(Mode.OFFHAND,
             "Moves damaged mending items into your offhand one at a time to soak up experience.");
-    private final NumberSetting threshold = new NumberSetting("Threshold",
-        "Start throwing once a piece drops below this much durability.", 99, 1, 100, 1, "%")
-        .min(1).max(100)
+    private final EnumSetting<Gear> gear = new EnumSetting<>("Gear",
+        "Which mending pieces are watched.", Gear.BOTH)
+        .describe(Gear.ARMOUR, "Only the armour you wear.")
+        .describe(Gear.HANDS, "Only what you hold in either hand.")
+        .describe(Gear.BOTH, "The armour you wear and what you hold.")
+        .under(mode, Mode.BOTTLES);
+    private final NumberSetting startBelow = new NumberSetting("Start below",
+        "Throwing starts once a watched piece drops below this much durability.", 99, 1, 100, 1, "%")
+        .max(100)
+        .under(mode, Mode.BOTTLES);
+    private final NumberSetting repairTo = new NumberSetting("Repair up to",
+        "Throwing stops once every watched piece is back to this much durability or to Start below when"
+            + " that is higher.", 99, 1, 100, 1, "%")
+        .max(100)
         .under(mode, Mode.BOTTLES);
     private final NumberSetting delay = new NumberSetting("Delay",
         "Ticks between throws.", 4, 0, 20, 1, " ticks")
         .under(mode, Mode.BOTTLES, Mode.ALL_BOTTLES);
     private final BoolSetting groundOnly = new BoolSetting("Ground only",
-        "Only throw whilst standing on the ground.", true)
+        "Only throws whilst you stand on the ground.", true)
         .under(mode, Mode.BOTTLES, Mode.ALL_BOTTLES);
+    private final BoolSetting fromInventory = new BoolSetting("Take from inventory",
+        "Borrows bottles from the rest of the inventory when the hotbar and offhand have none.", true)
+        .under(mode, Mode.BOTTLES);
     private final RegistryListSetting<Item> skip = new RegistryListSetting<>("Skip",
         "Items that never go into the offhand. Click to pick them.", BuiltInRegistries.ITEM, List.of())
         .under(mode, Mode.OFFHAND);
@@ -64,19 +88,22 @@ public final class AutoMend extends Module {
         "Switches off once the gear is repaired or once no bottles are left to throw.", true);
 
     private final InventoryUtil.SlotSwap slots = new InventoryUtil.SlotSwap();
+    // Bottles brought up from the inventory stay in the hotbar until the mending is over.
+    private final InventoryUtil.HotbarLoan loan = new InventoryUtil.HotbarLoan();
     private int timer;
     private int bottles;
-    // Minus one whilst nothing worn or held carries Mending.
+    // Minus one whilst nothing watched carries Mending.
     private int worstPercent = -1;
+    // Set once a watched piece drops under Start below and cleared once all are back up.
+    private boolean mending;
+    // True once a bottle has gone since the module was switched on.
+    private boolean threw;
     // True once the offhand mode has put something in the offhand.
     private boolean moved;
-    // Set for the one packet that carries the downward throw.
-    // Read from the packet thread.
-    private volatile boolean throwing;
 
     public AutoMend() {
         super("AutoMend", "Repairs your mending gear with experience.", Category.PLAYER);
-        addSettings(mode, threshold, delay, groundOnly, skip, force, autoDisable);
+        addSettings(mode, gear, startBelow, repairTo, delay, groundOnly, fromInventory, skip, force, autoDisable);
         searchTags("mending", "xp", "experience bottle", "repair", "exp thrower");
     }
 
@@ -97,46 +124,54 @@ public final class AutoMend extends Module {
     @Override
     protected void onEnable() {
         timer = 0;
+        mending = false;
+        threw = false;
         moved = false;
-        throwing = false;
     }
 
     @Override
     protected void onDisable() {
         slots.restoreIfMine();
-        throwing = false;
+        loan.giveBack(false);
     }
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || mc.player.isSpectator()) {
+        if (mc.player.isSpectator()) {
             return;
         }
+        if (mc.player.isDeadOrDying()) {
+            // Respawn hands out a fresh inventory.
+            loan.forget();
+            return;
+        }
+        if (!borrows()) {
+            loan.giveBack(false);
+        }
         if (mode.is(Mode.OFFHAND)) {
-            slots.restoreIfMine();
             tickOffhand();
             return;
         }
         worstPercent = lowestDurability();
         bottles = countBottles();
-        if (mode.is(Mode.ALL_BOTTLES) ? bottles == 0 : worstPercent < 0) {
-            slots.restoreIfMine();
-            if (mode.is(Mode.ALL_BOTTLES) && autoDisable.isOn()) {
+        if (mode.is(Mode.BOTTLES) && !needsMending()) {
+            loan.giveBack(false);
+            // With no mending gear on it waits for some to be put on.
+            if (autoDisable.isOn() && worstPercent >= 0) {
+                ChatUtil.message(threw ? "§aEverything is repaired." : "§aNothing needs mending.");
                 setEnabled(false);
             }
             return;
         }
-        if (mode.is(Mode.BOTTLES) && worstPercent >= threshold.getInt()) {
-            slots.restoreIfMine();
+        if (bottles == 0) {
+            loan.giveBack(false);
             if (autoDisable.isOn()) {
-                if (bottles > 0) {
-                    ChatUtil.message("§aEverything is repaired.");
-                }
+                ChatUtil.message("§cNo experience bottles are left to throw.");
                 setEnabled(false);
             }
             return;
         }
-        if (!InventoryUtil.inventoryFree()) {
+        if (!handsFree()) {
             return;
         }
         if (groundOnly.isOn() && !mc.player.onGround()) {
@@ -149,36 +184,75 @@ public final class AutoMend extends Module {
         throwBottle();
     }
 
-    // A bottle already in the offhand is thrown from there with no swap.
+    // Throwing starts under the low mark and goes on until every watched piece reaches the high one.
+    private boolean needsMending() {
+        if (worstPercent < 0) {
+            mending = false;
+        } else if (worstPercent < startBelow.getInt()) {
+            mending = true;
+        } else if (worstPercent >= stopsAt()) {
+            mending = false;
+        }
+        return mending;
+    }
+
+    // Throwing goes on up to the higher of the two marks.
+    private int stopsAt() {
+        return Math.max(repairTo.getInt(), startBelow.getInt());
+    }
+
+    // True when the bottles would mend what is worn in the slot until more of its durability is
+    // left than the line. The line is a share of the whole.
+    public boolean wouldMend(EquipmentSlot slot, double line) {
+        ItemStack worn = mc.player.getItemBySlot(slot);
+        if (!isMending(worn)) {
+            return false;
+        }
+        return switch (mode.getValue()) {
+            case ALL_BOTTLES -> true;
+            case BOTTLES -> gear.getValue().slots.contains(slot) && percentLeft(worn) < startBelow.getInt()
+                && stopsAt() / PERCENT > line;
+            case OFFHAND -> false;
+        };
+    }
+
+    // A meal or ShulkerPacker or an item in use has the hands. A slot change would end the meal.
+    private boolean handsFree() {
+        return InventoryUtil.inventoryFree() && !Hands.slotsTaken() && !mc.player.isUsingItem();
+    }
+
+    // A bottle already in the offhand is thrown from there with no swap. A hotbar one is held for
+    // the throw alone and the slot goes back in the same tick. The server never sees the held item
+    // change between its ticks and a fight keeps its weapon.
     private void throwBottle() {
-        InteractionHand hand = InteractionHand.OFF_HAND;
-        if (!mc.player.getOffhandItem().is(Items.EXPERIENCE_BOTTLE)) {
-            int slot = findBottle();
+        boolean offhand = mc.player.getOffhandItem().is(Items.EXPERIENCE_BOTTLE);
+        if (!offhand) {
+            int slot = bottleSlot();
             if (slot == -1) {
-                slots.restore();
                 return;
             }
             slots.select(slot);
-            hand = InteractionHand.MAIN_HAND;
         }
-        throwing = true;
+        InteractionHand hand = offhand ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND;
         try {
-            mc.gameMode.useItem(mc.player, hand);
+            RotationManager.whileFacing(mc.player.getYRot(), RotationManager.STRAIGHT_DOWN,
+                () -> mc.gameMode.useItem(mc.player, hand).consumesAction());
         } finally {
-            throwing = false;
+            slots.restore();
         }
+        threw = true;
         timer = delay.getInt();
     }
 
-    // The use packet carries the rotation the server throws along.
-    @Subscribe(priority = 100)
-    private void onPacketSend(PacketSendEvent event) {
-        if (!throwing || !(event.getPacket() instanceof ServerboundUseItemPacket packet)) {
-            return;
+    // The hotbar slot holding bottles. Minus one when none is at hand. Bottles from the inventory
+    // go into a free hotbar slot or the one beside the held slot and stay there whilst they last.
+    private int bottleSlot() {
+        int slot = InventoryUtil.hotbarSlot(stack -> stack.is(Items.EXPERIENCE_BOTTLE));
+        if (slot != -1 || !borrows()) {
+            return slot;
         }
-        // The throw direction rides on the use packet.
-        event.setPacket(new ServerboundUseItemPacket(packet.hand(), packet.sequence(),
-            packet.yRot(), RotationManager.STRAIGHT_DOWN));
+        int stored = InventoryUtil.findSlot(Items.EXPERIENCE_BOTTLE, InventoryUtil.WHOLE_INVENTORY);
+        return loan.borrow(stored, InventoryUtil.selectedSlot());
     }
 
     // Keeps one damaged mending item in the offhand until it is whole and
@@ -186,7 +260,7 @@ public final class AutoMend extends Module {
     private void tickOffhand() {
         ItemStack offhand = mc.player.getOffhandItem();
         worstPercent = isMending(offhand) ? percentLeft(offhand) : -1;
-        if (!InventoryUtil.inventoryFree()) {
+        if (!handsFree()) {
             return;
         }
         if (!offhand.isEmpty()) {
@@ -222,11 +296,11 @@ public final class AutoMend extends Module {
             && !skip.contains(stack.getItem()), InventoryUtil.WHOLE_INVENTORY);
     }
 
-    // Minus one when no equipped piece carries Mending.
+    // Minus one when no watched piece carries Mending.
     private int lowestDurability() {
         int lowest = -1;
-        for (EquipmentSlot slot : REPAIRABLE) {
-            ItemStack stack = slot == EquipmentSlot.MAINHAND ? heldTool() : mc.player.getItemBySlot(slot);
+        for (EquipmentSlot slot : gear.getValue().slots) {
+            ItemStack stack = mc.player.getItemBySlot(slot);
             if (!isMending(stack)) {
                 continue;
             }
@@ -247,20 +321,14 @@ public final class AutoMend extends Module {
         return (int) ItemUtil.durabilityPercent(stack);
     }
 
-    // The tool stays in the slot the bottle swap came from.
-    private ItemStack heldTool() {
-        int home = slots.previousSlot();
-        return home == -1 ? mc.player.getMainHandItem() : mc.player.getInventory().getItem(home);
+    // All bottles keeps to the hotbar.
+    private boolean borrows() {
+        return mode.is(Mode.BOTTLES) && fromInventory.isOn();
     }
 
-    // Hotbar bottles plus any in the offhand.
+    // Bottles in the offhand and in the slots they may be taken from.
     private int countBottles() {
-        int count = InventoryUtil.count(Items.EXPERIENCE_BOTTLE, InventoryUtil.HOTBAR_SIZE);
-        ItemStack offhand = mc.player.getOffhandItem();
-        return offhand.is(Items.EXPERIENCE_BOTTLE) ? count + offhand.getCount() : count;
-    }
-
-    private int findBottle() {
-        return InventoryUtil.findSlot(Items.EXPERIENCE_BOTTLE, InventoryUtil.HOTBAR_SIZE);
+        return InventoryUtil.countWithOffhand(Items.EXPERIENCE_BOTTLE,
+            borrows() ? InventoryUtil.WHOLE_INVENTORY : InventoryUtil.HOTBAR_SIZE);
     }
 }

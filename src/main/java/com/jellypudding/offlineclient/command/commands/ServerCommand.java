@@ -8,6 +8,8 @@ import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.ClientLines;
 import com.jellypudding.offlineclient.util.ServerInfo;
 import com.jellypudding.offlineclient.util.ServerPlugins;
+import com.jellypudding.offlineclient.util.StatusPing;
+import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.chat.Component;
@@ -19,10 +21,14 @@ import java.util.TreeSet;
 
 public final class ServerCommand extends Command {
 
+    // A version text is a few words. A server can send one of any length.
+    private static final int LONGEST_VERSION = 256;
+
     public ServerCommand() {
         super("server",
-            "Shows the address and details of the server you are on. Plugins lists the plugins it gives away.",
-            "server [plugins]", "ip");
+            "Shows the address and details of the server you are on. Plugins lists the plugins it gives away and"
+                + " copy puts the address on the clipboard.",
+            "server [plugins|copy]", "ip");
     }
 
     @Override
@@ -36,11 +42,16 @@ public final class ServerCommand extends Command {
             plugins();
             return;
         }
+        if (args.length == 1 && args[0].equalsIgnoreCase("copy")) {
+            OfflineClient.MC.keyboardHandler.setClipboard(address);
+            ChatUtil.message("§7Copied §f" + address + "§7 to the clipboard.");
+            return;
+        }
         if (args.length != 0) {
             usage();
             return;
         }
-        ChatUtil.row("Address", address);
+        ChatUtil.row("Address", ChatUtil.copyOnClick(Component.literal("§b" + address), address));
         Component motd = ServerInfo.motd();
         if (motd != null) {
             ChatUtil.row("MOTD", motd);
@@ -49,6 +60,7 @@ public final class ServerCommand extends Command {
         if (brand != null) {
             ChatUtil.row("Software", brand);
         }
+        version(address);
         ChatUtil.row("Login", offlineMode() ? "offline mode" : "online mode");
         ChatUtil.row("Players", ServerInfo.online() + " online");
         ChatUtil.row("Ping", ServerInfo.ping() + " ms");
@@ -58,6 +70,23 @@ public final class ServerCommand extends Command {
         if (saved != null) {
             ChatUtil.row("Saved as", saved);
         }
+    }
+
+    // The version text a server reports comes with the answer the server list gets. A join from
+    // anywhere else never asked for it and the server is asked now.
+    private static void version(String address) {
+        ServerData known = OfflineClient.MC.getCurrentServer();
+        if (known != null && (known.state() == ServerData.State.SUCCESSFUL
+            || known.state() == ServerData.State.INCOMPATIBLE)) {
+            ChatUtil.row("Version", versionOf(known));
+            return;
+        }
+        StatusPing.ask(address, answer -> ClientLines.inChat(() -> ChatUtil.row("Version",
+            answer == null ? "§cthe server did not answer" : versionOf(answer))));
+    }
+
+    private static String versionOf(ServerData server) {
+        return server.version.getString(LONGEST_VERSION);
     }
 
     // The names the version command offers come first. They carry the capitals a plugin gives itself.
@@ -86,6 +115,6 @@ public final class ServerCommand extends Command {
 
     @Override
     public List<String> complete(String[] tokens, int index, String current) {
-        return index == 1 ? CommandManager.filter(current, List.of("plugins")) : List.of();
+        return index == 1 ? CommandManager.filter(current, List.of("plugins", "copy")) : List.of();
     }
 }

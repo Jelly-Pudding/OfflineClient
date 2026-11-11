@@ -7,23 +7,17 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.util.ChunkRebuild;
-import net.minecraft.world.level.Level;
 
 // Recolours the world on your screen only. The mixins ask this what to paint.
 public final class Ambience extends Module {
 
     private final BoolSetting endSky = new BoolSetting("End sky",
-        "Draws the End sky box in every dimension.", false);
+        "Draws the End sky box in place of the overworld sky.", false);
     private final BoolSetting customSky = new BoolSetting("Custom sky colour",
-        "Paints the sky in colours of your own.", false);
-    private final ColorSetting overworldSky = new ColorSetting("Overworld sky",
-        "Sky colour in the overworld.", 210, 1f, 1f, false)
-        .under(customSky);
-    private final ColorSetting netherSky = new ColorSetting("Nether sky",
-        "Sky colour in the nether.", 0, 1f, 0.4f, false)
-        .under(customSky);
-    private final ColorSetting endSkyColor = new ColorSetting("End sky colour",
-        "Sky colour in the end.", 277, 0.67f, 0.35f, false)
+        "Paints the sky in a colour of your own.", false)
+        .visibleWhen(() -> !endSky.isOn());
+    private final ColorSetting skyColor = new ColorSetting("Sky colour",
+        "Colour of the sky in the overworld.", 210, 1f, 1f, false)
         .under(customSky);
     private final BoolSetting customClouds = new BoolSetting("Custom cloud colour",
         "Paints the clouds in a colour of your own.", false);
@@ -68,7 +62,7 @@ public final class Ambience extends Module {
     public Ambience() {
         super("Ambience", "Recolours the sky and the clouds and the ground around you.",
             Category.RENDER);
-        addSettings(endSky, customSky, overworldSky, netherSky, endSkyColor,
+        addSettings(endSky, customSky, skyColor,
             customClouds, cloudColor, customLightning, lightningColor,
             customGrass, grassColor, customFoliage, foliageColor,
             customWater, waterColor, customLava, lavaColor, customFog, fogColor);
@@ -111,13 +105,7 @@ public final class Ambience extends Module {
     }
 
     public int skyColor() {
-        if (mc.level == null) {
-            return overworldSky.getColor();
-        }
-        if (mc.level.dimension() == Level.NETHER) {
-            return netherSky.getColor();
-        }
-        return mc.level.dimension() == Level.END ? endSkyColor.getColor() : overworldSky.getColor();
+        return skyColor.getColor();
     }
 
     public boolean paintsClouds() {

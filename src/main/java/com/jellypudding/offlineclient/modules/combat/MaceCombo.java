@@ -1,7 +1,7 @@
 package com.jellypudding.offlineclient.modules.combat;
 
 import com.jellypudding.offlineclient.event.Subscribe;
-import com.jellypudding.offlineclient.event.events.PostMotionEvent;
+import com.jellypudding.offlineclient.event.events.ClientTickEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
@@ -20,10 +20,10 @@ import com.jellypudding.offlineclient.util.SprintPause;
 import com.jellypudding.offlineclient.util.SwingMode;
 import com.jellypudding.offlineclient.util.TargetFilter;
 import com.jellypudding.offlineclient.util.TargetPriority;
+import com.jellypudding.offlineclient.util.Targeting;
 import com.jellypudding.offlineclient.util.WindLaunch;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.MaceItem;
 import net.minecraft.world.phys.AABB;
@@ -35,7 +35,7 @@ import java.util.function.Predicate;
 // Launches off a wind charge beside the target and smashes it with a mace on the way
 // down. The server scales the smash by the fall it watched. The hit waits for the last
 // tick before the ground or before the target slips out of reach.
-public final class MaceCombo extends Module {
+public final class MaceCombo extends Module implements Targeting {
 
     // Room the launch needs above your head. A lower ceiling cuts the fall short.
     private static final double HEADROOM = 4;
@@ -55,7 +55,7 @@ public final class MaceCombo extends Module {
         "How close a target has to be before the launch.", 3, 1, 6, 0.25, " blocks").min(0.5);
     private final EnumSetting<TargetPriority> priority =
         TargetPriority.setting("Smashes", TargetPriority.NEAREST);
-    private final EntityFilter filter = EntityFilter.living("Smash", "smashed", true,
+    private final EntityFilter filter = EntityFilter.living("Smashes", "smashed", true,
         EntityFilter.Pick.NONE, List.of());
     private final TargetFilter targets = new TargetFilter();
     private final BoolSetting steer = new BoolSetting("Steer",
@@ -70,8 +70,7 @@ public final class MaceCombo extends Module {
 
     private final WindLaunch launch = new WindLaunch();
     private final HotbarLoan loan = new HotbarLoan();
-    private final SprintPause sprintPause = new SprintPause();
-    private LivingEntity target;
+    private Entity target;
     private boolean airborne;
     private int airTicks;
 
@@ -87,7 +86,13 @@ public final class MaceCombo extends Module {
 
     @Override
     public String getSuffix() {
-        return target == null ? null : target.getName().getString();
+        return target == null ? null : EntityUtil.displayNameOf(target);
+    }
+
+    // What the combo is after from the throw to the smash. Null otherwise.
+    @Override
+    public Entity getFought() {
+        return target;
     }
 
     // The modules that hit or swap weapons for you hold off whilst this is true. Their hit would spend the
@@ -100,22 +105,29 @@ public final class MaceCombo extends Module {
     protected void onEnable() {
         airborne = false;
         target = null;
+        SprintPause.attach(this);
     }
 
     @Override
     protected void onDisable() {
         finish();
         launch.stop();
-        sprintPause.resume();
+        SprintPause.detach(this);
+    }
+
+    // Fires without a world as well. A loan from the last server names slots of an inventory
+    // that is gone. A change of dimension keeps the inventory and the loan still goes home right.
+    @Subscribe
+    private void onClientTick(ClientTickEvent event) {
+        if (mc.level == null) {
+            abandon();
+        }
     }
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || mc.player.isSpectator() || mc.player.isDeadOrDying()) {
-            loan.forget();
-            launch.stop();
-            airborne = false;
-            target = null;
+        if (mc.player.isSpectator() || mc.player.isDeadOrDying()) {
+            abandon();
             return;
         }
         if (launch.tick()) {
@@ -139,7 +151,7 @@ public final class MaceCombo extends Module {
         if (maceSlot() == -1 || !WindLaunch.canThrow(fromInventory.isOn()) || !roomAbove()) {
             return;
         }
-        LivingEntity picked = pick(range.getValue());
+        Entity picked = pick(range.getValue());
         if (picked != null && launch.start(fromInventory.isOn())) {
             target = picked;
         }
@@ -158,8 +170,8 @@ public final class MaceCombo extends Module {
         return slot;
     }
 
-    // The damage from the held item only counts once the server has ticked with it.
-    // The mace goes up whilst you rise.
+    // The mace goes up early whilst you rise. A plain server only counts its damage a tick after
+    // the swap and Paper charges the smash by its speed at once.
     private void takeMace() {
         if (loan.select(maceSlot())) {
             mc.gameMode.ensureHasSentCarriedItem();
@@ -193,7 +205,7 @@ public final class MaceCombo extends Module {
 
     // The fall is longest on the last tick before the ground or before the target slips out
     // of reach. The hit goes out before this tick's move and the server measures it there.
-    private boolean lastChance(LivingEntity target, Vec3 velocity, double reach) {
+    private boolean lastChance(Entity target, Vec3 velocity, double reach) {
         if (!mc.level.noCollision(mc.player, mc.player.getBoundingBox().move(0, velocity.y, 0))) {
             return true;
         }
@@ -203,7 +215,7 @@ public final class MaceCombo extends Module {
     }
 
     // Air control alone is too weak to follow anyone. The pace never passes a sprint.
-    private void steerTowards(LivingEntity target) {
+    private void steerTowards(Entity target) {
         Vec3 offset = target.position().subtract(mc.player.position());
         double distance = offset.horizontalDistance();
         if (distance <= STEER_STOP) {
@@ -216,9 +228,9 @@ public final class MaceCombo extends Module {
     }
 
     // A sprinting player never lands a critical hit and a critical hit multiplies the smash.
-    private void smash(LivingEntity victim) {
+    private void smash(Entity victim) {
         faceTarget.getValue().face(victim.getBoundingBox().getCenter(), RotationPriority.ATTACK);
-        sprintPause.pause();
+        SprintPause.hide();
         mc.gameMode.attack(mc.player, victim);
         swing.getValue().swing(InteractionHand.MAIN_HAND);
         finish();
@@ -230,18 +242,20 @@ public final class MaceCombo extends Module {
         loan.release();
     }
 
+    // Ends the combo where no swap can put the mace back.
+    private void abandon() {
+        loan.forget();
+        launch.stop();
+        airborne = false;
+        target = null;
+    }
+
     // Within is measured to the hitbox the way reach is.
-    private LivingEntity pick(double within) {
-        return (LivingEntity) EntityUtil.bestInReach(within, priority.getValue(), this::wanted);
+    private Entity pick(double within) {
+        return EntityUtil.bestInReach(within, priority.getValue(), this::wanted);
     }
 
     private boolean wanted(Entity entity) {
         return targets.attackable(entity, filter);
-    }
-
-    // The attack packet has gone out by this point.
-    @Subscribe
-    private void onPostMotion(PostMotionEvent event) {
-        sprintPause.resume();
     }
 }

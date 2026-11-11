@@ -1,14 +1,17 @@
 package com.jellypudding.offlineclient.mixin;
 
 import com.jellypudding.offlineclient.OfflineClient;
-import com.jellypudding.offlineclient.modules.movement.EdgeGuard;
 import com.jellypudding.offlineclient.modules.movement.NoClip;
 import com.jellypudding.offlineclient.modules.movement.Sprint;
+import com.jellypudding.offlineclient.modules.movement.Step;
 import com.jellypudding.offlineclient.modules.world.Scaffold;
 import com.jellypudding.offlineclient.util.Modules;
+import com.jellypudding.offlineclient.util.SprintPause;
+import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import net.minecraft.world.entity.MoverType;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
@@ -34,21 +37,34 @@ public abstract class PlayerMixin {
         }
     }
 
-    // The sneak edge check probes down by the step height. EdgeGuard holds
-    // the probe at the vanilla depth.
+    // The sneak edge check probes down by the step height. Whatever Step raises that to
+    // the probe keeps the depth of the plain game unless Step asks for a deeper one.
     @WrapOperation(
         method = "maybeBackOffFromEdge(Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/entity/MoverType;)Lnet/minecraft/world/phys/Vec3;",
         at = @At(value = "INVOKE",
             target = "Lnet/minecraft/world/entity/player/Player;maxUpStep()F"))
     private float wrapEdgeProbeDepth(Player player, Operation<Float> original) {
-        float depth = original.call(player);
-        if (Modules.enabled(EdgeGuard.class)) {
-            return Math.min(depth, 0.6f);
+        if (player != OfflineClient.MC.player) {
+            return original.call(player);
         }
-        return depth;
+        float plain = (float) player.getAttributeValue(Attributes.STEP_HEIGHT);
+        Step step = Modules.get(Step.class);
+        return step == null ? plain : step.edgeProbe(plain);
     }
 
-    // A landed hit halves the speed and clears the sprint. Sprint can keep both.
+    // The client plays its own hit out the way the server is going to see it. A hit the
+    // server sees no sprint for knocks no further back and costs neither speed nor sprint.
+    @ModifyExpressionValue(
+        method = {"attack(Lnet/minecraft/world/entity/Entity;)V",
+            "canCriticalAttack(Lnet/minecraft/world/entity/Entity;)Z"},
+        at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/world/entity/player/Player;isSprinting()Z"))
+    private boolean onHitSprinting(boolean original) {
+        return original && !((Object) this == OfflineClient.MC.player && SprintPause.hitUnsprinted());
+    }
+
+    // A hit that knocks back takes two fifths of the speed and clears the sprint. Sprint
+    // can keep both.
     @WrapOperation(
         method = "causeExtraKnockback(Lnet/minecraft/world/entity/Entity;FLnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/damagesource/DamageSource;FZ)V",
         at = @At(value = "INVOKE",

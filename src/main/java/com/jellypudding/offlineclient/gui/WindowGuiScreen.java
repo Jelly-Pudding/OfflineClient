@@ -7,6 +7,8 @@ import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.modules.misc.ClickGuiModule;
+import com.jellypudding.offlineclient.render.ClientFonts;
+import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.RenderUtil;
 import com.jellypudding.offlineclient.util.SearchRank;
 import net.minecraft.client.gui.Font;
@@ -33,13 +35,18 @@ public final class WindowGuiScreen extends GuiScreenBase {
     private static final String FAVOURITES = "Favourites";
     private static final String ENABLED = "Enabled";
     private static final String ALL = "All";
+    // The rows under the categories. They stay whatever is hidden.
+    private static final List<String> LISTS = List.of(FAVOURITES, ENABLED, ALL);
     private static final String HINT =
         "Click a row to toggle. The arrow opens settings. The star favourites.";
 
     private static final String STATE_KEY = "window";
 
+    // Every tab there is. The tallies are kept in the same order.
     private final List<String> tabs = new ArrayList<>();
     private final int[] tabCounts;
+    // The tabs the sidebar lists. A hidden category has none.
+    private final List<String> sidebar = new ArrayList<>();
     private final Set<String> expanded = new LinkedHashSet<>();
     private final SettingWidget.Drag drag = new SettingWidget.Drag();
     private final ScrollBar scrollBar = new ScrollBar();
@@ -60,23 +67,18 @@ public final class WindowGuiScreen extends GuiScreenBase {
         for (Category category : Category.values()) {
             tabs.add(category.getDisplayName());
         }
-        tabs.add(FAVOURITES);
-        tabs.add(ENABLED);
-        tabs.add(ALL);
+        tabs.addAll(LISTS);
         tabCounts = new int[tabs.size()];
         tab = tabs.getFirst();
-        try {
-            restoreState();
-        } catch (RuntimeException e) {
-            OfflineClient.LOG.warn("Ignoring a broken saved window layout", e);
-        }
+        SavedLayout.read("the window", this::restoreState);
         restoreSearch();
     }
 
-    private void restoreState() {
+    // True when the layout held the window.
+    private boolean restoreState() {
         JsonObject gui = OfflineClient.INSTANCE.getConfigManager().getGuiState();
         if (!gui.has(STATE_KEY) || !gui.get(STATE_KEY).isJsonObject()) {
-            return;
+            return false;
         }
         JsonObject state = gui.getAsJsonObject(STATE_KEY);
         if (state.has("tab") && tabs.contains(state.get("tab").getAsString())) {
@@ -86,6 +88,7 @@ public final class WindowGuiScreen extends GuiScreenBase {
             scrollBar.setOffset(state.get("scroll").getAsInt());
         }
         readNames(state, "expanded", expanded);
+        return true;
     }
 
     private static void readNames(JsonObject state, String key, Set<String> into) {
@@ -161,7 +164,7 @@ public final class WindowGuiScreen extends GuiScreenBase {
 
     // The bar at the foot of the window goes away with the hover help.
     private int descHeight() {
-        return hoverHelp() ? WindowParts.FOOT_HEIGHT : 0;
+        return GuiTheme.hoverHelp() ? WindowParts.FOOT_HEIGHT : 0;
     }
 
     private int contentHeight() {
@@ -174,6 +177,26 @@ public final class WindowGuiScreen extends GuiScreenBase {
 
     private int listWidth() {
         return windowWidth() - WindowParts.SIDEBAR_WIDTH - MARGIN;
+    }
+
+    // Runs every frame because a category can be hidden at any time.
+    private void refreshSidebar() {
+        ClickGuiModule gui = Modules.get(ClickGuiModule.class);
+        sidebar.clear();
+        for (Category category : Category.values()) {
+            if (gui.showsCategory(category)) {
+                sidebar.add(category.getDisplayName());
+            }
+        }
+        sidebar.addAll(LISTS);
+        if (sidebar.contains(tab)) {
+            return;
+        }
+        // The chosen tab went. The first one left takes over and a search keeps its place.
+        tab = sidebar.getFirst();
+        if (!isSearching()) {
+            scrollBar.setOffset(0);
+        }
     }
 
     // A query that has not changed keeps the order it already has.
@@ -210,28 +233,39 @@ public final class WindowGuiScreen extends GuiScreenBase {
         }
     }
 
+    // A hidden module is left out of its category and of the list of them all.
     private boolean inTab(Module module, String name) {
         return switch (name) {
             case FAVOURITES -> Favourites.has(module);
             case ENABLED -> module.isEnabled();
-            case ALL -> true;
-            default -> module.getCategory().getDisplayName().equals(name);
+            case ALL -> shows(module);
+            default -> shows(module) && module.getCategory().getDisplayName().equals(name);
         };
+    }
+
+    private static boolean shows(Module module) {
+        return Modules.get(ClickGuiModule.class).showsModule(module);
     }
 
     private void refreshCounts() {
         Arrays.fill(tabCounts, 0);
         int categories = Category.values().length;
         for (Module module : allModules) {
-            tabCounts[module.getCategory().ordinal()]++;
             if (Favourites.has(module)) {
                 tabCounts[categories]++;
             }
             if (module.isEnabled()) {
                 tabCounts[categories + 1]++;
             }
-            tabCounts[categories + 2]++;
+            if (shows(module)) {
+                tabCounts[module.getCategory().ordinal()]++;
+                tabCounts[categories + 2]++;
+            }
         }
+    }
+
+    private int countOf(String name) {
+        return tabCounts[tabs.indexOf(name)];
     }
 
     private int heightOf(Module module) {
@@ -252,12 +286,13 @@ public final class WindowGuiScreen extends GuiScreenBase {
     @Override
     protected void renderGui(GuiGraphicsExtractor context, int mouseX, int mouseY, float partialTicks) {
         description = null;
-        Font font = OfflineClient.MC.font;
+        Font font = ClientFonts.gui();
         int wx = windowX();
         int wy = windowY();
         int ww = windowWidth();
         int wh = windowHeight();
 
+        refreshSidebar();
         refreshListed();
         refreshCounts();
 
@@ -266,9 +301,9 @@ public final class WindowGuiScreen extends GuiScreenBase {
         renderSearchBox(context, font, wx + MARGIN, searchY(), ww - 2 * MARGIN,
             mouseX, mouseY, isSearching() ? listed.size() : -1);
         WindowParts.tabs(context, font, wx + MARGIN, contentTop(), WindowParts.tabWidth(), contentHeight(),
-            tabs, i -> String.valueOf(tabCounts[i]), tabs.indexOf(tab), mouseX, mouseY);
+            sidebar, i -> String.valueOf(countOf(sidebar.get(i))), sidebar.indexOf(tab), mouseX, mouseY);
         renderList(context, font, mouseX, mouseY);
-        if (hoverHelp()) {
+        if (GuiTheme.hoverHelp()) {
             boolean empty = description == null || description.isEmpty();
             WindowParts.footer(context, font, wx, wy, ww, wh, empty ? HINT : description,
                 empty ? GuiTheme.textFaint() : GuiTheme.text());
@@ -277,12 +312,12 @@ public final class WindowGuiScreen extends GuiScreenBase {
 
     private void renderTitle(GuiGraphicsExtractor context, Font font, int wx, int wy, int ww) {
         int titleY = WindowParts.titleY(wy);
-        ClickGuiModule gui = OfflineClient.INSTANCE.getModuleManager().get(ClickGuiModule.class);
+        ClickGuiModule gui = Modules.get(ClickGuiModule.class);
         int nameX = wx + WindowParts.TITLE_INSET;
         context.text(font, OfflineClient.NAME, nameX, titleY, gui.titleColor(), false);
         context.text(font, "v" + OfflineClient.VERSION,
             nameX + font.width(OfflineClient.NAME) + WindowParts.TITLE_GAP, titleY, gui.versionColor(), false);
-        int on = tabCounts[Category.values().length + 1];
+        int on = countOf(ENABLED);
         String tally = on + " enabled";
         context.text(font, tally, wx + ww - WindowParts.TITLE_INSET - font.width(tally), titleY,
             on > 0 ? GuiTheme.accentText() : GuiTheme.textFaint(), false);
@@ -385,7 +420,7 @@ public final class WindowGuiScreen extends GuiScreenBase {
             description = ResetMarks.withCount(module.getDescription(), changed);
         }
         if (open) {
-            SettingWidget.renderBlock(context, font, block, x, y + MODULE_ROW, w,
+            SettingWidget.renderBlock(context, block, x, y + MODULE_ROW, w,
                 mouseX, mouseY, hoverAllowed, settings);
         }
     }
@@ -397,6 +432,9 @@ public final class WindowGuiScreen extends GuiScreenBase {
 
     @Override
     protected boolean clickGui(double mx, double my, int button) {
+        if (settings.takeClick(button)) {
+            return true;
+        }
         settings.beginClick();
         return clickSearchBox(mx, my) != SearchField.Click.MISSED
             || clickSidebar(mx, my)
@@ -405,11 +443,11 @@ public final class WindowGuiScreen extends GuiScreenBase {
 
     private boolean clickSidebar(double mx, double my) {
         int index = WindowParts.tabAt(mx, my, windowX() + MARGIN, contentTop(), WindowParts.tabWidth(),
-            contentHeight(), tabs.size());
+            contentHeight(), sidebar.size());
         if (index < 0) {
             return false;
         }
-        tab = tabs.get(index);
+        tab = sidebar.get(index);
         if (isSearching()) {
             searchBar.clear();
         }

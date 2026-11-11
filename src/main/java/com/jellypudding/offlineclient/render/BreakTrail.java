@@ -24,7 +24,7 @@ public final class BreakTrail {
     private final BoolSetting show = new BoolSetting("Broken trail",
         "Draws a fading box on each block as it breaks.", true);
     private final NumberSetting time = new NumberSetting("Trail time",
-        "How long each box takes to fade away.", 8, 1, 40, 1, " ticks").min(1).under(show);
+        "How long each box takes to fade away.", 8, 1, 40, 1, " ticks").under(show);
     private final BoxStyle style = new BoxStyle("Trail", BoxStyle.Shape.BOTH, 0).under(show);
 
     // A block sent for and what stood there when the packets left. A powered part that only

@@ -18,11 +18,11 @@ public final class BossStack extends Module {
     private static final int VANILLA_GAP = 10;
 
     private final BoolSetting stack = new BoolSetting("Stack",
-        "Merge boss bars that share a name into one bar with a count after it.", true);
+        "Merges boss bars that share a name into one bar with a count after it.", true);
     private final BoolSetting hideName = new BoolSetting("Hide names",
-        "Leave every boss bar without its name.", false);
+        "Leaves every boss bar without its name.", false);
     private final NumberSetting gap = new NumberSetting("Bar gap",
-        "Pixels of space between one bar and the next.", 10, 0, 20, 1, " px").min(0);
+        "Pixels of space between one bar and the next.", 10, 0, 20, 1, " px");
 
     // How many bars each drawn name stands for this frame.
     private final Map<String, Integer> counts = new HashMap<>();

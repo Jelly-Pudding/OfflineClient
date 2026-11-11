@@ -53,9 +53,6 @@ public final class BrushReader extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame()) {
-            return;
-        }
         if (world.changed()) {
             named.clear();
             breaking = null;
@@ -77,7 +74,7 @@ public final class BrushReader extends Module {
             return;
         }
         boolean breaks = breakUnwanted.isOn() && unwanted.contains(find.getItem());
-        ChatUtil.message("§bBrushReader §7found §f" + find.getHoverName().getString() + "§7 in the "
+        tell("found §f" + find.getHoverName().getString() + "§7 in the "
             + ChatUtil.words(BlockUtil.state(pos).getBlock()) + (breaks ? " and breaks it out." : "."));
         if (breaks) {
             mc.gameMode.releaseUsingItem(mc.player);

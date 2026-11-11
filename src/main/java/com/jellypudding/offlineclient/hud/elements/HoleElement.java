@@ -6,6 +6,7 @@ import com.jellypudding.offlineclient.hud.HudElement;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
+import com.jellypudding.offlineclient.util.Holes;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.player.LocalPlayer;
@@ -39,12 +40,18 @@ public final class HoleElement extends HudElement {
     private static final int[][] PLACES = {{1, 0}, {0, 1}, {2, 1}, {1, 2}};
 
     // What one side is made of and how far someone has broken it. Minus one is untouched.
-    private record Side(BlockState state, BlockUtil.Wall wall, int crack) {
+    private record Side(BlockState state, Holes.Wall wall, int crack) {
 
         static Side of(BlockState state, int crack) {
-            return new Side(state, BlockUtil.wallOf(state), crack);
+            return new Side(state, Holes.wallOf(state), crack);
         }
     }
+
+    // An obsidian hole with someone breaking its front stands in whilst the editor is open and
+    // nothing is round you. Its word reads In a hole.
+    private static final List<Side> SAMPLE = List.of(Side.of(Blocks.OBSIDIAN.defaultBlockState(), SAMPLE_CRACK),
+        Side.of(Blocks.BEDROCK.defaultBlockState(), -1), Side.of(Blocks.OBSIDIAN.defaultBlockState(), -1),
+        Side.of(Blocks.OBSIDIAN.defaultBlockState(), -1));
 
     private final ColorSetting unbreakable = new ColorSetting("Hole unbreakable colour",
         "Colour of a side no blast can take.", 120, 0.75f, 0.9f, false);
@@ -61,7 +68,7 @@ public final class HoleElement extends HudElement {
     private final BoolSetting icons = new BoolSetting("Hole icons",
         "Draws each side as the block it is made of.", false);
     private final BoolSetting word = new BoolSetting("Hole word",
-        "Write whether you are safe under the plan.", true);
+        "Writes whether you stand in a hole under the plan.", true);
 
     public HoleElement() {
         super("Hole", "What surrounds your feet and whether it holds.", false, 96, 55);
@@ -82,25 +89,37 @@ public final class HoleElement extends HudElement {
         }
         Direction front = turns.isOn()
             ? Direction.fromYRot(OfflineClient.MC.gameRenderer.mainCamera().yRot()) : Direction.NORTH;
-        BlockPos feet = player.blockPosition();
+        List<BlockPos> body = Holes.feetBlocks(player);
         List<Side> sides = new ArrayList<>(PLACES.length);
         List<Direction> ways = List.of(front, front.getCounterClockWise(), front.getClockWise(),
             front.getOpposite());
         for (Direction way : ways) {
-            BlockPos pos = feet.relative(way);
-            sides.add(Side.of(OfflineClient.MC.level.getBlockState(pos), BlockUtil.crackStage(pos)));
+            sides.add(weakest(body, way));
         }
-        // An obsidian hole with someone breaking its front stands in whilst the editor is open and
-        // nothing is round you.
-        if (editing() && sides.stream().allMatch(side -> side.wall() == BlockUtil.Wall.OPEN)) {
-            BlockState obsidian = Blocks.OBSIDIAN.defaultBlockState();
-            return List.of(Side.of(obsidian, SAMPLE_CRACK), Side.of(Blocks.BEDROCK.defaultBlockState(), -1),
-                Side.of(obsidian, -1), Side.of(obsidian, -1));
+        if (editing() && sides.stream().allMatch(side -> side.wall() == Holes.Wall.OPEN)) {
+            return SAMPLE;
         }
         return sides;
     }
 
-    private int colorOf(BlockUtil.Wall wall) {
+    // The weakest block beside the body on one side. Somebody across an edge has two there.
+    private static Side weakest(List<BlockPos> body, Direction way) {
+        Side weakest = null;
+        for (BlockPos block : body) {
+            BlockPos pos = block.relative(way);
+            if (body.contains(pos)) {
+                continue;
+            }
+            Side side = Side.of(BlockUtil.state(pos), BlockUtil.crackStage(pos));
+            int order = weakest == null ? -1 : side.wall().compareTo(weakest.wall());
+            if (order < 0 || (order == 0 && side.crack() > weakest.crack())) {
+                weakest = side;
+            }
+        }
+        return weakest;
+    }
+
+    private int colorOf(Holes.Wall wall) {
         return switch (wall) {
             case UNBREAKABLE -> unbreakable.getColor();
             case BLAST_PROOF -> strong.getColor();
@@ -109,8 +128,10 @@ public final class HoleElement extends HudElement {
         };
     }
 
+    // The word follows the one hole rule of the client whatever the plan shows. Empty sides mean
+    // there is no player to ask about.
     private static String verdict(List<Side> sides) {
-        boolean safe = !sides.isEmpty() && sides.stream().allMatch(side -> side.wall().holds());
+        boolean safe = sides == SAMPLE || !sides.isEmpty() && Holes.playerInHole();
         return safe ? "In a hole" : "Out in the open";
     }
 

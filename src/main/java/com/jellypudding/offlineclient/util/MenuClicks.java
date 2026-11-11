@@ -70,6 +70,11 @@ public final class MenuClicks {
         return slotsWhere(menu, MenuClicks::isContainerSlot);
     }
 
+    // Copies of what those slots hold in slot order with the empty ones in place.
+    public static List<ItemStack> containerItems(AbstractContainerMenu menu) {
+        return containerSlots(menu).stream().map(slot -> menu.slots.get(slot).getItem().copy()).toList();
+    }
+
     // Indexes of the player's own backpack and hotbar slots in the menu.
     public static List<Integer> inventorySlots(AbstractContainerMenu menu) {
         return slotsWhere(menu, MenuClicks::isInventorySlot);

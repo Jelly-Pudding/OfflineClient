@@ -3,12 +3,12 @@ package com.jellypudding.offlineclient.mixin;
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.config.NameStore;
 import com.jellypudding.offlineclient.gui.FootButtons;
-import com.jellypudding.offlineclient.modules.misc.AutoLog;
 import com.jellypudding.offlineclient.modules.misc.AutoReconnect;
 import com.jellypudding.offlineclient.modules.misc.Conceal;
 import com.jellypudding.offlineclient.modules.misc.PacketLogger;
 import com.jellypudding.offlineclient.modules.misc.Webhook;
 import com.jellypudding.offlineclient.util.ConnectionLog;
+import com.jellypudding.offlineclient.util.Leave;
 import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.layouts.LinearLayout;
@@ -25,9 +25,10 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-// What the client adds to the screen a disconnect leaves you on. Words from AutoLog or about a turned
-// away name go under the reason. The kick goes to the packet log and the webhook. The game log fills
-// the space above. Two foot rows reconnect by hand and Join as rejoins under the next name.
+// What the client adds to the screen a disconnect leaves you on. Words about a kick the client asked
+// for or about a turned away name go under the reason. The kick goes to the packet log and the
+// webhook. The game log fills the space above. Two foot rows reconnect by hand and Join as rejoins
+// under the next name.
 @Mixin(DisconnectedScreen.class)
 public abstract class DisconnectedScreenMixin extends Screen {
 
@@ -67,11 +68,11 @@ public abstract class DisconnectedScreenMixin extends Screen {
         }
     }
 
-    // AutoLog explains a kick it caused. A server that checked your account turned the saved name away.
+    // A kick the client asked for is explained. A server that checked your account turned the saved
+    // name away.
     @Unique
     private static Component offlineclient$takeNote() {
-        AutoLog autoLog = Modules.get(AutoLog.class);
-        Component leaveNote = autoLog == null ? null : autoLog.takeLeaveNote();
+        Component leaveNote = Leave.takeNote();
         String turnedAway = NameStore.get().checkedName();
         if (leaveNote != null || turnedAway == null) {
             return leaveNote;

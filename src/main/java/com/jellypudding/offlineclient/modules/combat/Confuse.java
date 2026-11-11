@@ -11,6 +11,7 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.MovementUtil;
+import com.jellypudding.offlineclient.util.WholeMove;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Input;
@@ -51,7 +52,7 @@ public final class Confuse extends Module {
         "Only moves round whatever KillAura is hitting. Off also moves round the nearest enemy player.",
         false);
     private final NumberSetting maxDrop = new NumberSetting("Max drop",
-        "Turns back rather than run off a drop deeper than this.", 3, 1, 10, 1, " blocks").min(1);
+        "Turns back rather than run off a drop deeper than this.", 3, 1, 10, 1, " blocks");
     private final BoolSetting jump = new BoolSetting("Jump",
         "Hops the whole way round to be harder still to hit.", false);
 
@@ -81,11 +82,7 @@ public final class Confuse extends Module {
     // Runs after Speed. The way round wins over its push.
     @Subscribe(priority = -20)
     private void onTick(TickEvent event) {
-        if (!inGame() || !free(mc.player)) {
-            return;
-        }
-        HoleSnap holeSnap = Modules.get(HoleSnap.class);
-        if (holeSnap != null && holeSnap.holdsMovement()) {
+        if (!free(mc.player) || HoleSnap.holds()) {
             return;
         }
         LivingEntity target = pickTarget();
@@ -134,11 +131,10 @@ public final class Confuse extends Module {
                 return;
             }
         }
-        if (jump.isOn() && mc.player.onGround() && !mc.player.input.keyPresses.jump()) {
+        if (jump.isOn() && mc.player.onGround()) {
             mc.player.jumpFromGround();
         }
-        Vec3 velocity = mc.player.getDeltaMovement();
-        mc.player.setDeltaMovement(heading.x * pace, velocity.y, heading.z * pace);
+        WholeMove.set(heading.x * pace, heading.z * pace);
     }
 
     // Along the circle with a pull back towards the chosen distance.

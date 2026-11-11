@@ -32,11 +32,11 @@ public final class InventoryElement extends HudElement {
     private static final int SELECTED = 0x70FFFFFF;
 
     private final BoolSetting armour = new BoolSetting("Show armour",
-        "Add a row above the bag for what you wear.", false);
+        "Adds a row above the bag for what you wear.", false);
     private final BoolSetting offhand = new BoolSetting("Show offhand",
-        "Add what you hold in your other hand to the top row.", false);
+        "Adds what you hold in your other hand to the top row.", false);
     private final BoolSetting hotbar = new BoolSetting("Show hotbar",
-        "Add the row you carry in hand below the bag. Switch off the Hotbar element to hide"
+        "Adds the row you carry in hand below the bag. Switch off the Hotbar element to hide"
             + " the game's own.", false);
     private final BoolSetting container = new BoolSetting("Show held container",
         "Shows a shulker box you hold in place of your bag. An ender chest shows what yours held once"

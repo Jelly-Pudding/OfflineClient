@@ -1,5 +1,8 @@
 package com.jellypudding.offlineclient.modules.misc;
 
+import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.condition.Condition;
+import com.jellypudding.offlineclient.condition.Conditions;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.event.events.TotemPopEvent;
@@ -7,46 +10,34 @@ import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
-import com.jellypudding.offlineclient.setting.NumberSetting;
-import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.setting.TextSetting;
+import com.jellypudding.offlineclient.util.ChatPace;
 import com.jellypudding.offlineclient.util.ChatUtil;
-import com.jellypudding.offlineclient.util.DamageUtil;
-import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.Leave;
 import com.jellypudding.offlineclient.util.Modules;
-import com.jellypudding.offlineclient.util.PlayerAlarm;
-import com.jellypudding.offlineclient.util.Totems;
-import net.minecraft.SharedConstants;
-import net.minecraft.core.component.DataComponents;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.network.chat.Component;
-import net.minecraft.network.protocol.game.ServerboundAttackPacket;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.EntityTypes;
-import net.minecraft.world.entity.player.Player;
+import com.jellypudding.offlineclient.util.SentLine;
+import net.minecraft.client.Screenshot;
+import net.minecraft.util.Util;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 public final class AutoLog extends Module {
 
-    public enum Count { TOGETHER, EACH }
-
-    // How close a player has to be for a one hit kill to count.
-    private static final double INSTANT_KILL_RANGE = 8;
-
     // A command that did not get you out of danger is run again after this long at the soonest.
-    private static final int COMMAND_GAP_TICKS = 5 * SharedConstants.TICKS_PER_SECOND;
+    // The rearm waits as long with no reason holding and one escape takes one screenshot in it.
+    private static final long GAP_MILLIS = TimeUnit.SECONDS.toMillis(5);
 
-    // The kick that follows a refused chat line or a hit on yourself comes within a round trip.
-    // A disconnect much later than this has some other cause.
-    private static final long NOTE_MILLIS = TimeUnit.SECONDS.toMillis(30);
+    // The way each mode leaves. A command keeps you on the server and a blank one cannot. It falls
+    // back to a plain disconnect.
+    public enum Mode {
+        QUIT(Leave.QUIT), CHARS(Leave.CHAT), SELF_HURT(Leave.HURT), COMMAND(Leave.QUIT);
 
-    public enum Mode { QUIT, CHARS, SELF_HURT, COMMAND }
+        private final Leave way;
+
+        Mode(Leave way) {
+            this.way = way;
+        }
+    }
 
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
         "How you get away from the danger.", Mode.QUIT)
@@ -59,248 +50,170 @@ public final class AutoLog extends Module {
         .under(mode, Mode.COMMAND);
     private final BoolSetting pauseInCreative = new BoolSetting("Pause in creative",
         "Does nothing whilst you are in creative mode.", true);
-    private final NumberSetting health = new NumberSetting("Health",
-        "Disconnect at or below this many hearts.", 3, 0.5, 9.5, 0.5, " hearts");
-    private final BoolSetting predict = new BoolSetting("Predict damage",
-        "Also disconnect when a crystal or bed or weapon or fall nearby would take you under the line.",
-        true);
-    private final BoolSetting instantKill = new BoolSetting("Instant kill",
-        "Disconnect when a player within eight blocks holds a weapon that could kill you in one hit.",
-        false);
-    private final NumberSetting totems = new NumberSetting("Totems",
-        "Also disconnect with fewer totems than this. Zero ignores totems.", 0, 0, 10, 1);
-    private final NumberSetting totemPops = new NumberSetting("Totem pops",
-        "Disconnect once this many of your totems have popped in one life. Zero ignores pops.", 0, 0, 10, 1);
-    private final BoolSetting onlyTrusted = new BoolSetting("Only trusted",
-        "Disconnect when any player who is not a friend comes into view. Fake players that AntiBot spots never"
-            + " count.", false);
-    private final BoolSetting onAlarm = new BoolSetting("On alarm",
-        "Disconnects when one of the Notifier alarms rings.", false);
-    private final RegistryListSetting<EntityType<?>> entities = new RegistryListSetting<>("Entities",
-        "Disconnect when too many of these gather near you.", BuiltInRegistries.ENTITY_TYPE,
-        List.of(EntityTypes.END_CRYSTAL));
-    private final EnumSetting<Count> count = new EnumSetting<>("Count",
-        "How the listed entities are counted.", Count.TOGETHER)
-        .describe(Count.TOGETHER, "Every listed kind counts towards one total.")
-        .describe(Count.EACH, "Each kind is counted on its own.")
-        .visibleWhen(() -> entities.size() > 0);
-    private final NumberSetting combinedLimit = new NumberSetting("Combined limit",
-        "How many listed entities in total trigger the disconnect.", 10, 1, 32, 1)
-        .under(count, Count.TOGETHER);
-    private final NumberSetting eachLimit = new NumberSetting("Each limit",
-        "How many of one kind trigger the disconnect.", 2, 1, 16, 1)
-        .under(count, Count.EACH);
-    private final NumberSetting entityRange = new NumberSetting("Entity range",
-        "How close a listed entity has to be to count.", 5, 1, 16, 1, " blocks")
-        .visibleWhen(() -> entities.size() > 0);
+    private final Conditions reasons = Conditions.forEscape("Reasons",
+        "What makes it act. Click to pick the reasons. Each one you pick lists its own rows below and any"
+            + " one of them is enough.", "Health");
+    private final BoolSetting screenshot = new BoolSetting("Screenshot first",
+        "Saves a screenshot of what you saw to your screenshots folder as it acts.", false);
     private final BoolSetting toggleOff = new BoolSetting("Toggle off",
-        "Turn the module off after it disconnects you.", true);
-    private final BoolSetting rearm = new BoolSetting("Rearm when healed",
-        "After a low health disconnect turn back on once you are above the health line again.", false)
+        "Turns the module off after it acts.", true);
+    private final BoolSetting rearm = new BoolSetting("Rearm when safe",
+        "After it acts it turns back on once no reason has held for five seconds in a world. Time on counts"
+            + " again from the moment it acted.", false)
         .under(toggleOff);
     private final BoolSetting stopReconnect = new BoolSetting("Stop AutoReconnect",
-        "Turns AutoReconnect off as you leave to stop you rejoining the danger.", true);
+        "Turns AutoReconnect off as you leave to stop you rejoining the danger.", true)
+        .visibleWhen(() -> !staying());
 
-    private final Map<EntityType<?>, Integer> tally = new HashMap<>();
-    private final PlayerAlarm.Watcher alarms = new PlayerAlarm.Watcher();
-    private int commandWait;
+    // When the command may run again and when the last screenshot was taken on the game clock.
+    private long commandAt;
+    private long pictureAt;
 
-    // What the last kick it caused was for. The disconnected screen shows it under the kick text.
-    private Component leaveNote;
-    private long leftAt;
+    // Listens whilst the module is off to come back once no reason has held for a while. It
+    // gives up when the module is switched on by hand or the rearm is switched off. A dormant
+    // client stays as it is.
+    private final Object safeWatcher = new Object() {
 
-    // Listens whilst the module is off to come back once healed.
-    private final Object healWatcher = new Object() {
+        private long quietSince;
+
         @Subscribe
         private void onTick(TickEvent event) {
-            if (isEnabled()) {
-                stopWatching();
+            if (isEnabled() || !rearm.isOn()) {
+                unwatch(this);
                 return;
             }
-            if (inGame() && !mc.player.isDeadOrDying()
-                && !EntityUtil.healthAtOrBelow(health.getValue())) {
-                stopWatching();
-                setEnabled(true);
-                ChatUtil.message("AutoLog is back on now that you have healed.");
+            if (mc.player.isDeadOrDying() || Modules.dormant()) {
+                quietSince = 0;
+                return;
+            }
+            reasons.tick();
+            long now = Util.getMillis();
+            if (reasons.anyHolds() || quietSince == 0) {
+                quietSince = now;
+                return;
+            }
+            if (now - quietSince < GAP_MILLIS) {
+                return;
+            }
+            quietSince = 0;
+            unwatch(this);
+            setEnabled(true);
+            if (isEnabled()) {
+                ChatUtil.message("AutoLog is back on. None of its reasons has held for five seconds.");
             }
         }
     };
 
     public AutoLog() {
-        super("AutoLog", "Logs you out when your health gets low.", Category.MISC);
-        addSettings(mode, command, pauseInCreative, health, predict, instantKill, totems, totemPops, onlyTrusted,
-            onAlarm, entities, count, combinedLimit, eachLimit, entityRange, toggleOff, rearm, stopReconnect);
-        searchTags("auto disconnect", "log out", "antisocial", "staff");
+        super("AutoLog", "Logs you out on low health or for any other reason you pick.", Category.MISC);
+        addSettings(mode, command, pauseInCreative);
+        addSettings(reasons.settings());
+        addSettings(screenshot, toggleOff, rearm, stopReconnect);
+        searchTags("auto disconnect", "log out", "antisocial", "staff", "afk", "travel", "arrival", "highway",
+            "stranger", "screenshot", "at a place");
     }
 
     @Override
     protected void onEnable() {
-        alarms.sync();
-        commandWait = 0;
+        reasons.start();
+        reasons.tellProblems();
+        if (reasons.size() == 0) {
+            ChatUtil.error("AutoLog has no reason to act. Pick at least one under Reasons.");
+        }
     }
 
     @Override
     public String getSuffix() {
-        return health.getValueString();
+        return reasons.summary();
     }
 
+    // A command keeps you on the server. A blank one cannot and the mode falls back to a
+    // plain disconnect.
+    private boolean staying() {
+        return mode.is(Mode.COMMAND) && !command.isBlank();
+    }
+
+    private boolean paused() {
+        return !inGame() || mc.player.isDeadOrDying() || pauseInCreative.isOn() && mc.player.isCreative();
+    }
+
+    // A pop is acted on as it is heard of. That is the same tick the totem saved you on.
     @Subscribe
     private void onTotemPop(TotemPopEvent event) {
-        if (event.isDeath() || event.getPlayer() != mc.player || totemPops.getInt() == 0
-            || (pauseInCreative.isOn() && mc.player.isCreative())) {
-            return;
-        }
-        if (event.getCount() >= totemPops.getInt()) {
-            logOut(event.getCount() + " totems had popped.", false);
+        Condition pop = reasons.popped(event);
+        if (pop != null && !paused()) {
+            act(pop.reason());
         }
     }
 
+    // The reasons are read on every tick. Something that happened whilst it sat a tick out is
+    // not kept for later.
     @Subscribe
     private void onTick(TickEvent event) {
-        List<PlayerAlarm.Ring> rings = alarms.fresh();
-        if (commandWait > 0) {
-            commandWait--;
-        }
-        if (!inGame() || mc.player.isDeadOrDying()
-            || (pauseInCreative.isOn() && mc.player.isCreative())) {
-            return;
-        }
-        if (onAlarm.isOn() && !rings.isEmpty()) {
-            PlayerAlarm.Ring ring = rings.getFirst();
-            logOut("The " + ring.alarm().toLowerCase(Locale.ROOT) + " alarm rang for " + ring.player() + ".", false);
-            return;
-        }
-        // Absorption hearts from golden apples and totems count as health.
-        if (EntityUtil.healthAtOrBelow(health.getValue())) {
-            logOut("Health was at or below " + health.getValueString() + ".", true);
-            return;
-        }
-        float line = health.getFloat() * EntityUtil.HEART;
-        if (predict.isOn()
-            && DamageUtil.healthAfterIncoming() <= line) {
-            logOut("Something nearby was about to take you below " + health.getValueString() + ".", false);
-            return;
-        }
-        if (totems.getInt() > 0 && Totems.carried() < totems.getInt()) {
-            logOut("Fewer than " + totems.getInt() + " totems were left.", false);
-            return;
-        }
-        if (!checkPlayers()) {
-            checkEntities();
+        reasons.tick();
+        Condition reason = reasons.firstHolding();
+        if (reason != null && !paused()) {
+            act(reason.reason());
         }
     }
 
-    // True when a player caused a logout.
-    private boolean checkPlayers() {
-        if (!onlyTrusted.isOn() && !instantKill.isOn()) {
-            return false;
-        }
-        for (Player player : mc.level.players()) {
-            if (!EntityUtil.isOtherPlayer(player)) {
-                continue;
-            }
-            if (onlyTrusted.isOn() && EntityUtil.isEnemy(player)) {
-                logOut(EntityUtil.nameOf(player) + " came into view and is not a friend.", false);
-                return true;
-            }
-            if (instantKill.isOn() && EntityUtil.isEnemy(player)
-                && player.distanceTo(mc.player) <= INSTANT_KILL_RANGE
-                && DamageUtil.attackDamage(player, mc.player) > EntityUtil.totalHealth(mc.player)) {
-                logOut(EntityUtil.nameOf(player) + " held a weapon that could kill you in one hit.", false);
-                return true;
-            }
-        }
-        return false;
-    }
-
-    // True when the listed entities caused a logout.
-    private boolean checkEntities() {
-        if (entities.size() == 0) {
-            return false;
-        }
-        tally.clear();
-        int total = 0;
-        for (Entity entity : mc.level.entitiesForRendering()) {
-            if (!entities.contains(entity.getType())
-                || entity.distanceTo(mc.player) > entityRange.getValue()) {
-                continue;
-            }
-            total++;
-            tally.merge(entity.getType(), 1, Integer::sum);
-        }
-        if (count.is(Count.TOGETHER)) {
-            if (total >= combinedLimit.getInt()) {
-                logOut(total + " of the listed entities were within " + entityRange.getInt() + " blocks.",
-                    false);
-                return true;
-            }
-            return false;
-        }
-        for (Map.Entry<EntityType<?>, Integer> entry : tally.entrySet()) {
-            if (entry.getValue() >= eachLimit.getInt()) {
-                logOut(entry.getValue() + " " + entry.getKey().getDescription().getString()
-                    + " were within " + entityRange.getInt() + " blocks.", false);
-                return true;
-            }
-        }
-        return false;
-    }
-
-    // Turning off first stops an instant logout after reconnecting.
-    // A low health logout can leave a watcher behind that turns the module back on.
-    // A command keeps you on the server and AutoReconnect has nothing to do.
-    private void logOut(String reason, boolean lowHealth) {
-        boolean staying = mode.is(Mode.COMMAND) && !command.isBlank();
-        if (staying && commandWait > 0) {
+    // Turning off first stops an instant logout after reconnecting. It can leave a watcher
+    // behind that turns the module back on. A command keeps you on the server and AutoReconnect
+    // has nothing to do.
+    private void act(String reason) {
+        boolean staying = staying();
+        String line = SentLine.asCommand(command.getValue());
+        long now = Util.getMillis();
+        if (staying && (now < commandAt || !sendCommand(line))) {
             return;
         }
+        takeScreenshot(now);
         String note = "";
         if (!staying && stopReconnect.isOn() && Modules.stopReconnecting()) {
             note = "\n§7AutoReconnect was turned off.";
         }
         if (toggleOff.isOn()) {
             setEnabled(false);
-            if (lowHealth && rearm.isOn()) {
-                watch(healWatcher);
+            if (rearm.isOn()) {
+                reasons.start();
+                watch(safeWatcher);
             }
         }
         if (staying) {
-            commandWait = COMMAND_GAP_TICKS;
-            // Without its slash the command would go out as a chat line.
-            String typed = command.getValue().trim();
-            String line = typed.startsWith("/") ? typed : "/" + typed;
-            ChatUtil.say(line);
+            commandAt = now + GAP_MILLIS;
             ChatUtil.message("§7AutoLog ran §f" + line + "§7. " + reason);
             return;
         }
-        String text = "AutoLog saved you.\n§7" + reason + note;
-        Mode way = mode.getValue();
-        // The server ignores a hit from a player holding a spear.
-        if (way == Mode.SELF_HURT && mc.player.getMainHandItem().has(DataComponents.PIERCING_WEAPON)) {
-            way = Mode.QUIT;
-        }
-        if (way == Mode.CHARS || way == Mode.SELF_HURT) {
-            // The server writes its own kick text and the disconnected screen adds this under it.
-            leaveNote = Component.literal("\n\n§b" + text);
-            leftAt = System.currentTimeMillis();
-        }
-        switch (way) {
-            // The section sign is refused by every server.
-            case CHARS -> mc.player.connection.sendChat("§");
-            case SELF_HURT -> mc.player.connection.send(new ServerboundAttackPacket(mc.player.getId()));
-            default -> ChatUtil.leaveServer(text);
-        }
+        mode.getValue().way.go("AutoLog saved you.\n§7" + reason + note);
     }
 
-    // The words for the disconnected screen after a kick AutoLog caused. Null once read and for a
-    // disconnect long after it acted.
-    public Component takeLeaveNote() {
-        Component note = System.currentTimeMillis() - leftAt <= NOTE_MILLIS ? leaveNote : null;
-        leaveNote = null;
-        return note;
+    // The command gets you out of danger and may go where a rule of Triggers may not. A server
+    // close to kicking for spam still does not get it.
+    private boolean sendCommand(String line) {
+        if (ChatPace.ESCAPE.say(line)) {
+            return true;
+        }
+        ChatPace.tellHeld(getName());
+        return false;
     }
 
-    private void stopWatching() {
-        unwatch(healWatcher);
+    // The copy of the last drawn frame is ordered at once and the file is written afterwards.
+    // The picture is of the game as it stood even when the disconnect follows straight away.
+    // One escape takes one picture however many ticks the kick takes to land and a picture
+    // that fails must never stand in the way of the escape.
+    private void takeScreenshot(long now) {
+        if (!screenshot.isOn() || now < pictureAt) {
+            return;
+        }
+        pictureAt = now + GAP_MILLIS;
+        try {
+            Screenshot.grab(mc.gameDirectory, mc.gameRenderer.mainRenderTarget(), saved -> mc.execute(() -> {
+                if (mc.player != null) {
+                    mc.gui.hud.getChat().addClientSystemMessage(saved);
+                }
+            }));
+        } catch (RuntimeException e) {
+            OfflineClient.LOG.error("AutoLog could not take its screenshot", e);
+        }
     }
 }

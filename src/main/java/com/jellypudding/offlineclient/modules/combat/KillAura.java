@@ -11,7 +11,10 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.AttackTimer;
+import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ColorUtil;
+import com.jellypudding.offlineclient.util.EntityKind;
+import com.jellypudding.offlineclient.util.EntitySpecies;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.HotbarLoan;
@@ -27,15 +30,13 @@ import com.jellypudding.offlineclient.util.WeaponKinds;
 import com.jellypudding.offlineclient.util.WeaponUtil;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.protocol.game.ServerboundSetCarriedItemPacket;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.monster.Enemy;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.phys.AABB;
-import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
@@ -50,21 +51,21 @@ public final class KillAura extends Module implements Targeting {
     public enum Ages { ADULTS, BABIES, BOTH }
 
     private final NumberSetting range = new NumberSetting("Range",
-        "Maximum reach in blocks.", 4.2, 1, 6, 0.05);
+        "Maximum reach.", 4.2, 1, 6, 0.05, " blocks");
     private final NumberSetting wallsRange = new NumberSetting("Walls range",
-        "Shorter reach for targets you cannot see.", 3.5, 0, 6, 0.05);
+        "Shorter reach for targets you cannot see.", 3.5, 0, 6, 0.05, " blocks");
     private final BoolSetting walls = new BoolSetting("Through walls",
-        "Also swing at targets you cannot see.", true);
+        "Also swings at targets you cannot see.", true);
     private final NumberSetting fov = new NumberSetting("FOV",
-        "Only hit targets within this angle of your view.", 360, 30, 360, 5, " degrees")
+        "Only hits targets within this angle of your view.", 360, 30, 360, 5, " degrees")
         .min(1).max(360);
     private final BoolSetting onlyOnLook = new BoolSetting("Only on look",
         "Only hits whatever your crosshair is already on.", false);
 
     private final BoolSetting players = new BoolSetting("Players",
-        "Swing at other players.", true);
+        "Swings at other players.", true);
     private final BoolSetting hostile = new BoolSetting("Hostile mobs",
-        "Swing at anything that hunts you.", false);
+        "Swings at anything that hunts you.", false);
     private final EnumSetting<Ages> hostileAges = new EnumSetting<>("Hostile ages",
         "Which hostile mobs by age.", Ages.BOTH)
         .describe(Ages.ADULTS, "Grown mobs only.")
@@ -72,16 +73,16 @@ public final class KillAura extends Module implements Targeting {
         .describe(Ages.BOTH, "Any age.")
         .under(hostile);
     private final BoolSetting slimes = new BoolSetting("Slimes",
-        "Swing at slimes and magma cubes.", true)
+        "Swings at slimes and magma cubes.", true)
         .under(hostile);
     private final BoolSetting shulkers = new BoolSetting("Shulkers",
-        "Swing at shulkers.", true)
+        "Swings at shulkers.", true)
         .under(hostile);
     private final BoolSetting zombieVillagers = new BoolSetting("Zombie villagers",
-        "Swing at zombie villagers. Turn off to keep one for curing.", true)
+        "Swings at zombie villagers. Turn off to keep one for curing.", true)
         .under(hostile);
     private final BoolSetting passive = new BoolSetting("Passive mobs",
-        "Swing at animals and villagers and other harmless mobs.", false);
+        "Swings at animals and villagers and other harmless mobs.", false);
     private final EnumSetting<Ages> passiveAges = new EnumSetting<>("Passive ages",
         "Which passive mobs by age.", Ages.ADULTS)
         .describe(Ages.ADULTS, "Grown animals only.")
@@ -89,24 +90,26 @@ public final class KillAura extends Module implements Targeting {
         .describe(Ages.BOTH, "Any age.")
         .under(passive);
     private final BoolSetting waterMobs = new BoolSetting("Water mobs",
-        "Swing at fish and squid and dolphins.", true)
+        "Swings at fish and squid and dolphins and axolotls and turtles.", true)
         .under(passive);
     private final BoolSetting bats = new BoolSetting("Bats",
-        "Swing at bats.", true)
+        "Swings at bats.", true)
         .under(passive);
     private final BoolSetting villagers = new BoolSetting("Villagers",
-        "Swing at villagers and wandering traders.", true)
+        "Swings at villagers and wandering traders.", true)
         .under(passive);
     private final BoolSetting golems = new BoolSetting("Golems",
-        "Swing at iron golems and snow golems and copper golems.", true)
+        "Swings at iron golems and snow golems and copper golems.", true)
         .under(passive);
     private final BoolSetting allays = new BoolSetting("Allays",
-        "Swing at allays.", true)
+        "Swings at allays.", true)
         .under(passive);
-    private final TargetFilter filter = new TargetFilter().withoutAges()
-        .nest(players, hostile, () -> hostile.isOn() || passive.isOn());
+    private final TargetFilter filter =
+        new TargetFilter(mob -> EntitySpecies.of(mob) != EntitySpecies.OTHER).withoutAges()
+            .nest(players, hostile, () -> hostile.isOn() || passive.isOn(), this::neutralRuleActs);
     private final RegistryListSetting<EntityType<?>> extraMobs = new RegistryListSetting<>("Also hit",
-        "Kinds of entity to hit whatever the switches above say.", BuiltInRegistries.ENTITY_TYPE, List.of());
+        "Kinds of entity to hit whatever the switches above say. Crystals and boats and other things"
+            + " with no life are only hit from this list.", BuiltInRegistries.ENTITY_TYPE, List.of());
     private final RegistryListSetting<EntityType<?>> ignoredMobs = new RegistryListSetting<>("Never hit",
         "Kinds of entity to leave alone whatever the switches above say.", BuiltInRegistries.ENTITY_TYPE, List.of());
     private final EnumSetting<TargetPriority> priority = TargetPriority.setting("Attacks", TargetPriority.NEAREST);
@@ -141,7 +144,7 @@ public final class KillAura extends Module implements Targeting {
         "Only swings whilst one of the ticked weapons is in your main hand.", false);
     private final WeaponKinds weapons = new WeaponKinds(onlyWithWeapon);
     private final BoolSetting onlyOnClick = new BoolSetting("Only on click",
-        "Only swing whilst you hold the attack key down.", false);
+        "Only swings whilst you hold the attack key down.", false);
     private final BoolSetting ignoreCooldown = new BoolSetting("Ignore cooldown",
         "Swings before the attack cooldown ends. Hits land weaker but far more often.", false);
     private final NumberSetting switchDelay = new NumberSetting("Switch delay",
@@ -149,7 +152,7 @@ public final class KillAura extends Module implements Targeting {
     private final EnumSetting<SwingMode> swing = SwingMode.setting(SwingMode.BOTH);
 
     private final BoolSetting pauseOnUse = new BoolSetting("Pause on use",
-        "Hold off whilst eating or blocking or drawing a bow or mining.", true);
+        "Holds off whilst eating or blocking or drawing a bow or mining.", true);
     private final BoolSetting pauseOnContainers = new BoolSetting("Pause in containers",
         "No swinging whilst a chest or furnace is open. Your own inventory and the menus carry on.", true);
     private final BoolSetting pauseOnCrystals = new BoolSetting("Pause on crystals",
@@ -161,7 +164,7 @@ public final class KillAura extends Module implements Targeting {
 
     private final AttackTimer timer = new AttackTimer();
     private final HotbarLoan loan = new HotbarLoan();
-    private final List<LivingEntity> targets = new ArrayList<>();
+    private final List<Entity> targets = new ArrayList<>();
     private int switchTimer;
 
     public KillAura() {
@@ -183,13 +186,32 @@ public final class KillAura extends Module implements Targeting {
 
     @Override
     public String getSuffix() {
-        return targets.isEmpty() ? range.getValueString() : targets.getFirst().getName().getString();
+        return targets.isEmpty() ? range.getValueString() : EntityUtil.displayNameOf(targets.getFirst());
     }
 
-    // The entity being hit right now. Null between fights.
+    // The first of the things being hit right now. Null between fights.
+    @Override
+    public Entity getFought() {
+        return targets.isEmpty() ? null : targets.getFirst();
+    }
+
+    // The first living thing being hit right now. Null between fights and whilst only crystals
+    // or boats are in reach.
     @Override
     public LivingEntity getTarget() {
-        return targets.isEmpty() ? null : targets.getFirst();
+        for (Entity target : targets) {
+            if (target instanceof LivingEntity living) {
+                return living;
+            }
+        }
+        return null;
+    }
+
+    // The neutral rule judges the mobs of both big switches and any neutral kind on the
+    // Also hit list. Its rows show whilst one of those gives it something to judge.
+    private boolean neutralRuleActs() {
+        return hostile.isOn() || passive.isOn() || extraMobs.resolved().stream()
+            .anyMatch(type -> EntityKind.of(type) == EntityKind.NEUTRAL);
     }
 
     @Override
@@ -220,8 +242,8 @@ public final class KillAura extends Module implements Targeting {
             putWeaponAway();
             return;
         }
-        LivingEntity primary = targets.getFirst();
-        boolean armed = armWeapon(primary);
+        Entity primary = targets.getFirst();
+        boolean armed = armWeapon(getTarget());
         if (rotate.is(Rotate.CAMERA)) {
             turnCamera(primary);
         } else if (rotate.is(Rotate.ALWAYS)) {
@@ -235,7 +257,7 @@ public final class KillAura extends Module implements Targeting {
 
     // Hits before the attack cooldown ends deal reduced damage.
     private boolean charged() {
-        return ignoreCooldown.isOn() || mc.player.getAttackStrengthScale(0.5f) >= 1;
+        return ignoreCooldown.isOn() || AttackTimer.charged();
     }
 
     // Every reason the aura sits this tick out.
@@ -265,7 +287,7 @@ public final class KillAura extends Module implements Targeting {
 
     // Hits everything in reach on one swing then sets the next wait.
     private void strike() {
-        LivingEntity primary = targets.getFirst();
+        Entity primary = targets.getFirst();
         if (rotate.is(Rotate.CAMERA) && !crosshairOn(primary)) {
             return;
         }
@@ -278,35 +300,34 @@ public final class KillAura extends Module implements Targeting {
             RotationManager.look(aimPoint(primary), RotationPriority.ATTACK,
                 RotationManager.ENTITY_TOLERANCE, RotationManager.NO_STEP);
         }
-        // One swing animation covers every entity hit on the tick.
-        for (LivingEntity target : targets) {
-            mc.gameMode.attack(mc.player, target);
-        }
-        swing.getValue().swing(InteractionHand.MAIN_HAND);
-        timer.spent();
+        timer.strike(targets, swing.getValue());
     }
 
-    private static Vec3 aimPoint(LivingEntity target) {
+    private static Vec3 aimPoint(Entity target) {
         return target.getBoundingBox().getCenter();
     }
 
-    private void turnCamera(LivingEntity target) {
+    private void turnCamera(Entity target) {
         RotationManager.turnCamera(aimPoint(target), rotateSpeed.getFloat());
     }
 
     // True once the real crosshair rests on the target's box within reach.
-    private boolean crosshairOn(LivingEntity target) {
+    private boolean crosshairOn(Entity target) {
         Vec3 eye = mc.player.getEyePosition();
         Vec3 look = mc.player.getViewVector(1f);
         Vec3 end = eye.add(look.scale(range.getValue()));
         return target.getBoundingBox().clip(eye, end).isPresent();
     }
 
-    // Takes up the best weapon for the target. The server judges a hit by the item held
-    // at the end of the last tick. A hit in the tick of a swap waits for the next one.
-    // False whilst it waits or when a raised shield is left alone. A swap that cannot
-    // be made leaves the held item to hit with.
+    // Takes up the best weapon for the target. A hit never goes out in the tick of a swap. A
+    // plain server only counts the damage of the weapon swapped in after its next tick and Paper
+    // charges the hit by that weapon's speed at once. False whilst it waits or when a raised
+    // shield is left alone. A swap that cannot be made leaves the held item to hit with. A swing
+    // with nothing alive among its targets keeps it too since a crystal or a boat falls to any hit.
     private boolean armWeapon(LivingEntity target) {
+        if (target == null) {
+            return true;
+        }
         boolean blocking = target.isBlocking();
         if (blocking && shields.is(Shields.IGNORE)) {
             return false;
@@ -337,40 +358,33 @@ public final class KillAura extends Module implements Targeting {
         loan.release((weaponSwapBack.isOn() || !autoWeapon.isOn()) && loan.stillMine());
     }
 
-    private List<LivingEntity> pickTargets() {
-        List<LivingEntity> found = new ArrayList<>();
+    // Wanted measures the reach to the hitbox. A cut by the distance to the feet would drop a big
+    // mob whose box is in reach.
+    private List<Entity> pickTargets() {
         if (onlyOnLook.isOn()) {
-            if (mc.crosshairPickEntity instanceof LivingEntity living && wanted(living)) {
-                found.add(living);
-            }
-            return found;
+            Entity aimed = mc.crosshairPickEntity;
+            return aimed != null && wanted(aimed) ? List.of(aimed) : List.of();
         }
-        for (Entity entity : mc.level.entitiesForRendering()) {
-            if (entity instanceof LivingEntity living && wanted(living)) {
-                found.add(living);
-            }
-        }
-        TargetPriority order = priority.getValue();
-        found.sort((a, b) -> Double.compare(order.score(a), order.score(b)));
+        List<Entity> found = EntityUtil.ranked(Double.MAX_VALUE, priority.getValue(), this::wanted);
         int limit = maxTargets.getInt();
         return found.size() <= limit ? found : found.subList(0, limit);
     }
 
-    private boolean wanted(LivingEntity living) {
-        if (living == mc.player || !living.isAlive() || living.isSpectator()
-            || EntityUtil.isFriend(living) || ignoredMobs.contains(living.getType())) {
+    private boolean wanted(Entity entity) {
+        if (entity == mc.player || !entity.isAlive() || entity.isSpectator()
+            || EntityUtil.isFriend(entity) || ignoredMobs.contains(entity.getType())) {
             return false;
         }
         double furthest = walls.isOn() ? Math.max(range.getValue(), wallsRange.getValue()) : range.getValue();
-        double distance = EntityUtil.reachDistance(mc.player, living);
-        if (distance > furthest || !inFov(living)) {
+        double distance = EntityUtil.reachDistance(mc.player, entity);
+        if (distance > furthest || !inFov(entity)) {
             return false;
         }
-        if (!extraMobs.contains(living.getType()) && !kindWanted(living) || !filter.allows(living)) {
+        if (!extraMobs.contains(entity.getType()) && !kindWanted(entity) || !filter.allows(entity)) {
             return false;
         }
         // The line of sight raycast costs the most.
-        boolean visible = canSee(living);
+        boolean visible = canSee(entity);
         if (!visible && !walls.isOn()) {
             return false;
         }
@@ -378,22 +392,32 @@ public final class KillAura extends Module implements Targeting {
     }
 
     // Whether the switches above pick out this kind of entity.
-    private boolean kindWanted(LivingEntity living) {
-        if (living instanceof Player) {
+    private boolean kindWanted(Entity entity) {
+        if (entity instanceof Player) {
             return players.isOn();
         }
-        if (!(living instanceof Mob mob) || !speciesAllowed(mob)) {
+        if (!(entity instanceof Mob mob) || !speciesAllowed(mob)) {
             return false;
         }
-        if (EntityUtil.kindOf(mob) == EntityUtil.Kind.HOSTILE) {
-            return hostile.isOn() && allowedAge(mob, hostileAges.getValue());
-        }
-        return passive.isOn() && allowedAge(mob, passiveAges.getValue());
+        return goesWithHostile(mob) ? hostile.isOn() && allowedAge(mob, hostileAges.getValue())
+            : passive.isOn() && allowedAge(mob, passiveAges.getValue());
+    }
+
+    // Which of the two big switches a mob answers to. A species with a row of its own goes
+    // with the switch that row hangs under whatever the single mob is like. Every other mob
+    // goes by whether the game counts it a monster. An enderman is one and a wolf is not and
+    // the neutral rule then says when either is hit.
+    private static boolean goesWithHostile(Mob mob) {
+        return switch (EntitySpecies.of(mob)) {
+            case SLIME, SHULKER, ZOMBIE_VILLAGER -> true;
+            case WATER, BAT, VILLAGER, GOLEM, ALLAY -> false;
+            case OTHER -> mob instanceof Enemy;
+        };
     }
 
     // The switches that pick out one family from the wider hostile or passive group.
     private boolean speciesAllowed(Mob mob) {
-        return switch (EntityUtil.speciesOf(mob)) {
+        return switch (EntitySpecies.of(mob)) {
             case WATER -> waterMobs.isOn();
             case BAT -> bats.isOn();
             case SLIME -> slimes.isOn();
@@ -415,17 +439,11 @@ public final class KillAura extends Module implements Targeting {
     }
 
     // Either the head or the feet being visible is enough to land a hit.
-    private boolean canSee(LivingEntity target) {
-        if (mc.player.hasLineOfSight(target)) {
-            return true;
-        }
-        Vec3 eye = mc.player.getEyePosition();
-        Vec3 feet = target.position().add(0, 0.1, 0);
-        return mc.level.clip(new ClipContext(eye, feet, ClipContext.Block.COLLIDER,
-            ClipContext.Fluid.NONE, mc.player)).getType() == HitResult.Type.MISS;
+    private boolean canSee(Entity target) {
+        return mc.player.hasLineOfSight(target) || BlockUtil.canSee(target.position().add(0, 0.1, 0));
     }
 
-    private boolean inFov(LivingEntity target) {
+    private boolean inFov(Entity target) {
         double limit = fov.getValue();
         return limit >= 360 || EntityUtil.lookAngleTo(target) <= limit / 2;
     }
@@ -443,8 +461,9 @@ public final class KillAura extends Module implements Targeting {
         if (!showTarget.isOn() || targets.isEmpty()) {
             return;
         }
-        for (LivingEntity target : targets) {
-            float share = EntityUtil.healthShare(target);
+        for (Entity target : targets) {
+            // A thing with no health gets the full green box.
+            float share = target instanceof LivingEntity living ? EntityUtil.healthShare(living) : 1;
             AABB box = EntityUtil.lerpedBox(target, event.getPartialTicks());
             Vec3 centre = box.getCenter();
             AABB inner = new AABB(centre, centre).inflate(box.getXsize() / 2 * share,

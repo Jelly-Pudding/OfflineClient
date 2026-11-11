@@ -2,6 +2,7 @@ package com.jellypudding.offlineclient.mixin;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.gui.GuiTheme;
+import com.jellypudding.offlineclient.util.ChatPace;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.modules.misc.BetterChat;
@@ -16,6 +17,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
+import net.minecraft.util.Util;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
@@ -35,6 +37,11 @@ public abstract class ChatScreenMixin extends Screen {
     @Unique
     private static final int ROW_PITCH = 10;
 
+    // How long the completions stand before the command is asked again. A seed world's structures
+    // and the players online can change under the same text.
+    @Unique
+    private static final long OPTIONS_AGE_MS = 1000;
+
     private ChatScreenMixin(Component title) {
         super(title);
     }
@@ -45,13 +52,20 @@ public abstract class ChatScreenMixin extends Screen {
     @Shadow
     protected EditBox input;
 
+    // The completions of the client command in the box and when the command was asked for them.
+    @Unique
+    private List<String> offlineclient$options = List.of();
+
+    @Unique
+    private long offlineclient$optionsAt;
+
     // Which of the shown completions the arrow keys have picked.
     @Unique
     private int offlineclient$picked;
 
-    // The text the pick was made for. Typing anything else starts over at the top.
+    // The text the completions and the pick were made for. Typing anything else starts over at the top.
     @Unique
-    private String offlineclient$pickedFor = "";
+    private String offlineclient$optionsFor = "";
 
     @Unique
     private final ChatScrollBar offlineclient$scrollBar = new ChatScrollBar();
@@ -95,17 +109,13 @@ public abstract class ChatScreenMixin extends Screen {
             return;
         }
         String text = input.getValue();
-        String prefix = OfflineClient.INSTANCE.getCommandManager().getPrefix();
-        if (!text.startsWith(prefix) || text.length() <= prefix.length()) {
-            return;
-        }
-        List<String> options = OfflineClient.INSTANCE.getCommandManager().complete(text);
+        List<String> options = offlineclient$options(text);
         // With nothing to choose between the arrows keep walking the chat history.
         if (options.isEmpty() || (key != InputConstants.KEY_TAB && options.size() < 2)) {
             return;
         }
         cir.setReturnValue(true);
-        int picked = offlineclient$pickFor(text, options.size());
+        int picked = offlineclient$picked;
 
         if (key == InputConstants.KEY_UP || key == InputConstants.KEY_DOWN) {
             offlineclient$picked = Math.floorMod(picked + (key == InputConstants.KEY_DOWN ? 1 : -1), options.size());
@@ -113,7 +123,8 @@ public abstract class ChatScreenMixin extends Screen {
         }
 
         int lastSpace = text.lastIndexOf(' ');
-        String head = lastSpace == -1 ? prefix : text.substring(0, lastSpace + 1);
+        String head = lastSpace == -1 ? OfflineClient.INSTANCE.getCommandManager().getPrefix()
+            : text.substring(0, lastSpace + 1);
         String typed = text.substring(head.length());
         String common = offlineclient$commonPrefix(options);
         // A pick or a single match completes whole. Otherwise the shared start fills in first.
@@ -125,14 +136,24 @@ public abstract class ChatScreenMixin extends Screen {
         input.moveCursorToEnd(false);
     }
 
+    // Empty unless the box holds a client command. Asked again only when the text changes or the
+    // list has stood its time.
     @Unique
-    private int offlineclient$pickFor(String text, int count) {
-        if (!text.equals(offlineclient$pickedFor)) {
-            offlineclient$pickedFor = text;
-            offlineclient$picked = 0;
+    private List<String> offlineclient$options(String text) {
+        String prefix = OfflineClient.INSTANCE.getCommandManager().getPrefix();
+        if (!text.startsWith(prefix) || text.length() <= prefix.length()) {
+            return List.of();
         }
-        offlineclient$picked = Math.min(offlineclient$picked, count - 1);
-        return offlineclient$picked;
+        long now = Util.getMillis();
+        boolean typed = !text.equals(offlineclient$optionsFor);
+        if (typed || now - offlineclient$optionsAt > OPTIONS_AGE_MS) {
+            offlineclient$options = OfflineClient.INSTANCE.getCommandManager().complete(text);
+            offlineclient$optionsAt = now;
+            offlineclient$optionsFor = text;
+            int last = Math.max(0, offlineclient$options.size() - 1);
+            offlineclient$picked = typed ? 0 : Math.min(offlineclient$picked, last);
+        }
+        return offlineclient$options;
     }
 
     // The chat draws no background of its own. The blur has to be asked for here.
@@ -153,17 +174,12 @@ public abstract class ChatScreenMixin extends Screen {
         if (offlineclient$scrollBarOn()) {
             offlineclient$scrollBar.render(context, mouseX, mouseY);
         }
-        String text = input == null ? "" : input.getValue();
-        String prefix = OfflineClient.INSTANCE.getCommandManager().getPrefix();
-        if (!text.startsWith(prefix) || text.length() <= prefix.length()) {
-            return;
-        }
-        List<String> options = OfflineClient.INSTANCE.getCommandManager().complete(text);
+        List<String> options = offlineclient$options(input == null ? "" : input.getValue());
         if (options.isEmpty()) {
             return;
         }
 
-        int picked = offlineclient$pickFor(text, options.size());
+        int picked = offlineclient$picked;
         // The list scrolls to keep the pick among the rows shown.
         int shown = Math.min(POPUP_ROWS, options.size());
         int first = Math.clamp(picked - shown + 1, 0, options.size() - shown);
@@ -242,11 +258,16 @@ public abstract class ChatScreenMixin extends Screen {
             return;
         }
 
-        // The typed line is what goes into the history. The dressed one goes to the server.
+        // The typed line is what goes into the history. The dressed one goes to the server. A dressed
+        // command comes back as a command and dressed chat stays chat whatever it starts with.
         ci.cancel();
         if (addToHistory) {
             minecraft.gui.hud.getChat().addRecentChat(message);
         }
-        minecraft.player.connection.sendChat(rewritten);
+        if (message.startsWith("/")) {
+            ChatPace.PLAYER.say(rewritten);
+        } else {
+            ChatPace.PLAYER.chat(rewritten);
+        }
     }
 }

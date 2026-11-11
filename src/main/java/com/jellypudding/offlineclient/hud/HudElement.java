@@ -2,9 +2,11 @@ package com.jellypudding.offlineclient.hud;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.gui.HudEditorScreen;
+import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.modules.misc.HudModule;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
+import com.jellypudding.offlineclient.setting.ModuleSwitch;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.Setting;
 import com.jellypudding.offlineclient.util.Modules;
@@ -13,6 +15,7 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 
@@ -30,6 +33,9 @@ public abstract class HudElement {
     // Where the stretch sliders stop. A typed or dragged size goes further.
     private static final double SLIDER_STRETCH = 2;
 
+    // The red a piece writes in when it says why it cannot do what it was asked.
+    protected static final int PROBLEM_INK = 0xFFFF5555;
+
     // The soft blue grey most rows of overlay text start out in.
     private static final float LABEL_HUE = 190;
     private static final float LABEL_SATURATION = 0.15f;
@@ -38,6 +44,8 @@ public abstract class HudElement {
     private final String name;
     private final String description;
     private final List<Setting<?>> settings = new ArrayList<>();
+    // Rows that come after the background.
+    private final List<Setting<?>> last = new ArrayList<>();
 
     protected final BoolSetting active;
     private final double mostStretch;
@@ -76,11 +84,26 @@ public abstract class HudElement {
     // An element that has to reach across any screen such as a cover sets how far it stretches.
     protected HudElement(String name, String description, boolean on, double startX, double startY,
                          double startSize, double mostStretch, Background background) {
+        this(name, description, new BoolSetting(name, description, on), startX, startY, startSize, mostStretch,
+            background);
+    }
+
+    // An element that draws what a module works out. Its switch is the module's own on or off
+    // state. Two switches for one thing could disagree.
+    protected HudElement(String name, String description, Class<? extends Module> owner, double startX,
+                         double startY, Background background) {
+        this(name, description, new ModuleSwitch(name, description, owner), startX, startY, 1, MAX_STRETCH,
+            background);
+    }
+
+    private HudElement(String name, String description, BoolSetting active, double startX, double startY,
+                       double startSize, double mostStretch, Background background) {
         this.name = name;
         this.description = description;
         this.mostStretch = mostStretch;
+        this.active = active;
         // Fifteen elements with five or more options each would swamp the HUD panel.
-        active = new BoolSetting(name, description, on).startFolded();
+        active.startFolded();
         x = percent(" x", "How far across the screen it sits.", startX);
         y = percent(" y", "How far down the screen it sits.", startY);
         across = stretch(" width scale", "How wide it is drawn next to its normal size.", startSize);
@@ -98,17 +121,23 @@ public abstract class HudElement {
 
     private NumberSetting percent(String suffix, String description, double start) {
         return new NumberSetting(name + suffix, description, start, 0, 100, 0.5, "%")
-            .min(0).max(100);
+            .max(100);
     }
 
     private NumberSetting stretch(String suffix, String description, double start) {
         return new NumberSetting(name + suffix, description, start, MIN_STRETCH, SLIDER_STRETCH, 0.05, "x")
-            .min(MIN_STRETCH).max(mostStretch);
+            .max(mostStretch);
     }
 
     private NumberSetting placedSize(String suffix, String side) {
         return new NumberSetting(name + suffix, "The " + side + " of the screen it was last placed on in GUI pixels.",
-            0, 0, 1, 1).min(0).internal();
+            0, 0, 1, 1).internal();
+    }
+
+    // What follows the name of a piece of a kind there can be several of. The first goes by
+    // the plain name.
+    protected static String ordinal(int number) {
+        return number == 1 ? "" : " " + number;
     }
 
     // A colour setting that starts out in the soft label colour.
@@ -121,6 +150,14 @@ public abstract class HudElement {
         for (Setting<?> setting : more) {
             hang(setting);
             settings.add(setting);
+        }
+    }
+
+    // Files rows that come last in the block such as the one that adds another piece of the kind.
+    public final void addLast(Setting<?>... rows) {
+        for (Setting<?> row : rows) {
+            hang(row);
+            last.add(row);
         }
     }
 
@@ -147,6 +184,7 @@ public abstract class HudElement {
         if (backdrop != null) {
             options.addAll(backdrop.settings());
         }
+        options.addAll(last);
         options.add(placedWidth);
         options.add(placedHeight);
         return Collections.unmodifiableList(options);
@@ -248,11 +286,11 @@ public abstract class HudElement {
         return x.isDefault() && y.isDefault();
     }
 
+    // Back to the share it starts at. The screen it was last placed on stays as it is. A share
+    // at its start never reads it.
     public final void resetPosition() {
         x.reset();
         y.reset();
-        placedWidth.reset();
-        placedHeight.reset();
     }
 
     // Where the element sits until the player moves it. Null for an element placed
@@ -279,6 +317,12 @@ public abstract class HudElement {
         return false;
     }
 
+    // True for an element laid over others on purpose such as a cover. It never moves to make
+    // room and nothing moves to make room for it.
+    public boolean liesOver() {
+        return false;
+    }
+
     // How the element lines up against its anchor. Nought is the left edge and one
     // the right edge and a half the middle.
     protected final double alignment() {
@@ -290,6 +334,16 @@ public abstract class HudElement {
         return active.isOn();
     }
 
+    // True for an element whose switch is the on or off state of the module it draws for.
+    public final boolean followsModule() {
+        return active instanceof ModuleSwitch;
+    }
+
+    // True when the switch of this element is one of the settings.
+    public final boolean switchIsAmong(Collection<? extends Setting<?>> settings) {
+        return settings.contains(active);
+    }
+
     public final void setActive(boolean on) {
         active.setValue(on);
     }
@@ -298,6 +352,10 @@ public abstract class HudElement {
     // something it would not in play such as a sample of what it shows.
     public boolean visible() {
         return active.isOn();
+    }
+
+    // Called as the piece is taken off the overlay. One that holds a texture lets go of it.
+    public void discard() {
     }
 
     // True whilst the HUD editor is open.

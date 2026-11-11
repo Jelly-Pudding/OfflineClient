@@ -29,6 +29,10 @@ public final class DrawBatch {
     // Thinner lines vanish against terrain at any distance.
     private static final float LINE_WIDTH = 2;
 
+    // Tracers start on the line of sight this many blocks out. Nearer the eye the bob of a walking
+    // view swings the start well off the crosshair.
+    private static final double TRACER_START = 10;
+
     // Direction.values allocates a fresh array on every call.
     private static final Direction[] SIDES = Direction.values();
 
@@ -59,13 +63,7 @@ public final class DrawBatch {
     // A point in front of the camera that tracer lines start from.
     private static Vec3 tracerOrigin() {
         Camera camera = OfflineClient.MC.gameRenderer.mainCamera();
-        if (camera == null) {
-            return Vec3.ZERO;
-        }
-        double yaw = Math.toRadians(camera.yRot());
-        double pitch = Math.toRadians(camera.xRot());
-        return new Vec3(-Math.sin(yaw) * Math.cos(pitch), -Math.sin(pitch),
-            Math.cos(yaw) * Math.cos(pitch)).scale(10);
+        return camera == null ? Vec3.ZERO : new Vec3(camera.forwardVector()).scale(TRACER_START);
     }
 
     public void line(Vec3 from, Vec3 to, int color, boolean throughWalls) {
@@ -118,10 +116,10 @@ public final class DrawBatch {
         return 1 << side.ordinal();
     }
 
-    // A bit for every horizontal side on which the set holds a neighbour of the key.
+    // A bit for every side on which the set holds a neighbour of the key.
     public static int sharedSides(LongSet keys, long key) {
         int hidden = 0;
-        for (Direction side : Direction.Plane.HORIZONTAL) {
+        for (Direction side : SIDES) {
             if (keys.contains(BlockPos.offset(key, side))) {
                 hidden |= sideBit(side);
             }
@@ -155,7 +153,7 @@ public final class DrawBatch {
 
     // The edges of a box leaving out every edge that lies on a hidden face.
     public void outlineBoxPart(AABB box, int hidden, int color, boolean throughWalls) {
-        float[] b = relative(box);
+        float[] b = relative(box, camera);
         float x1 = b[0];
         float y1 = b[1];
         float z1 = b[2];
@@ -219,20 +217,25 @@ public final class DrawBatch {
     }
 
     public void solidBox(AABB box, int color, boolean throughWalls) {
-        VertexConsumer vc = buffer(Pipelines.fill(throughWalls));
-        float[] b = relative(box);
+        boxFaces(buffer(Pipelines.fill(throughWalls)), pose, box, camera, color);
+    }
+
+    // Every face of a box as a tinted quad. The silhouettes of the outline shader fill their
+    // boxes here too.
+    static void boxFaces(VertexConsumer vc, PoseStack.Pose pose, AABB box, Vec3 camera, int color) {
+        float[] b = relative(box, camera);
         for (Direction side : SIDES) {
-            quad(vc, color, corners(b, side));
+            quad(vc, pose, color, corners(b, side));
         }
     }
 
     // One face of a box as a tinted quad.
     public void solidFace(AABB box, Direction side, int color, boolean throughWalls) {
-        quad(buffer(Pipelines.fill(throughWalls)), color, corners(relative(box), side));
+        quad(buffer(Pipelines.fill(throughWalls)), pose, color, corners(relative(box, camera), side));
     }
 
     public void outlineFace(AABB box, Direction side, int color, boolean throughWalls) {
-        float[] c = corners(relative(box), side);
+        float[] c = corners(relative(box, camera), side);
         edge(c[0], c[1], c[2], c[3], c[4], c[5], color, throughWalls);
         edge(c[3], c[4], c[5], c[6], c[7], c[8], color, throughWalls);
         edge(c[6], c[7], c[8], c[9], c[10], c[11], color, throughWalls);
@@ -240,7 +243,7 @@ public final class DrawBatch {
     }
 
     // The box relative to the camera as its low corner then its high corner.
-    private float[] relative(AABB box) {
+    private static float[] relative(AABB box, Vec3 camera) {
         AABB b = box.move(camera.reverse());
         return new float[] {(float) b.minX, (float) b.minY, (float) b.minZ,
             (float) b.maxX, (float) b.maxY, (float) b.maxZ};
@@ -271,7 +274,7 @@ public final class DrawBatch {
         Vec3 rb = b.subtract(camera);
         Vec3 rc = c.subtract(camera);
         Vec3 rd = d.subtract(camera);
-        quad(vc, color, (float) ra.x, (float) ra.y, (float) ra.z, (float) rb.x, (float) rb.y, (float) rb.z,
+        quad(vc, pose, color, (float) ra.x, (float) ra.y, (float) ra.z, (float) rb.x, (float) rb.y, (float) rb.z,
             (float) rc.x, (float) rc.y, (float) rc.z, (float) rd.x, (float) rd.y, (float) rd.z);
     }
 
@@ -292,7 +295,7 @@ public final class DrawBatch {
     // The four upright faces of a box blending from bottom colour to top colour.
     public void gradientSides(AABB box, int bottom, int top, boolean throughWalls) {
         VertexConsumer vc = buffer(Pipelines.fill(throughWalls));
-        float[] b = relative(box);
+        float[] b = relative(box, camera);
         float x1 = b[0];
         float y1 = b[1];
         float z1 = b[2];
@@ -381,13 +384,13 @@ public final class DrawBatch {
     }
 
     // Four corners of three coordinates each.
-    private void quad(VertexConsumer vc, int color, float[] c) {
-        quad(vc, color, c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7], c[8], c[9], c[10], c[11]);
+    private static void quad(VertexConsumer vc, PoseStack.Pose pose, int color, float[] c) {
+        quad(vc, pose, color, c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7], c[8], c[9], c[10], c[11]);
     }
 
-    private void quad(VertexConsumer vc, int color,
-                      float ax, float ay, float az, float bx, float by, float bz,
-                      float cx, float cy, float cz, float dx, float dy, float dz) {
+    private static void quad(VertexConsumer vc, PoseStack.Pose pose, int color,
+                             float ax, float ay, float az, float bx, float by, float bz,
+                             float cx, float cy, float cz, float dx, float dy, float dz) {
         vc.addVertex(pose, ax, ay, az).setColor(color);
         vc.addVertex(pose, bx, by, bz).setColor(color);
         vc.addVertex(pose, cx, cy, cz).setColor(color);

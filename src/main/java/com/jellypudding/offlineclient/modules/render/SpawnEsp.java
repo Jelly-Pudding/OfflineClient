@@ -31,13 +31,13 @@ public final class SpawnEsp extends Module {
     private final NumberSetting vertical = new NumberSetting("Vertical range",
         "How far up and down to look.", 6, 1, 24, 1, " blocks");
     private final NumberSetting light = new NumberSetting("Light",
-        "Highest block light a spot may have.", 0, 0, 15, 1).min(0).max(15);
+        "Highest block light a spot may have.", 0, 0, 15, 1).max(15);
     private final NumberSetting limit = new NumberSetting("Limit",
         "Most spots marked at once.", 600, 100, 4000, 100).min(1);
     private final NumberSetting refresh = new NumberSetting("Refresh",
-        "Ticks between scans.", 10, 1, 60, 1, " ticks").min(1);
+        "Ticks between scans.", 10, 1, 60, 1, " ticks");
     private final BoolSetting cross = new BoolSetting("Cross",
-        "Draw an X inside each square.", true);
+        "Draws an X inside each square.", true);
     private final ColorSetting nowColor = new ColorSetting("Colour",
         "Colour of spots where a mob can appear right now.", 0, 0.89f, 0.88f, false);
     private final ColorSetting nightColor = new ColorSetting("Night colour",
@@ -45,9 +45,9 @@ public final class SpawnEsp extends Module {
     private final NumberSetting opacity = new NumberSetting("Opacity",
         "How solid the markers are drawn.", 50, 5, 100, 5, "%").min(1).max(100);
     private final BoolSetting hitbox = new BoolSetting("Hitbox check",
-        "Also make sure a whole mob fits in the space. Slower but it rules out tight corners.", false);
+        "Also makes sure a whole mob fits in the space. Slower but it rules out tight corners.", false);
     private final BoolSetting throughWalls = new BoolSetting("Through walls",
-        "Show spots behind blocks.", false);
+        "Shows spots behind blocks.", false);
 
     private List<Spot> spots = List.of();
     private int timer;
@@ -81,10 +81,6 @@ public final class SpawnEsp extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame()) {
-            forget();
-            return;
-        }
         if (timer > 0) {
             timer--;
             return;

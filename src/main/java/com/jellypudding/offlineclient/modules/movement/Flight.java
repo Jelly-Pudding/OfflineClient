@@ -25,7 +25,6 @@ import net.minecraft.network.protocol.game.ClientboundPlayerAbilitiesPacket;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.world.entity.player.Abilities;
-import net.minecraft.world.entity.player.Input;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
@@ -65,10 +64,10 @@ public final class Flight extends Module {
         .describe(Mode.DIRECT, "Moves the instant you press a key and stops dead when you let go.")
         .describe(Mode.TELEPORT, "Moves you in whole steps each tick with no momentum at all.");
     private final NumberSetting horizontalSpeed = new NumberSetting("Horizontal speed",
-        "Speed along the ground. 1 matches creative flight.", 1, 0.1, 10, 0.1, "x").min(0.1)
+        "Speed along the ground. 1 matches creative flight.", 1, 0.1, 10, 0.1, "x")
         .visibleWhen(this::flowing);
     private final NumberSetting verticalSpeed = new NumberSetting("Vertical speed",
-        "Up and down speed. 1 matches creative flight.", 1, 0.1, 10, 0.1, "x").min(0.1)
+        "Up and down speed. 1 matches creative flight.", 1, 0.1, 10, 0.1, "x")
         .visibleWhen(this::flowing);
     private final NumberSetting step = new NumberSetting("Step",
         "How far each tick carries you across. Vanilla allows about twenty blocks a tick and Paper far more.",
@@ -81,7 +80,7 @@ public final class Flight extends Module {
         .min(STEP_BACK).under(mode, Mode.TELEPORT);
     private final NumberSetting ramp = new NumberSetting("Ramp",
         "Ticks the steps take to grow to full size once you start moving. Zero starts at full size.",
-        0, 0, 20, 1, " ticks").min(0).under(mode, Mode.TELEPORT);
+        0, 0, 20, 1, " ticks").under(mode, Mode.TELEPORT);
     private final BoolSetting snapToAxis = new BoolSetting("Snap to axis",
         "Steps run straight along the compass line you face.", false).under(mode, Mode.TELEPORT);
     private final BoolSetting throughFloors = new BoolSetting("Through floors",
@@ -90,10 +89,13 @@ public final class Flight extends Module {
     private final BoolSetting scrollSpeed = new BoolSetting("Scroll to change speed",
         "The mouse wheel changes the horizontal speed or the teleport step whilst you fly.", false);
     private final NumberSetting timer = new NumberSetting("Timer",
-        "Speeds up the game whilst you fly. 1 is normal.", 1, 1, 3, 0.1, "x").min(1)
+        "Speeds up the game whilst you fly. 1 is normal.", 1, 1, 3, 0.1, "x")
         .visibleWhen(this::flowing);
     private final BoolSetting keepFlightOn = new BoolSetting("Keep flight on",
         "Ignores the server when it switches your flight off.", true);
+    private final BoolSetting stopWhenOff = new BoolSetting("Stop when switched off",
+        "Switching Flight off stops you where you are. Off lets you keep the speed you had.", false)
+        .visibleWhen(this::flowing);
     private final BoolSetting avoidLava = new BoolSetting("Avoid lava",
         "Lava stops you like a wall whilst you fly.", true);
     private final EnumSetting<AntiKick> antiKick = new EnumSetting<>("AntiKick",
@@ -106,7 +108,7 @@ public final class Flight extends Module {
         "Ticks between each little dip.", 70, 5, 80, 1, " ticks").min(1)
         .under(antiKick, AntiKick.DIP, AntiKick.PACKET);
     private final NumberSetting dipTicks = new NumberSetting("Dip ticks",
-        "How many ticks each dip lasts before the climb back.", 1, 1, 20, 1, " ticks").min(1)
+        "How many ticks each dip lasts before the climb back.", 1, 1, 20, 1, " ticks")
         .under(antiKick, AntiKick.DIP);
 
     private final HoverDip dip = new HoverDip();
@@ -128,7 +130,8 @@ public final class Flight extends Module {
     public Flight() {
         super("Flight", "Lets you fly like in creative mode.", Category.MOVEMENT);
         addSettings(mode, horizontalSpeed, verticalSpeed, step, riseStep, dropStep, ramp, snapToAxis,
-            throughFloors, scrollSpeed, timer, keepFlightOn, avoidLava, antiKick, antiKickInterval, dipTicks);
+            throughFloors, scrollSpeed, timer, keepFlightOn, stopWhenOff, avoidLava, antiKick, antiKickInterval,
+            dipTicks);
         searchTags("fly", "teleport fly");
     }
 
@@ -167,6 +170,9 @@ public final class Flight extends Module {
     protected void onDisable() {
         Timer.override(TIMER_KEY, 1f);
         MovementUtil.endFlight();
+        if (stopWhenOff.isOn() && flowing() && mc.player != null) {
+            mc.player.setDeltaMovement(Vec3.ZERO);
+        }
         stepFrom = null;
         stepDrops = false;
     }
@@ -206,9 +212,6 @@ public final class Flight extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame()) {
-            return;
-        }
         boolean moving = MovementUtil.hasInput()
             || mc.options.keyJump.isDown() || mc.options.keyShift.isDown();
         Timer.override(TIMER_KEY, moving && flowing() ? timer.getFloat() : 1f);
@@ -272,8 +275,7 @@ public final class Flight extends Module {
     // Up or down first as the server moves a box and then across at the new height. A
     // step through a floor goes on its own.
     private Vec3 nextStep(Vec3 at) {
-        Input keys = mc.player.input.keyPresses;
-        int vertical = (keys.jump() ? 1 : 0) - (keys.shift() ? 1 : 0);
+        int vertical = MovementUtil.verticalInput();
         Vec3 heading = snapToAxis.isOn()
             ? MovementUtil.inputDirection(Math.round(mc.player.getYRot() / AXIS_DEGREES) * AXIS_DEGREES)
             : MovementUtil.inputDirection();
@@ -383,8 +385,7 @@ public final class Flight extends Module {
     // After NoFall. A teleport drop must not claim a landing the server would charge.
     @Subscribe(priority = AFTER_REWRITES)
     private void onPacketSend(PacketSendEvent event) {
-        if (mc.player == null || event.isCancelled()
-            || !(event.getPacket() instanceof ServerboundMovePlayerPacket packet)) {
+        if (mc.player == null || !(event.getPacket() instanceof ServerboundMovePlayerPacket packet)) {
             return;
         }
         if (stepDrops && carriesStep(packet)) {

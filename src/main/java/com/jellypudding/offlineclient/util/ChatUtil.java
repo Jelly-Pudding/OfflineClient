@@ -6,21 +6,26 @@ import com.jellypudding.offlineclient.modules.misc.ClickGuiModule;
 import com.jellypudding.offlineclient.setting.Defaults;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.components.ChatComponent;
-import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.multiplayer.chat.GuiMessage;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.FormattedText;
 import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.network.chat.Style;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.entity.BlockEntityType;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
 
@@ -69,14 +74,6 @@ public final class ChatUtil {
         component(Component.literal("§7" + label + " §r").append(value));
     }
 
-    // Leaves the server. The disconnect screen shows the message under the client tag.
-    public static void leaveServer(String message) {
-        ClientPacketListener connection = OfflineClient.MC.getConnection();
-        if (connection != null) {
-            connection.getConnection().disconnect(Component.literal(TAG + " §f" + message));
-        }
-    }
-
     // Takes the newest line the test accepts out of the last few in chat and hands back
     // its text. Null when none of them matched.
     public static String removeRecent(ChatComponent chat, int depth, Predicate<String> text) {
@@ -90,20 +87,6 @@ public final class ChatUtil {
             }
         }
         return null;
-    }
-
-    // Sends a line as the player. A line starting with a slash runs as a server
-    // command the way the chat screen runs it. Chat would show it as text.
-    public static void say(String text) {
-        ClientPacketListener connection = OfflineClient.MC.getConnection();
-        if (connection == null || text.isBlank()) {
-            return;
-        }
-        if (text.startsWith("/")) {
-            connection.sendCommand(text.substring(1));
-        } else {
-            connection.sendChat(text);
-        }
     }
 
     // Coordinates that walk there with the goto command when clicked.
@@ -120,10 +103,17 @@ public final class ChatUtil {
 
     // Text that runs one of our own commands when clicked. The command is written without the prefix.
     public static Component commandLink(String shown, String command, String hover) {
-        String typed = OfflineClient.INSTANCE.getCommandManager().getPrefix() + command;
+        String typed = OfflineClient.INSTANCE.getCommandManager().offer(command);
         return Component.literal(shown).withStyle(style -> style
             .withClickEvent(new ClickEvent.RunCommand(typed))
             .withHoverEvent(new HoverEvent.ShowText(Component.literal(hover))));
+    }
+
+    // Text that types one of our own commands into the chat box when clicked. The player finishes
+    // it and sends it. The command is written without the prefix.
+    public static MutableComponent typeLink(MutableComponent shown, String command) {
+        String typed = OfflineClient.INSTANCE.getCommandManager().getPrefix() + command;
+        return shown.withStyle(style -> style.withClickEvent(new ClickEvent.SuggestCommand(typed)));
     }
 
     // A line about a reset with a link after it that takes the reset back.
@@ -151,6 +141,20 @@ public final class ChatUtil {
             .withHoverEvent(new HoverEvent.ShowText(Component.literal("Click to copy"))));
     }
 
+    // The start of a text up to that many characters. Each part keeps its own style. Reading stops
+    // at the limit however long the text is.
+    public static MutableComponent head(Component text, int characters) {
+        MutableComponent head = Component.empty();
+        int[] left = {characters};
+        text.visit((style, words) -> {
+            String part = words.length() > left[0] ? words.substring(0, left[0]) : words;
+            head.append(Component.literal(part).setStyle(style));
+            left[0] -= part.length();
+            return left[0] > 0 ? Optional.empty() : FormattedText.STOP_ITERATION;
+        }, Style.EMPTY);
+        return head;
+    }
+
     // A saved file named from the game folder. Clicking it opens the folder that holds it.
     public static Component fileLink(Path file) {
         return pathLink(file, file.getParent());
@@ -166,6 +170,15 @@ public final class ChatUtil {
         return Component.literal(game.relativize(shown).toString().replace('\\', '/'))
             .withStyle(style -> style.withColor(ChatFormatting.WHITE)
                 .withClickEvent(new ClickEvent.OpenFile(opens)));
+    }
+
+    // A number to at most that many places with no zeros at the end such as 2.5 or 3. A value that
+    // is no number at all is written as it came.
+    public static String decimal(double value, int places) {
+        if (!Double.isFinite(value)) {
+            return String.valueOf(value);
+        }
+        return BigDecimal.valueOf(value).setScale(places, RoundingMode.HALF_UP).stripTrailingZeros().toPlainString();
     }
 
     // A span of time as a chat phrase such as 84 seconds or 12 minutes. Seconds stop
@@ -240,21 +253,40 @@ public final class ChatUtil {
         return words(BuiltInRegistries.ITEM.getKey(item));
     }
 
+    public static String words(BlockEntityType<?> type) {
+        return words(BuiltInRegistries.BLOCK_ENTITY_TYPE.getKey(type));
+    }
+
+    // A locked module never changed and has already said why.
     public static void toggled(Module module) {
         ClickGuiModule gui = Modules.get(ClickGuiModule.class);
-        if (gui != null && !gui.showsToggleMessages()) {
+        if (gui != null && !gui.showsToggleMessages(module) || Modules.lockHolds(module)) {
             return;
         }
-        message("§b" + module.getName() + " §7is now "
-            + (module.isEnabled() ? "§aenabled" : "§cdisabled") + "§7.");
+        message(toggledText(module.getName(), module.isEnabled()));
+    }
+
+    // What the client says when a module of this name is switched on or off.
+    public static String toggledText(String name, boolean on) {
+        return from(name, "is now " + (on ? "§aenabled" : "§cdisabled") + "§7.");
+    }
+
+    // A line in the voice of a module. Its name comes first in aqua and the words follow in grey.
+    public static String from(String who, String words) {
+        return "§b" + who + " §7" + words;
+    }
+
+    public static void tell(String who, String words) {
+        message(from(who, words));
     }
 
     // Where the name next sits as a word of its own or minus one. Sam inside
-    // Samuel is not Sam.
+    // Samuel is not Sam. A colour code straight before the name counts as a gap.
     public static int wholeWordIndex(String text, String name, int from) {
         int at = text.indexOf(name, from);
         while (at != -1) {
-            boolean startClear = at == 0 || !isNameChar(text.charAt(at - 1));
+            boolean startClear = at == 0 || !isNameChar(text.charAt(at - 1))
+                || at >= 2 && text.charAt(at - 2) == ChatFormatting.PREFIX_CODE;
             int end = at + name.length();
             boolean endClear = end >= text.length() || !isNameChar(text.charAt(end));
             if (startClear && endClear) {
@@ -265,7 +297,8 @@ public final class ChatUtil {
         return -1;
     }
 
-    private static boolean isNameChar(char c) {
+    // True for a letter or a digit or an underscore. Anything else ends a word.
+    public static boolean isNameChar(char c) {
         return Character.isLetterOrDigit(c) || c == '_';
     }
 
@@ -280,10 +313,15 @@ public final class ChatUtil {
             return;
         }
         written++;
-        Component line = Component.literal(PREFIX).append(component);
-        // BetterChat can send the client's own lines to their piece of the HUD instead.
+        Component line = tagged(component);
+        // The Client lines piece of the HUD takes the client's own lines whilst it is on.
         if (!ClientLines.take(line)) {
             OfflineClient.MC.gui.hud.getChat().addClientSystemMessage(line);
         }
+    }
+
+    // A line the way the client writes it with its tag in front.
+    public static Component tagged(Component component) {
+        return Component.literal(PREFIX).append(component);
     }
 }

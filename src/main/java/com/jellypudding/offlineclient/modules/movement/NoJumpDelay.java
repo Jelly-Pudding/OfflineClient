@@ -17,8 +17,6 @@ public final class NoJumpDelay extends Module {
     // The tick event runs before the player moves and the wait is read.
     @Subscribe
     private void onTick(TickEvent event) {
-        if (inGame()) {
-            mc.player.noJumpDelay = 0;
-        }
+        mc.player.noJumpDelay = 0;
     }
 }

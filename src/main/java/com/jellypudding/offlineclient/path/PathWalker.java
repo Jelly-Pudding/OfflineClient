@@ -1,9 +1,12 @@
 package com.jellypudding.offlineclient.path;
 
 import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.modules.movement.PathfinderModule;
 import com.jellypudding.offlineclient.util.BlockMiner;
-import com.jellypudding.offlineclient.util.DamageUtil;
+import com.jellypudding.offlineclient.util.BlockUtil;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.InputUtil;
+import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.RotationManager;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
@@ -14,6 +17,7 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
+import java.util.function.BooleanSupplier;
 
 // Drives the player along a finished path one tick at a time.
 public final class PathWalker {
@@ -26,7 +30,7 @@ public final class PathWalker {
     // How far ahead a node may be and still count as the one the player is on.
     private static final int LOOK_AHEAD = 8;
 
-    // Ticks off the path before a new search is asked for.
+    // Ticks off the path or held against a wall on the node before. Then a new search is asked for.
     private static final int STRAY_LIMIT = 30;
 
     // The most degrees a client side turn moves in one tick.
@@ -35,11 +39,21 @@ public final class PathWalker {
     // How closely the keys have to line up with the way to the next node.
     private static final double KEY_EDGE = 0.35;
 
+    // Ticks a floor may refuse to go down before the walk looks for another way.
+    private static final int LAY_PATIENCE = 20;
+
+    // The walk that holds the sneak key down. Null whilst none does.
+    private static PathWalker sneaker;
+
     private List<BlockPos> path = List.of();
     private int index;
     private int strayTicks;
+    // Ticks of pushing into something from the node before with nothing left to dig.
+    private int pushTicks;
     private boolean lost;
     private boolean holding;
+    private int layTicks;
+    private final InventoryUtil.SlotSwap slots = new InventoryUtil.SlotSwap();
 
     private Turn turn = Turn.CLIENT;
     private boolean sprint = true;
@@ -58,7 +72,31 @@ public final class PathWalker {
         path = nodes;
         index = nodes.isEmpty() ? 0 : 1;
         strayTicks = 0;
+        pushTicks = 0;
+        layTicks = 0;
         lost = false;
+    }
+
+    // The hotbar slot with a block the Pathfinder row lists that makes a floor at the spot.
+    // Minus one when there is none.
+    static int blockSlot(BlockPos floor) {
+        return BlockUtil.findBlockSlot(block -> PathfinderModule.lays(block) && BlockUtil.buildsAt(block, floor));
+    }
+
+    // Asks something with the sneak a walk holds by itself lifted. Jesus takes a held sneak
+    // for a wish to sink and a walk that creeps along an edge wishes no such thing. A sneak
+    // the player holds stays as it is.
+    static boolean unsneaked(BooleanSupplier question) {
+        KeyMapping key = MC.options.keyShift;
+        if (sneaker == null || !key.isDown() || InputUtil.physicallyHeld(key)) {
+            return question.getAsBoolean();
+        }
+        InputUtil.release(key);
+        try {
+            return question.getAsBoolean();
+        } finally {
+            InputUtil.hold(key);
+        }
     }
 
     public boolean arrived() {
@@ -75,6 +113,7 @@ public final class PathWalker {
         path = List.of();
         index = 0;
         strayTicks = 0;
+        pushTicks = 0;
         lost = false;
     }
 
@@ -88,9 +127,18 @@ public final class PathWalker {
         InputUtil.release(MC.options.keyLeft);
         InputUtil.release(MC.options.keyRight);
         InputUtil.release(MC.options.keyJump);
-        InputUtil.release(MC.options.keyShift);
         InputUtil.release(MC.options.keySprint);
+        sneak(false);
         holding = false;
+    }
+
+    private void sneak(boolean down) {
+        press(MC.options.keyShift, down);
+        if (down) {
+            sneaker = this;
+        } else if (sneaker == this) {
+            sneaker = null;
+        }
     }
 
     // Called once a tick whilst a path is being walked.
@@ -100,19 +148,38 @@ public final class PathWalker {
             releaseKeys();
             return;
         }
+        if (PathfinderModule.pausesWalk()) {
+            stand(player, false);
+            return;
+        }
         BlockPos here = PathFinder.standingAt(player);
-        advance(here, player);
+        advance(rules, here, player);
         if (arrived()) {
             releaseKeys();
             return;
         }
+        RouteView.walking(path, index);
 
+        BlockPos prev = path.get(index - 1);
         BlockPos node = path.get(index);
-        if (!rules.canStep(path.get(index - 1), node)) {
+        if (!rules.canStep(prev, node)) {
             lost = true;
         }
-        if (breakInto(rules, node)) {
+        if (breakInto(rules, prev, node)) {
+            pushTicks = 0;
             releaseKeys();
+            return;
+        }
+        boolean climbing = player.onClimbable();
+        BlockPos floor = rules.missingFloor(node);
+        // A sneak holds the player on the edge until the floor ahead is down. Jesus drops
+        // whoever sneaks and a walk on a liquid it holds up never does.
+        boolean afloat = rules.afloat(here) || rules.afloat(node);
+        boolean sneaks = !climbing && !afloat && (floor != null || nearDrop(rules, here, node));
+        if (floor == null) {
+            layTicks = 0;
+        } else if (!lays(floor) || afloat) {
+            stand(player, sneaks);
             return;
         }
 
@@ -120,9 +187,14 @@ public final class PathWalker {
         face(target);
         steer(target, player);
         holding = true;
+        // A wall no rule names holds the player on the node before.
+        if (player.onGround() && player.horizontalCollision && here.equals(prev) && ++pushTicks > STRAY_LIMIT) {
+            lost = true;
+        }
 
-        boolean climbing = player.onClimbable();
-        if (node.getY() > here.getY() && (player.onGround() || climbing)) {
+        // Step lifts nobody who sneaks.
+        boolean walksUp = !sneaks && !climbing && stepsUp(rules, here, node);
+        if (node.getY() > here.getY() && (player.onGround() || climbing) && !walksUp) {
             InputUtil.hold(MC.options.keyJump);
         } else if (player.isInWater() && node.getY() >= here.getY()) {
             InputUtil.hold(MC.options.keyJump);
@@ -134,11 +206,7 @@ public final class PathWalker {
             InputUtil.release(MC.options.keyUp);
         }
 
-        if (!climbing && nearDrop(rules, here, node)) {
-            InputUtil.hold(MC.options.keyShift);
-        } else {
-            InputUtil.release(MC.options.keyShift);
-        }
+        sneak(sneaks);
 
         if (sprint && !player.isInWater() && node.getY() >= here.getY()) {
             InputUtil.hold(MC.options.keySprint);
@@ -148,13 +216,15 @@ public final class PathWalker {
     }
 
     // Moves the index past every node the player has already reached and counts
-    // the ticks it spends nowhere near the path.
-    private void advance(BlockPos here, LocalPlayer player) {
+    // the ticks it spends nowhere near the path. A node still waiting for its floor is
+    // not reached by a player who hangs over it or jumps through it.
+    private void advance(PathFinder.Rules rules, BlockPos here, LocalPlayer player) {
         int last = Math.min(path.size(), index + LOOK_AHEAD);
         for (int i = last - 1; i >= index; i--) {
-            if (path.get(i).equals(here)) {
+            if (path.get(i).equals(here) && rules.missingFloor(here) == null) {
                 index = i + 1;
                 strayTicks = 0;
+                pushTicks = 0;
                 return;
             }
         }
@@ -167,10 +237,10 @@ public final class PathWalker {
         }
     }
 
-    // Digs out whatever stands in the way of the next node. True whilst it is
-    // still working on it.
-    private boolean breakInto(PathFinder.Rules rules, BlockPos node) {
-        BlockPos blocking = rules.blocking(node);
+    // Digs out whatever stands in the way of the step from prev to the next node. True whilst
+    // it is still working on it.
+    private boolean breakInto(PathFinder.Rules rules, BlockPos prev, BlockPos node) {
+        BlockPos blocking = rules.blocking(prev, node);
         if (blocking == null) {
             return false;
         }
@@ -178,6 +248,50 @@ public final class PathWalker {
             lost = true;
         }
         return true;
+    }
+
+    // True when the rise to the node is one the player walks up without a jump. Straight
+    // up or out of water or off a ladder still takes one.
+    private static boolean stepsUp(PathFinder.Rules rules, BlockPos here, BlockPos node) {
+        boolean across = node.getX() != here.getX() || node.getZ() != here.getZ();
+        return across && node.getY() - here.getY() <= rules.stepUp()
+            && MC.player.onGround() && !MC.player.isInWater();
+    }
+
+    // Lays the floor the next node wants from the hotbar. A floor that goes where the player
+    // stands waits for the jump to lift them clear. False whilst the hands are busy and
+    // the floor has to wait for them.
+    private boolean lays(BlockPos floor) {
+        if (handsBusy()) {
+            return false;
+        }
+        if (BlockUtil.intersectsPlayer(floor)) {
+            return true;
+        }
+        int slot = blockSlot(floor);
+        if (slot == -1 || !BlockUtil.placeFrom(slots, slot, floor, true) && ++layTicks > LAY_PATIENCE) {
+            lost = true;
+        }
+        return true;
+    }
+
+    // A change of slot would stop a meal or a drawn bow and ShulkerPacker counts the stacks
+    // it packs.
+    private static boolean handsBusy() {
+        return MC.player.isUsingItem() || Hands.slotsTaken();
+    }
+
+    // Stands still and keeps a sneak that holds an edge. A swimmer who lets go of jump sinks.
+    private void stand(LocalPlayer player, boolean sneaks) {
+        releaseKeys();
+        boolean swims = player.isInWater();
+        if (sneaks) {
+            sneak(true);
+        }
+        if (swims) {
+            InputUtil.hold(MC.options.keyJump);
+        }
+        holding = sneaks || swims;
     }
 
     private void face(Vec3 target) {
@@ -228,22 +342,10 @@ public final class PathWalker {
         }
         for (Direction side : Direction.Plane.HORIZONTAL) {
             BlockPos beside = here.relative(side);
-            if (!rules.fitsAt(beside) || rules.canStand(beside)) {
-                continue;
-            }
-            if (deepDrop(rules, beside)) {
+            if (rules.fitsAt(beside) && !rules.canStand(beside) && rules.deepDrop(beside)) {
                 return true;
             }
         }
         return false;
-    }
-
-    private boolean deepDrop(PathFinder.Rules rules, BlockPos pos) {
-        for (int drop = 1; drop <= DamageUtil.SAFE_FALL; drop++) {
-            if (rules.canStand(pos.below(drop))) {
-                return false;
-            }
-        }
-        return true;
     }
 }

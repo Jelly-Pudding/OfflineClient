@@ -59,21 +59,21 @@ public final class Arson extends Module {
         .describe(Method.FIRE, "Lights fire on them with flint and steel or a fire charge.")
         .describe(Method.LAVA, "Pours lava beside them from a bucket anywhere in your inventory.");
     private final NumberSetting range = new NumberSetting("Range",
-        "How far away blocks are burnt.", 4.5, 1, 6, 0.1, " blocks").min(1);
+        "How far away blocks are burnt.", 4.5, 1, 6, 0.1, " blocks");
     private final NumberSetting wallsRange = new NumberSetting("Walls range",
         "How far fire is lit with no clear view from your eyes. The server never checks.",
-        4.5, 0, 6, 0.1, " blocks").min(0).under(method, Method.FIRE);
+        4.5, 0, 6, 0.1, " blocks").under(method, Method.FIRE);
     private final NumberSetting perRound = new NumberSetting("Blocks per round",
-        "How many blocks are set alight in one round.", 2, 1, 8, 1).min(1);
+        "How many blocks are set alight in one round.", 2, 1, 8, 1);
     private final NumberSetting delay = new NumberSetting("Delay",
-        "Ticks to wait between rounds.", 2, 0, 20, 1, " ticks").min(0);
+        "Ticks to wait between rounds.", 2, 0, 20, 1, " ticks");
     private final BoolSetting flammableOnly = new BoolSetting("Flammable only",
         "Only burns blocks that catch fire such as wood and wool and leaves. Off burns any solid block.", true);
     private final NumberSetting aboveYou = new NumberSetting("Above you",
         "Only burns blocks this many blocks above your feet or higher. Zero burns them at any height.",
-        1, 0, 10, 1, " blocks").min(0);
+        1, 0, 10, 1, " blocks");
     private final NumberSetting keepAway = new NumberSetting("Keep away",
-        "Never starts a fire or a pour closer to you than this.", 2, 0, 6, 0.5, " blocks").min(0);
+        "Never starts a fire or a pour closer to you than this.", 2, 0, 6, 0.5, " blocks");
     private final RegistryListSetting<Block> skip = new RegistryListSetting<>("Skip blocks",
         "Blocks that are never set alight. Click to pick them.", BuiltInRegistries.BLOCK,
         List.of(Blocks.SHORT_GRASS, Blocks.TALL_GRASS));
@@ -134,7 +134,7 @@ public final class Arson extends Module {
     @Subscribe
     private void onTick(TickEvent event) {
         targets.clear();
-        if (!inGame() || mc.player.isSpectator()) {
+        if (mc.player.isSpectator()) {
             return;
         }
         tried.tick();

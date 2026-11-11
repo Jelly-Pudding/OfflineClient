@@ -3,8 +3,11 @@ package com.jellypudding.offlineclient.mixin;
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.events.PacketReceiveEvent;
 import com.jellypudding.offlineclient.event.events.PacketSendEvent;
+import com.jellypudding.offlineclient.event.events.PacketSentEvent;
 import com.jellypudding.offlineclient.modules.misc.AntiPacketKick;
+import com.jellypudding.offlineclient.modules.misc.Linger;
 import com.jellypudding.offlineclient.modules.misc.Proxy;
+import com.jellypudding.offlineclient.modules.misc.ServerSpoof;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.PacketNotice;
 import com.jellypudding.offlineclient.util.PacketUtil;
@@ -108,6 +111,42 @@ public abstract class ConnectionMixin extends SimpleChannelInboundHandler<Packet
         }
     }
 
+    // Whilst Linger keeps you in the world of a dropped connection the game is not told that the
+    // connection ended.
+    @Inject(method = "handleDisconnection", at = @At("HEAD"), cancellable = true)
+    private void onHandleDisconnection(CallbackInfo ci) {
+        Linger linger = Modules.get(Linger.class);
+        if (linger != null && linger.keeps((Connection) (Object) this)) {
+            ci.cancel();
+        }
+    }
+
+    // Every send of the client ends here. Only the connection Linger keeps drops what it is given.
+    @Inject(method = "send(Lnet/minecraft/network/protocol/Packet;Lio/netty/channel/ChannelFutureListener;Z)V",
+        at = @At("HEAD"), cancellable = true)
+    private void onSend(CallbackInfo ci) {
+        Linger linger = Modules.get(Linger.class);
+        if (linger != null && linger.drops((Connection) (Object) this)) {
+            ci.cancel();
+        }
+    }
+
+    // The handshake of a join names the address you typed. It never passes through send. Both ways
+    // into a join come here. A world of your own and a look at the server list do not.
+    @ModifyVariable(
+        method = {
+            "initiateServerboundPlayConnection(Ljava/lang/String;I"
+                + "Lnet/minecraft/network/protocol/login/ClientLoginPacketListener;)V",
+            "initiateServerboundPlayConnection(Ljava/lang/String;ILnet/minecraft/network/ProtocolInfo;"
+                + "Lnet/minecraft/network/ProtocolInfo;Lnet/minecraft/network/ClientboundPacketListener;Z)V"},
+        at = @At("HEAD"),
+        argsOnly = true)
+    private String nameJoinedHost(String hostName) {
+        ServerSpoof spoof = Modules.get(ServerSpoof.class);
+        Connection joining = (Connection) (Object) this;
+        return spoof == null || joining.isMemoryConnection() ? hostName : spoof.joining(joining, hostName);
+    }
+
     @WrapMethod(
         method = "send(Lnet/minecraft/network/protocol/Packet;Lio/netty/channel/ChannelFutureListener;)V")
     private void wrapSend(Packet<?> packet, ChannelFutureListener callback, Operation<Void> original) {
@@ -117,5 +156,6 @@ public abstract class ConnectionMixin extends SimpleChannelInboundHandler<Packet
             return;
         }
         original.call(event.getPacket(), callback);
+        OfflineClient.INSTANCE.getEventBus().post(new PacketSentEvent(event.getPacket()));
     }
 }

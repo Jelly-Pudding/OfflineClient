@@ -29,8 +29,8 @@ public enum Hop {
     private static final double WIPE_RISE = 0.02;
 
     // A vehicle keeps every drop as a fall with no rise to wipe it. Each of its packets
-    // claims ground and drops less than the three blocks that start to hurt.
-    private static final double VEHICLE_DROP = 2.5;
+    // claims ground and drops half a block less than the fall that starts to hurt.
+    private static final double VEHICLE_DROP = DamageUtil.SAFE_FALL - 0.5;
 
     // The server kicks anyone floating for eighty ticks. A drop further than it lets
     // pass as floating starts the count again.
@@ -40,8 +40,8 @@ public enum Hop {
     // A trip that goes this long without a hop gives up.
     private static final int PATIENCE = 40;
 
-    // A pull back this many ticks after a trip that moved up or down is taken for a late
-    // refusal of its last packets.
+    // A pull back this many ticks after a trip that moved up or down or through a block is
+    // taken for a late refusal of its last packets.
     private static final int WATCH_TICKS = 20;
 
     public enum Result {
@@ -52,6 +52,9 @@ public enum Hop {
         PULLED_BACK("The server pulled you back on the way."),
         BUSY("Try again in a moment."),
         NOT_STEERING("You cannot steer what you are riding."),
+        ON_FOOT("Only a player on foot goes through a wall."),
+        WALLED("This server pulls back every move through a wall."),
+        NO_HOLD("Stand on a block or against one to go through a wall."),
         HELD_BACK("Another module is holding your movement back."),
         LEFT("You left the world before the trip ended.");
 
@@ -66,9 +69,11 @@ public enum Hop {
         }
     }
 
-    // A drop keeps its fall for the action after it. A wipe rises a hair to clear a fall.
-    // An action sends nothing and runs straight after the packet before it.
-    private enum Kind { MOVE, DROP, WIPE, ACT }
+    // A drop keeps its fall for the action after it. A landing claims the ground and the
+    // fall is paid there and then. A wipe rises a hair to clear a fall. An action sends
+    // nothing and runs straight after the packet before it. A lean tells the server a spot a
+    // hair inside a block and the trip itself stays where it was.
+    private enum Kind { MOVE, DROP, LAND, WIPE, ACT, LEAN }
 
     private record Stop(Kind kind, Vec3 spot, Runnable action) {
     }
@@ -85,6 +90,10 @@ public enum Hop {
     private static boolean wipeAfterPull;
     // Ticks left in which a pull back still owes that wipe.
     private static int watching;
+    // The trip whose hop through a block the server has yet to answer and the ticks left
+    // in which a pull back is that answer.
+    private static Trip unanswered;
+    private static int answerTicks;
 
     // A trip for whatever the player moves from where it stands. Nothing moves until go.
     public static Plan plan() {
@@ -144,6 +153,23 @@ public enum Hop {
         return HopPath.clearWay(mover, from, to);
     }
 
+    // The first spot that way past whatever blocks the mover where it fits clear of lava.
+    // Null when nothing blocks the way or nothing behind it is free within the reach.
+    public static Vec3 beyond(Entity mover, Vec3 way, double reach) {
+        return HopPath.beyond(mover, mover.position(), way, reach);
+    }
+
+    // Says in chat how a trip went once it is over.
+    public static Consumer<Result> telling(String done) {
+        return result -> ClientLines.inChat(() -> {
+            if (result == Result.MOVED) {
+                ChatUtil.message(done);
+            } else {
+                ChatUtil.error(result.problem());
+            }
+        });
+    }
+
     // Wipes the fall the server may still hold after a trip that went wrong. The rise goes
     // on the next tick that allows it. A spot with no room for the rise keeps its fall.
     private static void owe(Vec3 landing) {
@@ -176,6 +202,9 @@ public enum Hop {
         private final List<Stop> stops = new ArrayList<>();
         private Vec3 end;
         private boolean fallKept;
+        // Some hop goes through a block. Whether the server lets it stand is only known a
+        // while after the trip.
+        private boolean answeredLate;
         private Result problem;
 
         private Plan(Entity mover, Vec3 start, Result problem) {
@@ -202,6 +231,7 @@ public enum Hop {
             int size = stops.size();
             Vec3 before = end;
             boolean kept = fallKept;
+            boolean late = answeredLate;
             steps.accept(this);
             if (problem == null) {
                 return true;
@@ -209,6 +239,7 @@ public enum Hop {
             stops.subList(size, stops.size()).clear();
             end = before;
             fallKept = kept;
+            answeredLate = late;
             problem = null;
             return false;
         }
@@ -232,6 +263,42 @@ public enum Hop {
             for (int i = 0; i < route.size(); i++) {
                 move(route.get(i), i + 1 < route.size() ? route.get(i + 1) : null);
             }
+            return this;
+        }
+
+        // Straight there in one hop through whatever lies between. A vanilla server
+        // forgives the way of a player it holds inside a block and one only touching a
+        // block is leant into it first. Straight up or down every server lets through.
+        // The trip only says it moved once the server has had time to pull the hop back.
+        public Plan through(Vec3 spot) {
+            if (problem != null) {
+                return this;
+            }
+            if (vehicle) {
+                return fail(Result.ON_FOOT);
+            }
+            wipeKeptFall();
+            if (!HopPath.landing(mover, spot)) {
+                return fail(Result.BLOCKED);
+            }
+            if (end.distanceTo(spot) > hop || end.y - spot.y > longestDrop()) {
+                return fail(Result.NO_ROUTE);
+            }
+            boolean clear = HopPath.clearWay(mover, end, spot);
+            if (!clear && !HopPath.upright(end, spot) && MoveGate.sweepChecked()) {
+                if (!MoveGate.forgivesOverlap()) {
+                    return fail(Result.WALLED);
+                }
+                Vec3 lean = HopPath.lean(mover, end);
+                if (lean == null) {
+                    return fail(Result.NO_HOLD);
+                }
+                if (!lean.equals(end)) {
+                    stops.add(new Stop(Kind.LEAN, lean, null));
+                }
+            }
+            answeredLate |= !clear;
+            move(spot, null);
             return this;
         }
 
@@ -259,6 +326,18 @@ public enum Hop {
             }
             end = spot;
             fallKept = true;
+            return this;
+        }
+
+        // Straight down onto the ground below with the landing claimed. The server charges
+        // the whole fall it holds since the last rise on that packet. A vehicle keeps no
+        // fall and drops the usual way.
+        public Plan landOn(Vec3 spot) {
+            dropTo(spot);
+            if (problem == null && !vehicle) {
+                stops.add(new Stop(Kind.LAND, stops.removeLast().spot(), null));
+                fallKept = false;
+            }
             return this;
         }
 
@@ -328,8 +407,9 @@ public enum Hop {
                     return Integer.MAX_VALUE;
                 }
                 for (int legs = 0; legs < burst.legs(); next++) {
-                    if (stops.get(next).kind() != Kind.ACT) {
-                        at = stops.get(next).spot();
+                    Stop stop = stops.get(next);
+                    if (stop.kind() != Kind.ACT) {
+                        at = stop.kind() == Kind.LEAN ? at : stop.spot();
                         legs++;
                     }
                 }
@@ -344,7 +424,9 @@ public enum Hop {
                 return;
             }
             wipeKeptFall();
-            begin(new Trip(mover, stops, start, finished));
+            Trip made = new Trip(mover, stops, start, finished);
+            made.answeredLate = answeredLate;
+            begin(made);
         }
 
         private Plan fail(Result result) {
@@ -405,6 +487,9 @@ public enum Hop {
         private boolean over;
         // Some leg went up or down and its refusal may come after the trip.
         private boolean vertical;
+        // Some leg went through a block. The trip says how it went once the server has
+        // had time to refuse that.
+        private boolean answeredLate;
         // A trip that goes wrong owes a wipe after it. A wipe that goes wrong does not.
         private boolean wipesAfter = true;
         private int idle;
@@ -426,11 +511,18 @@ public enum Hop {
         }
     }
 
+    // A pull back counts against the trip under way as the tick begins and against a hop
+    // still waiting for its answer. A trip that begins further down has it behind it.
     @Subscribe
     private void onTick(TickEvent event) {
+        boolean pulled = lagback.happened();
+        Trip underWay = trip;
         if (trip == null && watching > 0) {
             watching--;
-            wipeAfterPull |= lagback.happened();
+            wipeAfterPull |= pulled;
+        }
+        if (unanswered != null && (pulled || --answerTicks <= 0)) {
+            answer(pulled ? Result.PULLED_BACK : Result.MOVED);
         }
         LocalPlayer player = OfflineClient.MC.player;
         if (wipeAfterPull && trip == null && player != null) {
@@ -439,7 +531,7 @@ public enum Hop {
             owe(player.position());
         }
         if (trip != null) {
-            advance(trip);
+            advance(trip, pulled && trip == underWay);
         }
     }
 
@@ -449,6 +541,9 @@ public enum Hop {
         LocalPlayer player = OfflineClient.MC.player;
         if (trip != null && trip.player != player) {
             finish(trip, Result.LEFT);
+        }
+        if (unanswered != null && unanswered.player != player) {
+            answer(Result.LEFT);
         }
         if (player == null) {
             wipeAfterPull = false;
@@ -460,9 +555,13 @@ public enum Hop {
     // fall the old one left unwiped is still owed. Hops only go from the tick handler a
     // full tick after the client's own last packet.
     private static void begin(Trip next) {
+        // A pull back nobody has read yet is none of the next trip's. It answers a hop
+        // that still waits.
+        if (lagback.happened()) {
+            answer(Result.PULLED_BACK);
+        }
         Trip old = trip;
         trip = next;
-        lagback.sync();
         if (old != null) {
             next.owed |= old.owed && old.mover == next.mover;
             old.over = true;
@@ -470,8 +569,8 @@ public enum Hop {
         }
     }
 
-    private static void advance(Trip current) {
-        Result problem = problem(current);
+    private static void advance(Trip current, boolean pulled) {
+        Result problem = problem(current, pulled);
         if (problem != null) {
             finish(current, problem);
             return;
@@ -520,7 +619,7 @@ public enum Hop {
         }
     }
 
-    private static Result problem(Trip current) {
+    private static Result problem(Trip current, boolean pulled) {
         LocalPlayer player = OfflineClient.MC.player;
         if (player != current.player) {
             return Result.LEFT;
@@ -531,12 +630,13 @@ public enum Hop {
         if (MoveGate.held(current.vehicle)) {
             return Result.HELD_BACK;
         }
-        return lagback.happened() ? Result.PULLED_BACK : null;
+        return pulled ? Result.PULLED_BACK : null;
     }
 
     // A trip that went wrong may leave the server holding a fall. A pull back and a trip
     // that gave up owe a wipe. One held back would be held back as well. A trip that got
-    // there listens a while for a pull back that refused its last packets.
+    // there listens a while for a pull back that refused its last packets. One that went
+    // through a block keeps its word back until then.
     private static void finish(Trip current, Result result) {
         current.over = true;
         if (trip == current) {
@@ -553,7 +653,23 @@ public enum Hop {
                 default -> { }
             }
         }
-        current.finished.accept(result);
+        if (result == Result.MOVED && current.answeredLate) {
+            // A hop still waiting from an earlier trip is taken to have stood.
+            answer(Result.MOVED);
+            unanswered = current;
+            answerTicks = WATCH_TICKS;
+        } else {
+            current.finished.accept(result);
+        }
+    }
+
+    // Tells the trip whose hop through a block was still waiting how it went.
+    private static void answer(Result result) {
+        Trip waiting = unanswered;
+        unanswered = null;
+        if (waiting != null) {
+            waiting.finished.accept(result);
+        }
     }
 
     private static void runActions(Trip current) {
@@ -603,6 +719,10 @@ public enum Hop {
             if (stop.kind() == Kind.ACT) {
                 continue;
             }
+            if (stop.kind() == Kind.LEAN) {
+                legs++;
+                continue;
+            }
             Vec3 way = stop.spot().subtract(from);
             if (way.y <= 0 && way.horizontalDistanceSqr() > 0) {
                 return true;
@@ -623,17 +743,24 @@ public enum Hop {
             }
             sent = MoveGate.send(stop.spot(), claimsGround(current, stop));
         }
-        if (sent) {
+        if (sent && stop.kind() != Kind.LEAN) {
             arrive(current, stop.spot());
+            // The server holds no fall once a landing has paid it.
+            current.owed &= stop.kind() != Kind.LAND;
         }
         return sent;
     }
 
-    // Only a level move onto the ground with no fall owed claims it. The server charges
-    // a fall it holds before a rise gets to wipe it.
+    // A landing always claims it. Otherwise only a level move onto the ground with no fall
+    // owed claims it. The server charges a fall it holds before a rise gets to wipe it. A
+    // lean claims the ground the mover stands on already.
     private static boolean claimsGround(Trip current, Stop stop) {
-        return stop.kind() == Kind.MOVE && !current.owed && stop.spot().y == current.at.y
-            && HopPath.standingAt(current.mover, stop.spot());
+        if (stop.kind() == Kind.LAND) {
+            return true;
+        }
+        boolean lean = stop.kind() == Kind.LEAN;
+        boolean level = lean || stop.kind() == Kind.MOVE && stop.spot().y == current.at.y;
+        return level && !current.owed && HopPath.standingAt(current.mover, lean ? current.at : stop.spot());
     }
 
     private static void arrive(Trip current, Vec3 spot) {

@@ -16,7 +16,6 @@ import com.jellypudding.offlineclient.util.ProjectilePath;
 import com.jellypudding.offlineclient.util.RotationManager;
 import com.jellypudding.offlineclient.util.TargetFilter;
 import com.jellypudding.offlineclient.util.TargetPriority;
-import net.minecraft.network.protocol.Packet;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
@@ -54,17 +53,15 @@ public final class SkyDrop extends Module {
         60, LEAST_DROP, 200, 1, " blocks");
     private final NumberSetting throwsEach = new NumberSetting("Throws",
         "How many go down on the target for each throw you make. A pearl or a wind charge goes once.",
-        1, 1, 16, 1).min(1);
+        1, 1, 16, 1);
     private final EnumSetting<TargetPriority> priority = TargetPriority.setting("Drops on",
         TargetPriority.CLOSEST_ANGLE);
-    private final EntityFilter filter = EntityFilter.living("Target", "targeted", true,
+    private final EntityFilter filter = EntityFilter.living("Targets", "targeted", true,
         EntityFilter.Pick.NONE, List.of());
     private final TargetFilter targets = new TargetFilter();
 
     private final ChatWarning warning = new ChatWarning();
-
-    // The shot kept back until the drop reaches the server.
-    private HeldShot held;
+    private final HeldShot.Carrier carrier = new HeldShot.Carrier(warning);
 
     // Where the drop starts and where it lands over the head.
     private record Drop(Vec3 top, Vec3 strike) {
@@ -86,17 +83,10 @@ public final class SkyDrop extends Module {
 
     @Subscribe(priority = BEFORE_SLINGSHOT)
     private void onPacketSend(PacketSendEvent event) {
-        if (event.isCancelled() || !inGame()) {
+        if (!inGame() || carrier.holds(event)) {
             return;
         }
-        Packet<?> packet = event.getPacket();
-        if (held != null) {
-            if (held.gather(packet)) {
-                event.cancel();
-            }
-            return;
-        }
-        HeldShot shot = Hop.travelling() ? null : HeldShot.of(packet, items);
+        HeldShot shot = Hop.travelling() ? null : HeldShot.of(event.getPacket(), items);
         Entity target = shot == null ? null
             : EntityUtil.best(range.getValue(), priority.getValue(), this::targetable);
         if (target == null) {
@@ -106,10 +96,7 @@ public final class SkyDrop extends Module {
         if (plan == null) {
             return;
         }
-        warning.clear();
-        event.cancel();
-        held = shot;
-        plan.go(this::landed);
+        carrier.carry(event, shot, plan);
     }
 
     private boolean targetable(Entity entity) {
@@ -198,18 +185,6 @@ public final class SkyDrop extends Module {
             shot.fireAimed(mc.player.getYRot(), RotationManager.STRAIGHT_DOWN, throwsEach.getInt());
         } else {
             shot.fire();
-        }
-    }
-
-    // A trip cut short before the shot lets it go as it was. A player who left takes
-    // nothing along.
-    private void landed(Hop.Result result) {
-        if (result != Hop.Result.LEFT) {
-            held.finish();
-        }
-        held = null;
-        if (result != Hop.Result.MOVED) {
-            warning.say(result.problem());
         }
     }
 }

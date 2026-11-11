@@ -72,8 +72,8 @@ public final class RotationManager {
     // the view once any module has turned the view back.
     private volatile boolean turnedByUse;
 
-    // The player the server angle was last seeded from.
-    private LocalPlayer seededFor;
+    // The body the server angle was last seeded from.
+    private final LifeWatch seeded = new LifeWatch();
 
     private RotationManager() {
     }
@@ -112,6 +112,11 @@ public final class RotationManager {
         float pitchNow = INSTANCE.projected ? INSTANCE.projectedPitch : INSTANCE.serverPitch;
         return Mth.degreesDifferenceAbs(heldNow, yaw) <= tolerance
             && Math.abs(pitchNow - pitch) <= tolerance;
+    }
+
+    // The yaw isFacing compares against. A shield blocks by the yaw alone.
+    public static float facingYaw() {
+        return INSTANCE.projected ? INSTANCE.projectedYaw : INSTANCE.serverYaw;
     }
 
     // True once the angle has really reached the server. Only for placements whose
@@ -224,9 +229,8 @@ public final class RotationManager {
     // Settles who owns the view for this tick. Runs after every request.
     @Subscribe(priority = Subscribe.LAST)
     private void onPreMotion(PreMotionEvent event) {
-        if (MC.player != seededFor) {
+        if (seeded.changed()) {
             // A fresh player has sent nothing yet. Its view is what the server assumes.
-            seededFor = MC.player;
             serverYaw = MC.player.getYRot();
             serverPitch = MC.player.getXRot();
             sentOnGround = MC.player.onGround();

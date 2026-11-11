@@ -15,19 +15,16 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
-import com.jellypudding.offlineclient.util.Cooldowns;
+import com.jellypudding.offlineclient.util.CrystalGuard;
 import com.jellypudding.offlineclient.util.EntityUtil;
-import com.jellypudding.offlineclient.util.ExplosionUtil;
+import com.jellypudding.offlineclient.util.Holes;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
-import com.jellypudding.offlineclient.util.RotationPriority;
 import com.jellypudding.offlineclient.util.SwingMode;
+import com.jellypudding.offlineclient.util.UseBudget;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.network.protocol.game.ServerboundAttackPacket;
 import net.minecraft.world.InteractionHand;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.boss.enderdragon.EndCrystal;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -51,21 +48,18 @@ public final class Surround extends Module {
     // How far off an enemy still decides which side is walled first.
     private static final double THREAT_RANGE = 12;
 
-    // Ticks a hit crystal is left alone before it is hit again.
-    private static final int HIT_MEMORY = 10;
-
     private final RegistryListSetting<Block> blocks = new RegistryListSetting<>("Blocks",
         "Blocks to use in order of preference.",
         BuiltInRegistries.BLOCK,
         List.of(Blocks.OBSIDIAN, Blocks.CRYING_OBSIDIAN));
     private final EnumSetting<Centre> centre = new EnumSetting<>("Centre",
         "When to move you to the middle of your block.", Centre.INCOMPLETE)
-        .describe(Centre.NEVER, "Never moves you.")
+        .describe(Centre.NEVER, "Never moves you. The ring goes round every block your body touches.")
         .describe(Centre.ON_ENABLE, "Once when the module turns on.")
         .describe(Centre.INCOMPLETE, "Whilst any side is still open.")
         .describe(Centre.ALWAYS, "The whole time the module is on.");
     private final BoolSetting onlyOnGround = new BoolSetting("Only on ground",
-        "Wait until you are standing on something.", true);
+        "Waits until you are standing on something.", true);
     private final NumberSetting perTick = new NumberSetting("Blocks per tick",
         "How many blocks to place in one tick.", 4, 1, 4, 1);
     private final NumberSetting delay = new NumberSetting("Delay",
@@ -73,10 +67,10 @@ public final class Surround extends Module {
     private final BoolSetting airPlace = new BoolSetting("Air place",
         "Places on an open side with nothing to lean on. Off lays a support block under it first.", true);
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Send a look packet towards each block as it goes down.", true);
+        "Sends a look packet towards each block as it goes down.", true);
     private final EnumSetting<SwingMode> swing = SwingMode.setting(SwingMode.BOTH);
     private final BoolSetting doubleHeight = new BoolSetting("Double height",
-        "Also wall the four sides at head height to stop a face place.", false);
+        "Also walls the four sides at head height to stop a face place.", false);
     private final BoolSetting protect = new BoolSetting("Protect",
         "Hits any crystal sitting on an open side before it can be set off.", true);
     private final ChoiceListSetting disableModules = new ChoiceListSetting("Disable modules",
@@ -86,11 +80,11 @@ public final class Surround extends Module {
         "Switches those modules back on when this turns off.", true)
         .under(disableModules, () -> disableModules.size() > 0);
     private final BoolSetting toggleOnDeath = new BoolSetting("Toggle off on death",
-        "Turn off when you die instead of walling your respawn.", true);
+        "Turns off when you die instead of walling your respawn.", true);
     private final BoolSetting toggleOnDone = new BoolSetting("Toggle off when done",
-        "Turn off once all four sides are filled.", false);
+        "Turns off once every side is filled.", false);
     private final BoolSetting toggleOnMove = new BoolSetting("Toggle off on move",
-        "Turn off if you leave the block you started on.", false);
+        "Turns off if you leave the block you started on.", false);
     private final BoolSetting render = new BoolSetting("Render",
         "Draws the side positions by how well they hold.", true);
     private final BoxStyle boxStyle = BoxStyle.shapeOnly(BoxStyle.Shape.BOTH).under(render);
@@ -106,7 +100,7 @@ public final class Surround extends Module {
     private final ColorSetting openColor = new ColorSetting("Open colour",
         "A side with nothing in it.", 0, false).under(render);
 
-    private final Cooldowns<Integer> hitCrystals = new Cooldowns<>();
+    private final CrystalGuard crystals = new CrystalGuard();
     private final List<Module> disabled = new ArrayList<>();
     private int timer;
     private BlockPos anchor;
@@ -126,7 +120,7 @@ public final class Surround extends Module {
     protected void onEnable() {
         timer = 0;
         anchor = null;
-        hitCrystals.clear();
+        crystals.forget();
         slots.forget();
         holdModules();
         if (inGame()) {
@@ -166,7 +160,7 @@ public final class Surround extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || mc.player.isSpectator()) {
+        if (mc.player.isSpectator()) {
             return;
         }
         if (mc.player.isDeadOrDying()) {
@@ -182,24 +176,21 @@ public final class Surround extends Module {
         if (onlyOnGround.isOn() && !mc.player.onGround()) {
             return;
         }
+        if (centre.is(Centre.ALWAYS)) {
+            BlockUtil.centerPlayer();
+        }
+        List<BlockPos> body = Holes.feetBlocks(mc.player);
         // A crystal on an open side goes before the wall does.
         // The delay never holds this up.
         if (protect.isOn()) {
-            protectSides(feet);
-        }
-        if (centre.is(Centre.ALWAYS)) {
-            BlockUtil.centerPlayer();
+            protectSides(body);
         }
         if (timer > 0) {
             timer--;
             return;
         }
 
-        List<BlockPos> missing = missingSides(feet);
-        // Off the ground the floor of the pocket comes first.
-        if (!mc.player.onGround() && BlockUtil.blockFits(feet.below())) {
-            missing.add(0, feet.below());
-        }
+        List<BlockPos> missing = missing(body);
         if (missing.isEmpty()) {
             slots.restore();
             if (toggleOnDone.isOn()) {
@@ -215,6 +206,10 @@ public final class Surround extends Module {
         }
         if (centre.is(Centre.INCOMPLETE)) {
             BlockUtil.centerPlayer();
+            // Back in the middle of one block the ring is the four round it.
+            if (body.size() > 1) {
+                missing = missing(Holes.feetBlocks(mc.player));
+            }
         }
         if (placeRound(missing, slot) > 0) {
             timer = delay.getInt();
@@ -239,9 +234,10 @@ public final class Surround extends Module {
     }
 
     private int placeRound(List<BlockPos> missing, int slot) {
+        int round = Math.min(perTick.getInt(), UseBudget.remaining());
         int placed = 0;
         for (BlockPos pos : missing) {
-            if (placed >= perTick.getInt()) {
+            if (placed >= round) {
                 break;
             }
             BlockPos target = pos;
@@ -270,10 +266,24 @@ public final class Surround extends Module {
         return placed;
     }
 
-    private List<BlockPos> missingSides(BlockPos feet) {
+    // Every open spot of the wall round the blocks the body stands in. Off the ground the
+    // floor of the pocket comes first.
+    private List<BlockPos> missing(List<BlockPos> body) {
+        List<BlockPos> missing = missingSides(body);
+        if (!mc.player.onGround()) {
+            for (BlockPos block : body) {
+                if (BlockUtil.blockFits(block.below())) {
+                    missing.add(0, block.below());
+                }
+            }
+        }
+        return missing;
+    }
+
+    private List<BlockPos> missingSides(List<BlockPos> body) {
+        List<BlockPos> ring = Holes.ringAround(body);
         List<BlockPos> result = new ArrayList<>();
-        for (Direction side : Direction.Plane.HORIZONTAL) {
-            BlockPos pos = feet.relative(side);
+        for (BlockPos pos : ring) {
             if (BlockUtil.blockFits(pos)) {
                 result.add(pos);
             }
@@ -286,11 +296,9 @@ public final class Surround extends Module {
         }
         // The lower ring goes down first. The pocket is sealed before it is raised.
         if (doubleHeight.isOn()) {
-            BlockPos head = feet.above();
-            for (Direction side : Direction.Plane.HORIZONTAL) {
-                BlockPos pos = head.relative(side);
-                if (BlockUtil.blockFits(pos)) {
-                    result.add(pos);
+            for (BlockPos side : ring) {
+                if (BlockUtil.blockFits(side.above())) {
+                    result.add(side.above());
                 }
             }
         }
@@ -303,29 +311,11 @@ public final class Surround extends Module {
 
     // A side that is open or being mined is where a crystal would go.
     // Any crystal touching such a side is hit unless popping it would kill us.
-    private void protectSides(BlockPos feet) {
-        hitCrystals.tick();
-        float health = EntityUtil.totalHealth(mc.player);
-        for (Direction side : Direction.Plane.HORIZONTAL) {
-            BlockPos pos = feet.relative(side);
-            if (!BlockUtil.isReplaceable(pos) && BlockUtil.crackStage(pos) < 0) {
-                continue;
-            }
-            AABB reach = new AABB(pos).inflate(1);
-            for (Entity crystal : mc.level.getEntities((Entity) null, reach, e -> e instanceof EndCrystal)) {
-                if (ExplosionUtil.crystalDamage(mc.player, crystal.position()) >= health) {
-                    continue;
-                }
-                // One hit a crystal. A second packet before it pops is wasted.
-                if (hitCrystals.contains(crystal.getId())) {
-                    continue;
-                }
-                hitCrystals.put(crystal.getId(), HIT_MEMORY);
-                if (rotate.isOn()) {
-                    BlockUtil.faceVector(crystal.position(), RotationPriority.ATTACK);
-                }
-                mc.player.connection.send(new ServerboundAttackPacket(crystal.getId()));
-                swing.getValue().swing(InteractionHand.MAIN_HAND);
+    private void protectSides(List<BlockPos> body) {
+        crystals.tick();
+        for (BlockPos pos : Holes.ringAround(body)) {
+            if (BlockUtil.isReplaceable(pos) || BlockUtil.crackStage(pos) >= 0) {
+                crystals.clear(new AABB(pos).inflate(1), rotate.isOn(), swing.getValue());
             }
         }
     }
@@ -336,15 +326,17 @@ public final class Surround extends Module {
             return;
         }
         DrawBatch batch = event.getBatch();
-        BlockPos feet = mc.player.blockPosition();
-        for (Direction side : Direction.Plane.HORIZONTAL) {
-            drawSide(batch, feet.relative(side));
+        List<BlockPos> body = Holes.feetBlocks(mc.player);
+        for (BlockPos side : Holes.ringAround(body)) {
+            drawSide(batch, side);
             if (doubleHeight.isOn()) {
-                drawSide(batch, feet.above().relative(side));
+                drawSide(batch, side.above());
             }
         }
         if (renderBelow.isOn()) {
-            drawSide(batch, feet.below());
+            for (BlockPos block : body) {
+                drawSide(batch, block.below());
+            }
         }
     }
 
@@ -353,7 +345,7 @@ public final class Surround extends Module {
     }
 
     private int sideColor(BlockPos pos) {
-        return switch (BlockUtil.wallOf(BlockUtil.state(pos))) {
+        return switch (Holes.wallOf(BlockUtil.state(pos))) {
             case OPEN -> openColor.getColor();
             case WEAK -> weakColor.getColor();
             case BLAST_PROOF -> safeColor.getColor();

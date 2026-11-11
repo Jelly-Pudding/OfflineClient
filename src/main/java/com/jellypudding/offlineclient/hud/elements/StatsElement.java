@@ -1,8 +1,8 @@
 package com.jellypudding.offlineclient.hud.elements;
 
 import com.jellypudding.offlineclient.OfflineClient;
-import com.jellypudding.offlineclient.hud.HudElement;
 import com.jellypudding.offlineclient.hud.RowCache;
+import com.jellypudding.offlineclient.hud.RowsElement;
 import com.jellypudding.offlineclient.hud.TextRow;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
@@ -15,7 +15,6 @@ import com.jellypudding.offlineclient.setting.Setting;
 import com.jellypudding.offlineclient.util.PlayerStats;
 import net.minecraft.SharedConstants;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
@@ -38,8 +37,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
 
 // Your statistics on this server as the server itself counts them. The rows come in the
-// order you drag them and each lines up with the side the element is anchored to.
-public final class StatsElement extends HudElement {
+// order you drag them.
+public final class StatsElement extends RowsElement {
 
     // The rows on offer with the item each shows beside it in the settings. The editor shows a
     // made up amount for each in the unit of its statistic until the server first answers.
@@ -156,7 +155,7 @@ public final class StatsElement extends HudElement {
     private final BoolSetting perHour = new BoolSetting("Statistics per hour",
         "Adds how many of each you gain in an hour of play over the same period.", false);
     private final NumberSetting refresh = new NumberSetting("Statistics refresh",
-        "How often the server is asked for your statistics.", 5, 1, 60, 1, " seconds").min(1);
+        "How often the server is asked for your statistics.", 5, 1, 60, 1, " seconds");
     private final ColorSetting color = labelColor("Statistics colour",
         "Colour of the row names. The numbers stay white.");
     // The sums walk every statistic you have.
@@ -330,22 +329,8 @@ public final class StatsElement extends HudElement {
     }
 
     // The colour goes on as the rows are drawn. A rainbow keeps moving between rebuilds.
-    private List<TextRow> rows(Font font) {
+    @Override
+    protected List<TextRow> rows(Font font) {
         return TextRow.lines(font, lines(), color);
-    }
-
-    @Override
-    public void render(GuiGraphicsExtractor context, Font font) {
-        TextRow.draw(context, font, rows(font), alignment());
-    }
-
-    @Override
-    public int width(Font font) {
-        return TextRow.widest(rows(font));
-    }
-
-    @Override
-    public int height(Font font) {
-        return TextRow.height(font, lines().size());
     }
 }

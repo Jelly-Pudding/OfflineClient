@@ -1,6 +1,7 @@
 package com.jellypudding.offlineclient.util;
 
 import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.modules.misc.ClickGuiModule;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
@@ -10,11 +11,36 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 
+import java.util.ArrayList;
+import java.util.List;
+
 // How a render module colours an entity. One colour per kind of entity or a fade
 // with distance or with health or the same colour for everything.
 public final class EntityColors {
 
     public enum Mode { TYPE, DISTANCE, HEALTH, SINGLE }
+
+    // A colour as its hue in degrees then its saturation and brightness from nought to one.
+    private record Shade(float hue, float saturation, float brightness) {
+
+        int color() {
+            return ColorUtil.hsv(hue, saturation, brightness);
+        }
+
+        ColorSetting row(String name, String description) {
+            return new ColorSetting(name, description, hue, saturation, brightness, false);
+        }
+    }
+
+    // The colour of each kind before a player picks another. The rows of every module start
+    // here and the radar and the world map keep to them.
+    private static final Shade HOSTILE = new Shade(9, 0.81f, 1f);
+    private static final Shade NEUTRAL = new Shade(42, 0.9f, 1f);
+    private static final Shade PASSIVE = new Shade(120, 0.57f, 0.88f);
+    private static final Shade WATER = new Shade(240, 0.9f, 1f);
+    private static final Shade AMBIENT = new Shade(0, 0f, 0.1f);
+    private static final Shade ITEM = new Shade(51, 0.75f, 1f);
+    private static final Shade OTHER = new Shade(28, 0.87f, 1f);
 
     // The single colour starts red unless a module picks another hue.
     private static final float RED_HUE = 0;
@@ -22,6 +48,7 @@ public final class EntityColors {
     private final EnumSetting<Mode> mode;
     private final ColorSetting playerColor;
     private final ColorSetting hostileColor;
+    private final ColorSetting neutralColor;
     private final ColorSetting passiveColor;
     private final ColorSetting waterColor;
     private final ColorSetting ambientColor;
@@ -31,7 +58,14 @@ public final class EntityColors {
     private final ColorSetting farColor;
     private final NumberSetting farDistance;
     private final ColorSetting singleColor;
-    private final BoolSetting friendColor;
+    private final BoolSetting teamColors;
+    private final BoolSetting markFriends;
+    private final BoolSetting markEnemies;
+
+    // False for a module that never draws a player. The rows about players stay off its list.
+    private boolean players = true;
+    // False for a module that never draws a dropped item. The item row stays off its list.
+    private boolean items = true;
 
     public EntityColors(Mode defaultMode) {
         this(defaultMode, RED_HUE);
@@ -46,17 +80,19 @@ public final class EntityColors {
             .describe(Mode.SINGLE, "One colour for everything.");
         playerColor = new ColorSetting("Player colour", "Colour of other players.", 0, false)
             .under(mode, Mode.TYPE);
-        hostileColor = new ColorSetting("Hostile colour", "Colour of mobs that attack you.", 9, 0.81f, 1f, false)
+        hostileColor = HOSTILE.row("Hostile colour", "Colour of mobs that attack you.")
             .under(mode, Mode.TYPE);
-        passiveColor = new ColorSetting("Passive colour", "Colour of animals and other peaceful mobs.", 120, 0.57f, 0.88f, false)
+        neutralColor = NEUTRAL.row("Neutral colour", "Colour of mobs that only fight back.")
             .under(mode, Mode.TYPE);
-        waterColor = new ColorSetting("Water colour", "Colour of fish and squid and other sea life.", 240, 0.9f, 1f, false)
+        passiveColor = PASSIVE.row("Passive colour", "Colour of animals and other peaceful mobs.")
             .under(mode, Mode.TYPE);
-        ambientColor = new ColorSetting("Ambient colour", "Colour of bats and other ambient creatures.", 0, 0f, 0.1f, false)
+        waterColor = WATER.row("Water colour", "Colour of fish and squid and other sea life.")
             .under(mode, Mode.TYPE);
-        itemColor = new ColorSetting("Item colour", "Colour of dropped items.", 51, 0.75f, 1f, false)
+        ambientColor = AMBIENT.row("Ambient colour", "Colour of bats and other ambient creatures.")
             .under(mode, Mode.TYPE);
-        otherColor = new ColorSetting("Other colour", "Colour of everything else such as crystals and boats.", 28, 0.87f, 1f, false)
+        itemColor = ITEM.row("Item colour", "Colour of dropped items.")
+            .under(mode, Mode.TYPE);
+        otherColor = OTHER.row("Other colour", "Colour of everything else such as crystals and boats.")
             .under(mode, Mode.TYPE);
         nearColor = new ColorSetting("Near colour", "Colour of whatever stands right beside you.",
             RED_HUE, ColorUtil.RAMP_SATURATION, 1f, false).under(mode, Mode.DISTANCE);
@@ -67,17 +103,70 @@ public final class EntityColors {
             .under(mode, Mode.DISTANCE);
         singleColor = new ColorSetting("Colour", "The colour everything gets.", singleHue, false)
             .under(mode, Mode.SINGLE);
-        friendColor = new BoolSetting("Friend colour", "Paint friends blue whatever the mode.", true);
+        teamColors = Teams.colorSwitch();
+        markFriends = new BoolSetting("Mark friends",
+            "Paints friends in the friend colour whatever the mode. The colour is set in ClickGUI.", true);
+        markEnemies = new BoolSetting("Mark enemies",
+            "Paints the players on your enemy list in the enemy colour whatever the mode. The colour is set in"
+                + " ClickGUI.", true);
+    }
+
+    public EntityColors withoutPlayers() {
+        players = false;
+        return this;
+    }
+
+    public EntityColors withoutItems() {
+        items = false;
+        return this;
     }
 
     public Setting<?>[] settings() {
-        return new Setting<?>[] {mode, playerColor, hostileColor, passiveColor, waterColor, ambientColor,
-            itemColor, otherColor, nearColor, farColor, farDistance, singleColor, friendColor};
+        List<Setting<?>> all = new ArrayList<>();
+        all.add(mode);
+        if (players) {
+            all.add(playerColor);
+        }
+        all.addAll(List.of(hostileColor, neutralColor, passiveColor, waterColor, ambientColor));
+        if (items) {
+            all.add(itemColor);
+        }
+        all.addAll(List.of(otherColor, nearColor, farColor, farDistance, singleColor));
+        if (players) {
+            all.addAll(List.of(teamColors, markFriends, markEnemies));
+        }
+        return all.toArray(new Setting<?>[0]);
     }
 
+    // The one colour of friends in every render. ClickGUI holds it beside the other client
+    // wide colours and its default stands in before the client is built.
+    public static int friendColor() {
+        ClickGuiModule gui = Modules.get(ClickGuiModule.class);
+        return gui != null ? gui.friendColor()
+            : ColorUtil.hsv(ClickGuiModule.FRIEND_HUE, ClickGuiModule.FRIEND_SATURATION, 1f);
+    }
+
+    // The one colour of listed enemies in every render. It lives beside the friend colour.
+    public static int enemyColor() {
+        ClickGuiModule gui = Modules.get(ClickGuiModule.class);
+        return gui != null ? gui.enemyColor()
+            : ColorUtil.hsv(ClickGuiModule.ENEMY_HUE, ClickGuiModule.ENEMY_SATURATION, 1f);
+    }
+
+    // A friend or a listed enemy first and then the side the server puts a player on. Everyone
+    // else and everything else goes by the mode.
     public int colorOf(Entity entity) {
-        if (friendColor.isOn() && EntityUtil.isFriend(entity)) {
-            return EntityUtil.FRIEND_COLOR;
+        if (entity instanceof Player player) {
+            if (markFriends.isOn() && EntityUtil.isFriend(player)) {
+                return friendColor();
+            }
+            if (markEnemies.isOn() && EntityUtil.isListedEnemy(player)) {
+                return enemyColor();
+            }
+            int team = teamColors.isOn() ? Teams.colorOf(player) : 0;
+            if (team != 0) {
+                return team;
+            }
         }
         return switch (mode.getValue()) {
             case TYPE -> typeColor(entity);
@@ -88,16 +177,16 @@ public final class EntityColors {
     }
 
     private int typeColor(Entity entity) {
-        if (entity instanceof Player) {
-            return playerColor.getColor();
-        }
-        return switch (EntityUtil.kindOf(entity)) {
+        return switch (EntityKind.of(entity)) {
+            // A mannequin can turn up where no player is ever drawn.
+            case PLAYER -> players ? playerColor.getColor() : otherColor.getColor();
             case ITEM -> itemColor.getColor();
             case HOSTILE -> hostileColor.getColor();
+            case NEUTRAL -> neutralColor.getColor();
             case PASSIVE -> passiveColor.getColor();
             case WATER -> waterColor.getColor();
             case AMBIENT -> ambientColor.getColor();
-            case PLAYER, OTHER -> otherColor.getColor();
+            case OTHER -> otherColor.getColor();
         };
     }
 
@@ -112,8 +201,24 @@ public final class EntityColors {
 
     private static int healthColor(LivingEntity living) {
         if (living.getMaxHealth() <= 0) {
-            return EntityUtil.colorOf(living);
+            return kindColor(living);
         }
         return ColorUtil.redToGreen(EntityUtil.healthShare(living));
+    }
+
+    // The colour of an entity's kind for a mark no colour rows govern such as a radar dot. Friends
+    // and listed enemies get their own colours and other players fade from red to green with distance.
+    public static int kindColor(Entity entity) {
+        return switch (EntityKind.of(entity)) {
+            case PLAYER -> EntityUtil.isFriend(entity) ? friendColor()
+                : EntityUtil.isListedEnemy(entity) ? enemyColor() : EntityUtil.distanceColor(entity);
+            case ITEM -> ITEM.color();
+            case HOSTILE -> HOSTILE.color();
+            case NEUTRAL -> NEUTRAL.color();
+            case PASSIVE -> PASSIVE.color();
+            case WATER -> WATER.color();
+            case AMBIENT -> AMBIENT.color();
+            case OTHER -> OTHER.color();
+        };
     }
 }

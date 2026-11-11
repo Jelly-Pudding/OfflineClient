@@ -1,5 +1,8 @@
 package com.jellypudding.offlineclient.util;
 
+import com.jellypudding.offlineclient.config.DataFiles;
+import net.minecraft.SharedConstants;
+import net.minecraft.sounds.SoundEvent;
 import net.minecraft.world.level.block.state.properties.NoteBlockInstrument;
 
 import java.io.DataInputStream;
@@ -15,6 +18,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.SortedMap;
 import java.util.TreeMap;
 
 // A song read from a Note Block Studio file. Notes are keyed by the game
@@ -33,6 +37,7 @@ public final class NoteSong {
 
     private static final int LOWEST = 0;
     private static final int HIGHEST = 24;
+    private static final int OCTAVE = 12;
 
     private static final NoteBlockInstrument[] INSTRUMENTS = {
         NoteBlockInstrument.HARP, NoteBlockInstrument.BASS, NoteBlockInstrument.BASEDRUM,
@@ -90,10 +95,10 @@ public final class NoteSong {
                 int pitch = note.pitch();
                 if (fold) {
                     while (pitch < LOWEST) {
-                        pitch += 12;
+                        pitch += OCTAVE;
                     }
                     while (pitch > HIGHEST) {
-                        pitch -= 12;
+                        pitch -= OCTAVE;
                     }
                 }
                 if (pitch >= LOWEST && pitch <= HIGHEST) {
@@ -130,6 +135,38 @@ public final class NoteSong {
             }
         }
         return new NoteSong(title, author, result);
+    }
+
+    // The instrument whose note block makes the sound. Null for any other sound and for a mob
+    // head which plays no notes.
+    public static NoteBlockInstrument instrumentOf(SoundEvent sound) {
+        for (NoteBlockInstrument instrument : NoteBlockInstrument.values()) {
+            if (instrument.isTunable() && instrument.getSoundEvent().value() == sound) {
+                return instrument;
+            }
+        }
+        return null;
+    }
+
+    // The note a note block sound of that pitch was struck on. Each step up multiplies the pitch
+    // by the twelfth root of two and the middle note of the twenty five plays at one.
+    public static int pitchOf(float soundPitch) {
+        double steps = OCTAVE * Math.log(soundPitch) / Math.log(2);
+        return Math.clamp(Math.round(steps) + OCTAVE, LOWEST, HIGHEST);
+    }
+
+    // Saves notes as the plain lines a song is read back from. Each line holds the tick and
+    // the pitch and the number of the instrument. False after logging why it could not be written.
+    public static boolean write(Path file, String title, String author, SortedMap<Integer, List<Note>> ticks) {
+        List<String> lines = new ArrayList<>();
+        lines.add(NAME_HEADER + " " + title);
+        lines.add(AUTHOR_HEADER + " " + author);
+        ticks.forEach((tick, notes) -> {
+            for (Note note : notes) {
+                lines.add(tick + ":" + note.pitch() + ":" + note.instrument().ordinal());
+            }
+        });
+        return DataFiles.writeSafely(file, temp -> Files.write(temp, lines));
     }
 
     public static NoteSong read(Path file) throws IOException {
@@ -223,8 +260,8 @@ public final class NoteSong {
             if (jump == 0) {
                 break;
             }
-            // Song ticks run at the tempo. Game ticks run at twenty a second.
-            position += jump * (20f / tempo);
+            // The tempo counts song ticks a second.
+            position += jump * (SharedConstants.TICKS_PER_SECOND / tempo);
             while (true) {
                 short layerJump = readShort(in);
                 if (layerJump == 0) {

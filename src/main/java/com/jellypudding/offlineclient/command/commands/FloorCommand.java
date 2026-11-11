@@ -13,7 +13,6 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
-import java.math.BigDecimal;
 import java.util.OptionalInt;
 
 // Takes the player through the ceiling or the floor to the next place to stand. Whatever
@@ -22,6 +21,8 @@ public final class FloorCommand extends Command {
 
     // A floor this close to the last one found is the same floor.
     private static final double SAME_FLOOR = 0.5;
+    // Places the height of a move is written to.
+    private static final int HEIGHT_PLACES = 1;
 
     private enum Search { UP, DOWN, TOP }
 
@@ -74,7 +75,7 @@ public final class FloorCommand extends Command {
             return;
         }
         hopTo(spot, "§7Moved " + (spot.y > mover.getY() ? "up" : "down") + " §b"
-            + plain(Math.abs(spot.y - mover.getY())) + " §7blocks.");
+            + ChatUtil.decimal(Math.abs(spot.y - mover.getY()), HEIGHT_PLACES) + " §7blocks.");
     }
 
     // The chosen floor in the direction of travel. Null when the world runs out first.
@@ -138,10 +139,5 @@ public final class FloorCommand extends Command {
             return Double.NaN;
         }
         return top;
-    }
-
-    // A whole number reads without its point and anything else keeps one place.
-    private static String plain(double blocks) {
-        return BigDecimal.valueOf(Math.round(blocks * 10) / 10.0).stripTrailingZeros().toPlainString();
     }
 }

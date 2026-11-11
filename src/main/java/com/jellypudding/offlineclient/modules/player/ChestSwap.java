@@ -6,6 +6,7 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.ItemUtil;
+import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.protocol.game.ServerboundContainerClosePacket;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -15,13 +16,13 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.Enchantments;
 
 // Swaps the chest slot between an elytra and a chestplate on one key.
-// AutoArmor never takes an elytra off.
+// AutoArmor leaves a worn elytra alone whilst its Keep elytra is on.
 public final class ChestSwap extends Module {
 
     public enum Choice { STRONGEST, FIRST_FOUND, DIAMOND, NETHERITE, PREFER_DIAMOND, PREFER_NETHERITE }
 
     private final EnumSetting<Choice> chestplate = new EnumSetting<>("Chestplate",
-        "Which chestplate goes on.", Choice.STRONGEST)
+        "Which chestplate goes on. AutoArmor picks instead whilst it is on.", Choice.STRONGEST)
         .describe(Choice.STRONGEST, "The chestplate with the most armour.")
         .describe(Choice.FIRST_FOUND, "The first chestplate in your inventory.")
         .describe(Choice.DIAMOND, "A diamond chestplate and nothing else.")
@@ -119,11 +120,22 @@ public final class ChestSwap extends Module {
     }
 
     private boolean equipChestplate() {
+        int found = Modules.chestplateSlot(this::chosenChestplate);
+        if (found == -1) {
+            return false;
+        }
+        wear(found);
+        return true;
+    }
+
+    // The chestplate the Chestplate row picks or minus one. A cursed piece would never come off
+    // again for the elytra.
+    private int chosenChestplate() {
         int found = -1;
         double bestScore = 0;
         for (int i = 0; i < InventoryUtil.WHOLE_INVENTORY; i++) {
             ItemStack stack = mc.player.getInventory().getItem(i);
-            if (!isChestplate(stack)) {
+            if (!isChestplate(stack) || InventoryUtil.stuckOn(stack)) {
                 continue;
             }
             double score = score(stack);
@@ -138,11 +150,7 @@ public final class ChestSwap extends Module {
                 break;
             }
         }
-        if (found == -1) {
-            return false;
-        }
-        wear(found);
-        return true;
+        return found;
     }
 
     // True when no later piece can beat this one.

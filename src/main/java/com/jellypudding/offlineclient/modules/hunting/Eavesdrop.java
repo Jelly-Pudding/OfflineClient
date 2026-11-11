@@ -21,7 +21,6 @@ import com.jellypudding.offlineclient.util.Bearing;
 import com.jellypudding.offlineclient.util.BearingFix;
 import com.jellypudding.offlineclient.util.BearingTrail;
 import com.jellypudding.offlineclient.util.BlockUtil;
-import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.Leak;
 import com.jellypudding.offlineclient.util.Notice;
 import com.jellypudding.offlineclient.util.PositionHistory;
@@ -29,6 +28,7 @@ import com.jellypudding.offlineclient.util.RenderUtil;
 import com.jellypudding.offlineclient.util.RepostGate;
 import com.jellypudding.offlineclient.util.ServerInfo;
 import com.jellypudding.offlineclient.util.ServerWatch;
+import com.jellypudding.offlineclient.util.TrackedPlace;
 import com.jellypudding.offlineclient.util.WorldWatch;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
@@ -129,10 +129,7 @@ public final class Eavesdrop extends Module implements FindSource, Leak.Source {
         private boolean knowsHeight;
         private long last;
         private final RepostGate told = RepostGate.forChat();
-        private final RepostGate saved = RepostGate.forWaypoint();
-        // The waypoint and the find this origin keeps. Null until it has one.
-        private String waypoint;
-        private FindLog.Find logged;
+        private final TrackedPlace tracked = new TrackedPlace();
 
         private Origin(Heard kind, int id, String home, String heardIn) {
             this.kind = kind;
@@ -165,17 +162,13 @@ public final class Eavesdrop extends Module implements FindSource, Leak.Source {
 
         // A true block fits when each line the origin holds could point at it.
         private boolean fits(BlockPos block, double minSpread) {
-            BearingFix spot = new BearingFix(block.getX() + 0.5, block.getZ() + 0.5, 0);
+            double x = block.getX() + 0.5;
+            double z = block.getZ() + 0.5;
             BearingFix place = place(minSpread);
             if (place != null) {
-                return Math.hypot(spot.x() - place.x(), spot.z() - place.z()) <= place.radius() + SPOT.lost();
+                return Math.hypot(x - place.x(), z - place.z()) <= place.radius() + SPOT.lost();
             }
-            for (Bearing line : trail.bearings()) {
-                if (spot.missedBy(line, SPOT)) {
-                    return false;
-                }
-            }
-            return true;
+            return trail.pointsAt(x, z);
         }
     }
 
@@ -247,12 +240,7 @@ public final class Eavesdrop extends Module implements FindSource, Leak.Source {
     // Where along a direction line its name sits.
     private static final double LABEL_ALONG = 32;
 
-    private static final double BEAM = 64;
-
     private static final double LABEL_LIFT = 1.5;
-
-    // The lines of an origin that already has a place draw this faint.
-    private static final float SETTLED_LINES = 0.4f;
 
     private static final int MAX_ORIGINS = 64;
 
@@ -359,9 +347,6 @@ public final class Eavesdrop extends Module implements FindSource, Leak.Source {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame()) {
-            return;
-        }
         if (server.changed()) {
             clear();
         }
@@ -576,31 +561,17 @@ public final class Eavesdrop extends Module implements FindSource, Leak.Source {
         if (!origin.kind.kept) {
             return;
         }
-        String dimension = keptIn(origin);
-        BlockPos spot = spotOf(origin, place);
-        String kind = origin.kind.label.toLowerCase(Locale.ROOT);
         String detail = origin.exact != null ? "exact"
             : "give or take " + Math.round(place.radius()) + " blocks" + (origin.home == null ? " in any dimension" : "");
-        FindLog.Find logged = origin.logged;
-        if (logged == null || !logged.pos().equals(spot) || !logged.detail().equals(detail)) {
-            if (logged != null && !logged.pos().equals(spot)) {
-                finds.remove(logged);
-            }
-            finds.add(dimension, spot, kind, detail);
-            origin.logged = new FindLog.Find(dimension, spot, kind, detail, now);
-        }
+        origin.tracked.log(finds, keptIn(origin), spotOf(origin, place), origin.kind.label.toLowerCase(Locale.ROOT),
+            detail, now);
     }
 
     // A place worth going back to takes a waypoint that moves as the estimate sharpens.
     private void save(Origin origin, Leak leak, long now) {
-        BearingFix place = origin.place(minSpread());
-        if (!waypoints.isOn() || !origin.kind.kept || !origin.saved.due(place.x(), place.z(), place.radius(), now)) {
-            return;
-        }
-        if (origin.waypoint == null) {
-            origin.waypoint = leak.saveFresh(origin.label().replace(" ", ""), keptIn(origin));
-        } else {
-            leak.saveAs(origin.waypoint, keptIn(origin));
+        if (waypoints.isOn() && origin.kind.kept) {
+            double radius = origin.place(minSpread()).radius();
+            origin.tracked.save(leak, origin.label().replace(" ", ""), keptIn(origin), radius, now);
         }
     }
 
@@ -649,20 +620,8 @@ public final class Eavesdrop extends Module implements FindSource, Leak.Source {
         int shade = color.getColor();
         double least = minSpread();
         for (Origin origin : origins) {
-            if (!drawnHere(origin)) {
-                continue;
-            }
-            BearingFix place = origin.place(least);
-            int lineShade = place == null ? shade : ColorUtil.fade(shade, SETTLED_LINES);
-            for (Bearing line : origin.trail.bearings()) {
-                FarShapes.ray(batch, line, ground, lineShade);
-            }
-            if (origin.exact != null) {
-                Vec3 top = Vec3.atCenterOf(origin.exact);
-                batch.outlineBox(FarShapes.pullIn(DrawBatch.blockBox(origin.exact)), shade, true);
-                FarShapes.line(batch, top, top.add(0, BEAM, 0), shade);
-            } else if (place != null) {
-                FarShapes.estimate(batch, place.x(), place.z(), place.radius(), shade);
+            if (drawnHere(origin)) {
+                FarShapes.crossing(batch, origin.trail.bearings(), origin.place(least), origin.exact, ground, shade);
             }
         }
     }

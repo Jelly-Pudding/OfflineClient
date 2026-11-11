@@ -5,6 +5,7 @@ import com.jellypudding.offlineclient.command.Command;
 import com.jellypudding.offlineclient.command.CommandManager;
 import com.jellypudding.offlineclient.config.DataFiles;
 import com.jellypudding.offlineclient.config.WaypointStore;
+import com.jellypudding.offlineclient.modules.render.Weather;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.ChunkOrigin;
@@ -17,7 +18,6 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.world.clock.WorldClocks;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.border.WorldBorder;
@@ -48,6 +48,9 @@ public final class WorldCommand extends Command {
 
     private static final String SPAWN_WAYPOINT = "Spawn";
     private static final String DEATH_WAYPOINT = "LastDeath";
+
+    // Border edges sit on half blocks when the centre does.
+    private static final int BORDER_PLACES = 1;
 
     // The game version whose terrain each dimension last changed in. ChunkOrigin tells chunks from
     // before it apart.
@@ -117,12 +120,15 @@ public final class WorldCommand extends Command {
 
     // A moving border also says where it is going and how long it has left.
     private static void addBorder(List<Row> rows, WorldBorder border) {
-        rows.add(new Row("Border", "x " + number(border.getMinX()) + " to " + number(border.getMaxX())
-            + " and z " + number(border.getMinZ()) + " to " + number(border.getMaxZ())));
-        String size = number(border.getSize()) + " around " + number(border.getCenterX()) + " "
-            + number(border.getCenterZ());
+        rows.add(new Row("Border", "x " + ChatUtil.decimal(border.getMinX(), BORDER_PLACES) + " to "
+            + ChatUtil.decimal(border.getMaxX(), BORDER_PLACES) + " and z "
+            + ChatUtil.decimal(border.getMinZ(), BORDER_PLACES) + " to "
+            + ChatUtil.decimal(border.getMaxZ(), BORDER_PLACES)));
+        String size = ChatUtil.decimal(border.getSize(), BORDER_PLACES) + " around "
+            + ChatUtil.decimal(border.getCenterX(), BORDER_PLACES) + " "
+            + ChatUtil.decimal(border.getCenterZ(), BORDER_PLACES);
         if (border.getLerpTime() > 0) {
-            size += " moving to " + number(border.getLerpTarget()) + " in "
+            size += " moving to " + ChatUtil.decimal(border.getLerpTarget(), BORDER_PLACES) + " in "
                 + ChatUtil.duration(border.getLerpTime() / (double) SharedConstants.TICKS_PER_SECOND);
         }
         rows.add(new Row("Border size", size));
@@ -136,12 +142,8 @@ public final class WorldCommand extends Command {
         return data.isHardcore() ? text + " in hardcore" : text;
     }
 
-    // TimeChanger answers the clock with a time of its own. The field keeps what the server sent.
     private static long day(ClientLevel level) {
-        long ticks = level.registryAccess().get(WorldClocks.OVERWORLD)
-            .map(clock -> level.clockManager().getInstance(clock).totalTicks)
-            .orElse(0L);
-        return ticks / SharedConstants.TICKS_PER_GAME_DAY;
+        return Weather.real(level::getOverworldClockTime) / SharedConstants.TICKS_PER_GAME_DAY;
     }
 
     // Names the scoreboard knows that the tab list does not show. The server sends the scores of
@@ -190,11 +192,6 @@ public final class WorldCommand extends Command {
             "Click to save it as a waypoint");
     }
 
-    // Whole numbers lose their point. Border edges sit on half blocks when the centre does.
-    private static String number(double value) {
-        return value == Math.rint(value) ? String.valueOf((long) value) : String.format(Locale.ROOT, "%.1f", value);
-    }
-
     private static void save(LocalPlayer player, ClientLevel level) {
         Path file = DataFiles.path("worlds", DataFiles.keyName(ServerInfo.key()) + ".txt");
         List<String> lines = new ArrayList<>();
@@ -222,7 +219,7 @@ public final class WorldCommand extends Command {
         }
         String name = spawn ? SPAWN_WAYPOINT : DEATH_WAYPOINT;
         String dimension = spot.dimension().identifier().toString();
-        WaypointStore.get().mark(name, spot.pos(), dimension, Modules.nextWaypointHue());
+        WaypointStore.get().mark(name, spot.pos(), dimension, Modules.nextWaypointColour());
         ChatUtil.message("§7Saved the waypoint §b" + name + " §7in the " + ServerInfo.dimensionName(dimension) + ".");
     }
 

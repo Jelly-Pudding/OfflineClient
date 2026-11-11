@@ -32,14 +32,17 @@ public final class MapPreview implements ClientTooltipComponent {
     // server has not sent yet.
     public static MapRenderState stateOf(ItemStack stack) {
         MapId id = stack.get(DataComponents.MAP_ID);
+        MapItemSavedData data = dataOf(id);
+        return data == null ? null : stateOf(id, data);
+    }
+
+    // What the server has sent of a map. Null for no map and for one it has not sent yet.
+    public static MapItemSavedData dataOf(MapId id) {
         ClientLevel level = OfflineClient.MC.level;
-        if (id == null || level == null) {
-            return null;
-        }
-        MapItemSavedData data = MapItem.getSavedData(id, level);
-        if (data == null) {
-            return null;
-        }
+        return level == null ? null : MapItem.getSavedData(id, level);
+    }
+
+    public static MapRenderState stateOf(MapId id, MapItemSavedData data) {
         MapRenderState state = new MapRenderState();
         OfflineClient.MC.getMapRenderer().extractRenderState(id, data, state);
         // A map drawn on the screen keeps only the markers a frame shows. A map in hand shows every one.

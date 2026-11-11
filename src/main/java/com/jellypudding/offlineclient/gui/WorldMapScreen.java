@@ -2,12 +2,16 @@ package com.jellypudding.offlineclient.gui;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.config.WaypointStore;
-import com.jellypudding.offlineclient.modules.render.Minimap;
+import com.jellypudding.offlineclient.modules.render.WorldMap;
 import com.jellypudding.offlineclient.path.Travel;
+import com.jellypudding.offlineclient.render.ClientFonts;
 import com.jellypudding.offlineclient.render.MapMarks;
+import com.jellypudding.offlineclient.render.MapOverlay;
 import com.jellypudding.offlineclient.render.MapView;
 import com.jellypudding.offlineclient.render.TerrainPicture;
 import com.jellypudding.offlineclient.util.BlockUtil;
+import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.ExploredLand;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.ServerInfo;
@@ -15,7 +19,6 @@ import com.jellypudding.offlineclient.util.TerrainLayer;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.player.LocalPlayer;
@@ -24,12 +27,10 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 
-import java.util.Locale;
-
 // The map of everything you explored on this server in the dimension you are in. Drag it to move
 // it and scroll to zoom. A click walks there and a right click saves a waypoint. It follows the
 // ClickGUI scale like every other panel.
-public final class WorldMapScreen extends Screen implements ClientScreen {
+public final class WorldMapScreen extends ScaledScreen {
 
     // Blocks a pixel at the closest and the furthest zoom.
     private static final double MIN_ZOOM = 0.125;
@@ -42,6 +43,8 @@ public final class WorldMapScreen extends Screen implements ClientScreen {
     private static final long REPAINT_GAP_MS = 500;
     // How near the pointer a mark must be to be named at the foot.
     private static final double HOVER_REACH = 5;
+    // Places the scale at the foot is written to.
+    private static final int SCALE_PLACES = 1;
     // Space round the window.
     private static final int GAP = 10;
     // Land never seen.
@@ -54,9 +57,9 @@ public final class WorldMapScreen extends Screen implements ClientScreen {
     // The zoom the map last had. It opens at it for the rest of the session.
     private static double lastZoom = 1;
 
-    private final Minimap minimap;
+    private final WorldMap worldMap;
+    private final MapOverlay overlay;
     private final TerrainPicture picture = new TerrainPicture();
-    private final LatchedScale latched = new LatchedScale();
     private final Footer footer = new Footer();
     private double centreX;
     private double centreZ;
@@ -71,9 +74,10 @@ public final class WorldMapScreen extends Screen implements ClientScreen {
     // The view drawn last frame. Clicks are read against it.
     private MapView view;
 
-    public WorldMapScreen(Minimap minimap) {
+    public WorldMapScreen(WorldMap worldMap) {
         super(Component.literal("Map"));
-        this.minimap = minimap;
+        this.worldMap = worldMap;
+        overlay = worldMap.overlay();
         centreOnYou();
     }
 
@@ -86,16 +90,11 @@ public final class WorldMapScreen extends Screen implements ClientScreen {
     }
 
     private int windowWidth() {
-        return (int) latched.toView(width) - 2 * GAP;
+        return viewWidth() - 2 * GAP;
     }
 
     private int windowHeight() {
-        return (int) latched.toView(height) - 2 * GAP;
-    }
-
-    @Override
-    public boolean isPauseScreen() {
-        return false;
+        return viewHeight() - 2 * GAP;
     }
 
     @Override
@@ -105,20 +104,14 @@ public final class WorldMapScreen extends Screen implements ClientScreen {
 
     @Override
     public void extractBackground(GuiGraphicsExtractor context, int mouseX, int mouseY, float deltaTicks) {
-        GuiScreenBase.dimBackground(this, context);
+        GuiTheme.dimBackground(this, context);
     }
 
+    // The readout at the foot reads fractions of a view pixel. One whole pixel is many blocks at the
+    // furthest zoom.
     @Override
-    public void extractRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float partialTicks) {
-        latched.refresh();
-        context.pose().pushMatrix();
-        context.pose().scale(latched.get(), latched.get());
-        renderView(context, latched.toView(mouseX), latched.toView(mouseY), partialTicks);
-        context.pose().popMatrix();
-    }
-
-    private void renderView(GuiGraphicsExtractor context, double mouseX, double mouseY, float partialTicks) {
-        Font font = OfflineClient.MC.font;
+    protected void renderScaled(GuiGraphicsExtractor context, double mouseX, double mouseY, float partialTicks) {
+        Font font = ClientFonts.gui();
         int ww = windowWidth();
         int wh = windowHeight();
         WindowParts.frame(context, GAP, GAP, ww, wh);
@@ -128,17 +121,12 @@ public final class WorldMapScreen extends Screen implements ClientScreen {
         view = new MapView(centreX, centreZ, zoom, 0, GAP + 1, top, ww - 2,
             wh - WindowParts.TITLE_HEIGHT - WindowParts.FOOT_HEIGHT - 2);
         context.fill(view.left(), view.top(), view.left() + view.width(), view.top() + view.height(), UNSEEN);
-        TerrainLayer land = minimap.explored();
+        TerrainLayer land = ExploredLand.here();
         if (land != null) {
-            picture.draw(context, view, land, minimap.tints(), REPAINT_GAP_MS);
+            picture.draw(context, view, land, overlay.tints(), REPAINT_GAP_MS);
         }
         context.enableScissor(view.left(), view.top(), view.left() + view.width(), view.top() + view.height());
-        if (minimap.drawsMarks()) {
-            MapMarks.marks(context, font, view, minimap.marks(), false, true, false);
-        }
-        if (minimap.drawsEntities()) {
-            MapMarks.entities(context, font, view, false);
-        }
+        overlay.draw(context, font, view, false, true, false);
         LocalPlayer player = OfflineClient.MC.player;
         if (player != null) {
             Vec3 at = player.getPosition(partialTicks);
@@ -153,7 +141,7 @@ public final class WorldMapScreen extends Screen implements ClientScreen {
     // Such as 4 blocks a pixel or 2.8 pixels a block.
     private String scaleText() {
         boolean wide = zoom >= 1;
-        String number = String.format(Locale.ROOT, "%.1f", wide ? zoom : 1 / zoom).replace(".0", "");
+        String number = ChatUtil.decimal(wide ? zoom : 1 / zoom, SCALE_PLACES);
         String unit = wide ? "block" : "pixel";
         return number + " " + (number.equals("1") ? unit : unit + "s") + (wide ? " a pixel" : " a block");
     }
@@ -163,11 +151,9 @@ public final class WorldMapScreen extends Screen implements ClientScreen {
         if (view == null || !view.inside(mouseX, mouseY, 0)) {
             return HINT;
         }
-        if (minimap.drawsMarks()) {
-            MapMarks.Mark mark = MapMarks.nearest(view, minimap.marks(), mouseX, mouseY, HOVER_REACH);
-            if (mark != null) {
-                return mark.label() + SEPARATOR + Mth.floor(mark.x()) + " " + Mth.floor(mark.z());
-            }
+        MapMarks.Mark mark = overlay.nearest(view, mouseX, mouseY, HOVER_REACH);
+        if (mark != null) {
+            return mark.label() + SEPARATOR + Mth.floor(mark.x()) + " " + Mth.floor(mark.z());
         }
         return Mth.floor(view.worldX(mouseX, mouseY)) + " " + Mth.floor(view.worldZ(mouseX, mouseY)) + SEPARATOR
             + HINT;
@@ -177,24 +163,28 @@ public final class WorldMapScreen extends Screen implements ClientScreen {
     private BlockPos spotAt(double screenX, double screenY) {
         int x = Mth.floor(view.worldX(screenX, screenY));
         int z = Mth.floor(view.worldZ(screenX, screenY));
-        return new BlockPos(x, minimap.standY(x, z), z);
+        return new BlockPos(x, ExploredLand.standY(x, z), z);
     }
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-        double mx = latched.toView(event.x());
-        double my = latched.toView(event.y());
+        if (worldMap.isMapKey(event)) {
+            onClose();
+            return true;
+        }
+        double mx = toView(event.x());
+        double my = toView(event.y());
         if (view == null || !view.inside(mx, my, 0) || OfflineClient.MC.player == null) {
             return super.mouseClicked(event, doubleClick);
         }
         if (InputUtil.isRight(event.button())) {
             BlockPos spot = spotAt(mx, my);
             String name = WaypointStore.get().markFresh(WAYPOINT_STEM, spot, ServerInfo.dimension(),
-                Modules.nextWaypointHue());
-            minimap.refreshMarks();
+                Modules.nextWaypointColour());
+            overlay.refresh();
             footer.say("Saved the waypoint " + name + " at " + BlockUtil.text(spot));
         } else if (InputUtil.isLeft(event.button())) {
-            latched.hold(true);
+            holdScale(true);
             pressed = true;
             dragged = false;
             pressX = mx;
@@ -210,8 +200,8 @@ public final class WorldMapScreen extends Screen implements ClientScreen {
         if (!pressed) {
             return super.mouseDragged(event, dragX, dragY);
         }
-        double mx = latched.toView(event.x());
-        double my = latched.toView(event.y());
+        double mx = toView(event.x());
+        double my = toView(event.y());
         if (Math.hypot(mx - pressX, my - pressY) >= CLICK_SLOP) {
             dragged = true;
         }
@@ -228,9 +218,9 @@ public final class WorldMapScreen extends Screen implements ClientScreen {
             return super.mouseReleased(event);
         }
         pressed = false;
-        latched.hold(false);
+        holdScale(false);
         if (!dragged && view != null) {
-            walk(spotAt(latched.toView(event.x()), latched.toView(event.y())));
+            walk(spotAt(toView(event.x()), toView(event.y())));
         }
         return true;
     }
@@ -247,8 +237,8 @@ public final class WorldMapScreen extends Screen implements ClientScreen {
     // Zooms about the spot under the pointer.
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
-        double mx = latched.toView(mouseX);
-        double my = latched.toView(mouseY);
+        double mx = toView(mouseX);
+        double my = toView(mouseY);
         if (view == null || scrollY == 0 || !view.inside(mx, my, 0)) {
             return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
         }
@@ -270,7 +260,7 @@ public final class WorldMapScreen extends Screen implements ClientScreen {
     @Override
     public boolean keyPressed(KeyEvent event) {
         int key = event.key();
-        if (key == InputConstants.KEY_ESCAPE || minimap.isMapKey(key)) {
+        if (key == InputConstants.KEY_ESCAPE || worldMap.isMapKey(event)) {
             onClose();
             return true;
         }

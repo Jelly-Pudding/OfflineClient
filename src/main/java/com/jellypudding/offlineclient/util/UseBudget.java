@@ -2,6 +2,7 @@ package com.jellypudding.offlineclient.util;
 
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.PacketSendEvent;
+import com.jellypudding.offlineclient.setting.NumberSetting;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ServerboundUseItemOnPacket;
 import net.minecraft.network.protocol.game.ServerboundUseItemPacket;
@@ -27,12 +28,18 @@ public final class UseBudget {
     private UseBudget() {
     }
 
+    // The Blocks per tick row of a builder. Its slider tops out at what Paper takes in one burst.
+    public static NumberSetting blocksPerTick() {
+        return new NumberSetting("Blocks per tick",
+            "Most blocks placed in one tick. Paper takes nine in a short burst and the rest wait their turn.",
+            3, 1, PAPER_USES, 1, " blocks");
+    }
+
     // Last of all because a packet another handler cancels never went out.
     @Subscribe(priority = Subscribe.LAST)
     private void onPacketSend(PacketSendEvent event) {
         Packet<?> packet = event.getPacket();
-        if (!event.isCancelled()
-            && (packet instanceof ServerboundUseItemOnPacket || packet instanceof ServerboundUseItemPacket)) {
+        if (packet instanceof ServerboundUseItemOnPacket || packet instanceof ServerboundUseItemPacket) {
             record();
         }
     }

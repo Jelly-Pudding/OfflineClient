@@ -3,10 +3,12 @@ package com.jellypudding.offlineclient.mixin;
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.gui.FootButtons;
 import com.jellypudding.offlineclient.modules.misc.AutoReconnect;
+import com.jellypudding.offlineclient.modules.misc.BetterChat;
 import com.jellypudding.offlineclient.modules.player.GUIMove;
 import com.jellypudding.offlineclient.modules.player.InvWalk;
 import com.jellypudding.offlineclient.modules.render.Blur;
 import com.jellypudding.offlineclient.modules.render.NoBackground;
+import com.jellypudding.offlineclient.util.Leave;
 import com.jellypudding.offlineclient.util.Modules;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -52,7 +54,7 @@ public abstract class ScreenMixin {
         }
         addRenderableWidget(FootButtons.lower(screen,
             CommonComponents.disconnectButtonLabel(OfflineClient.MC.isLocalServer()),
-            button -> AutoReconnect.leave()));
+            button -> Leave.toMenu()));
     }
 
     // The dark tint drawn over the world behind an open screen.
@@ -103,12 +105,18 @@ public abstract class ScreenMixin {
     }
 
     // Chat click events that carry a client command run locally instead of going to the server.
+    // Only a link the client wrote runs one. BetterChat may refuse any clicked command first.
     @Inject(
         method = "clickCommandAction(Lnet/minecraft/client/player/LocalPlayer;Ljava/lang/String;Lnet/minecraft/client/gui/screens/Screen;)V",
         at = @At("HEAD"),
         cancellable = true)
     private static void onClickCommand(LocalPlayer player, String command, Screen screen, CallbackInfo ci) {
-        if (OfflineClient.INSTANCE.getCommandManager().run(command)) {
+        BetterChat betterChat = Modules.get(BetterChat.class);
+        if (betterChat != null && betterChat.blocksClick(command)) {
+            ci.cancel();
+            return;
+        }
+        if (OfflineClient.INSTANCE.getCommandManager().runClicked(command)) {
             ci.cancel();
         }
     }

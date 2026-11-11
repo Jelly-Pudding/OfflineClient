@@ -1,13 +1,22 @@
 package com.jellypudding.offlineclient.modules.render;
 
+import com.jellypudding.offlineclient.event.Subscribe;
+import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.render.ChamsPicture;
+import com.jellypudding.offlineclient.render.PictureFile;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
+import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.setting.TextSetting;
+import com.jellypudding.offlineclient.util.AwayView;
+import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.EntityFilter;
-import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.EntityColors;
+import com.mojang.blaze3d.platform.NativeImage;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
@@ -19,50 +28,51 @@ import java.util.List;
 // render type. The crystal and avatar mixins reshape crystals and your own arm.
 public final class Chams extends Module {
 
+    public enum Fill { MODEL, FLAT, PICTURE }
+
     // A plain white texture that leaves only the tint on a model.
     public static final Identifier BLANK = Identifier.parse("offlineclient:textures/blank.png");
 
-    private final EntityFilter filter = EntityFilter.living("Draw", "drawn", true,
+    private final EntityFilter filter = EntityFilter.living("Draws", "drawn", true,
         EntityFilter.Pick.NONE, List.of());
     private final BoolSetting self = new BoolSetting("Self",
-        "Show your own body in third person.", false);
+        "Shows your own body in third person and whilst Freecam or RemoteView has the camera.", false);
     private final BoolSetting throughWalls = new BoolSetting("Through walls",
-        "Draw the model over blocks instead of only tinting it.", true);
-    private final ColorSetting color = new ColorSetting("Colour",
-        "Model colour.", 300, false);
+        "Draws the model over blocks instead of only tinting it.", true);
+    private final EntityColors colors = new EntityColors(EntityColors.Mode.SINGLE, 300).withoutItems();
     private final NumberSetting opacity = new NumberSetting("Opacity",
         "How solid the model looks.", 0.7, 0.1, 1, 0.05).min(0.05).max(1);
-    private final BoolSetting friendColor = new BoolSetting("Friend colour",
-        "Paint friends blue instead.", true);
-    private final BoolSetting playerSkin = new BoolSetting("Player skin",
-        "Keep the skin on players. Off paints them as one flat colour.", true);
-    private final BoolSetting mobTexture = new BoolSetting("Mob texture",
-        "Keep the texture on mobs. Off paints them as one flat colour.", true);
+    private final EnumSetting<Fill> playerFill = fill("Player fill", "What players are painted with.");
+    private final EnumSetting<Fill> mobFill = fill("Mob fill", "What mobs are painted with.");
+    private final TextSetting pictureFile = new TextSetting("Picture file", "The picture the Picture fill shows. Type the "
+        + "name of a PNG you have put in the " + PictureFile.FOLDER_WORDS + " folder such as stars. Empty shows the "
+        + "picture the client comes with.", "")
+        .visibleWhen(this::paintsPicture);
     private final NumberSetting playerScale = new NumberSetting("Player scale",
         "Makes player models bigger or smaller.", 1, 0.25, 3, 0.05, "x").min(0.05);
 
     private final BoolSetting crystals = new BoolSetting("Crystals",
-        "Reshape and recolour end crystals.", false);
+        "Reshapes and recolours end crystals.", false);
     private final NumberSetting crystalScale = new NumberSetting("Crystal scale",
         "How big a crystal is drawn.", 0.6, 0.1, 2, 0.05, "x").min(0.05)
         .under(crystals);
     private final NumberSetting crystalBounce = new NumberSetting("Crystal bounce",
-        "How high a crystal bobs up and down.", 0.6, 0, 2, 0.05, "x").min(0)
+        "How high a crystal bobs up and down.", 0.6, 0, 2, 0.05, "x")
         .under(crystals);
     private final NumberSetting crystalSpin = new NumberSetting("Crystal spin",
-        "How fast a crystal turns.", 0.3, 0, 2, 0.05, "x").min(0)
+        "How fast a crystal turns.", 0.3, 0, 2, 0.05, "x")
         .under(crystals);
     private final BoolSetting crystalTexture = new BoolSetting("Crystal texture",
-        "Keep the crystal texture under the colour. Off paints it flat.", true)
+        "Keeps the crystal texture under the colour. Off paints it flat.", true)
         .under(crystals);
     private final ColorSetting crystalColor = new ColorSetting("Crystal colour",
         "Colour tinted over a crystal.", 272, 0.47f, 1f, false)
         .under(crystals);
 
     private final BoolSetting hand = new BoolSetting("Hand",
-        "Recolour your own arm in first person.", false);
+        "Recolours your own arm in first person.", false);
     private final BoolSetting handTexture = new BoolSetting("Hand texture",
-        "Keep your skin on the arm under the colour. Off paints it flat.", false)
+        "Keeps your skin on the arm under the colour. Off paints it flat.", false)
         .under(hand);
     private final ColorSetting handColor = new ColorSetting("Hand colour",
         "Colour of the arm.", 272, 0.47f, 1f, false)
@@ -71,13 +81,55 @@ public final class Chams extends Module {
         "How solid the arm looks.", 0.6, 0.1, 1, 0.05).min(0.05).max(1)
         .under(hand);
 
+    private final PictureFile picture = new PictureFile(this::takePicture);
+
     public Chams() {
         super("Chams", "Draws player and mob models through walls.", Category.RENDER);
         addSettings(filter.settings());
-        addSettings(self, throughWalls, color, opacity, friendColor, playerSkin, mobTexture, playerScale,
+        addSettings(self, throughWalls);
+        addSettings(colors.settings());
+        addSettings(opacity, playerFill, mobFill, pictureFile, playerScale,
             crystals, crystalScale, crystalBounce, crystalSpin, crystalTexture, crystalColor,
             hand, handTexture, handColor, handOpacity);
-        searchTags("see through", "models", "wallhack");
+        searchTags("see through", "models", "wallhack", "picture", "galaxy");
+    }
+
+    private static EnumSetting<Fill> fill(String name, String description) {
+        return new EnumSetting<>(name, description, Fill.MODEL)
+            .describe(Fill.MODEL, "The skin or texture under the colour.")
+            .describe(Fill.FLAT, "One flat colour.")
+            .describe(Fill.PICTURE, "A picture seen through the model and tinted by the colour.");
+    }
+
+    @Override
+    protected void onDisable() {
+        letGoOfPicture();
+    }
+
+    // The named picture is looked at for changes only whilst a fill shows it.
+    @Subscribe
+    private void onTick(TickEvent event) {
+        if (paintsPicture()) {
+            picture.look(pictureFile.getValue());
+        } else {
+            letGoOfPicture();
+        }
+    }
+
+    private void letGoOfPicture() {
+        picture.release();
+        ChamsPicture.show(null);
+    }
+
+    private void takePicture(NativeImage pixels, String problem) {
+        ChamsPicture.show(pixels);
+        if (problem != null) {
+            ChatUtil.error(problem + " Chams shows the picture it comes with.");
+        }
+    }
+
+    private boolean paintsPicture() {
+        return playerFill.is(Fill.PICTURE) || mobFill.is(Fill.PICTURE);
     }
 
     public boolean applies(Entity entity) {
@@ -85,7 +137,7 @@ public final class Chams extends Module {
             return false;
         }
         if (entity == mc.player) {
-            return self.isOn() && Freecam.ownBodyVisible();
+            return self.isOn() && AwayView.ownBodyVisible();
         }
         return filter.matches(entity);
     }
@@ -96,16 +148,20 @@ public final class Chams extends Module {
 
     // True when an entity loses its texture for a flat colour.
     public boolean flat(Entity entity) {
-        return entity instanceof Player ? !playerSkin.isOn() : !mobTexture.isOn();
+        return fillOf(entity) == Fill.FLAT;
+    }
+
+    // True when an entity shows the picture in place of its texture.
+    public boolean picture(Entity entity) {
+        return fillOf(entity) == Fill.PICTURE;
+    }
+
+    private Fill fillOf(Entity entity) {
+        return (entity instanceof Player ? playerFill : mobFill).getValue();
     }
 
     public int tintFor(Entity entity) {
-        int base = color.getColor();
-        if (friendColor.isOn() && entity instanceof Player player
-            && EntityUtil.isFriend(player)) {
-            base = EntityUtil.FRIEND_COLOR;
-        }
-        return ColorUtil.fade(base, opacity.getFloat());
+        return ColorUtil.fade(colors.colorOf(entity), opacity.getFloat());
     }
 
     // One for anything that is not a marked player.

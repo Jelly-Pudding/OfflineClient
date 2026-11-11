@@ -1,17 +1,24 @@
 package com.jellypudding.offlineclient.util;
 
+import com.jellypudding.offlineclient.render.ClientFonts;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.network.chat.Style;
+import net.minecraft.util.FormattedCharSequence;
 import org.joml.Matrix3x2fStack;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.IntUnaryOperator;
 
 // 2D drawing helpers on top of GuiGraphicsExtractor.
 public final class RenderUtil {
 
     // Grey for text that should sit back from the main line.
     public static final int MUTED_TEXT = 0xFFB0B0C0;
+
+    // Coloured letters take the alpha of this and the colour of their own style.
+    private static final int LETTER_BASE = 0xFFFFFFFF;
 
     private RenderUtil() {
     }
@@ -30,17 +37,34 @@ public final class RenderUtil {
     // The drop shadow doubles up at a large scale. Big titles turn it off.
     public static void gradientText(GuiGraphicsExtractor context, Font font, String text,
                                     int x, int y, int from, int to, float alpha, boolean shadow) {
+        int last = text.codePointCount(0, text.length()) - 1;
+        colouredLetters(context, font, text, x, y,
+            i -> ColorUtil.lerp(from, to, last <= 0 ? 0 : (float) i / last), alpha, shadow);
+    }
+
+    // The text drawn in one piece with each letter in the colour its place gives. The game spaces the
+    // letters as it spaces any text. Alpha fades the whole text and every colour given is solid.
+    public static void colouredLetters(GuiGraphicsExtractor context, Font font, String text, int x, int y,
+                                       IntUnaryOperator colorOf, float alpha, boolean shadow) {
         if (alpha < 0.05f) {
             return;
         }
-        context.guiRenderState.up();
-        int length = text.length();
-        for (int i = 0; i < length; i++) {
-            String ch = String.valueOf(text.charAt(i));
-            int color = ColorUtil.lerp(from, to, length <= 1 ? 0 : (float) i / (length - 1));
-            context.text(font, ch, x, y, ColorUtil.fade(color, alpha), shadow);
-            x += font.width(ch);
+        // The game reads the letters later in the frame and their colours are fixed at the call.
+        int[] letters = text.codePoints().toArray();
+        Style[] styles = new Style[letters.length];
+        for (int i = 0; i < letters.length; i++) {
+            styles[i] = Style.EMPTY.withColor(colorOf.applyAsInt(i));
         }
+        FormattedCharSequence coloured = sink -> {
+            for (int i = 0; i < letters.length; i++) {
+                if (!sink.accept(i, styles[i], letters[i])) {
+                    return false;
+                }
+            }
+            return true;
+        };
+        context.guiRenderState.up();
+        context.text(font, coloured, x, y, ColorUtil.fade(LETTER_BASE, alpha), shadow);
     }
 
     public static void gradientTextScaled(GuiGraphicsExtractor context, Font font, String text,
@@ -71,13 +95,7 @@ public final class RenderUtil {
         pose.pushMatrix();
         pose.translate(x, y);
         pose.scale(scale, scale);
-        context.guiRenderState.up();
-        int cx = 0;
-        for (int i = 0; i < text.length(); i++) {
-            String ch = String.valueOf(text.charAt(i));
-            context.text(font, ch, cx, 0, ColorUtil.fade(ColorUtil.rainbow(i), alpha), true);
-            cx += font.width(ch);
-        }
+        colouredLetters(context, font, text, 0, 0, ColorUtil::rainbow, alpha, true);
         pose.popMatrix();
     }
 
@@ -328,6 +346,9 @@ public final class RenderUtil {
 
     // How far the background of a label reaches past its text.
     private static final int LABEL_PAD = 2;
+    // A world label loses this share of its size for every block away and keeps at least half.
+    private static final double LABEL_SHRINK_PER_BLOCK = 0.01;
+    private static final double SMALLEST_LABEL = 0.5;
 
     private static final int TOOLTIP_BORDER = 0x50FFFFFF;
 
@@ -366,11 +387,18 @@ public final class RenderUtil {
         return y - LABEL_PAD * belowScale - font.lineHeight * scale;
     }
 
+    // The share of its size a world label keeps that many blocks from the camera. Labels stacked on
+    // one another shrink alike.
+    public static double labelShrink(double distance) {
+        return Math.clamp(1 - distance * LABEL_SHRINK_PER_BLOCK, SMALLEST_LABEL, 1);
+    }
+
     // Pixels below the middle of the screen a crosshair readout sits.
     private static final int CROSSHAIR_GAP = 12;
 
-    // One line of text centred just under the crosshair.
-    public static void underCrosshair(GuiGraphicsExtractor context, Font font, String text, int color) {
+    // One line of text centred just under the crosshair in the overlay font.
+    public static void underCrosshair(GuiGraphicsExtractor context, String text, int color) {
+        Font font = ClientFonts.hud();
         int x = (context.guiWidth() - font.width(text)) / 2;
         int y = context.guiHeight() / 2 + CROSSHAIR_GAP;
         context.guiRenderState.up();

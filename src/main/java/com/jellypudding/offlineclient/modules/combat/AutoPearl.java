@@ -2,6 +2,7 @@ package com.jellypudding.offlineclient.modules.combat;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.Subscribe;
+import com.jellypudding.offlineclient.event.events.BlockPlaceEvent;
 import com.jellypudding.offlineclient.event.events.KeyPressEvent;
 import com.jellypudding.offlineclient.event.events.Render3DEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
@@ -28,6 +29,7 @@ import com.jellypudding.offlineclient.util.ProjectileUtil;
 import com.jellypudding.offlineclient.util.RotationManager;
 import com.jellypudding.offlineclient.util.SafeDrop;
 import com.jellypudding.offlineclient.util.SwingMode;
+import com.jellypudding.offlineclient.util.WorldWatch;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.InteractionHand;
@@ -43,6 +45,7 @@ import net.minecraft.world.phys.Vec3;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.ToDoubleFunction;
 
@@ -74,6 +77,13 @@ public final class AutoPearl extends Module {
 
     // Enemy pearls already judged for a chase. Each is chased once.
     private static final int MAX_JUDGED = 256;
+
+    // Blocks of your own remembered to tell your roof from an enemy's.
+    private static final int MAX_PLACED = 256;
+
+    // Ticks a block you placed may take to show whilst the server confirms it. A lag spike can hold
+    // the answer back for seconds.
+    private static final int CONFIRM_TICKS = 100;
 
     // Enemies this far off still count against a landing.
     private static final double ENEMY_SEARCH = 64;
@@ -121,8 +131,8 @@ public final class AutoPearl extends Module {
         "Escapes once your health plus absorption drops to this many hearts whilst an enemy is near. Zero never escapes on health.",
         4, 0, 18, 0.5, " hearts").under(escape);
     private final BoolSetting whenTrapped = new BoolSetting("When trapped",
-        "Escapes once a block covers your head and no side is open whilst an enemy is near. Skipped whilst SelfTrap is on.",
-        true).under(escape);
+        "Escapes once a block covers your head and no side is open whilst an enemy is near. A roof you placed"
+            + " yourself is left alone.", true).under(escape);
     private final NumberSetting enemyRange = new NumberSetting("Enemy range",
         "How close an enemy has to be before you escape.", 6, 1, 16, 0.5, " blocks").under(escape);
     private final NumberSetting safeDistance = new NumberSetting("Safe distance",
@@ -139,7 +149,7 @@ public final class AutoPearl extends Module {
         "How far from the enemy landing your own pearl may come down.", 3, 1, 12, 0.5, " blocks")
         .min(0.5).under(counter);
     private final KeybindSetting phaseKey = new KeybindSetting("Phase key",
-        "Press this whilst the module is on to pearl part way into the blocks beside your feet.",
+        "Pearls part way into the blocks beside your feet when pressed whilst the module is on.",
         KeybindSetting.UNBOUND);
     private final BoolSetting holdPhase = new BoolSetting("Hold phase",
         "Stops the game pushing you back out of those blocks until you walk away.", true)
@@ -155,6 +165,11 @@ public final class AutoPearl extends Module {
     private final Feeding feeding = new Feeding();
     private final List<Player> enemies = new ArrayList<>();
     private final Set<Integer> judged = Collections.newSetFromMap(new BoundedMap<>(MAX_JUDGED));
+    // Blocks you placed in this world and the last tick each may stay missing. A roof among them is
+    // your own.
+    private final Map<BlockPos, Integer> placed = new BoundedMap<>(MAX_PLACED);
+    private final WorldWatch world = new WorldWatch();
+    private int ticks;
     private int searchTimer;
     private boolean phaseAsked;
     private Vec3 phaseSpot;
@@ -218,13 +233,21 @@ public final class AutoPearl extends Module {
     }
 
     @Subscribe
+    private void onBlockPlace(BlockPlaceEvent event) {
+        syncWorld();
+        placed.put(event.getPos().immutable(), ticks + CONFIRM_TICKS);
+    }
+
+    @Subscribe
     private void onTick(TickEvent event) {
         status = null;
-        if (!inGame() || mc.player.isSpectator()) {
+        if (mc.player.isSpectator()) {
             phaseAsked = false;
             forgetPhase();
             return;
         }
+        ticks++;
+        forgetLostBlocks();
         // A death or the pause whilst a fruit's teleport lands.
         if (feeding.waiting()) {
             phaseAsked = false;
@@ -299,16 +322,18 @@ public final class AutoPearl extends Module {
         if (EntityUtil.healthAtOrBelow(health.getValue())) {
             return "(low health)";
         }
-        if (whenTrapped.isOn() && !Modules.enabled(SelfTrap.class) && boxedIn()) {
+        if (whenTrapped.isOn() && boxedIn()) {
             return "(trapped)";
         }
         return null;
     }
 
     // A block over the head keeps you from jumping and every side is shut at the feet or the head.
+    // A roof you placed yourself is no trap.
     private boolean boxedIn() {
         BlockPos feet = mc.player.blockPosition();
-        if (!BlockUtil.isSolid(feet.above(2))) {
+        BlockPos roof = feet.above(2);
+        if (!BlockUtil.isSolid(roof) || placed.containsKey(roof)) {
             return false;
         }
         for (Direction side : Direction.Plane.HORIZONTAL) {
@@ -320,11 +345,25 @@ public final class AutoPearl extends Module {
         return true;
     }
 
+    // A block of yours that has shown is forgotten the first tick it is gone and leaves its spot to
+    // whoever fills it next.
+    private void forgetLostBlocks() {
+        syncWorld();
+        placed.replaceAll((spot, missingUntil) -> BlockUtil.isSolid(spot) ? ticks : missingUntil);
+        placed.values().removeIf(missingUntil -> missingUntil < ticks);
+    }
+
+    // Blocks placed in another world mean nothing here.
+    private void syncWorld() {
+        if (world.changed()) {
+            placed.clear();
+        }
+    }
+
     private void collectEnemies() {
         enemies.clear();
         for (Player player : mc.level.players()) {
-            if (EntityUtil.isEnemy(player) && player != mc.player
-                && player.distanceTo(mc.player) <= ENEMY_SEARCH) {
+            if (EntityUtil.isEnemy(player) && player.distanceTo(mc.player) <= ENEMY_SEARCH) {
                 enemies.add(player);
             }
         }
@@ -396,8 +435,7 @@ public final class AutoPearl extends Module {
     // within the spread of where you stand. A thrower out of sight is judged by name.
     private Vec3 enemyLanding(ThrownEnderpearl pearl) {
         Entity owner = pearl.getOwner();
-        if (owner != null ? owner == mc.player || !EntityUtil.isEnemy(owner)
-            : !enemyName(EntityUtil.knownThrower(pearl))) {
+        if (owner != null ? !EntityUtil.isEnemy(owner) : !enemyName(EntityUtil.knownThrower(pearl))) {
             return null;
         }
         if (ProjectileUtil.inBubbles(pearl)) {

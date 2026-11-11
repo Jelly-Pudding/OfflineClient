@@ -2,7 +2,9 @@ package com.jellypudding.offlineclient.modules.movement;
 
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.ClientTickEvent;
+import com.jellypudding.offlineclient.event.events.PostMotionEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
+import com.jellypudding.offlineclient.event.events.VehicleTickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.modules.player.InvWalk;
@@ -11,11 +13,14 @@ import com.jellypudding.offlineclient.path.Trip;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.util.InputUtil;
+import com.jellypudding.offlineclient.util.LoadedChunks;
 import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.SectionPos;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.vehicle.boat.AbstractBoat;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
@@ -31,6 +36,19 @@ public final class AutoWalk extends Module {
     private static final int RETARGET_TICKS = 40;
     private static final double GOAL_RADIUS = 3;
 
+    // A boat looks this many ticks of its speed ahead for a wall and never less than the
+    // least. It tests its own box a block at a time shifted to either side.
+    private static final double BOAT_LOOK_TICKS = 10;
+    private static final double BOAT_LEAST_LOOK = 2;
+    private static final double BOAT_LOOK_STEP = 1;
+    private static final double BOAT_SIDE = 0.5;
+
+    // Degrees a boat turns away from a wall each tick.
+    private static final float BOAT_TURN = 4;
+
+    // The look ahead starts this far above the floor the boat rests on.
+    private static final double BOAT_CLEARANCE = 0.1;
+
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
         "How the walking is done.", Mode.SIMPLE)
         .describe(Mode.SIMPLE, "Holds the key and walks into whatever is in the way.")
@@ -38,7 +56,7 @@ public final class AutoWalk extends Module {
     private final EnumSetting<Direction> direction = new EnumSetting<>("Direction",
         "Which way you walk.", Direction.FORWARDS);
     private final BoolSetting autoSprint = new BoolSetting("Auto sprint",
-        "Sprint instead of walking.", false);
+        "Sprints instead of walking.", false);
     private final BoolSetting stopOnInput = new BoolSetting("Stop on input",
         "Switches off as soon as you press a movement key yourself.", false);
     private final BoolSetting stopOnHeightChange = new BoolSetting("Stop on height change",
@@ -46,6 +64,9 @@ public final class AutoWalk extends Module {
         .under(mode, Mode.SIMPLE);
     private final BoolSetting stayInLoadedChunks = new BoolSetting("Stay in loaded chunks",
         "Stops walking whilst the chunk ahead has not loaded yet.", true);
+    private final BoolSetting steerBoats = new BoolSetting("Steer boats",
+        "A boat you row forwards holds its heading and turns away from a wall that comes close."
+            + " It keeps an ice road by itself.", true);
 
     // Whether each movement key was physically down last tick.
     private final boolean[] wasHeld = new boolean[6];
@@ -53,10 +74,13 @@ public final class AutoWalk extends Module {
 
     private final Trip trip = new Trip();
     private int retarget;
+    // The yaw a rowed boat is held on. Not a number until one is taken.
+    private float heading = Float.NaN;
 
     public AutoWalk() {
         super("AutoWalk", "Walks for you.", Category.MOVEMENT);
-        addSettings(mode, direction, autoSprint, stopOnInput, stopOnHeightChange, stayInLoadedChunks);
+        addSettings(mode, direction, autoSprint, stopOnInput, stopOnHeightChange, stayInLoadedChunks,
+            steerBoats);
         searchTags("auto walk", "path", "afk walk");
     }
 
@@ -68,6 +92,7 @@ public final class AutoWalk extends Module {
     @Override
     protected void onEnable() {
         retarget = 0;
+        heading = Float.NaN;
         if (!inGame()) {
             return;
         }
@@ -84,15 +109,16 @@ public final class AutoWalk extends Module {
         trip.stop();
     }
 
+    // The move of the tick is done and the old height still holds where the tick began.
+    @Subscribe
+    private void onPostMotion(PostMotionEvent event) {
+        if (inGame() && mode.is(Mode.SIMPLE) && stopOnHeightChange.isOn() && mc.player.yo != mc.player.getY()) {
+            setEnabled(false);
+        }
+    }
+
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame()) {
-            return;
-        }
-        if (mode.is(Mode.SIMPLE) && stopOnHeightChange.isOn() && mc.player.yo != mc.player.getY()) {
-            setEnabled(false);
-            return;
-        }
         boolean pressed = pressedMovementKey();
         if (stopOnInput.isOn() && pressed) {
             setEnabled(false);
@@ -101,11 +127,12 @@ public final class AutoWalk extends Module {
         if (stayInLoadedChunks.isOn() && chunkAheadMissing()) {
             letGo();
             trip.stop();
-            Vec3 motion = mc.player.getDeltaMovement();
-            mc.player.setDeltaMovement(0, motion.y, 0);
+            Entity mover = mc.player.getRootVehicle();
+            mover.setDeltaMovement(0, mover.getDeltaMovement().y, 0);
             return;
         }
-        if (mode.is(Mode.SMART)) {
+        // A boat is rowed with the key. The pathfinder only knows the way on foot.
+        if (mode.is(Mode.SMART) && !rows()) {
             letGo();
             smartTick();
             return;
@@ -125,6 +152,50 @@ public final class AutoWalk extends Module {
             && !Modules.enabled(Sprint.class)) {
             mc.player.setSprinting(false);
         }
+    }
+
+    private boolean rows() {
+        return steerBoats.isOn() && mc.player.getControlledVehicle() instanceof AbstractBoat;
+    }
+
+    // The heading is the one the boat had as the row began. Steering by hand takes a
+    // fresh one. A wall nearer on one side turns the heading away from it for good and
+    // the boat follows a bend.
+    @Subscribe
+    private void onVehicleTick(VehicleTickEvent event) {
+        boolean byHand = InputUtil.physicallyHeld(mc.options.keyLeft)
+            || InputUtil.physicallyHeld(mc.options.keyRight);
+        if (!(event.getVehicle() instanceof AbstractBoat boat) || !steerBoats.isOn() || byHand
+            || held != mc.options.keyUp || !boat.isLocalInstanceAuthoritative()) {
+            heading = Float.NaN;
+            return;
+        }
+        if (Float.isNaN(heading)) {
+            heading = boat.getYRot();
+        }
+        double reach = Math.max(BOAT_LEAST_LOOK, boat.getDeltaMovement().horizontalDistance() * BOAT_LOOK_TICKS);
+        double left = wallAhead(boat, heading - 90, reach);
+        double right = wallAhead(boat, heading + 90, reach);
+        if (left < right) {
+            heading += BOAT_TURN;
+        } else if (right < left) {
+            heading -= BOAT_TURN;
+        }
+        boat.setYRot(heading);
+    }
+
+    // How far ahead the first wall lies for the boat shifted towards one side. Infinite
+    // when the look ahead is clear.
+    private double wallAhead(AbstractBoat boat, float side, double reach) {
+        AABB box = boat.getBoundingBox();
+        AABB shifted = box.setMinY(box.minY + BOAT_CLEARANCE).move(Vec3.directionFromRotation(0, side).scale(BOAT_SIDE));
+        Vec3 ahead = Vec3.directionFromRotation(0, heading);
+        for (double far = BOAT_LOOK_STEP; far <= reach; far += BOAT_LOOK_STEP) {
+            if (!mc.level.noCollision(boat, shifted.move(ahead.scale(far)))) {
+                return far;
+            }
+        }
+        return Double.POSITIVE_INFINITY;
     }
 
     // Aims a little way off in the chosen direction and lets the pathfinder get there.
@@ -199,11 +270,11 @@ public final class AutoWalk extends Module {
             mc.options.keyRight, mc.options.keyShift, mc.options.keyJump);
     }
 
-    // Looks two ticks of travel ahead. The stop comes before the border.
+    // Looks two ticks of travel ahead. The stop comes before the border. A ride carries
+    // the speed of a rider.
     private boolean chunkAheadMissing() {
-        Vec3 motion = mc.player.getDeltaMovement();
-        int chunkX = SectionPos.blockToSectionCoord(mc.player.getX() + motion.x * 2);
-        int chunkZ = SectionPos.blockToSectionCoord(mc.player.getZ() + motion.z * 2);
-        return !mc.level.getChunkSource().hasChunk(chunkX, chunkZ);
+        Entity mover = mc.player.getRootVehicle();
+        Vec3 motion = mover.getDeltaMovement();
+        return !LoadedChunks.has(mover.getX() + motion.x * 2, mover.getZ() + motion.z * 2);
     }
 }

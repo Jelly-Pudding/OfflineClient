@@ -1,7 +1,7 @@
 package com.jellypudding.offlineclient.gui;
 
-import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.render.ClientFonts;
 import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.RenderUtil;
@@ -96,7 +96,7 @@ public final class ModuleRow {
     }
 
     public void render(GuiGraphicsExtractor context, int mouseX, int mouseY) {
-        Font font = OfflineClient.MC.font;
+        Font font = ClientFonts.gui();
         int w = width;
         // The last pixel of the row pitch is the rule between rows.
         int h = GuiTheme.ROW_HEIGHT - 1;
@@ -144,7 +144,7 @@ public final class ModuleRow {
 
         if (expanded) {
             drag.follow(SettingWidget.blockContentX(x), SettingWidget.blockContentWidth(w), mouseX, mouseY);
-            SettingWidget.renderBlock(context, font, block, x, y + GuiTheme.ROW_HEIGHT, w,
+            SettingWidget.renderBlock(context, block, x, y + GuiTheme.ROW_HEIGHT, w,
                 mouseX, mouseY, hoverActive, host);
         }
     }

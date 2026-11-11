@@ -3,6 +3,7 @@ package com.jellypudding.offlineclient.modules.render;
 import com.jellypudding.offlineclient.gui.PeekScreen;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.modules.misc.Conceal;
 import com.jellypudding.offlineclient.render.BannerPreview;
 import com.jellypudding.offlineclient.render.BookPreview;
 import com.jellypudding.offlineclient.render.ContainerPreview;
@@ -12,10 +13,13 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.BoundedMap;
+import com.jellypudding.offlineclient.util.EffectText;
 import com.jellypudding.offlineclient.util.EnderChest;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.ChatFormatting;
-import net.minecraft.SharedConstants;
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.BookViewScreen;
@@ -24,15 +28,12 @@ import net.minecraft.client.gui.screens.inventory.tooltip.ClientBundleTooltip;
 import net.minecraft.client.gui.screens.inventory.tooltip.ClientTooltipComponent;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
-import net.minecraft.client.renderer.state.MapRenderState;
 import net.minecraft.core.HolderSet;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.world.effect.MobEffectInstance;
-import net.minecraft.world.effect.MobEffectUtil;
 import net.minecraft.world.entity.Bucketable;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntitySpawnReason;
@@ -66,8 +67,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.function.Consumer;
 
-// GuiGraphicsExtractorMixin remembers the hovered stack and asks for the extra
-// tooltip rows. The container and tooltip display mixins ask what to hide.
+// AbstractContainerScreenMixin hands over the stack of a hovered slot and GuiGraphicsExtractorMixin
+// any stack a tooltip is set from. GuiGraphicsExtractorMixin then asks for the extra rows. The
+// container and tooltip display mixins ask what to hide.
 public final class BetterTooltips extends Module {
 
     public enum When { KEY_HELD, ALWAYS }
@@ -76,10 +78,39 @@ public final class BetterTooltips extends Module {
 
     public enum SizeUnit { BYTES, KILOBYTES, MEGABYTES, AUTO }
 
+    // What a stack shows whilst the preview key is held. One decision picks it for the hint and the
+    // preview alike.
+    private enum Preview { CONTAINER, ENDER_CHEST, MAP, BOOK, BANNER, BUCKET, BUNDLE }
+
     private static final int COLUMNS = 9;
     private static final int COMPACT_ROWS = 5;
+    // A slot is this wide and the icon of what a box holds sits in its bottom right corner.
+    private static final int SLOT = 16;
+    private static final int ICON = 10;
+    private static final int MIXED_COLOR = 0xFFFFFF55;
+    // A screen never shows as many boxes. The ones drawn least of late go first.
+    private static final int MOST_ICONS = 512;
+
+    // What goes over a box. An empty icon for a box that holds nothing.
+    private record BoxIcon(ItemStack icon, boolean mixed) {
+
+        private static final BoxIcon NONE = new BoxIcon(ItemStack.EMPTY, false);
+    }
     private static final int KILOBYTE = 1024;
     private static final int MEGABYTE = KILOBYTE * KILOBYTE;
+
+    // A stack and the bytes it took up when they were counted. The server sends a fresh stack whenever
+    // the item changes but a click fills a bundle in place.
+    private record Sized(ItemStack stack, BundleContents bundle, int bytes) {
+
+        private static final Sized NONE = new Sized(ItemStack.EMPTY, null, 0);
+        // The bytes of a stack the codec cannot write.
+        private static final int UNWRITABLE = -1;
+
+        private boolean holds(ItemStack other) {
+            return stack == other && bundle == other.get(DataComponents.BUNDLE_CONTENTS);
+        }
+    }
 
     private final EnumSetting<When> show = new EnumSetting<>("Show previews",
         "When the picture previews appear in a tooltip.", When.KEY_HELD)
@@ -89,41 +120,44 @@ public final class BetterTooltips extends Module {
         "The key to hold for a preview.", InputConstants.KEY_LALT)
         .under(show, When.KEY_HELD);
     private final BoolSetting containers = new BoolSetting("Containers",
-        "Hover a shulker box in any inventory to see what is packed inside it.", true);
+        "Shows what is packed inside a shulker box you hover in any inventory.", true);
     private final BoolSetting compactList = new BoolSetting("Compact list",
-        "Replace the vanilla shulker item lines with the five biggest stacks by count.", true)
+        "Replaces the vanilla shulker item lines with the five biggest stacks by count.", true)
         .under(containers);
+    private final BoolSetting contentsIcon = new BoolSetting("Contents icon",
+        "Draws the item a shulker box holds most of over the box in every inventory."
+            + " A plus marks a box with more than one kind inside.", false);
     private final BoolSetting enderChest = new BoolSetting("Ender chest",
-        "Hover an ender chest item to see what yours held when you last opened one.", true);
+        "Shows what your ender chest held when you last opened it as you hover an ender chest item.", true);
     private final BoolSetting maps = new BoolSetting("Maps",
-        "Hover a filled map to see the map itself.", true);
+        "Shows the map itself as you hover a filled map.", true);
     private final NumberSetting mapSize = new NumberSetting("Map size",
         "How big the map preview is drawn.", 128, 64, 256, 8, " px").min(16)
         .under(maps);
     private final BoolSetting books = new BoolSetting("Books",
-        "Hover a book to read its first page.", true);
+        "Shows the first page of a book you hover.", true);
     private final BoolSetting banners = new BoolSetting("Banners",
-        "Hover a banner or pattern or shield to see the flag it makes.", true);
+        "Shows the flag a banner or pattern or shield makes as you hover it.", true);
     private final BoolSetting buckets = new BoolSetting("Bucket mobs",
-        "Hover a bucket with a fish or axolotl inside to see the creature.", true);
+        "Shows the creature in a bucket of fish or axolotl as you hover it.", true);
     private final BoolSetting bundles = new BoolSetting("Bundles",
-        "Hover a bundle to see every item inside it rather than the vanilla few.", true);
+        "Shows every item inside a bundle you hover rather than the vanilla few.", true);
     private final BoolSetting foodInfo = new BoolSetting("Food info",
-        "Add a line with the hunger and saturation of food.", true);
+        "Adds a line with the hunger and saturation of food.", true);
     private final BoolSetting effects = new BoolSetting("Effects",
-        "List the potion effects a food or stew gives with their length.", true);
+        "Lists the potion effects a food or stew gives with their length.", true);
     private final BoolSetting byteSize = new BoolSetting("Byte size",
-        "Add a line with how many bytes the item takes up.", true);
+        "Adds a line with how many bytes the item takes up.", true);
     private final EnumSetting<SizeUnit> sizeUnit = new EnumSetting<>("Size unit",
         "The unit the byte size is written in.", SizeUnit.AUTO)
         .describe(SizeUnit.AUTO, "Whichever unit fits the number best.")
         .under(byteSize);
     private final BoolSetting hiddenTooltips = new BoolSetting("Show hidden tooltips",
-        "Show a tooltip even when the item asks for it to be hidden.", false);
+        "Shows a tooltip even when the item asks for it to be hidden.", false);
     private final BoolSetting hiddenLines = new BoolSetting("Show hidden lines",
-        "Show lines the item hides such as enchantments and lore.", false);
+        "Shows lines the item hides such as enchantments and lore.", false);
     private final BoolSetting openContents = new BoolSetting("Open contents",
-        "Click a container or book in an inventory to open a window showing what is inside.", true);
+        "Opens a window showing what is inside a container or book you click in an inventory.", true);
     private final EnumSetting<OpenWith> openWith = new EnumSetting<>("Open with",
         "What opens the window.", OpenWith.MIDDLE_CLICK)
         .describe(OpenWith.MIDDLE_CLICK, "The middle mouse button.")
@@ -137,10 +171,15 @@ public final class BetterTooltips extends Module {
         .under(openContents);
 
     private ItemStack hovered = ItemStack.EMPTY;
+    // One tooltip shows at a time and the size line is asked for every frame it is up.
+    private Sized sized = Sized.NONE;
+    // What a box holds is worked out once for each stack. The slots are drawn every frame and
+    // the server sends a new stack whenever a box changes.
+    private final Map<ItemStack, BoxIcon> icons = new BoundedMap<>(MOST_ICONS, true);
 
     public BetterTooltips() {
         super("BetterTooltips", "Previews and extra facts in item tooltips.", Category.RENDER);
-        addSettings(show, previewKey, containers, compactList, enderChest, maps, mapSize, books, banners,
+        addSettings(show, previewKey, containers, compactList, contentsIcon, enderChest, maps, mapSize, books, banners,
             buckets, bundles, foodInfo, effects, byteSize, sizeUnit, hiddenTooltips, hiddenLines,
             openContents, openWith, openKey, pauseInCreative);
         searchTags("tooltip", "shulker", "preview", "peek");
@@ -149,9 +188,55 @@ public final class BetterTooltips extends Module {
     @Override
     protected void onDisable() {
         hovered = ItemStack.EMPTY;
+        sized = Sized.NONE;
+        icons.clear();
     }
 
-    // Called from the mixin whilst the game builds an item tooltip.
+    // Called from the mixin before the game draws the count and the bar of an item. The icon
+    // goes over the box and under those.
+    public void drawContentsIcon(GuiGraphicsExtractor graphics, Font font, ItemStack stack, int x, int y) {
+        if (!isEnabled() || !contentsIcon.isOn() || !stack.has(DataComponents.CONTAINER) || concealed()) {
+            return;
+        }
+        BoxIcon box = icons.computeIfAbsent(stack, BetterTooltips::iconFor);
+        if (box.icon().isEmpty()) {
+            return;
+        }
+        graphics.pose().pushMatrix();
+        graphics.pose().translate(x + SLOT - ICON, y + SLOT - ICON);
+        graphics.pose().scale((float) ICON / SLOT, (float) ICON / SLOT);
+        graphics.item(box.icon(), 0, 0);
+        graphics.pose().popMatrix();
+        if (box.mixed()) {
+            graphics.text(font, "+", x, y, MIXED_COLOR, true);
+        }
+    }
+
+    // The first stack of the kind the box holds most of. A potion keeps its colour that way.
+    private static BoxIcon iconFor(ItemStack stack) {
+        Iterable<ItemStackTemplate> held = stack.get(DataComponents.CONTAINER).nonEmptyItems();
+        Map<Item, Integer> counts = counts(held);
+        Item most = counts.entrySet().stream().max(Map.Entry.comparingByValue()).map(Map.Entry::getKey).orElse(null);
+        for (ItemStackTemplate template : held) {
+            if (template.item().value() == most) {
+                return new BoxIcon(template.withCount(1).create(), counts.size() > 1);
+            }
+        }
+        return BoxIcon.NONE;
+    }
+
+    // How many of each kind the stacks hold between them in the order the kinds first turn up.
+    private static Map<Item, Integer> counts(Iterable<ItemStackTemplate> held) {
+        Map<Item, Integer> counts = new LinkedHashMap<>();
+        for (ItemStackTemplate template : held) {
+            if (template.count() > 0) {
+                counts.merge(template.item().value(), template.count(), Integer::sum);
+            }
+        }
+        return counts;
+    }
+
+    // Called from the mixins just before the game sets an item tooltip.
     public void setHovered(ItemStack stack) {
         hovered = stack;
     }
@@ -160,11 +245,11 @@ public final class BetterTooltips extends Module {
     public List<ClientTooltipComponent> decorate(List<ClientTooltipComponent> rows) {
         ItemStack stack = hovered;
         hovered = ItemStack.EMPTY;
-        if (!isEnabled() || stack.isEmpty()) {
+        if (!isEnabled() || stack.isEmpty() || concealed()) {
             return rows;
         }
         List<ClientTooltipComponent> out = new ArrayList<>(rows);
-        // An empty tooltip is one the item hides and it only ever gets the hint.
+        // An empty tooltip is one the item hides. It only gets the preview or the hint.
         boolean hidden = rows.isEmpty();
         if (!hidden) {
             int at = Math.min(1, out.size());
@@ -176,20 +261,24 @@ public final class BetterTooltips extends Module {
                 out.add(text(size));
             }
         }
+        Preview kind = previewOf(stack);
+        if (kind == null) {
+            return out;
+        }
         if (previewing()) {
-            ClientTooltipComponent preview = preview(stack);
+            ClientTooltipComponent preview = preview(stack, kind);
             if (preview != null) {
-                if (stack.getItem() instanceof BundleItem) {
+                if (kind == Preview.BUNDLE) {
                     out.removeIf(row -> row instanceof ClientBundleTooltip);
                 }
                 out.add(preview);
             }
-        } else if (previewable(stack)) {
+        } else {
             if (!hidden) {
                 out.add(text(Component.empty()));
             }
             out.add(text(Component.literal("Hold ")
-                .append(Component.literal(previewKey.getKeyName()).withStyle(ChatFormatting.YELLOW))
+                .append(Component.literal(previewKey.getValueString()).withStyle(ChatFormatting.YELLOW))
                 .append(" to preview")));
         }
         return out;
@@ -203,13 +292,18 @@ public final class BetterTooltips extends Module {
         return show.is(When.ALWAYS) || previewKey.isHeld();
     }
 
+    // With no screen open the item sits in the hotbar which is part of the overlay.
+    private boolean concealed() {
+        return Conceal.hides(mc.gui.screen() == null ? Conceal.Part.OVERLAY : Conceal.Part.SCREENS);
+    }
+
     // True whilst a preview is up. The vanilla shulker item lines can then go.
     public boolean skipsContainerLines() {
-        return isEnabled() && containers.isOn() && previewing();
+        return isEnabled() && containers.isOn() && previewing() && !concealed();
     }
 
     public boolean compactsContainerLines() {
-        return isEnabled() && containers.isOn() && compactList.isOn();
+        return isEnabled() && containers.isOn() && compactList.isOn() && !concealed();
     }
 
     public boolean showsHiddenTooltips() {
@@ -222,13 +316,7 @@ public final class BetterTooltips extends Module {
 
     // The five biggest item types by count and how many more kinds there are.
     public void compactLines(List<Optional<ItemStackTemplate>> slots, Consumer<Component> out) {
-        Map<Item, Integer> counts = new LinkedHashMap<>();
-        for (Optional<ItemStackTemplate> slot : slots) {
-            if (slot.isEmpty() || slot.get().count() == 0) {
-                continue;
-            }
-            counts.merge(slot.get().item().value(), slot.get().count(), Integer::sum);
-        }
+        Map<Item, Integer> counts = counts(slots.stream().flatMap(Optional::stream).toList());
         counts.entrySet().stream()
             .sorted(Comparator.comparingInt((Map.Entry<Item, Integer> entry) -> entry.getValue()).reversed())
             .limit(COMPACT_ROWS)
@@ -277,27 +365,28 @@ public final class BetterTooltips extends Module {
         return found;
     }
 
-    private Component effectLine(MobEffectInstance effect) {
-        float tickRate = mc.level == null ? SharedConstants.TICKS_PER_SECOND : mc.level.tickRateManager().tickrate();
-        MutableComponent line = Component.translatable(effect.getDescriptionId());
-        if (effect.getAmplifier() != 0) {
-            line.append(" " + (effect.getAmplifier() + 1));
-        }
-        line.append(" (").append(MobEffectUtil.formatDuration(effect, 1, tickRate)).append(")");
-        return line.withStyle(effect.getEffect().value().isBeneficial() ? ChatFormatting.BLUE : ChatFormatting.RED);
+    private static Component effectLine(MobEffectInstance effect) {
+        return Component.literal(EffectText.name(effect) + " (" + EffectText.timeLeft(effect) + ")")
+            .withStyle(effect.getEffect().value().isBeneficial() ? ChatFormatting.BLUE : ChatFormatting.RED);
     }
 
     private Component byteSizeLine(ItemStack stack) {
         if (!byteSize.isOn() || mc.player == null) {
             return null;
         }
-        Optional<Tag> tag = ItemStack.CODEC
-            .encodeStart(mc.player.registryAccess().createSerializationContext(NbtOps.INSTANCE), stack)
-            .result();
-        if (tag.isEmpty()) {
+        if (!sized.holds(stack)) {
+            sized = new Sized(stack, stack.get(DataComponents.BUNDLE_CONTENTS), bytesOf(stack));
+        }
+        if (sized.bytes() == Sized.UNWRITABLE) {
             return Component.literal("Size unknown").withStyle(ChatFormatting.RED);
         }
-        return Component.literal(sizeText(tag.get().sizeInBytes())).withStyle(ChatFormatting.DARK_GRAY);
+        return Component.literal(sizeText(sized.bytes())).withStyle(ChatFormatting.DARK_GRAY);
+    }
+
+    private int bytesOf(ItemStack stack) {
+        return ItemStack.CODEC
+            .encodeStart(mc.player.registryAccess().createSerializationContext(NbtOps.INSTANCE), stack)
+            .result().map(Tag::sizeInBytes).orElse(Sized.UNWRITABLE);
     }
 
     private String sizeText(int bytes) {
@@ -312,28 +401,32 @@ public final class BetterTooltips extends Module {
         };
     }
 
-    // True for anything that would get a preview whilst the key is held.
-    private boolean previewable(ItemStack stack) {
+    // The preview a stack gets whilst the key is held. Null when there is nothing to show.
+    private Preview previewOf(ItemStack stack) {
         Item item = stack.getItem();
         if (containers.isOn() && hasContents(stack)) {
-            return true;
+            return Preview.CONTAINER;
         }
         if (enderChest.isOn() && item == Items.ENDER_CHEST) {
-            return true;
+            return Preview.ENDER_CHEST;
         }
-        if (maps.isOn() && item == Items.FILLED_MAP) {
-            return true;
+        // A map the server has not sent yet has no picture.
+        if (maps.isOn() && item == Items.FILLED_MAP && MapPreview.dataOf(stack.get(DataComponents.MAP_ID)) != null) {
+            return Preview.MAP;
         }
-        if (books.isOn() && (item == Items.WRITABLE_BOOK || item == Items.WRITTEN_BOOK)) {
-            return true;
+        if (books.isOn() && pageCount(stack) > 0) {
+            return Preview.BOOK;
         }
         if (banners.isOn() && isBannerLike(stack)) {
-            return true;
+            return Preview.BANNER;
         }
         if (buckets.isOn() && item instanceof MobBucketItem) {
-            return true;
+            return Preview.BUCKET;
         }
-        return bundles.isOn() && item instanceof BundleItem && hasBundleItems(stack);
+        if (bundles.isOn() && item instanceof BundleItem && hasBundleItems(stack)) {
+            return Preview.BUNDLE;
+        }
+        return null;
     }
 
     private static boolean hasContents(ItemStack stack) {
@@ -354,56 +447,43 @@ public final class BetterTooltips extends Module {
             && !stack.getOrDefault(DataComponents.BANNER_PATTERNS, BannerPatternLayers.EMPTY).layers().isEmpty();
     }
 
-    // Null when there is nothing worth previewing.
-    private ClientTooltipComponent preview(ItemStack stack) {
-        Item item = stack.getItem();
-        if (containers.isOn() && hasContents(stack)) {
-            return new ContainerPreview(ContainerPreview.contentsOf(stack), COLUMNS, ContainerPreview.tintOf(stack));
-        }
-        if (enderChest.isOn() && item == Items.ENDER_CHEST) {
-            List<ItemStack> chest = EnderChest.INSTANCE.contents();
-            return chest.isEmpty()
-                ? text(Component.literal("Unknown inventory.").withStyle(ChatFormatting.DARK_RED))
-                : new ContainerPreview(chest, COLUMNS, ContainerPreview.tintOf(stack));
-        }
-        if (maps.isOn() && item == Items.FILLED_MAP) {
-            return mapPreview(stack);
-        }
-        if (books.isOn() && (item == Items.WRITABLE_BOOK || item == Items.WRITTEN_BOOK)) {
-            return bookPreview(stack);
-        }
-        if (banners.isOn() && isBannerLike(stack)) {
-            return bannerPreview(stack);
-        }
-        if (buckets.isOn() && item instanceof MobBucketItem bucket) {
-            return bucketPreview(stack, bucket);
-        }
-        if (bundles.isOn() && item instanceof BundleItem && hasBundleItems(stack)) {
-            return new ContainerPreview(stack.get(DataComponents.BUNDLE_CONTENTS).itemCopies().toList(), COLUMNS);
-        }
-        return null;
+    // Null when a bucket mob cannot be built.
+    private ClientTooltipComponent preview(ItemStack stack, Preview kind) {
+        return switch (kind) {
+            case CONTAINER -> new ContainerPreview(ContainerPreview.contentsOf(stack), COLUMNS,
+                ContainerPreview.tintOf(stack));
+            case ENDER_CHEST -> enderChestPreview(stack);
+            case MAP -> new MapPreview(MapPreview.stateOf(stack), mapSize.getInt());
+            case BOOK -> bookPreview(stack);
+            case BANNER -> bannerPreview(stack);
+            case BUCKET -> bucketPreview(stack, (MobBucketItem) stack.getItem());
+            case BUNDLE -> new ContainerPreview(stack.get(DataComponents.BUNDLE_CONTENTS).itemCopies().toList(),
+                COLUMNS);
+        };
     }
 
-    private ClientTooltipComponent mapPreview(ItemStack stack) {
-        MapRenderState state = MapPreview.stateOf(stack);
-        return state == null ? null : new MapPreview(state, mapSize.getInt());
+    private static ClientTooltipComponent enderChestPreview(ItemStack stack) {
+        List<ItemStack> chest = EnderChest.INSTANCE.contents();
+        return chest.isEmpty()
+            ? text(Component.literal("Unknown inventory.").withStyle(ChatFormatting.DARK_RED))
+            : new ContainerPreview(chest, COLUMNS, ContainerPreview.tintOf(stack));
     }
 
+    // How many pages a book holds. A book and quill nobody has written in holds none.
+    private static int pageCount(ItemStack stack) {
+        if (stack.getItem() == Items.WRITABLE_BOOK) {
+            return stack.getOrDefault(DataComponents.WRITABLE_BOOK_CONTENT, WritableBookContent.EMPTY).pages().size();
+        }
+        return stack.getItem() == Items.WRITTEN_BOOK
+            ? stack.getOrDefault(DataComponents.WRITTEN_BOOK_CONTENT, WrittenBookContent.EMPTY).pages().size() : 0;
+    }
+
+    // Only asked for a book with a page.
     private static ClientTooltipComponent bookPreview(ItemStack stack) {
-        Component first = null;
-        int pages = 0;
-        WritableBookContent writable = stack.get(DataComponents.WRITABLE_BOOK_CONTENT);
-        WrittenBookContent written = stack.get(DataComponents.WRITTEN_BOOK_CONTENT);
-        if (writable != null && !writable.pages().isEmpty()) {
-            first = Component.literal(writable.pages().getFirst().get(false));
-            pages = writable.pages().size();
-        } else if (written != null && !written.pages().isEmpty()) {
-            first = written.pages().getFirst().get(false);
-            pages = written.pages().size();
-        }
-        if (first == null) {
-            return null;
-        }
+        Component first = stack.getItem() == Items.WRITABLE_BOOK
+            ? Component.literal(stack.get(DataComponents.WRITABLE_BOOK_CONTENT).pages().getFirst().get(false))
+            : stack.get(DataComponents.WRITTEN_BOOK_CONTENT).pages().getFirst().get(false);
+        int pages = pageCount(stack);
         String count = pages == 1 ? " (1 page)" : " (" + pages + " pages)";
         return new BookPreview(BookPreview.head(first).append(Component.literal(count).withStyle(ChatFormatting.GRAY)));
     }
@@ -442,11 +522,12 @@ public final class BetterTooltips extends Module {
 
     // True for the click or key the player picked to open a window.
     public boolean wantsToOpen(MouseButtonEvent event) {
-        return canOpen() && openWith.is(OpenWith.MIDDLE_CLICK) && event.button() == InputConstants.MOUSE_BUTTON_MIDDLE;
+        return canOpen() && (openWith.is(OpenWith.MIDDLE_CLICK)
+            ? event.button() == InputConstants.MOUSE_BUTTON_MIDDLE : openKey.answers(event));
     }
 
     public boolean wantsToOpen(KeyEvent event) {
-        return canOpen() && openWith.is(OpenWith.KEY) && openKey.isBound() && event.key() == openKey.getValue();
+        return canOpen() && openWith.is(OpenWith.KEY) && openKey.answers(event);
     }
 
     private boolean canOpen() {

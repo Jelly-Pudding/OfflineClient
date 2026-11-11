@@ -6,6 +6,8 @@ import com.jellypudding.offlineclient.event.events.PacketSendEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.modules.hunting.SignReader;
+import com.jellypudding.offlineclient.modules.misc.ColourCodes;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
@@ -13,18 +15,24 @@ import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.setting.TextSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.BoundedMap;
-import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.ChatWarning;
 import com.jellypudding.offlineclient.util.Cooldowns;
 import com.jellypudding.offlineclient.util.FaceMode;
+import com.jellypudding.offlineclient.util.FormatCodes;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.HotbarLoan;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.LiveText;
+import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.RotationPriority;
+import com.jellypudding.offlineclient.util.SignStory;
+import com.jellypudding.offlineclient.util.SignWords;
 import com.jellypudding.offlineclient.util.UseBudget;
+import com.jellypudding.offlineclient.util.UseClick;
 import com.jellypudding.offlineclient.util.WorldWatch;
+import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.component.DataComponents;
@@ -33,6 +41,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ClientboundOpenSignEditorPacket;
 import net.minecraft.network.protocol.game.ServerboundSignUpdatePacket;
 import net.minecraft.network.protocol.game.ServerboundUseItemOnPacket;
+import net.minecraft.util.StringUtil;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.DyeColor;
@@ -64,7 +73,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 // have text of their own. It can also write the signs around you and sign each block you place.
 public final class AutoSign extends Module {
 
-    public enum Source { TYPED, FIRST_SIGN }
+    public enum Source { TYPED, FIRST_SIGN, FILE, REMEMBERED }
 
     public enum Back { BLANK, SAME, OWN }
 
@@ -86,7 +95,10 @@ public final class AutoSign extends Module {
     private final EnumSetting<Source> source = new EnumSetting<>("Source",
         "Where the text comes from.", Source.TYPED)
         .describe(Source.TYPED, "The text typed below.")
-        .describe(Source.FIRST_SIGN, "Copies whatever you write on the next sign by hand.");
+        .describe(Source.FIRST_SIGN, "Copies whatever you write on the next sign by hand.")
+        .describe(Source.FILE, "Runs the text of a file on from sign to sign four lines at a time.")
+        .describe(Source.REMEMBERED, "Writes back what SignReader saw on a sign first. Place a sign where one "
+            + "is gone or open one that changed.");
     private final TextSetting front = new TextSetting("Text",
         "What the front says. Type \\n to start a new line. You can use " + LiveText.WORDS + ".",
         "{username}\\nwas here")
@@ -97,11 +109,13 @@ public final class AutoSign extends Module {
     private final TextSetting hangingFront = new TextSetting("Hanging text",
         "What the front of a hanging sign says. Type \\n to start a new line.", "")
         .under(ownHanging);
+    private final SignStory story = new SignStory().under(source, Source.FILE);
     private final EnumSetting<Back> back = new EnumSetting<>("Back",
         "What the back of the sign says.", Back.BLANK)
         .describe(Back.BLANK, "Leaves the back empty.")
         .describe(Back.SAME, "Writes the front text on the back as well.")
-        .describe(Back.OWN, "Writes its own text on the back.");
+        .describe(Back.OWN, "Writes its own text on the back.")
+        .visibleWhen(() -> !source.is(Source.REMEMBERED));
     private final TextSetting backText = new TextSetting("Back text",
         "What the back says. Type \\n to start a new line.", "")
         .under(back, Back.OWN);
@@ -118,9 +132,10 @@ public final class AutoSign extends Module {
         .under(aura);
     private final BoolSetting overwrite = new BoolSetting("Overwrite",
         "Also rewrites signs that already have writing. Off only fills blank ones.", false)
-        .under(aura);
+        .under(aura, () -> aura.isOn() && !source.is(Source.FILE));
     private final BoolSetting placeSigns = new BoolSetting("Place signs",
-        "Puts a sign on each block you place by hand. Standing signs go first and hanging ones after.",
+        "Puts a sign on each block you place by hand. Opening a block such as a chest with a block in hand "
+            + "signs that block instead. Standing signs go first and hanging ones after.",
         false);
     private final RegistryListSetting<Item> skipSigns = new RegistryListSetting<>("Skip signs",
         "Sign types it never places.", BuiltInRegistries.ITEM, List.of())
@@ -148,6 +163,8 @@ public final class AutoSign extends Module {
         private final BlockPos pos;
         private final Deque<SignTextSlot> sides;
         private final Deque<Finish> finishes = new ArrayDeque<>();
+        // The part of the story this sign takes. Null for any other source.
+        private SignStory.Chunk story;
         private Step step;
         private int waited;
 
@@ -180,9 +197,11 @@ public final class AutoSign extends Module {
 
     public AutoSign() {
         super("AutoSign", "Writes your text on signs without the edit screen showing.", Category.WORLD);
-        addSettings(source, front, ownHanging, hangingFront, back, backText, hangingBack, delay, faceTarget,
-            aura, range, overwrite, placeSigns, skipSigns, dyes, glow, wax);
-        searchTags("sign", "text", "dye", "glow", "wax");
+        addSettings(source, front, ownHanging, hangingFront);
+        addSettings(story.settings());
+        addSettings(back, backText, hangingBack, delay, faceTarget, aura, range, overwrite, placeSigns, skipSigns,
+            dyes, glow, wax);
+        searchTags("sign", "text", "dye", "glow", "wax", "story", "file");
     }
 
     @Override
@@ -196,6 +215,7 @@ public final class AutoSign extends Module {
     @Override
     protected void onEnable() {
         learned = null;
+        story.readAgain();
         written = 0;
         world.accept();
         reset();
@@ -218,9 +238,14 @@ public final class AutoSign extends Module {
         noHand.clear();
     }
 
-    // Safe on any thread. Only the settings and the learned lines are read.
+    // Safe on any thread. Only the settings and the learned lines and the story are read.
     private boolean hasText() {
-        return source.is(Source.TYPED) || learned != null;
+        return switch (source.getValue()) {
+            case TYPED -> true;
+            case FIRST_SIGN -> learned != null;
+            case FILE -> story.left();
+            case REMEMBERED -> true;
+        };
     }
 
     // Fired on the network thread. The editor never shows for a sign AutoSign writes.
@@ -234,13 +259,13 @@ public final class AutoSign extends Module {
 
     @Subscribe
     private void onPacketSend(PacketSendEvent event) {
-        if (sending || event.isCancelled() || !inGame()) {
+        if (sending || !inGame()) {
             return;
         }
         if (event.getPacket() instanceof ServerboundSignUpdatePacket packet) {
             learn(packet);
         } else if (event.getPacket() instanceof ServerboundUseItemOnPacket packet && placeSigns.isOn()
-            && InputUtil.physicallyHeld(mc.options.keyUse)) {
+            && InputUtil.physicallyHeld(mc.options.keyUse) && placesBlock(UseClick.heldAtClick(packet.hand()))) {
             BlockHitResult hit = packet.hitResult();
             base = new Base(hit.getBlockPos(), hit.getDirection(), ticks + Math.max(1, delay.getInt()));
         }
@@ -257,7 +282,7 @@ public final class AutoSign extends Module {
         if (!first) {
             return;
         }
-        ChatUtil.message("§bAutoSign §7copied that sign.");
+        tell("copied that sign.");
         SignBlockEntity sign = signAt(packet.pos());
         SignTextSlot other = packet.slot() == SignTextSlot.FRONT ? SignTextSlot.BACK : SignTextSlot.FRONT;
         if (job == null && sign != null && linesFor(sign, other) != null) {
@@ -267,9 +292,6 @@ public final class AutoSign extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame()) {
-            return;
-        }
         if (world.changed() || mc.player.isDeadOrDying()) {
             reset();
             return;
@@ -279,6 +301,9 @@ public final class AutoSign extends Module {
         // A switch to copying waits for the next sign you write.
         if (!source.is(Source.FIRST_SIGN)) {
             learned = null;
+        }
+        if (source.is(Source.FILE)) {
+            story.read();
         }
         takeOpened();
         if (pause > 0) {
@@ -297,9 +322,10 @@ public final class AutoSign extends Module {
         }
     }
 
-    // Clicks wait whilst a screen is open or the server's use budget is spent.
+    // Clicks wait whilst a screen is open or the server's use budget is spent or something else
+    // has the hands.
     private boolean canClick() {
-        return mc.gui.screen() == null && UseBudget.remaining() > 0;
+        return mc.gui.screen() == null && UseBudget.remaining() > 0 && !Hands.taken();
     }
 
     private void takeOpened() {
@@ -324,7 +350,7 @@ public final class AutoSign extends Module {
         }
         List<SignTextSlot> sides = sidesToWrite(sign);
         if (!sides.isEmpty()) {
-            job = new Job(sign.getBlockPos(), sides, Step.WRITE);
+            job = begin(sign, sides, Step.WRITE);
             pause = delay.getInt();
         } else if (!recent.contains(sign.getBlockPos())) {
             // There is nothing to write. The editor opens as it would without AutoSign.
@@ -353,6 +379,10 @@ public final class AutoSign extends Module {
         }
         SignTextSlot side = job.sides.poll();
         send(new ServerboundSignUpdatePacket(job.pos, linesFor(sign, side), side));
+        // The story moves on once the front of a sign has taken its lines.
+        if (side == SignTextSlot.FRONT && job.story != null) {
+            story.took(job.story);
+        }
         if (!job.sides.isEmpty()) {
             job.step = Step.CLICK;
             return;
@@ -495,38 +525,38 @@ public final class AutoSign extends Module {
             return;
         }
         recent.put(pos, RETRY_TICKS);
-        List<SignTextSlot> sides = sidesToWrite(signAt(pos));
+        SignBlockEntity sign = signAt(pos);
+        List<SignTextSlot> sides = sidesToWrite(sign);
         if (clickSign(pos)) {
-            job = new Job(pos, sides, Step.OPENING);
+            job = begin(sign, sides, Step.OPENING);
         }
     }
 
-    // An unwaxed sign in reach that the server lets you edit and that lacks your text.
+    // A sign written from a file keeps the lines it started with. The story place moves on
+    // under it before its back and its dye are done.
+    private Job begin(SignBlockEntity sign, List<SignTextSlot> sides, Step step) {
+        Job started = new Job(sign.getBlockPos(), sides, step);
+        if (source.is(Source.FILE)) {
+            started.story = story.chunk(sign.getMaxTextLineWidth());
+        }
+        return started;
+    }
+
+    // An unwaxed sign in reach that the server lets you edit and that lacks your text. A click
+    // on a sign runs any command in its text and the aura keeps away from those.
     private boolean auraWants(BlockPos pos) {
         if (recent.contains(pos) || !(mc.level.getBlockEntity(pos) instanceof SignBlockEntity sign)) {
             return false;
         }
-        boolean filtering = mc.player.isTextFilteringEnabled();
-        if (sign.isWaxed() || runsClicks(sign, filtering)
-            || !sign.getText(sign.getSlotPlayerIsFacing(mc.player)).hasEditableText(filtering)) {
+        if (sign.isWaxed() || SignWords.runsClicks(sign) || !sign.getText(sign.getSlotPlayerIsFacing(mc.player))
+            .hasEditableText(mc.player.isTextFilteringEnabled())) {
             return false;
         }
-        if (!overwrite.isOn() && SIDES.stream().anyMatch(side -> sign.getText(side).hasMessage(filtering))) {
+        // A story only ever goes onto blank signs. Each one would take the next lines otherwise.
+        if ((!overwrite.isOn() || source.is(Source.FILE)) && SignWords.isWritten(sign)) {
             return false;
         }
         return BlockUtil.serverReaches(pos) && !sidesToWrite(sign).isEmpty();
-    }
-
-    // A click on a sign runs any command in its text. The aura keeps away from those.
-    private static boolean runsClicks(SignBlockEntity sign, boolean filtering) {
-        for (SignTextSlot side : SIDES) {
-            for (Component line : sign.getText(side).getMessages(filtering)) {
-                if (line.getStyle().getClickEvent() != null) {
-                    return true;
-                }
-            }
-        }
-        return false;
     }
 
     // A sign on the block you placed. When the click only used a block such as a chest the
@@ -592,6 +622,12 @@ public final class AutoSign extends Module {
         return item instanceof BlockItem block && block.getBlock() instanceof SignBlock;
     }
 
+    // Only a block that is not a sign places something to sign. Eating or drinking or an empty
+    // hand sends the same click on a block.
+    private static boolean placesBlock(Item item) {
+        return item instanceof BlockItem && !isSign(item);
+    }
+
     // The sides whose wanted lines differ from what the sign shows.
     private List<SignTextSlot> sidesToWrite(SignBlockEntity sign) {
         List<SignTextSlot> sides = new ArrayList<>();
@@ -604,40 +640,67 @@ public final class AutoSign extends Module {
         return sides;
     }
 
+    // With colour codes on a line shows with its codes made real. A server that took them out
+    // again shows the bare letters and the line still counts as written.
     private boolean shows(SignText text, List<String> lines) {
         List<Component> messages = text.getMessages(mc.player.isTextFilteringEnabled());
+        boolean coloured = coloured();
         for (int i = 0; i < lines.size(); i++) {
-            if (!messages.get(i).getString().equals(lines.get(i))) {
+            String shown = messages.get(i).getString();
+            String wanted = coloured ? FormatCodes.coded(lines.get(i)) : lines.get(i);
+            if (!shown.equals(wanted) && !(coloured && shown.equals(ChatFormatting.stripFormatting(wanted)))) {
                 return false;
             }
         }
         return true;
     }
 
+    // True whilst ColourCodes makes the codes in a sign line real on its way out.
+    private static boolean coloured() {
+        ColourCodes codes = Modules.active(ColourCodes.class);
+        return codes != null && codes.coloursSigns();
+    }
+
     // The four lines one side should show cut to what fits on the sign like the edit screen
     // cuts them. Null when that side is left as it is.
     private List<String> linesFor(SignBlockEntity sign, SignTextSlot side) {
-        List<String> wanted = wantedLines(sign instanceof HangingSignBlockEntity, side);
+        List<String> wanted = wantedLines(sign, side);
         if (wanted == null) {
             return null;
         }
+        boolean coloured = coloured();
+        int width = sign.getMaxTextLineWidth();
         List<String> lines = new ArrayList<>(SignText.LINES);
         for (int i = 0; i < SignText.LINES; i++) {
             String line = i < wanted.size() ? wanted.get(i) : "";
-            lines.add(mc.font.plainSubstrByWidth(line, sign.getMaxTextLineWidth()));
+            // A colour code takes no room on the sign.
+            String fitted = coloured ? FormatCodes.fit(line, mc.font::width, width)
+                : mc.font.plainSubstrByWidth(line, width);
+            // Characters that take no room could run a line past what an edit carries.
+            lines.add(StringUtil.truncateStringIfNecessary(fitted, SignWords.MOST_LINE_CHARS, false));
         }
         return lines;
     }
 
     // The lines of one side with the live words filled in. A back that repeats the front reads it.
-    private List<String> wantedLines(boolean hanging, SignTextSlot side) {
-        boolean ownHangingText = hanging && source.is(Source.TYPED) && ownHanging.isOn();
+    private List<String> wantedLines(SignBlockEntity sign, SignTextSlot side) {
+        if (source.is(Source.REMEMBERED)) {
+            SignReader reader = Modules.get(SignReader.class);
+            return reader == null ? null : reader.remembered(sign.getBlockPos(), side);
+        }
+        boolean ownHangingText = sign instanceof HangingSignBlockEntity && source.is(Source.TYPED) && ownHanging.isOn();
         if (side == SignTextSlot.BACK && !back.is(Back.SAME)) {
             return back.is(Back.BLANK) ? null : LiveText.lines((ownHangingText ? hangingBack : backText).getValue());
         }
         if (source.is(Source.FIRST_SIGN)) {
             String[] copied = learned;
             return copied == null ? null : Arrays.stream(copied).map(LiveText::fill).toList();
+        }
+        if (source.is(Source.FILE)) {
+            // The sign being written keeps its own lines. Any other is offered the next ones.
+            SignStory.Chunk lines = job != null && job.story != null && job.pos.equals(sign.getBlockPos())
+                ? job.story : story.chunk(sign.getMaxTextLineWidth());
+            return lines == null ? null : lines.lines();
         }
         return LiveText.lines((ownHangingText ? hangingFront : front).getValue());
     }

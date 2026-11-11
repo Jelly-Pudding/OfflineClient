@@ -1,8 +1,8 @@
 package com.jellypudding.offlineclient.hud.elements;
 
 import com.jellypudding.offlineclient.OfflineClient;
-import com.jellypudding.offlineclient.hud.HudElement;
 import com.jellypudding.offlineclient.hud.RowCache;
+import com.jellypudding.offlineclient.hud.RowsElement;
 import com.jellypudding.offlineclient.hud.TextRow;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.modules.misc.HudModule;
@@ -11,14 +11,12 @@ import com.jellypudding.offlineclient.setting.ChoiceListSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
 
 import java.util.ArrayList;
 import java.util.List;
 
-// Whether each module you pick is on or off. Each row lines up with the side the element is
-// anchored to.
-public final class ModuleStatusElement extends HudElement {
+// Whether each module you pick is on or off.
+public final class ModuleStatusElement extends RowsElement {
 
     // The fighting modules most worth keeping an eye on.
     private static final List<String> WATCHED = List.of("KillAura", "CrystalAura", "AnchorAura", "BedAura",
@@ -77,7 +75,8 @@ public final class ModuleStatusElement extends HudElement {
     }
 
     // The colours are picked a row at a time. A rainbow runs down the rows.
-    private List<TextRow> rows(Font font) {
+    @Override
+    protected List<TextRow> rows(Font font) {
         List<Status> shown = shown();
         List<TextRow> rows = new ArrayList<>(shown.size());
         for (int row = 0; row < shown.size(); row++) {
@@ -94,20 +93,5 @@ public final class ModuleStatusElement extends HudElement {
             return OFF;
         }
         return details.isOn() && status.doing() != null ? status.doing() : ON;
-    }
-
-    @Override
-    public void render(GuiGraphicsExtractor context, Font font) {
-        TextRow.draw(context, font, rows(font), alignment());
-    }
-
-    @Override
-    public int width(Font font) {
-        return TextRow.widest(rows(font));
-    }
-
-    @Override
-    public int height(Font font) {
-        return TextRow.height(font, shown().size());
     }
 }

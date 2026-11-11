@@ -1,15 +1,15 @@
 package com.jellypudding.offlineclient.hud.elements;
 
 import com.jellypudding.offlineclient.OfflineClient;
-import com.jellypudding.offlineclient.hud.HudElement;
+import com.jellypudding.offlineclient.hud.RowsElement;
 import com.jellypudding.offlineclient.hud.TextRow;
+import com.jellypudding.offlineclient.render.ClientFonts;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.Mounts;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.entity.LivingEntity;
 
@@ -17,9 +17,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-// The figures of what you ride worked out the way Nametags works them out above every
-// mount. Each row lines up with the side the element is anchored to.
-public final class MountElement extends HudElement {
+// The figures of what you ride worked out the way Nametags works them out above every mount.
+public final class MountElement extends RowsElement {
 
     // A fast horse that has lost a few hearts stands in whilst the editor is open and you ride
     // nothing. Each figure carries roughly where it sits against wild horses.
@@ -51,7 +50,7 @@ public final class MountElement extends HudElement {
 
     @Override
     public boolean visible() {
-        return isActive() && !rows(OfflineClient.MC.font).isEmpty();
+        return isActive() && !rows(ClientFonts.hud()).isEmpty();
     }
 
     // What you ride whilst it is a mount. Null otherwise.
@@ -63,7 +62,8 @@ public final class MountElement extends HudElement {
         return null;
     }
 
-    private List<TextRow> rows(Font font) {
+    @Override
+    protected List<TextRow> rows(Font font) {
         LivingEntity mount = mount();
         if (mount != null) {
             return rowsOf(font, Mounts.figures(mount), EntityUtil.totalHealth(mount), EntityUtil.healthShare(mount));
@@ -112,23 +112,8 @@ public final class MountElement extends HudElement {
         if (figure.measure() == Mounts.Measure.HEALTH) {
             String now = String.format(Locale.ROOT, "%.0f", healthNow);
             return TextRow.of(font, List.of(label, now, "/" + figure.value()),
-                List.of(name, ColorUtil.health(healthShare), tint));
+                List.of(name, ColorUtil.redToGreen(healthShare), tint));
         }
         return TextRow.of(font, List.of(label, figure.value()), List.of(name, tint));
-    }
-
-    @Override
-    public void render(GuiGraphicsExtractor context, Font font) {
-        TextRow.draw(context, font, rows(font), alignment());
-    }
-
-    @Override
-    public int width(Font font) {
-        return TextRow.widest(rows(font));
-    }
-
-    @Override
-    public int height(Font font) {
-        return TextRow.height(font, rows(font).size());
     }
 }

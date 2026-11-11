@@ -14,8 +14,11 @@ import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.ExplosionUtil;
 import com.jellypudding.offlineclient.util.ItemUtil;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.tags.FluidTags;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
@@ -26,7 +29,9 @@ import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.ItemStackTemplate;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.component.ItemContainerContents;
 import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.DecoratedPotBlock;
@@ -46,8 +51,13 @@ public final class NoInteract extends Module {
     // Which clicks a protected kind of entity is spared.
     public enum Protect { NONE, HIT, USE, BOTH }
 
+    // What a right click with a protected item is kept off.
+    public enum Target { BLOCKS, ENTITIES, BOTH }
+
+    private static final int LAVA_QUIET_TICKS = 200;
+
     private final BoolSetting explosives = new BoolSetting("Explosives",
-        "Block right clicks on beds and respawn anchors where they detonate.", true);
+        "Blocks right clicks on beds and respawn anchors where they detonate.", true);
     private final RegistryListSetting<Block> useBlocks = new RegistryListSetting<>("No use",
         "Blocks that never take a right click. Click to pick them.",
         BuiltInRegistries.BLOCK, List.of());
@@ -66,6 +76,9 @@ public final class NoInteract extends Module {
     private final EnumSetting<ListMode> mineBlocksMode = ListMode.setting("No mine list mode",
         ListMode.BLACKLIST, "Only the listed blocks get broken.",
         "Every block except the listed ones gets broken.");
+    private final BoolSetting lava = new BoolSetting("No mine by lava",
+        "Leaves a block standing whilst lava beside or above it would pour into the gap. Your hand and every"
+            + " mining module keep to it.", false);
     private final RegistryListSetting<EntityType<?>> hitEntities = new RegistryListSetting<>("No hit",
         "Entities that never take a hit. Click to pick them.",
         BuiltInRegistries.ENTITY_TYPE, List.of());
@@ -89,6 +102,21 @@ public final class NoInteract extends Module {
     private final EnumSetting<Protect> pets = protect("Pets", "a tamed animal", Protect.HIT);
     private final EnumSetting<Protect> named = protect("Named", "anything wearing a name tag",
         Protect.NONE);
+    private final BoolSetting useAnyway = new BoolSetting("Use item anyway",
+        "A right click NoInteract drops on a block or an entity still uses the item in your hand as if you"
+            + " clicked the air. Items on the No use items list stay unused.", false);
+    private final RegistryListSetting<Item> useItems = new RegistryListSetting<>("No use items",
+        "Items that never right click a block or an entity whilst in your hand. Click to pick them.",
+        BuiltInRegistries.ITEM, List.of());
+    private final EnumSetting<Target> useItemsOn = new EnumSetting<>("No use items on",
+        "What a right click with one of those items is kept off.", Target.BOTH)
+        .describe(Target.BLOCKS, "Blocks only. A click on an entity goes through.")
+        .describe(Target.ENTITIES, "Entities only. A click on a block goes through.")
+        .describe(Target.BOTH, "Blocks and entities.")
+        .under(useItems, () -> useItems.size() > 0);
+    private final BoolSetting inShulkers = new BoolSetting("Inside shulker boxes",
+        "A shulker box that holds one of those items counts as one.", true)
+        .under(useItems, () -> useItems.size() > 0);
     private final RegistryListSetting<Item> noDrop = new RegistryListSetting<>("No drop",
         "Items you can never throw away by hand. Click to pick them.", BuiltInRegistries.ITEM,
         keptByDefault());
@@ -99,12 +127,16 @@ public final class NoInteract extends Module {
         "Holding this key lets a protected item be thrown.", KeybindSetting.UNBOUND)
         .under(noDrop, () -> noDrop.size() > 0);
 
+    // The player clock when the last line about lava went out.
+    private int lavaToldAt = -LAVA_QUIET_TICKS;
+
     public NoInteract() {
         super("NoInteract", "Stops clicks and throws on the things you choose to protect.", Category.PLAYER);
-        addSettings(explosives, useBlocks, useBlocksMode, useHand, mineBlocks, mineBlocksMode,
+        addSettings(explosives, useBlocks, useBlocksMode, useHand, mineBlocks, mineBlocksMode, lava,
             hitEntities, hitEntitiesMode, useEntities, useEntitiesMode, useEntityHand,
-            friends, babies, pets, named, noDrop, intoFrames, throwKey);
-        searchTags("no click", "protect", "anti bed", "anti drop", "no throw");
+            friends, babies, pets, named, useAnyway, useItems, useItemsOn, inShulkers, noDrop, intoFrames,
+            throwKey);
+        searchTags("no click", "protect", "anti bed", "anti drop", "no throw", "anti interact", "pearl through");
     }
 
     // Diamond and netherite tools and weapons and other gear that is hard to replace. Every
@@ -122,26 +154,42 @@ public final class NoInteract extends Module {
     private static EnumSetting<Protect> protect(String name, String what, Protect defaultValue) {
         return new EnumSetting<>(name, "Which clicks " + what + " is spared.", defaultValue)
             .describe(Protect.NONE, "Hits and right clicks land on " + what + ".")
-            .describe(Protect.HIT, "Never hit " + what + ".")
-            .describe(Protect.USE, "Never right click " + what + ".")
-            .describe(Protect.BOTH, "Never hit or right click " + what + ".");
+            .describe(Protect.HIT, "Never lets you hit " + what + ".")
+            .describe(Protect.USE, "Never lets you right click " + what + ".")
+            .describe(Protect.BOTH, "Never lets you hit or right click " + what + ".");
     }
 
     @Subscribe
     private void onRightClick(RightClickEvent event) {
-        if (!inGame() || mc.hitResult == null) {
-            return;
-        }
-        BlockHitResult aimed = BlockUtil.aimedBlock();
-        if (aimed != null && blocksUse(aimed.getBlockPos())) {
-            event.cancel();
-        }
-        if (mc.hitResult instanceof EntityHitResult hit && blocksEntityUse(hit.getEntity())) {
+        if (inGame() && mc.hitResult != null && dropsWholeClick(mc.hitResult)) {
             event.cancel();
         }
     }
 
-    private boolean blocksUse(BlockPos pos) {
+    // True when no hand may right click what the crosshair rests on.
+    private boolean dropsWholeClick(HitResult target) {
+        if (target instanceof BlockHitResult hit && hit.getType() == HitResult.Type.BLOCK) {
+            return blocksUse(hit.getBlockPos());
+        }
+        return target instanceof EntityHitResult hit && blocksEntityUse(hit.getEntity());
+    }
+
+    // Called from the game around a right click. True when the click goes on as one into the air
+    // and the held items are used past what the crosshair rests on. Neither hand may hold an item
+    // that is kept from use or that item would be used.
+    public boolean clicksAsAir(HitResult target) {
+        if (!isEnabled() || !useAnyway.isOn() || !inGame() || !dropsWholeClick(target)) {
+            return false;
+        }
+        boolean onBlock = target.getType() == HitResult.Type.BLOCK;
+        return !keptFromUse(mc.player.getMainHandItem(), onBlock) && !keptFromUse(mc.player.getOffhandItem(), onBlock);
+    }
+
+    // True when no right click may land on the block whatever the hands hold.
+    public boolean blocksUse(BlockPos pos) {
+        if (!isEnabled() || !inGame()) {
+            return false;
+        }
         BlockState state = mc.level.getBlockState(pos);
         Block block = state.getBlock();
         if (listed(useBlocks, useBlocksMode, block)) {
@@ -153,12 +201,12 @@ public final class NoInteract extends Module {
         if (block instanceof BedBlock) {
             return ExplosionUtil.bedsExplodeHere();
         }
-        return block instanceof RespawnAnchorBlock && anchorDetonates(state, pos);
+        return block instanceof RespawnAnchorBlock && anchorDetonates(state);
     }
 
     // True when the click sets the anchor off rather than charging it or setting a spawn.
-    private boolean anchorDetonates(BlockState state, BlockPos pos) {
-        if (!ExplosionUtil.anchorsExplodeAt(pos)) {
+    private boolean anchorDetonates(BlockState state) {
+        if (!ExplosionUtil.anchorsExplodeHere()) {
             return false;
         }
         int charge = state.getValue(RespawnAnchorBlock.CHARGE);
@@ -174,30 +222,70 @@ public final class NoInteract extends Module {
             || mc.player.getOffhandItem().is(Items.GLOWSTONE);
     }
 
-    // Called from the game mode mixin for each hand that tries a block. A protected item
-    // never goes into a pot.
-    public boolean blocksUseWith(InteractionHand hand, BlockPos pos) {
+    // Called from the game mode mixin for each hand that tries a block. Null lets the click through.
+    // FAIL ends the whole right click and PASS goes on to use the item in that hand. A protected
+    // item never goes into a pot.
+    public InteractionResult dropsBlockClick(InteractionHand hand, BlockHitResult hit) {
         if (!isEnabled()) {
-            return false;
+            return null;
         }
-        if (covers(useHand.getValue(), hand)) {
-            return true;
+        ItemStack held = mc.player.getItemInHand(hand);
+        // A right click of the player carries the game's own crosshair result. A module builds its own.
+        boolean player = hit == mc.hitResult;
+        if (player && keptFromUse(held, true)) {
+            return InteractionResult.FAIL;
         }
-        return intoFrames.isOn() && mc.level.getBlockState(pos).getBlock() instanceof DecoratedPotBlock
-            && keeps(mc.player.getItemInHand(hand));
+        boolean dropped = covers(useHand.getValue(), hand) || intoFrames.isOn()
+            && mc.level.getBlockState(hit.getBlockPos()).getBlock() instanceof DecoratedPotBlock && keeps(held);
+        if (!dropped) {
+            return null;
+        }
+        return player && useAnyway.isOn() ? InteractionResult.PASS : InteractionResult.FAIL;
     }
 
-    // Called from the game mode mixin for each hand that tries an entity. A protected item
-    // never goes into an empty item frame. A frame that holds something only turns it.
-    public boolean blocksEntityUseWith(InteractionHand hand, Entity target) {
+    // The same for an entity. The game uses the held item after any entity click that fails and
+    // CONSUME ends a right click of the player without a swing. A module only hears FAIL. A
+    // protected item never goes into an empty item frame. A frame that holds something only turns it.
+    public InteractionResult dropsEntityClick(InteractionHand hand, Entity target, EntityHitResult hit) {
         if (!isEnabled()) {
+            return null;
+        }
+        ItemStack held = mc.player.getItemInHand(hand);
+        boolean player = hit == mc.hitResult;
+        if (player && keptFromUse(held, false)) {
+            return InteractionResult.CONSUME;
+        }
+        boolean dropped = covers(useEntityHand.getValue(), hand) || intoFrames.isOn()
+            && target instanceof ItemFrame frame && frame.getItem().isEmpty() && keeps(held);
+        if (!dropped) {
+            return null;
+        }
+        if (!player) {
+            return InteractionResult.FAIL;
+        }
+        return useAnyway.isOn() ? InteractionResult.PASS : InteractionResult.CONSUME;
+    }
+
+    // True when the stack may not right click a block or an entity. A shulker box counts for what
+    // it holds whilst Inside shulker boxes is on.
+    private boolean keptFromUse(ItemStack stack, boolean onBlock) {
+        if (useItems.size() == 0 || stack.isEmpty() || useItemsOn.is(onBlock ? Target.ENTITIES : Target.BLOCKS)) {
             return false;
         }
-        if (covers(useEntityHand.getValue(), hand)) {
+        if (useItems.contains(stack.getItem())) {
             return true;
         }
-        return intoFrames.isOn() && target instanceof ItemFrame frame && frame.getItem().isEmpty()
-            && keeps(mc.player.getItemInHand(hand));
+        ItemContainerContents box = inShulkers.isOn() && ItemUtil.isShulkerBox(stack.getItem())
+            ? stack.get(DataComponents.CONTAINER) : null;
+        if (box == null) {
+            return false;
+        }
+        for (ItemStackTemplate inside : box.nonEmptyItems()) {
+            if (useItems.contains(inside.item().value())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // True when the stack may not be thrown away. Holding the throw key lets it go.
@@ -229,7 +317,27 @@ public final class NoInteract extends Module {
         if (!isEnabled() || !inGame()) {
             return false;
         }
-        return listed(mineBlocks, mineBlocksMode, mc.level.getBlockState(pos).getBlock());
+        return listed(mineBlocks, mineBlocksMode, mc.level.getBlockState(pos).getBlock()) || refusesBreak(pos);
+    }
+
+    // True whilst No mine by lava keeps the block standing. Asking does nothing else.
+    public boolean holdsBackLava(BlockPos pos) {
+        return isEnabled() && lava.isOn() && inGame() && !mc.level.getBlockState(pos).isAir()
+            && BlockUtil.holdsBackLiquid(pos, liquid -> liquid.is(FluidTags.LAVA));
+    }
+
+    // The same for a break that was about to go out. A chat line says why at most once in ten seconds.
+    public boolean refusesBreak(BlockPos pos) {
+        if (!holdsBackLava(pos)) {
+            return false;
+        }
+        int now = mc.player.tickCount;
+        if (now - lavaToldAt >= LAVA_QUIET_TICKS || now < lavaToldAt) {
+            lavaToldAt = now;
+            tell("left the block at §f" + BlockUtil.text(pos)
+                + " §7standing to hold back lava.");
+        }
+        return true;
     }
 
     private boolean blocksHit(Entity entity) {
@@ -274,10 +382,12 @@ public final class NoInteract extends Module {
         return !mode.getValue().admits(list.contains(entry));
     }
 
+    // A swing at nothing names the empty block at the end of the reach and is never held back.
     public boolean blocksAttack(HitResult result) {
         if (result instanceof EntityHitResult hit) {
             return blocksHit(hit.getEntity());
         }
-        return result instanceof BlockHitResult hit && blocksMining(hit.getBlockPos());
+        return result instanceof BlockHitResult hit && hit.getType() == HitResult.Type.BLOCK
+            && blocksMining(hit.getBlockPos());
     }
 }

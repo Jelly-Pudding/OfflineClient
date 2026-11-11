@@ -38,7 +38,7 @@ public final class NoReturnCommand extends Command {
             case "add" -> add(args, player, noReturn);
             case "list" -> list(noReturn);
             case "remove" -> remove(args);
-            case "clear" -> ChatUtil.message("§bNoReturn §7" + Tally.cleared(ClosedAreas.get().openAll(), "area") + ".");
+            case "clear" -> ChatUtil.tell("NoReturn", Tally.cleared(ClosedAreas.get().openAll(), "area") + ".");
             default -> usage();
         }
     }
@@ -65,14 +65,14 @@ public final class NoReturnCommand extends Command {
             ChatUtil.error("An area round that chunk is closed already.");
             return;
         }
-        ChatUtil.message("§bNoReturn §7closed the area round §f" + Math.round(spot.x) + " " + Math.round(spot.z) + "§7."
+        ChatUtil.tell("NoReturn", "closed the area round §f" + Math.round(spot.x) + " " + Math.round(spot.z) + "§7."
             + (noReturn.isEnabled() ? "" : " Switch NoReturn on to keep out of it."));
     }
 
     private static void list(NoReturn noReturn) {
         List<ClosedAreas.Area> areas = ClosedAreas.get().onServer();
         if (areas.isEmpty()) {
-            ChatUtil.message("§bNoReturn §7has no closed areas on this server.");
+            ChatUtil.tell("NoReturn", "has no closed areas on this server.");
             return;
         }
         int number = 1;
@@ -102,7 +102,7 @@ public final class NoReturnCommand extends Command {
             return;
         }
         ClosedAreas.get().open(areas.get(number.getAsInt() - 1));
-        ChatUtil.message("§bNoReturn §7opened area §f" + number.getAsInt() + "§7.");
+        ChatUtil.tell("NoReturn", "opened area §f" + number.getAsInt() + "§7.");
     }
 
     @Override

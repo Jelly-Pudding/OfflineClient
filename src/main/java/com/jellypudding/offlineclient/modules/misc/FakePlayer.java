@@ -25,7 +25,8 @@ import java.util.List;
 import java.util.UUID;
 import java.util.function.Supplier;
 
-// A client side copy of the player. The server never knows it exists.
+// Client side copies of the player. The server never knows they exist. Switching the module on
+// spawns the copies its settings ask for and the fakeplayer command adds named ones one at a time.
 public final class FakePlayer extends Module {
 
     // How far apart several copies stand.
@@ -34,17 +35,20 @@ public final class FakePlayer extends Module {
     private final TextSetting name = new TextSetting("Name",
         "The name over the copy. Blank uses your own name and skin.", "");
     private final NumberSetting copies = new NumberSetting("Copies",
-        "How many are spawned in a ring round you.", 1, 1, 5, 1).min(1);
+        "How many are spawned in a ring round you.", 1, 1, 5, 1);
     private final BoolSetting copyGear = new BoolSetting("Copy gear",
-        "Give the copy your armour and held items.", true);
+        "Gives the copy your armour and held items.", true);
     private final NumberSetting health = new NumberSetting("Health",
         "Health points the copy starts with.",
-        20, 1, 40, 1).min(1);
+        20, 1, 40, 1);
 
     private final List<Body> bodies = new ArrayList<>();
 
+    // True whilst the command switches the module on for a body of its own.
+    private boolean adding;
+
     public FakePlayer() {
-        super("FakePlayer", "Spawns a copy of you that only you can see. Practise your combat on it.", Category.MISC);
+        super("FakePlayer", "Spawns a copy of you that only you can see to practise your combat on.", Category.MISC);
         addSettings(name, copies, copyGear, health);
         searchTags("dummy", "bot", "target");
     }
@@ -60,29 +64,65 @@ public final class FakePlayer extends Module {
             disable("Join a world before spawning a fake player.");
             return;
         }
+        if (adding) {
+            return;
+        }
         int count = copies.getInt();
         for (int i = 0; i < count; i++) {
-            Body body = new Body(mc.level, mc.player, name.getValue().trim(), health.getFloat(),
-                copyGear.isOn(), false);
-            if (count > 1) {
-                Vec3 offset = Vec3.directionFromRotation(0, mc.player.getYRot() + 360f * i / count)
-                    .scale(RING);
-                body.setPos(mc.player.getX() + offset.x, mc.player.getY(), mc.player.getZ() + offset.z);
-                body.setOldPosAndRot();
-            }
-            mc.level.addEntity(body);
-            bodies.add(body);
+            Vec3 offset = count == 1 ? Vec3.ZERO
+                : Vec3.directionFromRotation(0, mc.player.getYRot() + 360f * i / count).scale(RING);
+            spawn(name.getValue().trim(), mc.player.position().add(offset.x, 0, offset.z));
         }
     }
 
     @Override
     protected void onDisable() {
-        for (Body body : bodies) {
-            if (mc.level != null && body.level() == mc.level) {
-                mc.level.removeEntity(body.getId(), Entity.RemovalReason.DISCARDED);
-            }
-        }
+        bodies.forEach(FakePlayer::discard);
         bodies.clear();
+    }
+
+    // Stands one more body where the player is. A blank name copies the player. Null when the
+    // module could not be switched on for it.
+    public Body add(String name) {
+        if (!isEnabled()) {
+            adding = true;
+            setEnabled(true);
+            adding = false;
+        }
+        return isEnabled() ? spawn(name, mc.player.position()) : null;
+    }
+
+    // Takes away every body of that name whatever its case and hands back how many went. The
+    // module switches off with the last one.
+    public int remove(String name) {
+        List<Body> named = bodies.stream()
+            .filter(body -> body.getGameProfile().name().equalsIgnoreCase(name)).toList();
+        named.forEach(FakePlayer::discard);
+        bodies.removeAll(named);
+        if (!named.isEmpty() && bodies.isEmpty()) {
+            setEnabled(false);
+        }
+        return named.size();
+    }
+
+    // The bodies standing in the world in the order they were added.
+    public List<Body> bodies() {
+        return List.copyOf(bodies);
+    }
+
+    private Body spawn(String name, Vec3 spot) {
+        Body body = new Body(mc.level, mc.player, name, health.getFloat(), copyGear.isOn(), false);
+        body.setPos(spot);
+        body.setOldPosAndRot();
+        mc.level.addEntity(body);
+        bodies.add(body);
+        return body;
+    }
+
+    private static void discard(Body body) {
+        if (mc.level != null && body.level() == mc.level) {
+            mc.level.removeEntity(body.getId(), Entity.RemovalReason.DISCARDED);
+        }
     }
 
     @Subscribe
@@ -158,6 +198,10 @@ public final class FakePlayer extends Module {
                 }
                 ours.setSelectedSlot(theirs.getSelectedSlot());
             }
+        }
+
+        public boolean isGhost() {
+            return ghost;
         }
 
         // Read by EntityRendererMixin. A ghost vanishes whilst the camera is inside or beside it.

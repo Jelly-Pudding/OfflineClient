@@ -11,21 +11,23 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.FaceMode;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.SwingMode;
+import com.jellypudding.offlineclient.util.UseBudget;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.item.BlockItem;
 
 import java.util.concurrent.ThreadLocalRandom;
 
-// Scatters whatever you hold over the ground around you. Fire and lava and spawn
-// eggs work as well as blocks once the held item check is off.
+// Scatters whatever you hold over the ground around you. Fire and spawn eggs work as
+// well as blocks once the held item check is off.
 public final class BuildRandom extends Module {
 
     private final NumberSetting range = new NumberSetting("Range",
-        "How far from your eyes a block may go.", 5, 1, 6, 0.05).min(1);
+        "How far from your eyes a block may go.", 5, 1, 6, 0.05, " blocks");
     private final NumberSetting attempts = new NumberSetting("Attempts",
         "Random spots tried each tick before giving up. More builds faster and lags more.",
-        128, 1, 1024, 1).min(1);
+        128, 1, 1024, 1);
     private final BoolSetting checkItem = new BoolSetting("Check held item",
         "Only places whilst you hold a block.", true);
     private final BoolSetting lineOfSight = new BoolSetting("Line of sight",
@@ -60,7 +62,7 @@ public final class BuildRandom extends Module {
     @Subscribe
     private void onTick(TickEvent event) {
         lastPlaced = null;
-        if (!inGame() || (!fastPlace.isOn() && mc.rightClickDelay > 0)) {
+        if ((!fastPlace.isOn() && mc.rightClickDelay > 0) || UseBudget.remaining() == 0 || Hands.taken()) {
             return;
         }
         if (checkItem.isOn() && !(mc.player.getMainHandItem().getItem() instanceof BlockItem)) {
@@ -85,15 +87,18 @@ public final class BuildRandom extends Module {
         }
     }
 
+    // True once a click went out whether or not it was taken. Every click costs a use packet.
     private boolean tryPlace(BlockPos pos) {
         if (!BlockUtil.isReplaceable(pos)) {
             return false;
         }
         BlockUtil.Placement placement = BlockUtil.placementInReach(pos, range.getValue(), lineOfSight.isOn());
-        if (placement == null || !placement.place(faceTarget.getValue(), swing.getValue())) {
+        if (placement == null) {
             return false;
         }
-        lastPlaced = pos;
+        if (placement.place(faceTarget.getValue(), swing.getValue())) {
+            lastPlaced = pos;
+        }
         return true;
     }
 

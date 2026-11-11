@@ -19,6 +19,7 @@ import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.ItemUtil;
 import com.jellypudding.offlineclient.util.MenuClicks;
+import com.jellypudding.offlineclient.util.Totems;
 import com.jellypudding.offlineclient.util.WorldWatch;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.gui.screens.Screen;
@@ -180,9 +181,6 @@ public final class ChestLink extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame()) {
-            return;
-        }
         ticks++;
         if (world.changed()) {
             forget();
@@ -252,10 +250,9 @@ public final class ChestLink extends Module {
         if (event.getAction() == InputConstants.RELEASE || !inGame()) {
             return;
         }
-        int key = event.getKey();
-        boolean inventoryKey = InputUtil.isKey(mc.options.keyInventory, key);
-        boolean ownKey = showKey.isBound() && key == showKey.getValue();
-        boolean escape = key == InputConstants.KEY_ESCAPE && escapeHides.isOn();
+        boolean inventoryKey = event.isFor(mc.options.keyInventory);
+        boolean ownKey = event.isFor(showKey);
+        boolean escape = event.getKey() == InputConstants.KEY_ESCAPE && escapeHides.isOn();
         Screen screen = mc.gui.screen();
         if (event.getAction() == InputConstants.REPEAT) {
             // A held key repeats. The screen would close the kept menu for good and with no
@@ -304,7 +301,7 @@ public final class ChestLink extends Module {
             saved = false;
             if (!told) {
                 told = true;
-                ChatUtil.message("§bChestLink §7keeps your " + keptName() + " open. Press §f"
+                tell("keeps your " + keptName() + " open. Press §f"
                     + mc.options.keyInventory.getTranslatedKeyMessage().getString() + "§7 to see it again.");
             }
         }
@@ -317,8 +314,7 @@ public final class ChestLink extends Module {
 
     // Saves once each time the danger comes. A totem in hand saves you instead.
     private void guard() {
-        boolean totem = mc.player.getMainHandItem().is(Items.TOTEM_OF_UNDYING)
-            || mc.player.getOffhandItem().is(Items.TOTEM_OF_UNDYING);
+        boolean totem = Totems.inHand(mc.player);
         float left = beforeHits.isOn() ? DamageUtil.healthAfterIncoming() : EntityUtil.totalHealth(mc.player);
         boolean danger = left <= health.getValue() * EntityUtil.HEART && !(unlessTotem.isOn() && totem);
         if (!danger) {
@@ -342,7 +338,7 @@ public final class ChestLink extends Module {
             moved += saveWhere(menu, stack -> true);
         }
         if (moved > 0) {
-            ChatUtil.message("§bChestLink §7saved §f" + moved + "§7 stacks into your " + keptName() + ".");
+            tell("saved §f" + moved + "§7 stacks into your " + keptName() + ".");
         }
     }
 

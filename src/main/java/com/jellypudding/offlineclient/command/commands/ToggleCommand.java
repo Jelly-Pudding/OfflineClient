@@ -44,14 +44,18 @@ public final class ToggleCommand extends Command {
         return null;
     }
 
-    // A module only its bind opens cannot be switched.
     public static void switchTo(Module module, boolean on) {
         if (!module.isTogglable()) {
-            ChatUtil.error(module.getName() + " cannot be toggled. The bind opens it.");
+            cannotSwitch(module);
             return;
         }
         module.setEnabled(on);
         ChatUtil.toggled(module);
+    }
+
+    // The one answer for a module without an on and off whether its name comes alone or after toggle.
+    public static void cannotSwitch(Module module) {
+        ChatUtil.error(module.getName() + " cannot be switched on or off.");
     }
 
     @Override

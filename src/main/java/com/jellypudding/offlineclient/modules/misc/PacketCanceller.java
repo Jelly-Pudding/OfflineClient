@@ -33,8 +33,8 @@ public final class PacketCanceller extends Module {
     private final AtomicInteger dropped = new AtomicInteger();
 
     public PacketCanceller() {
-        super("PacketCanceller", "Drops the kinds of packet you pick. Hides an action from the server or ignores what it sends.",
-            Category.MISC);
+        super("PacketCanceller", "Drops the kinds of packet you pick to hide an action from the server or ignore"
+            + " what it sends.", Category.MISC);
         addSettings(outgoing, incoming);
         searchTags("packet filter", "block packets");
     }

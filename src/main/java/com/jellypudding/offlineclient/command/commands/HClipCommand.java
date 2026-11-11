@@ -3,17 +3,16 @@ package com.jellypudding.offlineclient.command.commands;
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.command.Command;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.ClientLines;
 import com.jellypudding.offlineclient.util.Hop;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.OptionalDouble;
+import java.util.function.Consumer;
 
 public final class HClipCommand extends Command {
-
-    // The search for the far side of a wall steps a quarter block at a time.
-    private static final double SEARCH_STEP = 0.25;
 
     public HClipCommand() {
         super("hclip", "Moves you the way you look without touching your height. With no number it"
@@ -39,17 +38,28 @@ public final class HClipCommand extends Command {
         }
     }
 
-    // The first spot past the wall ahead where there is room again out of lava.
+    // Straight through the wall where the server lets that stand and over it elsewhere. A
+    // hop the server pulls back after all is tried again over the wall.
     private static void throughWall(Entity mover, Vec3 ahead) {
-        boolean inWall = false;
-        for (double reach = SEARCH_STEP; reach <= Hop.MAX_TRIP; reach += SEARCH_STEP) {
-            Vec3 spot = mover.position().add(ahead.scale(reach));
-            if (inWall && Hop.safeAt(mover, spot)) {
-                hopTo(spot, "§7Moved §b" + Math.round(reach) + " §7blocks.");
-                return;
-            }
-            inWall |= !Hop.fits(mover, spot);
+        Vec3 spot = Hop.beyond(mover, ahead, Hop.MAX_TRIP);
+        if (spot == null) {
+            ChatUtil.error("There is no wall ahead with room behind it.");
+            return;
         }
-        ChatUtil.error("There is no wall ahead with room behind it.");
+        Consumer<Hop.Result> told = Hop.telling(
+            "§7Moved §b" + Math.round(spot.distanceTo(mover.position())) + " §7blocks.");
+        Hop.Plan plan = Hop.plan();
+        if (!plan.attempt(trip -> trip.through(spot))) {
+            plan.to(spot).go(told);
+            return;
+        }
+        plan.go(result -> {
+            if (result == Hop.Result.PULLED_BACK) {
+                ClientLines.inChat(() -> ChatUtil.error(result.problem()));
+                Hop.travel(spot, told);
+            } else {
+                told.accept(result);
+            }
+        });
     }
 }

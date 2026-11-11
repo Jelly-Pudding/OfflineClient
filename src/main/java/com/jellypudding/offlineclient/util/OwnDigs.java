@@ -51,7 +51,7 @@ public final class OwnDigs {
     // Last of all because a packet another handler cancels never went out.
     @Subscribe(priority = Subscribe.LAST)
     private void onPacketSend(PacketSendEvent event) {
-        if (!event.isCancelled() && event.getPacket() instanceof ServerboundPlayerActionPacket packet
+        if (event.getPacket() instanceof ServerboundPlayerActionPacket packet
             && (packet.getAction() == ServerboundPlayerActionPacket.Action.START_DESTROY_BLOCK
                 || packet.getAction() == ServerboundPlayerActionPacket.Action.STOP_DESTROY_BLOCK)) {
             dug(packet.getPos());

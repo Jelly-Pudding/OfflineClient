@@ -12,9 +12,9 @@ import com.jellypudding.offlineclient.util.ChunkPaint;
 import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.Modules;
-import com.jellypudding.offlineclient.util.RenderUtil;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+import it.unimi.dsi.fastutil.floats.FloatArrayList;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import net.minecraft.client.gui.Font;
@@ -34,7 +34,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 // What a map draws over the land. The entities Radar picks and your waypoints and the hunting finds
-// and you yourself. The minimap and the map of everything you explored share it.
+// and you yourself. The minimap and the map of everything you explored share it and a map you
+// carry takes the arrow for you.
 public final class MapMarks {
 
     // A waypoint or a find with the colour it is drawn in and what it is called.
@@ -79,7 +80,7 @@ public final class MapMarks {
         for (WaypointStore.Waypoint waypoint : shown) {
             if (!waypoint.hidden()) {
                 Vec3 centre = waypoint.centre();
-                marks.add(new Mark(centre.x, centre.z, Waypoints.colorOf(waypoint), waypoint.name(), true));
+                marks.add(new Mark(centre.x, centre.z, waypoint.argb(), waypoint.name(), true));
             }
         }
         for (FindLog log : FindSource.logs()) {
@@ -161,7 +162,7 @@ public final class MapMarks {
     // and over every square.
     public static void marks(GuiGraphicsExtractor context, Font font, MapView view, List<Mark> marks, boolean edges,
                              boolean names, boolean shadow) {
-        Squares squares = Squares.within(context, view);
+        Shapes squares = Shapes.within(context, view);
         if (squares == null) {
             return;
         }
@@ -180,17 +181,15 @@ public final class MapMarks {
             int left = (int) Math.round(x);
             int top = (int) Math.round(y);
             int half = mark.waypoint() ? WAYPOINT_SIZE : FIND_SIZE;
-            squares.add(left - half - 1, top - half - 1, left + half + 2, top + half + 2, OUTLINE);
-            squares.add(left - half, top - half, left + half + 1, top + half + 1, mark.colour());
+            squares.square(left - half - 1, top - half - 1, left + half + 2, top + half + 2, OUTLINE);
+            squares.square(left - half, top - half, left + half + 1, top + half + 1, mark.colour());
             if (names && mark.waypoint()) {
                 int nameX = left + half + NAME_GAP + 1;
                 int nameY = top - font.lineHeight / 2;
                 labels.add(() -> context.text(font, mark.label(), nameX, nameY, mark.colour(), shadow));
             }
         }
-        if (!squares.isEmpty()) {
-            context.guiRenderState.addGuiElement(squares);
-        }
+        squares.draw(context);
         labels.forEach(Runnable::run);
     }
 
@@ -210,20 +209,26 @@ public final class MapMarks {
         return best;
     }
 
-    // An arrow on your spot pointing the way you face. Yaw nought looks south.
+    // An arrow on your spot pointing the way you face. Yaw nought looks south. Its corners keep
+    // their fractions of a pixel and the arrow glides and turns without a jump.
     public static void self(GuiGraphicsExtractor context, MapView view, double x, double z, float yaw) {
+        Shapes arrows = Shapes.within(context, view);
+        if (arrows == null) {
+            return;
+        }
         Vec3 facing = Vec3.directionFromRotation(0, yaw);
         double pointX = view.turnedX(facing.x, facing.z);
         double pointY = view.turnedY(facing.x, facing.z);
         double spotX = view.screenX(x, z);
         double spotY = view.screenY(x, z);
-        arrow(context, spotX, spotY, pointX, pointY, OUTLINE_GROWTH, OUTLINE);
-        arrow(context, spotX, spotY, pointX, pointY, 1, SELF);
+        arrow(arrows, spotX, spotY, pointX, pointY, OUTLINE_GROWTH, OUTLINE);
+        arrow(arrows, spotX, spotY, pointX, pointY, 1, SELF);
+        arrows.draw(context);
     }
 
     // Two triangles meeting at the tip with a notch cut between the back corners.
-    private static void arrow(GuiGraphicsExtractor context, double x, double y, double pointX, double pointY,
-                              double size, int colour) {
+    private static void arrow(Shapes shapes, double x, double y, double pointX, double pointY, double size,
+                              int colour) {
         double sideX = -pointY;
         double sideY = pointX;
         double tipX = x + pointX * ARROW_TIP * size;
@@ -233,8 +238,8 @@ public final class MapMarks {
         double notchX = x - pointX * ARROW_NOTCH * size;
         double notchY = y - pointY * ARROW_NOTCH * size;
         double wing = ARROW_SIDE * size;
-        RenderUtil.triangle(context, tipX, tipY, backX + sideX * wing, backY + sideY * wing, notchX, notchY, colour);
-        RenderUtil.triangle(context, tipX, tipY, notchX, notchY, backX - sideX * wing, backY - sideY * wing, colour);
+        shapes.triangle(tipX, tipY, backX + sideX * wing, backY + sideY * wing, notchX, notchY, colour);
+        shapes.triangle(tipX, tipY, notchX, notchY, backX - sideX * wing, backY - sideY * wing, colour);
     }
 
     // The letter for north on the edge of the map the way north lies.
@@ -248,56 +253,77 @@ public final class MapMarks {
             (int) Math.round(y - font.lineHeight / 2.0), NORTH, shadow);
     }
 
-    // The squares of one call as a single element clipped to the view. The game places each
+    // The filled shapes of one call as a single element clipped to the view. The game places each
     // element it is given by searching the ones before it. Thousands of finds as an element each
-    // would cost the square of their count every frame.
-    private static final class Squares implements GuiElementRenderState {
+    // would cost the square of their count every frame. A corner here may sit between two pixels
+    // which a corner of the game's own filled rectangles cannot.
+    private static final class Shapes implements GuiElementRenderState {
 
-        // Left top right bottom and colour of each square.
-        private static final int PARTS = 5;
+        // Every shape has four corners with an x and a y each.
+        private static final int CORNERS = 4;
+        private static final int PARTS = CORNERS * 2;
 
         private final Matrix3x2f pose;
         private final ScreenRectangle area;
-        private final IntArrayList parts = new IntArrayList();
+        private final FloatArrayList corners = new FloatArrayList();
+        private final IntArrayList colours = new IntArrayList();
 
-        private Squares(Matrix3x2f pose, ScreenRectangle area) {
+        private Shapes(Matrix3x2f pose, ScreenRectangle area) {
             this.pose = pose;
             this.area = area;
         }
 
         // The view on the screen the way a scissor round it would clip. Null when none of it shows.
-        private static Squares within(GuiGraphicsExtractor context, MapView view) {
+        private static Shapes within(GuiGraphicsExtractor context, MapView view) {
             ScreenRectangle screen = new ScreenRectangle(0, 0, context.guiWidth(), context.guiHeight());
             ScreenRectangle area = new ScreenRectangle(view.left(), view.top(), view.width(), view.height())
                 .transformAxisAligned(context.pose()).intersection(screen);
-            return area == null ? null : new Squares(new Matrix3x2f(context.pose()), area);
-        }
-
-        private void add(int left, int top, int right, int bottom, int colour) {
-            parts.add(left);
-            parts.add(top);
-            parts.add(right);
-            parts.add(bottom);
-            parts.add(colour);
-        }
-
-        private boolean isEmpty() {
-            return parts.isEmpty();
+            return area == null ? null : new Shapes(new Matrix3x2f(context.pose()), area);
         }
 
         // The corners go round the way the game's own filled rectangles do.
+        private void square(int left, int top, int right, int bottom, int colour) {
+            corner(right, bottom);
+            corner(right, top);
+            corner(left, top);
+            corner(left, bottom);
+            colours.add(colour);
+        }
+
+        // A triangle is a shape with two corners on one spot. The game only draws a shape whose
+        // corners go round the way those of a square do.
+        private void triangle(double ax, double ay, double bx, double by, double cx, double cy, int colour) {
+            if ((bx - ax) * (cy - ay) - (by - ay) * (cx - ax) > 0) {
+                triangle(ax, ay, cx, cy, bx, by, colour);
+                return;
+            }
+            corner(ax, ay);
+            corner(bx, by);
+            corner(cx, cy);
+            corner(cx, cy);
+            colours.add(colour);
+        }
+
+        private void corner(double x, double y) {
+            corners.add((float) x);
+            corners.add((float) y);
+        }
+
+        private void draw(GuiGraphicsExtractor context) {
+            if (!colours.isEmpty()) {
+                context.guiRenderState.addGuiElement(this);
+            }
+        }
+
         @Override
         public void buildVertices(VertexConsumer vertices) {
-            for (int i = 0; i < parts.size(); i += PARTS) {
-                float left = parts.getInt(i);
-                float top = parts.getInt(i + 1);
-                float right = parts.getInt(i + 2);
-                float bottom = parts.getInt(i + 3);
-                int colour = parts.getInt(i + 4);
-                vertices.addVertexWith2DPose(pose, right, bottom).setColor(colour);
-                vertices.addVertexWith2DPose(pose, right, top).setColor(colour);
-                vertices.addVertexWith2DPose(pose, left, top).setColor(colour);
-                vertices.addVertexWith2DPose(pose, left, bottom).setColor(colour);
+            for (int shape = 0; shape < colours.size(); shape++) {
+                int colour = colours.getInt(shape);
+                for (int corner = 0; corner < CORNERS; corner++) {
+                    int at = shape * PARTS + corner * 2;
+                    vertices.addVertexWith2DPose(pose, corners.getFloat(at), corners.getFloat(at + 1))
+                        .setColor(colour);
+                }
             }
         }
 

@@ -5,6 +5,7 @@ import com.jellypudding.offlineclient.config.FindLog;
 import com.jellypudding.offlineclient.config.FindLog.Find;
 import com.jellypudding.offlineclient.config.FindSource;
 import com.jellypudding.offlineclient.config.WaypointStore;
+import com.jellypudding.offlineclient.render.ClientFonts;
 import com.jellypudding.offlineclient.setting.ActionSetting;
 import com.jellypudding.offlineclient.setting.Setting;
 import com.jellypudding.offlineclient.util.BlockUtil;
@@ -211,7 +212,7 @@ public final class FindsScreen extends ListWindow {
     @Override
     protected void renderView(GuiGraphicsExtractor context, int mouseX, int mouseY) {
         refresh();
-        Font font = OfflineClient.MC.font;
+        Font font = ClientFonts.gui();
         footer.begin();
         if (clear != null && clear.isArmed()) {
             footer.show("Click again to " + clear.confirmWords() + " on this server.", GuiTheme.RED_TEXT);
@@ -334,7 +335,7 @@ public final class FindsScreen extends ListWindow {
     // Named after the kind with the first free number such as stash3.
     private static String addWaypoint(Find find) {
         return WaypointStore.get().markFresh(find.kind().replace(" ", ""), find.pos(), find.dimension(),
-            Modules.nextWaypointHue());
+            Modules.nextWaypointColour());
     }
 
     @Override
@@ -344,7 +345,7 @@ public final class FindsScreen extends ListWindow {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
-        return list.scroll(latched.toView(mouseX), latched.toView(mouseY), scrollY)
+        return list.scroll(toView(mouseX), toView(mouseY), scrollY)
             || super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
     }
 }

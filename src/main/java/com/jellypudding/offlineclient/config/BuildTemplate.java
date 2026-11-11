@@ -3,118 +3,123 @@ package com.jellypudding.offlineclient.config;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import net.minecraft.core.BlockPos;
+import net.minecraft.SharedConstants;
+import net.minecraft.commands.arguments.blocks.BlockStateParser;
 import net.minecraft.core.Direction;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
-import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.CarvedPumpkinBlock;
+import net.minecraft.world.level.block.state.BlockState;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
-// A shape saved as a list of block offsets in offlineclient/templates. Positions
-// run sideways then up then forward from the block you build on. A block name
-// beside an offset asks for that block and no name means whatever you hold.
+// A shape made of loose cells. Positions run sideways to the left then up then forward from the
+// block you build on as seen by someone facing south. A cell names the block state it wants or
+// takes whatever you hold. Shapes are saved as json in offlineclient/templates and a few come
+// with the client. A saved file wins over a shape of the same name that came with it.
 public final class BuildTemplate {
 
-    // A null block means any block will do.
-    public record Entry(int x, int y, int z, Block block) {
+    // A null state means any block will do.
+    public record Entry(int x, int y, int z, BlockState state) {
     }
 
-    private static final int VERSION = 2;
+    private static final int VERSION = 3;
 
-    // The shapes written out the first time the folder is empty.
-    private static final Map<String, int[][]> DEFAULTS = new LinkedHashMap<>();
+    private static final String VERSION_KEY = "version";
+    private static final String DATA_VERSION_KEY = "data_version";
+    private static final String BLOCKS_KEY = "blocks";
+    private static final String POSITION_KEY = "pos";
+    private static final String BLOCK_KEY = "block";
+
+    // A nether portal frame without its corners. The two columns inside stand over the block you
+    // build on and the one to its left.
+    private static final int PORTAL_INSIDE_WIDTH = 2;
+    private static final int PORTAL_INSIDE_HEIGHT = 3;
+
+    // The shapes that come with the client.
+    private static final Map<String, List<Entry>> BUILT_IN = new LinkedHashMap<>();
 
     static {
-        DEFAULTS.put("Bridge", new int[][] {{0, 0, 0}, {1, 0, 0}, {1, 0, 1}, {0, 0, 1}, {-1, 0, 1},
-            {-1, 0, 0}, {-1, 0, 2}, {0, 0, 2}, {1, 0, 2}, {1, 0, 3}, {0, 0, 3}, {-1, 0, 3},
-            {-1, 0, 4}, {0, 0, 4}, {1, 0, 4}, {1, 0, 5}, {0, 0, 5}, {-1, 0, 5}});
-        DEFAULTS.put("Pillar", new int[][] {{0, 0, 0}, {0, 1, 0}, {0, 2, 0}, {0, 3, 0}, {0, 4, 0},
-            {0, 5, 0}, {0, 6, 0}});
-        DEFAULTS.put("Floor", square(3, 0));
-        DEFAULTS.put("Wall", wall(7, 7));
-        DEFAULTS.put("Tower", tower(2, 6));
+        BUILT_IN.put("Bridge", box(-1, 1, 0, 0, 0, 5, null));
+        BUILT_IN.put("Pillar", box(0, 0, 0, 6, 0, 0, null));
+        BUILT_IN.put("Floor", box(-3, 3, 0, 0, 0, 6, null));
+        BUILT_IN.put("Wall", box(-3, 3, 0, 6, 0, 0, null));
+        BUILT_IN.put("Tower", tower(2, 6));
+        BUILT_IN.put("Iron golem", golem(Blocks.IRON_BLOCK.defaultBlockState(), true));
+        BUILT_IN.put("Snow golem", golem(Blocks.SNOW_BLOCK.defaultBlockState(), false));
+        BUILT_IN.put("Portal", portal());
     }
 
-    private final String name;
-    private final List<Entry> entries;
-
-    private BuildTemplate(String name, List<Entry> entries) {
-        this.name = name;
-        this.entries = List.copyOf(entries);
+    private BuildTemplate() {
     }
 
-    // A shape that never touches a file such as a painted pattern. Null when it has no blocks.
-    public static BuildTemplate of(String name, List<Entry> entries) {
-        return entries.isEmpty() ? null : new BuildTemplate(name, entries);
-    }
-
-    public String name() {
-        return name;
-    }
-
-    public int size() {
-        return entries.size();
+    // Boxes loose cells into a build such as a painted pattern. Null when there are none. Cells
+    // too far apart for one build are refused with the size in words.
+    public static Blueprint of(String name, List<Entry> entries) throws BuildFiles.Unreadable {
+        if (entries.isEmpty()) {
+            return null;
+        }
+        Blueprint.Box box = new Blueprint.Box();
+        Set<BlockState> kinds = new HashSet<>();
+        for (Entry entry : entries) {
+            box.add(entry.x(), entry.y(), entry.z());
+            kinds.add(entry.state());
+        }
+        BuildFiles.checkSize(box.sizeX(), box.sizeY(), box.sizeZ());
+        Blueprint.Builder builder = new Blueprint.Builder(name, box.min(), box.size(), kinds.size());
+        for (Entry entry : entries) {
+            builder.set(entry.x(), entry.y(), entry.z(), builder.kind(entry.state()));
+        }
+        return builder.build();
     }
 
     public static Path folder() {
         return DataFiles.path("templates");
     }
 
-    // The names on offer with the defaults written out on the first look.
+    // The shapes that came with the client and then the saved ones from A to Z.
     public static Collection<String> names() {
-        List<String> names = DataFiles.jsonNames(folder());
-        if (!names.isEmpty()) {
-            return names;
+        Set<String> names = new LinkedHashSet<>(BUILT_IN.keySet());
+        names.addAll(DataFiles.jsonNames(folder()));
+        return names;
+    }
+
+    // The saved file of that name or else the shape that came with the client. Null when there
+    // is neither or the file cannot be read. A file whose cells lie too far apart is refused
+    // with the size in words.
+    public static Blueprint load(String name) throws BuildFiles.Unreadable {
+        Path file = DataFiles.jsonFile(folder(), name);
+        List<Entry> entries = Files.isRegularFile(file)
+            ? DataFiles.readJson(file, root -> entries(root.getAsJsonObject())).orElse(null) : BUILT_IN.get(name);
+        return entries == null ? null : of(name, entries);
+    }
+
+    private static List<Entry> entries(JsonObject root) {
+        SavedStates states = new SavedStates(root.has(DATA_VERSION_KEY) ? root.get(DATA_VERSION_KEY).getAsInt() : 0);
+        List<Entry> entries = new ArrayList<>();
+        for (JsonElement element : root.getAsJsonArray(BLOCKS_KEY)) {
+            // An entry can also be a bare list of three numbers.
+            JsonArray at = element.isJsonArray() ? element.getAsJsonArray()
+                : element.getAsJsonObject().getAsJsonArray(POSITION_KEY);
+            entries.add(new Entry(at.get(0).getAsInt(), at.get(1).getAsInt(), at.get(2).getAsInt(),
+                element.isJsonArray() ? null : state(element.getAsJsonObject(), states)));
         }
-        writeDefaults();
-        return DataFiles.jsonNames(folder());
+        return entries;
     }
 
-    private static void writeDefaults() {
-        for (Map.Entry<String, int[][]> shape : DEFAULTS.entrySet()) {
-            List<Entry> entries = new ArrayList<>();
-            for (int[] at : shape.getValue()) {
-                entries.add(new Entry(at[0], at[1], at[2], null));
-            }
-            save(shape.getKey(), entries);
-        }
-    }
-
-    // Null when the file is missing or unreadable.
-    public static BuildTemplate load(String name) {
-        return DataFiles.readJson(DataFiles.jsonFile(folder(), name), root -> {
-            List<Entry> entries = new ArrayList<>();
-            for (JsonElement element : root.getAsJsonObject().getAsJsonArray("blocks")) {
-                entries.add(element.isJsonArray() ? plainEntry(element.getAsJsonArray())
-                    : namedEntry(element.getAsJsonObject()));
-            }
-            return entries.isEmpty() ? null : new BuildTemplate(name, entries);
-        }).orElse(null);
-    }
-
-    // An entry can also be a bare list of three numbers.
-    private static Entry plainEntry(JsonArray at) {
-        return new Entry(at.get(0).getAsInt(), at.get(1).getAsInt(), at.get(2).getAsInt(), null);
-    }
-
-    private static Entry namedEntry(JsonObject object) {
-        JsonArray at = object.getAsJsonArray("pos");
-        Block block = null;
-        if (object.has("block") && !object.get("block").getAsString().isEmpty()) {
-            Identifier id = Identifier.tryParse(object.get("block").getAsString());
-            block = id == null ? null : BuiltInRegistries.BLOCK.getValue(id);
-            if (block == Blocks.AIR) {
-                block = null;
-            }
-        }
-        return new Entry(at.get(0).getAsInt(), at.get(1).getAsInt(), at.get(2).getAsInt(), block);
+    // No name or air or a block this game does not have all mean any block.
+    private static BlockState state(JsonObject entry, SavedStates states) {
+        String text = entry.has(BLOCK_KEY) ? entry.get(BLOCK_KEY).getAsString() : "";
+        BlockState state = text.isEmpty() ? null : states.read(text);
+        return state == null || state.isAir() ? null : state;
     }
 
     // False when the file could not be written.
@@ -126,69 +131,57 @@ public final class BuildTemplate {
             at.add(entry.x());
             at.add(entry.y());
             at.add(entry.z());
-            block.add("pos", at);
-            block.addProperty("block", entry.block() == null ? ""
-                : BuiltInRegistries.BLOCK.getKey(entry.block()).toString());
+            block.add(POSITION_KEY, at);
+            block.addProperty(BLOCK_KEY, entry.state() == null ? "" : BlockStateParser.serialize(entry.state()));
             blocks.add(block);
         }
         JsonObject root = new JsonObject();
-        root.addProperty("version", VERSION);
-        root.add("blocks", blocks);
+        root.addProperty(VERSION_KEY, VERSION);
+        root.addProperty(DATA_VERSION_KEY, SharedConstants.getCurrentVersion().dataVersion().version());
+        root.add(BLOCKS_KEY, blocks);
         return DataFiles.writeJson(DataFiles.jsonFile(folder(), name), root);
     }
 
-    // Every block of the shape laid out from the origin in the facing given.
-    // Insertion order is kept. A template is built in the order it was written.
-    public Map<BlockPos, Block> layOut(BlockPos origin, Direction front) {
-        return layOut(origin, front, false);
-    }
-
-    // Laid flat the shape tips away from you. Its up runs ahead and its forward runs up.
-    public Map<BlockPos, Block> layOut(BlockPos origin, Direction front, boolean flat) {
-        Direction left = front.getCounterClockWise();
-        Map<BlockPos, Block> placed = new LinkedHashMap<>();
-        for (Entry entry : entries) {
-            int ahead = flat ? entry.y() : entry.z();
-            int up = flat ? entry.z() : entry.y();
-            placed.put(origin.relative(front, ahead).relative(left, entry.x()).above(up), entry.block());
-        }
-        return placed;
-    }
-
-    private static int[][] square(int radius, int y) {
-        List<int[]> out = new ArrayList<>();
-        for (int x = -radius; x <= radius; x++) {
-            for (int z = 0; z <= radius * 2; z++) {
-                out.add(new int[] {x, y, z});
-            }
-        }
-        return out.toArray(new int[0][]);
-    }
-
-    private static int[][] wall(int width, int height) {
-        List<int[]> out = new ArrayList<>();
-        int half = width / 2;
-        for (int y = 0; y < height; y++) {
-            for (int x = -half; x <= half; x++) {
-                out.add(new int[] {x, y, 0});
-            }
-        }
-        return out.toArray(new int[0][]);
-    }
-
-    // A hollow square tube.
-    private static int[][] tower(int radius, int height) {
-        List<int[]> out = new ArrayList<>();
-        for (int y = 0; y < height; y++) {
-            for (int x = -radius; x <= radius; x++) {
-                for (int z = 0; z <= radius * 2; z++) {
-                    boolean edge = Math.abs(x) == radius || z == 0 || z == radius * 2;
-                    if (edge) {
-                        out.add(new int[] {x, y, z});
-                    }
+    // Every cell between two corners with both counted.
+    private static List<Entry> box(int fromX, int toX, int fromY, int toY, int fromZ, int toZ, BlockState state) {
+        List<Entry> entries = new ArrayList<>();
+        for (int y = fromY; y <= toY; y++) {
+            for (int z = fromZ; z <= toZ; z++) {
+                for (int x = fromX; x <= toX; x++) {
+                    entries.add(new Entry(x, y, z, state));
                 }
             }
         }
-        return out.toArray(new int[0][]);
+        return entries;
+    }
+
+    // A hollow square tube.
+    private static List<Entry> tower(int radius, int height) {
+        List<Entry> entries = box(-radius, radius, 0, height - 1, 0, radius * 2, null);
+        entries.removeIf(entry -> Math.abs(entry.x()) < radius && entry.z() > 0 && entry.z() < radius * 2);
+        return entries;
+    }
+
+    // A body two blocks tall with a carved pumpkin on top that looks back at you. An iron golem
+    // has an arm either side of the upper block.
+    private static List<Entry> golem(BlockState body, boolean arms) {
+        List<Entry> entries = box(0, 0, 0, 1, 0, 0, body);
+        if (arms) {
+            entries.add(new Entry(-1, 1, 0, body));
+            entries.add(new Entry(1, 1, 0, body));
+        }
+        entries.add(new Entry(0, 2, 0, Blocks.CARVED_PUMPKIN.defaultBlockState()
+            .setValue(CarvedPumpkinBlock.FACING, Direction.NORTH)));
+        return entries;
+    }
+
+    private static List<Entry> portal() {
+        BlockState obsidian = Blocks.OBSIDIAN.defaultBlockState();
+        int top = PORTAL_INSIDE_HEIGHT + 1;
+        List<Entry> entries = box(0, PORTAL_INSIDE_WIDTH - 1, 0, 0, 0, 0, obsidian);
+        entries.addAll(box(-1, -1, 1, PORTAL_INSIDE_HEIGHT, 0, 0, obsidian));
+        entries.addAll(box(PORTAL_INSIDE_WIDTH, PORTAL_INSIDE_WIDTH, 1, PORTAL_INSIDE_HEIGHT, 0, 0, obsidian));
+        entries.addAll(box(0, PORTAL_INSIDE_WIDTH - 1, top, top, 0, 0, obsidian));
+        return entries;
     }
 }

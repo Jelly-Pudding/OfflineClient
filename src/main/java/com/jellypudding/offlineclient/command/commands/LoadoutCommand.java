@@ -7,6 +7,7 @@ import com.jellypudding.offlineclient.config.LoadoutStore.Loadout;
 import com.jellypudding.offlineclient.modules.player.Loadouts;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.Modules;
+import com.jellypudding.offlineclient.util.Tally;
 
 import java.util.List;
 import java.util.Map;
@@ -35,7 +36,7 @@ public final class LoadoutCommand extends KeyedCommand<Loadout> {
 
     @Override
     protected String summary(Loadout loadout) {
-        return loadout.slots().size() + " slots";
+        return Tally.counted(loadout.slots().size(), "slot");
     }
 
     @Override
@@ -59,7 +60,7 @@ public final class LoadoutCommand extends KeyedCommand<Loadout> {
             return;
         }
         store().add(new Loadout(args[1], store().keyOf(args[1]), layout));
-        ChatUtil.message("§b" + args[1] + " §7saved with §b" + layout.size() + " §7slots.");
+        ChatUtil.message("§b" + args[1] + " §7saved with §b" + Tally.counted(layout.size(), "slot") + "§7.");
     }
 
     private void load(String[] args) {

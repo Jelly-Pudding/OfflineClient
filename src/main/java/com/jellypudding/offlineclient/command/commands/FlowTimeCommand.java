@@ -109,7 +109,7 @@ public final class FlowTimeCommand extends Command {
             : " Its lava went in §f" + ChatUtil.duration(progress.layerSeconds()) + "§7 ago.";
         String flow = progress.flowEstimate() < 0 ? ""
             : " It should stop about §f" + ChatUtil.duration(progress.flowEstimate()) + "§7 after that.";
-        ChatUtil.message("§bLavaCast §7is on layer §f" + progress.layer() + "§7 of §f" + progress.layers()
+        ChatUtil.tell("LavaCast", "is on layer §f" + progress.layer() + "§7 of §f" + progress.layers()
             + "§7 and is " + progress.doing() + "." + began + flow);
     }
 

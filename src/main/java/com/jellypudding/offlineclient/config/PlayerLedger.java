@@ -23,6 +23,7 @@ public final class PlayerLedger extends ServerLedger<UUID, PlayerRecord> {
     public static final PlayerLedger INSTANCE = new PlayerLedger();
 
     private static final String FILE = "players.json";
+    private static final String WHAT = "player records";
     // A busy server lists thousands of players in a month. The least recently seen make room.
     private static final int MAX_PLAYERS = 4096;
 
@@ -31,7 +32,7 @@ public final class PlayerLedger extends ServerLedger<UUID, PlayerRecord> {
     private final Map<String, Set<UUID>> forgotten = new HashMap<>();
 
     private PlayerLedger() {
-        super(FILE, MAX_PLAYERS, "player records");
+        super(FILE, MAX_PLAYERS, WHAT);
     }
 
     // The record of a player started the first time they turn up. Null whilst the file is
@@ -82,14 +83,8 @@ public final class PlayerLedger extends ServerLedger<UUID, PlayerRecord> {
     // One broken record is left out rather than the whole file.
     @Override
     protected void parse(JsonElement root, Map<UUID, PlayerRecord> into, RegistryOps<JsonElement> ops) {
-        for (Map.Entry<String, JsonElement> entry : root.getAsJsonObject().entrySet()) {
-            try {
-                UUID id = UUID.fromString(entry.getKey());
-                into.put(id, PlayerRecord.fromJson(id, entry.getValue().getAsJsonObject()));
-            } catch (RuntimeException e) {
-                OfflineClient.LOG.warn("Left out the broken player record {}", entry.getKey(), e);
-            }
-        }
+        DataFiles.members(root, (id, saved) -> PlayerRecord.fromJson(UUID.fromString(id), saved.getAsJsonObject()),
+            WHAT).values().forEach(record -> into.put(record.id(), record));
     }
 
     @Override

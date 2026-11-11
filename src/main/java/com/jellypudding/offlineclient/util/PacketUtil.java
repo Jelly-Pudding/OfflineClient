@@ -2,6 +2,7 @@ package com.jellypudding.offlineclient.util;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.event.events.PacketReceiveEvent;
+import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.Connection;
 import net.minecraft.network.protocol.Packet;
@@ -25,6 +26,13 @@ public final class PacketUtil {
 
     public static void noteConnection(Connection live) {
         connection = live;
+    }
+
+    // True whilst the connection speaks the game protocol. A server switch passes through
+    // configuration on the same connection and some packet kinds belong to both.
+    public static boolean inPlay() {
+        ClientPacketListener listener = OfflineClient.MC.getConnection();
+        return listener != null && listener.getConnection().getPacketListener() == listener;
     }
 
     // A click on an anvil already down makes the server open its repair menu. Closing it on
@@ -57,7 +65,7 @@ public final class PacketUtil {
     // the server holds and a fall past the safe distance would hurt.
     public static boolean mayClaimGround(LocalPlayer player) {
         return !player.isFallFlying() && !player.isPassenger()
-            && player.fallDistance < DamageUtil.SAFE_FALL;
+            && player.fallDistance < DamageUtil.safeFall(player);
     }
 
     // Tells the server you stand on the ground without moving you. The server keeps the
@@ -78,6 +86,12 @@ public final class PacketUtil {
     // True for the claim above. Modules that rewrite the ground flag leave it as it is.
     public static boolean isGroundClaim(Packet<?> packet) {
         return packet != null && packet == claim;
+    }
+
+    // Tells the server you are off the ground without moving you. It opens a glide only
+    // for a player it takes to be in the air.
+    public static void claimAir(LocalPlayer player) {
+        player.connection.send(new ServerboundMovePlayerPacket.StatusOnly(false, player.horizontalCollision));
     }
 
     public static ServerboundMovePlayerPacket withOnGround(ServerboundMovePlayerPacket packet,

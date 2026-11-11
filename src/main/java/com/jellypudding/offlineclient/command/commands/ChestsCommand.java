@@ -54,7 +54,7 @@ public final class ChestsCommand extends Command {
         }
         long now = System.currentTimeMillis();
         if (!hits.isEmpty()) {
-            ChatUtil.message("§bChestMemory §7found §f" + name + "§7 in "
+            ChatUtil.tell("ChestMemory", "found §f" + name + "§7 in "
                 + Tally.counted(hits.size(), "container") + ".");
         }
         for (ChestMemory.Hit hit : hits.subList(0, Math.min(MOST_ROWS, hits.size()))) {

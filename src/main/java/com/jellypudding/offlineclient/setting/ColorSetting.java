@@ -4,6 +4,8 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.jellypudding.offlineclient.util.ColorUtil;
 
+import java.util.Locale;
+
 // A colour stored as a hue from nought to 360 with saturation and brightness.
 // Rainbow mode cycles the hue on its own.
 public final class ColorSetting extends Setting<Float> {
@@ -11,6 +13,12 @@ public final class ColorSetting extends Setting<Float> {
     private static final float FULL = 1f;
 
     private static final float DEFAULT_SATURATION = 0.75f;
+
+    // A shade written as red green and blue starts with this and has two hex digits for each.
+    public static final String HEX_MARK = "#";
+    private static final int HEX_DIGITS = 6;
+    private static final int HEX = 16;
+    private static final int RGB = 0xFFFFFF;
 
     private final boolean defaultRainbow;
     private final float defaultSaturation;
@@ -81,6 +89,26 @@ public final class ColorSetting extends Setting<Float> {
 
     public void setBrightness(float brightness) {
         this.brightness = Math.clamp(brightness, 0f, 1f);
+    }
+
+    // The shade it shows written as the mark and six hex digits such as #33CCFF.
+    public String hex() {
+        return String.format(Locale.ROOT, HEX_MARK + "%06X", getColor() & RGB);
+    }
+
+    // Takes a shade written as six hex digits with or without the mark in front and ends the
+    // rainbow. False for any other text.
+    public boolean setHex(String text) {
+        String digits = text.startsWith(HEX_MARK) ? text.substring(HEX_MARK.length()) : text;
+        if (digits.length() != HEX_DIGITS || !digits.chars().allMatch(digit -> Character.digit(digit, HEX) >= 0)) {
+            return false;
+        }
+        float[] shade = ColorUtil.hsvOf(Integer.parseInt(digits, HEX));
+        rainbow = false;
+        setHue(shade[0]);
+        setSaturation(shade[1]);
+        setBrightness(shade[2]);
+        return true;
     }
 
     public boolean isRainbow() {

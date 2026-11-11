@@ -5,22 +5,29 @@ import com.jellypudding.offlineclient.modules.movement.AutoWasp;
 import com.jellypudding.offlineclient.modules.movement.ElytraFly;
 import com.jellypudding.offlineclient.modules.movement.NoSlowdown;
 import com.jellypudding.offlineclient.modules.movement.Slippy;
+import com.jellypudding.offlineclient.modules.movement.Speed;
 import com.jellypudding.offlineclient.modules.movement.Sprint;
 import com.jellypudding.offlineclient.modules.player.Ghost;
 import com.jellypudding.offlineclient.modules.render.ClearView;
 import com.jellypudding.offlineclient.modules.render.HandView;
 import com.jellypudding.offlineclient.util.Modules;
+import com.jellypudding.offlineclient.util.WholeMove;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
@@ -91,6 +98,71 @@ public abstract class LivingEntityMixin {
         }
         Slippy slippy = Modules.get(Slippy.class);
         return slippy == null ? friction : slippy.groundFriction(below, friction);
+    }
+
+    // On land and in the air the keys push the speed set before the move. A module that sets the
+    // whole move of the tick leaves the push out. Speed holds a hop whose whole move passes its cap.
+    @WrapOperation(method = "handleRelativeFrictionAndCalculateMovement(Lnet/minecraft/world/phys/Vec3;F)"
+        + "Lnet/minecraft/world/phys/Vec3;",
+        at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/world/entity/LivingEntity;moveRelative(FLnet/minecraft/world/phys/Vec3;)V"))
+    private void onKeyPush(LivingEntity self, float push, Vec3 input, Operation<Void> original) {
+        if (self != OfflineClient.MC.player) {
+            original.call(self, push, input);
+            return;
+        }
+        if (WholeMove.holds(self)) {
+            original.call(self, 0f, input);
+            return;
+        }
+        Vec3 unpushed = self.getDeltaMovement();
+        original.call(self, push, input);
+        Speed speed = Modules.active(Speed.class);
+        if (speed != null) {
+            speed.holdHop(unpushed);
+        }
+    }
+
+    // Water lets through the share of the land speed this attribute names and half of that
+    // off the bottom. NoSlowdown lets all of it through wherever you swim.
+    @ModifyExpressionValue(method = "travelInWater(Lnet/minecraft/world/phys/Vec3;DZD)V",
+        at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/world/entity/LivingEntity;getAttributeValue(Lnet/minecraft/core/Holder;)D"))
+    private double onWaterEfficiency(double original) {
+        return offlineclient$skipsWaterDrag() ? 1 : original;
+    }
+
+    @ModifyExpressionValue(method = "travelInWater(Lnet/minecraft/world/phys/Vec3;DZD)V",
+        at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/world/entity/LivingEntity;onGround()Z"))
+    private boolean onWaterGrounded(boolean original) {
+        return original || offlineclient$skipsWaterDrag();
+    }
+
+    // Lava pushes a swimmer with a fifth of the speed they have on land.
+    @ModifyArg(method = "travelInLava(Lnet/minecraft/world/phys/Vec3;DZD)V",
+        at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/world/entity/LivingEntity;moveRelative(FLnet/minecraft/world/phys/Vec3;)V"),
+        index = 0)
+    private float onLavaPush(float original) {
+        if ((Object) this != OfflineClient.MC.player) {
+            return original;
+        }
+        NoSlowdown noSlowdown = Modules.get(NoSlowdown.class);
+        return noSlowdown == null ? original
+            : noSlowdown.lavaPush(original, ((LivingEntity) (Object) this).getSpeed());
+    }
+
+    // Dolphin's Grace puts a drag of its own in place of these sums. With the push of a walk
+    // on land on top it would carry you away. The game's own sums stand whilst it is on.
+    @Unique
+    private boolean offlineclient$skipsWaterDrag() {
+        if ((Object) this != OfflineClient.MC.player) {
+            return false;
+        }
+        NoSlowdown noSlowdown = Modules.get(NoSlowdown.class);
+        return noSlowdown != null && noSlowdown.skipsFluidDrag()
+            && !((LivingEntity) (Object) this).hasEffect(MobEffects.DOLPHINS_GRACE);
     }
 
     // Packet ElytraFly holds a glide open on the server whilst you fly like creative.

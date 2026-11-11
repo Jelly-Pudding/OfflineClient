@@ -1,51 +1,62 @@
 package com.jellypudding.offlineclient.modules.render;
 
 import com.jellypudding.offlineclient.event.Subscribe;
-import com.jellypudding.offlineclient.event.events.PacketSendEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
-import com.jellypudding.offlineclient.modules.misc.FakePlayer;
+import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.TextSetting;
+import com.jellypudding.offlineclient.util.AwayView;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.EntityFilter;
 import com.jellypudding.offlineclient.util.EntityUtil;
-import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
+import com.jellypudding.offlineclient.util.Modules;
+import com.jellypudding.offlineclient.util.TargetPriority;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
 
-// Puts your eyes inside another entity. Your body waits where you left it and
-// the server never hears about the trip.
-public final class RemoteView extends Module {
+// Puts the camera in the eyes of another entity. Your body stays where it stands and
+// stays yours to move. CameraMixin places the view the same way it does for Freecam.
+public final class RemoteView extends Module implements AwayView {
 
     public enum Pick { NEAREST, NAME }
 
     private static final double SEARCH_RANGE = 128;
-    // Fake health for the stand in body.
-    private static final float BODY_HEALTH = 20;
 
     private final EnumSetting<Pick> pick = new EnumSetting<>("View", "Whose eyes are borrowed.",
         Pick.NEAREST)
         .describe(Pick.NEAREST, "The nearest entity the filter allows.")
-        .describe(Pick.NAME, "The entity whose name you type in.");
+        .describe(Pick.NAME, "The nearest entity with the name you type in. Switching on again moves"
+            + " to the next one of that name.");
     private final TextSetting name = new TextSetting("Name",
-        "The name of the entity to view. Click to type it.", "")
+        "A player name or the name on a name tag or the name of a kind such as Zombie. Click to type it.", "")
         .under(pick, Pick.NAME);
-    private final EntityFilter filter = EntityFilter.living("View", "viewed", true,
+    private final EntityFilter filter = EntityFilter.living("Views", "viewed", true,
         EntityFilter.Pick.ALL, List.of());
+    private final BoolSetting ignoreCreative = new BoolSetting("Ignore creative",
+        "Never picks a player in creative mode.", false)
+        .visibleWhen(filter::wantsPlayers);
+    private final EnumSetting<InteractFrom> interactFrom = AwayView.interactFromSetting();
+    private final BoolSetting hideHand = AwayView.hideHandSetting();
 
     private Entity viewed;
     private boolean wasInvisible;
-    private FakePlayer.Body body;
+
+    // The network id of whoever was viewed last. A second ask for the same name starts after it.
+    private int lastViewed = -1;
+    // Whose eyes the next switch on borrows when a caller already knows.
+    private Entity asked;
 
     public RemoteView() {
-        super("RemoteView", "See the world through the eyes of another player or mob.", Category.RENDER);
+        super("RemoteView", "Shows the world through the eyes of another player or mob.", Category.RENDER);
         addSettings(pick, name);
         addSettings(filter.settings());
+        addSettings(ignoreCreative, interactFrom, hideHand);
         searchTags("remote view", "spectate", "possess");
     }
 
@@ -56,20 +67,27 @@ public final class RemoteView extends Module {
 
     @Override
     public String getSuffix() {
-        return viewed == null ? null : viewed.getName().getString();
+        return viewed == null ? null : EntityUtil.displayNameOf(viewed);
+    }
+
+    // Switches on in the eyes of this entity whatever the filter and the name say.
+    public void view(Entity entity) {
+        setEnabled(false);
+        asked = entity;
+        setEnabled(true);
+        asked = null;
     }
 
     @Override
     protected void onEnable() {
-        viewed = inGame() ? pickTarget() : null;
+        viewed = !inGame() ? null : asked != null ? asked : pickTarget();
         if (viewed == null) {
             disable("Nothing to view was found.");
             return;
         }
+        AwayView.claim(this);
+        lastViewed = viewed.getId();
         wasInvisible = viewed.isInvisible();
-        mc.player.noPhysics = true;
-        body = new FakePlayer.Body(mc.level, mc.player, BODY_HEALTH, true, true);
-        mc.level.addEntity(body);
         ChatUtil.message("Now viewing §b" + viewed.getName().getString() + "§7.");
     }
 
@@ -80,50 +98,76 @@ public final class RemoteView extends Module {
             ChatUtil.message("No longer viewing §b" + viewed.getName().getString() + "§7.");
             viewed = null;
         }
-        if (mc.player != null) {
-            mc.player.noPhysics = false;
-        }
-        if (body != null) {
-            if (mc.player != null && body.level() == mc.level) {
-                mc.player.setPos(body.getX(), body.getY(), body.getZ());
-                mc.player.setYRot(body.getYRot());
-                mc.player.setXRot(body.getXRot());
-                mc.player.setOldPosAndRot();
-                mc.player.setDeltaMovement(Vec3.ZERO);
-                mc.level.removeEntity(body.getId(), Entity.RemovalReason.DISCARDED);
-            }
-            body = null;
-        }
     }
 
+    // The nearest one that fits. A name is walked through from near to far one ask at a time.
     private Entity pickTarget() {
-        String wanted = name.getValue().trim();
-        return EntityUtil.nearest(SEARCH_RANGE, entity -> entity instanceof LivingEntity living
-            && living.isAlive() && filter.matches(entity)
-            && (pick.is(Pick.NEAREST) || entity.getName().getString().equalsIgnoreCase(wanted)));
+        List<Entity> fits = EntityUtil.ranked(SEARCH_RANGE, TargetPriority.NEAREST, this::viewable);
+        if (fits.isEmpty()) {
+            return null;
+        }
+        int last = -1;
+        for (int i = 0; pick.is(Pick.NAME) && i < fits.size(); i++) {
+            if (fits.get(i).getId() == lastViewed) {
+                last = i;
+            }
+        }
+        return fits.get((last + 1) % fits.size());
+    }
+
+    private boolean viewable(Entity entity) {
+        if (!(entity instanceof LivingEntity living) || !living.isAlive() || Modules.isLocalBody(entity)
+            || !filter.matches(entity)) {
+            return false;
+        }
+        if (ignoreCreative.isOn() && entity instanceof Player player && player.isCreative()) {
+            return false;
+        }
+        return pick.is(Pick.NEAREST) || EntityUtil.isCalled(entity, name.getValue().trim());
     }
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || viewed == null || viewed.isRemoved() || viewed.level() != mc.level
-            || !(viewed instanceof LivingEntity living) || !living.isAlive()) {
+        if (viewed == null || viewed.isRemoved() || viewed.level() != mc.level
+            || !viewed.isAlive()) {
             setEnabled(false);
             return;
         }
-        mc.player.copyPosition(viewed);
-        mc.player.setPosRaw(viewed.getX(),
-            viewed.getY() - mc.player.getEyeHeight(mc.player.getPose()) + viewed.getEyeHeight(viewed.getPose()),
-            viewed.getZ());
-        mc.player.setOldPosAndRot();
-        mc.player.setDeltaMovement(Vec3.ZERO);
+        // The camera sits inside its head and the model would fill the screen.
         viewed.setInvisible(true);
     }
 
-    // The server must never learn where the eyes went.
-    @Subscribe
-    private void onPacketSend(PacketSendEvent event) {
-        if (event.getPacket() instanceof ServerboundMovePlayerPacket) {
-            event.cancel();
-        }
+    @Override
+    public Vec3 getCamPos(float partialTicks) {
+        return viewed.getEyePosition(partialTicks);
+    }
+
+    @Override
+    public float getCamYaw() {
+        return viewed.getViewYRot(framePartial());
+    }
+
+    @Override
+    public float getCamPitch() {
+        return viewed.getViewXRot(framePartial());
+    }
+
+    private float framePartial() {
+        return mc.getDeltaTracker().getGameTimeDeltaPartialTick(true);
+    }
+
+    @Override
+    public boolean hidesHand() {
+        return isEnabled() && hideHand.isOn();
+    }
+
+    @Override
+    public boolean interactsFromCamera() {
+        return isEnabled() && interactFrom.is(InteractFrom.CAMERA);
+    }
+
+    @Override
+    public Entity carrier() {
+        return viewed;
     }
 }

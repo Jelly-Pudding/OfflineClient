@@ -179,12 +179,8 @@ public final class SoftLanding {
     }
 
     // A block fills the ground when the ground gives way and sits on top of it
-    // otherwise. The feet need a block of room above wherever it goes. A sneaking
-    // player takes the whole fall on slime.
+    // otherwise. The feet need a block of room above wherever it goes.
     private static Plan layPlan(Kind kind, BlockPos ground) {
-        if (kind == Kind.SLIME_BLOCK && MC.player.isShiftKeyDown()) {
-            return null;
-        }
         BlockPos spot = BlockUtil.isReplaceable(ground) ? ground : ground.above();
         if (!BlockUtil.isReplaceable(spot) || !stays(kind, spot)) {
             return null;
@@ -312,9 +308,9 @@ public final class SoftLanding {
         return hit.getType() == HitResult.Type.BLOCK ? hit : null;
     }
 
-    // True when the fall already ends in water or a web or powder snow or a berry bush or slime.
-    // Webs and powder snow and berry bushes hold you and the server forgets the fall. Slime
-    // cancels it unless you sneak.
+    // True when the fall already ends in water or a web or a berry bush or on a block that
+    // charges no fall such as slime or powder snow. Webs and berry bushes hold you and the
+    // server forgets the fall.
     private static boolean alreadySoft(BlockHitResult ground) {
         BlockPos pos = ground.getBlockPos();
         FluidState fluid = MC.level.getFluidState(pos);
@@ -323,8 +319,7 @@ public final class SoftLanding {
             return true;
         }
         BlockState state = BlockUtil.state(pos);
-        return state.is(Blocks.COBWEB) || state.is(Blocks.POWDER_SNOW) || state.is(Blocks.SWEET_BERRY_BUSH)
-            || (state.is(Blocks.SLIME_BLOCK) && !MC.player.isShiftKeyDown());
+        return state.is(Blocks.COBWEB) || state.is(Blocks.SWEET_BERRY_BUSH) || Landing.on(state).spares();
     }
 
     private static boolean withSneak(Plan plan, BooleanSupplier action) {

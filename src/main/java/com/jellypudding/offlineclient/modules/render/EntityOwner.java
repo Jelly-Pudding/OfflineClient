@@ -7,6 +7,7 @@ import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.Render2DEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.util.EntityColors;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.render.WorldToScreen;
 import com.jellypudding.offlineclient.setting.BoolSetting;
@@ -44,11 +45,11 @@ public final class EntityOwner extends Module {
     private final NumberSetting range = new NumberSetting("Range",
         "Furthest entity to label.", 64, 8, 256, 8, " blocks").min(1);
     private final BoolSetting projectiles = new BoolSetting("Projectiles",
-        "Label pearls and arrows and anything else thrown.", true);
+        "Labels pearls and arrows and anything else thrown.", true);
     private final BoolSetting pets = new BoolSetting("Pets",
-        "Label tamed animals.", true);
+        "Labels tamed animals.", true);
     private final BoolSetting self = new BoolSetting("Own",
-        "Also label what you threw yourself.", false);
+        "Also labels what you threw yourself.", false);
 
     public EntityOwner() {
         super("EntityOwner", "Shows who owns the projectiles and pets around you.", Category.RENDER);
@@ -77,7 +78,7 @@ public final class EntityOwner extends Module {
             if (distance > maxDistance) {
                 continue;
             }
-            float size = (float) (scale.getValue() * Math.clamp(1 - distance / 80.0, 0.5, 1));
+            float size = (float) (scale.getValue() * RenderUtil.labelShrink(distance));
             // A pet with a name tag of its own wears the owner on top of it.
             float tagScale = nametags.tagScale(entity, distance);
             double height = tagScale > 0 ? Nametags.tagHeight(entity) : entity.getBbHeight() + 0.5;
@@ -88,7 +89,7 @@ public final class EntityOwner extends Module {
             if (tagScale > 0) {
                 screen = new Vec3(screen.x, RenderUtil.labelAbove(mc.font, screen.y, tagScale, size), screen.z);
             }
-            labels.add(new Label(owner, colorFor(owner), screen, size, distance));
+            labels.add(new Label(EntityUtil.displayName(owner), colorFor(owner), screen, size, distance));
         }
 
         // Far labels draw first.
@@ -171,7 +172,10 @@ public final class EntityOwner extends Module {
 
     private static int colorFor(String name) {
         if (OfflineClient.INSTANCE.getFriendManager().isFriend(name)) {
-            return EntityUtil.FRIEND_COLOR;
+            return EntityColors.friendColor();
+        }
+        if (OfflineClient.INSTANCE.getFriendManager().isEnemy(name)) {
+            return EntityColors.enemyColor();
         }
         return 0xFFFFD060;
     }

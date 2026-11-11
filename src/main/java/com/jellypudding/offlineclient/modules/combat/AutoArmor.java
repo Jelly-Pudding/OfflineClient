@@ -4,29 +4,37 @@ import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
+import com.jellypudding.offlineclient.modules.movement.ElytraBoost;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ChoiceListSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.ChatWarning;
+import com.jellypudding.offlineclient.util.Dimension;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.Swap;
 import com.jellypudding.offlineclient.util.ItemUtil;
+import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.MovementUtil;
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import net.minecraft.core.Holder;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.tags.ItemTags;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.Enchantment;
-import net.minecraft.world.item.enchantment.EnchantmentEffectComponents;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import net.minecraft.world.item.enchantment.Enchantments;
 
 import java.util.List;
+import java.util.Locale;
 
 public final class AutoArmor extends Module {
+
+    // Any worn piece of gold calms piglins. Every gold piece of the slot comes before every other.
+    private static final double GOLD_FIRST = 1000;
 
     public enum Protection {
         PROTECTION(Enchantments.PROTECTION),
@@ -41,6 +49,19 @@ public final class AutoArmor extends Module {
         }
     }
 
+    public enum GoldPiece {
+        HELMET(EquipmentSlot.HEAD),
+        CHESTPLATE(EquipmentSlot.CHEST),
+        LEGGINGS(EquipmentSlot.LEGS),
+        BOOTS(EquipmentSlot.FEET);
+
+        private final EquipmentSlot slot;
+
+        GoldPiece(EquipmentSlot slot) {
+            this.slot = slot;
+        }
+    }
+
     private final NumberSetting delay = new NumberSetting("Delay",
         "Ticks between each swap.", 2, 0, 20, 1, " ticks");
     private final EnumSetting<Protection> prefer = new EnumSetting<>("Prefer",
@@ -52,29 +73,48 @@ public final class AutoArmor extends Module {
     private final BoolSetting blastLeggings = new BoolSetting("Blast leggings",
         "Leggings always prefer Blast Protection whatever is picked above.", true);
     private final ChoiceListSetting avoided = new ChoiceListSetting("Avoided enchantments",
-        "Never put on a piece carrying any of these and take one off when something else fits.",
+        "Never puts on a piece carrying any of these and takes one off when something else fits.",
         ItemUtil::enchantmentIds, List.of("minecraft:binding_curse", "minecraft:frost_walker"));
     private final BoolSetting keepElytra = new BoolSetting("Keep elytra",
-        "Leave a worn elytra alone rather than swapping a chestplate over it.", true);
+        "Leaves a worn elytra alone rather than swapping a chestplate over it.", true);
     private final BoolSetting whileMoving = new BoolSetting("While moving",
-        "Keep swapping whilst you walk. Off waits until you stand still.", true);
+        "Keeps swapping whilst you walk. Off waits until you stand still.", true);
     private final BoolSetting antiBreak = new BoolSetting("Anti break",
         "Takes a worn piece off before it shatters and never puts one on.", true);
     private final NumberSetting durability = new NumberSetting("Durability",
         "Uses left at which a piece counts as worn out.", 10, 1, 100, 1, " uses")
         .under(antiBreak);
+    private final BoolSetting gold = new BoolSetting("Gold for piglins",
+        "Keeps a gold piece on whilst you are in the Nether and piglins leave you alone. With Anti break a worn"
+            + " one is swapped for a fresh one.", false);
+    private final EnumSetting<GoldPiece> goldPiece = new EnumSetting<>("Gold piece",
+        "Which piece of your armour is gold.", GoldPiece.BOOTS)
+        .under(gold);
 
+    private final ChatWarning noGold = new ChatWarning();
     private int timer;
 
     public AutoArmor() {
         super("AutoArmor", "Automatically wears the best armour you have.", Category.COMBAT);
-        addSettings(delay, prefer, blastLeggings, avoided, keepElytra, whileMoving, antiBreak, durability);
-        searchTags("armour", "auto equip");
+        addSettings(delay, prefer, blastLeggings, avoided, keepElytra, whileMoving, antiBreak, durability, gold,
+            goldPiece);
+        searchTags("armour", "auto equip", "gold", "piglin");
+    }
+
+    @Override
+    protected void onEnable() {
+        noGold.clear();
     }
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || mc.player.isSpectator()) {
+        if (mc.player.isSpectator()) {
+            return;
+        }
+        // ShulkerPacker takes armour off to pack it and puts back on whatever stays out. A rocket
+        // jump wears the elytra until the chestplate goes back on.
+        ElytraBoost boost = Modules.get(ElytraBoost.class);
+        if (Modules.packing() || boost != null && boost.jumping()) {
             return;
         }
         // Clicks are thrown away unless the survival inventory is the open one.
@@ -99,13 +139,16 @@ public final class AutoArmor extends Module {
                 continue;
             }
             // A cursed piece never comes off. Clicking at it every tick gets nowhere.
-            if (EnchantmentHelper.has(worn, EnchantmentEffectComponents.PREVENT_ARMOR_CHANGE)) {
+            if (InventoryUtil.stuckOn(worn)) {
                 continue;
             }
 
             int armorNetworkSlot = InventoryUtil.ARMOR_START + slotIndex;
             int upgrade = bestUpgrade(worn, slot);
             if (upgrade == -1) {
+                if (keepsGold(slot)) {
+                    sayIfNoGold(worn);
+                }
                 // Nothing better to wear. A shattering piece still comes off.
                 if (wornOut(worn) && stow(armorNetworkSlot)) {
                     return;
@@ -135,6 +178,26 @@ public final class AutoArmor extends Module {
 
     private boolean wornOut(ItemStack stack) {
         return antiBreak.isOn() && ItemUtil.nearlyBroken(stack, durability.getInt());
+    }
+
+    // Piglins only live in the Nether. Elsewhere the slot wears its best.
+    private boolean keepsGold(EquipmentSlot slot) {
+        return gold.isOn() && goldPiece.getValue().slot == slot && Dimension.NETHER.isHere();
+    }
+
+    private void sayIfNoGold(ItemStack worn) {
+        if (worn.is(ItemTags.PIGLIN_SAFE_ARMOR) && !wornOut(worn)) {
+            noGold.clear();
+        } else {
+            noGold.say("You have no gold " + EnumSetting.label(goldPiece.getValue()).toLowerCase(Locale.ROOT)
+                + " fit to wear for piglins.");
+        }
+    }
+
+    // Read by ChestSwap through Modules. The inventory slot of the chestplate this module would put
+    // on an empty chest or minus one.
+    public int bestChestplate() {
+        return bestUpgrade(ItemStack.EMPTY, EquipmentSlot.CHEST);
     }
 
     // The inventory slot of the piece that beats the worn one or minus one.
@@ -170,6 +233,9 @@ public final class AutoArmor extends Module {
         }
         score += ItemUtil.enchantLevel(Enchantments.UNBREAKING, stack);
         score += 2 * ItemUtil.enchantLevel(Enchantments.MENDING, stack);
+        if (keepsGold(slot) && stack.is(ItemTags.PIGLIN_SAFE_ARMOR)) {
+            score += GOLD_FIRST;
+        }
         for (Object2IntMap.Entry<Holder<Enchantment>> entry
             : EnchantmentHelper.getEnchantmentsForCrafting(stack).entrySet()) {
             if (isAvoided(entry.getKey())) {

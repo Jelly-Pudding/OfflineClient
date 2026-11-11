@@ -8,9 +8,9 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 public final class NoGhostBlocks extends Module {
 
     private final BoolSetting breaking = new BoolSetting("Breaking",
-        "Leave a broken block on screen until the server removes it.", true);
+        "Leaves a broken block on screen until the server removes it.", true);
     private final BoolSetting placing = new BoolSetting("Placing",
-        "Leave the space clear until the server puts the block there.", true);
+        "Leaves the space clear until the server puts the block there.", true);
 
     public NoGhostBlocks() {
         super("NoGhostBlocks", "Waits for the server instead of guessing what a click did.",

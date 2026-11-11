@@ -10,6 +10,7 @@ import com.jellypudding.offlineclient.event.events.Render3DEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.render.BoxStyle;
+import com.jellypudding.offlineclient.render.ClientFonts;
 import com.jellypudding.offlineclient.render.ContainerPreview;
 import com.jellypudding.offlineclient.render.DrawBatch;
 import com.jellypudding.offlineclient.setting.ActionSetting;
@@ -24,6 +25,7 @@ import com.jellypudding.offlineclient.util.MenuClicks;
 import com.jellypudding.offlineclient.util.OpenedContainers;
 import com.jellypudding.offlineclient.util.PlacedBox;
 import com.jellypudding.offlineclient.util.ServerInfo;
+import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.core.BlockPos;
@@ -122,8 +124,7 @@ public final class ChestMemory extends Module {
         return blockEntity instanceof BaseContainerBlockEntity && !PlacedBox.working(blockEntity.getBlockPos());
     }
 
-    // The first screen of storage to open after the click shows the clicked container. Its items
-    // follow the screen in a packet of their own and the menu counts from nought until then.
+    // The first screen of storage to open after the click shows the clicked container.
     @Subscribe
     private void onClientTick(ClientTickEvent event) {
         if (!inGame()) {
@@ -150,17 +151,17 @@ public final class ChestMemory extends Module {
             return;
         }
         if (watching != null) {
-            store.update(watching, contents(menu));
+            store.update(watching, MenuClicks.containerItems(menu));
             return;
         }
         BlockPos pos = clicked;
-        if (pos == null || menu.containerId == clickedMenu || menu.getStateId() == 0) {
+        if (pos == null || InventoryUtil.openedSince(clickedMenu) != menu) {
             return;
         }
         clicked = null;
         watching = Spot.here(filedAt(pos));
         watchedMenu = menu.containerId;
-        store.opened(watching, contents(menu));
+        store.opened(watching, MenuClicks.containerItems(menu));
     }
 
     // The menu of the storage screen in front of you. Null for any other screen and for your
@@ -171,14 +172,6 @@ public final class ChestMemory extends Module {
         }
         AbstractContainerMenu menu = screen.getMenu();
         return InventoryUtil.isStorage(menu) ? menu : null;
-    }
-
-    private static List<ItemStack> contents(AbstractContainerMenu menu) {
-        List<ItemStack> items = new ArrayList<>();
-        for (int slot : MenuClicks.containerSlots(menu)) {
-            items.add(menu.slots.get(slot).getItem().copy());
-        }
-        return items;
     }
 
     // A double chest is filed under the same half whichever half was clicked.
@@ -198,11 +191,12 @@ public final class ChestMemory extends Module {
             return;
         }
         GuiGraphicsExtractor context = event.getContext();
+        Font font = ClientFonts.hud();
         int x = context.guiWidth() / 2 + PEEK_GAP;
         int y = context.guiHeight() / 2 + PEEK_GAP;
-        context.text(mc.font, "Seen " + ChatUtil.ago(System.currentTimeMillis() - seen.seen()), x, y, PEEK_TEXT, true);
+        context.text(font, "Seen " + ChatUtil.ago(System.currentTimeMillis() - seen.seen()), x, y, PEEK_TEXT, true);
         new ContainerPreview(seen.items(), PEEK_COLUMNS)
-            .drawAt(context, mc.font, x, y + mc.font.lineHeight + 1, -1, -1);
+            .drawAt(context, font, x, y + font.lineHeight + 1, -1, -1);
     }
 
     @Subscribe

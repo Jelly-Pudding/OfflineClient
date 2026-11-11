@@ -1,106 +1,67 @@
 package com.jellypudding.offlineclient.command.commands;
 
 import com.jellypudding.offlineclient.OfflineClient;
-import com.jellypudding.offlineclient.command.Command;
-import com.jellypudding.offlineclient.command.CommandManager;
+import com.jellypudding.offlineclient.command.NameListCommand;
 import com.jellypudding.offlineclient.friend.FriendManager;
 import com.jellypudding.offlineclient.modules.misc.SecretChat;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.Modules;
-import net.minecraft.client.player.AbstractClientPlayer;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
+import java.util.Set;
 
-public final class FriendCommand extends Command {
+public final class FriendCommand extends NameListCommand {
+
+    private static final String PING = "ping";
 
     public FriendCommand() {
         super("friend", "Manages your friends list. Friends are never targeted by combat modules.",
-            "friend <add|remove|list|ping> [name]", "f");
+            "friend", "friends", List.of(PING), "f");
+    }
+
+    private static FriendManager friends() {
+        return OfflineClient.INSTANCE.getFriendManager();
     }
 
     @Override
-    public void execute(String[] args) {
-        FriendManager friends = OfflineClient.INSTANCE.getFriendManager();
-
-        if (args.length == 1 && args[0].equalsIgnoreCase("list")) {
-            if (friends.getAll().isEmpty()) {
-                ChatUtil.message("§7Your friends list is empty.");
-            } else {
-                ChatUtil.message("§3Friends §b" + String.join("§7 §b", friends.getAll()));
-            }
-            return;
-        }
-
-        // A ping with no name goes to every friend online.
-        if (args.length >= 1 && args.length <= 2 && args[0].equalsIgnoreCase("ping")) {
-            SecretChat secretChat = Modules.get(SecretChat.class);
-            if (secretChat != null) {
-                ChatUtil.message("§7" + secretChat.ping(args.length == 2 ? args[1] : null) + ".");
-            }
-            return;
-        }
-
-        if (args.length != 2) {
-            usage();
-            return;
-        }
-
-        String name = args[1];
-        switch (args[0].toLowerCase(Locale.ROOT)) {
-            case "add" -> {
-                if (OfflineClient.MC.player != null
-                    && name.equalsIgnoreCase(OfflineClient.MC.player.getGameProfile().name())) {
-                    ChatUtil.error("You cannot add yourself as a friend.");
-                    return;
-                }
-                if (friends.add(name)) {
-                    ChatUtil.message("§7Added §b" + name + "§7 to your friends.");
-                } else {
-                    ChatUtil.error(name + " is already a friend.");
-                }
-            }
-            case "remove" -> {
-                if (friends.remove(name)) {
-                    ChatUtil.message("§7Removed §b" + name + "§7 from your friends.");
-                } else {
-                    ChatUtil.error(name + " is not on your friends list.");
-                }
-            }
-            default -> usage();
-        }
-        OfflineClient.INSTANCE.getConfigManager().saveSoon();
+    protected Set<String> names() {
+        return friends().getAll();
     }
 
     @Override
-    public List<String> complete(String[] tokens, int index, String current) {
-        if (index == 1) {
-            return CommandManager.filter(current, List.of("add", "remove", "list", "ping"));
+    protected boolean add(String name) {
+        return friends().add(name);
+    }
+
+    @Override
+    protected boolean remove(String name) {
+        return friends().remove(name);
+    }
+
+    @Override
+    protected void clear() {
+        friends().clear();
+    }
+
+    @Override
+    protected String otherListOf(String name) {
+        return friends().isEnemy(name) ? "enemies" : null;
+    }
+
+    // A ping with no name goes to every friend online.
+    @Override
+    protected boolean runOwn(String verb, String[] args) {
+        SecretChat secretChat = Modules.get(SecretChat.class);
+        if (!verb.equals(PING) || args.length > 2 || secretChat == null) {
+            return false;
         }
-        if (index != 2) {
-            return List.of();
-        }
-        FriendManager friends = OfflineClient.INSTANCE.getFriendManager();
-        if (tokens[1].equalsIgnoreCase("remove")) {
-            return CommandManager.filter(current, new ArrayList<>(friends.getAll()));
-        }
-        if (tokens[1].equalsIgnoreCase("ping")) {
-            SecretChat secretChat = Modules.get(SecretChat.class);
-            return secretChat == null ? List.of() : CommandManager.filter(current, secretChat.onlineFriends());
-        }
-        if (!tokens[1].equalsIgnoreCase("add") || OfflineClient.MC.level == null) {
-            return List.of();
-        }
-        String self = OfflineClient.MC.player == null
-            ? "" : OfflineClient.MC.player.getGameProfile().name();
-        List<String> names = new ArrayList<>();
-        for (AbstractClientPlayer player : OfflineClient.MC.level.players()) {
-            String name = player.getGameProfile().name();
-            if (!name.equalsIgnoreCase(self) && !friends.isFriend(name)) {
-                names.add(name);
-            }
-        }
-        return CommandManager.filter(current, names);
+        ChatUtil.message("§7" + secretChat.ping(args.length == 2 ? args[1] : null) + ".");
+        return true;
+    }
+
+    @Override
+    protected List<String> namesFor(String verb) {
+        SecretChat secretChat = Modules.get(SecretChat.class);
+        return verb.equals(PING) && secretChat != null ? secretChat.onlineFriends() : List.of();
     }
 }

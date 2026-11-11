@@ -1,12 +1,14 @@
 package com.jellypudding.offlineclient.gui;
 
 import com.jellypudding.offlineclient.modules.misc.ClickGuiModule;
+import com.jellypudding.offlineclient.modules.render.Blur;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.RenderUtil;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.screens.Screen;
 
 // Shared colours and metrics for the ClickGUI and HUD.
 public final class GuiTheme {
@@ -62,28 +64,29 @@ public final class GuiTheme {
     // A background brighter than this takes dark writing.
     private static final float LIGHT_BACKGROUND = 0.55f;
     private static final int DARK_TEXT = 0xFF10121A;
+    // The wash over the world behind a screen of the client.
+    private static final int DIM_TOP = 0x70101018;
+    private static final int DIM_BOTTOM = 0xA0060610;
 
     private GuiTheme() {
     }
 
-    // Null before the client has built its modules.
     private static ClickGuiModule gui() {
         return Modules.get(ClickGuiModule.class);
     }
 
+    // One shade moved onto the chosen background colour.
+    private static int tinted(int shade) {
+        return ColorUtil.retint(shade, DEFAULT_PANEL, gui().background());
+    }
+
     // One background shade moved onto the chosen colour and thinned by the opacity.
     private static int bg(int shade) {
-        ClickGuiModule gui = gui();
-        if (gui == null) {
-            return shade;
-        }
-        return ColorUtil.fade(ColorUtil.retint(shade, DEFAULT_PANEL, gui.background()),
-            gui.opacity());
+        return ColorUtil.fade(tinted(shade), gui().opacity());
     }
 
     private static int ink(int shade) {
-        ClickGuiModule gui = gui();
-        return gui == null ? shade : ColorUtil.retint(shade, DEFAULT_TEXT, gui.textColor());
+        return ColorUtil.retint(shade, DEFAULT_TEXT, gui().textColor());
     }
 
     public static int bgWindow() {
@@ -121,9 +124,7 @@ public final class GuiTheme {
     }
 
     private static int solid(int shade) {
-        ClickGuiModule gui = gui();
-        return gui == null ? shade
-            : ColorUtil.withAlpha(ColorUtil.retint(shade, DEFAULT_PANEL, gui.background()), 255);
+        return ColorUtil.withAlpha(tinted(shade), 255);
     }
 
     public static int text() {
@@ -140,21 +141,15 @@ public final class GuiTheme {
 
     // The outline and the edge stay solid. A see through panel still has a border.
     public static int outline() {
-        ClickGuiModule gui = gui();
-        return gui == null ? DEFAULT_OUTLINE
-            : ColorUtil.retint(DEFAULT_OUTLINE, DEFAULT_PANEL, gui.background());
+        return tinted(DEFAULT_OUTLINE);
     }
 
     public static int edge() {
-        ClickGuiModule gui = gui();
-        return gui == null ? DEFAULT_EDGE
-            : ColorUtil.retint(DEFAULT_EDGE, DEFAULT_PANEL, gui.background());
+        return tinted(DEFAULT_EDGE);
     }
 
     public static int scrollThumb() {
-        ClickGuiModule gui = gui();
-        return gui == null ? DEFAULT_THUMB
-            : ColorUtil.retint(DEFAULT_THUMB, DEFAULT_PANEL, gui.background());
+        return tinted(DEFAULT_THUMB);
     }
 
     public static int textY(int rowY, int rowHeight) {
@@ -162,7 +157,7 @@ public final class GuiTheme {
     }
 
     private static ColorSetting accentSetting() {
-        return Modules.get(ClickGuiModule.class).getAccent();
+        return gui().getAccent();
     }
 
     public static int accent() {
@@ -192,6 +187,24 @@ public final class GuiTheme {
     // Dark writing on a light background and the given light writing on anything darker.
     public static int contrastText(int background, int light) {
         return ColorUtil.luminance(background) > LIGHT_BACKGROUND ? DARK_TEXT : light;
+    }
+
+    // The hover text can be switched off in the ClickGUI module.
+    static boolean hoverHelp() {
+        return gui().showsHoverHelp();
+    }
+
+    // The vanilla blur washes the panel colours out. Blur adds its own when
+    // asked. The wash over the world follows the opacity setting because a
+    // see through panel is worth nothing over a blacked out world.
+    static void dimBackground(Screen screen, GuiGraphicsExtractor context) {
+        Blur blur = Modules.get(Blur.class);
+        if (blur != null && blur.wants(screen)) {
+            blur.blurHere(context);
+        }
+        float share = gui().opacity();
+        context.fillGradient(0, 0, screen.width, screen.height,
+            ColorUtil.fade(DIM_TOP, share), ColorUtil.fade(DIM_BOTTOM, share));
     }
 
     // A rounded button with its label in the middle. A button that is not live greys out.

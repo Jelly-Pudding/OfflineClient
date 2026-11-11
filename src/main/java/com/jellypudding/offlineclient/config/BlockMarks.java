@@ -7,9 +7,7 @@ import com.jellypudding.offlineclient.util.ServerInfo;
 import net.minecraft.core.BlockPos;
 
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 
 // Blocks marked for one purpose. Each mark is filed under the server and the dimension it was
@@ -24,7 +22,8 @@ public final class BlockMarks {
 
     private BlockMarks(String fileName) {
         file = DataFiles.path(fileName);
-        DataFiles.readJson(file, BlockMarks::decode).ifPresent(marks::addAll);
+        DataFiles.readJson(file, root -> DataFiles.entries(root, JsonElement::getAsString, "marks in " + fileName))
+            .ifPresent(marks::addAll);
     }
 
     // The containers ChestAura leaves alone.
@@ -81,14 +80,6 @@ public final class BlockMarks {
 
     private static String key(BlockPos pos) {
         return ServerInfo.worldKey() + " " + BlockUtil.text(pos);
-    }
-
-    private static List<String> decode(JsonElement root) {
-        List<String> decoded = new ArrayList<>();
-        for (JsonElement element : root.getAsJsonArray()) {
-            decoded.add(element.getAsString());
-        }
-        return decoded;
     }
 
     private void save() {

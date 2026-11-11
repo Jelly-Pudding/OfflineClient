@@ -35,8 +35,7 @@ public final class AutoGap extends Module {
         "Eats apples back to back for as long as the module is on whatever your health or effects.",
         false);
     private final NumberSetting health = new NumberSetting("Health",
-        "Eat at or below this many hearts. Zero turns it off.", 7, 0, 10, 0.5, " hearts")
-        .min(0)
+        "Eats at or below this many hearts. Zero turns it off.", 7, 0, 10, 0.5, " hearts")
         .unless(always);
     private final EnumSetting<Choice> choice = new EnumSetting<>("Choice",
         "Which apple to reach for.", Choice.PLAIN_FIRST)
@@ -45,24 +44,21 @@ public final class AutoGap extends Module {
         .describe(Choice.ENCHANTED_FIRST, "Eats an enchanted apple and falls back to a plain one.")
         .describe(Choice.ENCHANTED_ONLY, "Never eats a plain apple.");
     private final BoolSetting absorption = new BoolSetting("Absorption",
-        "Eat to keep the absorption effect topped up.", true)
+        "Eats to keep the absorption effect topped up.", true)
         .unless(always);
     private final BoolSetting regeneration = new BoolSetting("Regeneration",
-        "Eat to keep the regeneration effect topped up.", false)
+        "Eats to keep the regeneration effect topped up.", false)
         .unless(always);
     private final BoolSetting fireResistance = new BoolSetting("Fire resistance",
-        "Eat to keep the fire resistance effect topped up. Only an enchanted apple gives it.", false)
+        "Eats to keep the fire resistance effect topped up. Only an enchanted apple gives it.", false)
         .visibleWhen(() -> !always.isOn() && !choice.is(Choice.PLAIN_ONLY));
     private final NumberSetting expiry = new NumberSetting("Expiry",
-        "Start eating this many ticks before an effect runs out.", 60, 0, 200, 10, " ticks")
-        .min(0)
+        "Starts eating this many ticks before an effect runs out.", 60, 0, 200, 10, " ticks")
         .unless(always);
     private final BoolSetting hold = new BoolSetting("Keep held",
-        "Stay on the apple slot between bites.", true);
+        "Stays on the apple slot between bites.", true);
     private final BoolSetting pauseCombat = new BoolSetting("Pause combat",
         "Holds the combat modules back whilst you eat.", true);
-    private final BoolSetting noSlowdown = new BoolSetting("No slowdown",
-        "Keeps your normal speed whilst an apple goes down.", false);
 
     private final Feeding feeding = new Feeding();
     private boolean needsEnchanted;
@@ -71,7 +67,7 @@ public final class AutoGap extends Module {
     public AutoGap() {
         super("AutoGap", "Eats golden apples to hold your buffs and your health up.", Category.PLAYER);
         addSettings(always, health, choice, absorption, regeneration, fireResistance, expiry, hold,
-            pauseCombat, noSlowdown);
+            pauseCombat);
         searchTags("gapple", "golden apple", "egap");
     }
 
@@ -81,14 +77,6 @@ public final class AutoGap extends Module {
 
     public boolean isBusy() {
         return isEnabled() && feeding.isActive();
-    }
-
-    // Read by LocalPlayerMixin to stop the apple slowing you. Manual bites count too.
-    public boolean suppressesSlowdown() {
-        if (!isEnabled() || !noSlowdown.isOn() || mc.player == null || !mc.player.isUsingItem()) {
-            return false;
-        }
-        return ItemUtil.isGoldenApple(mc.player.getUseItem());
     }
 
     @Override
@@ -103,7 +91,7 @@ public final class AutoGap extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || mc.player.isSpectator()) {
+        if (mc.player.isSpectator()) {
             feeding.stop();
             return;
         }
@@ -143,8 +131,10 @@ public final class AutoGap extends Module {
         feeding.begin(slot);
     }
 
+    // Another feeder has the use key or a bottle thrown at your feet may still bring what an apple
+    // gives. ShulkerPacker keeps count of every stack.
     private boolean handBusy() {
-        return Modules.feeding(this);
+        return Modules.feeding(this) || Modules.bottleLanding() || Modules.packing();
     }
 
     private boolean wantsApple() {

@@ -7,11 +7,22 @@ import com.jellypudding.offlineclient.event.events.PacketSendEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
+import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.PacketNotice;
+import com.jellypudding.offlineclient.util.PacketUtil;
+import com.jellypudding.offlineclient.util.SignWords;
+import net.minecraft.SharedConstants;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientboundAddEntityPacket;
+import net.minecraft.network.protocol.game.ClientboundBossEventPacket;
+import net.minecraft.network.protocol.game.ClientboundDisguisedChatPacket;
 import net.minecraft.network.protocol.game.ClientboundEntityPositionSyncPacket;
 import net.minecraft.network.protocol.game.ClientboundExplodePacket;
+import net.minecraft.network.protocol.game.ClientboundGameEventPacket;
 import net.minecraft.network.protocol.game.ClientboundLevelParticlesPacket;
 import net.minecraft.network.protocol.game.ClientboundLoginPacket;
 import net.minecraft.network.protocol.game.ClientboundMoveMinecartPacket;
@@ -19,25 +30,37 @@ import net.minecraft.network.protocol.game.ClientboundMoveVehiclePacket;
 import net.minecraft.network.protocol.game.ClientboundPlayerPositionPacket;
 import net.minecraft.network.protocol.game.ClientboundProjectilePowerPacket;
 import net.minecraft.network.protocol.game.ClientboundSetChunkCacheRadiusPacket;
+import net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket;
 import net.minecraft.network.protocol.game.ClientboundSetEntityMotionPacket;
+import net.minecraft.network.protocol.game.ClientboundSystemChatPacket;
 import net.minecraft.network.protocol.game.ClientboundTeleportEntityPacket;
+import net.minecraft.network.protocol.game.ServerboundClientCommandPacket;
 import net.minecraft.network.protocol.game.ServerboundSignUpdatePacket;
+import net.minecraft.network.syncher.EntityDataSerializers;
+import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.server.level.ChunkMap;
 import net.minecraft.util.StringUtil;
+import net.minecraft.world.BossEvent;
+import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.PositionMoveRotation;
 import net.minecraft.world.entity.PositionPath;
 import net.minecraft.world.entity.PositionStep;
 import net.minecraft.world.entity.vehicle.minecart.NewMinecartBehavior;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.component.FireworkExplosion;
+import net.minecraft.world.item.component.Fireworks;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
 // Drops or trims server packets carrying values nothing in the game produces. It runs
 // before the game or any other module handles them. Packets that fail to read at all
-// are AntiPacketKick's job.
+// are AntiPacketKick's job. Firework bursts are counted where the game sets them off.
 public final class AntiCrash extends Module {
 
     // Ten times what the server lets a player cover in one tick. Nothing in the game moves faster.
@@ -58,10 +81,24 @@ public final class AntiCrash extends Module {
     // The farthest view distance a server can set.
     private static final int MAX_CHUNK_RADIUS = ChunkMap.MAX_VIEW_DISTANCE;
 
-    // The longest sign line the client can send back.
-    private static final int MAX_SIGN_LINE = 384;
+    // Far wider than any screen and room for the many parts a pack font builds a boss bar from.
+    private static final int LONGEST_NAME = 1000;
+
+    // More lines than the chat keeps. Nothing a player could read comes faster.
+    private static final int CHAT_BUDGET = 200;
+
+    // A rocket holds no more stars than fit a crafting grid beside its paper and gunpowder. The
+    // game lets a server send one with hundreds and plays them all.
+    private static final int MOST_STARS = 7;
+
+    // Eight full rockets a tick. A rocket with no star still makes a puff and counts as one.
+    private static final int STAR_BUDGET = 8 * MOST_STARS;
 
     private static final String VELOCITY = "Velocity";
+    private static final String NAMES = "Long names";
+    private static final String FIREWORKS = "Fireworks";
+    private static final String CHAT_FLOOD = "Chat flood";
+    private static final String FLOOD_DROPPED = "Dropped a flood of chat lines from the server.";
     private static final String TOO_FAST = "Dropped a push faster than anything in the game.";
 
     private final BoolSetting explosions = new BoolSetting("Explosions",
@@ -79,16 +116,41 @@ public final class AntiCrash extends Module {
     private final BoolSetting signs = new BoolSetting("Sign lines",
         "Trims sign lines to what the server takes when you close a sign. A longer line drops your connection.",
         true);
+    private final BoolSetting names = new BoolSetting(NAMES,
+        "Cuts the name of an entity or boss bar or item to a thousand characters. The game draws a name of any"
+            + " length every frame.", true);
+    private final BoolSetting fireworks = new BoolSetting(FIREWORKS,
+        "Cuts a rocket to the seven stars one can be crafted with and lets no more than fifty six stars burst in a"
+            + " tick. A storm of them freezes the game.", true);
+    private final BoolSetting chatFlood = new BoolSetting(CHAT_FLOOD,
+        "Drops server lines past two hundred a second. Chat from players always shows.", true);
+    private final NumberSetting entityCap = new NumberSetting("Entity cap",
+        "New entities are dropped once the world around you holds this many. Players always appear. Zero sets"
+            + " no cap.", 0, 0, 10000, 100);
+    private final BoolSetting demo = new BoolSetting("Demo screen",
+        "Drops the demo welcome screen and the demo hints a server can send.", true);
+    private final BoolSetting credits = new BoolSetting("End credits",
+        "Skips the end credits and asks for the respawn they end with straight away.", false);
+    private final BoolSetting guardian = new BoolSetting("Guardian face",
+        "Drops the elder guardian face and its sound. The mining fatigue it comes with still lands.", false);
     private final BoolSetting notify = new BoolSetting("Notify",
         "Says in chat when a guard throws something away.", true);
 
     // Particles asked for since the last client tick. Filled on the netty thread.
     private final AtomicInteger particlesThisTick = new AtomicInteger();
+    // Entities let in since the last client tick. The world only counts them once it has ticked.
+    private final AtomicInteger spawnsThisTick = new AtomicInteger();
+    private final AtomicInteger chatThisSecond = new AtomicInteger();
+    private int secondTicks;
+    // Stars set off since the last client tick. Bursts happen on the game thread.
+    private int starsThisTick;
 
     public AntiCrash() {
         super("AntiCrash", "Stops packets that would crash or freeze the game.", Category.MISC);
-        addSettings(explosions, particles, velocity, positions, chunkRadius, signs, notify);
-        searchTags("crash", "freeze", "lag", "exploit");
+        addSettings(explosions, particles, velocity, positions, chunkRadius, signs, names, fireworks, chatFlood,
+            entityCap, demo, credits, guardian, notify);
+        searchTags("crash", "freeze", "lag", "exploit", "demo", "credits", "elder guardian", "boss bar",
+            "entity limit", "chat spam", "firework");
     }
 
     // Nothing legitimate trips a guard. It is safe to have on everywhere.
@@ -100,6 +162,12 @@ public final class AntiCrash extends Module {
     @Subscribe
     private void onClientTick(ClientTickEvent event) {
         particlesThisTick.set(0);
+        spawnsThisTick.set(0);
+        starsThisTick = 0;
+        if (++secondTicks >= SharedConstants.TICKS_PER_SECOND) {
+            secondTicks = 0;
+            chatThisSecond.set(0);
+        }
     }
 
     // Fired on the netty thread. Runs before every other module sees the packet.
@@ -123,7 +191,16 @@ public final class AntiCrash extends Module {
                 drop(VELOCITY, TOO_FAST);
             case ClientboundProjectilePowerPacket power when velocity.isOn()
                 && !(Math.abs(power.getAccelerationPower()) <= MAX_SPEED) -> drop(VELOCITY, TOO_FAST);
+            case ClientboundAddEntityPacket spawn when overCap(spawn) ->
+                drop("Entity cap", "Dropped new entities past the cap you set.");
             case ClientboundAddEntityPacket spawn -> spawn(spawn);
+            case ClientboundSetEntityDataPacket data when names.isOn() || fireworks.isOn() -> entityData(data);
+            case ClientboundBossEventPacket bar when names.isOn() -> bossBar(bar);
+            case ClientboundSystemChatPacket line when chatFlood.isOn() && !line.overlay() && floods() ->
+                drop(CHAT_FLOOD, FLOOD_DROPPED);
+            case ClientboundDisguisedChatPacket _ when chatFlood.isOn() && floods() ->
+                drop(CHAT_FLOOD, FLOOD_DROPPED);
+            case ClientboundGameEventPacket event -> gameEvent(event);
             case ClientboundPlayerPositionPacket teleport -> teleport(teleport);
             case ClientboundTeleportEntityPacket teleport -> teleport(teleport);
             case ClientboundEntityPositionSyncPacket sync when positions.isOn() && !inWorld(sync.position()) ->
@@ -180,6 +257,133 @@ public final class AntiCrash extends Module {
         return new ClientboundLevelParticlesPacket(burst.particle(), burst.overrideLimiter(), burst.alwaysShow(),
             burst.x(), burst.y(), burst.z(), burst.xDist(), burst.yDist(), burst.zDist(),
             burst.xMaxSpeed(), burst.yMaxSpeed(), burst.zMaxSpeed(), left, burst.randomizationType());
+    }
+
+    // The world is read from the netty thread. Its count may be a tick behind and the tally of
+    // this tick makes up for that.
+    private boolean overCap(ClientboundAddEntityPacket spawn) {
+        int cap = entityCap.getInt();
+        ClientLevel level = mc.level;
+        return cap > 0 && level != null && spawn.getType() != EntityTypes.PLAYER
+            && level.getEntityCount() + spawnsThisTick.getAndIncrement() >= cap;
+    }
+
+    private boolean floods() {
+        return chatThisSecond.getAndIncrement() >= CHAT_BUDGET;
+    }
+
+    // A demo of the game runs on a world of its own and shows these by itself. Closing the credits
+    // asks the server for a respawn and skipping them has to ask too.
+    private Packet<?> gameEvent(ClientboundGameEventPacket event) {
+        ClientboundGameEventPacket.Type kind = event.getEvent();
+        if (kind == ClientboundGameEventPacket.DEMO_EVENT && demo.isOn() && !mc.isDemo()) {
+            return drop("Demo screen", "Dropped a demo screen the server sent.");
+        }
+        if (kind == ClientboundGameEventPacket.GUARDIAN_ELDER_EFFECT && guardian.isOn()) {
+            return null;
+        }
+        if (kind == ClientboundGameEventPacket.WIN_GAME && credits.isOn()) {
+            PacketUtil.send(new ServerboundClientCommandPacket(ServerboundClientCommandPacket.Action.PERFORM_RESPAWN));
+            return null;
+        }
+        return event;
+    }
+
+    // An entity carries its name and a rocket its stars as data values.
+    private Packet<?> entityData(ClientboundSetEntityDataPacket data) {
+        List<SynchedEntityData.DataValue<?>> values = data.packedItems();
+        List<SynchedEntityData.DataValue<?>> safe = null;
+        for (int i = 0; i < values.size(); i++) {
+            SynchedEntityData.DataValue<?> value = values.get(i);
+            SynchedEntityData.DataValue<?> fixed = safeValue(value);
+            if (fixed != value) {
+                safe = safe == null ? new ArrayList<>(values) : safe;
+                safe.set(i, fixed);
+            }
+        }
+        return safe == null ? data : new ClientboundSetEntityDataPacket(data.id(), safe);
+    }
+
+    private SynchedEntityData.DataValue<?> safeValue(SynchedEntityData.DataValue<?> value) {
+        if (names.isOn() && value.value() instanceof Optional<?> held && held.isPresent()
+            && held.get() instanceof Component name && tooLong(name)) {
+            report(NAMES, "Cut an entity name too long to draw.");
+            return new SynchedEntityData.DataValue<>(value.id(), EntityDataSerializers.OPTIONAL_COMPONENT,
+                Optional.of(cut(name)));
+        }
+        if (fireworks.isOn() && value.value() instanceof ItemStack rocket) {
+            Fireworks stars = rocket.get(DataComponents.FIREWORKS);
+            if (stars != null && stars.explosions().size() > MOST_STARS) {
+                ItemStack trimmed = rocket.copy();
+                trimmed.set(DataComponents.FIREWORKS, new Fireworks(stars.flightDuration(),
+                    List.copyOf(stars.explosions().subList(0, MOST_STARS))));
+                report(FIREWORKS, "Cut a rocket with more stars than one can be crafted with.");
+                return new SynchedEntityData.DataValue<>(value.id(), EntityDataSerializers.ITEM_STACK, trimmed);
+            }
+        }
+        return value;
+    }
+
+    // The packet only shows what it holds to a handler. A bar that is added or renamed with a long
+    // name is built again with the name cut.
+    private Packet<?> bossBar(ClientboundBossEventPacket bar) {
+        ClientboundBossEventPacket[] safe = {bar};
+        bar.dispatch(new ClientboundBossEventPacket.Handler() {
+            @Override
+            public void add(UUID id, Component name, float progress, BossEvent.BossBarColor colour,
+                            BossEvent.BossBarOverlay overlay, boolean darkenScreen, boolean playMusic,
+                            boolean createFog) {
+                if (tooLong(name)) {
+                    BossEvent cutBar = new BossEvent(id, cut(name), colour, overlay) {
+                    };
+                    cutBar.setProgress(progress);
+                    cutBar.setDarkenScreen(darkenScreen).setPlayBossMusic(playMusic).setCreateWorldFog(createFog);
+                    safe[0] = ClientboundBossEventPacket.createAddPacket(cutBar);
+                }
+            }
+
+            @Override
+            public void updateName(UUID id, Component name) {
+                if (tooLong(name)) {
+                    safe[0] = ClientboundBossEventPacket.createUpdateNamePacket(new BossEvent(id, cut(name),
+                        BossEvent.BossBarColor.WHITE, BossEvent.BossBarOverlay.PROGRESS) {
+                    });
+                }
+            }
+        });
+        if (safe[0] != bar) {
+            report(NAMES, "Cut a boss bar name too long to draw.");
+        }
+        return safe[0];
+    }
+
+    // Asked by ClientLevelMixin as a rocket bursts. The stars of one tick stay within the budget.
+    public boolean letsBurst(List<FireworkExplosion> stars) {
+        if (!fireworks.isOn()) {
+            return true;
+        }
+        int cost = Math.max(1, stars.size());
+        if (starsThisTick + cost <= STAR_BUDGET) {
+            starsThisTick += cost;
+            return true;
+        }
+        report(FIREWORKS, "Dropped a storm of fireworks.");
+        return false;
+    }
+
+    // The name the game draws for an item. Read by ItemStackMixin. A stack as the game makes it
+    // has a name of the game's own. The anvil reads the whole name and never this one.
+    public Component shortName(ItemStack stack, Component name) {
+        return names.isOn() && !stack.getComponentsPatch().isEmpty() && tooLong(name) ? cut(name) : name;
+    }
+
+    // Reading stops one character past the limit however long the name is.
+    private static boolean tooLong(Component name) {
+        return name.getString(LONGEST_NAME + 1).length() > LONGEST_NAME;
+    }
+
+    private static Component cut(Component name) {
+        return ChatUtil.head(name, LONGEST_NAME);
     }
 
     private Packet<?> spawn(ClientboundAddEntityPacket spawn) {
@@ -265,11 +469,11 @@ public final class AntiCrash extends Module {
     @Subscribe
     private void onPacketSend(PacketSendEvent event) {
         if (!signs.isOn() || !(event.getPacket() instanceof ServerboundSignUpdatePacket sign)
-            || sign.lines().stream().allMatch(line -> line.length() <= MAX_SIGN_LINE)) {
+            || sign.lines().stream().allMatch(line -> line.length() <= SignWords.MOST_LINE_CHARS)) {
             return;
         }
         List<String> lines = sign.lines().stream()
-            .map(line -> StringUtil.truncateStringIfNecessary(line, MAX_SIGN_LINE, false))
+            .map(line -> StringUtil.truncateStringIfNecessary(line, SignWords.MOST_LINE_CHARS, false))
             .toList();
         event.setPacket(new ServerboundSignUpdatePacket(sign.pos(), lines, sign.slot()));
         report("Sign lines", "Trimmed a sign line longer than the server takes.");

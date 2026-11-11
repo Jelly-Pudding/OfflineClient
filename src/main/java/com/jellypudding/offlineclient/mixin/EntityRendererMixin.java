@@ -2,11 +2,12 @@ package com.jellypudding.offlineclient.mixin;
 
 import com.jellypudding.offlineclient.mixinterface.IRenderState;
 import com.jellypudding.offlineclient.modules.misc.FakePlayer;
-import com.jellypudding.offlineclient.modules.misc.NameProtect;
+import com.jellypudding.offlineclient.modules.misc.Inspector;
 import com.jellypudding.offlineclient.modules.render.Chams;
 import com.jellypudding.offlineclient.modules.render.Esp;
 import com.jellypudding.offlineclient.modules.render.NoRender;
 import com.jellypudding.offlineclient.modules.render.TrueSight;
+import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.culling.Frustum;
@@ -51,10 +52,16 @@ public abstract class EntityRendererMixin {
             state.outlineColor = esp.glowColor(entity);
         }
 
+        Inspector inspector = Modules.get(Inspector.class);
+        if (inspector != null && inspector.glows(entity)) {
+            state.outlineColor = inspector.markColour();
+        }
+
         Chams chams = Modules.get(Chams.class);
         if (chams != null && chams.applies(entity)) {
             extra.offlineclient$setChams(chams.throughWalls());
             extra.offlineclient$setFlat(chams.flat(entity));
+            extra.offlineclient$setPicture(chams.picture(entity));
             extra.offlineclient$setTint(chams.tintFor(entity));
         }
 
@@ -69,9 +76,8 @@ public abstract class EntityRendererMixin {
             state.nameTag = null;
         }
         // The vanilla tag over a head carries whatever the server wrote there.
-        NameProtect nameProtect = Modules.get(NameProtect.class);
-        if (nameProtect != null && state.nameTag != null) {
-            state.nameTag = nameProtect.filter(state.nameTag);
+        if (state.nameTag != null) {
+            state.nameTag = EntityUtil.displayed(state.nameTag);
         }
     }
 }

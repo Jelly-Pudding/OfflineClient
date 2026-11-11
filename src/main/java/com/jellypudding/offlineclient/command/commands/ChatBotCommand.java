@@ -32,7 +32,7 @@ public final class ChatBotCommand extends Command {
         }
         switch (args[0].toLowerCase(Locale.ROOT)) {
             case KEY -> key(chatBot, args);
-            case FORGET -> forget(chatBot, args);
+            case FORGET -> forgetKey(chatBot, args);
             case KEYS -> list();
             default -> usage();
         }
@@ -59,7 +59,7 @@ public final class ChatBotCommand extends Command {
         forgetTypedLine(key);
     }
 
-    private void forget(ChatBot chatBot, String[] args) {
+    private void forgetKey(ChatBot chatBot, String[] args) {
         if (args.length > 2) {
             usage("chatbot forget [host]");
             return;
@@ -69,11 +69,7 @@ public final class ChatBotCommand extends Command {
             usage("chatbot forget <host>");
             return;
         }
-        if (ServerStore.modelKeys().remove(host)) {
-            ChatUtil.message("§7Forgot the key for §b" + host + "§7.");
-        } else {
-            ChatUtil.error("No key is saved for " + host + ".");
-        }
+        forget(ServerStore.modelKeys(), host, "key");
     }
 
     private static void list() {

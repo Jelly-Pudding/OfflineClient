@@ -5,21 +5,22 @@ import com.jellypudding.offlineclient.OfflineClient;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.resources.ResourceKey;
+import net.minecraft.core.Holder;
 import net.minecraft.util.Mth;
-import net.minecraft.world.attribute.EnvironmentAttributes;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.ClipContext;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BedPart;
+import net.minecraft.world.level.dimension.BuiltinDimensionTypes;
+import net.minecraft.world.level.dimension.DimensionType;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
-// Works out what an end crystal blast would do before it happens.
+// Works out what a blast would do before it happens.
 // The numbers mirror the vanilla explosion code exactly.
 public final class ExplosionUtil {
 
@@ -38,19 +39,16 @@ public final class ExplosionUtil {
     private ExplosionUtil() {
     }
 
-    // An anchor that sets a spawn point never goes off.
+    // The anchor rule never reaches the client. It sits on the dimension type and an anchor only
+    // sets a spawn point in the Nether.
     public static boolean anchorsExplodeHere() {
-        return anchorsExplodeAt(MC.player.blockPosition());
+        return !MC.level.dimensionTypeRegistration().is(BuiltinDimensionTypes.NETHER);
     }
 
-    public static boolean anchorsExplodeAt(BlockPos pos) {
-        return !MC.level.environmentAttributes().getValue(EnvironmentAttributes.RESPAWN_ANCHOR_WORKS, pos);
-    }
-
-    // The bed rule never reaches the client. Beds blow up in the Nether and the End.
+    // The bed rule never reaches the client either. Beds blow up in the Nether and the End.
     public static boolean bedsExplodeHere() {
-        ResourceKey<Level> dimension = MC.level.dimension();
-        return dimension == Level.NETHER || dimension == Level.END;
+        Holder<DimensionType> type = MC.level.dimensionTypeRegistration();
+        return type.is(BuiltinDimensionTypes.NETHER) || type.is(BuiltinDimensionTypes.END);
     }
 
     public static float crystalDamage(LivingEntity target, Vec3 source) {
@@ -65,8 +63,8 @@ public final class ExplosionUtil {
         return blastDamage(target, source, power, Vec3.ZERO);
     }
 
-    // Damage with the target carried forward by the lead. The blast stays where it
-    // really is and the exposure raycast runs through the world that exists.
+    // Damage with the target carried forward by the lead. Its distance and the share of it the blast
+    // sees are both measured there. The blast stays put and the rays run through the world as it stands.
     public static float blastDamage(LivingEntity target, Vec3 source, float power, Vec3 lead) {
         return blastDamage(target, source, power, lead, NOTHING);
     }
@@ -84,20 +82,34 @@ public final class ExplosionUtil {
         if (distance > diameter) {
             return 0;
         }
-        float seen = seenPercent(source, target, ignored);
+        float seen = seenPercent(source, target.getBoundingBox().move(lead), target, ignored);
         double impact = (1 - distance / diameter) * seen;
         float raw = (float) ((impact * impact + impact) / 2 * 7 * diameter + 1);
         return reduce(raw, target);
     }
 
-    // The suicide check refuses anything that could kill.
-    public static boolean selfSafe(Vec3 source, float power, float maxSelfDamage,
-                                   boolean antiSuicide, BlockPos... ignored) {
-        float self = blastDamage(MC.player, source, power, Vec3.ZERO, ignored);
-        if (self > maxSelfDamage) {
-            return false;
+    // True when the blast sees some of the target from inside its reach. Behind full cover it only
+    // grazes for the least damage any blast deals.
+    public static boolean exposed(LivingEntity target, Vec3 source, float power) {
+        return target.position().distanceTo(source) < power * 2
+            && seenPercent(source, target.getBoundingBox(), target, NOTHING) > 0;
+    }
+
+    // True when the blast deals no friend more than the limit. One that would kill a friend is
+    // refused whatever the limit.
+    public static boolean friendsSafe(Vec3 source, float power, float maxFriendDamage, BlockPos... ignored) {
+        double reach = power * 2;
+        for (Player player : MC.level.players()) {
+            if (player == MC.player || player.isSpectator() || player.position().distanceToSqr(source) > reach * reach
+                || !EntityUtil.isFriend(player)) {
+                continue;
+            }
+            float damage = blastDamage(player, source, power, Vec3.ZERO, ignored);
+            if (damage > maxFriendDamage || damage >= EntityUtil.totalHealth(player)) {
+                return false;
+            }
         }
-        return !antiSuicide || self < EntityUtil.totalHealth(MC.player);
+        return true;
     }
 
     // Only the reach is checked when dangerous is off.
@@ -121,10 +133,9 @@ public final class ExplosionUtil {
         return new BlockPos[] {pos, other};
     }
 
-    // The share of the target the blast can see using the same grid of points vanilla
-    // samples over the hitbox. A ray that only meets an ignored block counts as clear.
-    private static float seenPercent(Vec3 source, LivingEntity target, BlockPos[] ignored) {
-        AABB box = target.getBoundingBox();
+    // The share of the box the blast can see using the same grid of points vanilla samples over a
+    // hitbox. A ray that only meets an ignored block counts as clear.
+    private static float seenPercent(Vec3 source, AABB box, LivingEntity target, BlockPos[] ignored) {
         double stepX = 1 / ((box.maxX - box.minX) * 2 + 1);
         double stepY = 1 / ((box.maxY - box.minY) * 2 + 1);
         double stepZ = 1 / ((box.maxZ - box.minZ) * 2 + 1);
@@ -155,7 +166,7 @@ public final class ExplosionUtil {
 
     private static boolean isIgnored(BlockPos pos, BlockPos[] ignored) {
         for (BlockPos ignore : ignored) {
-            if (ignore.equals(pos)) {
+            if (pos.equals(ignore)) {
                 return true;
             }
         }

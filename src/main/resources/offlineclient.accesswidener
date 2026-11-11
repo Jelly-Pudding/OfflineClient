@@ -3,6 +3,7 @@ accessible field net/minecraft/client/Minecraft rightClickDelay I
 accessible method net/minecraft/client/Minecraft startAttack ()Z
 accessible method net/minecraft/client/Minecraft startUseItem ()V
 accessible field net/minecraft/client/multiplayer/MultiPlayerGameMode destroyDelay I
+accessible field net/minecraft/client/multiplayer/ClientCommonPacketListenerImpl isTransferring Z
 accessible field net/minecraft/client/gui/GuiGraphicsExtractor guiRenderState Lnet/minecraft/client/renderer/state/gui/GuiRenderState;
 accessible field net/minecraft/client/KeyMapping key Lcom/mojang/blaze3d/platform/InputConstants$Key;
 accessible method net/minecraft/client/renderer/RenderPipelines register (Lcom/mojang/renderpearl/api/pipeline/RenderPipeline;)Lcom/mojang/renderpearl/api/pipeline/RenderPipeline;
@@ -13,12 +14,12 @@ accessible method net/minecraft/client/renderer/rendertype/RenderType create (Lj
 accessible field net/minecraft/world/entity/projectile/FishingHook biting Z
 accessible field net/minecraft/network/protocol/game/ClientboundEntityEventPacket entityId I
 accessible field net/minecraft/client/gui/components/ChatComponent allMessages Ljava/util/List;
+accessible field net/minecraft/client/gui/components/MultiLineEditBox textField Lnet/minecraft/client/gui/components/MultilineTextField;
 accessible method net/minecraft/client/gui/components/ChatComponent refreshTrimmedMessages ()V
 accessible method net/minecraft/client/multiplayer/MultiPlayerGameMode ensureHasSentCarriedItem ()V
 accessible field net/minecraft/world/entity/LivingEntity DATA_EFFECT_PARTICLES Lnet/minecraft/network/syncher/EntityDataAccessor;
 accessible method net/minecraft/world/entity/projectile/FishingHook calculateOpenWater (Lnet/minecraft/core/BlockPos;)Z
 accessible method net/minecraft/world/entity/animal/feline/Ocelot isTrusting ()Z
-accessible method net/minecraft/world/entity/animal/fox/Fox trusts (Lnet/minecraft/world/entity/LivingEntity;)Z
 accessible field net/minecraft/world/item/MobBucketItem type Lnet/minecraft/world/entity/EntityType;
 accessible field net/minecraft/world/entity/Entity wasTouchingWater Z
 accessible method net/minecraft/world/entity/projectile/arrow/AbstractArrow isInGround ()Z
@@ -51,6 +52,9 @@ accessible field net/minecraft/client/multiplayer/ClientPacketListener serverChu
 accessible field net/minecraft/world/level/block/entity/SignBlockEntity allowOpFeatures Z
 accessible method net/minecraft/world/level/block/TrapDoorBlock getType ()Lnet/minecraft/world/level/block/state/properties/BlockSetType;
 accessible field net/minecraft/world/entity/LivingEntity noJumpDelay I
+accessible method net/minecraft/world/entity/LivingEntity updateFallFlyingMovement (Lnet/minecraft/world/phys/Vec3;)Lnet/minecraft/world/phys/Vec3;
+accessible field net/minecraft/world/entity/LivingEntity autoSpinAttackTicks I
+accessible field net/minecraft/world/entity/projectile/FireworkRocketEntity attachedToEntity Lnet/minecraft/world/entity/LivingEntity;
 accessible field net/minecraft/client/multiplayer/ClientPacketListener serverSimulationDistance I
 accessible method net/minecraft/client/multiplayer/ClientLevel getAllMapData ()Ljava/util/Map;
 accessible method net/minecraft/world/level/gameevent/vibrations/VibrationSystem$Listener isOccluded (Lnet/minecraft/world/level/Level;Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/phys/Vec3;)Z
@@ -58,5 +62,14 @@ accessible field net/minecraft/world/entity/projectile/Projectile leftOwner Z
 accessible field net/minecraft/server/MinecraftServer storageSource Lnet/minecraft/world/level/storage/LevelStorageSource$LevelStorageAccess;
 accessible field net/minecraft/stats/StatsCounter stats Lit/unimi/dsi/fastutil/objects/Object2IntMap;
 accessible method net/minecraft/world/entity/player/Player printPlayerPermissions (Lnet/minecraft/server/permissions/PermissionSet;)Ljava/lang/String;
-accessible field net/minecraft/client/ClientClockManager$ClientClockInstance totalTicks J
 accessible method net/minecraft/world/level/block/entity/vault/VaultSharedData getConnectedPlayers ()Ljava/util/Set;
+accessible field net/minecraft/client/sounds/WeighedSoundEvents list Ljava/util/List;
+accessible field net/minecraft/client/renderer/feature/FeatureRenderDispatcher preparedFrame Lnet/minecraft/client/renderer/feature/FeatureRenderDispatcher$PreparedFrame;
+accessible field net/minecraft/client/renderer/feature/FeatureRenderDispatcher$PreparedFrame context Lnet/minecraft/client/renderer/feature/FeatureFrameContext;
+accessible field net/minecraft/client/gui/Font provider Lnet/minecraft/client/gui/Font$Provider;
+accessible class net/minecraft/world/attribute/EnvironmentAttributeSystem$ValueSampler
+accessible method net/minecraft/world/attribute/EnvironmentAttributeSystem getValueSampler (Lnet/minecraft/world/attribute/EnvironmentAttribute;)Lnet/minecraft/world/attribute/EnvironmentAttributeSystem$ValueSampler;
+accessible method net/minecraft/world/attribute/EnvironmentAttributeSystem$ValueSampler computeValueNotPositional ()Ljava/lang/Object;
+accessible field net/minecraft/world/attribute/EnvironmentAttributeSystem$ValueSampler layers Ljava/util/List;
+accessible field net/minecraft/world/timeline/AttributeTrackSampler cachedTickId I
+accessible field net/minecraft/world/timeline/AttributeTrackSampler cachedArgument Ljava/lang/Object;

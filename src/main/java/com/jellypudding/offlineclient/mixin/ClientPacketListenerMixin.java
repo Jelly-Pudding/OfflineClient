@@ -5,12 +5,15 @@ import com.jellypudding.offlineclient.event.events.ChunkDataEvent;
 import com.jellypudding.offlineclient.event.events.EntityAddedEvent;
 import com.jellypudding.offlineclient.event.events.EntityDamageEvent;
 import com.jellypudding.offlineclient.event.events.EntityDeathEvent;
+import com.jellypudding.offlineclient.modules.misc.BetterChat;
+import com.jellypudding.offlineclient.modules.misc.NameProtect;
 import com.jellypudding.offlineclient.modules.misc.Privacy;
 import com.jellypudding.offlineclient.modules.player.NoRotate;
 import com.jellypudding.offlineclient.modules.render.NoRender;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.PlayerStats;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.player.LocalPlayer;
@@ -53,11 +56,44 @@ public abstract class ClientPacketListenerMixin {
         }
     }
 
+    // A button in a window the server opens runs its command through here and nothing asks
+    // about it before. A click in chat or in a book was already asked about in ScreenMixin. A
+    // command the player typed never comes through here.
+    @Inject(method = "sendUnattendedCommand(Ljava/lang/String;Lnet/minecraft/client/gui/screens/Screen;)V",
+        at = @At("HEAD"), cancellable = true)
+    private void onUnattendedCommand(String command, Screen screen, CallbackInfo ci) {
+        BetterChat betterChat = Modules.get(BetterChat.class);
+        if (betterChat != null && betterChat.blocksClick(command)) {
+            ci.cancel();
+        }
+    }
+
+    // Only the main thread run reaches the end. The player of the join is built by then and has
+    // not ticked. The profile tied to the server goes in before anything acts on the join.
+    @Inject(method = "handleLogin(Lnet/minecraft/network/protocol/game/ClientboundLoginPacket;)V",
+        at = @At("TAIL"))
+    private void onLogin(CallbackInfo ci) {
+        OfflineClient.INSTANCE.getConfigManager().profiles().onLogin();
+    }
+
     // Only the main thread run reaches the end. By then the numbers are in the player's counter.
     @Inject(method = "handleAwardStats(Lnet/minecraft/network/protocol/game/ClientboundAwardStatsPacket;)V",
         at = @At("TAIL"))
     private void onAwardStats(CallbackInfo ci) {
         PlayerStats.INSTANCE.onAnswer();
+    }
+
+    // Only the main thread run reaches the end. These two are the only ways onto and off the tab
+    // list and NameProtect numbers whoever is on it.
+    @Inject(method = {
+        "handlePlayerInfoUpdate(Lnet/minecraft/network/protocol/game/ClientboundPlayerInfoUpdatePacket;)V",
+        "handlePlayerInfoRemove(Lnet/minecraft/network/protocol/game/ClientboundPlayerInfoRemovePacket;)V"},
+        at = @At("TAIL"))
+    private void onTabListChange(CallbackInfo ci) {
+        NameProtect nameProtect = Modules.get(NameProtect.class);
+        if (nameProtect != null) {
+            nameProtect.onTabListChange();
+        }
     }
 
     // Dropped on the network thread before the packet is handed to the main thread.

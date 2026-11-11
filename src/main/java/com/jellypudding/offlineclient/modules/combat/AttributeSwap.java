@@ -68,76 +68,76 @@ public final class AttributeSwap extends Module {
         "The other item must beat what you hold by this many points.", 0.5, 0, 10, 0.5)
         .under(mode, Mode.SMART);
     private final BoolSetting swapBack = new BoolSetting("Swap back",
-        "Return to the slot you had once the hit has landed.", true);
+        "Returns to the slot you had once the hit has landed.", true);
     private final NumberSetting swapBackDelay = new NumberSetting("Swap back delay",
         "Ticks to hold the swapped item before returning.", 2, 0, 20, 1, " ticks")
         .under(swapBack);
     private final BoolSetting antiBreak = new BoolSetting("Anti break",
-        "Skip items that are about to break.", true);
+        "Skips items that are about to break.", true);
 
     private final BoolSetting shieldBreaker = new BoolSetting("Shield breaker",
-        "Swap to an axe when the target is holding a shield up.", true)
+        "Swaps to an axe when the target is holding a shield up.", true)
         .under(mode, Mode.SMART);
     private final BoolSetting durabilitySaver = new BoolSetting("Durability saver",
-        "Lean towards items that cannot wear out or carry Unbreaking.", true)
+        "Leans towards items that cannot wear out or carry Unbreaking.", true)
         .under(mode, Mode.SMART);
 
     private final BoolSetting swords = new BoolSetting("Sword enchantments",
-        "Score the enchantments swords carry.", true)
+        "Scores the enchantments swords carry.", true)
         .under(mode, Mode.SMART);
     private final BoolSetting fireAspect = new BoolSetting("Fire aspect",
-        "Prefer Fire Aspect against a target that is not burning yet.", true)
+        "Prefers Fire Aspect against a target that is not burning yet.", true)
         .under(swords);
     private final BoolSetting looting = new BoolSetting("Looting",
-        "Prefer Looting against mobs and twice as much when they are nearly dead.", true)
+        "Prefers Looting against mobs and twice as much when they are nearly dead.", true)
         .under(swords);
     private final BoolSetting sharpness = new BoolSetting("Sharpness",
-        "Count the extra damage from Sharpness.", true)
+        "Counts the extra damage from Sharpness.", true)
         .under(swords);
     private final BoolSetting smite = new BoolSetting("Smite",
-        "Count the extra damage from Smite against the undead.", true)
+        "Counts the extra damage from Smite against the undead.", true)
         .under(swords);
     private final BoolSetting bane = new BoolSetting("Bane of arthropods",
-        "Count the extra damage from Bane of Arthropods against bugs.", true)
+        "Counts the extra damage from Bane of Arthropods against bugs.", true)
         .under(swords);
     private final BoolSetting sweeping = new BoolSetting("Sweeping edge",
-        "Prefer Sweeping Edge for the wider hit.", true)
+        "Prefers Sweeping Edge for the wider hit.", true)
         .under(swords);
 
     private final BoolSetting maces = new BoolSetting("Mace enchantments",
-        "Score maces and their enchantments whilst you are falling.", true)
+        "Scores maces and their enchantments whilst you are falling.", true)
         .under(mode, Mode.SMART);
     private final BoolSetting regularMace = new BoolSetting("Regular mace",
-        "Swap to any mace once you have fallen far enough to smash.", true)
+        "Swaps to any mace once you have fallen far enough to smash.", true)
         .under(maces);
     private final BoolSetting density = new BoolSetting("Density",
-        "Prefer Density for the harder smash the further you fall.", true)
+        "Prefers Density for the harder smash the further you fall.", true)
         .under(maces);
     private final BoolSetting breach = new BoolSetting("Breach",
-        "Prefer Breach against a target wearing armour.", true)
+        "Prefers Breach against a target wearing armour.", true)
         .under(maces);
     private final BoolSetting windBurst = new BoolSetting("Wind burst",
-        "Prefer Wind Burst to bounce up again after the smash.", true)
+        "Prefers Wind Burst to bounce up again after the smash.", true)
         .under(maces);
 
     private final BoolSetting spears = new BoolSetting("Spear swaps",
-        "Swap to a spear for reach or for a lunge.", true)
+        "Swaps to a spear for reach or for a lunge.", true)
         .under(mode, Mode.SMART);
     private final BoolSetting lunge = new BoolSetting("Lunge",
         "Swaps to a Lunge spear when a swing misses to carry you forward.", true)
         .under(spears);
     private final BoolSetting reach = new BoolSetting("Reach",
-        "Swap to a spear when what you swing at is past normal reach.", true)
+        "Swaps to a spear when what you swing at is past normal reach.", true)
         .under(spears);
     private final BoolSetting keepLungeSpear = new BoolSetting("Keep lunge spear",
-        "Never use a Lunge spear for the reach swap.", true)
+        "Never uses a Lunge spear for the reach swap.", true)
         .under(reach);
 
     private final BoolSetting others = new BoolSetting("Other enchantments",
-        "Score enchantments that live on tridents and spears.", true)
+        "Scores enchantments that live on tridents and spears.", true)
         .under(mode, Mode.SMART);
     private final BoolSetting impaling = new BoolSetting("Impaling",
-        "Count the extra damage from Impaling against sea creatures.", true)
+        "Counts the extra damage from Impaling against sea creatures.", true)
         .under(others);
 
     private final EnumSetting<Against> against = new EnumSetting<>("Swap against",
@@ -146,9 +146,9 @@ public final class AttributeSwap extends Module {
         .describe(Against.PLAYERS, "Only other players.")
         .describe(Against.MOBS, "Only mobs.");
     private final BoolSetting onlyWithKillAura = new BoolSetting("Only with KillAura",
-        "Stay put unless KillAura is on.", false);
+        "Stays put unless KillAura is on.", false);
     private final BoolSetting onlyOnWeapon = new BoolSetting("Only on weapon",
-        "Only swap whilst you already hold one of the ticked kinds.", false);
+        "Only swaps whilst you already hold one of the ticked kinds.", false);
     private final WeaponKinds weaponKinds = new WeaponKinds(onlyOnWeapon);
 
     private final SlotSwap slots = new SlotSwap();
@@ -237,7 +237,7 @@ public final class AttributeSwap extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame() || !slots.isHolding()) {
+        if (!slots.isHolding()) {
             return;
         }
         if (!swapBack.isOn()) {

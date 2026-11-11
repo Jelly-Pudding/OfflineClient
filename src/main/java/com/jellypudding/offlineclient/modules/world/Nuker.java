@@ -10,6 +10,7 @@ import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.ExclusivityGroup;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.ListMode;
+import com.jellypudding.offlineclient.util.BreakTime;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.render.BoxStyle;
 import com.jellypudding.offlineclient.render.BreakTrail;
@@ -22,8 +23,8 @@ import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.BlockMiner;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.BoundedMap;
-import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.ItemUtil;
@@ -90,7 +91,7 @@ public final class Nuker extends Module {
         .describe(Shape.CUBE, "A box with its own reach on each of the six sides.");
     private final NumberSetting range = new NumberSetting("Range",
         "How far from your eyes to break blocks.",
-        4.5, 1, 6, 0.1).min(1).under(shape, Shape.SPHERE, Shape.UNIFORM_CUBE);
+        4.5, 1, 6, 0.1, " blocks").under(shape, Shape.SPHERE, Shape.UNIFORM_CUBE);
     private final NumberSetting up = sideSetting("Up", "above your feet").under(shape, Shape.CUBE);
     private final NumberSetting down = sideSetting("Down", "below your feet").under(shape, Shape.CUBE);
     private final NumberSetting left = sideSetting("Left", "to your left").under(shape, Shape.CUBE);
@@ -99,7 +100,7 @@ public final class Nuker extends Module {
     private final NumberSetting back = sideSetting("Back", "behind you").under(shape, Shape.CUBE);
     private final NumberSetting wallsRange = new NumberSetting("Walls range",
         "How far to break blocks with no clear view from your eyes.",
-        4.5, 0, 6, 0.1).min(0);
+        4.5, 0, 6, 0.1, " blocks");
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
         "Which blocks the module is allowed to break.", Mode.ALL)
         .describe(Mode.ALL, "Every block in range.")
@@ -144,19 +145,18 @@ public final class Nuker extends Module {
         .describe(Speed.LEGIT, "One block at a time like a held click.")
         .describe(Speed.INSTANT, "Fires the break packets for several at once.")
         .unless(interact);
-    private final NumberSetting perTick = new NumberSetting("Blocks per tick",
-        "The most blocks Instant mode breaks in one tick.", 4, 1, 16, 1)
-        .min(1).under(speed, () -> !interact.isOn() && speed.is(Speed.INSTANT));
+    private final NumberSetting perTick = PacketBreaker.blocksPerTick()
+        .under(speed, () -> !interact.isOn() && speed.is(Speed.INSTANT));
     private final BoolSetting instantOnly = new BoolSetting("Instant only",
         "Leaves alone any block the server cannot break within one tick.", false)
         .under(speed, () -> !interact.isOn() && speed.is(Speed.INSTANT));
     private final NumberSetting delay = new NumberSetting("Delay",
-        "Ticks to wait before starting on a new block.", 0, 0, 20, 1, " ticks").min(0);
+        "Ticks to wait before starting on a new block.", 0, 0, 20, 1, " ticks");
     private final BoolSetting autoTool = new BoolSetting("Auto tool",
         "Holds the tool AutoTool would pick or else your fastest one.", true)
         .under(speed, () -> !interact.isOn() && speed.is(Speed.INSTANT));
     private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Turn towards the block on the server side.", true);
+        "Turns towards the block on the server side.", true);
     private final EnumSetting<Order> order = new EnumSetting<>("Order",
         "Which block gets dealt with first.", Order.NEAREST)
         .describe(Order.NEAREST, "The closest block first.")
@@ -212,7 +212,7 @@ public final class Nuker extends Module {
 
     private static NumberSetting sideSetting(String name, String where) {
         return new NumberSetting(name, "How many blocks " + where + " to clear.",
-            1, 0, MAX_SIDE, 1, " blocks").min(0).max(MAX_SIDE);
+            1, 0, MAX_SIDE, 1, " blocks").max(MAX_SIDE);
     }
 
     @Override
@@ -278,7 +278,7 @@ public final class Nuker extends Module {
         }
         selected = state.getBlock();
         current = null;
-        ChatUtil.message("§bNuker §7now breaks §f" + BlockUtil.blockName(selected) + "§7.");
+        tell("now breaks §f" + BlockUtil.blockName(selected) + "§7.");
     }
 
     // Only on click takes the attack key over. A click on a block breaks the blocks around you
@@ -320,11 +320,11 @@ public final class Nuker extends Module {
         String list = listMode.getValueString().toLowerCase(Locale.ROOT);
         if (blocks.contains(block)) {
             blocks.remove(block);
-            ChatUtil.message("§bNuker §7took §f" + BlockUtil.blockName(block)
+            tell("took §f" + BlockUtil.blockName(block)
                 + "§7 off the " + list + ".");
         } else {
             blocks.add(block);
-            ChatUtil.message("§bNuker §7added §f" + BlockUtil.blockName(block)
+            tell("added §f" + BlockUtil.blockName(block)
                 + "§7 to the " + list + ".");
         }
     }
@@ -335,7 +335,7 @@ public final class Nuker extends Module {
         candidates.clear();
         toolFor.clear();
         region = null;
-        if (!inGame() || mc.player.isSpectator()) {
+        if (mc.player.isSpectator()) {
             current = null;
             slots.restoreIfMine();
             return;
@@ -345,9 +345,9 @@ public final class Nuker extends Module {
         }
         // Holding attack means the player is mining by hand. Only on click turns that round.
         boolean clicking = InputUtil.physicallyHeld(mc.options.keyAttack);
-        if (clicking && !onlyOnClick.isOn() || mc.player.isUsingItem()) {
+        if (clicking && !onlyOnClick.isOn() || mc.player.isUsingItem() || Hands.slotsTaken()) {
             current = null;
-            slots.restoreIfMine();
+            slots.standAside();
             return;
         }
         if ((mode.is(Mode.SELECTED) && selected == null)
@@ -467,7 +467,7 @@ public final class Nuker extends Module {
             case NEAREST -> candidates.sort(Comparator.comparingDouble(BlockUtil::distanceTo));
             case FURTHEST -> candidates.sort(
                 Comparator.comparingDouble((BlockPos pos) -> -BlockUtil.distanceTo(pos)));
-            case FASTEST -> candidates.sort(Comparator.comparingInt(BlockUtil::breakTicks));
+            case FASTEST -> candidates.sort(Comparator.comparingInt(BreakTime::breakTicks));
             case TOP_DOWN -> candidates.sort(Comparator.comparingInt((BlockPos pos) -> -pos.getY()));
         }
     }
@@ -533,7 +533,7 @@ public final class Nuker extends Module {
         if (!breaker.canSend(pos)) {
             return false;
         }
-        if (autoTool.isOn() && !BlockUtil.breaksInOneTick(pos)) {
+        if (autoTool.isOn() && !BreakTime.breaksInOneTick(pos)) {
             holdTool(pos);
             return breaker.canSend(pos);
         }
@@ -543,13 +543,13 @@ public final class Nuker extends Module {
     // Judged with the tool Auto tool would put in hand for the block.
     private boolean breaksInOneTick(BlockPos pos, BlockState state) {
         if (!autoTool.isOn() || mc.player.getAbilities().instabuild) {
-            return BlockUtil.breaksInOneTick(pos);
+            return BreakTime.breaksInOneTick(pos);
         }
         ItemStack tool = toolFor.computeIfAbsent(state, kind -> {
             int slot = Modules.toolSlot(kind);
             return slot == -1 ? mc.player.getMainHandItem() : mc.player.getInventory().getItem(slot);
         });
-        return BlockUtil.breakDelta(tool, state, pos) >= BlockUtil.SERVER_ACCEPTS;
+        return BreakTime.breakDelta(tool, state, pos) >= BreakTime.SERVER_ACCEPTS;
     }
 
     // Instant mode never reaches the vanilla mining call and AutoTool never sees
@@ -593,7 +593,7 @@ public final class Nuker extends Module {
             && !ItemUtil.suits(mc.player.getMainHandItem(), state)) {
             return false;
         }
-        if (!interact.isOn() && Modules.toolRefuses(state, speed.is(Speed.INSTANT))) {
+        if (!interact.isOn() && (Modules.toolRefuses(state, speed.is(Speed.INSTANT)) || BlockMiner.kept(pos))) {
             return false;
         }
         if (instantOnly.isOn() && !interact.isOn() && speed.is(Speed.INSTANT)

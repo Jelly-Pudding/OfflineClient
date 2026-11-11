@@ -28,10 +28,10 @@ public final class PlayerModelElement extends HudElement {
         "The body turns as you turn. Off holds a fixed angle.", true);
     private final NumberSetting angle = new NumberSetting("Model angle",
         "How far it turns from facing you whilst it does not follow you.", 20, -180, 180, 5, " degrees")
-        .min(-180).max(180).unless(follow);
+        .max(180).unless(follow);
     private final NumberSetting pitch = new NumberSetting("Model pitch",
         "How far it looks down whilst it does not follow you. Below nought it looks up.",
-        0, -90, 90, 5, " degrees").min(-90).max(90).unless(follow);
+        0, -90, 90, 5, " degrees").max(90).unless(follow);
 
     public PlayerModelElement() {
         super("Player model", "Your own body drawn on the screen.", false, 4, 55);

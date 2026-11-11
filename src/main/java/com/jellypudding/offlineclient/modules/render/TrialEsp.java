@@ -105,9 +105,6 @@ public final class TrialEsp extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (!inGame()) {
-            return;
-        }
         if (world.changed()) {
             clear();
         }

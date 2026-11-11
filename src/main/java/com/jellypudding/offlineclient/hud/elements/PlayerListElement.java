@@ -1,15 +1,16 @@
 package com.jellypudding.offlineclient.hud.elements;
 
 import com.jellypudding.offlineclient.OfflineClient;
-import com.jellypudding.offlineclient.hud.HudElement;
 import com.jellypudding.offlineclient.hud.RowCache;
+import com.jellypudding.offlineclient.hud.RowsElement;
 import com.jellypudding.offlineclient.hud.TextRow;
+import com.jellypudding.offlineclient.render.ClientFonts;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ColorUtil;
+import com.jellypudding.offlineclient.util.EntityColors;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.player.LocalPlayer;
 
@@ -18,14 +19,13 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 
-// The players near you with how far away and how hurt they are. Each row lines up with the
-// side the element is anchored to.
-public final class PlayerListElement extends HudElement {
+// The players near you with how far away and how hurt they are.
+public final class PlayerListElement extends RowsElement {
 
     private final NumberSetting range = new NumberSetting("Player list range",
         "How far away a player still shows.", 64, 8, 256, 8, " blocks").min(1);
     private final NumberSetting limit = new NumberSetting("Player list limit",
-        "Most rows to draw.", 8, 1, 30, 1).min(1);
+        "Most rows to draw.", 8, 1, 30, 1);
     private final BoolSetting friends = new BoolSetting("Player list friends",
         "Shows friends as well as everyone else.", true);
     private final BoolSetting friendsFirst = new BoolSetting("Player list friends first",
@@ -44,20 +44,20 @@ public final class PlayerListElement extends HudElement {
 
     @Override
     public boolean visible() {
-        return isActive() && !rows().isEmpty();
+        return isActive() && !rows(ClientFonts.hud()).isEmpty();
     }
 
     // A friend at full health and a hurt stranger stand in whilst the editor is open and
     // nobody is near.
-    private List<TextRow> rows() {
+    @Override
+    protected List<TextRow> rows(Font font) {
         List<TextRow> built = rows.get();
         if (!built.isEmpty() || !editing()) {
             return built;
         }
-        Font font = OfflineClient.MC.font;
         List<TextRow> sample = new ArrayList<>(2);
         if (friends.isOn()) {
-            sample.add(rowOf(font, "Steve", 12, 20, EntityUtil.FRIEND_COLOR));
+            sample.add(rowOf(font, "Steve", 12, 20, EntityColors.friendColor()));
         }
         sample.add(rowOf(font, "Alex", 31, 7, ColorUtil.redToGreen(7 / 20f)));
         return sample;
@@ -67,7 +67,7 @@ public final class PlayerListElement extends HudElement {
         LocalPlayer self = OfflineClient.MC.player;
         List<TextRow> built = new ArrayList<>();
         for (AbstractClientPlayer player : nearby()) {
-            built.add(rowOf(OfflineClient.MC.font, EntityUtil.displayNameOf(player), self.distanceTo(player),
+            built.add(rowOf(ClientFonts.hud(), EntityUtil.displayNameOf(player), self.distanceTo(player),
                 EntityUtil.totalHealth(player), colorOf(player)));
         }
         return built;
@@ -106,26 +106,15 @@ public final class PlayerListElement extends HudElement {
         return TextRow.of(font, row, color);
     }
 
-    // A friend keeps the friend colour and everyone else fades from green to red.
+    // A friend keeps the friend colour and a listed enemy the enemy colour. Everyone else fades
+    // from green to red.
     private static int colorOf(AbstractClientPlayer player) {
         if (EntityUtil.isFriend(player)) {
-            return EntityUtil.FRIEND_COLOR;
+            return EntityColors.friendColor();
+        }
+        if (EntityUtil.isListedEnemy(player)) {
+            return EntityColors.enemyColor();
         }
         return ColorUtil.redToGreen(EntityUtil.healthShare(player));
-    }
-
-    @Override
-    public void render(GuiGraphicsExtractor context, Font font) {
-        TextRow.draw(context, font, rows(), alignment());
-    }
-
-    @Override
-    public int width(Font font) {
-        return TextRow.widest(rows());
-    }
-
-    @Override
-    public int height(Font font) {
-        return TextRow.height(font, rows().size());
     }
 }

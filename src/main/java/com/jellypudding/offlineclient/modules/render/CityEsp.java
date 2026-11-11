@@ -11,24 +11,24 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.Holes;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.player.Player;
 
 import java.util.ArrayList;
 import java.util.List;
 
-// The pick matches what AutoCity would mine.
 public final class CityEsp extends Module {
 
     private final NumberSetting targetRange = new NumberSetting("Target range",
         "How far away enemies are considered.", 6, 1, 16, 0.5, " blocks");
     private final NumberSetting breakRange = new NumberSetting("Break range",
-        "How far you can reach to mine.", 4.5, 1, 6, 0.1).min(1);
+        "How far you can reach to mine.", 4.5, 1, 6, 0.1, " blocks");
     private final BoolSetting nearestOnly = new BoolSetting("Nearest only",
-        "Only mark the closest enemy.", false);
+        "Only marks the closest enemy.", false);
     private final BoxStyle style = new BoxStyle(BoxStyle.Shape.BOTH, 0);
     private final BoolSetting throughWalls = new BoolSetting("Through walls",
-        "Show boxes behind blocks.", true);
+        "Shows boxes behind blocks.", true);
 
     private final List<BlockPos> targets = new ArrayList<>();
 
@@ -53,7 +53,7 @@ public final class CityEsp extends Module {
     @Subscribe
     private void onTick(TickEvent event) {
         targets.clear();
-        if (!inGame() || mc.player.isSpectator()) {
+        if (mc.player.isSpectator()) {
             return;
         }
         double reach = breakRange.getValue();
@@ -63,8 +63,7 @@ public final class CityEsp extends Module {
             return;
         }
         for (Player player : mc.level.players()) {
-            if (player == mc.player || !EntityUtil.isEnemy(player)
-                || mc.player.distanceTo(player) > targetRange.getValue()) {
+            if (!EntityUtil.isEnemy(player) || mc.player.distanceTo(player) > targetRange.getValue()) {
                 continue;
             }
             addTarget(player, reach);
@@ -75,7 +74,7 @@ public final class CityEsp extends Module {
         if (target == null) {
             return;
         }
-        BlockPos pos = BlockUtil.cityBlock(target, reach);
+        BlockPos pos = Holes.cityBlock(target, reach);
         if (pos != null && !targets.contains(pos)) {
             targets.add(pos);
         }

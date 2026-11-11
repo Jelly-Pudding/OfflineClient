@@ -7,14 +7,11 @@ import com.jellypudding.offlineclient.event.events.KeyPressEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
-import com.jellypudding.offlineclient.modules.combat.AutoTotem;
-import com.jellypudding.offlineclient.modules.combat.Offhand;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.MenuClicks;
 import com.jellypudding.offlineclient.util.Modules;
-import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.world.entity.player.Inventory;
 
 import java.util.List;
@@ -32,7 +29,7 @@ public final class Loadouts extends Module {
         IntStream.range(InventoryUtil.MAIN_START, InventoryUtil.WHOLE_INVENTORY)).toArray();
 
     private final NumberSetting delay = new NumberSetting("Delay",
-        "Ticks between moves. Zero moves everything at once.", 1, 0, 10, 1, " ticks").min(0);
+        "Ticks between moves. Zero moves everything at once.", 1, 0, 10, 1, " ticks");
 
     private Loadout restoring;
     private int timer;
@@ -77,10 +74,10 @@ public final class Loadouts extends Module {
 
     @Subscribe
     private void onKeyPress(KeyPressEvent event) {
-        if (event.getAction() != InputConstants.PRESS || mc.gui.screen() != null || !inGame()) {
+        if (mc.gui.screen() != null || !inGame()) {
             return;
         }
-        List<Loadout> bound = LoadoutStore.get().boundTo(event.getKey());
+        List<Loadout> bound = LoadoutStore.get().pressedBy(event);
         if (!bound.isEmpty()) {
             restore(bound.getFirst());
         }
@@ -95,8 +92,8 @@ public final class Loadouts extends Module {
             timer--;
             return;
         }
-        // A container or a stack on the cursor waits until it is gone.
-        if (!InventoryUtil.cursorFree()) {
+        // The restore waits whilst a container is open or a stack is on the cursor or ShulkerPacker packs.
+        if (!InventoryUtil.cursorFree() || Modules.packing()) {
             return;
         }
         int moves = delay.getInt() == 0 ? ORDER.length : 1;
@@ -144,14 +141,9 @@ public final class Loadouts extends Module {
         return best;
     }
 
-    // AutoTotem and Offhand keep the offhand themselves. A restore that moved it too would
-    // trade it back and forth with them for ever. It stays out whilst either holds it.
+    // The offhand stays out whilst another module keeps it.
     private static boolean mine(int index) {
-        if (index != Inventory.SLOT_OFFHAND) {
-            return true;
-        }
-        AutoTotem autoTotem = Modules.get(AutoTotem.class);
-        return !Modules.enabled(Offhand.class) && (autoTotem == null || !autoTotem.isLocked());
+        return index != Inventory.SLOT_OFFHAND || !Modules.keepsOffhand();
     }
 
     private String kindAt(int index) {
