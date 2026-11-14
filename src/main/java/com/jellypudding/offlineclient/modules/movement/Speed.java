@@ -8,6 +8,7 @@ import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.modules.misc.Timer;
+import com.jellypudding.offlineclient.path.PathWalker;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
@@ -36,6 +37,10 @@ public final class Speed extends Module {
     // Runs after NoKnockback has scaled a push.
     private static final int AFTER_SCALING = -10;
 
+    // The steps a walk the client makes needs ahead of it before it next goes down. A stride at
+    // this pace skips a gap one block wide and lands past a ledge.
+    private static final int STRIDE_RUN = 2;
+
     // How much of a kept push is left a tick later and the least worth keeping.
     private static final double PUSH_KEPT = 0.9;
     private static final double LEAST_PUSH = 0.02;
@@ -43,7 +48,8 @@ public final class Speed extends Module {
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
         "How the speed is gained.", Mode.STRAFE)
         .describe(Mode.STRAFE, "Holds you at a set multiple of your normal speed.")
-        .describe(Mode.BHOP, "Bunnyhops and multiplies your speed on every landing.");
+        .describe(Mode.BHOP, "Bunnyhops and multiplies your speed on every landing. Keeps to the ground whilst"
+            + " the client walks for you as it does on a goto.");
     private final NumberSetting multiplier = new NumberSetting("Multiplier",
         "Your speed as a multiple of normal.", 1.6, 1, 10, 0.1, "x")
         .visibleWhen(() -> mode.is(Mode.STRAFE));
@@ -114,7 +120,9 @@ public final class Speed extends Module {
             Timer.override(TIMER_KEY, 1f);
             return;
         }
-        if (forceSprint.isOn() && !mc.player.isShiftKeyDown() && !mc.player.isUsingItem()) {
+        // A walk the client makes sprints by itself where a sprint helps. Forced on in water it
+        // would swim from side to side.
+        if (forceSprint.isOn() && !mc.player.isShiftKeyDown() && !mc.player.isUsingItem() && !PathWalker.steering()) {
             mc.player.setSprinting(true);
         }
     }
@@ -166,9 +174,13 @@ public final class Speed extends Module {
             return;
         }
 
+        // A walk the client makes keeps its footing at a ledge. A hop comes down wherever it
+        // will and no walk can steer one round a corner.
         if (mode.is(Mode.BHOP)) {
-            hop();
-        } else {
+            if (!PathWalker.steering()) {
+                hop();
+            }
+        } else if (PathWalker.levelRun() >= STRIDE_RUN) {
             strafe(heading);
         }
     }

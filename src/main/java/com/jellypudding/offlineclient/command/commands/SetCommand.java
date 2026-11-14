@@ -75,9 +75,10 @@ public final class SetCommand extends Command {
 
         Setting<?> setting = module.getSetting(args[1]);
         if (setting == null) {
-            // The setting name may be left out when the module has only one.
-            if (args.length == 2 && module.playerSettings().size() == 1) {
-                apply(module, module.playerSettings().getFirst(), args[1]);
+            // The setting name may be left out when the module has only one of its own.
+            Setting<?> only = module.onlySetting();
+            if (args.length == 2 && only != null) {
+                apply(module, only, args[1]);
                 return;
             }
             ChatUtil.error("§f" + module.getName() + "§c has no setting called §f" + args[1]

@@ -12,7 +12,10 @@ import com.jellypudding.offlineclient.modules.player.NoRotate;
 import com.jellypudding.offlineclient.modules.render.NoRender;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.PlayerStats;
+import com.jellypudding.offlineclient.util.ServerSneak;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.multiplayer.ClientPacketListener;
@@ -23,6 +26,7 @@ import net.minecraft.world.entity.EntityEvent;
 import net.minecraft.network.protocol.game.ClientboundAddEntityPacket;
 import net.minecraft.network.protocol.game.ClientboundDamageEventPacket;
 import net.minecraft.network.protocol.game.ClientboundEntityEventPacket;
+import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.world.level.chunk.LevelChunk;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -30,6 +34,8 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+
+import java.util.List;
 
 @Mixin(ClientPacketListener.class)
 public abstract class ClientPacketListenerMixin {
@@ -51,7 +57,8 @@ public abstract class ClientPacketListenerMixin {
             return;
         }
         Privacy privacy = Modules.get(Privacy.class);
-        if (privacy != null && privacy.keepsChatUnsigned(serverEnforcesSecureChat)) {
+        if (privacy != null
+            && privacy.holdsChatSession((ClientPacketListener) (Object) this, serverEnforcesSecureChat)) {
             ci.cancel();
         }
     }
@@ -227,5 +234,18 @@ public abstract class ClientPacketListenerMixin {
         if (entity != null) {
             OfflineClient.INSTANCE.getEventBus().post(new EntityDamageEvent(entity, packet.getSource(level)));
         }
+    }
+
+    // Only the main thread run gets as far as the values. What the server sends about your own
+    // player passes ServerSneak which keeps a crouch only the server was told of off your screen.
+    @WrapOperation(
+        method = "handleSetEntityData(Lnet/minecraft/network/protocol/game/ClientboundSetEntityDataPacket;)V",
+        at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/network/syncher/SynchedEntityData;assignValues(Ljava/util/List;)V"))
+    private void wrapOwnEntityData(SynchedEntityData data, List<SynchedEntityData.DataValue<?>> sent,
+                                   Operation<Void> original) {
+        LocalPlayer player = OfflineClient.MC.player;
+        boolean own = player != null && player.getEntityData() == data;
+        original.call(data, own ? ServerSneak.keepStance(player, sent) : sent);
     }
 }

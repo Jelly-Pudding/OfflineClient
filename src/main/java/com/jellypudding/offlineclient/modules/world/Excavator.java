@@ -69,7 +69,7 @@ public final class Excavator extends Module implements CornerPicker.Taker {
     private final PathFinder finder = new PathFinder();
     private final PathWalker walker = new PathWalker();
 
-    private final CornerPicker corners = new CornerPicker();
+    private final CornerPicker corners = new CornerPicker(this, boxStyle, maxBlocks::getInt, "dug out");
     private final List<BlockPos> remaining = new ArrayList<>();
     private BlockPos current;
     private final WorldWatch world = new WorldWatch();
@@ -78,7 +78,7 @@ public final class Excavator extends Module implements CornerPicker.Taker {
     private final SlotSwap slots = new SlotSwap();
 
     public Excavator() {
-        super("Excavator", "Digs out the box between two corners you mark with its bind whilst it is on.",
+        super("Excavator", "Digs out the box between two opposite corners you click with the use key.",
             Category.WORLD);
         addSettings(range, maxBlocks, speed, perTick, skipBlocks, autoTool, rotate, walkTo, keepActive, logSelection);
         addSettings(boxStyle.settings());
@@ -88,8 +88,8 @@ public final class Excavator extends Module implements CornerPicker.Taker {
 
     @Override
     public String getSuffix() {
-        String prompt = corners.prompt();
-        return prompt != null ? prompt : remaining.size() + " left";
+        String waiting = corners.waitingFor();
+        return waiting != null ? waiting : remaining.size() + " left";
     }
 
     @Override
@@ -100,6 +100,7 @@ public final class Excavator extends Module implements CornerPicker.Taker {
     @Override
     protected void onEnable() {
         clear();
+        corners.open();
         world.accept();
     }
 
@@ -108,6 +109,7 @@ public final class Excavator extends Module implements CornerPicker.Taker {
         BlockMiner.release();
         slots.restoreIfMine();
         clear();
+        corners.close();
         world.forget();
     }
 
@@ -126,30 +128,15 @@ public final class Excavator extends Module implements CornerPicker.Taker {
     }
 
     @Override
-    public void onKeybind() {
-        BlockPos corner = CornerPicker.aimedCorner(this);
-        if (corner == null) {
-            toggle();
-            return;
-        }
-        markCorner(corner);
-    }
-
-    @Override
     public void markCorner(BlockPos pos) {
-        if (!corners.started() || corners.done()) {
-            clear();
-            corners.mark(pos);
+        corners.mark(pos);
+        if (!corners.done()) {
             if (logSelection.isOn()) {
                 tell("first corner at §f" + BlockUtil.text(pos) + "§7.");
             }
             return;
         }
-        corners.mark(pos);
-        if (!build()) {
-            return;
-        }
-        if (logSelection.isOn()) {
+        if (build() && logSelection.isOn()) {
             tell("second corner at §f" + BlockUtil.text(pos)
                 + "§7. §f" + remaining.size() + "§7 blocks to dig.");
         }
@@ -159,7 +146,7 @@ public final class Excavator extends Module implements CornerPicker.Taker {
     private boolean build() {
         remaining.clear();
         current = null;
-        if (!corners.withinLimit(maxBlocks.getInt())) {
+        if (!corners.withinLimit()) {
             return false;
         }
         Vec3 eye = mc.player.getEyePosition();
@@ -314,15 +301,8 @@ public final class Excavator extends Module implements CornerPicker.Taker {
 
     @Subscribe
     private void onRender3D(Render3DEvent event) {
-        corners.draw(event.getBatch(), boxStyle);
         if (corners.done() && current != null) {
             targetStyle.draw(event.getBatch(), current, false);
         }
-    }
-
-    // The key does more than switch the module and cannot be a held one.
-    @Override
-    public boolean keySwitches() {
-        return false;
     }
 }

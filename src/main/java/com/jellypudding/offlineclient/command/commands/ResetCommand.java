@@ -105,7 +105,7 @@ public final class ResetCommand extends Command {
             return;
         }
         if (args.length == 1) {
-            resetAll(module.getName(), module.getSettings());
+            resetAll(module.getName(), module.allSettings());
             return;
         }
         Setting<?> setting = module.getSetting(args[1]);
@@ -170,7 +170,7 @@ public final class ResetCommand extends Command {
 
     // A key row inside a module is a bind whichever module holds it.
     private static List<Setting<?>> settingsOf(Module module) {
-        return module.getSettings().stream().filter(setting -> !(setting instanceof KeybindSetting)).toList();
+        return module.allSettings().stream().filter(setting -> !(setting instanceof KeybindSetting)).toList();
     }
 
     private static void resetBinds() {

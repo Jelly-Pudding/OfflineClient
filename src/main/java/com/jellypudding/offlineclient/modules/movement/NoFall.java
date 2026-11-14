@@ -82,6 +82,10 @@ public final class NoFall extends Module {
         .describe(AirPlaceWhen.BEFORE_DAMAGE, "Before the fall would hurt at all.")
         .describe(AirPlaceWhen.BEFORE_DEATH, "Only once the fall would kill you.")
         .under(mode, Mode.AIR_PLACE);
+    private final BoolSetting switchBack = new BoolSetting("Switch back",
+        "Puts the hotbar back on the slot you held once you have landed. Switched off it stays where the"
+            + " landing left it.", true)
+        .under(mode, Mode.PLACE, Mode.AIR_PLACE, Mode.BOTH);
     private final BoolSetting anchor = new BoolSetting("Anchor",
         "Centres you first to put the landing block right under you.", true)
         .under(mode, Mode.PLACE, Mode.AIR_PLACE, Mode.BOTH);
@@ -138,8 +142,8 @@ public final class NoFall extends Module {
 
     public NoFall() {
         super("NoFall", "Stops fall damage.", Category.MOVEMENT);
-        addSettings(mode, limitSpeed, dives, landings, pickUp, airPlaceWhen, anchor, minFall, antiBounce,
-            pauseOnMace);
+        addSettings(mode, limitSpeed, dives, landings, pickUp, airPlaceWhen, switchBack, anchor, minFall,
+            antiBounce, pauseOnMace);
         searchTags("fall damage", "water bucket", "clutch", "air place");
     }
 
@@ -476,6 +480,7 @@ public final class NoFall extends Module {
     // A mode change mid clutch still clears up what is already down.
     @Subscribe(priority = -90)
     private void onTick(TickEvent event) {
+        landing.switchBack(switchBack.isOn());
         if (placeMode() && falling()) {
             landing.fall(landings.ranked(), descent, anchor.isOn());
         } else {
@@ -496,7 +501,7 @@ public final class NoFall extends Module {
     // The block lands where the feet are.
     private void airPlaceTick() {
         if (!falling() || descent <= airPlaceThreshold()) {
-            airPlaceLoan.giveBack();
+            airPlaceLoan.giveBack(switchBack.isOn());
             return;
         }
         BlockPos below = mc.player.blockPosition().below();

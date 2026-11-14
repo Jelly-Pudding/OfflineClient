@@ -306,13 +306,14 @@ public abstract class HudElement {
     }
 
     // True for an element drawn once the game has drawn everything else. The rest of the
-    // overlay sits under the tab list and any open screen.
+    // overlay sits under any menu and under the tab list as well unless it goes over the debug
+    // text.
     public boolean drawsOnTop() {
         return false;
     }
 
-    // True for an element that keeps drawing whilst the rest of the overlay steps aside for a
-    // menu or the debug screen.
+    // True for an element that keeps drawing with the game's own HUD whilst the rest of the
+    // overlay steps aside for a menu or the debug screen or waits to go over the debug text.
     public boolean staysWhenHidden() {
         return false;
     }

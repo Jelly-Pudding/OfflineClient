@@ -30,6 +30,13 @@ public final class PathWalker {
     // How far ahead a node may be and still count as the one the player is on.
     private static final int LOOK_AHEAD = 8;
 
+    // How many steps ahead the run of a walk is measured for whatever adds pace.
+    private static final int RUN_SIGHT = 16;
+
+    // Ticks a walk may steer at one node without reaching it. The slowest ground there is takes
+    // a quarter of this for a block. Past it the node is out of reach from where the player is.
+    private static final int STALL_LIMIT = 100;
+
     // Ticks off the path or held against a wall on the node before. Then a new search is asked for.
     private static final int STRAY_LIMIT = 30;
 
@@ -45,12 +52,21 @@ public final class PathWalker {
     // The walk that holds the sneak key down. Null whilst none does.
     private static PathWalker sneaker;
 
+    // The steps the walk ticked last has ahead of its player before it goes down and the tick
+    // they were counted on.
+    private static int runTick = Integer.MIN_VALUE;
+    private static int levelRun;
+
     private List<BlockPos> path = List.of();
     private int index;
     private int strayTicks;
     // Ticks of pushing into something from the node before with nothing left to dig.
     private int pushTicks;
+    // Ticks of steering at the same node.
+    private int stallTicks;
     private boolean lost;
+    // The node the walk steered at in vain as it was lost. Null when it was lost another way.
+    private BlockPos walled;
     private boolean holding;
     private int layTicks;
     private final InventoryUtil.SlotSwap slots = new InventoryUtil.SlotSwap();
@@ -73,8 +89,10 @@ public final class PathWalker {
         index = nodes.isEmpty() ? 0 : 1;
         strayTicks = 0;
         pushTicks = 0;
+        stallTicks = 0;
         layTicks = 0;
         lost = false;
+        walled = null;
     }
 
     // The hotbar slot with a block the Pathfinder row lists that makes a floor at the spot.
@@ -108,13 +126,33 @@ public final class PathWalker {
         return lost;
     }
 
+    // The spot a lost walk could not get into though every rule said it could. Null when the
+    // walk was lost another way.
+    public BlockPos walled() {
+        return walled;
+    }
+
+    // The steps a walk of this tick has ahead before it next goes down. A pace above a plain walk
+    // skips a gap one block wide and lands past a ledge. No walk leaves any pace free.
+    public static int levelRun() {
+        return steering() ? levelRun : Integer.MAX_VALUE;
+    }
+
+    // True on a tick a walk steers the player and at the end of that tick once the count has
+    // moved on by one.
+    public static boolean steering() {
+        return MC.player != null && (MC.player.tickCount == runTick || MC.player.tickCount == runTick + 1);
+    }
+
     public void stop() {
         releaseKeys();
         path = List.of();
         index = 0;
         strayTicks = 0;
         pushTicks = 0;
+        stallTicks = 0;
         lost = false;
+        walled = null;
     }
 
     // Lets go of every key the walker was holding and leaves the path alone.
@@ -159,6 +197,7 @@ public final class PathWalker {
             return;
         }
         RouteView.walking(path, index);
+        measureRun(player);
 
         BlockPos prev = path.get(index - 1);
         BlockPos node = path.get(index);
@@ -167,6 +206,7 @@ public final class PathWalker {
         }
         if (breakInto(rules, prev, node)) {
             pushTicks = 0;
+            stallTicks = 0;
             releaseKeys();
             return;
         }
@@ -179,6 +219,7 @@ public final class PathWalker {
         if (floor == null) {
             layTicks = 0;
         } else if (!lays(floor) || afloat) {
+            stallTicks = 0;
             stand(player, sneaks);
             return;
         }
@@ -187,9 +228,12 @@ public final class PathWalker {
         face(target);
         steer(target, player);
         holding = true;
-        // A wall no rule names holds the player on the node before.
-        if (player.onGround() && player.horizontalCollision && here.equals(prev) && ++pushTicks > STRAY_LIMIT) {
+        // A wall no rule names holds the player on the node before. Anything else that keeps the
+        // node out of reach shows as a walk that steers at it and never gets there.
+        boolean pushes = player.onGround() && player.horizontalCollision && here.equals(prev);
+        if (pushes && ++pushTicks > STRAY_LIMIT || ++stallTicks > STALL_LIMIT) {
             lost = true;
+            walled = node;
         }
 
         // Step lifts nobody who sneaks.
@@ -201,18 +245,39 @@ public final class PathWalker {
         } else {
             InputUtil.release(MC.options.keyJump);
         }
-        // Forward is what climbs a ladder. Let go of it on the way down.
-        if (climbing && node.getY() < here.getY()) {
+        // Forward is what climbs a ladder. Let go of it on the way straight down one. A step off
+        // to the side out of a vine that hangs over the ground still needs it.
+        if (climbing && node.getY() < here.getY() && !across(here, node)) {
             InputUtil.release(MC.options.keyUp);
         }
 
-        sneak(sneaks);
+        // A player who lets go inside a vine that hangs free sinks through it. A sneak holds the
+        // height for the step out of it to the side.
+        sneak(sneaks || climbing && !player.onGround() && across(here, node) && node.getY() >= here.getY());
 
         if (sprint && !player.isInWater() && node.getY() >= here.getY()) {
             InputUtil.hold(MC.options.keySprint);
         } else {
             InputUtil.release(MC.options.keySprint);
         }
+    }
+
+    // Counts the steps ahead before the path goes down. A path through water has none. Nothing
+    // asks about a run longer than the sight.
+    private void measureRun(LocalPlayer player) {
+        int last = Math.min(path.size(), index + RUN_SIGHT);
+        int level = 0;
+        while (index + level < last && path.get(index + level).getY() >= path.get(index + level - 1).getY()) {
+            level++;
+        }
+        // A swimmer bobs out of the water and back in. Pace added in the air between would
+        // throw it from side to side all the way across.
+        levelRun = wet(path.get(index)) || wet(path.get(index - 1)) ? 0 : level;
+        runTick = player.tickCount;
+    }
+
+    private static boolean wet(BlockPos node) {
+        return !MC.level.getFluidState(node).isEmpty();
     }
 
     // Moves the index past every node the player has already reached and counts
@@ -225,6 +290,7 @@ public final class PathWalker {
                 index = i + 1;
                 strayTicks = 0;
                 pushTicks = 0;
+                stallTicks = 0;
                 return;
             }
         }
@@ -253,9 +319,13 @@ public final class PathWalker {
     // True when the rise to the node is one the player walks up without a jump. Straight
     // up or out of water or off a ladder still takes one.
     private static boolean stepsUp(PathFinder.Rules rules, BlockPos here, BlockPos node) {
-        boolean across = node.getX() != here.getX() || node.getZ() != here.getZ();
-        return across && node.getY() - here.getY() <= rules.stepUp()
+        return across(here, node) && node.getY() - here.getY() <= rules.stepUp()
             && MC.player.onGround() && !MC.player.isInWater();
+    }
+
+    // True when the node lies in another column than the player.
+    private static boolean across(BlockPos here, BlockPos node) {
+        return node.getX() != here.getX() || node.getZ() != here.getZ();
     }
 
     // Lays the floor the next node wants from the hotbar. A floor that goes where the player

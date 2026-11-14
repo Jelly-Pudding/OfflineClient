@@ -30,8 +30,9 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
-// Teleports you onto the block you click. A long way is covered a hop at a time and a
-// wall on the way is climbed over. A spot with no room gives way to the nearest one.
+// Teleports you onto the block you click whichever face of it the click meets. A long way is
+// covered a hop at a time and a wall on the way is climbed over. With no room on top the spot
+// beside the face is taken and with none there the nearest one.
 public final class ClickTp extends Module {
 
     public enum Trigger { USE, ATTACK, BOTH }
@@ -62,7 +63,8 @@ public final class ClickTp extends Module {
     private Landing preview;
 
     public ClickTp() {
-        super("ClickTp", "Teleports you to the block you click.", Category.MOVEMENT);
+        super("ClickTp", "Teleports you onto the block you click or beside it when there is no room on top.",
+            Category.MOVEMENT);
         addSettings(range, trigger, water, showLanding);
         addSettings(landingStyle.settings());
         addSettings(blockedStyle.settings());
@@ -168,10 +170,15 @@ public final class ClickTp extends Module {
         if (!attack && BlockUtil.opensOnClick(state)) {
             return null;
         }
+        Entity mover = Hop.mover(mc.player);
+        Vec3 onTop = new Vec3(pos.getX() + 0.5, pos.getY() + top(pos, state), pos.getZ() + 0.5);
+        // From the ground only the sides of a treetop or a roof can be clicked.
+        if (Hop.safeAt(mover, onTop)) {
+            return new Landing(onTop, onTop);
+        }
         Direction side = hit.getDirection();
-        Vec3 aimed = new Vec3(pos.getX() + 0.5 + side.getStepX(), pos.getY() + top(pos, state),
-            pos.getZ() + 0.5 + side.getStepZ());
-        return new Landing(aimed, Hop.nearestFit(Hop.mover(mc.player), aimed));
+        Vec3 beside = onTop.add(side.getStepX(), 0, side.getStepZ());
+        return new Landing(beside, Hop.nearestFit(mover, beside));
     }
 
     // The height a mover stands at on the block. Water with nothing solid in it holds it

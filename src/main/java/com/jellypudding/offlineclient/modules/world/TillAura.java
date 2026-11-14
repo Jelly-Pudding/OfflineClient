@@ -3,8 +3,6 @@ package com.jellypudding.offlineclient.modules.world;
 import com.jellypudding.offlineclient.module.BlockUseAura;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.util.BlockTurns;
-import com.jellypudding.offlineclient.util.BlockUtil;
-import net.minecraft.core.BlockPos;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.item.ItemStack;
 
@@ -38,12 +36,6 @@ public final class TillAura extends BlockUseAura {
         if (!hoe.is(ItemTags.HOES)) {
             return;
         }
-        tilled += click(inReach(pos -> tillable(hoe, pos)), BlockTurns::use);
-    }
-
-    // Farmland only forms under open air. Rooted dirt under a block would lose its roots for nothing.
-    private boolean tillable(ItemStack hoe, BlockPos pos) {
-        return BlockUtil.state(pos.above()).isAir() && BlockTurns.result(hoe, pos) != null
-            && (!nearWater.isOn() || BlockTurns.staysWet(mc.level, pos));
+        tilled += click(inReach(pos -> BlockTurns.tills(hoe, pos, nearWater.isOn())), BlockTurns::use);
     }
 }

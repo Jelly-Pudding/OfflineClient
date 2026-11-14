@@ -91,7 +91,7 @@ public final class FightBot extends Module implements Targeting {
             chase.stop();
             return;
         }
-        target = EntityUtil.best(searchRange.getValue(), priority.getValue(), this::attackable);
+        target = EntityUtil.best(searchRange.getValue(), priority.getValue(), this::wouldFight);
         if (target == null) {
             chase.stop();
             return;
@@ -103,7 +103,8 @@ public final class FightBot extends Module implements Targeting {
         }
     }
 
-    private boolean attackable(Entity entity) {
+    @Override
+    public boolean wouldFight(Entity entity) {
         return targets.attackable(entity, filter);
     }
 }

@@ -333,6 +333,13 @@ public final class Modules {
         return module.isEnabled() && module.getFought() != null;
     }
 
+    // True whilst something a combat module that is on would fight is within the range of you.
+    public static boolean fightNear(double range) {
+        List<Targeting> fighters = all(Targeting.class).stream().filter(Targeting::isEnabled).toList();
+        return !fighters.isEmpty() && EntityUtil.nearest(range,
+            entity -> fighters.stream().anyMatch(fighter -> fighter.wouldFight(entity))) != null;
+    }
+
     // True whilst FightBot or Protect is on. A walk of theirs is how they fight.
     public static boolean walksToFight() {
         return enabled(FightBot.class) || enabled(Protect.class);

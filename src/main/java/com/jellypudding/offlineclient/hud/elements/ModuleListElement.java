@@ -5,15 +5,12 @@ import com.jellypudding.offlineclient.hud.HudElement;
 import com.jellypudding.offlineclient.hud.RowCache;
 import com.jellypudding.offlineclient.hud.TextRow;
 import com.jellypudding.offlineclient.module.Module;
-import com.jellypudding.offlineclient.modules.misc.HudModule;
 import com.jellypudding.offlineclient.render.ClientFonts;
 import com.jellypudding.offlineclient.setting.BoolSetting;
-import com.jellypudding.offlineclient.setting.ChoiceListSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.util.ColorUtil;
-import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.Tally;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -72,19 +69,16 @@ public final class ModuleListElement extends HudElement {
 
     private final EnumSetting<Shows> shows = new EnumSetting<>("List shows",
         "What the piece writes.", Shows.LIST)
-        .describe(Shows.LIST, "Every module that is on one to a line.")
-        .describe(Shows.COUNT, "Only how many modules are on.")
+        .describe(Shows.LIST, "Each module on a line of its own.")
+        .describe(Shows.COUNT, "Only how many modules the list would hold.")
         .describe(Shows.LIST_THAT_FITS,
-            "The list whilst it is no taller than the screen and only how many are on once it is.");
+            "The list whilst it is no taller than the screen and only how many modules it holds once it is.");
     private final EnumSetting<Sort> sort = new EnumSetting<>("List order",
         "How the rows are ordered.", Sort.LONGEST)
         .describe(Sort.LONGEST, "Longest name first. A row keeps its place when the word in brackets changes.")
         .describe(Sort.SHORTEST, "Shortest name first.")
         .describe(Sort.ALPHABETICAL, "By name from A to Z.")
         .under(shows, Shows.LIST, Shows.LIST_THAT_FITS);
-    private final ChoiceListSetting hidden = new ChoiceListSetting("Hidden modules",
-        "Modules left out of the list and the count. Click to pick them.",
-        () -> OfflineClient.INSTANCE.getModuleManager().togglableNames(Modules.get(HudModule.class)));
     private final ColorSetting color = new ColorSetting("List colour",
         "Colour of the module names and of the count.", 200, false);
     private final BoolSetting keybinds = new BoolSetting("List keybinds",
@@ -115,8 +109,9 @@ public final class ModuleListElement extends HudElement {
     private boolean sampled;
 
     public ModuleListElement() {
-        super("Module list", "Enabled modules listed one to a line.", true, 100, 0, 0.5);
-        add(shows, sort, keybinds, keyColor, suffixes, suffixColor, bracketColor, slide, sideBar, hidden, color);
+        super("Module list", "The modules that are on one to a line. A module with In module list switched off"
+            + " stays out.", true, 100, 0, 0.5);
+        add(shows, sort, keybinds, keyColor, suffixes, suffixColor, bracketColor, slide, sideBar, color);
     }
 
     // True whilst only the count is written. The list gives way to it once it stands taller
@@ -158,11 +153,12 @@ public final class ModuleListElement extends HudElement {
         return sample;
     }
 
-    // The modules that are on in the order they are drawn. The HUD itself never lists itself.
+    // The modules that are on in the order they are drawn. One whose own switch for the list is
+    // off stays out of it and out of the count.
     private List<Entry> build() {
         List<Entry> built = new ArrayList<>();
         for (Module module : OfflineClient.INSTANCE.getModuleManager().getEnabled()) {
-            if (module instanceof HudModule || hidden.contains(module.getName())) {
+            if (!module.isListed()) {
                 continue;
             }
             KeybindSetting bind = module.getKeybind();

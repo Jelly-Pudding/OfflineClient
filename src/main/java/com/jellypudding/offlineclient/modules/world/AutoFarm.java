@@ -13,6 +13,7 @@ import com.jellypudding.offlineclient.setting.ChoiceListSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.BlockTurns;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.Cooldowns;
 import com.jellypudding.offlineclient.util.FaceMode;
@@ -22,10 +23,12 @@ import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.PacketBreaker;
 import com.jellypudding.offlineclient.util.RotationPriority;
 import com.jellypudding.offlineclient.util.SwingMode;
+import com.jellypudding.offlineclient.util.UseBudget;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.FluidTags;
+import net.minecraft.tags.ItemTags;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -192,9 +195,9 @@ public final class AutoFarm extends Module {
     // Ticks a cut spot waits for its seed.
     private static final int PLANT_TICKS = 60;
 
-    // Ticks a spot that was given a seed is passed over. A seed the server turned down leaves
-    // the spot empty and it would otherwise be clicked again and again.
-    private static final int SEED_RETRY_TICKS = 20;
+    // Ticks a spot that was given a seed or soil that met the hoe is passed over. A click the
+    // server turned down leaves it as it was and it would otherwise be clicked again and again.
+    private static final int RETRY_TICKS = 20;
 
     private static final AABB NODE = new AABB(BlockPos.ZERO).deflate(0.3);
     private static final AABB SHELL = new AABB(BlockPos.ZERO).deflate(1 / 16.0);
@@ -215,6 +218,10 @@ public final class AutoFarm extends Module {
         "Puts a seed on every empty farmland block in reach and nether wart on empty soul sand.", false);
     private final ChoiceListSetting sowPlants = new ChoiceListSetting("Sow plants",
         "Which plants go on empty soil. The first of them that you carry is sown.", () -> SOWN_NAMES, SOWN_ON)
+        .under(sow);
+    private final BoolSetting till = new BoolSetting("Till the soil",
+        "Tills the dirt and grass in reach with a hoe you carry whilst you carry a seed for it. Only soil with"
+            + " water within four blocks is tilled. Farmland further out dries up again.", false)
         .under(sow);
     private final BoolSetting bonemeal = new BoolSetting("Bonemeal",
         "Feeds bone meal to the crops that are still growing.", false);
@@ -243,7 +250,7 @@ public final class AutoFarm extends Module {
     private final PacketBreaker breaker = new PacketBreaker();
     private final Map<BlockPos, Plant> spots = new HashMap<>();
     private final Map<BlockPos, Integer> spotExpiry = new HashMap<>();
-    private final Cooldowns<BlockPos> seeded = new Cooldowns<>();
+    private final Cooldowns<BlockPos> tried = new Cooldowns<>();
 
     private List<BlockPos> shownHarvest = List.of();
     private Collection<BlockPos> shownReplant = List.of();
@@ -254,10 +261,11 @@ public final class AutoFarm extends Module {
 
     public AutoFarm() {
         super("AutoFarm", "Harvests the ripe crops in reach and replants them.", Category.WORLD);
-        addSettings(range, harvest, harvestPlants, replant, replantPlants, sow, sowPlants, bonemeal, perTick,
-            lineOfSight, faceTarget, swing, drawSpots, spotColor, drawHarvest, harvestColor,
+        addSettings(range, harvest, harvestPlants, replant, replantPlants, sow, sowPlants, till, bonemeal,
+            perTick, lineOfSight, faceTarget, swing, drawSpots, spotColor, drawHarvest, harvestColor,
             drawReplant, replantColor);
-        searchTags("farm", "crops", "harvest", "replant", "sow", "plant seeds", "wheat", "berries");
+        searchTags("farm", "crops", "harvest", "replant", "sow", "plant seeds", "wheat", "berries", "till",
+            "hoe", "farmland");
     }
 
     @Override
@@ -286,7 +294,7 @@ public final class AutoFarm extends Module {
         breaker.reset();
         spots.clear();
         spotExpiry.clear();
-        seeded.clear();
+        tried.clear();
         shownHarvest = List.of();
         shownReplant = List.of();
         lastUse = 0;
@@ -307,7 +315,7 @@ public final class AutoFarm extends Module {
         if (breaker.tick(this::readyToMine)) {
             reset();
         }
-        seeded.tick();
+        tried.tick();
         int now = mc.player.tickCount;
         spotExpiry.entrySet().removeIf(entry -> {
             boolean gone = entry.getValue() <= now;
@@ -331,11 +339,13 @@ public final class AutoFarm extends Module {
         List<BlockPos> toFeed = new ArrayList<>();
         // Nearest first like the scan.
         Map<BlockPos, Plant> toPlant = new LinkedHashMap<>();
-        sort(scan, toMine, toInteract, toPlant, toFeed);
+        List<Plant> sowable = sow.isOn() ? sowable() : List.of();
+        sort(scan, sowable, toMine, toInteract, toPlant, toFeed);
         shownHarvest = toMine;
         shownReplant = toPlant.keySet();
 
-        boolean acted = plantSeeds(toPlant, now);
+        // A seed goes in before more soil is tilled and no farmland waits bare.
+        boolean acted = plantSeeds(toPlant, now) || tillSoil(scan, sowable, now);
         if (!acted && harvest.isOn()) {
             acted = pickByHand(toInteract, now);
         }
@@ -343,13 +353,16 @@ public final class AutoFarm extends Module {
             mineTick(toMine);
         }
         if (!acted && bonemeal.isOn()) {
-            feedTick(toFeed, now);
+            acted = feedTick(toFeed, now);
+        }
+        // The next use would have come by now. The hand goes back to what the player held.
+        if (!acted && now - lastUse >= InputUtil.USE_DELAY) {
+            loan.standAside();
         }
     }
 
-    private void sort(List<BlockPos> scan, List<BlockPos> toMine, List<BlockPos> toInteract,
+    private void sort(List<BlockPos> scan, List<Plant> sowable, List<BlockPos> toMine, List<BlockPos> toInteract,
                       Map<BlockPos, Plant> toPlant, List<BlockPos> toFeed) {
-        List<Plant> sowable = sow.isOn() ? sowable() : List.of();
         for (BlockPos pos : scan) {
             if (lineOfSight.isOn() && !BlockUtil.canSee(pos)) {
                 continue;
@@ -458,10 +471,10 @@ public final class AutoFarm extends Module {
         for (Map.Entry<BlockPos, Plant> spot : toPlant.entrySet()) {
             BlockPos pos = spot.getKey();
             Plant plant = spot.getValue();
-            if (seeded.contains(pos) || !holdSeed(plant.seed())) {
+            if (tried.contains(pos) || !holdSeed(plant.seed())) {
                 continue;
             }
-            seeded.put(pos, SEED_RETRY_TICKS);
+            tried.put(pos, RETRY_TICKS);
             faceTarget.getValue().face(Vec3.atCenterOf(pos), RotationPriority.PLACE);
             if (BlockUtil.placeAny(pos, false, false)) {
                 swing.getValue().swing(InteractionHand.MAIN_HAND);
@@ -487,14 +500,52 @@ public final class AutoFarm extends Module {
         return InventoryUtil.freeHotbarSlot() != -1 && InventoryUtil.conjure(new ItemStack(seed)) != null;
     }
 
-    private void feedTick(List<BlockPos> toFeed, int now) {
+    // Tills one block of soil a seed at hand could go on. The hoe comes from anywhere in the
+    // inventory and the one in hand goes first.
+    private boolean tillSoil(List<BlockPos> scan, List<Plant> sowable, int now) {
+        if (!till.isOn() || now - lastUse < InputUtil.USE_DELAY || UseBudget.remaining() == 0
+            || !seedForFarmland(sowable)) {
+            return false;
+        }
+        int slot = mc.player.getMainHandItem().is(ItemTags.HOES) ? InventoryUtil.selectedSlot()
+            : InventoryUtil.findSlot(stack -> stack.is(ItemTags.HOES), InventoryUtil.WHOLE_INVENTORY);
+        if (slot == -1) {
+            return false;
+        }
+        ItemStack hoe = mc.player.getInventory().getItem(slot);
+        for (BlockPos pos : scan) {
+            if (tried.contains(pos) || !BlockTurns.tills(hoe, pos, true)
+                || lineOfSight.isOn() && !BlockUtil.canSee(pos)) {
+                continue;
+            }
+            if (!loan.select(slot)) {
+                return false;
+            }
+            tried.put(pos, RETRY_TICKS);
+            faceTarget.getValue().face(BlockUtil.hitPoint(pos, BlockUtil.facingSide(pos)), RotationPriority.PLACE);
+            if (BlockTurns.use(pos)) {
+                swing.getValue().swing(InteractionHand.MAIN_HAND);
+                lastUse = now;
+            }
+            return true;
+        }
+        return false;
+    }
+
+    // Nether wart is the one sown plant no farmland takes. It goes on soul sand.
+    private static boolean seedForFarmland(List<Plant> sowable) {
+        return sowable.stream().anyMatch(plant -> plant.seed() != Items.NETHER_WART);
+    }
+
+    // True once the bone meal is in hand whether or not the crop took it.
+    private boolean feedTick(List<BlockPos> toFeed, int now) {
         if (toFeed.isEmpty() || now - lastUse < InputUtil.USE_DELAY) {
-            return;
+            return false;
         }
         BlockPos target = toFeed.getFirst();
         int slot = InventoryUtil.findSlot(Items.BONE_MEAL, InventoryUtil.WHOLE_INVENTORY);
         if (slot == -1 || !loan.select(slot)) {
-            return;
+            return false;
         }
         Direction side = BlockUtil.facingSide(target);
         faceTarget.getValue().face(BlockUtil.hitPoint(target, side), RotationPriority.PLACE);
@@ -502,6 +553,7 @@ public final class AutoFarm extends Module {
             swing.getValue().swing(InteractionHand.MAIN_HAND);
             lastUse = now;
         }
+        return true;
     }
 
     // The crops and stems and cocoa of a farm that bone meal still grows.

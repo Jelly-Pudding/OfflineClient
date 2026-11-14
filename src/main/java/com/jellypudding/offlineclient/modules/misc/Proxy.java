@@ -24,7 +24,8 @@ public final class Proxy extends Module {
     private volatile PackNotice packNotice = PackNotice.NONE;
 
     public Proxy() {
-        super("Proxy", "Joins servers through the proxy picked in the Proxies tab.", Category.MISC);
+        super("Proxy", "Joins servers through the proxy picked in the Proxies tab and they see its address in"
+            + " place of yours.", Category.MISC);
         searchTags("socks", "socks5", "http proxy", "hide ip", "ip ban", "proxy list");
     }
 

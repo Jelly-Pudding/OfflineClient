@@ -30,7 +30,8 @@ public abstract class ChatGraphicsMixin {
         + "Lnet/minecraft/client/gui/ActiveTextCollector$Parameters;"
         + "Lnet/minecraft/util/FormattedCharSequence;)V";
 
-    @Shadow
+    // The loader drops a mixin with two targets whose shadow may be renamed.
+    @Shadow(remap = false)
     @Final
     private GuiGraphicsExtractor graphics;
 

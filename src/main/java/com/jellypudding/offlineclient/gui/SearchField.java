@@ -115,7 +115,8 @@ public final class SearchField {
         }
         room = right - textX;
         if (isEmpty() && !focused) {
-            context.text(font, placeholder, textX, textY, GuiTheme.textFaint(), false);
+            context.text(font, SettingWidget.trimEnd(font, placeholder, room), textX, textY,
+                GuiTheme.textFaint(), false);
         } else {
             text.render(context, font, textX, textY, room, GuiTheme.text(), focused);
         }

@@ -49,6 +49,7 @@ public final class TabStrip {
 
     private static final int TOP = 2;
     private static final int PAD = 6;
+    private static final int MIN_PAD = 2;
     private static final int UNDERLINE = 1;
 
     @FunctionalInterface
@@ -66,25 +67,29 @@ public final class TabStrip {
         return TOP + HEIGHT + UNDERLINE;
     }
 
-    // Laid out every frame because a tab can be switched off at any time.
+    // Laid out every frame because a tab can be switched off at any time. A view too narrow for
+    // the whole row closes up the gaps beside the labels.
     private void layout(int screenWidth) {
         Font font = ClientFonts.gui();
         slots.clear();
-        int total = 0;
+        int labels = 0;
+        int shown = 0;
         for (Tab tab : Tab.values()) {
             if (tab.isShown()) {
-                total += font.width(tab.getLabel()) + PAD * 2;
+                labels += font.width(tab.getLabel());
+                shown++;
             }
         }
-        if (total == 0) {
+        if (shown == 0) {
             return;
         }
-        int x = (screenWidth - total) / 2;
+        int pad = Math.clamp((screenWidth - labels) / (shown * 2), MIN_PAD, PAD);
+        int x = (screenWidth - labels - shown * pad * 2) / 2;
         for (Tab tab : Tab.values()) {
             if (!tab.isShown()) {
                 continue;
             }
-            int w = font.width(tab.getLabel()) + PAD * 2;
+            int w = font.width(tab.getLabel()) + pad * 2;
             slots.add(new Slot(tab, x, w));
             x += w;
         }

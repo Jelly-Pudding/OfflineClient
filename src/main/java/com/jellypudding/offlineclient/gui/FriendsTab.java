@@ -12,6 +12,12 @@ import java.util.List;
 // list and a name typed with the word enemy after it goes on the enemies.
 final class FriendsTab implements TabView.Source {
 
+    // The word that puts a typed name on the enemies.
+    private static final String ENEMY = "enemy";
+    // The names of the two players the game itself ships with.
+    private static final String FRIEND_EXAMPLE = "Steve";
+    private static final String ENEMY_EXAMPLE = "Alex";
+
     @Override
     public List<TabView.Entry> entries(String query) {
         FriendManager lists = OfflineClient.INSTANCE.getFriendManager();
@@ -44,7 +50,21 @@ final class FriendsTab implements TabView.Source {
 
     @Override
     public String addHint() {
-        return "type a name or a name and the word enemy";
+        return "type a name to add a friend";
+    }
+
+    // Only shown whilst both lists are empty.
+    @Override
+    public List<TabView.Hint> hints(String query) {
+        FriendManager lists = OfflineClient.INSTANCE.getFriendManager();
+        if (!query.isEmpty() || !lists.getAll().isEmpty() || !lists.getEnemies().isEmpty()) {
+            return List.of();
+        }
+        return List.of(
+            new TabView.Hint("Add a friend", "Type a name and press enter. Friends are never targeted.",
+                List.of(FRIEND_EXAMPLE)),
+            new TabView.Hint("Add an enemy", "Type the word " + ENEMY + " after the name. Enemies are drawn in the"
+                + " enemy colour.", List.of(ENEMY_EXAMPLE + " " + ENEMY)));
     }
 
     @Override
@@ -80,6 +100,6 @@ final class FriendsTab implements TabView.Source {
     // True for a name typed with the word enemy after it.
     private static boolean asEnemy(String text) {
         String[] words = text.trim().split("\\s+");
-        return words.length > 1 && words[1].equalsIgnoreCase("enemy");
+        return words.length > 1 && words[1].equalsIgnoreCase(ENEMY);
     }
 }

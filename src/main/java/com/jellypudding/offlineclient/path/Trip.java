@@ -2,6 +2,7 @@ package com.jellypudding.offlineclient.path;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.world.phys.Vec3;
 import net.minecraft.core.BlockPos;
 
 // One walk from where the player stands to a goal. Searches again whenever the
@@ -43,6 +44,7 @@ public final class Trip {
         stop();
         this.goal = goal;
         searches = 0;
+        finder.forgive();
         state = State.WALKING;
         return search();
     }
@@ -77,6 +79,14 @@ public final class Trip {
             if (nearTarget(player) || goal.reached(PathFinder.standingAt(player))) {
                 return end(State.ARRIVED);
             }
+            // The player stands still whilst the next way is looked for.
+            walker.releaseKeys();
+            if (!settled(player)) {
+                return state;
+            }
+            if (walker.walled() != null) {
+                finder.shun(walker.walled());
+            }
             if (searches >= MAX_SEARCHES || !search()) {
                 return end(State.FAILED);
             }
@@ -86,13 +96,21 @@ public final class Trip {
         return state;
     }
 
+    // True where a search may start. In mid air the player stands on nothing a path begins at.
+    private static boolean settled(LocalPlayer player) {
+        return player.onGround() || player.isInWater() || player.isInLava() || player.onClimbable()
+            || player.isPassenger() || player.getAbilities().flying;
+    }
+
     private boolean search() {
         searches++;
         return finder.search(PathFinder.standingAt(OfflineClient.MC.player), goal);
     }
 
+    // Measured from the middle of the block the player stands on. A walk that ends on the block
+    // beside the goal is there wherever on that block it stops.
     private boolean nearTarget(LocalPlayer player) {
-        return goal.distance(player.position()) <= CLOSE_ENOUGH;
+        return goal.distance(Vec3.atBottomCenterOf(PathFinder.standingAt(player))) <= CLOSE_ENOUGH;
     }
 
     private State end(State outcome) {

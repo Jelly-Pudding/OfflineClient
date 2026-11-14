@@ -69,6 +69,14 @@ public final class BlockTurns {
         return result(stack, OfflineClient.MC.level, pos, BlockUtil.facingSide(pos));
     }
 
+    // True when the hoe would turn the soil there into something else. Farmland only forms under
+    // open air and rooted dirt under a block would lose its roots for nothing. Wet only passes
+    // soil that would find water as farmland. Farmland with none dries up again.
+    public static boolean tills(ItemStack hoe, BlockPos pos, boolean wetOnly) {
+        return BlockUtil.state(pos.above()).isAir() && result(hoe, pos) != null
+            && (!wetOnly || staysWet(OfflineClient.MC.level, pos));
+    }
+
     // True when farmland at the spot would find the water that keeps it wet. The search is the
     // one the farmland block makes itself.
     public static boolean staysWet(BlockGetter level, BlockPos pos) {

@@ -14,7 +14,7 @@ public record SettingBlock(Object owner, String name, List<Setting<?>> settings,
                            String keeps) {
 
     public static SettingBlock of(Module module) {
-        return new SettingBlock(module, module.getName(), module.getSettings(), module.getKeybind(),
+        return new SettingBlock(module, module.getName(), module.allSettings(), module.getKeybind(),
             module.isTogglable() ? "The bind and the on or off state stay as they are."
                 : "The bind stays as it is.");
     }

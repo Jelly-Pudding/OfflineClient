@@ -93,8 +93,13 @@ public final class TriggerBot extends Module implements Targeting {
         timer.strike(target, swing.getValue());
     }
 
+    @Override
+    public boolean wouldFight(Entity entity) {
+        return targets.attackable(entity, filter);
+    }
+
     private boolean attackable(Entity entity) {
-        return targets.attackable(entity, filter)
+        return wouldFight(entity)
             && (fov.getValue() >= 360 || EntityUtil.lookAngleTo(entity) <= fov.getValue() / 2);
     }
 }

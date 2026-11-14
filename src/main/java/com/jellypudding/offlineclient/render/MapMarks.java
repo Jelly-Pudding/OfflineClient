@@ -212,6 +212,12 @@ public final class MapMarks {
     // An arrow on your spot pointing the way you face. Yaw nought looks south. Its corners keep
     // their fractions of a pixel and the arrow glides and turns without a jump.
     public static void self(GuiGraphicsExtractor context, MapView view, double x, double z, float yaw) {
+        self(context, view, x, z, yaw, 1);
+    }
+
+    // The same arrow drawn this many times its usual size.
+    public static void self(GuiGraphicsExtractor context, MapView view, double x, double z, float yaw,
+                            double size) {
         Shapes arrows = Shapes.within(context, view);
         if (arrows == null) {
             return;
@@ -221,8 +227,8 @@ public final class MapMarks {
         double pointY = view.turnedY(facing.x, facing.z);
         double spotX = view.screenX(x, z);
         double spotY = view.screenY(x, z);
-        arrow(arrows, spotX, spotY, pointX, pointY, OUTLINE_GROWTH, OUTLINE);
-        arrow(arrows, spotX, spotY, pointX, pointY, 1, SELF);
+        arrow(arrows, spotX, spotY, pointX, pointY, size * OUTLINE_GROWTH, OUTLINE);
+        arrow(arrows, spotX, spotY, pointX, pointY, size, SELF);
         arrows.draw(context);
     }
 

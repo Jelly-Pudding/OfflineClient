@@ -2,8 +2,6 @@ package com.jellypudding.offlineclient.modules.world;
 
 import com.jellypudding.offlineclient.config.BuildFrame;
 import com.jellypudding.offlineclient.config.BuildTemplate;
-import com.jellypudding.offlineclient.event.Subscribe;
-import com.jellypudding.offlineclient.event.events.Render3DEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.render.BoxStyle;
@@ -19,12 +17,13 @@ import net.minecraft.world.level.block.state.BlockState;
 import java.util.ArrayList;
 import java.util.List;
 
-// Saves a build as a template for AutoBuild. Press the bind on two corners and
-// then on the block the build should grow from. The facing at the last press
-// becomes the front of the template.
+// Saves a build as a template for AutoBuild. Click two corners and then the block
+// the build should grow from. The facing at the last click becomes the front of
+// the template.
 public final class TemplateTool extends Module implements CornerPicker.Taker {
 
     private static final String DEFAULT_NAME = "My build";
+    private static final String GROWS_FROM = "the block the build grows from";
 
     private final TextSetting name = new TextSetting("Name",
         "The file the template is saved as. Click to type it.", DEFAULT_NAME);
@@ -32,7 +31,8 @@ public final class TemplateTool extends Module implements CornerPicker.Taker {
         "Remembers which block sits where and which way it faces. Off saves the shape alone.", true);
     private final BoxStyle boxStyle = new BoxStyle(BoxStyle.Shape.LINES, 200);
 
-    private final CornerPicker corners = new CornerPicker();
+    private final CornerPicker corners =
+        new CornerPicker(this, boxStyle, () -> CornerPicker.MOST_BLOCKS, "saved").thenClick(GROWS_FROM);
 
     public TemplateTool() {
         super("TemplateTool", "Saves a build as a shape AutoBuild can put up again.", Category.WORLD);
@@ -48,23 +48,17 @@ public final class TemplateTool extends Module implements CornerPicker.Taker {
 
     @Override
     public String getSuffix() {
-        String prompt = corners.prompt();
-        return prompt != null ? prompt : "pick the origin";
+        return corners.waitingFor();
     }
 
     @Override
     protected void onEnable() {
-        corners.clear();
+        corners.open();
     }
 
     @Override
-    public void onKeybind() {
-        BlockPos corner = CornerPicker.aimedCorner(this);
-        if (corner == null) {
-            toggle();
-            return;
-        }
-        markCorner(corner);
+    protected void onDisable() {
+        corners.close();
     }
 
     // Once both corners are down the next spot is the one the build grows from.
@@ -80,9 +74,8 @@ public final class TemplateTool extends Module implements CornerPicker.Taker {
             return;
         }
         // Saving walks every block of the box in one tick.
-        if (corners.withinLimit(CornerPicker.MOST_BLOCKS)) {
-            tell("second corner at §f" + BlockUtil.text(pos)
-                + "§7. Now press the bind on the block the build grows from.");
+        if (corners.withinLimit()) {
+            tell("second corner at §f" + BlockUtil.text(pos) + "§7. Now " + CornerPicker.press(GROWS_FROM) + ".");
         }
     }
 
@@ -108,16 +101,5 @@ public final class TemplateTool extends Module implements CornerPicker.Taker {
             ChatUtil.error("Could not write the template file.");
         }
         setEnabled(false);
-    }
-
-    @Subscribe
-    private void onRender3D(Render3DEvent event) {
-        corners.draw(event.getBatch(), boxStyle);
-    }
-
-    // The key does more than switch the module and cannot be a held one.
-    @Override
-    public boolean keySwitches() {
-        return false;
     }
 }

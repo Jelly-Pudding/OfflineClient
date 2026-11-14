@@ -10,17 +10,21 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.GlideSwitch;
-import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.MovementUtil;
 import com.jellypudding.offlineclient.util.PacketUtil;
 import com.jellypudding.offlineclient.util.RotationManager;
 import com.jellypudding.offlineclient.util.RotationPriority;
+import com.jellypudding.offlineclient.util.ServerInfo;
+import com.jellypudding.offlineclient.util.ServerSneak;
 import com.jellypudding.offlineclient.util.SwingMode;
 import net.minecraft.SharedConstants;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.network.protocol.game.ServerboundInteractPacket;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
+import net.minecraft.network.protocol.game.ServerboundUseItemOnPacket;
 import net.minecraft.util.Mth;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.effect.MobEffects;
 
 import java.util.concurrent.ThreadLocalRandom;
@@ -36,8 +40,13 @@ public final class Derp extends Module {
     // Each step slower waits one more tick between flips.
     private static final int TWERK_FASTEST = 10;
 
-    // Ticks between arm swings whilst flailing. A swing takes about six to play out.
-    private static final int FLAIL_GAP = 3;
+    // How long a combat module still counts as fighting once its target has gone. One that slips
+    // out of reach or out of view for a moment is back within this.
+    private static final int FIGHT_MEMORY_TICKS = SharedConstants.TICKS_PER_SECOND;
+
+    // How near something a combat module would fight keeps the arm still. A swing reaches about
+    // four blocks and two sprinters close seven more whilst the cooldown of a sword fills.
+    private static final double FIGHT_RANGE = 12;
 
     // How long a start waits for the server to show the glide.
     private static final int ECHO_WAIT_TICKS = SharedConstants.TICKS_PER_SECOND;
@@ -49,7 +58,7 @@ public final class Derp extends Module {
         .describe(Mode.SPIN, "Turns your head round and round.")
         .describe(Mode.SHAKE, "Shakes your head from side to side.")
         .describe(Mode.HEADBANG, "Nods your head up and down.")
-        .describe(Mode.FLAIL, "Waves your main arm about.")
+        .describe(Mode.FLAIL, "Waves your main arm about. Each wave restarts your attack cooldown.")
         .describe(Mode.TWERK, "Crouches up and down on the spot.")
         .describe(Mode.RANDOM, "Points your head somewhere new every tick and flails now and then.");
     private final NumberSetting speed = new NumberSetting("Speed",
@@ -60,7 +69,8 @@ public final class Derp extends Module {
         5, 1, TWERK_FASTEST, 1).max(TWERK_FASTEST)
         .under(mode, Mode.TWERK);
     private final BoolSetting pauseInCombat = new BoolSetting("Pause in combat",
-        "Stops whilst your hands are busy or a combat module has a target.", true);
+        "Stops whilst your hands are busy or a combat module has had a target within the last second. The arm"
+            + " also keeps still whilst something a combat module would fight is within twelve blocks.", true);
     private final BoolSetting glidePose = new BoolSetting("Glide pose",
         "Shows you gliding on your elytra to everyone whilst you walk. The elytra wears one point a second.",
         false);
@@ -70,8 +80,11 @@ public final class Derp extends Module {
     private boolean rising = true;
     private boolean left;
     private int flailTimer;
+    // Counts down from the last tick a combat module had something to fight.
+    private int fightMemory;
     private int twerkTimer;
     private boolean crouched;
+    private final ServerSneak twerkSneak = new ServerSneak();
 
     private final GlideSwitch glide = GlideSwitch.get();
     // Whilst set the ground flag of every movement packet goes out as false.
@@ -99,6 +112,7 @@ public final class Derp extends Module {
     @Override
     protected void onEnable() {
         flailTimer = 0;
+        fightMemory = 0;
         twerkTimer = 0;
         waitFor = 0;
         retryIn = 0;
@@ -181,6 +195,15 @@ public final class Derp extends Module {
     // Runs after every other module has settled the packet.
     @Subscribe(priority = -50)
     private void onPacketSend(PacketSendEvent event) {
+        // The server takes a click from a player it holds for sneaking as a sneak click and throws a
+        // rider it holds for sneaking off the mount. The twerk stands up ahead of a click and rests
+        // until the answer is in. A ride the click began is known by then.
+        if (event.getPacket() instanceof ServerboundUseItemOnPacket
+            || event.getPacket() instanceof ServerboundInteractPacket) {
+            standUp();
+            twerkTimer = Math.max(twerkTimer, ServerInfo.answerTicks());
+        }
+        twerkSneak.keep(event);
         LocalPlayer player = mc.player;
         if (!posing || player == null || !(event.getPacket() instanceof ServerboundMovePlayerPacket packet)
             || !packet.isOnGround() || PacketUtil.isGroundClaim(packet)) {
@@ -194,7 +217,8 @@ public final class Derp extends Module {
         if (!inGame() || mc.player.isSpectator()) {
             return;
         }
-        if (pauseInCombat.isOn() && handsBusy()) {
+        boolean fighting = inFight();
+        if (pauseInCombat.isOn() && (fighting || handsBusy())) {
             return;
         }
         if (flailTimer > 0) {
@@ -256,32 +280,41 @@ public final class Derp extends Module {
         }
         twerkTimer = TWERK_FASTEST - twerkSpeed.getInt();
         crouched = !crouched;
-        InputUtil.sendShift(crouched);
+        twerkSneak.want(crouched);
     }
 
-    // Puts the server back on the real key state.
+    // Hands the server back to the sneak key.
     private void standUp() {
-        if (crouched && mc.player != null) {
-            InputUtil.sendShift(mc.player.getLastSentInput().shift());
-        }
+        twerkSneak.release();
         crouched = false;
     }
 
     // Swings the main arm for everyone else. The punch carries no hand and the server never
-    // echoes the swing back. The view stays still.
+    // echoes the swing back. The view stays still. Every punch restarts the attack cooldown on the
+    // server and a fight that begins before it has filled begins late. The arm keeps still
+    // whilst one may begin.
     private void flail() {
-        if (flailTimer > 0) {
+        if (flailTimer > 0 || pauseInCombat.isOn() && Modules.fightNear(FIGHT_RANGE)) {
             return;
         }
-        flailTimer = FLAIL_GAP;
+        flailTimer = flailGap();
         SwingMode.PACKET.swing();
     }
 
+    // Ticks from one punch to the next. The server starts a fresh swing only once the one before
+    // is past its half. A punch sooner than that shows nothing and still restarts the cooldown.
+    private int flailGap() {
+        return mc.player.getItemInHand(InteractionHand.MAIN_HAND).getAttackAnimation().duration() / 2 + 1;
+    }
+
+    // True whilst a combat module has something to fight and for a second after.
+    private boolean inFight() {
+        fightMemory = Modules.fighting() ? FIGHT_MEMORY_TICKS : Math.max(0, fightMemory - 1);
+        return fightMemory > 0;
+    }
+
     private boolean handsBusy() {
-        if (mc.player.isSwinging() && !mode.is(Mode.FLAIL) && !mode.is(Mode.RANDOM)
-            || mc.options.keyAttack.isDown() || mc.player.isUsingItem()) {
-            return true;
-        }
-        return Modules.fighting();
+        return mc.player.isSwinging() && !mode.is(Mode.FLAIL) && !mode.is(Mode.RANDOM)
+            || mc.options.keyAttack.isDown() || mc.player.isUsingItem();
     }
 }

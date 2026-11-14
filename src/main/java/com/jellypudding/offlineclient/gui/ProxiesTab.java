@@ -23,8 +23,14 @@ public final class ProxiesTab implements TabView.Source {
     private static final String IMPORT = "import";
     // An address kept for examples that belongs to nobody.
     private static final String PROXY_EXAMPLE = "203.0.113.5:1080";
+    // The same with the name and the password a proxy may ask for after the port.
+    private static final String LOGIN_EXAMPLE = PROXY_EXAMPLE + ":name:password";
     // How long the proxy footer says what the field did.
     private static final long SAID_MS = 6000;
+    // Shown whether or not the list holds proxies. A second list is imported the same way.
+    private static final TabView.Hint IMPORT_HINT = new TabView.Hint("Import a list",
+        "Put a text file in the offlineclient folder with one proxy on each line.",
+        List.of(IMPORT + " " + ProxyStore.DEFAULT_FILE));
 
     // What the field last did. The footer says it for a while.
     private String said = "";
@@ -64,8 +70,9 @@ public final class ProxiesTab implements TabView.Source {
             return "press enter to add the proxies in " + importRequest(query).shownFile();
         }
         ProxyText.Typed typed = ProxyText.typed(query, ProxyText.DEFAULT_KIND);
-        return typed == null ? "type a proxy such as " + PROXY_EXAMPLE
-            : "press enter to save " + typed.savedName() + " at " + typed.address() + " as " + typed.kind();
+        return typed == null ? "type the address of a proxy such as " + PROXY_EXAMPLE
+            : "press enter to save " + named(typed.savedName(), typed.address()) + " as " + typed.kind()
+                + (typed.login() == null ? "" : " with its login");
     }
 
     @Override
@@ -78,7 +85,7 @@ public final class ProxiesTab implements TabView.Source {
 
     @Override
     public String addHint() {
-        return "type a proxy or check or import";
+        return "type the address of a proxy";
     }
 
     @Override
@@ -86,22 +93,32 @@ public final class ProxiesTab implements TabView.Source {
         if (!query.isEmpty()) {
             return List.of();
         }
-        List<ProxyStore.Entry> all = ProxyStore.get().all();
+        ProxyStore store = ProxyStore.get();
+        List<ProxyStore.Entry> all = store.all();
         if (all.isEmpty()) {
             return List.of(
-                new TabView.Hint("Add a proxy", "Type its address and press enter. A name before it and"
-                    + " socks4 or http after it are both up to you.",
-                    List.of(PROXY_EXAMPLE, "home " + PROXY_EXAMPLE + " http")),
-                new TabView.Hint("Import a list", "Put a text file in the offlineclient folder with one proxy"
-                    + " on each line. A login can follow the port.", List.of(IMPORT + " " + ProxyStore.DEFAULT_FILE)));
+                new TabView.Hint("What a proxy is", "Another computer that passes your connection on. A server you"
+                    + " join through it sees its address in place of yours. Unlike a VPN it carries only the game's"
+                    + " joins and server list pings and server packs.", List.of()),
+                new TabView.Hint("Add a proxy", "Type the address of a proxy you rent or run and press enter. A name"
+                    + " for the list can go before it. It is taken as a SOCKS5 proxy unless socks4 or http follows"
+                    + " it. A proxy that wants a login takes the name and password after the port.",
+                    List.of(PROXY_EXAMPLE, "home " + PROXY_EXAMPLE + " http", LOGIN_EXAMPLE)),
+                IMPORT_HINT);
         }
         List<TabView.Hint> hints = new ArrayList<>();
+        if (Modules.active(Proxy.class) == null || store.picked() == null) {
+            hints.add(new TabView.Hint("Join through a proxy", "Click one in the list. That switches Proxy on and"
+                + " every join and server list ping goes through it from the next one on. Click it again to stop"
+                + " using a proxy.", List.of()));
+        }
         hints.add(new TabView.Hint("Check them all", "Times how long each proxy takes to take a connection.",
             List.of(CHECK)));
         if (!ProxyCheck.dead(all).isEmpty() && ProxyCheck.pruneRefusal() == null) {
             hints.add(new TabView.Hint("Remove the dead ones", "Removes every proxy the newest check found dead.",
                 List.of(PRUNE)));
         }
+        hints.add(IMPORT_HINT);
         return hints;
     }
 
@@ -120,9 +137,9 @@ public final class ProxiesTab implements TabView.Source {
         } else {
             ProxyText.Typed typed = ProxyText.typed(text, ProxyText.DEFAULT_KIND);
             ProxyStore.Entry entry = typed == null ? null : ProxyStore.get().save(typed);
-            say(typed == null ? "That is no proxy. Type one such as " + PROXY_EXAMPLE
+            say(typed == null ? "That is no proxy. Type an address such as " + PROXY_EXAMPLE
                 : entry == null ? "The list holds at most " + ProxyStore.MOST_SAVED + " proxies"
-                : "Saved " + entry.name() + " at " + entry.address());
+                : "Saved " + named(entry.name(), entry.address()));
         }
     }
 
@@ -162,9 +179,15 @@ public final class ProxiesTab implements TabView.Source {
         String login = store.login(entry) == null ? "" : " with a saved login";
         String check = ProxyCheck.sentence(entry);
         String click = !picked ? "Click to join through it."
-            : on ? "Joins go through it. Click to stop using a proxy." : "Picked for when Proxy is on. Click to join through it.";
+            : on ? "Joins go through it. Click to stop using a proxy."
+            : "Picked for when Proxy is on. Click to join through it.";
         return new TabView.Entry(entry.name(), detail, entry.kind() + " proxy at " + entry.address() + login + ". "
             + (check.isEmpty() ? "" : check + " ") + click, ProxyCheck.isDead(entry));
+    }
+
+    // A proxy saved without a name of its own goes by its address and reads as that alone.
+    private static String named(String name, String address) {
+        return name.equals(address) ? address : name + " at " + address;
     }
 
     private static boolean isImport(String word) {

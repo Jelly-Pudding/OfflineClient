@@ -9,9 +9,11 @@ import com.jellypudding.offlineclient.util.DamageUtil;
 import com.jellypudding.offlineclient.util.Modules;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.EmptyBlockGetter;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.FenceBlock;
@@ -20,6 +22,7 @@ import net.minecraft.world.level.block.WallBlock;
 import net.minecraft.world.level.block.WebBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.FluidState;
+import net.minecraft.world.phys.shapes.VoxelShape;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -55,6 +58,10 @@ public final class PathFinder {
     // A step height a hair short of a whole block still climbs one.
     private static final double STEP_SLACK = 0.01;
 
+    // The tallest body inside a spot that a walk steps onto without a thought. A carpet or a
+    // layer of snow lies under it and a stalk of bamboo or a cocoa pod stands over it.
+    private static final double STEP_OVER = 0.5;
+
     // The nodes a search may open before it settles for the closest it got. Then the
     // radius in chunks it may search around the start.
     private static final int NODE_BUDGET = 20000;
@@ -88,6 +95,18 @@ public final class PathFinder {
 
     private Future<Result> running;
 
+    // Spots a walk could not get into for a reason no rule names. Every search goes round them
+    // until they are forgiven.
+    private final Set<BlockPos> shunned = new HashSet<>();
+
+    public void shun(BlockPos spot) {
+        shunned.add(spot.immutable());
+    }
+
+    public void forgive() {
+        shunned.clear();
+    }
+
     public PathFinder maxFall(int blocks) {
         this.maxFall = blocks;
         fallChosen = true;
@@ -106,7 +125,7 @@ public final class PathFinder {
 
     // The rules a walker checks the live world against on the client thread.
     public Rules liveRules() {
-        return new Rules(ChunkWindow.live(), means());
+        return new Rules(ChunkWindow.live(), means(), Set.copyOf(shunned));
     }
 
     // Read on the client thread as a search starts and on every tick of a walk. A module
@@ -138,7 +157,7 @@ public final class PathFinder {
             return false;
         }
         BlockPos from = start.immutable();
-        Rules rules = new Rules(ChunkWindow.capture(from, AREA_CHUNKS), means());
+        Rules rules = new Rules(ChunkWindow.capture(from, AREA_CHUNKS), means(), Set.copyOf(shunned));
         running = POOL.submit(() -> new Search(rules, goal, from, NODE_BUDGET).run());
         return true;
     }
@@ -181,10 +200,12 @@ public final class PathFinder {
 
         private final ChunkWindow view;
         private final Means means;
+        private final Set<BlockPos> shunned;
 
-        Rules(ChunkWindow view, Means means) {
+        Rules(ChunkWindow view, Means means, Set<BlockPos> shunned) {
             this.view = view;
             this.means = means;
+            this.shunned = shunned;
         }
 
         boolean canStand(BlockPos pos) {
@@ -266,7 +287,8 @@ public final class PathFinder {
                 int dx = STEP_X[i];
                 int dz = STEP_Z[i];
                 boolean diagonal = dx != 0 && dz != 0;
-                if (diagonal && !cornerClear(from, dx, dz)) {
+                // Nobody leaves a vine that hangs free by a corner. The way out is straight onto a floor.
+                if (diagonal && (hangs(from) || !cornerClear(from, dx, dz))) {
                     continue;
                 }
                 double base = diagonal ? DIAGONAL : 1;
@@ -357,6 +379,12 @@ public final class PathFinder {
             }
         }
 
+        // True for a ladder or a vine with nothing under it to stand on.
+        private boolean hangs(BlockPos pos) {
+            BlockState under = view.get(pos.below());
+            return climbable(view.get(pos)) && !solidFloor(under) && !holdsUp(under);
+        }
+
         private boolean canFloat(BlockState state) {
             return climbable(state) || (means.swim() && state.getFluidState().is(FluidTags.WATER));
         }
@@ -403,10 +431,10 @@ public final class PathFinder {
         // Minus one when the player cannot move through the block.
         private double spaceCost(BlockPos pos, boolean mine) {
             BlockState state = view.get(pos);
-            if (unknown(state) || BlockUtil.harmful(state)) {
+            if (unknown(state) || BlockUtil.harmful(state) || shunned.contains(pos)) {
                 return -1;
             }
-            if (BlockUtil.blocksMotion(state) && !climbable(state)) {
+            if (stops(state) && !climbable(state)) {
                 if (!mine || state.getBlock().defaultDestroyTime() < 0) {
                     return -1;
                 }
@@ -418,6 +446,19 @@ public final class PathFinder {
             }
             return state.getBlock() instanceof WebBlock ? WEB : 0;
         }
+    }
+
+    // True for a block with a body the player cannot walk through. Bamboo and a cocoa pod are
+    // no solid blocks and stand in the way all the same.
+    private static boolean stops(BlockState state) {
+        if (state.isAir()) {
+            return false;
+        }
+        if (BlockUtil.blocksMotion(state)) {
+            return true;
+        }
+        VoxelShape body = state.getCollisionShape(EmptyBlockGetter.INSTANCE, BlockPos.ZERO);
+        return !body.isEmpty() && body.max(Direction.Axis.Y) > STEP_OVER;
     }
 
     private static boolean climbable(BlockState state) {

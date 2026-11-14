@@ -58,7 +58,7 @@ public final class InfoBarElement extends HudElement {
     private final RowCache<String> parts = new RowCache<>(() -> build(false));
 
     public InfoBarElement() {
-        super("Info bar", "One line with where you are and the way you face and how fast you go.", false, 0, 100,
+        super("Info bar", "One line with where you are and the way you face and how fast you go.", false, 0, 90,
             0.5);
         add(coords, otherDimension, camera, direction, rotation, biome, speed, walk, fps, clock, hideInChat);
     }

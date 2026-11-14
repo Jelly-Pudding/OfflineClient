@@ -80,7 +80,7 @@ public final class CompassElement extends HudElement {
     });
 
     public CompassElement() {
-        super("Compass", "A sliding strip of the compass points.", false, 50, 8);
+        super("Compass", "A sliding strip of the compass points.", false, 50, 0);
         add(field, labels, reading, needle, needleColor, color, northColor, waypoints);
     }
 

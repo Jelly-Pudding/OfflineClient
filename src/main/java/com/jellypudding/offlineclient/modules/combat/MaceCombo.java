@@ -183,7 +183,7 @@ public final class MaceCombo extends Module implements Targeting {
             finish();
             return;
         }
-        if (target == null || !wanted(target)) {
+        if (target == null || !wouldFight(target)) {
             target = pick(AIR_SCAN);
         }
         if (target == null) {
@@ -252,10 +252,11 @@ public final class MaceCombo extends Module implements Targeting {
 
     // Within is measured to the hitbox the way reach is.
     private Entity pick(double within) {
-        return EntityUtil.bestInReach(within, priority.getValue(), this::wanted);
+        return EntityUtil.bestInReach(within, priority.getValue(), this::wouldFight);
     }
 
-    private boolean wanted(Entity entity) {
+    @Override
+    public boolean wouldFight(Entity entity) {
         return targets.attackable(entity, filter);
     }
 }

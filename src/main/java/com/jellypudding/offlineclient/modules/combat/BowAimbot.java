@@ -168,9 +168,14 @@ public final class BowAimbot extends Module implements Targeting {
         return 0;
     }
 
+    @Override
+    public boolean wouldFight(Entity entity) {
+        return targets.attackable(entity, filter);
+    }
+
     private boolean valid(Entity entity) {
         if (entity == mc.player || entity == mc.getCameraEntity()
-            || mc.player.distanceTo(entity) > range.getValue() || !targets.attackable(entity, filter)) {
+            || mc.player.distanceTo(entity) > range.getValue() || !wouldFight(entity)) {
             return false;
         }
         return walls.isOn() || mc.player.hasLineOfSight(entity);

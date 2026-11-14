@@ -106,8 +106,7 @@ final class MacrosTab implements TabView.Source {
                     + MacroStore.CYCLE + " in front runs one line a press.",
                 List.of("kit /home" + then + MacroLine.WAIT + " 2s" + then + "/kit",
                     "wave " + MacroLine.REPEAT + " 3 1s /wave",
-                    "gear " + MacroStore.CYCLE + " " + prefix + "loadout load pvp" + then + prefix
-                        + "loadout load mine")));
+                    "gear " + MacroStore.CYCLE + " /kit pvp" + then + "/kit mine")));
         }
         if (fresh) {
             hints.add(new TabView.Hint("Put a setting on a key",

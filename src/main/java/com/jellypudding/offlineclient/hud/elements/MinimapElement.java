@@ -7,6 +7,7 @@ import com.jellypudding.offlineclient.render.ChunkTints;
 import com.jellypudding.offlineclient.render.MapMarks;
 import com.jellypudding.offlineclient.render.MapView;
 import com.jellypudding.offlineclient.render.TerrainPicture;
+import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ExploredLand;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.TerrainLayer;
@@ -26,10 +27,13 @@ public final class MinimapElement extends HudElement {
     // The layer at your height over the land whilst a roof is over you. What it has not read is
     // clear and the land shows through.
     private final TerrainPicture cave = new TerrainPicture();
+    private final NumberSetting arrowSize = new NumberSetting("Minimap arrow size",
+        "How big the arrow that marks you is drawn next to its normal size.", 1, 0.5, 3, 0.1, "x").min(0.1);
 
     public MinimapElement() {
         super("Minimap", "A map of the land around you. Its other options are in the Minimap module."
             + " Turn on WorldMap to open the whole map.", Minimap.class, 0, 0, Background.ON);
+        add(arrowSize);
     }
 
     // A minimap that is switched off holds no textures. The next draw makes them afresh.
@@ -70,7 +74,7 @@ public final class MinimapElement extends HudElement {
         boolean shadow = textShadow();
         context.enableScissor(0, 0, width, height);
         minimap.overlay().draw(context, font, view, true, false, shadow);
-        MapMarks.self(context, view, at.x, at.z, yaw);
+        MapMarks.self(context, view, at.x, at.z, yaw, arrowSize.getValue());
         if (minimap.marksNorth()) {
             MapMarks.north(context, font, view, shadow);
         }

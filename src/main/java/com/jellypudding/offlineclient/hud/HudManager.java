@@ -11,6 +11,7 @@ import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Predicate;
 
 // Works out where each element sits and draws it. The editor screen asks for the
 // same layout. What you drag is exactly what you see whilst playing.
@@ -277,11 +278,23 @@ public final class HudManager {
 
     // The overlay drawn along with the game's own HUD. Elements that sit on top of
     // everything wait for renderOnTop. Whilst the overlay is hidden only the elements that
-    // stay are drawn.
-    public void render(GuiGraphicsExtractor context, Font font, boolean hidden) {
+    // stay are drawn. Whilst the rest waits for the debug text they are all that is drawn here
+    // as well and renderOverDebugText draws the rest.
+    public void render(GuiGraphicsExtractor context, Font font, boolean hidden, boolean restWaits) {
         beginFrame(font, context.guiWidth(), context.guiHeight(), hidden);
+        drawEach(context, font, element -> drawn(element, hidden || restWaits));
+    }
+
+    // Once the game has drawn the debug text of a frame whose render left the rest waiting. Those
+    // elements get a stratum of their own above everything already drawn.
+    public void renderOverDebugText(GuiGraphicsExtractor context, Font font) {
+        context.nextStratum();
+        drawEach(context, font, element -> !element.staysWhenHidden() && element.visible());
+    }
+
+    private void drawEach(GuiGraphicsExtractor context, Font font, Predicate<HudElement> wanted) {
         for (HudElement element : elements) {
-            if (!element.drawsOnTop() && drawn(element, hidden)) {
+            if (!element.drawsOnTop() && wanted.test(element)) {
                 draw(context, font, placement(element, font, context.guiWidth(), context.guiHeight()));
             }
         }

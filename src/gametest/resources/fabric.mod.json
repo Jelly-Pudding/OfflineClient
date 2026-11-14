@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "offlineclient_rig",
+  "version": "1.0.0",
+  "name": "OfflineClient test rig",
+  "description": "Starts the game with OfflineClient loaded and plays scripted checks. It is never shipped.",
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "preLaunch": [
+      "com.jellypudding.offlineclient.rig.Watchdog"
+    ],
+    "fabric-client-gametest": [
+      "com.jellypudding.offlineclient.rig.RigMain"
+    ]
+  },
+  "depends": {
+    "offlineclient": "*",
+    "fabric-client-gametest-api-v1": "*"
+  },
+  "mixins": [
+    "offlineclient_rig.mixins.json"
+  ]
+}

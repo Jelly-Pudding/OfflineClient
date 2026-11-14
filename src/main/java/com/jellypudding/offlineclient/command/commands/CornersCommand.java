@@ -20,8 +20,8 @@ import java.util.Locale;
 import java.util.OptionalInt;
 
 // Hands a module that works on a box both of its corners by typing. A corner out of sight or
-// out of reach cannot be marked with the bind. The module is switched on afresh for the box and
-// says the rest itself.
+// out of reach cannot be clicked. The module is switched on afresh for the box and says the
+// rest itself.
 public final class CornersCommand extends Command {
 
     private static final int SIZE_WORDS = 3;

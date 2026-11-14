@@ -43,7 +43,7 @@ public class HudMixin {
     }
 
     // Other modules draw nothing here whilst the debug screen is open. The HUD draws only the
-    // elements that stay and the debug text goes over them.
+    // elements that stay and whatever else it shows waits for afterDebugText.
     @Inject(
         method = "extractTabList(Lnet/minecraft/client/gui/GuiGraphicsExtractor;Lnet/minecraft/client/DeltaTracker;)V",
         at = @At("HEAD"))
@@ -61,6 +61,16 @@ public class HudMixin {
         }
         float tickDelta = tickCounter.getGameTimeDeltaPartialTick(true);
         OfflineClient.INSTANCE.getEventBus().post(new Render2DEvent(context, tickDelta));
+    }
+
+    // The game has drawn the debug text by the end of this call. What the HUD kept back for it
+    // goes on over it.
+    @Inject(method = "extractDebugOverlay", at = @At("TAIL"))
+    private void afterDebugText(GuiGraphicsExtractor context, CallbackInfo ci) {
+        HudModule hud = Modules.active(HudModule.class);
+        if (hud != null) {
+            hud.renderOverDebugText(context);
+        }
     }
 
     @Inject(

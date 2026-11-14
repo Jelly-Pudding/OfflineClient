@@ -78,6 +78,9 @@ public final class TabView {
     }
 
     private static final int DROP_ZONE = 14;
+    private static final int DETAIL_PAD = 3;
+    // A long detail leaves the name this much of its row.
+    private static final int NAME_ROOM = 40;
     private static final int EMPTY_HEIGHT = 18;
     private static final int LINE = 10;
     private static final int PAD = 2;
@@ -86,6 +89,8 @@ public final class TabView {
     private static final int MIN_HEIGHT = 40;
     private static final int DEFAULT_WIDTH = 220;
     private static final int HINT_GAP = 6;
+    // How far the line along the bottom sits in from each end of the rows.
+    private static final int FOOTER_INSET = GuiTheme.PAD - 2;
     private static final int CHIP_HEIGHT = 11;
     private static final int CHIP_STEP = CHIP_HEIGHT + 2;
     private static final int CHIP_PAD = 3;
@@ -166,9 +171,30 @@ public final class TabView {
         return entries;
     }
 
+    // Text broken into lines that fit the room. A word too wide for a line of its own is cut short.
+    private static List<String> lines(Font font, String text, int room) {
+        List<String> lines = new ArrayList<>();
+        for (String line : RenderUtil.wrap(font, text, room)) {
+            lines.add(SettingWidget.trimEnd(font, line, room));
+        }
+        return lines;
+    }
+
+    // What is shown in place of rows. It keeps the same gap to both ends of the rows and that
+    // clears a scrollbar as well.
+    private List<String> emptyLines() {
+        return lines(ClientFonts.gui(), source.emptyText(asked), rowRoom() - GuiTheme.PAD * 2);
+    }
+
+    private List<String> footerLines() {
+        return lines(ClientFonts.gui(), source.footer(), rowRoom() - FOOTER_INSET * 2);
+    }
+
+    // A single line in place of rows takes the empty height and every further line adds its own.
     private int rowsHeight() {
         int count = entries().size();
-        return count == 0 ? EMPTY_HEIGHT : count * GuiTheme.ROW_HEIGHT;
+        return count == 0 ? EMPTY_HEIGHT + Math.max(0, emptyLines().size() - 1) * LINE
+            : count * GuiTheme.ROW_HEIGHT;
     }
 
     private int contentHeight() {
@@ -187,7 +213,7 @@ public final class TabView {
         Font font = ClientFonts.gui();
         int height = HINT_GAP;
         for (Hint hint : hints) {
-            height += HINT_GAP + LINE + RenderUtil.wrap(font, hint.how(), hintRoom()).size() * LINE
+            height += HINT_GAP + LINE + lines(font, hint.how(), hintRoom()).size() * LINE
                 + hint.examples().size() * CHIP_STEP;
         }
         return height;
@@ -199,7 +225,7 @@ public final class TabView {
     }
 
     private int footerHeight() {
-        return source.footer().isEmpty() ? 0 : LINE;
+        return footerLines().size() * LINE;
     }
 
     // What the box is allowed to draw at right now. The size the user chose
@@ -351,10 +377,14 @@ public final class TabView {
             scrollBar.render(context, trackX, viewTop, view, full,
                 ScrollBar.isOverTrack(mouseX, mouseY, trackX, viewTop, view));
         }
-        if (footerHeight() > 0) {
-            context.text(font, SettingWidget.trimEnd(font, source.footer(), rowRoom()),
-                rowX + GuiTheme.PAD - 2, GuiTheme.textY(viewTop + view, LINE),
-                GuiTheme.textFaint(), false);
+        // A box too short for the whole of it shows the lines that fit.
+        int footerY = viewTop + view;
+        for (String line : footerLines()) {
+            if (footerY + LINE > top + drawn) {
+                break;
+            }
+            context.text(font, line, rowX + FOOTER_INSET, GuiTheme.textY(footerY, LINE), GuiTheme.textFaint(), false);
+            footerY += LINE;
         }
     }
 
@@ -365,9 +395,12 @@ public final class TabView {
             && mouseY >= viewTop && mouseY < viewTop + view;
         int contentTop = viewTop - scrollBar.getOffset();
         if (rows.isEmpty()) {
-            context.text(font, SettingWidget.trimEnd(font, source.emptyText(asked), rowW - GuiTheme.PAD),
-                rowX + GuiTheme.PAD,
-                GuiTheme.textY(contentTop, EMPTY_HEIGHT), GuiTheme.textFaint(), false);
+            int lineY = contentTop;
+            for (String line : emptyLines()) {
+                context.text(font, line, rowX + GuiTheme.PAD, GuiTheme.textY(lineY, EMPTY_HEIGHT),
+                    GuiTheme.textFaint(), false);
+                lineY += LINE;
+            }
         }
         int rowY = contentTop;
         for (Entry entry : rows) {
@@ -387,22 +420,25 @@ public final class TabView {
         y += HINT_GAP;
         for (Hint hint : hints) {
             y += HINT_GAP;
-            context.text(font, hint.title(), x, GuiTheme.textY(y, LINE), GuiTheme.text(), false);
+            context.text(font, SettingWidget.trimEnd(font, hint.title(), hintRoom()), x, GuiTheme.textY(y, LINE),
+                GuiTheme.text(), false);
             y += LINE;
-            for (String line : RenderUtil.wrap(font, hint.how(), hintRoom())) {
+            for (String line : lines(font, hint.how(), hintRoom())) {
                 context.text(font, line, x, GuiTheme.textY(y, LINE), GuiTheme.textFaint(), false);
                 y += LINE;
             }
             for (String example : hint.examples()) {
-                int w = font.width(example) + CHIP_PAD * 2;
+                String shown = SettingWidget.trimEnd(font, example, hintRoom() - CHIP_PAD * 2);
+                int w = font.width(shown) + CHIP_PAD * 2;
                 boolean over = inView && SettingWidget.isOver(mouseX, mouseY, x, y, w, CHIP_HEIGHT);
                 RenderUtil.roundedRect(context, x, y, x + w, y + CHIP_HEIGHT, GuiTheme.CORNER - 1,
                     over ? GuiTheme.bgRowHover() : GuiTheme.bgSetting());
                 context.guiRenderState.up();
-                context.text(font, example, x + CHIP_PAD, GuiTheme.textY(y, CHIP_HEIGHT),
+                context.text(font, shown, x + CHIP_PAD, GuiTheme.textY(y, CHIP_HEIGHT),
                     over ? GuiTheme.text() : GuiTheme.accentText(), false);
+                // An example cut short reads whole under the pointer.
                 if (over) {
-                    tooltips.accept(CHIP_TIP);
+                    tooltips.accept(shown.equals(example) ? CHIP_TIP : example);
                 }
                 chips.add(new Chip(x, y, w, example));
                 y += CHIP_STEP;
@@ -423,6 +459,16 @@ public final class TabView {
         return false;
     }
 
+    // The detail as its row shows it. One too long for the row is cut short.
+    private static String fitted(Font font, String detail, int rowW) {
+        return SettingWidget.trimEnd(font, detail, rowW - DROP_ZONE - NAME_ROOM - DETAIL_PAD * 2);
+    }
+
+    // How much of the row the detail takes with the gap on either side of it.
+    private static int detailWidth(Font font, String detail) {
+        return detail.isEmpty() ? 0 : font.width(detail) + DETAIL_PAD * 2;
+    }
+
     private void renderRow(GuiGraphicsExtractor context, Font font, Entry entry, int rowX,
                            int rowY, int rowW, int mouseX, int mouseY, boolean inView) {
         int h = GuiTheme.ROW_HEIGHT;
@@ -433,15 +479,15 @@ public final class TabView {
         context.guiRenderState.up();
 
         int textY = GuiTheme.textY(rowY, h - 1);
-        String detail = entry.name().equals(binding) ? BindCapture.LISTENING : entry.detail();
-        int detailWidth = detail.isEmpty() ? 0 : font.width(detail) + 6;
+        String detail = fitted(font, entry.name().equals(binding) ? BindCapture.LISTENING : entry.detail(), rowW);
+        int detailWidth = detailWidth(font, detail);
         int detailX = rowX + rowW - DROP_ZONE - detailWidth;
         if (!detail.isEmpty()) {
             boolean overDetail = hovered && mouseX >= detailX && mouseX < detailX + detailWidth;
             int colour = entry.name().equals(binding) ? GuiTheme.accentText()
                 : overDetail && source.bindable() ? GuiTheme.text()
                 : entry.warn() ? WARN_TEXT : GuiTheme.textFaint();
-            context.text(font, detail, detailX + 3, textY, colour, false);
+            context.text(font, detail, detailX + DETAIL_PAD, textY, colour, false);
         }
 
         context.text(font, SettingWidget.trimEnd(font, entry.name(), detailX - rowX - GuiTheme.PAD),
@@ -558,7 +604,7 @@ public final class TabView {
         for (Entry entry : entries()) {
             int h = GuiTheme.ROW_HEIGHT;
             if (SettingWidget.isOver(mx, my, rowX, rowY, rowW, h)) {
-                int detailWidth = entry.detail().isEmpty() ? 0 : font.width(entry.detail()) + 6;
+                int detailWidth = detailWidth(font, fitted(font, entry.detail(), rowW));
                 int detailX = rowX + rowW - DROP_ZONE - detailWidth;
                 if (mx >= rowX + rowW - DROP_ZONE) {
                     source.drop(entry.name());

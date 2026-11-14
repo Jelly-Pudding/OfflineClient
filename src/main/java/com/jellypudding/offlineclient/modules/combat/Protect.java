@@ -138,7 +138,7 @@ public final class Protect extends Module implements Targeting {
             return;
         }
         if (mc.player.distanceTo(ward) < STRAY) {
-            enemy = EntityUtil.nearest(alertRange.getValue(), this::attackable);
+            enemy = EntityUtil.nearest(alertRange.getValue(), this::wouldFight);
         }
         boolean fighting = enemy != null;
         Entity target = fighting ? enemy : ward;
@@ -149,7 +149,8 @@ public final class Protect extends Module implements Targeting {
         }
     }
 
-    private boolean attackable(Entity entity) {
+    @Override
+    public boolean wouldFight(Entity entity) {
         return entity != ward && targets.attackable(entity, filter);
     }
 }

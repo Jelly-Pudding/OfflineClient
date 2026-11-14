@@ -88,7 +88,7 @@ public final class NameProtect extends Module {
         "Draws everyone with the default skin. Nobody is recognised on a stream.", false);
     private final NumberSetting renameCount = new NumberSetting("Renames",
         "How many other players get a name of your choosing. A row opens for each.",
-        0, 0, SLOTS, 1).max(SLOTS);
+        2, 0, SLOTS, 1).max(SLOTS);
     private final Slot[] slots = new Slot[SLOTS];
     private final BoolSetting renameAll = new BoolSetting("Rename everyone",
         "Gives every other player on your screen a numbered name like Player1.", false);

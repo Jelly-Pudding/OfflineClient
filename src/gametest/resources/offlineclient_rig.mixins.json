@@ -1,0 +1,18 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.jellypudding.offlineclient.rig.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "mixins": [],
+  "client": [
+    "ChatUtilMixin",
+    "ClipboardManagerMixin",
+    "GuiRenderStateMixin",
+    "GuiTextRenderStateAccessor",
+    "MinecraftMixin",
+    "WindowMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

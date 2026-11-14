@@ -74,3 +74,5 @@ tasks.register("install", Copy) {
     from(tasks.named("jar").flatMap { it.archiveFile })
     into modsDir
 }
+
+apply from: "rig.gradle"

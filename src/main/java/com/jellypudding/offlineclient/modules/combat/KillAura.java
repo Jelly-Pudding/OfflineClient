@@ -370,9 +370,24 @@ public final class KillAura extends Module implements Targeting {
         return found.size() <= limit ? found : found.subList(0, limit);
     }
 
+    @Override
+    public boolean wouldFight(Entity entity) {
+        return candidate(entity) && picked(entity);
+    }
+
+    // Never yourself or the dead or a spectator or a friend or a mob on the ignore list.
+    private boolean candidate(Entity entity) {
+        return entity != mc.player && entity.isAlive() && !entity.isSpectator()
+            && !EntityUtil.isFriend(entity) && !ignoredMobs.contains(entity.getType());
+    }
+
+    // Whether the rows pick this entity out wherever it stands.
+    private boolean picked(Entity entity) {
+        return (extraMobs.contains(entity.getType()) || kindWanted(entity)) && filter.allows(entity);
+    }
+
     private boolean wanted(Entity entity) {
-        if (entity == mc.player || !entity.isAlive() || entity.isSpectator()
-            || EntityUtil.isFriend(entity) || ignoredMobs.contains(entity.getType())) {
+        if (!candidate(entity)) {
             return false;
         }
         double furthest = walls.isOn() ? Math.max(range.getValue(), wallsRange.getValue()) : range.getValue();
@@ -380,7 +395,7 @@ public final class KillAura extends Module implements Targeting {
         if (distance > furthest || !inFov(entity)) {
             return false;
         }
-        if (!extraMobs.contains(entity.getType()) && !kindWanted(entity) || !filter.allows(entity)) {
+        if (!picked(entity)) {
             return false;
         }
         // The line of sight raycast costs the most.

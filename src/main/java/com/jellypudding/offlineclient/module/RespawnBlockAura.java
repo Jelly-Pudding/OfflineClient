@@ -347,10 +347,14 @@ public abstract class RespawnBlockAura extends Module implements Targeting {
     }
 
     // Any living thing the filter allows that is not a friend.
+    @Override
+    public boolean wouldFight(Entity entity) {
+        return entity instanceof LivingEntity && !EntityUtil.isFriend(entity)
+            && filter.matches(entity) && targets.allows(entity);
+    }
+
     private LivingEntity bestTarget() {
-        Entity best = EntityUtil.best(targetRange.getValue(), priority.getValue(),
-            entity -> entity instanceof LivingEntity && !EntityUtil.isFriend(entity)
-                && filter.matches(entity) && targets.allows(entity));
+        Entity best = EntityUtil.best(targetRange.getValue(), priority.getValue(), this::wouldFight);
         return best instanceof LivingEntity living ? living : null;
     }
 

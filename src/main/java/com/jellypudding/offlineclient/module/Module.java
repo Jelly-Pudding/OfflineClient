@@ -1,6 +1,7 @@
 package com.jellypudding.offlineclient.module;
 
 import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.setting.Setting;
 import com.jellypudding.offlineclient.util.ChatUtil;
@@ -22,8 +23,30 @@ public abstract class Module {
     private final List<Setting<?>> settings = new ArrayList<>();
     private final List<Setting<?>> settingsView = Collections.unmodifiableList(settings);
     private final KeybindSetting keybind;
+    private final BoolSetting listed;
     private String[] tags = new String[0];
     private boolean enabled;
+
+    // Whether the Module list on the HUD writes the module. A module that ships switched on
+    // starts out of it. One that cannot be switched on is never written there and keeps the
+    // switch to itself.
+    private final class ListSwitch extends BoolSetting {
+
+        private ListSwitch() {
+            super("In module list", "Lets the Module list on the HUD show and count " + name + " whilst " + name
+                + " is on.", !enabledByDefault());
+        }
+
+        @Override
+        public boolean isInternal() {
+            return !isTogglable();
+        }
+
+        @Override
+        public boolean isVisible() {
+            return isTogglable();
+        }
+    }
 
     protected Module(String name, String description, Category category) {
         this(name, description, category, KeybindSetting.UNBOUND);
@@ -34,6 +57,7 @@ public abstract class Module {
         this.description = description;
         this.category = category;
         this.keybind = new KeybindSetting("Bind", "The key or mouse button for " + name + ".", defaultKey);
+        this.listed = new ListSwitch();
     }
 
     public String getName() {
@@ -67,21 +91,40 @@ public abstract class Module {
     }
 
     // Higher scores match the query better. The name outranks a tag and a tag outranks the
-    // description. Only the strongest tag counts. Setting names are searched as well and a
-    // half remembered setting still finds its module.
+    // description. Only the strongest tag counts. The names of the module's own settings are
+    // searched as well and a half remembered setting still finds its module.
     public int searchScore(String query) {
-        List<String> settingNames = playerSettings().stream().map(Setting::getName).toList();
+        List<String> settingNames = offered(getSettings()).stream().map(Setting::getName).toList();
         return SearchRank.best(query, name, SearchRank.strongest(query, List.of(tags)), description,
             SearchRank.strongest(query, settingNames));
     }
 
+    // The settings the module adds. A module whose rows come and go lists them here.
     public List<Setting<?>> getSettings() {
         return settingsView;
     }
 
+    // Every setting of the module. Its own come first and the switch for the Module list closes
+    // them. Whatever saves or shows or resets settings reads these.
+    public final List<Setting<?>> allSettings() {
+        List<Setting<?>> all = new ArrayList<>(getSettings());
+        all.add(listed);
+        return all;
+    }
+
     // The settings the player can list and type. The config still saves the internal ones.
     public List<Setting<?>> playerSettings() {
-        return getSettings().stream().filter(setting -> !setting.isInternal()).toList();
+        return offered(allSettings());
+    }
+
+    private static List<Setting<?>> offered(List<Setting<?>> settings) {
+        return settings.stream().filter(setting -> !setting.isInternal()).toList();
+    }
+
+    // The one setting of its own a player can type. Null for a module with none or with several.
+    public Setting<?> onlySetting() {
+        List<Setting<?>> own = offered(getSettings());
+        return own.size() == 1 ? own.getFirst() : null;
     }
 
     public List<String> settingIds() {
@@ -91,7 +134,7 @@ public abstract class Module {
     // Spaces and case are ignored. An internal setting is never found.
     public Setting<?> getSetting(String settingName) {
         String wanted = Setting.idFor(settingName);
-        for (Setting<?> setting : getSettings()) {
+        for (Setting<?> setting : allSettings()) {
             if (!setting.isInternal() && setting.id().equals(wanted)) {
                 return setting;
             }
@@ -191,9 +234,15 @@ public abstract class Module {
         return true;
     }
 
-    // True for modules that ship switched on when there is no saved state.
+    // True for modules that ship switched on when there is no saved state. Asked whilst the
+    // module is still being built and the answer never leans on a field of the module.
     public boolean enabledByDefault() {
         return false;
+    }
+
+    // True whilst the Module list on the HUD writes the module when it is on.
+    public final boolean isListed() {
+        return listed.isOn();
     }
 
     // False for rows like ClickGUI that only exist to hold settings.

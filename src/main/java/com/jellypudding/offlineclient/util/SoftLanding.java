@@ -77,6 +77,8 @@ public final class SoftLanding {
     private static final int ECHO = 20;
 
     private final InventoryUtil.HotbarLoan loan = new InventoryUtil.HotbarLoan();
+    // Whether the slot held before comes back once the landing item is done with.
+    private boolean switchBack = true;
 
     // What went down and where. Null once it is collected or given up on.
     private Kind placed;
@@ -92,6 +94,16 @@ public final class SoftLanding {
         forget();
     }
 
+    public void switchBack(boolean on) {
+        switchBack = on;
+    }
+
+    // The landing item goes home. The slot held before only comes back when that is wanted and
+    // the player is still on the slot the landing picked.
+    private void handBack() {
+        loan.giveBack(switchBack && loan.stillMine());
+    }
+
     // One tick of a fall that would hurt. The landing goes down once the ground is in
     // reach and the fall is slowed for a tick that would carry it past that point.
     public void fall(List<Kind> ranked, double fallen, boolean anchor) {
@@ -100,7 +112,7 @@ public final class SoftLanding {
         double reach = BlockUtil.serverBlockReach() - REACH_MARGIN;
         BlockHitResult ground = groundBelow(reach + drop);
         if (ground == null || alreadySoft(ground)) {
-            loan.giveBack(loan.stillMine());
+            handBack();
             return;
         }
         double feet = player.getY();
@@ -125,7 +137,7 @@ public final class SoftLanding {
     // the player stands on the ground or in the water.
     public void settle(boolean collect) {
         if (placed == null) {
-            loan.giveBack(loan.stillMine());
+            handBack();
             return;
         }
         int waited = MC.player.tickCount - placedTick;
@@ -260,7 +272,7 @@ public final class SoftLanding {
             remember(Kind.WATER, plan.spot());
             return;
         }
-        loan.giveBack(loan.stillMine());
+        handBack();
     }
 
     // A click on the top of the ground. A powder snow bucket has no use of its own
@@ -272,7 +284,7 @@ public final class SoftLanding {
         if (plan.kind() == Kind.POWDER_SNOW && BlockUtil.state(plan.spot()).is(Blocks.POWDER_SNOW)) {
             remember(Kind.POWDER_SNOW, plan.spot());
         } else {
-            loan.giveBack(loan.stillMine());
+            handBack();
         }
     }
 
@@ -297,7 +309,7 @@ public final class SoftLanding {
     private void forget() {
         placed = null;
         placedAt = null;
-        loan.giveBack(loan.stillMine());
+        handBack();
     }
 
     // The first surface straight below the eyes. Water counts as one.

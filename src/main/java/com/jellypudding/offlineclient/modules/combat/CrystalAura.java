@@ -499,22 +499,23 @@ public final class CrystalAura extends Module implements Targeting {
             : chosen == half;
     }
 
+    @Override
+    public boolean wouldFight(Entity entity) {
+        if (!(entity instanceof LivingEntity living) || entity == mc.player || !living.isAlive()) {
+            return false;
+        }
+        return entity instanceof Player player
+            ? players.isOn() && EntityUtil.isEnemy(player) && !(ignoreNakeds.isOn() && naked(player))
+            : mobs.contains(entity.getType());
+    }
+
     private void collectTargets() {
         double reach = targetRange.getValue();
         for (Entity entity : mc.level.entitiesForRendering()) {
-            if (!(entity instanceof LivingEntity living) || entity == mc.player
-                || !living.isAlive() || mc.player.distanceTo(entity) > reach) {
-                continue;
+            if (entity instanceof LivingEntity living && wouldFight(living)
+                && mc.player.distanceTo(entity) <= reach) {
+                targets.add(living);
             }
-            if (entity instanceof Player player) {
-                if (!players.isOn() || !EntityUtil.isEnemy(player)
-                    || (ignoreNakeds.isOn() && naked(player))) {
-                    continue;
-                }
-            } else if (!mobs.contains(entity.getType())) {
-                continue;
-            }
-            targets.add(living);
         }
         targets.sort((a, b) -> Double.compare(mc.player.distanceToSqr(a), mc.player.distanceToSqr(b)));
     }

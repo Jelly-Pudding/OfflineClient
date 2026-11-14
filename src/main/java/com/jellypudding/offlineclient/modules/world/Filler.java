@@ -33,14 +33,14 @@ public final class Filler extends AreaPlacer implements CornerPicker.Taker {
         "Stays on after the box is full ready for another.", false);
     private final BoxStyle boxStyle = BoxStyle.white(BoxStyle.Shape.LINES);
 
-    private final CornerPicker corners = new CornerPicker();
+    private final CornerPicker corners = new CornerPicker(this, boxStyle, maxBlocks::getInt, "filled");
     private final WorldWatch world = new WorldWatch();
     // Spots of the box still to fill or break at the last count and the ticks to the next one.
     private int left;
     private int countWait;
 
     public Filler() {
-        super("Filler", "Fills a box between two corners you mark with the bind.",
+        super("Filler", "Fills the box between two opposite corners you click with the use key.",
             "The blocks the box is filled with. Click to pick them.",
             List.of(Blocks.COBBLESTONE, Blocks.STONE, Blocks.DIRT, Blocks.NETHERRACK, Blocks.OBSIDIAN),
             "Outline the spots waiting to be filled.", 0, TARGET_COLOR);
@@ -51,8 +51,8 @@ public final class Filler extends AreaPlacer implements CornerPicker.Taker {
 
     @Override
     public String getSuffix() {
-        String prompt = corners.prompt();
-        return prompt != null ? prompt : left + " left";
+        String waiting = corners.waitingFor();
+        return waiting != null ? waiting : left + " left";
     }
 
     // Bringing this back at launch would start filling at once.
@@ -65,6 +65,7 @@ public final class Filler extends AreaPlacer implements CornerPicker.Taker {
     protected void onEnable() {
         super.onEnable();
         clear();
+        corners.open();
         world.accept();
     }
 
@@ -72,6 +73,7 @@ public final class Filler extends AreaPlacer implements CornerPicker.Taker {
     protected void onDisable() {
         super.onDisable();
         clear();
+        corners.close();
         world.forget();
     }
 
@@ -82,32 +84,18 @@ public final class Filler extends AreaPlacer implements CornerPicker.Taker {
     }
 
     @Override
-    public void onKeybind() {
-        BlockPos corner = CornerPicker.aimedCorner(this);
-        if (corner == null) {
-            toggle();
-            return;
-        }
-        markCorner(corner);
-    }
-
-    @Override
     public void markCorner(BlockPos pos) {
-        if (!corners.started() || corners.done()) {
-            stopDigging();
-            clear();
-            corners.mark(pos);
+        corners.mark(pos);
+        if (!corners.done()) {
             tell("first corner at §f" + BlockUtil.text(pos) + "§7.");
             return;
         }
-        corners.mark(pos);
         // The whole box is looked over every second and a huge one would stall the game.
-        if (!corners.withinLimit(maxBlocks.getInt())) {
-            return;
+        if (corners.withinLimit()) {
+            countWait = 0;
+            tell("second corner at §f" + BlockUtil.text(pos) + "§7. §f" + corners.volume()
+                + "§7 blocks in the box.");
         }
-        countWait = 0;
-        tell("second corner at §f" + BlockUtil.text(pos) + "§7. §f" + corners.volume()
-            + "§7 blocks in the box.");
     }
 
     // Runs before the placing round. Blocks in the way come out first.
@@ -199,15 +187,8 @@ public final class Filler extends AreaPlacer implements CornerPicker.Taker {
 
     @Subscribe
     private void onRender3D(Render3DEvent event) {
-        corners.draw(event.getBatch(), boxStyle);
         if (corners.done() && digging() != null) {
             event.getBatch().outlineBlock(digging(), CornerPicker.COLOR, false);
         }
-    }
-
-    // The key does more than switch the module and cannot be a held one.
-    @Override
-    public boolean keySwitches() {
-        return false;
     }
 }

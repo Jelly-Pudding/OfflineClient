@@ -83,7 +83,7 @@ public final class TpAura extends Module implements Targeting {
         if (Hop.travelling()) {
             return;
         }
-        Entity picked = EntityUtil.best(range.getValue(), priority.getValue(), this::attackable);
+        Entity picked = EntityUtil.best(range.getValue(), priority.getValue(), this::wouldFight);
         boolean ready = timer.ready();
         if (picked != null || ready) {
             fought = picked;
@@ -141,7 +141,8 @@ public final class TpAura extends Module implements Targeting {
         }
     }
 
-    private boolean attackable(Entity entity) {
+    @Override
+    public boolean wouldFight(Entity entity) {
         return targets.attackable(entity, filter);
     }
 }

@@ -238,7 +238,7 @@ public final class ConfigManager {
         boolean own = parts.contains(settingsPart(module));
         JsonObject settings = new JsonObject();
         JsonObject folds = new JsonObject();
-        for (Setting<?> setting : module.getSettings()) {
+        for (Setting<?> setting : module.allSettings()) {
             if (setting.saves() && parts.contains(partOf(module, setting))) {
                 settings.add(setting.getName(), setting.toJson());
             }
@@ -305,7 +305,7 @@ public final class ConfigManager {
         if (m.has(SETTINGS)) {
             JsonObject saved = m.getAsJsonObject(SETTINGS);
             JsonObject settings = new JsonObject();
-            for (Setting<?> setting : module.getSettings()) {
+            for (Setting<?> setting : module.allSettings()) {
                 if (parts.contains(partOf(module, setting))) {
                     copy(saved, settings, setting.getName());
                 }
@@ -391,7 +391,7 @@ public final class ConfigManager {
                 boolean own = parts.contains(settingsPart(module));
                 JsonObject settings = m.getAsJsonObject(SETTINGS);
                 JsonObject folds = m.has(FOLDS) ? m.getAsJsonObject(FOLDS) : new JsonObject();
-                for (Setting<?> setting : module.getSettings()) {
+                for (Setting<?> setting : module.allSettings()) {
                     if (setting.saves() && parts.contains(partOf(module, setting)) && settings.has(setting.getName())) {
                         setting.fromJson(settings.get(setting.getName()));
                     }
@@ -422,7 +422,7 @@ public final class ConfigManager {
                 module.getKeybind().reset();
             }
             boolean own = parts.contains(settingsPart(module));
-            for (Setting<?> setting : module.getSettings()) {
+            for (Setting<?> setting : module.allSettings()) {
                 if (parts.contains(partOf(module, setting))) {
                     setting.reset();
                 }

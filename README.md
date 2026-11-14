@@ -153,7 +153,7 @@ The latest jar is on the [releases page](https://github.com/Jelly-Pudding/Offlin
 | VehicleFly | Flies or speeds the boat or mount you are riding. |
 | TridentBoost | Makes a riptide trident throw you further. |
 | Blink | Pauses your position updates until you turn it off. |
-| ClickTp | Teleports you to the block you click. |
+| ClickTp | Teleports you onto the block you click or beside it when there is no room on top. |
 | Fetch | Picks up dropped items from far away. |
 | NoClip | Takes you through blocks. |
 
@@ -253,7 +253,7 @@ The latest jar is on the [releases page](https://github.com/Jelly-Pudding/Offlin
 | FastUse | Removes the delay between right clicks for items. |
 | Reach | Reaches blocks and entities from further away. |
 | Multitask | Lets you mine and place blocks whilst you eat or draw a bow. |
-| FrameInput | Reads your keys and mining every drawn frame. |
+| FrameInput | Reads your keys and mining every drawn frame rather than every tick. |
 | NoMiningTrace | Mines and clicks through the entities and portals in the way. |
 | LiquidInteract | Lets you aim at water and lava instead of looking through it. |
 | NoInteract | Stops clicks and throws on the things you choose to protect. |
@@ -304,8 +304,8 @@ The latest jar is on the [releases page](https://github.com/Jelly-Pudding/Offlin
 | Nuker | Breaks all blocks around you. |
 | VeinMiner | Mines a whole vein of ore when you break one block of it. |
 | PacketMine | Breaks each block you click and any area around it whilst you do other things. |
-| Excavator | Digs out the box between two corners you mark with its bind whilst it is on. |
-| Filler | Fills a box between two corners you mark with the bind. |
+| Excavator | Digs out the box between two opposite corners you click with the use key. |
+| Filler | Fills the box between two opposite corners you click with the use key. |
 | Tunneller | Digs a straight tunnel the way you face. |
 | HighwayBuilder | Digs and builds a highway along one line. |
 | InfinityMiner | Mines ore for ever and lets Mending heal the pickaxe on the way. |
@@ -419,8 +419,8 @@ The latest jar is on the [releases page](https://github.com/Jelly-Pudding/Offlin
 | SkinDerp | Makes your skin layers blink on and off for everyone to see. |
 | Derp | Makes you look ridiculous to everyone else. |
 | ServerSpoof | Reports a plain client to the server. |
-| Proxy | Joins servers through the proxy picked in the Proxies tab. |
-| Privacy | Stops usage data reaching Mojang and keeps your chat out of reports. |
+| Proxy | Joins servers through the proxy picked in the Proxies tab and they see its address in place of yours. |
+| Privacy | Stops usage data reaching Mojang and keeps your chat out of reports where a server takes unsigned chat. |
 | AntiPacketKick | Spreads packet bursts out and keeps the server from dropping you. |
 | AntiCrash | Stops packets that would crash or freeze the game. |
 | PacketCanceller | Drops the kinds of packet you pick to hide an action from the server or ignore what it sends. |
