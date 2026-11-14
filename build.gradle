@@ -75,4 +75,4 @@ tasks.register("install", Copy) {
     into modsDir
 }
 
-apply from: "rig.gradle"
+apply from: "testing/rig.gradle"

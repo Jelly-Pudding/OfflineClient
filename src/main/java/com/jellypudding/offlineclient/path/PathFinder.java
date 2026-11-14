@@ -283,6 +283,7 @@ public final class PathFinder {
 
         // Every spot reachable from here in one move.
         void steps(BlockPos from, List<Step> out) {
+            boolean firm = firm(from);
             for (int i = 0; i < STEP_X.length; i++) {
                 int dx = STEP_X[i];
                 int dz = STEP_Z[i];
@@ -299,7 +300,7 @@ public final class PathFinder {
                 } else if (!diagonal && means.bridge() && !afloat(from) && wantsFloor(side)) {
                     out.add(new Step(side, base + PLACE));
                 }
-                if (!diagonal) {
+                if (!diagonal && firm) {
                     addRise(from, side, base, out);
                 }
                 addDrop(side, base, out);
@@ -377,6 +378,14 @@ public final class PathFinder {
             if (canFloat(view.get(down)) && entryCost(down) >= 0) {
                 out.add(new Step(down, CLIMB));
             }
+        }
+
+        // A hop or a step up needs something to push off from. A player hanging on a vine or
+        // come to the top of one has nothing under the feet and only gets off it on the level.
+        // A swimmer is lifted onto the bank by the water.
+        private boolean firm(BlockPos pos) {
+            BlockState under = view.get(pos.below());
+            return solidFloor(under) || holdsUp(under) || view.get(pos).getFluidState().is(FluidTags.WATER);
         }
 
         // True for a ladder or a vine with nothing under it to stand on.

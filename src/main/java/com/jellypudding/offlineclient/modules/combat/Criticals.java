@@ -3,6 +3,7 @@ package com.jellypudding.offlineclient.modules.combat;
 import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.ClientTickEvent;
 import com.jellypudding.offlineclient.event.events.PacketSendEvent;
+import com.jellypudding.offlineclient.event.events.PostMotionEvent;
 import com.jellypudding.offlineclient.event.events.PreMotionEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
@@ -26,32 +27,35 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.phys.Vec3;
 
-// A critical hit needs the server to believe the player is falling. The packet modes
-// lower the tick's movement packet and hold the hit back one tick. The jump modes really
-// jump. A mace smash rides a lift and a drop by packet and lands the hit at the bottom.
+// A critical hit needs the server to have seen the player come down. The packet modes hold
+// the hit back and report a lift in one tick and the drop in the next and send the hit right
+// behind the drop. The jump modes really jump and send the hit behind the first position on
+// the way down. A mace smash rides a lift and a drop by packet and lands the hit at the bottom.
 public final class Criticals extends Module {
 
-    // The smallest drop the server rebuilds any fall distance from.
-    private static final double CRIT_DIP = 0.0625;
-
-    private static final double SUBTLE_DIP = 0.0000008;
+    // A server pulls back a player whose box sinks into the floor however little. The lift
+    // goes up into free air a tick ahead and the drop back to the floor is the fall.
+    private static final double CRIT_LIFT = 0.0625;
+    private static final double SUBTLE_LIFT = 0.0000008;
 
     private static final double MINI_JUMP_SPEED = 0.25;
-    private static final int MINI_JUMP_TICKS = 4;
 
     private static final int GIVE_UP_TICKS = 10;
+    // The longest wait for a jump to turn down. A jump under a strong jump boost climbs for longer.
+    private static final int JUMP_TICKS = 30;
 
-    private enum Stage { IDLE, DIP, READY, JUMP, SMASH }
+    private enum Stage { IDLE, LIFT, DIP, READY, JUMP, SMASH }
 
     public enum Mode { NONE, PACKET, SUBTLE, MINI_JUMP, FULL_JUMP }
 
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
         "How to get the fall a critical hit needs.", Mode.PACKET)
         .describe(Mode.NONE, "No critical hits. Mace smash still works.")
-        .describe(Mode.PACKET, "Drops your reported height a sixteenth of a block and hits a tick later.")
-        .describe(Mode.SUBTLE, "The same with a drop far too small to notice.")
-        .describe(Mode.MINI_JUMP, "A small hop and the hit waits four ticks for the fall.")
-        .describe(Mode.FULL_JUMP, "A normal jump and the hit waits for the peak.");
+        .describe(Mode.PACKET, "Lifts your reported height a sixteenth of a block and drops it again and"
+            + " hits with the drop.")
+        .describe(Mode.SUBTLE, "The same with a lift far too small to notice.")
+        .describe(Mode.MINI_JUMP, "A small hop and the hit goes out on the way down.")
+        .describe(Mode.FULL_JUMP, "A normal jump and the hit goes out on the way down.");
 
     private final BoolSetting onlyKillAura = new BoolSetting("Only KillAura targets",
         "Only makes hits on the KillAura target critical.", false)
@@ -89,9 +93,8 @@ public final class Criticals extends Module {
     // It is let go with the hold. A player kept here keeps its whole world alive.
     private LocalPlayer heldBy;
     private Stage stage = Stage.IDLE;
-    private boolean waitingForPeak;
+    // The height the game last sent whilst a jump is under way.
     private double lastY;
-    private int sendTimer;
 
     // How far the next outgoing packet moves the reported height.
     private double offset;
@@ -162,8 +165,8 @@ public final class Criticals extends Module {
         switch (mode.getValue()) {
             case PACKET, SUBTLE -> {
                 hold(event, attack);
-                offset = -(mode.is(Mode.PACKET) ? CRIT_DIP : SUBTLE_DIP);
-                stage = Stage.DIP;
+                offset = lift();
+                stage = Stage.LIFT;
             }
             case MINI_JUMP, FULL_JUMP -> {
                 hold(event, attack);
@@ -265,26 +268,31 @@ public final class Criticals extends Module {
         return killAura != null && target == killAura.getTarget();
     }
 
-    // A jump cannot start from a ladder or a web. The packet modes need solid ground and a dip
-    // that goes out at once.
+    // A jump cannot start from a ladder or a web. The packet modes need solid ground and
+    // positions that go out at once and room overhead for the lift.
     private boolean skipCrit() {
-        if (!mc.player.onGround() || mc.player.isInWater() || mc.player.isInLava()
-            || mc.player.onClimbable() || mode.isAny(Mode.PACKET, Mode.SUBTLE) && MoveGate.held(false)) {
+        if (!mc.player.onGround() || mc.player.isInWater() || mc.player.isInLava() || mc.player.onClimbable()) {
             return true;
         }
-        return mode.isAny(Mode.MINI_JUMP, Mode.FULL_JUMP) && BlockUtil.inCobweb(mc.player);
+        if (mode.isAny(Mode.PACKET, Mode.SUBTLE)) {
+            return MoveGate.held(false)
+                || !mc.level.noCollision(mc.player, mc.player.getBoundingBox().move(0, lift(), 0));
+        }
+        return BlockUtil.inCobweb(mc.player);
+    }
+
+    private double lift() {
+        return mode.is(Mode.PACKET) ? CRIT_LIFT : SUBTLE_LIFT;
     }
 
     private void jump() {
         if (mode.is(Mode.FULL_JUMP)) {
             mc.player.jumpFromGround();
-            waitingForPeak = true;
-            lastY = mc.player.getY();
         } else {
             Vec3 motion = mc.player.getDeltaMovement();
             mc.player.setDeltaMovement(motion.x, MINI_JUMP_SPEED, motion.z);
-            sendTimer = MINI_JUMP_TICKS;
         }
+        lastY = mc.player.getY();
     }
 
     // A respawn or a change of world or server replaces the player. A hit held for the player
@@ -296,48 +304,52 @@ public final class Criticals extends Module {
         }
     }
 
-    // The dip the hit needs rides on the one position packet this tick allows.
+    // The lift and the drop each ride on the one position packet their tick allows. The hit
+    // goes out right behind the drop. The game's own packet of that tick comes after it and
+    // claims the ground and that would wipe the fall before a hit sent any later.
     @Subscribe
     private void onPreMotion(PreMotionEvent event) {
-        if (stage != Stage.DIP) {
+        if (stage != Stage.LIFT && stage != Stage.DIP) {
             return;
         }
         if (++waited > GIVE_UP_TICKS) {
             stage = Stage.READY;
             return;
         }
-        if (MoveGate.send(mc.player.getX(), mc.player.getY() + offset, mc.player.getZ(), false)) {
-            stage = Stage.READY;
-            waited = 0;
+        if (!MoveGate.send(mc.player.getX(), mc.player.getY() + offset, mc.player.getZ(), false)) {
+            return;
         }
+        waited = 0;
+        if (stage == Stage.LIFT) {
+            stage = Stage.DIP;
+            offset = 0;
+        } else {
+            release();
+        }
+    }
+
+    // A jump counts for nothing until the server has seen the player come down. Every
+    // position on the way up wipes the fall it holds. The hit goes out behind the first
+    // position the game sends from lower than the one before. A jump that never left the
+    // ground lets the hit go as it is.
+    @Subscribe
+    private void onPostMotion(PostMotionEvent event) {
+        if (stage != Stage.JUMP) {
+            return;
+        }
+        double y = mc.player.getY();
+        boolean grounded = waited > 0 && mc.player.onGround();
+        if (y < lastY || grounded || ++waited > JUMP_TICKS) {
+            release();
+        }
+        lastY = y;
     }
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (stage == Stage.IDLE) {
-            return;
+        if (stage == Stage.READY) {
+            release();
         }
-        switch (stage) {
-            case READY -> release();
-            case JUMP -> jumpTick();
-            default -> {
-            }
-        }
-    }
-
-    private void jumpTick() {
-        if (waitingForPeak) {
-            double y = mc.player.getY();
-            // The first tick that fails to climb is the peak.
-            waitingForPeak = y > lastY;
-            lastY = y;
-            return;
-        }
-        if (sendTimer > 0) {
-            sendTimer--;
-            return;
-        }
-        release();
     }
 
     // Sends the held hit now that the server sees a fall.
@@ -354,8 +366,6 @@ public final class Criticals extends Module {
     private void resetStage() {
         stage = Stage.IDLE;
         heldBy = null;
-        waitingForPeak = false;
-        sendTimer = 0;
         offset = 0;
         waited = 0;
     }

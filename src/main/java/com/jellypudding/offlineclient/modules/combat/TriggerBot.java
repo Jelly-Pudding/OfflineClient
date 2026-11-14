@@ -100,6 +100,6 @@ public final class TriggerBot extends Module implements Targeting {
 
     private boolean attackable(Entity entity) {
         return wouldFight(entity)
-            && (fov.getValue() >= 360 || EntityUtil.lookAngleTo(entity) <= fov.getValue() / 2);
+            && (fov.getValue() >= 360 || EntityUtil.lookAngleToNearest(entity) <= fov.getValue() / 2);
     }
 }

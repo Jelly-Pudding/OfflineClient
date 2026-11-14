@@ -17,6 +17,7 @@ import net.minecraft.world.entity.AgeableMob;
 import net.minecraft.world.entity.Bucketable;
 import net.minecraft.world.entity.EntityReference;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
@@ -46,10 +47,15 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.Vec3;
 
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
+import java.lang.reflect.ParameterizedType;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.function.Predicate;
 
@@ -57,6 +63,8 @@ public final class EntityUtil {
 
     // Health points in one heart.
     public static final float HEART = 2;
+
+    private static final Map<EntityType<?>, Class<?>> BUILT_AS = builtAs();
 
     private static final double MOVING_SQR = 0.02 * 0.02;
 
@@ -133,6 +141,33 @@ public final class EntityUtil {
     // The holder on EntityType itself is deprecated. The lookup goes via the registry.
     public static boolean typeIs(Entity entity, TagKey<EntityType<?>> tag) {
         return BuiltInRegistries.ENTITY_TYPE.wrapAsHolder(entity.getType()).is(tag);
+    }
+
+    // The class each kind of entity is built as. An entity type names Entity as its base class
+    // whatever it makes. What a kind really makes is only written down in how the game declares
+    // its constant.
+    private static Map<EntityType<?>, Class<?>> builtAs() {
+        Map<EntityType<?>, Class<?>> classes = new IdentityHashMap<>();
+        for (Field constant : EntityTypes.class.getFields()) {
+            if (!Modifier.isStatic(constant.getModifiers()) || constant.getType() != EntityType.class
+                || !(constant.getGenericType() instanceof ParameterizedType declared)
+                || !(declared.getActualTypeArguments()[0] instanceof Class<?> built)) {
+                continue;
+            }
+            try {
+                classes.put((EntityType<?>) constant.get(null), built);
+            } catch (IllegalAccessException e) {
+                throw new IllegalStateException("The game hides the entity type " + constant.getName(), e);
+            }
+        }
+        return classes;
+    }
+
+    // True when the kind makes entities of that class or of one under it. False for a kind the
+    // game does not declare itself.
+    public static boolean builds(EntityType<?> type, Class<?> wanted) {
+        Class<?> built = BUILT_AS.get(type);
+        return built != null && wanted.isAssignableFrom(built);
     }
 
     // A mob somebody has tamed or saddled or won the trust of.
@@ -385,13 +420,38 @@ public final class EntityUtil {
     // Degrees between where the viewer looks and the middle of the target. Another player
     // looks where their head turns.
     public static double lookAngle(Entity viewer, Entity target) {
-        Vec3 toTarget = target.getBoundingBox().getCenter().subtract(viewer.getEyePosition());
+        return degreesBetween(viewer.getViewVector(1),
+            target.getBoundingBox().getCenter().subtract(viewer.getEyePosition()));
+    }
+
+    // Degrees between where you look and the nearest part of the target. Nought whilst the
+    // crosshair lies on it. The middle of a mob that stands right before you is far below the
+    // crosshair that rests on its head.
+    public static double lookAngleToNearest(Entity target) {
+        Player player = OfflineClient.MC.player;
+        if (player == null) {
+            return 180;
+        }
+        Vec3 eyes = player.getEyePosition();
+        Vec3 view = player.getViewVector(1);
+        AABB box = target.getBoundingBox();
+        double along = Math.max(0, box.getCenter().subtract(eyes).dot(view));
+        double through = along + box.getXsize() + box.getYsize() + box.getZsize();
+        if (box.contains(eyes) || box.clip(eyes, eyes.add(view.scale(through))).isPresent()) {
+            return 0;
+        }
+        Vec3 onRay = eyes.add(view.scale(along));
+        Vec3 nearest = new Vec3(Math.clamp(onRay.x, box.minX, box.maxX), Math.clamp(onRay.y, box.minY, box.maxY),
+            Math.clamp(onRay.z, box.minZ, box.maxZ));
+        return degreesBetween(view, nearest.subtract(eyes));
+    }
+
+    private static double degreesBetween(Vec3 view, Vec3 toTarget) {
         double length = toTarget.length();
         if (length < 1.0E-4) {
             return 0;
         }
-        double cosine = Math.clamp(viewer.getViewVector(1).dot(toTarget) / length, -1, 1);
-        return Math.toDegrees(Math.acos(cosine));
+        return Math.toDegrees(Math.acos(Math.clamp(view.dot(toTarget) / length, -1, 1)));
     }
 
     // A right click on the middle of the entity. The hand swings when the game takes it.

@@ -118,3 +118,6 @@ logs/
 
 # Avoid ignoring Gradle wrapper jar file (.jar files are usually ignored)
 !gradle-wrapper.jar
+
+# Settings of the test rig that belong to one machine
+testing/local.properties

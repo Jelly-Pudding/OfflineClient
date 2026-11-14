@@ -1,0 +1,12 @@
+name: RigProbe
+version: "1.0"
+main: com.jellypudding.offlineclient.probe.RigProbe
+api-version: "1.21"
+description: Tells the OfflineClient test rig what the server saw.
+commands:
+  probe:
+    description: Writes one line of facts to the server log.
+    permission: rigprobe.use
+permissions:
+  rigprobe.use:
+    default: op

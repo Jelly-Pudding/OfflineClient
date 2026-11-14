@@ -94,7 +94,7 @@ public final class ArrowDodge extends Module {
     private final RegistryListSetting<EntityType<?>> projectiles = new RegistryListSetting<>("Projectiles",
         "Kinds of projectile that are dodged or blocked. Click to pick them.", BuiltInRegistries.ENTITY_TYPE,
         List.of(EntityTypes.ARROW, EntityTypes.SPECTRAL_ARROW, EntityTypes.TRIDENT))
-        .only(type -> Projectile.class.isAssignableFrom(type.getBaseClass()));
+        .only(type -> EntityUtil.builds(type, Projectile.class));
     private final BoolSetting shield = new BoolSetting("Block with shield",
         "Raises a shield held in either hand against a projectile about to hit you and keeps it up until the"
             + " projectile has gone. One the shield cannot stop in time is still stepped from.", false);

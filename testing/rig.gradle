@@ -1,0 +1,184 @@
+// The test rig. It starts the real game with the client in it and plays scripted checks.
+// It has a source set of its own and nothing here reaches the jar. See testing/README.md.
+
+import java.time.Duration
+
+def rigFilter = (findProperty("rig.filter") ?: "").toString()
+def rigScales = (findProperty("rig.scales") ?: "2,4").toString()
+// Seconds the game may run before it ends itself.
+def rigLimit = (findProperty("rig.limit") ?: "7200").toString().toInteger()
+// A folder holding a copy of a player's offlineclient folder. Empty runs on first run defaults.
+def rigOwner = (findProperty("rig.owner") ?: "").toString()
+def rigName = (findProperty("rig.name") ?: new Date().format("yyyy-MM-dd_HH-mm-ss")).toString()
+
+// Settings of this machine alone. The file is not in git.
+def rigLocal = new Properties()
+def rigLocalFile = file("testing/local.properties")
+if (rigLocalFile.isFile()) {
+    rigLocalFile.withInputStream { rigLocal.load(it) }
+}
+// The folder of a Paper server for the two player suites. Without one they are left out.
+def rigServer = (rigLocal.getProperty("server") ?: "").trim()
+// Anti cheat plugins of that server for the Guard suite. Without any it is left out.
+def rigGuard = (rigLocal.getProperty("guard") ?: "").trim()
+
+def rigRunDir = file("build/run/clientGameTest")
+def rigOut = layout.buildDirectory.dir("rig/${rigName}").get().asFile
+def rigHosts = new File(rigRunDir, "rig-hosts.txt")
+def rigProbeDir = layout.buildDirectory.dir("rig-probe")
+def rigProbeJar = rigProbeDir.map { it.file("rig-probe.jar") }
+
+// The real window stays small. The game draws into a larger picture of its own.
+def rigWindowWidth = 480
+def rigWindowHeight = 270
+
+fabricApi.configureTests {
+    createSourceSet = true
+    enableGameTests = false
+    enableClientGameTests = true
+    // rigPrepare empties the game directory itself and then fills it.
+    clearRunDirectory = false
+    modId = "offlineclient_rig"
+    username = "RigPlayer"
+}
+
+sourceSets.gametest.java.srcDirs = [file("testing/src/java")]
+sourceSets.gametest.resources.srcDirs = [file("testing/src/resources")]
+
+dependencies {
+    gametestImplementation fabricApi.module("fabric-client-gametest-api-v1", project.fabric_api_version)
+}
+
+loom.runs.clientGameTest {
+    property "rig.out", rigOut.absolutePath
+    property "rig.filter", rigFilter
+    property "rig.scales", rigScales
+    property "rig.limit", rigLimit.toString()
+    property "rig.owner", rigOwner.isEmpty() ? "false" : "true"
+    property "rig.server", rigServer
+    property "rig.guard", rigGuard
+    property "rig.probe", rigProbeJar.get().asFile.absolutePath
+    // Names resolve from this file alone. Nothing outside this machine has a name here.
+    property "jdk.net.hosts.file", rigHosts.absolutePath
+    programArgs "--width", rigWindowWidth.toString(), "--height", rigWindowHeight.toString()
+}
+
+// Game options for a run that must not be heard and must not reach the network.
+def rigGameOptions = [
+    fullscreen            : "false",
+    pauseOnLostFocus      : "false",
+    onboardAccessibility  : "false",
+    skipMultiplayerWarning: "true",
+    joinedFirstServer     : "true",
+    realmsNotifications   : "false",
+    telemetryOptInExtra   : "false",
+    narratorHotkey        : "false",
+    showSubtitles         : "false",
+    hideSplashTexts       : "true",
+    renderClouds          : "\"false\"",
+    enableVsync           : "false",
+    maxFps                : "60",
+    inactivityFpsLimit    : "\"minimized\"",
+    tutorialStep          : "none",
+    lang                  : "en_us"
+]
+def rigSoundSources = ["master", "music", "record", "weather", "block", "hostile", "neutral", "player",
+                       "ambient", "voice", "ui"]
+
+tasks.register("rigPrepare") {
+    group = "rig"
+    description = "Empties the test game directory and writes the options a silent run needs."
+    def gameJars = configurations.compileClasspath
+    def buildDir = layout.buildDirectory.get().asFile
+    doLast {
+        if (!rigRunDir.toPath().startsWith(buildDir.toPath())) {
+            throw new GradleException("The test game directory must sit inside the build folder.")
+        }
+        project.delete(rigRunDir)
+        rigRunDir.mkdirs()
+        rigOut.mkdirs()
+
+        def gameJar = gameJars.files.find { it.name.startsWith("minecraft-merged") }
+        def versionFile = zipTree(gameJar).matching { include "version.json" }.singleFile
+        def lines = ["version:" + new groovy.json.JsonSlurper().parse(versionFile).world_version]
+        rigGameOptions.each { key, value -> lines << "${key}:${value}" }
+        rigSoundSources.each { lines << "soundCategory_${it}:0.0" }
+        new File(rigRunDir, "options.txt").setText(lines.join("\n") + "\n", "UTF-8")
+        rigHosts.setText("127.0.0.1 localhost\n127.0.0.1 rig.local\n", "UTF-8")
+
+        if (!rigOwner.isEmpty()) {
+            def source = file(rigOwner)
+            if (!new File(source, "config.json").isFile()) {
+                throw new GradleException("rig.owner must name a copy of an offlineclient folder.")
+            }
+            project.copy {
+                from source
+                into new File(rigRunDir, "offlineclient")
+            }
+        }
+        new File(buildDir, "rig/latest.txt").setText(rigOut.absolutePath + "\n", "UTF-8")
+    }
+}
+
+// The plugin that tells the rig what the server saw. It is built against the libraries of the
+// server it will run on.
+def rigServerLibraries = {
+    def jars = fileTree(rigServer) { include "paper-*.jar" }.files.sort { jar ->
+        (jar.name =~ /-(\d+)\.jar$/).with { it.find() ? it.group(1).toInteger() : 0 }
+    }
+    if (jars.isEmpty()) {
+        throw new GradleException("The server folder of testing/local.properties holds no paper jar.")
+    }
+    def list = zipTree(jars.last()).matching { include "META-INF/libraries.list" }.singleFile
+    files(list.readLines().findAll { it.trim() }.collect { new File(rigServer, "libraries/" + it.split("\t")[2]) })
+}
+
+tasks.register("rigProbeClasses", JavaCompile) {
+    group = "rig"
+    onlyIf { !rigServer.isEmpty() }
+    source = fileTree("testing/probe/java")
+    classpath = files({ rigServer.isEmpty() ? [] : rigServerLibraries() })
+    destinationDirectory = rigProbeDir.map { it.dir("classes") }
+    options.release = 21
+    options.encoding = "UTF-8"
+}
+
+tasks.register("rigProbeJar", Jar) {
+    group = "rig"
+    description = "Builds the plugin that tells the rig what the server saw."
+    dependsOn "rigProbeClasses"
+    onlyIf { !rigServer.isEmpty() }
+    from rigProbeDir.map { it.dir("classes") }
+    from "testing/probe/resources"
+    archiveFileName = "rig-probe.jar"
+    destinationDirectory = rigProbeDir
+}
+
+tasks.register("rigReport", JavaExec) {
+    group = "rig"
+    description = "Writes the summary and the contact sheets of the last run and fails when a case failed."
+    dependsOn "gametestClasses"
+    classpath = sourceSets.gametest.runtimeClasspath
+    mainClass = "com.jellypudding.offlineclient.rig.report.ReportMain"
+    args rigOut.absolutePath, rigRunDir.absolutePath
+    systemProperty "java.awt.headless", "true"
+}
+
+tasks.named("runClientGameTest") {
+    group = "rig"
+    dependsOn "rigPrepare", "rigProbeJar"
+    finalizedBy "rigReport"
+    // The report decides whether the run passed. A crashed game still gets its report.
+    ignoreExitValue = true
+    timeout = Duration.ofSeconds(rigLimit + 120)
+    // The window opens without taking the keyboard and the sound goes to no device.
+    environment "SDL_WINDOW_ACTIVATE_WHEN_SHOWN", "0"
+    environment "SDL_WINDOW_ACTIVATE_WHEN_RAISED", "0"
+    environment "ALSOFT_DRIVERS", "null"
+}
+
+tasks.register("rig") {
+    group = "rig"
+    description = "Starts the game and runs the test suites. Pass a filter with the rig.filter property."
+    dependsOn "runClientGameTest"
+}

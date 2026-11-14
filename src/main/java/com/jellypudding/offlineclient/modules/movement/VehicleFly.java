@@ -12,6 +12,7 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.DamageUtil;
+import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.MovementUtil;
 import net.minecraft.SharedConstants;
@@ -106,17 +107,10 @@ public final class VehicleFly extends Module {
 
     // Every kind a player can steer. Minecarts run on rails and llamas cannot be steered.
     private static List<EntityType<?>> rideableTypes() {
-        return BuiltInRegistries.ENTITY_TYPE.stream().filter(type -> {
-            Class<?> base = type.getBaseClass();
-            if (Llama.class.isAssignableFrom(base)) {
-                return false;
-            }
-            return AbstractBoat.class.isAssignableFrom(base)
-                || AbstractHorse.class.isAssignableFrom(base)
-                || ItemSteerable.class.isAssignableFrom(base)
-                || HappyGhast.class.isAssignableFrom(base)
-                || AbstractNautilus.class.isAssignableFrom(base);
-        }).toList();
+        return BuiltInRegistries.ENTITY_TYPE.stream().filter(type -> !EntityUtil.builds(type, Llama.class)
+            && (EntityUtil.builds(type, AbstractBoat.class) || EntityUtil.builds(type, AbstractHorse.class)
+            || EntityUtil.builds(type, ItemSteerable.class) || EntityUtil.builds(type, HappyGhast.class)
+            || EntityUtil.builds(type, AbstractNautilus.class))).toList();
     }
 
     @Override

@@ -460,7 +460,7 @@ public final class KillAura extends Module implements Targeting {
 
     private boolean inFov(Entity target) {
         double limit = fov.getValue();
-        return limit >= 360 || EntityUtil.lookAngleTo(target) <= limit / 2;
+        return limit >= 360 || EntityUtil.lookAngleToNearest(target) <= limit / 2;
     }
 
     // A hotbar swap the server has to hear about before a hit is believed.
