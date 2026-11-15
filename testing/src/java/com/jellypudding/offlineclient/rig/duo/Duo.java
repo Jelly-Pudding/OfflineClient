@@ -27,8 +27,7 @@ public final class Duo {
     // Further off than a server shows one player to another.
     private static final String FAR_SPOT = "300.5 -60 0.5";
     private static final int SEEN_TICKS = 5;
-    private static final String TELEPORTS = "teleports.";
-    private static final String BY_COMMAND = ".COMMAND";
+    private static final String BY_COMMAND = "teleports.COMMAND";
     private static final List<String> STEADY_WORLD = List.of("time set noon", "weather clear",
         "gamerule advance_time false", "gamerule advance_weather false", "gamerule spawn_mobs false");
 
@@ -144,16 +143,13 @@ public final class Duo {
         return server.tally(rig.world().player());
     }
 
-    // How often the server moved the first player since the tallies were reset with no command
-    // of the rig asking for it. An anti cheat that sets a player back shows here.
-    public double setBacks() {
-        double moved = 0;
-        for (Map.Entry<String, Double> each : leadTally().entrySet()) {
-            if (each.getKey().startsWith(TELEPORTS) && !each.getKey().endsWith(BY_COMMAND)) {
-                moved += each.getValue();
-            }
-        }
-        return moved;
+    // How often the server moved the first player with no command of the rig asking for it. The
+    // game counts every time it was moved and the server counts the commands. The count of the
+    // game from before and tallies reset at the same moment go in. An anti cheat that sets a
+    // player back shows here whichever way it does it.
+    public int setBacks(int movedBefore) {
+        double byCommand = leadTally().getOrDefault(BY_COMMAND, 0.0);
+        return Math.max(0, rig.setbacks() - movedBefore - (int) byCommand);
     }
 
     public void close() {

@@ -6,11 +6,20 @@ import com.jellypudding.offlineclient.rig.core.World;
 import com.jellypudding.offlineclient.rig.suite.Motion.Moved;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.gui.screens.DeathScreen;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.util.Mth;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.Vec3;
 
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 
 // One case for each module that looks after the player. It is made hungry or hurt or set on
 // fire or killed and the server says what the module did about it.
@@ -39,6 +48,12 @@ public final class PlayerSuite implements Suite {
     private static final int BOTTLES = 64;
     private static final int THROW_TICKS = 20;
     private static final int USE = InputConstants.MOUSE_BUTTON_RIGHT;
+    private static final int ATTACK = InputConstants.MOUSE_BUTTON_LEFT;
+    private static final int SPRINT = InputConstants.KEY_LCONTROL;
+    private static final int JUMP = InputConstants.KEY_SPACE;
+    private static final int RUN_TICKS = 120;
+    private static final int MINE_TICKS = 50;
+    private static final int SNOWBALLS = 16;
 
     private BlockPos home;
 
@@ -66,6 +81,24 @@ public final class PlayerSuite implements Suite {
         plays.put("AntiCactus keeps a cactus from hurting you", this::antiCactus);
         plays.put("NoRotate keeps your view when the server turns your head", this::noRotate);
         plays.put("FastUse throws bottles faster", this::fastUse);
+        plays.put("AutoPotion throws a healing potion once you are hurt", this::autoPotion);
+        plays.put("AutoMend throws bottles at worn mending gear", this::autoMend);
+        plays.put("AntiHunger makes a run cost less food", this::antiHunger);
+        plays.put("Multitask mines whilst you eat", this::multitask);
+        plays.put("NoMiningTrace mines past a mob in the way", this::noMiningTrace);
+        plays.put("GhostHand opens a chest through a wall", this::ghostHand);
+        plays.put("Throw throws a whole stack on one click", this::throwAll);
+        plays.put("AutoSwitch goes through the hotbar by itself", this::autoSwitch);
+        plays.put("Rotation turns the view the server holds to its angle", this::rotation);
+        plays.put("NoInteract keeps your hand off a charged respawn anchor", this::noInteract);
+        plays.put("Loadouts puts the hotbar back the way it was saved", this::loadouts);
+        plays.put("Ghost lets you walk on whilst the server holds you dead", this::ghost);
+        plays.put("FastPlace places blocks with no wait between them", this::fastPlace);
+        plays.put("LiquidInteract rests the crosshair on water", this::liquidInteract);
+        plays.put("MenuTools puts its buttons above a chest's menu", this::menuTools);
+        plays.put("LootList lists the enchanted gear in a chest", this::lootList);
+        plays.put("PortalMenus keeps the inventory open in a portal", this::portalMenus);
+        plays.put("InventoryTweaks pushes split stacks together", this::inventoryTweaks);
         return plays;
     }
 
@@ -222,5 +255,366 @@ public final class PlayerSuite implements Suite {
         rig.controls().releaseMouse(USE);
         rig.ticks(SEEN_TICKS);
         return BOTTLES - Props.carried(rig, "experience_bottle");
+    }
+
+    private void autoPotion(Rig rig) {
+        World world = rig.world();
+        Props.hold(rig, 0, "splash_potion[potion_contents={potion:\"minecraft:strong_healing\"}]");
+        world.hotbar(1, "splash_potion[potion_contents={potion:\"minecraft:strong_healing\"}]");
+        rig.client().enable("AutoPotion");
+        world.command("damage " + world.player() + " 9");
+        int took = Props.await(rig, "a potion to be thrown", ACT_TICKS, () -> Props.carried(rig, "splash_potion") < 2);
+        rig.note("A potion left the hotbar about " + took + " ticks after the hurt");
+    }
+
+    private void autoMend(Rig rig) {
+        Props.wear(rig, CHEST, "diamond_chestplate[damage=300,enchantments={\"minecraft:mending\":1}]");
+        Props.hold(rig, 0, "experience_bottle " + BOTTLES);
+        rig.client().enable("AutoMend");
+        int took = Props.await(rig, "bottles to be thrown", ACT_TICKS * 2,
+            () -> Props.carried(rig, "experience_bottle") < BOTTLES);
+        rig.note("The first bottle was thrown after about " + took + " ticks");
+    }
+
+    // A run with jumps for six seconds. What it costs is read off the server in hundredths.
+    private void antiHunger(Rig rig) {
+        int plain = runCost(rig);
+        rig.world().teleport(home.getX() + 0.5, home.getY(), home.getZ() + 0.5, NORTH, 0);
+        rig.client().enable("AntiHunger");
+        int spared = runCost(rig);
+        rig.note("The run cost " + spared + " hundredths of hunger against " + plain);
+        rig.expect(plain >= 30, "The run cost no hunger without AntiHunger. That proves nothing");
+        rig.expect(spared <= plain * 0.7, "AntiHunger spared no food");
+    }
+
+    private int runCost(Rig rig) {
+        World world = rig.world();
+        String player = world.player();
+        world.command("effect give " + player + " saturation 1 20 true");
+        rig.ticks(SEEN_TICKS);
+        int before = spent(world, player);
+        Motion.hold(rig, RUN_TICKS, FORWARD, SPRINT, JUMP);
+        return spent(world, player) - before;
+    }
+
+    // Hunger spent in hundredths of a point. Saturation goes first and what is not yet taken off it waits.
+    private static int spent(World world, String player) {
+        int saturation = world.count("data get entity " + player + " foodSaturationLevel 100");
+        int waiting = world.count("data get entity " + player + " foodExhaustionLevel 25");
+        return waiting - saturation;
+    }
+
+    // The game lets nobody mine with food at the mouth.
+    private void multitask(Rig rig) {
+        rig.expect(!minedWhilstEating(rig), "The block broke whilst eating without Multitask. That proves nothing");
+        rig.client().enable("Multitask");
+        rig.expect(minedWhilstEating(rig), "The block did not break whilst eating");
+    }
+
+    private boolean minedWhilstEating(Rig rig) {
+        BlockPos block = home.north(2);
+        rig.world().refill(block, block, "dirt");
+        Props.hold(rig, 0, APPLE + " " + APPLES_GIVEN);
+        rig.ticks(SEEN_TICKS);
+        rig.controls().aimAtBlock(block, Direction.SOUTH);
+        rig.controls().holdMouse(USE);
+        rig.ticks(2);
+        rig.controls().holdMouse(ATTACK);
+        rig.ticks(MINE_TICKS);
+        rig.controls().releaseMouse(ATTACK);
+        rig.controls().releaseMouse(USE);
+        rig.ticks(SEEN_TICKS);
+        return Props.is(rig, block, "air");
+    }
+
+    // A husk stands between the player and a block of stone.
+    private void noMiningTrace(Rig rig) {
+        World world = rig.world();
+        BlockPos block = home.north(3).above();
+        world.setBlock(block, "stone");
+        Props.summon(rig, "husk", home.north(), "{NoAI:1b,PersistenceRequired:1b,IsBaby:0b}");
+        Props.hold(rig, 0, "diamond_pickaxe");
+        rig.client().enable("NoMiningTrace");
+        rig.ticks(SEEN_TICKS);
+        rig.controls().aimAtBlock(block, Direction.SOUTH);
+        rig.controls().holdMouse(ATTACK);
+        rig.ticks(MINE_TICKS);
+        rig.controls().releaseMouse(ATTACK);
+        rig.ticks(SEEN_TICKS);
+        rig.expect(Props.is(rig, block, "air"), "The block behind the husk did not break");
+        rig.expect(Props.health(rig, "husk") == FULL_HEALTH, "The husk in the way was hit");
+    }
+
+    private void ghostHand(Rig rig) {
+        World world = rig.world();
+        BlockPos wall = home.north(2);
+        world.fill(wall.offset(-1, 0, 0), wall.offset(1, 1, 0), "stone");
+        world.setBlock(wall.north(), "chest[facing=south]");
+        Props.hold(rig, 0);
+        rig.ticks(SEEN_TICKS);
+        // The crosshair points at the middle of the chest and the wall is what it rests on.
+        rig.controls().aimAt(Vec3.atCenterOf(wall.north()));
+        rig.ticks(2);
+        rig.controls().click(USE);
+        rig.ticks(SEEN_TICKS);
+        rig.expect(rig.ask(mc -> !(mc.gui.screen() instanceof AbstractContainerScreen)),
+            "The chest opened through the wall without GhostHand. That proves nothing");
+        rig.client().enable("GhostHand");
+        rig.controls().click(USE);
+        rig.ticks(SEEN_TICKS);
+        boolean opened = rig.ask(mc -> mc.gui.screen() instanceof AbstractContainerScreen);
+        rig.act(mc -> {
+            if (mc.gui.screen() != null) {
+                mc.player.closeContainer();
+            }
+        });
+        rig.expect(opened, "The chest behind the wall did not open");
+    }
+
+    private void throwAll(Rig rig) {
+        Props.hold(rig, 0, "snowball " + SNOWBALLS);
+        rig.client().enable("Throw");
+        rig.controls().look(NORTH, -30);
+        rig.ticks(SEEN_TICKS);
+        // The button is down for the one tick the game takes the click in.
+        rig.controls().holdMouse(USE);
+        rig.ticks(2);
+        rig.controls().releaseMouse(USE);
+        rig.ticks(SEEN_TICKS);
+        int thrown = SNOWBALLS - Props.carried(rig, "snowball");
+        rig.note(thrown + " snowballs went out on one click");
+        rig.expect(thrown >= 5, "One click threw " + thrown + " snowballs");
+    }
+
+    private void autoSwitch(Rig rig) {
+        rig.client().enable("AutoSwitch");
+        Set<String> slots = new HashSet<>();
+        for (int look = 0; look < SEEN_TICKS; look++) {
+            rig.ticks(2);
+            slots.add(rig.world().facts().get("slot"));
+        }
+        rig.note("The server saw the slots " + slots);
+        rig.expect(slots.size() >= 3, "The hotbar slot hardly changed");
+    }
+
+    private void rotation(Rig rig) {
+        rig.client().enable("Rotation");
+        rig.ticks(SEEN_TICKS);
+        float yaw = Float.parseFloat(rig.world().facts().get("yaw"));
+        rig.note("The server has the player facing " + yaw + " degrees");
+        rig.expect(Math.abs(Mth.wrapDegrees(yaw)) < TURN_NEAR, "The view did not go to the angle of the module");
+    }
+
+    // A charged respawn anchor blows up when it is clicked outside the Nether. In creative the
+    // blast that does go off hurts nobody.
+    private void noInteract(Rig rig) {
+        World world = rig.world();
+        BlockPos anchor = home.north(2);
+        world.gameMode("creative");
+        world.setBlock(anchor, "respawn_anchor[charges=1]");
+        Props.hold(rig, 0);
+        rig.client().enable("NoInteract");
+        rig.ticks(SEEN_TICKS);
+        rig.controls().aimAtBlock(anchor, Direction.SOUTH);
+        rig.controls().click(USE);
+        rig.ticks(SEEN_TICKS);
+        boolean kept = Props.is(rig, anchor, "respawn_anchor");
+        rig.client().disable("NoInteract");
+        rig.controls().click(USE);
+        rig.ticks(SEEN_TICKS);
+        boolean blown = !Props.is(rig, anchor, "respawn_anchor");
+        world.gameMode("survival");
+        rig.expect(blown, "The anchor did not blow up without NoInteract. That proves nothing");
+        rig.expect(kept, "The click went through and the anchor blew up");
+    }
+
+    private void loadouts(Rig rig) {
+        World world = rig.world();
+        world.hotbar(0, "diamond_sword");
+        world.hotbar(1, "diamond_pickaxe");
+        rig.ticks(SEEN_TICKS);
+        rig.client().command("loadout save rig");
+        world.hotbar(0, "diamond_pickaxe");
+        world.hotbar(1, "diamond_sword");
+        rig.ticks(SEEN_TICKS);
+        rig.client().enable("Loadouts");
+        rig.client().command("loadout load rig");
+        Props.await(rig, "the sword to be back in the first slot", ACT_TICKS,
+            () -> Props.holds(rig, "hotbar.0", "diamond_sword") && Props.holds(rig, "hotbar.1", "diamond_pickaxe"));
+    }
+
+    private void ghost(Rig rig) {
+        World world = rig.world();
+        rig.client().enable("Ghost");
+        world.command("kill " + world.player());
+        rig.ticks(SEEN_TICKS * 2);
+        boolean screened = rig.ask(mc -> mc.gui.screen() instanceof DeathScreen);
+        Vec3 fell = rig.ask(mc -> mc.player.position());
+        rig.controls().hold(FORWARD);
+        rig.ticks(WALK_TICKS);
+        rig.controls().release(FORWARD);
+        double walked = rig.ask(mc -> mc.player.position().distanceTo(fell));
+        float health = world.health();
+        rig.controls().press(InputConstants.KEY_R);
+        boolean rose = true;
+        try {
+            rig.until("the respawn key to bring the player back", ACT_TICKS, mc -> mc.player != null
+                && mc.player.isAlive());
+        } catch (RuntimeException stillDead) {
+            rose = false;
+            rig.client().disable("Ghost");
+            rig.act(mc -> mc.player.respawn());
+            rig.until("the player to live again", ACT_TICKS, mc -> mc.player != null && mc.player.isAlive());
+        }
+        rig.expect(!screened, "The death screen came up");
+        rig.expect(health == 0, "The server has the player at " + health + " health. That proves nothing");
+        rig.expect(walked > 1, "The dead player walked " + Math.round(walked) + " blocks");
+        rig.expect(rose, "The respawn key did not bring the player back");
+    }
+
+    // A stack of blocks grows down from a ceiling as fast as the game lets one follow the next.
+    private void fastPlace(Rig rig) {
+        int plain = ticksToPlaceThree(rig);
+        rig.client().enable("FastPlace");
+        int fast = ticksToPlaceThree(rig);
+        rig.note("Three blocks took " + plain + " ticks and " + fast + " with FastPlace");
+        rig.expect(plain >= 8, "Three blocks took " + plain + " ticks without FastPlace. That proves nothing");
+        rig.expect(fast * 2 <= plain, "Three blocks still took " + fast + " ticks");
+    }
+
+    private int ticksToPlaceThree(Rig rig) {
+        World world = rig.world();
+        world.refill(home.above(2), home.above(4), "air");
+        world.refill(home.above(5), home.above(5), "stone");
+        Props.hold(rig, 0, "cobblestone 64");
+        rig.controls().look(NORTH, -90);
+        rig.ticks(SEEN_TICKS);
+        rig.controls().holdMouse(USE);
+        try {
+            return rig.until("three blocks under the ceiling", ACT_TICKS,
+                mc -> mc.player.getInventory().getItem(0).getCount() <= 61);
+        } finally {
+            rig.controls().releaseMouse(USE);
+            // The server takes the last block a tick after the game counted it.
+            rig.ticks(SEEN_TICKS);
+        }
+    }
+
+    // One block of the floor is water. The crosshair goes through it onto the block below.
+    private void liquidInteract(Rig rig) {
+        BlockPos pool = home.offset(0, -1, -2);
+        rig.world().setBlock(pool, "water");
+        rig.ticks(SEEN_TICKS);
+        rig.controls().aimAt(Vec3.atCenterOf(pool));
+        rig.ticks(2);
+        BlockPos plain = aimedBlock(rig);
+        rig.client().enable("LiquidInteract");
+        rig.ticks(2);
+        BlockPos wet = aimedBlock(rig);
+        rig.expect(!pool.equals(plain), "The crosshair rested on the water without LiquidInteract. That proves "
+            + "nothing");
+        rig.expect(pool.equals(wet), "The crosshair still goes through the water");
+    }
+
+    private static BlockPos aimedBlock(Rig rig) {
+        return rig.ask(mc -> mc.hitResult instanceof BlockHitResult hit ? hit.getBlockPos() : BlockPos.ZERO);
+    }
+
+    private void menuTools(Rig rig) {
+        BlockPos chest = home.north(2);
+        rig.world().setBlock(chest, "chest[facing=south]");
+        Props.hold(rig, 0);
+        rig.ticks(SEEN_TICKS);
+        boolean bare = !opensWith(rig, chest, "Desync");
+        rig.client().enable("MenuTools");
+        boolean shown = opensWith(rig, chest, "Desync");
+        rig.expect(bare, "The chest's menu said Desync without MenuTools. That proves nothing");
+        rig.expect(shown, "No Desync button stands above the chest's menu");
+    }
+
+    private void lootList(Rig rig) {
+        BlockPos chest = home.north(2);
+        rig.world().command("setblock " + Props.at(chest) + " chest[facing=south]{Items:[{Slot:0b,"
+            + "id:\"minecraft:diamond_sword\",count:1,components:{\"minecraft:enchantments\":"
+            + "{\"minecraft:sharpness\":5}}}]}");
+        Props.hold(rig, 0);
+        rig.ticks(SEEN_TICKS);
+        boolean bare = !opensWith(rig, chest, "Diamond Sword");
+        rig.client().enable("LootList");
+        boolean listed = opensWith(rig, chest, "Diamond Sword");
+        rig.expect(bare, "The chest's menu named the sword without LootList. That proves nothing");
+        rig.expect(listed, "No list beside the chest names the enchanted sword");
+    }
+
+    // Opens the chest and says whether its screen writes the words.
+    private static boolean opensWith(Rig rig, BlockPos chest, String words) {
+        rig.controls().aimAt(Vec3.atCenterOf(chest));
+        rig.ticks(2);
+        rig.controls().click(USE);
+        rig.until("the chest to open", ACT_TICKS, mc -> mc.gui.screen() instanceof AbstractContainerScreen);
+        rig.ticks(SEEN_TICKS);
+        boolean written = rig.frames().capture("menu with " + words).shows(words);
+        rig.act(mc -> mc.player.closeContainer());
+        rig.ticks(SEEN_TICKS);
+        return written;
+    }
+
+    private void portalMenus(Rig rig) {
+        World world = rig.world();
+        world.fill(home.offset(-1, -1, -3), home.offset(2, 3, -3), "obsidian");
+        world.fill(home.offset(0, 0, -3), home.offset(1, 2, -3), "nether_portal[axis=x]");
+        boolean shut = !staysOpenInPortal(rig);
+        rig.client().enable("PortalMenus");
+        boolean kept = staysOpenInPortal(rig);
+        rig.expect(shut, "The inventory stayed open in the portal without PortalMenus. That proves nothing");
+        rig.expect(kept, "The portal shut the inventory");
+    }
+
+    // Steps into the portal and opens the inventory there. The stay is far shorter than the four
+    // seconds a portal takes to send a player on.
+    private boolean staysOpenInPortal(Rig rig) {
+        World world = rig.world();
+        world.teleport(home.getX() + 0.5, home.getY(), home.getZ() - 2.5, NORTH, 0);
+        rig.ticks(SEEN_TICKS / 2);
+        rig.act(mc -> mc.gui.setScreen(new InventoryScreen(mc.player)));
+        rig.ticks(SEEN_TICKS / 2);
+        boolean open = rig.ask(mc -> mc.gui.screen() instanceof InventoryScreen);
+        rig.act(mc -> mc.gui.setScreen(null));
+        world.teleport(home.getX() + 0.5, home.getY(), home.getZ() + 0.5, NORTH, 0);
+        rig.ticks(SEEN_TICKS);
+        return open;
+    }
+
+    // Two part stacks of one item lie side by side in the backpack.
+    private void inventoryTweaks(Rig rig) {
+        Props.pack(rig, 0, "cobblestone 20");
+        Props.pack(rig, 1, "cobblestone 30");
+        rig.ticks(SEEN_TICKS);
+        long apart = cobbleStacks(rig);
+        rig.client().enable("InventoryTweaks");
+        rig.act(mc -> mc.gui.setScreen(new InventoryScreen(mc.player)));
+        try {
+            rig.until("the two stacks to be one", ACT_TICKS, mc -> stacksOfCobble(mc.player.getInventory()) == 1);
+        } finally {
+            rig.act(mc -> mc.gui.setScreen(null));
+        }
+        rig.ticks(SEEN_TICKS);
+        int held = Props.carried(rig, "cobblestone");
+        rig.expect(apart == 2, "The backpack held " + apart + " stacks to begin with. That proves nothing");
+        rig.expect(held == 50, "The server holds " + held + " cobblestone and fifty went in");
+    }
+
+    private static long cobbleStacks(Rig rig) {
+        return rig.ask(mc -> stacksOfCobble(mc.player.getInventory()));
+    }
+
+    private static long stacksOfCobble(Inventory pack) {
+        long stacks = 0;
+        for (int slot = 0; slot < pack.getContainerSize(); slot++) {
+            if (pack.getItem(slot).is(Items.COBBLESTONE)) {
+                stacks++;
+            }
+        }
+        return stacks;
     }
 }

@@ -72,6 +72,13 @@ public enum InputHolds {
         }
     }
 
+    // A jump the way the jump key makes one. The key goes down for a tick and the game jumps
+    // by itself and tells the server the key was pressed. A server that checks every move pulls
+    // back a jump it was never told of.
+    public static void tapJump() {
+        hold(Key.JUMP, 1);
+    }
+
     // The keys held and the ticks each has left.
     public static Map<Key, Integer> running() {
         return Map.copyOf(left);

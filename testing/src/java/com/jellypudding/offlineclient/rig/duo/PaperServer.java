@@ -48,14 +48,28 @@ public final class PaperServer {
         }
     }
 
-    // True when the borrowed server holds a plugin whose jar begins with the name.
+    // True when a plugin whose jar begins with the name lies among the plugins of the borrowed
+    // server or in the rig's own folder of plugins.
     public static boolean has(String plugin) {
-        try (DirectoryStream<Path> jars = Files.newDirectoryStream(RigConfig.server().resolve(PLUGINS),
-            plugin + "*.jar")) {
-            return jars.iterator().hasNext();
-        } catch (IOException e) {
-            return false;
+        return !jars(plugin).isEmpty();
+    }
+
+    private static List<Path> jars(String plugin) {
+        List<Path> found = new ArrayList<>();
+        for (Path folder : List.of(RigConfig.server().resolve(PLUGINS), RigConfig.plugins())) {
+            if (!Files.isDirectory(folder)) {
+                continue;
+            }
+            try (DirectoryStream<Path> jars = Files.newDirectoryStream(folder, plugin + "*.jar")) {
+                jars.forEach(found::add);
+            } catch (IOException e) {
+                throw new RigFailure("The plugins in " + folder + " could not be listed", e);
+            }
+            if (!found.isEmpty()) {
+                break;
+            }
         }
+        return found;
     }
 
     public static final String HOST = "127.0.0.1";
@@ -274,17 +288,18 @@ public final class PaperServer {
         }
         Files.copy(RigConfig.probe(), to.resolve(RigConfig.probe().getFileName()), StandardCopyOption.REPLACE_EXISTING);
         for (String plugin : setup.plugins()) {
-            boolean found = false;
-            try (DirectoryStream<Path> jars = Files.newDirectoryStream(from, plugin + "*.jar")) {
-                for (Path jar : jars) {
-                    Files.copy(jar, to.resolve(jar.getFileName()), StandardCopyOption.REPLACE_EXISTING);
-                    found = true;
-                }
+            List<Path> jars = jars(plugin);
+            if (jars.isEmpty()) {
+                throw new RigFailure("No plugin called " + plugin + " was found");
             }
-            if (!found) {
-                throw new RigFailure("The server folder holds no plugin called " + plugin);
+            for (Path jar : jars) {
+                Files.copy(jar, to.resolve(jar.getFileName()), StandardCopyOption.REPLACE_EXISTING);
             }
-            copy(from.resolve(plugin).resolve(PLUGIN_SETTINGS), to.resolve(plugin).resolve(PLUGIN_SETTINGS));
+            // The settings its owner gave it go along. A plugin without any writes its own.
+            Path settings = jars.getFirst().resolveSibling(plugin).resolve(PLUGIN_SETTINGS);
+            if (Files.isRegularFile(settings)) {
+                copy(settings, to.resolve(plugin).resolve(PLUGIN_SETTINGS));
+            }
         }
     }
 

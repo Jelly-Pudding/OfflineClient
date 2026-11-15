@@ -7,6 +7,7 @@ import com.jellypudding.offlineclient.module.ExclusivityGroup;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.InputHolds;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
@@ -52,7 +53,7 @@ public final class Parkour extends Module {
             .move(0, -minDepth.getValue(), 0)
             .inflate(-edge, 0, -edge);
         if (mc.level.noCollision(mc.player, under)) {
-            mc.player.jumpFromGround();
+            InputHolds.tapJump();
         }
     }
 }

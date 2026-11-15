@@ -10,12 +10,14 @@ import com.jellypudding.offlineclient.rig.suite.BootSuite;
 import com.jellypudding.offlineclient.rig.suite.CombatSuite;
 import com.jellypudding.offlineclient.rig.suite.GotoSuite;
 import com.jellypudding.offlineclient.rig.suite.GuardSuite;
+import com.jellypudding.offlineclient.rig.suite.MiscSuite;
 import com.jellypudding.offlineclient.rig.suite.MovementSuite;
 import com.jellypudding.offlineclient.rig.suite.PlayerSuite;
 import com.jellypudding.offlineclient.rig.suite.RenderSuite;
 import com.jellypudding.offlineclient.rig.suite.ScenariosSuite;
 import com.jellypudding.offlineclient.rig.suite.ScreensSuite;
 import com.jellypudding.offlineclient.rig.suite.ServerSuite;
+import com.jellypudding.offlineclient.rig.suite.SettingsSuite;
 import com.jellypudding.offlineclient.rig.suite.SmokeSuite;
 import com.jellypudding.offlineclient.rig.suite.Suite;
 import com.jellypudding.offlineclient.rig.suite.WorldSuite;
@@ -62,8 +64,10 @@ public final class RigMain implements FabricClientGameTest {
     }
 
     private static List<Suite> suites() {
-        return List.of(new BootSuite(), new SmokeSuite(), new ScreensSuite(), new ScenariosSuite(),
-            new MovementSuite(), new CombatSuite(), new WorldSuite(), new PlayerSuite(), new RenderSuite(),
+        return List.of(new BootSuite(), new SmokeSuite(), new SettingsSuite(), new ScreensSuite(),
+            new ScenariosSuite(),
+            new MovementSuite(), new CombatSuite(), new WorldSuite(), new PlayerSuite(), new MiscSuite(),
+            new RenderSuite(),
             new GotoSuite(),
             new ServerSuite(), new GuardSuite());
     }

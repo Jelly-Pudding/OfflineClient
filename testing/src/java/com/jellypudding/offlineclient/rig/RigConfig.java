@@ -16,6 +16,7 @@ public final class RigConfig {
     private static final String SERVER_PROPERTY = "rig.server";
     private static final String PROBE_PROPERTY = "rig.probe";
     private static final String GUARD_PROPERTY = "rig.guard";
+    private static final String PLUGINS_PROPERTY = "rig.plugins";
     private static final String ROLE_PROPERTY = "rig.role";
     private static final String PARTNER = "partner";
     private static final String LINK_PROPERTY = "rig.link";
@@ -51,7 +52,13 @@ public final class RigConfig {
         return folder.isBlank() ? null : Path.of(folder);
     }
 
-    // The plugins of that server the Guard suite runs under. Empty when the local settings name none.
+    // A folder of plugin jars that belong to the rig alone. Git ignores it.
+    public static Path plugins() {
+        return Path.of(System.getProperty(PLUGINS_PROPERTY, ""));
+    }
+
+    // The anti cheats the Guard suite runs under one after the other. Empty when the local
+    // settings name none.
     public static List<String> guard() {
         List<String> plugins = new ArrayList<>();
         for (String plugin : System.getProperty(GUARD_PROPERTY, "").split(SEPARATOR)) {

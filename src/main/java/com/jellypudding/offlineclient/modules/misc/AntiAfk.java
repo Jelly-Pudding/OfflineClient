@@ -14,6 +14,7 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ChatPace;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.HeldKey;
+import com.jellypudding.offlineclient.util.InputHolds;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.RotationManager;
@@ -176,7 +177,7 @@ public final class AntiAfk extends Module {
             mc.player.getAbilities().flying = true;
         }
         if (jump.isOn() && mc.player.onGround() && chance()) {
-            mc.player.jumpFromGround();
+            InputHolds.tapJump();
         }
         if (swing.isOn() && chance()) {
             // A swing on its own never leaves this screen. The punch is what the server counts as activity.

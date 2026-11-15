@@ -48,6 +48,12 @@ public final class Ghost extends Module {
         return deathButton.isOn();
     }
 
+    // Read by LocalPlayerMixin. Your body stays in the world whilst this is on and whilst the
+    // death screen still offers to turn it on.
+    public boolean keepsBody() {
+        return isEnabled() || deathButton.isOn();
+    }
+
     // True whilst you are dead and walking about. Read by the mixins that free the body.
     public boolean walking() {
         LocalPlayer player = mc.player;

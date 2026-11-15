@@ -4,10 +4,13 @@ import com.jellypudding.offlineclient.OfflineClient;
 import com.jellypudding.offlineclient.rig.core.Rig;
 import com.jellypudding.offlineclient.rig.core.RigFailure;
 import com.jellypudding.offlineclient.rig.duo.Duo;
+import com.jellypudding.offlineclient.rig.duo.PaperServer;
 import com.jellypudding.offlineclient.rig.duo.Partner;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.DisconnectedScreen;
 import net.minecraft.core.BlockPos;
+import net.minecraft.util.Mth;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
 
@@ -15,6 +18,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 // What only a second player can show. It is hit and followed and talked to and it says what it
 // sees of the first player. The server counts what really reached it.
@@ -51,6 +55,11 @@ final class PlayerPlays {
     private static final double KEPT = 4.5;
     private static final double EYE_TO_EYE = 0.5;
     private static final double SMASHED = 20;
+    private static final float EAST = -90;
+    private static final double TURNED_TO = 6;
+    private static final int TAB = InputConstants.KEY_TAB;
+    private static final int BACK_TICKS = 400;
+    private static final Pattern NUMBER = Pattern.compile("\\d{1,4}");
 
     private static final String SWORD = "diamond_sword";
     private static final String HITS = "hits";
@@ -87,6 +96,19 @@ final class PlayerPlays {
         plays.put("CrystalAura blows a crystal up beside another player", PlayerPlays::crystalAura);
         plays.put("AutoTrap builds a roof over another player", PlayerPlays::autoTrap);
         plays.put("AutoWeb webs the block another player stands in", PlayerPlays::autoWeb);
+        plays.put("AnchorAura blows an anchor up beside another player", PlayerPlays::anchorAura);
+        plays.put("TntAura lights TNT beside another player", PlayerPlays::tntAura);
+        plays.put("LavaAura pours lava on another player", PlayerPlays::lavaAura);
+        plays.put("AutoAnvil drops an anvil on another player", PlayerPlays::autoAnvil);
+        plays.put("Hitboxes lets a swing just beside another player land", PlayerPlays::hitboxes);
+        plays.put("AimAssist turns your view to the player you fight", PlayerPlays::aimAssist);
+        plays.put("TpAura hits another player from all sides", PlayerPlays::tpAura);
+        plays.put("Honker blows its horn when another player comes near", PlayerPlays::honker);
+        plays.put("BetterTab writes the ping into the player list", PlayerPlays::betterTab);
+        plays.put("LogoutSpots marks where another player left", PlayerPlays::logoutSpots);
+        plays.put("Linger keeps the world once the connection drops", PlayerPlays::linger);
+        plays.put("AutoReconnect joins again after a kick", PlayerPlays::autoReconnect);
+        plays.put("AutoLog leaves the server once your health is low", PlayerPlays::autoLog);
         plays.put("KillMessage names the player you killed in chat", PlayerPlays::killMessage);
         plays.put("another player sees you stand still whilst Blink holds your moves", PlayerPlays::blink);
         plays.put("Follow walks after another player", PlayerPlays::follow);
@@ -98,6 +120,7 @@ final class PlayerPlays {
         plays.put("Spam sends its line to the server", PlayerPlays::spam);
         plays.put("AntiSpam stacks a line another player repeats", PlayerPlays::antiSpam);
         plays.put("SecretChat is read by a player with the key and not by the server", PlayerPlays::secretChat);
+        plays.put("ChatAlerts shows a toast when another player writes your name", PlayerPlays::chatAlerts);
     }
 
     private static void twerk(Rig rig, Duo duo) {
@@ -519,5 +542,207 @@ final class PlayerPlays {
         rig.act(mc -> mc.player.getInventory().setSelectedSlot(0));
         rig.client().enable("AutoWeb");
         Props.await(rig, "a web in the second player's block", ANSWER_TICKS, () -> Props.is(rig, STOOD_IN, "cobweb"));
+    }
+
+    // The first player cannot be hurt. Its own blast holds no module back and does not end the case.
+    private static void hardy(Rig rig, Duo duo) {
+        duo.server().console(String.format(Locale.ROOT, HARDY, rig.world().player()));
+    }
+
+    private static void inHand(Rig rig, String item) {
+        rig.world().hotbar(0, item);
+        rig.act(mc -> mc.player.getInventory().setSelectedSlot(0));
+        rig.ticks(2);
+    }
+
+    private static double hurtBy(Duo duo, String cause) {
+        return duo.server().tally(Partner.NAME).getOrDefault("hurt." + cause, 0.0);
+    }
+
+    private static void anchorAura(Rig rig, Duo duo) {
+        duo.partnerAt(IN_REACH.x, -60, IN_REACH.z, 90);
+        hardy(rig, duo);
+        inHand(rig, "respawn_anchor 8");
+        rig.world().hotbar(1, "glowstone 16");
+        rig.client().enable("AnchorAura");
+        Props.await(rig, "a blast to hurt the second player", KILL_TICKS, () -> hurtBy(duo, "BLOCK_EXPLOSION") >= 1);
+        rig.client().disable("AnchorAura");
+    }
+
+    private static void tntAura(Rig rig, Duo duo) {
+        duo.partnerAt(IN_REACH.x, -60, IN_REACH.z, 90);
+        hardy(rig, duo);
+        inHand(rig, "tnt 8");
+        rig.world().hotbar(1, "flint_and_steel");
+        rig.client().enable("TntAura");
+        Props.await(rig, "lit TNT beside the second player", KILL_TICKS, () -> Props.living(rig, "tnt") >= 1);
+        rig.client().disable("TntAura");
+    }
+
+    // The second player stands four blocks off. Lava runs three and the module keeps it off you.
+    private static void lavaAura(Rig rig, Duo duo) {
+        hardy(rig, duo);
+        inHand(rig, "lava_bucket");
+        rig.client().enable("LavaAura");
+        Props.await(rig, "lava to burn the second player", KILL_TICKS,
+            () -> hurtBy(duo, "LAVA") + hurtBy(duo, "FIRE") + hurtBy(duo, "FIRE_TICK") >= 1);
+        rig.client().disable("LavaAura");
+    }
+
+    private static void autoAnvil(Rig rig, Duo duo) {
+        duo.partnerInReach(false);
+        inHand(rig, "anvil 8");
+        rig.world().hotbar(1, OBSIDIAN + " 16");
+        rig.client().enable("AutoAnvil");
+        Props.await(rig, "an anvil to land on the second player", KILL_TICKS, () -> hurtBy(duo, "FALLING_BLOCK") >= 1);
+        rig.client().disable("AutoAnvil");
+    }
+
+    // The crosshair sits half a block to the side of the second player and past its body.
+    private static void hitboxes(Rig rig, Duo duo) {
+        arm(rig);
+        duo.partnerInReach(true);
+        Vec3 beside = IN_REACH.add(0, 0, 0.5);
+        double missed = swingAt(rig, duo, beside);
+        rig.client().enable("Hitboxes");
+        double landed = swingAt(rig, duo, beside);
+        rig.expect(missed == 0, "The swing beside the player landed without Hitboxes. That proves nothing");
+        rig.expect(landed == 1, "The swing beside the player did not land");
+    }
+
+    private static double swingAt(Rig rig, Duo duo, Vec3 point) {
+        duo.server().resetTallies();
+        rig.controls().aimAt(point);
+        rig.ticks(SETTLE_TICKS);
+        rig.controls().click(LEFT_BUTTON);
+        rig.ticks(SETTLE_TICKS);
+        return count(duo, HITS);
+    }
+
+    private static void aimAssist(Rig rig, Duo duo) {
+        arm(rig);
+        duo.partnerInReach(true);
+        swingAt(rig, duo, IN_REACH);
+        rig.client().enable("AimAssist");
+        rig.controls().look(EAST + 30, 0);
+        rig.ticks(SETTLE_TICKS * 2);
+        float yaw = rig.ask(mc -> mc.player.getYRot());
+        rig.note("The view was turned thirty degrees off the player and came to rest "
+            + told(Mth.wrapDegrees(yaw - EAST)) + " degrees off it");
+        rig.expect(Math.abs(Mth.wrapDegrees(yaw - EAST)) < TURNED_TO, "The view did not turn to the player");
+    }
+
+    private static void tpAura(Rig rig, Duo duo) {
+        arm(rig);
+        duo.partnerInReach(true);
+        rig.client().enable("TpAura");
+        rig.ticks(WATCH_TICKS);
+        Map<String, Double> seen = duo.leadTally();
+        rig.client().disable("TpAura");
+        rig.note("It landed " + seen.getOrDefault(HITS, 0.0) + " hits and the server saw the player move "
+            + told(seen.getOrDefault("moved", 0.0)) + " blocks");
+        rig.expect(seen.getOrDefault(HITS, 0.0) >= FEWEST, "TpAura did not hit a player in reach");
+        rig.expect(seen.getOrDefault("moved", 0.0) >= 2, "The server never saw the player move round its target");
+    }
+
+    private static void honker(Rig rig, Duo duo) {
+        duo.partnerAway();
+        inHand(rig, "goat_horn");
+        rig.client().enable("Honker");
+        rig.ticks(SETTLE_TICKS);
+        duo.server().resetTallies();
+        duo.partnerHome();
+        Props.await(rig, "the horn to be blown", ANSWER_TICKS, () -> count(duo, "interacts") >= 1);
+    }
+
+    // The game draws bars for the ping. Numbers in the list are the module's.
+    private static void betterTab(Rig rig, Duo duo) {
+        rig.client().disable("BetterTab");
+        boolean bare = numbersInList(rig, "player list bare");
+        rig.client().enable("BetterTab");
+        boolean numbered = numbersInList(rig, "player list numbered");
+        rig.expect(!bare, "A number stood on the screen without BetterTab. That proves nothing");
+        rig.expect(numbered, "No ping is written into the player list");
+    }
+
+    private static boolean numbersInList(Rig rig, String shot) {
+        rig.controls().hold(TAB);
+        rig.ticks(SEEN_TICKS);
+        boolean numbers = rig.frames().capture(shot).texts().stream().anyMatch(text -> NUMBER.matcher(text).matches());
+        rig.controls().release(TAB);
+        return numbers;
+    }
+
+    private static void logoutSpots(Rig rig, Duo duo) {
+        rig.client().enable("LogoutSpots");
+        rig.controls().look(EAST, 0);
+        rig.ticks(SETTLE_TICKS);
+        duo.partner().ask("leave");
+        rig.ticks(SETTLE_TICKS);
+        boolean marked;
+        try {
+            marked = rig.frames().capture("logout spot").texts().stream().anyMatch(text -> text.contains(Partner.NAME));
+        } finally {
+            duo.partner().ask("join", PaperServer.address());
+        }
+        rig.expect(marked, "Nothing on the screen names the player who left");
+    }
+
+    private static void linger(Rig rig, Duo duo) {
+        String me = rig.world().player();
+        rig.client().enable("Linger");
+        duo.server().console("kick " + me + " rig");
+        rig.ticks(SETTLE_TICKS * 2);
+        boolean gone = "false".equals(duo.server().player(me).get("online"));
+        boolean held = rig.ask(mc -> mc.level != null && mc.player != null
+            && !(mc.gui.screen() instanceof DisconnectedScreen));
+        rig.client().disable("Linger");
+        rig.ticks(SETTLE_TICKS);
+        rig.expect(gone, "The kick did not land. That proves nothing");
+        rig.expect(held, "The world was not kept once the connection dropped");
+    }
+
+    private static void autoReconnect(Rig rig, Duo duo) {
+        String me = rig.world().player();
+        rig.client().enable("AutoReconnect");
+        duo.server().console("kick " + me + " rig");
+        rig.ticks(SETTLE_TICKS);
+        rig.expect("false".equals(duo.server().player(me).get("online")), "The kick did not land. That proves nothing");
+        int took = Props.await(rig, "the player to be back on the server", BACK_TICKS,
+            () -> "true".equals(duo.server().player(me).get("online")));
+        rig.until("the player to stand in the world again", BACK_TICKS,
+            mc -> mc.player != null && mc.level != null && mc.gui.screen() == null);
+        rig.client().disable("AutoReconnect");
+        rig.note("It was back about " + took + " ticks after the kick");
+    }
+
+    private static void autoLog(Rig rig, Duo duo) {
+        String me = rig.world().player();
+        rig.client().enable("AutoLog");
+        duo.server().console("damage " + me + " 15");
+        try {
+            Props.await(rig, "the player to leave the server", ANSWER_TICKS,
+                () -> "false".equals(duo.server().player(me).get("online")));
+        } finally {
+            rig.client().disable("AutoLog");
+        }
+    }
+
+    private static void chatAlerts(Rig rig, Duo duo) {
+        rig.client().enable("ChatAlerts");
+        boolean quiet = !toasted(rig, duo, "nothing here");
+        boolean rang = toasted(rig, duo, "hey " + rig.world().player());
+        rig.expect(quiet, "A line that names nobody raised a toast. That proves nothing");
+        rig.expect(rang, "No toast came up when another player wrote your name");
+    }
+
+    // Has the second player say the words and wipes the chat. A toast is then all that still
+    // holds them.
+    private static boolean toasted(Rig rig, Duo duo, String words) {
+        duo.partner().ask("chat", words);
+        rig.ticks(SETTLE_TICKS);
+        rig.act(mc -> mc.gui.hud.getChat().clearMessages(true));
+        rig.ticks(2);
+        return rig.frames().capture("toast " + words).shows(words);
     }
 }

@@ -83,6 +83,16 @@ public abstract class ScreenMixin {
         }
     }
 
+    // The game draws an inventory or a chest over the plain world with no blur of its own.
+    @Inject(method = "extractTransparentBackground(Lnet/minecraft/client/gui/GuiGraphicsExtractor;)V",
+        at = @At("HEAD"))
+    private void onExtractTransparentBackground(GuiGraphicsExtractor graphics, CallbackInfo ci) {
+        Blur blur = Modules.active(Blur.class);
+        if (blur != null && blur.wants((Screen) (Object) this)) {
+            blur.blurHere(graphics);
+        }
+    }
+
     // Space presses a focused button and the arrows move the focus. Whilst
     // InvWalk jumps on space or GUIMove turns on the arrows the screen never sees them.
     @Inject(method = "keyPressed(Lnet/minecraft/client/input/KeyEvent;)Z",

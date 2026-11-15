@@ -2,6 +2,7 @@ package com.jellypudding.offlineclient.probe;
 
 import com.destroystokyo.paper.event.player.PlayerClientOptionsChangeEvent;
 import io.papermc.paper.event.player.AsyncChatEvent;
+import io.papermc.paper.event.player.PlayerFailMoveEvent;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Bukkit;
@@ -85,6 +86,7 @@ public final class RigProbe extends JavaPlugin implements Listener {
                 Integer.parseInt(args[2]), Integer.parseInt(args[3])).getType().getKey());
             case "plugin" -> say("plugin " + word(args, 1) + " "
                 + Bukkit.getPluginManager().isPluginEnabled(word(args, 1)));
+            case "close" -> Bukkit.getPlayerExact(args[1]).closeInventory();
             case "sign" -> showSign(args);
             case "anvil" -> showAnvil(args);
             case "pack" -> Bukkit.getPlayerExact(args[1]).setResourcePack(UUID.randomUUID(), args[2], (byte[]) null,
@@ -267,6 +269,15 @@ public final class RigProbe extends JavaPlugin implements Listener {
     @EventHandler(priority = EventPriority.MONITOR)
     public void onTeleport(PlayerTeleportEvent event) {
         add(event.getPlayer(), "teleports." + event.getCause(), 1);
+    }
+
+    // A move the server itself would not take. It puts the player back without a teleport event.
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onFailedMove(PlayerFailMoveEvent event) {
+        if (!event.isAllowed()) {
+            add(event.getPlayer(), "failedMoves", 1);
+            say("failmove " + event.getPlayer().getName() + " reason=" + event.getFailReason());
+        }
     }
 
     @EventHandler(priority = EventPriority.MONITOR)

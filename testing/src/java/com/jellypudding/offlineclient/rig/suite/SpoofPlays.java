@@ -4,8 +4,7 @@ import com.jellypudding.offlineclient.rig.core.Rig;
 import com.jellypudding.offlineclient.rig.duo.Duo;
 import com.jellypudding.offlineclient.rig.duo.PackTrap;
 import com.jellypudding.offlineclient.rig.duo.Partner;
-import net.minecraft.client.gui.screens.inventory.AbstractSignEditScreen;
-import net.minecraft.client.gui.screens.inventory.AnvilScreen;
+import com.jellypudding.offlineclient.rig.duo.PlainGame;
 
 import java.util.List;
 import java.util.Map;
@@ -34,7 +33,10 @@ final class SpoofPlays {
     private static final String LOADED = "SUCCESSFULLY_LOADED";
     private static final double FACE_TO_FACE = 4;
     private static final double NEAR = 0.5;
-    private static final int OPEN_TICKS = 100;
+    private static final int OPEN_TICKS = 20;
+    private static final int SHUT_TICKS = 5;
+    // What a server asks a game about itself as it joins.
+    private static final List<String> SAME_FACTS = List.of("brand", "channels", "host", "locale");
     private static final int ANSWER_TICKS = 100;
     private static final int PACK_TICKS = 60;
 
@@ -45,6 +47,7 @@ final class SpoofPlays {
         plays.put("both players stand on the server", SpoofPlays::bothThere);
         plays.put("ServerSpoof tells the server a plain game joined", SpoofPlays::brand);
         plays.put("the server sees the mod loader with ServerSpoof off", SpoofPlays::unspoofed);
+        plays.put("ServerSpoof makes the client look like a plain game with no mods", SpoofPlays::likePlainGame);
         plays.put("ServerSpoof keeps mod words out of a sign the server shows", SpoofPlays::signText);
         plays.put("ServerSpoof keeps mod words out of an anvil the server opens", SpoofPlays::anvilText);
         plays.put("ServerSpoof tells the server the host name you chose", SpoofPlays::hostName);
@@ -83,9 +86,10 @@ final class SpoofPlays {
     }
 
     private static void signText(Rig rig, Duo duo) {
-        List<String> guarded = signLines(rig, duo);
+        String player = rig.world().player();
+        List<String> guarded = signLines(rig, duo, player);
         rig.client().set(SPOOF, HIDE_TEXT, OFF);
-        List<String> open = signLines(rig, duo);
+        List<String> open = signLines(rig, duo, player);
         rig.note("The sign came back as " + guarded + " and with the guard off as " + open);
         rig.expect(!open.getFirst().equals(MOD_KEY), "The trick caught nothing with the guard off and proves nothing");
         rig.expect(guarded.getFirst().equals(MOD_KEY), "The sign gave mod words away. It read " + guarded.getFirst());
@@ -94,39 +98,67 @@ final class SpoofPlays {
             "A key bind of the game itself read " + guarded.get(2) + " and not " + open.get(2));
     }
 
-    // The server stands a sign of three keys before the player and opens it. Shutting the screen
-    // sends the lines back.
-    private static List<String> signLines(Rig rig, Duo duo) {
-        String player = rig.world().player();
+    // The server stands a sign of three keys before a player and opens it and shuts it again.
+    // The game sends the lines back as it shuts. Nobody at that game has to do a thing.
+    private static List<String> signLines(Rig rig, Duo duo, String player) {
         int mark = duo.server().logMark();
         duo.server().console("probe sign " + player + " " + MOD_KEY + " " + GAME_KEY + " " + BIND + GAME_BIND);
-        rig.until("the sign to open", OPEN_TICKS, mc -> mc.gui.screen() instanceof AbstractSignEditScreen);
-        rig.act(mc -> mc.gui.screen().onClose());
+        rig.ticks(OPEN_TICKS);
+        duo.server().console("probe close " + player);
         String lines = duo.server().heard("sign " + player, mark, ANSWER_TICKS);
-        rig.expect(lines != null, "The server never got the sign back");
+        rig.expect(lines != null, "The server never got the sign back from " + player);
         return List.of(lines.split(LINE_SPLIT, -1));
     }
 
     private static void anvilText(Rig rig, Duo duo) {
-        String guarded = anvilName(rig, duo);
+        String player = rig.world().player();
+        String guarded = anvilName(rig, duo, player);
         rig.client().set(SPOOF, HIDE_TEXT, OFF);
-        String open = anvilName(rig, duo);
+        String open = anvilName(rig, duo, player);
         rig.note("The name came back as " + guarded + " and with the guard off as " + open);
         rig.expect(open != null && !open.equals(MOD_KEY),
             "The trick caught nothing with the guard off and proves nothing");
         rig.expect(MOD_KEY.equals(guarded), "The anvil gave mod words away. It read " + guarded);
     }
 
-    // The server opens an anvil and lays an item named by a key in it. The game writes the name
-    // into the box and tells the server what the box holds.
-    private static String anvilName(Rig rig, Duo duo) {
-        String player = rig.world().player();
+    // The server opens an anvil for a player and lays an item named by a key in it. The game
+    // writes the name into the box and tells the server what the box holds.
+    private static String anvilName(Rig rig, Duo duo, String player) {
         int mark = duo.server().logMark();
         duo.server().console("probe anvil " + player + " " + MOD_KEY);
-        rig.until("the anvil to open", OPEN_TICKS, mc -> mc.gui.screen() instanceof AnvilScreen);
         String name = duo.server().heard("anvil " + player, mark, ANSWER_TICKS);
-        rig.act(mc -> mc.player.closeContainer());
+        duo.server().console("probe close " + player);
+        rig.ticks(SHUT_TICKS);
         return name;
+    }
+
+    // A game with no mod loader in it joins the same server. Everything the server can learn
+    // about a game by itself must read the same for that game and for the client.
+    private static void likePlainGame(Rig rig, Duo duo) {
+        String me = rig.world().player();
+        try (PlainGame plain = PlainGame.join(rig, duo.server())) {
+            Map<String, String> theirs = duo.server().player(PlainGame.NAME);
+            Map<String, String> ours = duo.lead();
+            List<String> theirSign = signLines(rig, duo, PlainGame.NAME);
+            List<String> ourSign = signLines(rig, duo, me);
+            String theirAnvil = anvilName(rig, duo, PlainGame.NAME);
+            String ourAnvil = anvilName(rig, duo, me);
+            rig.note("The plain game showed the brand " + theirs.get("brand") + " and the channels ["
+                + theirs.get("channels") + "] and the host " + theirs.get("host") + " and the sign " + theirSign
+                + " and the anvil name " + theirAnvil);
+            rig.note("The client showed the brand " + ours.get("brand") + " and the channels [" + ours.get("channels")
+                + "] and the host " + ours.get("host") + " and the sign " + ourSign + " and the anvil name "
+                + ourAnvil);
+            for (String fact : SAME_FACTS) {
+                rig.expect(String.valueOf(theirs.get(fact)).equals(String.valueOf(ours.get(fact))),
+                    "The server holds the " + fact + " " + ours.get(fact) + " for the client and " + theirs.get(fact)
+                        + " for a plain game");
+            }
+            rig.expect(theirSign.equals(ourSign),
+                "A sign came back differently from the client than from a plain game");
+            rig.expect(String.valueOf(theirAnvil).equals(String.valueOf(ourAnvil)),
+                "An anvil name came back differently from the client than from a plain game");
+        }
     }
 
     private static void hostName(Rig rig, Duo duo) {

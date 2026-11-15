@@ -6,6 +6,7 @@ import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
+import com.jellypudding.offlineclient.util.InputHolds;
 import com.jellypudding.offlineclient.util.MovementUtil;
 import net.minecraft.world.phys.Vec3;
 
@@ -58,7 +59,7 @@ public final class AutoJump extends Module {
             return;
         }
         if (mode.is(Mode.JUMP)) {
-            mc.player.jumpFromGround();
+            InputHolds.tapJump();
             return;
         }
         Vec3 motion = mc.player.getDeltaMovement();

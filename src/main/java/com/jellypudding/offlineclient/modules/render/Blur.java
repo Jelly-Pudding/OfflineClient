@@ -34,6 +34,8 @@ public final class Blur extends Module {
     // How far the blur has faded in from nought to one.
     private float level;
     private long lastFrame;
+    // The game takes one blur a frame and throws on a second.
+    private boolean asked;
 
     public Blur() {
         super("Blur", "Blurs the world behind menus and fades the blur in and out.", Category.RENDER);
@@ -48,6 +50,7 @@ public final class Blur extends Module {
 
     // The radius the blur shader gets this frame. Runs once a frame before the GUI draws.
     public int radius(int vanilla) {
+        asked = false;
         if (!isEnabled()) {
             return vanilla;
         }
@@ -85,7 +88,8 @@ public final class Blur extends Module {
 
     // Asks for the blur pass before whatever the screen draws next.
     public void blurHere(GuiGraphicsExtractor context) {
-        if (isEnabled() && level > 0) {
+        if (isEnabled() && level > 0 && !asked) {
+            asked = true;
             context.blurBeforeThisStratum();
         }
     }

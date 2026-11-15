@@ -6,6 +6,7 @@ import com.jellypudding.offlineclient.rig.core.World;
 import com.jellypudding.offlineclient.rig.suite.Motion.Moved;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.core.BlockPos;
+import net.minecraft.client.gui.screens.inventory.AbstractSignEditScreen;
 import net.minecraft.core.Direction;
 import net.minecraft.world.phys.Vec3;
 
@@ -36,6 +37,8 @@ public final class WorldSuite implements Suite {
     private static final int WORK_TICKS = 200;
     private static final int LONG_BREAK = 200;
     private static final int DIAMONDS = 5;
+    private static final double LOOKED_AWAY = 8;
+    private static final double ENDER_EYES = 2.55;
 
     private BlockPos home;
 
@@ -70,6 +73,25 @@ public final class WorldSuite implements Suite {
         plays.put("Arson sets the wood round you alight", this::arson);
         plays.put("BuildRandom places blocks round you", this::buildRandom);
         plays.put("AutoFish casts into the water", this::autoFish);
+        plays.put("Excavator digs the box between two clicked corners", this::excavator);
+        plays.put("Filler fills the box between two clicked corners", this::filler);
+        plays.put("TrailMaker lays blocks behind you", this::trailMaker);
+        plays.put("InstantBunker walls you in", this::instantBunker);
+        plays.put("Collisions keeps you out of a web", this::collisions);
+        plays.put("ToolAura makes a path with the shovel you hold", this::toolAura);
+        plays.put("WaxAura waxes copper", this::waxAura);
+        plays.put("AutoNametag names the wolf beside you", this::autoNametag);
+        plays.put("EndermanLook turns your eyes off an enderman", this::endermanLook);
+        plays.put("AutoSmelter loads the furnace you open", this::autoSmelter);
+        plays.put("AutoSign writes the sign you place", this::autoSign);
+        plays.put("BrushReader names the find you brush", this::brushReader);
+        plays.put("SpawnProofer lights the dark ground at night", this::spawnProofer);
+        plays.put("Painter covers the block it is told to cover", this::painter);
+        plays.put("BlockSwap swaps a path for grass", this::blockSwap);
+        plays.put("TreeAura plants a sapling and feeds it", this::treeAura);
+        plays.put("Flamethrower sets a cow alight", this::flamethrower);
+        plays.put("AutoInteract milks the cow beside you", this::autoInteract);
+        plays.put("EChestFarmer turns ender chests into obsidian", this::eChestFarmer);
         return plays;
     }
 
@@ -333,5 +355,250 @@ public final class WorldSuite implements Suite {
         rig.controls().look(180, 25);
         rig.client().enable("AutoFish");
         Props.await(rig, "the bobber to fly", WORK_TICKS / 2, () -> Props.living(rig, "fishing_bobber") == 1);
+    }
+
+    private void excavator(Rig rig) {
+        World world = rig.world();
+        world.fill(home.offset(-1, 0, -2), home.offset(1, 0, -2), "dirt");
+        Props.hold(rig, 0);
+        rig.client().enable("Excavator");
+        clickCorners(rig, home.offset(-1, 0, -2), Direction.SOUTH, home.offset(1, 0, -2));
+        int took = Props.await(rig, "the three blocks to be dug out", WORK_TICKS, () -> {
+            for (int across = -1; across <= 1; across++) {
+                if (!Props.is(rig, home.offset(across, 0, -2), AIR)) {
+                    return false;
+                }
+            }
+            return true;
+        });
+        rig.note("The box was dug out after about " + took + " ticks");
+    }
+
+    // One corner is ground and the other the top of a post. The box between them holds air.
+    private void filler(Rig rig) {
+        World world = rig.world();
+        world.fill(home.offset(1, 0, -2), home.offset(1, 1, -2), STONE);
+        Props.hold(rig, 0, COBBLESTONE + " 64");
+        rig.client().enable("Filler");
+        clickCorners(rig, home.offset(-1, -1, -2), Direction.UP, home.offset(1, 1, -2));
+        Props.await(rig, "the box to be filled", WORK_TICKS, () -> Props.is(rig, home.offset(0, 0, -2), COBBLESTONE)
+            && Props.is(rig, home.offset(-1, 1, -2), COBBLESTONE));
+    }
+
+    // The first corner is clicked on the face named and the second on the face towards the player.
+    private static void clickCorners(Rig rig, BlockPos first, Direction face, BlockPos second) {
+        rig.ticks(SEEN_TICKS);
+        rig.controls().aimAtBlock(first, face);
+        rig.controls().click(USE);
+        rig.ticks(SEEN_TICKS);
+        rig.controls().aimAtBlock(second, Direction.SOUTH);
+        rig.controls().click(USE);
+        rig.ticks(SEEN_TICKS);
+    }
+
+    private void trailMaker(Rig rig) {
+        Props.hold(rig, 0, COBBLESTONE + " 64");
+        rig.client().enable("TrailMaker");
+        Motion.hold(rig, WALK_TICKS, FORWARD);
+        rig.ticks(SEEN_TICKS);
+        int left = Props.carried(rig, COBBLESTONE);
+        rig.note((64 - left) + " blocks were laid over a walk of " + WALK_TICKS + " ticks");
+        rig.expect(left <= 62, "No trail was laid");
+    }
+
+    private void instantBunker(Rig rig) {
+        Props.hold(rig, 0, "obsidian 64");
+        rig.client().enable("InstantBunker");
+        // The shell is five blocks wide and its walls stand two blocks from the player.
+        Props.await(rig, "walls on all four sides", WORK_TICKS, () -> !rig.world().isAir(home.north(2))
+            && !rig.world().isAir(home.east(2)) && !rig.world().isAir(home.south(2))
+            && !rig.world().isAir(home.west(2)));
+    }
+
+    // A web two blocks ahead. A walk ends in it or stops at its face.
+    private void collisions(Rig rig) {
+        double into = walkedAtWeb(rig);
+        rig.world().teleport(home.getX() + 0.5, home.getY(), home.getZ() + 0.5, 180, 0);
+        rig.client().enable("Collisions");
+        double kept = walkedAtWeb(rig);
+        rig.note(String.format(Locale.ROOT, "The walk got %.2f blocks with Collisions and %.2f without", kept, into));
+        rig.expect(into > 1.35, "The walk never got into the web without Collisions. That proves nothing");
+        rig.expect(kept <= 1.25, "The walk got into the web");
+    }
+
+    private double walkedAtWeb(Rig rig) {
+        rig.world().refill(home.north(2), home.north(2), "cobweb");
+        return Motion.hold(rig, WALK_TICKS * 2, FORWARD).across();
+    }
+
+    private void toolAura(Rig rig) {
+        Props.hold(rig, 0, "diamond_shovel");
+        rig.client().enable("ToolAura");
+        Props.await(rig, "a path beside the player", WORK_TICKS,
+            () -> Props.is(rig, home.offset(0, -1, -1), "dirt_path")
+                || Props.is(rig, home.offset(1, -1, 0), "dirt_path"));
+    }
+
+    private void waxAura(Rig rig) {
+        BlockPos copper = home.north(2);
+        rig.world().setBlock(copper, "copper_block");
+        Props.hold(rig, 0, "honeycomb 8");
+        rig.client().enable("WaxAura");
+        Props.await(rig, "the copper to be waxed", WORK_TICKS, () -> Props.is(rig, copper, "waxed_copper_block"));
+    }
+
+    private void autoNametag(Rig rig) {
+        Props.summon(rig, "wolf", home.north(2), Props.STILL_MOB);
+        Props.hold(rig, 0, "name_tag[custom_name=\"Rex\"]");
+        rig.client().enable("AutoNametag");
+        Props.await(rig, "the wolf to be called Rex", WORK_TICKS, () -> Props.living(rig, "wolf,name=Rex") == 1);
+    }
+
+    private void endermanLook(Rig rig) {
+        BlockPos spot = home.north(4);
+        Props.summon(rig, "enderman", spot, Props.STILL_MOB);
+        Vec3 eyes = new Vec3(spot.getX() + 0.5, spot.getY() + ENDER_EYES, spot.getZ() + 0.5);
+        rig.ticks(SEEN_TICKS);
+        rig.controls().aimAt(eyes);
+        rig.ticks(2);
+        double before = angleTo(rig, eyes);
+        rig.client().enable("EndermanLook");
+        rig.ticks(SEEN_TICKS * 2);
+        double after = angleTo(rig, eyes);
+        rig.note(String.format(Locale.ROOT, "The server had the view %.1f degrees off its eyes and then %.1f", before,
+            after));
+        rig.expect(before < 2, "The view was not on the enderman to begin with. That proves nothing");
+        rig.expect(after >= LOOKED_AWAY, "The server still has the view on the enderman's eyes");
+    }
+
+    // Degrees between the way the server has the player looking and the way to a point. An
+    // enderman is angered by what the server sees.
+    private static double angleTo(Rig rig, Vec3 point) {
+        Map<String, String> held = rig.world().facts();
+        Vec3 view = Vec3.directionFromRotation(Float.parseFloat(held.get("pitch")), Float.parseFloat(held.get("yaw")));
+        Vec3 eyes = rig.ask(mc -> mc.player.getEyePosition());
+        return Math.toDegrees(Math.acos(Math.clamp(view.dot(point.subtract(eyes).normalize()), -1, 1)));
+    }
+
+    private void autoSmelter(Rig rig) {
+        World world = rig.world();
+        BlockPos furnace = home.north(2);
+        world.setBlock(furnace, "furnace[facing=south]");
+        Props.pack(rig, 0, "raw_iron 8");
+        Props.pack(rig, 1, "coal 8");
+        Props.hold(rig, 0);
+        rig.client().enable("AutoSmelter");
+        rig.ticks(SEEN_TICKS);
+        rig.controls().aimAtBlock(furnace, Direction.SOUTH);
+        rig.controls().click(USE);
+        try {
+            Props.await(rig, "ore and fuel in the furnace", WORK_TICKS,
+                () -> world.attempt("execute if items block " + Props.at(furnace) + " container.0 raw_iron")
+                    && world.attempt("execute if items block " + Props.at(furnace) + " container.1 coal"));
+        } finally {
+            rig.act(mc -> {
+                if (mc.gui.screen() != null) {
+                    mc.player.closeContainer();
+                }
+            });
+        }
+    }
+
+    private void autoSign(Rig rig) {
+        World world = rig.world();
+        Props.hold(rig, 0, "oak_sign 4");
+        rig.client().enable("AutoSign");
+        rig.ticks(SEEN_TICKS);
+        rig.controls().aimAtBlock(home.offset(0, -1, -2), Direction.UP);
+        rig.controls().click(USE);
+        BlockPos sign = home.north(2);
+        Props.await(rig, "words on the sign", WORK_TICKS,
+            () -> world.count("data get block " + Props.at(sign) + " front_text.messages[0]") > 0);
+        rig.expect(rig.ask(mc -> !(mc.gui.screen() instanceof AbstractSignEditScreen)),
+            "The sign screen was left open");
+    }
+
+    private void brushReader(Rig rig) {
+        BlockPos sand = home.north(2);
+        rig.world().command("setblock " + Props.at(sand) + " suspicious_sand{item:{id:\"minecraft:emerald\",count:1}}");
+        Props.hold(rig, 0, "brush");
+        rig.client().enable("BrushReader");
+        rig.ticks(SEEN_TICKS);
+        int mark = rig.client().chatMark();
+        rig.controls().aimAtBlock(sand, Direction.SOUTH);
+        rig.controls().holdMouse(USE);
+        rig.ticks(WALK_TICKS * 2);
+        rig.controls().releaseMouse(USE);
+        List<String> said = rig.client().saidSince(mark);
+        rig.note("BrushReader said " + said);
+        rig.expect(said.stream().anyMatch(line -> line.toLowerCase(Locale.ROOT).contains("emerald")),
+            "The find was not named");
+    }
+
+    private void spawnProofer(Rig rig) {
+        World world = rig.world();
+        Props.hold(rig, 0, "torch 64");
+        world.command("time set midnight");
+        try {
+            rig.client().enable("SpawnProofer");
+            // One torch lights every spot in reach.
+            int took = Props.await(rig, "a torch on the dark ground", WORK_TICKS,
+                () -> Props.carried(rig, "torch") < 64);
+            rig.note("A torch stood after about " + took + " ticks");
+        } finally {
+            world.attempt("time set noon");
+        }
+    }
+
+    private void painter(Rig rig) {
+        BlockPos block = home.north(2);
+        rig.world().setBlock(block, "netherrack");
+        Props.hold(rig, 0, COBBLESTONE + " 64");
+        rig.client().enable("Painter");
+        Props.await(rig, "a block on top of the netherrack", WORK_TICKS,
+            () -> Props.is(rig, block.above(), COBBLESTONE));
+    }
+
+    private void blockSwap(Rig rig) {
+        BlockPos path = home.offset(1, -1, -1);
+        rig.world().setBlock(path, "dirt_path");
+        Props.hold(rig, 0, "grass_block 16");
+        rig.client().enable("BlockSwap");
+        Props.await(rig, "grass where the path was", WORK_TICKS, () -> Props.is(rig, path, "grass_block"));
+    }
+
+    private void treeAura(Rig rig) {
+        Props.hold(rig, 0, "oak_sapling 8");
+        rig.world().hotbar(1, "bone_meal 64");
+        rig.client().enable("TreeAura");
+        Props.await(rig, "a sapling to be planted and fed", WORK_TICKS,
+            () -> Props.carried(rig, "oak_sapling") < 8 && Props.carried(rig, "bone_meal") < 64);
+    }
+
+    private void flamethrower(Rig rig) {
+        Props.summon(rig, "cow", home.north(2), Props.STILL_MOB);
+        Props.hold(rig, 0, "flint_and_steel");
+        rig.client().enable("Flamethrower");
+        Props.await(rig, "the cow to burn", WORK_TICKS,
+            () -> Props.living(rig, "cow") == 0 || Props.health(rig, "cow") < 10);
+    }
+
+    private void autoInteract(Rig rig) {
+        Props.summon(rig, "cow", home.north(2), Props.STILL_MOB);
+        Props.hold(rig, 0, "bucket");
+        rig.client().enable("AutoInteract");
+        Props.await(rig, "milk in the bucket", WORK_TICKS, () -> Props.holds(rig, "weapon.mainhand", "milk_bucket"));
+    }
+
+    // The chest goes on the block under the crosshair. It stands right beside the player. What a
+    // chest drops two blocks off lies out of the player's reach.
+    private void eChestFarmer(Rig rig) {
+        Props.hold(rig, 0, "ender_chest 8");
+        rig.world().hotbar(1, PICKAXE);
+        rig.controls().aimAtBlock(home.offset(0, -1, -1), Direction.UP);
+        rig.client().enable("EChestFarmer");
+        int took = Props.await(rig, "obsidian from the first chest", WORK_TICKS * 3,
+            () -> Props.carried(rig, "obsidian") >= 8);
+        rig.note("The first eight obsidian were in the pack after about " + took + " ticks");
     }
 }

@@ -1,6 +1,7 @@
 package com.jellypudding.offlineclient.rig.core;
 
 import net.minecraft.client.gui.screens.DeathScreen;
+import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.client.gui.screens.worldselection.WorldCreationUiState;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.Vec3;
@@ -16,6 +17,8 @@ public final class Stage {
     // A case may build this high and no higher. What stands above it outlives the case.
     private static final int HEADROOM = 14;
     private static final int RESPAWN_TICKS = 100;
+    private static final int REOPEN_TRIES = 30;
+    private static final int REOPEN_WAIT = 20;
     private static final double AT_HOME = 0.05;
     private static final float FACING = 180;
     // The husk stands north of the player and the cow east. A husk does not burn in daylight.
@@ -58,24 +61,41 @@ public final class Stage {
         rig.expect(state.isEmpty(), state);
     }
 
-    // Opens a fresh world after one was lost.
+    // Opens a fresh world after one was lost. The server of the lost one may still be on its
+    // way down and the game makes no new world before it has gone.
     public void reopen(WorldCreationUiState.SelectedGameMode mode) {
         try {
             rig.closeWorld();
         } catch (RuntimeException | AssertionError lost) {
             rig.forgetWorld();
         }
-        rig.openWorld(mode);
+        rig.act(mc -> mc.gui.setScreen(new TitleScreen()));
+        for (int tries = 0; ; tries++) {
+            try {
+                rig.openWorld(mode);
+                break;
+            } catch (IllegalStateException stillStopping) {
+                if (tries >= REOPEN_TRIES) {
+                    throw stillStopping;
+                }
+                rig.ticks(REOPEN_WAIT);
+            }
+        }
         findHome();
     }
 
-    // The mobs are killed first and what they drop as they die goes with a second sweep.
+    // The mobs drop out of the world before they are killed. A dying mob would lie on the stage
+    // for a second and take a click meant for what stands behind it. What they drop goes too.
     public void reset(boolean withKit) {
         if (!worldStands()) {
             return;
         }
         revive();
-        rig.act(mc -> mc.gui.setScreen(null));
+        // Smoke and sparks of the case before would drift through the pictures of this one.
+        rig.act(mc -> {
+            mc.gui.setScreen(null);
+            mc.particleEngine.clearParticles();
+        });
         rig.client().restoreDefaults();
         World world = rig.world();
         BlockPos low = home.offset(-REACH, -1, -REACH);
@@ -83,7 +103,8 @@ public final class Stage {
         String player = world.player();
         world.quietly(List.of(fill(low.below(3), high.below(3), "bedrock"), fill(low.below(2), high.below(1), "dirt"),
             fill(low, high, "grass_block"), fill(low.above(), high.above(HEADROOM), "air"),
-            "kill @e[type=!player]", "kill @e[type=item]", "clear " + player, "effect clear " + player,
+            "execute as @e[type=!player] at @s run tp @s ~ ~-300 ~", "kill @e[type=!player]", "kill @e[type=item]",
+            "clear " + player, "effect clear " + player,
             "effect give " + player + " instant_health 1 20 true", "effect give " + player + " saturation 1 20 true"));
         if (withKit) {
             giveKit(world);

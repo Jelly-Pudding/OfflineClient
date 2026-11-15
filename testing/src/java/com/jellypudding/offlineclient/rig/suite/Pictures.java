@@ -18,6 +18,8 @@ final class Pictures {
     private static final int CHANNEL_MASK = 0xFF;
     // Pixels this near to one that moves by itself count as moving too.
     private static final int RESTLESS_REACH = 3;
+    // Two neighbours this far apart in a colour channel are an edge.
+    private static final int EDGE = 12;
 
     private record Picture(int width, int[] pixels) {
     }
@@ -46,6 +48,22 @@ final class Pictures {
         return (double) counted / moved.length;
     }
 
+    // How many neighbours side by side stand a clear step apart. A blur takes most of them away.
+    // The middle half of the picture is left out because a menu sits there.
+    static int edges(Path picture) {
+        Picture read = read(picture);
+        int width = read.width();
+        int edges = 0;
+        for (int at = 0; at + 1 < read.pixels().length; at++) {
+            int column = at % width;
+            boolean aside = column < width / 4 || column >= width * 3 / 4;
+            if (aside && column + 1 < width && step(read.pixels()[at], read.pixels()[at + 1]) > EDGE) {
+                edges++;
+            }
+        }
+        return edges;
+    }
+
     private static boolean[] differing(Picture one, Picture two) {
         boolean[] differing = new boolean[one.pixels().length];
         for (int at = 0; at < differing.length; at++) {
@@ -55,13 +73,17 @@ final class Pictures {
     }
 
     private static boolean differs(int one, int two) {
+        return step(one, two) > CLEARLY;
+    }
+
+    // The furthest any colour channel of two pixels lies apart.
+    private static int step(int one, int two) {
+        int step = 0;
         for (int channel = 0; channel < CHANNELS; channel++) {
             int shift = channel * CHANNEL_BITS;
-            if (Math.abs((one >> shift & CHANNEL_MASK) - (two >> shift & CHANNEL_MASK)) > CLEARLY) {
-                return true;
-            }
+            step = Math.max(step, Math.abs((one >> shift & CHANNEL_MASK) - (two >> shift & CHANNEL_MASK)));
         }
-        return false;
+        return step;
     }
 
     // Every marked pixel marks the square of pixels round it as well.

@@ -33,6 +33,8 @@ public final class SmokeSuite implements Suite {
     private static final String COMMAND = "command";
     private static final int ON_TICKS = 10;
     private static final int OFF_TICKS = 2;
+    // Two seconds on a real server. Most modules have done their first piece of work by then.
+    private static final int SERVED_TICKS = 40;
     private static final int LONGEST_REPLY = 90;
     // Five times the pace of the game. Nothing in this suite measures time.
     private static final float HURRY = 5;
@@ -170,7 +172,7 @@ public final class SmokeSuite implements Suite {
         int setBack = rig.setbacks();
         RigFailure failed = null;
         try {
-            switchOnAndOff(rig, module);
+            switchOnAndOff(rig, module, SERVED_TICKS);
         } catch (RigFailure thrown) {
             failed = thrown;
         }
@@ -207,13 +209,22 @@ public final class SmokeSuite implements Suite {
             if (outside != null) {
                 rig.skip(NAME, name, LEFT_OUT + outside);
             } else {
-                cases.add(Case.of(name, each -> switchOnAndOff(each, module)));
+                cases.add(Case.of(name, each -> switchOnAndOff(each, module, ON_TICKS)));
             }
         }
         return cases;
     }
 
-    private static void switchOnAndOff(Rig rig, Module module) {
+    // Why a blanket run leaves a module off. Null when it takes part.
+    static String leftOut(String module, boolean onServer) {
+        String reason = OUTSIDE_MODULES.get(module);
+        if (reason == null && onServer) {
+            reason = SERVER_MODULES.get(module);
+        }
+        return reason == null ? null : LEFT_OUT + reason;
+    }
+
+    private static void switchOnAndOff(Rig rig, Module module, int onTicks) {
         int mark = rig.client().chatMark();
         boolean wasOn = rig.ask(mc -> module.isEnabled());
         if (module.isTogglable()) {
@@ -223,7 +234,7 @@ public final class SmokeSuite implements Suite {
             rig.act(mc -> module.onKeybind());
         }
         boolean took = rig.ask(mc -> module.isEnabled()) != wasOn;
-        rig.ticks(ON_TICKS);
+        rig.ticks(onTicks);
         boolean stayed = rig.ask(mc -> module.isEnabled()) != wasOn;
         Screen opened = rig.ask(mc -> mc.gui.screen());
         if (module.isTogglable()) {

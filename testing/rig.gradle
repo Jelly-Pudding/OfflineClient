@@ -19,7 +19,9 @@ if (rigLocalFile.isFile()) {
 }
 // The folder of a Paper server for the two player suites. Without one they are left out.
 def rigServer = (rigLocal.getProperty("server") ?: "").trim()
-// Anti cheat plugins of that server for the Guard suite. Without any it is left out.
+// Anti cheat plugins for the Guard suite split by commas. Each gets a server of its own. A jar
+// is looked for among the plugins of that server and in testing/plugins. Without any the suite
+// is left out.
 def rigGuard = (rigLocal.getProperty("guard") ?: "").trim()
 
 def rigRunDir = file("build/run/clientGameTest")
@@ -57,6 +59,7 @@ loom.runs.clientGameTest {
     property "rig.owner", rigOwner.isEmpty() ? "false" : "true"
     property "rig.server", rigServer
     property "rig.guard", rigGuard
+    property "rig.plugins", file("testing/plugins").absolutePath
     property "rig.probe", rigProbeJar.get().asFile.absolutePath
     // Names resolve from this file alone. Nothing outside this machine has a name here.
     property "jdk.net.hosts.file", rigHosts.absolutePath
@@ -77,7 +80,7 @@ def rigGameOptions = [
     hideSplashTexts       : "true",
     renderClouds          : "\"false\"",
     enableVsync           : "false",
-    maxFps                : "60",
+    maxFps                : "120",
     inactivityFpsLimit    : "\"minimized\"",
     tutorialStep          : "none",
     lang                  : "en_us"

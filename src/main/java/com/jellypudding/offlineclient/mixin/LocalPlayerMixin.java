@@ -21,6 +21,7 @@ import com.jellypudding.offlineclient.modules.movement.Sprint;
 import com.jellypudding.offlineclient.modules.movement.Step;
 import com.jellypudding.offlineclient.modules.movement.VehicleFly;
 import com.jellypudding.offlineclient.modules.player.FastBreak;
+import com.jellypudding.offlineclient.modules.player.Ghost;
 import com.jellypudding.offlineclient.modules.player.LiquidInteract;
 import com.jellypudding.offlineclient.modules.player.NoMiningTrace;
 import com.jellypudding.offlineclient.modules.player.PortalMenus;
@@ -447,6 +448,18 @@ public abstract class LocalPlayerMixin extends AbstractClientPlayer implements I
         if (result.getType() == HitResult.Type.MISS
             || fluidHit.getLocation().distanceToSqr(eye) < result.getLocation().distanceToSqr(eye)) {
             cir.setReturnValue(fluidHit);
+        }
+    }
+
+    // The game takes a dead player out of the world a second after the death and nothing walks a
+    // body that is gone. Ghost keeps yours in.
+    @WrapOperation(method = "tickDeath()V",
+        at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/client/player/LocalPlayer;remove(Lnet/minecraft/world/entity/Entity$RemovalReason;)V"))
+    private void onDeathRemoval(LocalPlayer player, Entity.RemovalReason reason, Operation<Void> original) {
+        Ghost ghost = Modules.get(Ghost.class);
+        if (ghost == null || !ghost.keepsBody()) {
+            original.call(player, reason);
         }
     }
 

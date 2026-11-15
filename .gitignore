@@ -121,3 +121,4 @@ logs/
 
 # Settings of the test rig that belong to one machine
 testing/local.properties
+testing/plugins/

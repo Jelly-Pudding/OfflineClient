@@ -10,6 +10,7 @@ import net.minecraft.client.gui.screens.worldselection.WorldCreationUiState;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Consumer;
 
 // Plays the cases of a suite on a flat single player world and again on a Paper server. A module
@@ -28,14 +29,33 @@ final class Grounds {
     // Every case starts in survival on a stage put back to how it began. The suite is handed the
     // stage of each ground before the first case on it.
     static void play(Rig rig, String suite, Map<String, Case.Body> plays, Consumer<Stage> standOn) {
+        play(rig, suite, plays, standOn, Set.of());
+    }
+
+    // The same with cases that only a real server can play. The test framework steps a single
+    // player game and its server together and nothing there can run ahead of the server.
+    static void play(Rig rig, String suite, Map<String, Case.Body> plays, Consumer<Stage> standOn,
+                     Set<String> serverOnly) {
+        play(rig, suite, plays, standOn, serverOnly, Map.of());
+    }
+
+    // The same with the cases the client is known to fail on a real server and what was seen.
+    static void play(Rig rig, String suite, Map<String, Case.Body> plays, Consumer<Stage> standOn,
+                     Set<String> serverOnly, Map<String, String> faultsOnServer) {
         for (String where : List.of(ALONE, SERVED)) {
+            boolean served = where.equals(SERVED);
             List<Case> cases = new ArrayList<>();
-            plays.forEach((name, play) -> cases.add(Case.of(name + " " + where, play)));
+            plays.forEach((name, play) -> {
+                if (served || !serverOnly.contains(name)) {
+                    Case made = Case.of(name + " " + where, play);
+                    String fault = served ? faultsOnServer.get(name) : null;
+                    cases.add(fault == null ? made : made.known(fault));
+                }
+            });
             List<Case> wanted = rig.wanted(suite, cases);
             if (wanted.isEmpty()) {
                 continue;
             }
-            boolean served = where.equals(SERVED);
             if (served && !Duo.available()) {
                 wanted.forEach(each -> rig.skip(suite, each.name(), Duo.NO_SERVER));
                 continue;

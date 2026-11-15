@@ -12,6 +12,7 @@ import net.minecraft.world.phys.Vec3;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 // One case for each movement module. The test player moves by held keys and the server says where
 // it ended up. Each case plays in single player and again on a Paper server that checks every
@@ -20,6 +21,7 @@ import java.util.Map;
 public final class MovementSuite implements Suite {
 
     private static final String NAME = "Movement";
+    private static final String TIMER = "Timer runs the game faster";
     private static final String SURVIVAL = "survival";
 
     private static final int FORWARD = InputConstants.KEY_W;
@@ -40,6 +42,9 @@ public final class MovementSuite implements Suite {
     private static final int DESCENT_LIMIT = 200;
     private static final int GLIDE_TICKS = 40;
     private static final int FLOOD_REACH = 9;
+    private static final int VOID_TICKS = 160;
+    private static final int FETCH_TICKS = 160;
+    private static final double NANOS = 1_000_000_000.0;
 
     // The plain moves of the ground a case stands on. Every module is held against these.
     private record Paces(double walked, double sprinted, double sprintJumped, double jumped, double dropped) {
@@ -92,12 +97,18 @@ public final class MovementSuite implements Suite {
         plays.put("NoKnockback holds you still when a mob hits you", this::noKnockback);
         plays.put("Freecam flies the camera and leaves the body where it stands", this::freecam);
         plays.put("WindJump jumps on a wind charge", this::windJump);
+        plays.put("HoleSnap drops a sprint into a safe hole", this::holeSnap);
+        plays.put("AntiVoid catches a fall into the void", this::antiVoid);
+        plays.put("ElytraBoost fires a rocket whilst you glide", this::elytraBoost);
+        plays.put("Fetch brings a far item back", this::fetch);
+        plays.put("NoReturn stops you going back to where it went on", this::noReturn);
+        plays.put(TIMER, this::timer);
         return plays;
     }
 
     @Override
     public void run(Rig rig) {
-        Grounds.play(rig, NAME, plays(), stage -> standOn(stage.home()));
+        Grounds.play(rig, NAME, plays(), stage -> standOn(stage.home()), Set.of(TIMER));
     }
 
     // Measured once on each ground with no module on.
@@ -568,5 +579,127 @@ public final class MovementSuite implements Suite {
         double jumped = jump(rig).highest();
         rig.note("It jumped " + told(jumped) + " blocks against " + told(plain.jumped()));
         rig.expect(jumped >= plain.jumped() + 2, "WindJump jumped no higher");
+    }
+
+    // A hole one block wide with obsidian all round lies in the way of a sprint.
+    private void holeSnap(Rig rig) {
+        World world = rig.world();
+        BlockPos hole = home.offset(0, -1, -3);
+        for (BlockPos wall : java.util.List.of(hole.north(), hole.east(), hole.south(), hole.west(), hole.below())) {
+            world.setBlock(wall, "obsidian");
+        }
+        world.setBlock(hole, "air");
+        Moved over = Motion.hold(rig, RUN_TICKS / 2, FORWARD, SPRINT);
+        goHome(rig);
+        rig.client().enable("HoleSnap");
+        Moved into = Motion.hold(rig, RUN_TICKS / 2, FORWARD, SPRINT);
+        rig.note("The sprint ended " + told(-into.rise()) + " blocks down with HoleSnap and " + told(-over.rise())
+            + " without");
+        rig.expect(over.rise() > -0.5, "The sprint fell into the hole without HoleSnap. That proves nothing");
+        rig.expect(into.rise() < -0.9 && into.across() < 4.5, "The sprint did not end in the hole");
+    }
+
+    // A shaft through the bedrock two blocks ahead.
+    private void antiVoid(Rig rig) {
+        World world = rig.world();
+        BlockPos shaft = home.north(2);
+        world.fill(shaft.below(4), shaft.below(), "air");
+        rig.client().enable("AntiVoid");
+        Motion.hold(rig, RUN_TICKS / 2, FORWARD);
+        rig.ticks(VOID_TICKS);
+        Stage.expectAlive(rig);
+        double depth = home.getY() - rig.world().where().y;
+        rig.note("The player hangs " + told(depth) + " blocks under the stage");
+        rig.expect(depth < 30, "The player fell on into the void");
+    }
+
+    private void elytraBoost(Rig rig) {
+        World world = rig.world();
+        Props.wear(rig, "armor.chest", "elytra");
+        Props.hold(rig, 0, "firework_rocket 16");
+        // The rocket is to be a real one the server sees fly.
+        rig.client().set("ElytraBoost", "Anti consume", "off");
+        rig.client().enable("ElytraBoost");
+        world.gameMode("creative");
+        lift(rig, HIGH);
+        rig.until("the fall to begin", TAP_TICKS * 10, mc -> !mc.player.onGround());
+        rig.ticks(TAP_TICKS * 2);
+        rig.controls().hold(JUMP);
+        rig.ticks(TAP_TICKS);
+        rig.controls().release(JUMP);
+        rig.until("the wings to open", RUN_TICKS, mc -> mc.player.isFallFlying());
+        rig.client().press("ElytraBoost");
+        rig.ticks(TAP_TICKS);
+        int rockets = 0;
+        for (int look = 0; look < TAP_TICKS * 5 && rockets == 0; look++) {
+            rig.ticks(1);
+            rockets = Props.living(rig, "firework_rocket");
+        }
+        goHome(rig);
+        world.gameMode(SURVIVAL);
+        rig.expect(rockets > 0, "No rocket flew");
+    }
+
+    private void fetch(Rig rig) {
+        World world = rig.world();
+        BlockPos far = home.north(10);
+        // The module leaves a drop alone that is too fresh to be picked up.
+        Props.summon(rig, "item", far, "{Item:{id:\"minecraft:diamond\",count:3}}");
+        rig.ticks(RUN_TICKS * 2);
+        int mark = rig.client().chatMark();
+        rig.client().enable("Fetch");
+        int took;
+        try {
+            took = Props.await(rig, "the diamonds to be in the pack", FETCH_TICKS,
+                () -> Props.carried(rig, "diamond") == 3);
+        } finally {
+            rig.note("Fetch said " + rig.client().saidSince(mark));
+        }
+        rig.ticks(RUN_TICKS / 2);
+        double away = world.where().distanceTo(Vec3.atBottomCenterOf(home));
+        rig.note("The diamonds were in the pack after about " + took + " ticks and the player stands " + told(away)
+            + " blocks from where it began");
+        rig.expect(away < 1.5, "The player did not come back");
+    }
+
+    private void timer(Rig rig) {
+        double plain = ticksASecond(rig);
+        rig.client().enable("Timer");
+        rig.ticks(TAP_TICKS * 5);
+        double fast = ticksASecond(rig);
+        rig.note("The game ran " + told(fast) + " ticks a second against " + told(plain));
+        rig.expect(fast >= plain * 1.6, "Timer ran the game no faster");
+    }
+
+    private static double ticksASecond(Rig rig) {
+        long began = System.nanoTime();
+        int from = rig.ask(mc -> mc.player.tickCount);
+        rig.ticks(RUN_TICKS * 2);
+        int ticks = rig.ask(mc -> mc.player.tickCount) - from;
+        return ticks / ((System.nanoTime() - began) / NANOS);
+    }
+
+    // A sprint south and a longer sprint back north. Blocks south of the start the player ends up.
+    private void noReturn(Rig rig) {
+        double free = thereAndBack(rig);
+        goHome(rig);
+        // An area an earlier case closed on this server stays closed and keeps the radius it got.
+        rig.client().command("noreturn clear");
+        // One chunk round the spot stays closed. Left alone it would be as far as the eye sees.
+        rig.client().set("NoReturn", "Radius", "1");
+        rig.client().enable("NoReturn");
+        double held = thereAndBack(rig);
+        rig.note("The way back ended " + told(held) + " blocks short of the start and without NoReturn " + told(free));
+        rig.expect(free < 5, "The way back did not reach the start without NoReturn. That proves nothing");
+        rig.expect(held >= 10, "The player got back to where NoReturn went on");
+    }
+
+    // The way out ends well past the two chunks that stay closed south of the start.
+    private double thereAndBack(Rig rig) {
+        rig.controls().look(0, 0);
+        Motion.hold(rig, RUN_TICKS * 6, FORWARD, SPRINT);
+        rig.controls().look(180, 0);
+        Motion.hold(rig, RUN_TICKS * 7, FORWARD, SPRINT);
+        return rig.world().where().z - (home.getZ() + 0.5);
     }
 }
