@@ -22,7 +22,6 @@ import com.jellypudding.offlineclient.util.TargetFilter;
 import com.jellypudding.offlineclient.util.TargetPriority;
 import com.jellypudding.offlineclient.util.Targeting;
 import com.jellypudding.offlineclient.util.WindLaunch;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.MaceItem;
@@ -232,7 +231,7 @@ public final class MaceCombo extends Module implements Targeting {
         faceTarget.getValue().face(victim.getBoundingBox().getCenter(), RotationPriority.ATTACK);
         SprintPause.hide();
         mc.gameMode.attack(mc.player, victim);
-        swing.getValue().swing(InteractionHand.MAIN_HAND);
+        swing.getValue().hit();
         finish();
     }
 

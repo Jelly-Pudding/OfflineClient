@@ -65,17 +65,6 @@ public abstract class RespawnBlockBreaker extends Module {
     }
 
     @Override
-    public ExclusivityGroup getExclusivityGroup() {
-        return ExclusivityGroup.MINING;
-    }
-
-    // A bed and an anchor guard against different threats and take turns with the miner.
-    @Override
-    public boolean clashesWith(Module other) {
-        return !(other instanceof RespawnBlockBreaker) && super.clashesWith(other);
-    }
-
-    @Override
     protected void onEnable() {
         current = null;
         slots.forget();
@@ -110,6 +99,7 @@ public abstract class RespawnBlockBreaker extends Module {
         if (autoTool.isOn()) {
             ItemUtil.selectBestTool(BlockUtil.state(current), slots);
         }
+        BlockMiner.first(current);
         if (BlockMiner.mine(current, rotate.isOn())) {
             breaking = this;
         } else {

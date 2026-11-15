@@ -412,11 +412,18 @@ public final class Scaffold extends Module {
     // A listed block still has to be something worth standing on. An empty allow
     // list falls back to any plain building block.
     private boolean allowed(Block block, BlockPos target) {
-        if (!BlockUtil.buildsAt(block, target)) {
-            return false;
-        }
+        return BlockUtil.buildsAt(block, target) && listed(block);
+    }
+
+    private boolean listed(Block block) {
         return blocks.size() == 0 && listMode.is(ListMode.WHITELIST)
             || listMode.getValue().admits(blocks.contains(block));
+    }
+
+    // True for a stack of blocks this would build with whilst it is on. AutoDrop leaves such a
+    // stack alone. Cobblestone is junk to it and a bridge to this.
+    public boolean buildsWith(ItemStack stack) {
+        return isEnabled() && stack.getItem() instanceof BlockItem item && listed(item.getBlock());
     }
 
     // Jumping from the ground lifts you. With Air place a block that just went under the feet

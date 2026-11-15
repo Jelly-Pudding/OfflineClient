@@ -202,7 +202,7 @@ public final class InputUtil {
         if (!mc.gameMode.useItem(mc.player, InteractionHand.MAIN_HAND).consumesAction()) {
             return false;
         }
-        SwingMode.swingArm(InteractionHand.MAIN_HAND);
+        SwingMode.swingUse(InteractionHand.MAIN_HAND);
         return true;
     }
 }

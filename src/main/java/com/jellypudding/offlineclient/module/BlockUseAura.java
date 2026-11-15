@@ -14,7 +14,6 @@ import com.jellypudding.offlineclient.util.RotationPriority;
 import com.jellypudding.offlineclient.util.SwingMode;
 import com.jellypudding.offlineclient.util.UseBudget;
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.ArrayList;
@@ -39,7 +38,7 @@ public abstract class BlockUseAura extends Module {
     protected final BoolSetting lineOfSight = new BoolSetting("Line of sight",
         "Leaves alone every block you cannot see from where you stand.", true);
     protected final EnumSetting<FaceMode> face = FaceMode.setting(FaceMode.SERVER);
-    protected final EnumSetting<SwingMode> swing = SwingMode.setting(SwingMode.BOTH);
+    protected final BoolSetting swing = SwingMode.useSetting(true);
 
     private final Cooldowns<Click> tried = new Cooldowns<>();
 
@@ -126,7 +125,7 @@ public abstract class BlockUseAura extends Module {
             }
         }
         if (taken > 0) {
-            swing.getValue().swing(InteractionHand.MAIN_HAND);
+            SwingMode.of(swing.isOn()).use();
             mc.rightClickDelay = InputUtil.USE_DELAY;
         }
         return taken;

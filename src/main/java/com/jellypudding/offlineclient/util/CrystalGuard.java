@@ -2,7 +2,6 @@ package com.jellypudding.offlineclient.util;
 
 import com.jellypudding.offlineclient.OfflineClient;
 import net.minecraft.client.Minecraft;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.boss.enderdragon.EndCrystal;
 import net.minecraft.world.phys.AABB;
@@ -37,7 +36,7 @@ public final class CrystalGuard {
             BlockUtil.faceVector(crystal.getBoundingBox().getCenter(), RotationPriority.ATTACK);
         }
         AttackTimer.packetHit(crystal);
-        swing.swing(InteractionHand.MAIN_HAND);
+        swing.hit();
         return true;
     }
 

@@ -9,11 +9,13 @@ import com.jellypudding.offlineclient.gui.FindsScreen;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.render.FindLines;
+import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.AlertSound;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.Notice;
 import com.jellypudding.offlineclient.util.Tally;
@@ -21,6 +23,8 @@ import com.jellypudding.offlineclient.util.WorldWatch;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.sounds.SoundEvents;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.vehicle.ContainerEntity;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -29,6 +33,7 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.entity.BlockEntityTypes;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
+import net.minecraft.world.phys.AABB;
 
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -64,6 +69,9 @@ public final class StashFinder extends Module implements FindSource {
             BlockEntityTypes.ENDER_CHEST, BlockEntityTypes.FURNACE, BlockEntityTypes.HOPPER,
             BlockEntityTypes.SHULKER_BOX, BlockEntityTypes.SMOKER,
             BlockEntityTypes.TRAPPED_CHEST));
+    private final BoolSetting carts = new BoolSetting("Storage carts",
+        "Counts chest and hopper minecarts and chest boats as containers. A heap of them in one block is a stash"
+            + " with no block of its own.", true);
     private final RegistryListSetting<Block> ignoredSupports = new RegistryListSetting<>(
         "Ignored supports", "A container standing on one of these is not counted. Click to pick them.",
         BuiltInRegistries.BLOCK, List.of(Blocks.TUFF_BRICKS, Blocks.BARREL));
@@ -87,7 +95,7 @@ public final class StashFinder extends Module implements FindSource {
 
     public StashFinder() {
         super("StashFinder", "Points out chunks packed with containers as you travel.", Category.HUNTING);
-        addSettings(minimum, containers, ignoredSupports, minimumDistance);
+        addSettings(minimum, containers, carts, ignoredSupports, minimumDistance);
         addSettings(notice.settings());
         addSettings(alarm.settings());
         addSettings(marks.settings());
@@ -176,6 +184,16 @@ public final class StashFinder extends Module implements FindSource {
             }
             counts.add(ChatUtil.words(blockEntity.getType()));
             where = nearerMiddle(where, blockEntity.getBlockPos(), middleX, middleZ);
+        }
+        if (carts.isOn()) {
+            // Carts only reach the game from nearer by than chunks do. A later look counts them.
+            AABB column = new AABB(pos.getMinBlockX(), mc.level.getMinY(), pos.getMinBlockZ(),
+                pos.getMaxBlockX() + 1, mc.level.getMaxY() + 1, pos.getMaxBlockZ() + 1);
+            for (Entity cart : mc.level.getEntitiesOfClass(Entity.class, column,
+                entity -> entity instanceof ContainerEntity)) {
+                counts.add(EntityUtil.storageName(cart));
+                where = nearerMiddle(where, cart.blockPosition(), middleX, middleZ);
+            }
         }
         if (counts.total() < minimum.getInt()) {
             return;

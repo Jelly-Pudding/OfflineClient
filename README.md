@@ -88,7 +88,7 @@ The latest jar is on the [releases page](https://github.com/Jelly-Pudding/Offlin
 | Cocoon | Seals you inside a ball or a box of blocks. |
 | Burrow | Places a blast proof block inside your own hitbox. |
 | AutoPearl | Throws ender pearls to escape a fight or chase an enemy or phase into a wall. |
-| ChorusHold | Keeps a chorus fruit teleport back until you put the fruit away or two seconds pass whilst the server already has you at the landing spot. |
+| ChorusHold | Keeps a chorus fruit teleport back until you put the fruit away or two seconds pass. The server holds you where you ate until then. |
 | AutoWeb | Throws cobwebs at an enemy to lock them in place. |
 | SelfWeb | Webs your own block to stop knockback. |
 | AutoAnvil | Drops anvils on an enemy to break their helmet. |
@@ -113,7 +113,7 @@ The latest jar is on the [releases page](https://github.com/Jelly-Pudding/Offlin
 </details>
 
 <details>
-<summary><b>Movement</b> (39)</summary>
+<summary><b>Movement</b> (40)</summary>
 
 | Module | What it does |
 | --- | --- |
@@ -154,6 +154,7 @@ The latest jar is on the [releases page](https://github.com/Jelly-Pudding/Offlin
 | TridentBoost | Makes a riptide trident throw you further. |
 | Blink | Pauses your position updates until you turn it off. |
 | ClickTp | Teleports you onto the block you click or beside it when there is no room on top. |
+| CushionHop | Carries you from cushion to cushion along the way you look. |
 | Fetch | Picks up dropped items from far away. |
 | NoClip | Takes you through blocks. |
 
@@ -272,7 +273,7 @@ The latest jar is on the [releases page](https://github.com/Jelly-Pudding/Offlin
 | ChestLink | Keeps your ender chest open after you close it and shows it again on a key. |
 | ChestMemory | Remembers what each container you open holds and finds an item among them. |
 | ChestSwap | Swaps an elytra and a chestplate on one key. |
-| AutoDrop | Throws away junk or whatever you hold or chosen hotbar slots. |
+| AutoDrop | Throws away junk or all but what you keep or whatever you hold or chosen hotbar slots. |
 | AutoSwitch | Switches your hotbar slot on its own on a timer or after each placement. |
 | InvWalk | Lets you walk about whilst a screen is open. |
 | GUIMove | Lets you look around whilst a chest or inventory is open. |

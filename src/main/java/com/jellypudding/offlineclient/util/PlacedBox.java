@@ -1,16 +1,22 @@
 package com.jellypudding.offlineclient.util;
 
 import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.path.Trip;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.inventory.MenuType;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.Enchantments;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.ShulkerBoxBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.AABB;
 
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
@@ -20,8 +26,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 
 // A shulker box or an ender chest set down beside you then opened for the owner's clicks and
-// mined back. A shulker box drops as an item with what it holds. An ender chest only comes
-// back to a Silk Touch pickaxe and is left standing without one.
+// mined back and picked up. A shulker box drops as an item with what it holds. An ender chest
+// only comes back to a Silk Touch pickaxe and is left standing without one. The item often
+// lands out of reach and is then walked onto.
 public final class PlacedBox implements WorkedScreens.Worker {
 
     // What the owner does whilst the container is open. True whilst there is more to do.
@@ -30,7 +37,7 @@ public final class PlacedBox implements WorkedScreens.Worker {
         boolean step(AbstractContainerMenu menu);
     }
 
-    private enum Stage { NONE, OPEN, BREAK }
+    private enum Stage { NONE, OPEN, BREAK, FETCH }
 
     private static final Minecraft MC = OfflineClient.MC;
 
@@ -39,12 +46,19 @@ public final class PlacedBox implements WorkedScreens.Worker {
     // Ticks the container gets to open before it is mined back unopened and to break before it is left standing.
     private static final int OPEN_LIMIT = 60;
     private static final int BREAK_LIMIT = 200;
+    // Ticks an item lies before the game hands it to anyone with two more for the server's answer.
+    private static final int PICKUP_DELAY = 12;
+    // Ticks the walk onto a container that fell out of reach gets.
+    private static final int FETCH_LIMIT = 100;
+    // A container that breaks lands within this many blocks of where it stood.
+    private static final double DROP_RADIUS = 3;
 
     // Where each container set down stands until it is mined back or given up. Read from the
     // network thread.
     private static final Set<BlockPos> WORKING = ConcurrentHashMap.newKeySet();
 
     private final InventoryUtil.SlotSwap slots;
+    private final Trip walk = new Trip();
     private Stage stage = Stage.NONE;
     private BlockPos pos;
     // The level the container went down in. Held weakly to keep no level left behind alive.
@@ -146,10 +160,19 @@ public final class PlacedBox implements WorkedScreens.Worker {
         if (stage == Stage.NONE) {
             return false;
         }
+        if (stage == Stage.FETCH) {
+            return fetch();
+        }
         BlockState state = BlockUtil.state(pos);
         if (!standing(state)) {
-            end();
-            return false;
+            // The container is an item on the ground from here on.
+            if (stage == Stage.BREAK) {
+                BlockMiner.release();
+            }
+            WORKING.remove(pos);
+            stage = Stage.FETCH;
+            ticks = 0;
+            return true;
         }
         if (++ticks > (stage == Stage.OPEN ? OPEN_LIMIT : BREAK_LIMIT)) {
             if (stage == Stage.BREAK) {
@@ -190,8 +213,37 @@ public final class PlacedBox implements WorkedScreens.Worker {
         if (pos != null) {
             WORKING.remove(pos);
         }
+        walk.stop();
         stage = Stage.NONE;
         pos = null;
+    }
+
+    // The game hands an item over once it has lain a moment with the player beside it. A
+    // container that still lies there after that fell out of reach.
+    private boolean fetch() {
+        ItemEntity lying = dropped();
+        if (++ticks > FETCH_LIMIT || lying == null && ticks > PICKUP_DELAY) {
+            end();
+            return false;
+        }
+        if (lying != null && ticks > PICKUP_DELAY) {
+            if (!walk.active()) {
+                walk.start(lying.blockPosition(), 0);
+            }
+            walk.tick();
+        }
+        return true;
+    }
+
+    // The container lying near where it broke. Null once it is picked up.
+    private ItemEntity dropped() {
+        List<ItemEntity> lying = MC.level.getEntitiesOfClass(ItemEntity.class, new AABB(pos).inflate(DROP_RADIUS),
+            item -> item.isAlive() && container(item.getItem()));
+        return lying.isEmpty() ? null : lying.getFirst();
+    }
+
+    private static boolean container(ItemStack stack) {
+        return stack.is(Items.ENDER_CHEST) || Block.byItem(stack.getItem()) instanceof ShulkerBoxBlock;
     }
 
     // A container left in another level owns nothing here. Menu ids start again on a new connection.

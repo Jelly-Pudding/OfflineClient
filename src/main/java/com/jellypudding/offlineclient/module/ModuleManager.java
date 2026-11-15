@@ -134,6 +134,7 @@ import com.jellypudding.offlineclient.modules.movement.Autopilot;
 import com.jellypudding.offlineclient.modules.movement.Blink;
 import com.jellypudding.offlineclient.modules.movement.Boost;
 import com.jellypudding.offlineclient.modules.movement.ClickTp;
+import com.jellypudding.offlineclient.modules.movement.CushionHop;
 import com.jellypudding.offlineclient.modules.movement.EdgeGuard;
 import com.jellypudding.offlineclient.modules.movement.ElytraBoost;
 import com.jellypudding.offlineclient.modules.movement.ElytraFly;
@@ -476,6 +477,7 @@ public final class ModuleManager {
 
         add(new Blink());
         add(new ClickTp());
+        add(new CushionHop());
         add(new Fetch());
         add(new NoClip());
     }

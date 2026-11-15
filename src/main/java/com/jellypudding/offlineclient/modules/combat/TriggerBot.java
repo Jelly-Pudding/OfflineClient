@@ -8,6 +8,8 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.AttackTimer;
+import com.jellypudding.offlineclient.util.BlockMiner;
+import com.jellypudding.offlineclient.util.DamageUtil;
 import com.jellypudding.offlineclient.util.EntityFilter;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.FaceMode;
@@ -36,6 +38,8 @@ public final class TriggerBot extends Module implements Targeting {
         "Only swings whilst you hold the attack key down.", false);
     private final BoolSetting whilstBlocking = new BoolSetting("Attack whilst blocking",
         "Swings even whilst you hold a shield up.", false);
+    private final BoolSetting onlyCrits = new BoolSetting("Only crits",
+        "Holds the swing back until the hit would be critical. That takes a jump unless Criticals is on.", false);
     private final EnumSetting<FaceMode> faceTarget = FaceMode.setting(FaceMode.SPAM);
     private final EnumSetting<SwingMode> swing = SwingMode.setting(SwingMode.BOTH);
     private final TargetFilter targets = new TargetFilter();
@@ -48,7 +52,7 @@ public final class TriggerBot extends Module implements Targeting {
         addSettings(range, fov, priority);
         addSettings(filter.settings());
         addSettings(targets.settings());
-        addSettings(onlyOnClick, whilstBlocking, faceTarget, swing);
+        addSettings(onlyOnClick, whilstBlocking, onlyCrits, faceTarget, swing);
         addSettings(timer.settings());
         searchTags("click aura", "trigger");
     }
@@ -76,7 +80,7 @@ public final class TriggerBot extends Module implements Targeting {
             return;
         }
         boolean blocking = whilstBlocking.isOn() && mc.player.isBlocking();
-        if ((mc.player.isUsingItem() && !blocking) || mc.gameMode.isDestroying()
+        if ((mc.player.isUsingItem() && !blocking) || BlockMiner.handMines()
             || Modules.feedersPauseCombat() || Modules.maceComboAirborne()) {
             return;
         }
@@ -85,12 +89,18 @@ public final class TriggerBot extends Module implements Targeting {
         }
         // Picked before the cooldown is read. Other modules stand aside for the target whilst the cooldown fills.
         target = EntityUtil.bestInReach(range.getValue(), priority.getValue(), this::attackable);
-        if (target == null || !AttackTimer.charged() || !timer.ready()) {
+        if (target == null || onlyCrits.isOn() && !critDue(target) || !AttackTimer.charged() || !timer.ready()) {
             return;
         }
         // Only Spam turns ahead of the hit. Server and Client turn in the movement packet after it.
         faceTarget.getValue().face(target.getBoundingBox().getCenter(), RotationPriority.ATTACK);
         timer.strike(target, swing.getValue());
+    }
+
+    // A fall makes the hit critical. Criticals does the same from the ground.
+    private static boolean critDue(Entity target) {
+        Criticals criticals = Modules.active(Criticals.class);
+        return DamageUtil.canCrit(mc.player) || criticals != null && criticals.makesCritical(target);
     }
 
     @Override

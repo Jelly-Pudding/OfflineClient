@@ -15,6 +15,7 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.LinkedHashSet;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 // The keyboard and the mouse of the test player. Every press goes through the game's own
 // input handlers. The real keyboard and mouse of the machine are never read or moved.
@@ -27,6 +28,8 @@ public final class Controls {
     private final Rig rig;
     private final TestInput input;
     private final Set<InputConstants.Key> held = new LinkedHashSet<>();
+    // The keyboard keys held right now. The game asks from any thread.
+    private static final Set<Integer> HELD_CODES = ConcurrentHashMap.newKeySet();
 
     Controls(Rig rig) {
         this.rig = rig;
@@ -41,13 +44,21 @@ public final class Controls {
     public void hold(int key) {
         InputConstants.Key down = InputConstants.Type.KEYBOARD.getOrCreate(key);
         held.add(down);
+        HELD_CODES.add(key);
         input.holdKey(down);
     }
 
     public void release(int key) {
         InputConstants.Key up = InputConstants.Type.KEYBOARD.getOrCreate(key);
         held.remove(up);
+        HELD_CODES.remove(key);
         input.releaseKey(up);
+    }
+
+    // True whilst the rig holds that key of the keyboard down. Read by the rig's own mixin where
+    // the game asks the keyboard itself.
+    public static boolean holds(int key) {
+        return HELD_CODES.contains(key);
     }
 
     // One click of a mouse button of the game's own numbering.
@@ -73,6 +84,7 @@ public final class Controls {
             input.releaseKey(key);
         }
         held.clear();
+        HELD_CODES.clear();
     }
 
     public void type(String text) {

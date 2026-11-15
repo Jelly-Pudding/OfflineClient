@@ -5,6 +5,7 @@ import com.jellypudding.offlineclient.rig.core.Rig;
 import com.jellypudding.offlineclient.rig.core.World;
 import com.jellypudding.offlineclient.rig.suite.Motion.Moved;
 import com.mojang.blaze3d.platform.InputConstants;
+import net.minecraft.client.CameraType;
 import net.minecraft.client.gui.screens.DeathScreen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
@@ -18,6 +19,7 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -54,6 +56,11 @@ public final class PlayerSuite implements Suite {
     private static final int RUN_TICKS = 120;
     private static final int MINE_TICKS = 50;
     private static final int SNOWBALLS = 16;
+    // Where the first hotbar slot lies in the inventory screen measured from its corner.
+    private static final int SLOT_X = 8 + 8;
+    private static final int SLOT_Y = 142 + 8;
+    private static final int INVENTORY_WIDTH = 176;
+    private static final int INVENTORY_HEIGHT = 166;
 
     private BlockPos home;
 
@@ -75,6 +82,8 @@ public final class PlayerSuite implements Suite {
         plays.put("AutoRespawn brings you back with no death screen", this::autoRespawn);
         plays.put("AutoReplenish tops a hotbar stack up from the backpack", this::autoReplenish);
         plays.put("AutoDrop throws junk out of the backpack", this::autoDrop);
+        plays.put("AutoDrop keeps what is on its keep list and throws the rest", this::autoDropKeep);
+        plays.put("AntiBlind keeps Speed from widening the view", this::effectZoom);
         plays.put("ChestSwap swaps the chestplate for the elytra", this::chestSwap);
         plays.put("AutoSleep goes to bed at night", this::autoSleep);
         plays.put("AutoDoors opens the door in your way", this::autoDoors);
@@ -99,6 +108,15 @@ public final class PlayerSuite implements Suite {
         plays.put("LootList lists the enchanted gear in a chest", this::lootList);
         plays.put("PortalMenus keeps the inventory open in a portal", this::portalMenus);
         plays.put("InventoryTweaks pushes split stacks together", this::inventoryTweaks);
+        plays.put("InvWalk walks you whilst the inventory is open", this::invWalk);
+        plays.put("GUIMove turns the view with the arrow keys whilst the inventory is open", this::guiMove);
+        plays.put("FreeLook turns your body with the arrow keys and leaves the camera be", this::freeLook);
+        plays.put("FrameInput still takes your keys and your mining", this::frameInput);
+        plays.put("MenuClicker plays its step as a chest opens", this::menuClicker);
+        plays.put("ShulkerPacker packs the backpack into a shulker box", this::shulkerPacker);
+        plays.put("ChestLink keeps the ender chest open behind a closed screen", this::chestLink);
+        plays.put("ChestMemory finds the chest that holds an item", this::chestMemory);
+        plays.put("BetterTooltips adds the hunger a food stills to its tooltip", this::betterTooltips);
         return plays;
     }
 
@@ -157,6 +175,43 @@ public final class PlayerSuite implements Suite {
         rig.client().enable("AutoDrop");
         Props.await(rig, "the junk to be thrown out", ACT_TICKS, () -> Props.carried(rig, "rotten_flesh") == 0);
         rig.expect(Props.living(rig, "item") >= 1, "The junk left the backpack and nothing lies on the ground");
+    }
+
+    // An empty keep list would throw the whole backpack out. It throws nothing instead.
+    private void autoDropKeep(Rig rig) {
+        Props.pack(rig, 3, "diamond 3");
+        Props.pack(rig, 4, "oak_planks 10");
+        Props.pack(rig, 5, "bread 5");
+        rig.client().set("AutoDrop", "Mode", "keep");
+        rig.client().enable("AutoDrop");
+        rig.ticks(SEEN_TICKS * 3);
+        int kept = Props.carried(rig, "oak_planks") + Props.carried(rig, "bread");
+        Props.pick(rig, "AutoDrop", "Keep", "minecraft:diamond");
+        Props.await(rig, "all but the diamonds to be thrown out", ACT_TICKS,
+            () -> Props.carried(rig, "oak_planks") + Props.carried(rig, "bread") == 0);
+        rig.expect(kept == 15, "An empty keep list threw things out");
+        rig.expect(Props.carried(rig, "diamond") == 3, "The diamonds on the keep list were thrown out");
+    }
+
+    private void effectZoom(Rig rig) {
+        World world = rig.world();
+        double plain = viewWidening(rig);
+        world.command("effect give " + world.player() + " speed 60 4 true");
+        rig.ticks(SEEN_TICKS);
+        double fast = viewWidening(rig);
+        rig.client().set("AntiBlind", "Effect zoom", "on");
+        rig.client().enable("AntiBlind");
+        rig.ticks(2);
+        double held = viewWidening(rig);
+        rig.note("The view widens by " + plain + " at rest and " + fast + " under Speed and " + held
+            + " with AntiBlind on");
+        rig.expect(fast > plain + 0.1, "Speed did not widen the view. That proves nothing");
+        rig.expect(Math.abs(held - plain) < 0.01, "The view still widened under Speed");
+    }
+
+    // The factor the game widens the field of view by for the pace of the player.
+    private static double viewWidening(Rig rig) {
+        return rig.ask(mc -> (double) mc.player.getFieldOfViewModifier(true, 1));
     }
 
     private void chestSwap(Rig rig) {
@@ -616,5 +671,197 @@ public final class PlayerSuite implements Suite {
             }
         }
         return stacks;
+    }
+
+    private void invWalk(Rig rig) {
+        double shut = walkedBehindInventory(rig);
+        rig.world().teleport(home.getX() + 0.5, home.getY(), home.getZ() + 0.5, NORTH, 0);
+        rig.client().enable("InvWalk");
+        double open = walkedBehindInventory(rig);
+        rig.note("The forward key moved the player " + Math.round(shut) + " blocks behind the inventory and "
+            + Math.round(open) + " with InvWalk");
+        rig.expect(shut < 0.5, "The player walked behind the inventory without InvWalk. That proves nothing");
+        rig.expect(open > 2, "The forward key did nothing behind the inventory");
+    }
+
+    // How far the server has the player gone after the forward key was held behind the inventory.
+    private static double walkedBehindInventory(Rig rig) {
+        rig.act(mc -> mc.gui.setScreen(new InventoryScreen(mc.player)));
+        rig.ticks(2);
+        Vec3 from = rig.world().where();
+        rig.controls().hold(FORWARD);
+        rig.ticks(WALK_TICKS);
+        rig.controls().release(FORWARD);
+        rig.ticks(SEEN_TICKS);
+        rig.act(mc -> mc.gui.setScreen(null));
+        return rig.world().where().distanceTo(from);
+    }
+
+    private void guiMove(Rig rig) {
+        double still = turnedBehindInventory(rig);
+        rig.client().enable("GUIMove");
+        double turned = turnedBehindInventory(rig);
+        rig.expect(still < 1, "The arrow key turned the view without GUIMove. That proves nothing");
+        rig.expect(turned >= 20, "The arrow key turned the view by " + Math.round(turned) + " degrees");
+    }
+
+    // Degrees the view turned whilst the right arrow was held behind the inventory.
+    private static double turnedBehindInventory(Rig rig) {
+        rig.act(mc -> mc.gui.setScreen(new InventoryScreen(mc.player)));
+        rig.ticks(2);
+        float from = rig.ask(mc -> mc.player.getYRot());
+        rig.controls().hold(InputConstants.KEY_RIGHT);
+        rig.ticks(SEEN_TICKS);
+        rig.controls().release(InputConstants.KEY_RIGHT);
+        float to = rig.ask(mc -> mc.player.getYRot());
+        rig.act(mc -> mc.gui.setScreen(null));
+        return Math.abs(Mth.degreesDifference(from, to));
+    }
+
+    // In player mode the mouse has the camera and the arrow keys have the body.
+    private void freeLook(Rig rig) {
+        float from = rig.ask(mc -> mc.player.getYRot());
+        rig.client().enable("FreeLook");
+        try {
+            rig.ticks(SEEN_TICKS);
+            float looked = rig.ask(mc -> mc.gameRenderer.mainCamera().yRot());
+            rig.controls().hold(InputConstants.KEY_RIGHT);
+            rig.ticks(SEEN_TICKS);
+            rig.controls().release(InputConstants.KEY_RIGHT);
+            rig.ticks(2);
+            double body = Math.abs(Mth.degreesDifference(from, rig.ask(mc -> mc.player.getYRot())));
+            double camera = Math.abs(Mth.degreesDifference(looked, rig.ask(mc -> mc.gameRenderer.mainCamera().yRot())));
+            rig.note("The body turned " + Math.round(body) + " degrees and the camera " + Math.round(camera));
+            rig.expect(body >= 20, "The arrow key turned the body by " + Math.round(body) + " degrees");
+            rig.expect(camera < 2, "The camera turned with the body");
+        } finally {
+            rig.client().disable("FreeLook");
+            rig.act(mc -> mc.options.setCameraType(CameraType.FIRST_PERSON));
+        }
+    }
+
+    // The keys are read once a frame in place of once a tick. A number key and the attack button
+    // must still do their work.
+    private void frameInput(Rig rig) {
+        BlockPos block = home.north(2);
+        rig.world().refill(block, block, "dirt");
+        Props.hold(rig, 0);
+        rig.client().enable("FrameInput");
+        rig.controls().press(InputConstants.KEY_3);
+        rig.ticks(SEEN_TICKS);
+        int slot = rig.ask(mc -> mc.player.getInventory().getSelectedSlot());
+        rig.controls().aimAtBlock(block, Direction.SOUTH);
+        rig.ticks(2);
+        rig.controls().holdMouse(ATTACK);
+        try {
+            rig.until("the dirt to break", MINE_TICKS * 2, mc -> mc.level.getBlockState(block).isAir());
+        } finally {
+            rig.controls().releaseMouse(ATTACK);
+        }
+        rig.expect(slot == 2, "The key for the third slot left slot " + slot + " in the hand");
+    }
+
+    private void menuClicker(Rig rig) {
+        BlockPos chest = home.north(2);
+        rig.world().command("setblock " + Props.at(chest) + " chest[facing=south]{Items:[{Slot:0b,"
+            + "id:\"minecraft:diamond\",count:3}]}");
+        Props.pick(rig, "MenuClicker", "Menus", "minecraft:generic_9x3");
+        Props.text(rig, "MenuClicker", "Step 1", "shift 0");
+        Props.hold(rig, 0);
+        rig.client().enable("MenuClicker");
+        rig.ticks(SEEN_TICKS);
+        rig.controls().aimAt(Vec3.atCenterOf(chest));
+        rig.ticks(2);
+        rig.controls().click(USE);
+        try {
+            Props.await(rig, "the diamonds to move into the backpack", ACT_TICKS,
+                () -> Props.carried(rig, "diamond") == 3);
+        } finally {
+            rig.act(mc -> mc.player.closeContainer());
+        }
+    }
+
+    private void shulkerPacker(Rig rig) {
+        Props.hold(rig, 0, "shulker_box");
+        Props.pack(rig, 0, "cobblestone 64");
+        Props.pack(rig, 1, "cobblestone 64");
+        rig.ticks(SEEN_TICKS);
+        rig.client().enable("ShulkerPacker");
+        int took = Props.await(rig, "the cobblestone to be packed away and the box picked up", ACT_TICKS * 4,
+            () -> Props.carried(rig, "cobblestone") == 0 && Props.carried(rig, "shulker_box") == 1);
+        rig.note("The box was packed and back in the backpack after about " + took + " ticks");
+    }
+
+    // Escape puts the screen away and the menu stays. The inventory key brings the screen back.
+    private void chestLink(Rig rig) {
+        BlockPos chest = home.north(2);
+        rig.world().setBlock(chest, "ender_chest[facing=south]");
+        Props.hold(rig, 0);
+        rig.client().enable("ChestLink");
+        rig.ticks(SEEN_TICKS);
+        rig.controls().aimAt(Vec3.atCenterOf(chest));
+        rig.ticks(2);
+        rig.controls().click(USE);
+        rig.until("the ender chest to open", ACT_TICKS, mc -> mc.gui.screen() instanceof AbstractContainerScreen);
+        rig.controls().press(InputConstants.KEY_ESCAPE);
+        rig.ticks(SEEN_TICKS);
+        boolean away = rig.ask(mc -> mc.gui.screen() == null);
+        boolean kept = rig.ask(mc -> mc.player.containerMenu != mc.player.inventoryMenu);
+        rig.controls().press(InputConstants.KEY_E);
+        rig.ticks(SEEN_TICKS);
+        boolean back = rig.ask(mc -> mc.gui.screen() instanceof AbstractContainerScreen
+            && !(mc.gui.screen() instanceof InventoryScreen));
+        rig.client().disable("ChestLink");
+        rig.act(mc -> mc.gui.setScreen(null));
+        rig.expect(away, "Escape left the screen up");
+        rig.expect(kept, "Escape closed the ender chest for good");
+        rig.expect(back, "The inventory key did not bring the ender chest back");
+    }
+
+    private void chestMemory(Rig rig) {
+        BlockPos chest = home.north(2);
+        rig.world().command("setblock " + Props.at(chest) + " chest[facing=south]{Items:[{Slot:0b,"
+            + "id:\"minecraft:diamond\",count:3}]}");
+        Props.hold(rig, 0);
+        rig.client().enable("ChestMemory");
+        List<String> before = rig.client().command("chests diamond");
+        rig.ticks(SEEN_TICKS);
+        rig.controls().aimAt(Vec3.atCenterOf(chest));
+        rig.ticks(2);
+        rig.controls().click(USE);
+        rig.until("the chest to open", ACT_TICKS, mc -> mc.gui.screen() instanceof AbstractContainerScreen);
+        rig.ticks(SEEN_TICKS);
+        rig.act(mc -> mc.player.closeContainer());
+        rig.ticks(SEEN_TICKS);
+        List<String> after = rig.client().command("chests diamond");
+        rig.note("Asked for diamonds it said " + after);
+        rig.expect(before.stream().noneMatch(line -> line.contains("found")), "It knew of the diamonds before the "
+            + "chest was ever opened. That proves nothing");
+        rig.expect(after.stream().anyMatch(line -> line.contains("found")), "It does not know the chest it just saw");
+    }
+
+    private void betterTooltips(Rig rig) {
+        Props.hold(rig, 0, BEEF);
+        rig.ticks(SEEN_TICKS);
+        boolean plain = !tooltipSays(rig, "saturation");
+        rig.client().enable("BetterTooltips");
+        boolean told = tooltipSays(rig, "saturation");
+        rig.expect(plain, "The tooltip named the saturation without BetterTooltips. That proves nothing");
+        rig.expect(told, "The tooltip of the food says nothing about hunger and saturation");
+    }
+
+    // Rests the pointer on the first hotbar slot of the inventory and reads what the screen writes.
+    private static boolean tooltipSays(Rig rig, String words) {
+        rig.act(mc -> mc.gui.setScreen(new InventoryScreen(mc.player)));
+        rig.ticks(2);
+        int[] corner = rig.ask(mc -> new int[] {(mc.getWindow().getGuiScaledWidth() - INVENTORY_WIDTH) / 2,
+            (mc.getWindow().getGuiScaledHeight() - INVENTORY_HEIGHT) / 2});
+        rig.controls().pointer(corner[0] + SLOT_X, corner[1] + SLOT_Y);
+        rig.ticks(SEEN_TICKS);
+        boolean written = rig.frames().capture("tooltip " + words).shows(words);
+        rig.controls().parkPointer();
+        rig.act(mc -> mc.gui.setScreen(null));
+        rig.ticks(2);
+        return written;
     }
 }

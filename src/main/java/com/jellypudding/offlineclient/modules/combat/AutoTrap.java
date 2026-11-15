@@ -13,9 +13,9 @@ import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.Holes;
-import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
+import com.jellypudding.offlineclient.util.PlacingRounds;
+import com.jellypudding.offlineclient.util.SwingMode;
 import com.jellypudding.offlineclient.util.TargetPriority;
-import com.jellypudding.offlineclient.util.UseBudget;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.entity.player.Player;
@@ -55,12 +55,7 @@ public final class AutoTrap extends Module {
         .describe(Bottom.SINGLE, "The block under their feet only.")
         .describe(Bottom.FULL, "The block under their feet and the four sides at feet height.")
         .describe(Bottom.NONE, "Places nothing at their feet.");
-    private final NumberSetting delay = new NumberSetting("Delay",
-        "Ticks to wait between placing rounds.", 1, 0, 5, 1, " ticks");
-    private final NumberSetting perRound = new NumberSetting("Blocks per round",
-        "How many blocks to place in one round.", 2, 1, 4, 1);
-    private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Sends a look packet towards each block.", true);
+    private final PlacingRounds rounds = new PlacingRounds(1);
     private final BoolSetting toggleOff = new BoolSetting("Toggle off when done",
         "Turns off once the target is boxed in.", false);
     private final BoolSetting render = new BoolSetting("Show blocks",
@@ -68,8 +63,6 @@ public final class AutoTrap extends Module {
     private final BoxStyle style = new BoxStyle(BoxStyle.Shape.BOTH, 280f).under(render);
     private final BoxStyle nextStyle = new BoxStyle("Next", BoxStyle.Shape.BOTH, 205f).under(render);
 
-    private int timer;
-    private final SlotSwap slots = new SlotSwap();
     private String targetName;
     private boolean placed;
 
@@ -78,8 +71,8 @@ public final class AutoTrap extends Module {
 
     public AutoTrap() {
         super("AutoTrap", "Places blocks around an enemy to trap them.", Category.COMBAT);
-        addSettings(targetRange, priority, placeRange, wallsRange, blocks, top, bottom, delay,
-            perRound, rotate, toggleOff, render);
+        addSettings(targetRange, priority, placeRange, wallsRange, blocks, top, bottom, rounds.delay(),
+            rounds.perRound(), rounds.rotate(), toggleOff, render);
         addSettings(style.settings());
         addSettings(nextStyle.settings());
         searchTags("obsidian", "trap", "box");
@@ -92,8 +85,7 @@ public final class AutoTrap extends Module {
 
     @Override
     protected void onEnable() {
-        timer = 0;
-        slots.forget();
+        rounds.forget();
         targetName = null;
         placed = false;
         pending = List.of();
@@ -101,7 +93,7 @@ public final class AutoTrap extends Module {
 
     @Override
     protected void onDisable() {
-        slots.restore();
+        rounds.restore();
         targetName = null;
         pending = List.of();
     }
@@ -115,53 +107,20 @@ public final class AutoTrap extends Module {
         Player target = EntityUtil.bestEnemy(targetRange.getValue(), priority.getValue());
         targetName = EntityUtil.displayNameOf(target);
         if (target == null) {
-            slots.restore();
+            rounds.restore();
             return;
         }
 
         List<BlockPos> missing = missingSpots(target);
         pending = missing;
         if (missing.isEmpty()) {
-            slots.restore();
+            rounds.restore();
             if (toggleOff.isOn() && placed) {
                 setEnabled(false);
             }
             return;
         }
-        if (timer > 0) {
-            timer--;
-            return;
-        }
-        int round = Math.min(perRound.getInt(), UseBudget.remaining());
-        if (round == 0) {
-            return;
-        }
-
-        int slot = BlockUtil.findRankedBlockSlot(blocks.getValue(), block -> true);
-        if (slot == -1) {
-            slots.restore();
-            return;
-        }
-        slots.select(slot);
-
-        int done = 0;
-        boolean rotated = false;
-        for (BlockPos pos : missing) {
-            if (done >= round) {
-                break;
-            }
-            boolean turn = rotate.isOn() && !rotated;
-            rotated |= turn;
-            boolean ok = BlockUtil.placeAny(pos, turn, true);
-            if (ok) {
-                done++;
-                placed = true;
-            }
-        }
-        if (done > 0) {
-            timer = delay.getInt();
-        }
-        slots.restore();
+        placed |= rounds.place(missing, blocks, SwingMode.BOTH) > 0;
     }
 
     // Furthest first. The near side is left open for as long as possible.
@@ -206,7 +165,7 @@ public final class AutoTrap extends Module {
             return;
         }
         for (int i = 0; i < pending.size(); i++) {
-            BoxStyle chosen = i < perRound.getInt() ? nextStyle : style;
+            BoxStyle chosen = i < rounds.perRound().getInt() ? nextStyle : style;
             chosen.draw(event.getBatch(), pending.get(i), false);
         }
     }

@@ -163,7 +163,7 @@ public abstract class RespawnBlockAura extends Module implements Targeting {
         pauseOnCrystals = new BoolSetting("Pause on crystals",
             "Stands aside whilst CrystalAura places or breaks.", true);
         faceTarget = FaceMode.setting(FaceMode.SERVER);
-        swing = SwingMode.setting(SwingMode.BOTH);
+        swing = SwingMode.settingWithUses(SwingMode.BOTH);
         render = new BoolSetting("Render", "Draws the spot the next block goes in and the one being set off.", true);
         placementStyle = new BoxStyle(BoxStyle.Shape.BOTH, hue).under(render);
         armedColor = new ColorSetting("Armed colour", "Colour of the block about to go off.", 0, false)

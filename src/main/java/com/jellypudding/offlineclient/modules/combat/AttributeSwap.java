@@ -15,6 +15,7 @@ import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.ItemUtil;
 import com.jellypudding.offlineclient.util.Modules;
+import com.jellypudding.offlineclient.util.ServerInfo;
 import com.jellypudding.offlineclient.util.WeaponKinds;
 import com.jellypudding.offlineclient.util.WeaponUtil;
 import net.minecraft.resources.ResourceKey;
@@ -53,6 +54,9 @@ public final class AttributeSwap extends Module {
 
     // A mob under this much health is about to drop its loot.
     private static final float NEARLY_DEAD = 20;
+
+    // The share of its damage a hit lands with right after the charge starts again.
+    private static final double RESTARTED_SHARE = 0.2;
 
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
         "What the swap goes to.", Mode.SMART)
@@ -329,14 +333,15 @@ public final class AttributeSwap extends Module {
             }
         }
         int selected = InventoryUtil.selectedSlot();
-        double bestScore = score(held, target) + minGain.getValue();
+        boolean restarts = ServerInfo.runsPaper();
+        double bestScore = score(held, held, target, false) + minGain.getValue();
         int best = -1;
         for (int i = 0; i < InventoryUtil.HOTBAR_SIZE; i++) {
             ItemStack stack = mc.player.getInventory().getItem(i);
             if (i == selected || skipped(stack) || stack.isEmpty() && !durabilitySaver.isOn()) {
                 continue;
             }
-            double score = score(stack, target);
+            double score = score(stack, held, target, restarts);
             if (score > bestScore) {
                 bestScore = score;
                 best = i;
@@ -345,20 +350,28 @@ public final class AttributeSwap extends Module {
         return best;
     }
 
-    // Points for one item. Real damage counts one point a heart and the rest are bonuses.
-    private double score(ItemStack stack, LivingEntity target) {
-        double score = durabilitySaver.isOn() ? durabilityScore(stack) : 0;
+    // Points for a hit with one item whilst another is held. Real damage counts one point a heart
+    // and the rest are bonuses. A swap at the moment of the hit never brings the whole item along.
+    // A plain server still strikes with the damage of the item you held and only the enchantments
+    // change hands. Paper takes the new item whole but starts the charge again. That leaves a
+    // fifth of its damage and nothing of the enchantments that add damage.
+    private double score(ItemStack stack, ItemStack held, LivingEntity target, boolean restarts) {
+        double damage = mc.player.getAttributeBaseValue(Attributes.ATTACK_DAMAGE)
+            + ItemUtil.attributeValue(restarts ? stack : held, Attributes.ATTACK_DAMAGE, EquipmentSlot.MAINHAND);
+        double score = restarts ? damage * RESTARTED_SHARE : damage;
+        if (durabilitySaver.isOn()) {
+            score += durabilityScore(stack);
+        }
         if (stack.isEmpty()) {
             return score;
         }
-        score += ItemUtil.attributeValue(stack, Attributes.ATTACK_DAMAGE, EquipmentSlot.MAINHAND);
         if (swords.isOn()) {
-            score += swordScore(stack, target);
+            score += swordScore(stack, target, restarts);
         }
         if (maces.isOn()) {
             score += maceScore(stack, target);
         }
-        if (others.isOn() && impaling.isOn()
+        if (!restarts && others.isOn() && impaling.isOn()
             && EntityUtil.typeIs(target, EntityTypeTags.SENSITIVE_TO_IMPALING)) {
             score += 2.5 * level(Enchantments.IMPALING, stack);
         }
@@ -373,7 +386,8 @@ public final class AttributeSwap extends Module {
         return 0.1 * level(Enchantments.UNBREAKING, stack);
     }
 
-    private double swordScore(ItemStack stack, LivingEntity target) {
+    // Fire and loot come with any hit that lands. The rest needs a charged one.
+    private double swordScore(ItemStack stack, LivingEntity target, boolean restarts) {
         double score = 0;
         boolean burning = target.isOnFire();
         if (fireAspect.isOn() && !burning && !fireProof(target)) {
@@ -382,6 +396,9 @@ public final class AttributeSwap extends Module {
         if (looting.isOn() && !(target instanceof Player)) {
             boolean nearlyDead = target.getHealth() < NEARLY_DEAD || burning;
             score += (nearlyDead ? 4 : 2) * level(Enchantments.LOOTING, stack);
+        }
+        if (restarts) {
+            return score;
         }
         if (sharpness.isOn()) {
             int sharp = level(Enchantments.SHARPNESS, stack);

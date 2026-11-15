@@ -27,7 +27,6 @@ import com.jellypudding.offlineclient.util.SwingMode;
 import com.jellypudding.offlineclient.util.WorldWatch;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
@@ -250,7 +249,7 @@ public final class Excavator extends Module implements CornerPicker.Taker {
             }
         }
         if (sent > 0) {
-            SwingMode.swingArm(InteractionHand.MAIN_HAND);
+            SwingMode.BOTH.mine();
         }
         return sent > 0;
     }

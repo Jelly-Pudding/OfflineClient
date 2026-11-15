@@ -163,7 +163,7 @@ public final class Nuker extends Module {
         .describe(Order.FURTHEST, "The furthest block first.")
         .describe(Order.FASTEST, "The quickest block to break first.")
         .describe(Order.TOP_DOWN, "The highest block first.");
-    private final EnumSetting<SwingMode> swing = SwingMode.setting(SwingMode.BOTH);
+    private final EnumSetting<SwingMode> swing = SwingMode.settingWithUses(SwingMode.BOTH);
     private final BoxStyle blockStyle = new BoxStyle("Block", BoxStyle.Shape.BOTH, 0);
     private final NumberSetting highlightStrength = new NumberSetting("Highlight strength",
         "How strongly the blocks waiting their turn show.", 35, 0, 100, 5, "%").max(100);
@@ -416,7 +416,7 @@ public final class Nuker extends Module {
             && EntityUtil.reachDistance(mc.player, entity) <= reach);
         if (hanging != null) {
             mc.gameMode.attack(mc.player, hanging);
-            swing.getValue().swing();
+            swing.getValue().hit();
             hangingHits.merge(hanging.getId(), 1, Integer::sum);
         }
     }
@@ -474,7 +474,7 @@ public final class Nuker extends Module {
 
     private void interactWith(BlockPos pos) {
         if (BlockUtil.useOn(pos, rotate.isOn(), false)) {
-            swing.getValue().swing();
+            swing.getValue().use();
         }
         interacted.add(pos);
     }
@@ -520,7 +520,7 @@ public final class Nuker extends Module {
             sent++;
         }
         if (sent > 0) {
-            swing.getValue().swing();
+            swing.getValue().mine();
         }
     }
 

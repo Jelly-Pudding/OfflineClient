@@ -122,7 +122,7 @@ public final class Ignition {
         }
         boolean used = InputUtil.whileSneaking(() -> MC.gameMode.useItemOn(MC.player, hand, hit).consumesAction());
         if (used) {
-            SwingMode.swingArm(hand);
+            SwingMode.swingUse(hand);
         }
         return used;
     }

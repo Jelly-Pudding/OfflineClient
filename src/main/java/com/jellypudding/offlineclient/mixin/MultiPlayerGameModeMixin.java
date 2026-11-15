@@ -7,6 +7,7 @@ import com.jellypudding.offlineclient.modules.movement.ElytraBoost;
 import com.jellypudding.offlineclient.modules.player.FastBreak;
 import com.jellypudding.offlineclient.modules.player.NoInteract;
 import com.jellypudding.offlineclient.modules.world.NoGhostBlocks;
+import com.jellypudding.offlineclient.util.AttackTimer;
 import com.jellypudding.offlineclient.util.Modules;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
@@ -181,6 +182,23 @@ public abstract class MultiPlayerGameModeMixin {
         InteractionResult dropped = noInteract == null ? null : noInteract.dropsEntityClick(hand, target, hit);
         if (dropped != null) {
             cir.setReturnValue(dropped);
+        }
+    }
+
+    // The server swings the arm after a use it takes and begins its attack cooldown again with
+    // the swing. The hit timer is told. The game's own count never is.
+    @Inject(method = {
+        "useItem(Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/world/InteractionHand;)"
+            + "Lnet/minecraft/world/InteractionResult;",
+        "useItemOn(Lnet/minecraft/client/player/LocalPlayer;Lnet/minecraft/world/InteractionHand;"
+            + "Lnet/minecraft/world/phys/BlockHitResult;)Lnet/minecraft/world/InteractionResult;",
+        "interact(Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/world/entity/Entity;"
+            + "Lnet/minecraft/world/phys/EntityHitResult;Lnet/minecraft/world/InteractionHand;)"
+            + "Lnet/minecraft/world/InteractionResult;"},
+        at = @At("RETURN"))
+    private void afterUse(CallbackInfoReturnable<InteractionResult> cir) {
+        if (cir.getReturnValue() instanceof InteractionResult.Success taken && taken.shouldSwing()) {
+            AttackTimer.restarted();
         }
     }
 

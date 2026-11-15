@@ -33,6 +33,9 @@ public final class ItemEsp extends Module {
     private static final double FANCY_GROW = 0.1;
     private static final double FANCY_LIFT = 0.05;
 
+    // Blocks a tick an item has to drop by to count as falling.
+    private static final double FALLING = 0.1;
+
     private final BoolSetting boxes = new BoolSetting("Boxes",
         "Draws a box around every item.", true);
     private final BoxStyle style = new BoxStyle(BoxStyle.Shape.LINES, 48).under(boxes);
@@ -48,6 +51,10 @@ public final class ItemEsp extends Module {
     private final BoolSetting steadyView = new BoolSetting("Steady view",
         "Stops view bobbing whilst tracers are on to keep the lines steady.", true)
         .under(tracers);
+    private final BoolSetting falling = new BoolSetting("Falling items",
+        "Draws a line in its own colour to any item on its way down. Something above let go of it.", false);
+    private final ColorSetting fallingColor = new ColorSetting("Falling colour",
+        "Colour of the line to a falling item.", 180, false).under(falling);
     private final BoolSetting limitRange = new BoolSetting("Limit range",
         "Only shows items within a set distance.", false);
     private final NumberSetting range = new NumberSetting("Range",
@@ -70,7 +77,8 @@ public final class ItemEsp extends Module {
         super("ItemESP", "Shows dropped items through walls.", Category.RENDER);
         addSettings(boxes);
         addSettings(style.settings());
-        addSettings(size, tracers, tracerColor, steadyView, limitRange, range, everything, items);
+        addSettings(size, tracers, tracerColor, steadyView, falling, fallingColor, limitRange, range, everything,
+            items);
         addSettings(gear.settings());
         addSettings(fade.setting());
         searchTags("item tracers", "drops", "enchanted gear");
@@ -119,8 +127,10 @@ public final class ItemEsp extends Module {
             if (boxes.isOn()) {
                 style.drawFading(batch, box, strength, true);
             }
-            if (tracers.isOn()) {
-                batch.tracer(box.getCenter(), ColorUtil.fade(tracerColor.getColor(), strength), true);
+            boolean drops = falling.isOn() && !item.onGround() && item.getDeltaMovement().y < -FALLING;
+            if (drops || tracers.isOn()) {
+                ColorSetting line = drops ? fallingColor : tracerColor;
+                batch.tracer(box.getCenter(), ColorUtil.fade(line.getColor(), strength), true);
             }
         }
         count = found;

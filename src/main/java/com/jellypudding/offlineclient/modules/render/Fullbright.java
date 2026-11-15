@@ -45,12 +45,11 @@ public final class Fullbright extends Module {
     private final NumberSetting fadeStep = new NumberSetting("Fade speed",
         "How much of the gap is closed each tick.", 1, 0.1, 4, 0.1).min(0.05)
         .under(fade, () -> mode.is(Mode.GAMMA) && fade.isOn());
-    private final NumberSetting restoreBrightness = new NumberSetting("Restore brightness",
-        "The gamma the game goes back to once this is off.", 1, 0, 1, 0.05).max(1)
-        .under(mode, Mode.GAMMA);
 
     // Where the fade has reached. Jumps straight to the target whilst fade is off.
     private double shown = 1;
+    // The brightness you had before. It comes back once this is off.
+    private double own = 1;
     private Mode running;
     // A dragged slider settles before every chunk is meshed again.
     private final ChunkRebuild rebuild = new ChunkRebuild();
@@ -59,8 +58,7 @@ public final class Fullbright extends Module {
 
     public Fullbright() {
         super("Fullbright", "Lets you see in the dark without torches.", Category.RENDER);
-        addSettings(mode, brightness, layer, minimumLight, fade, fadeStep,
-            restoreBrightness);
+        addSettings(mode, brightness, layer, minimumLight, fade, fadeStep);
         searchTags("night vision", "brightness");
     }
 
@@ -72,7 +70,8 @@ public final class Fullbright extends Module {
     @Override
     protected void onEnable() {
         // A crash whilst enabled leaves the boosted gamma in options.txt. Vanilla caps at 1.
-        shown = Math.min(mc.options.gamma().get(), 1.0);
+        own = Math.min(mc.options.gamma().get(), 1.0);
+        shown = own;
         running = mode.getValue();
         lastMinimum = minimumLight.getInt();
         lastLayer = layer.getValue();
@@ -93,7 +92,7 @@ public final class Fullbright extends Module {
             return;
         }
         switch (mode) {
-            case GAMMA -> setGamma(restoreBrightness.getValue());
+            case GAMMA -> setGamma(own);
             case POTION -> {
                 if (mc.player != null && ownNightVision(mc.player.getEffect(MobEffects.NIGHT_VISION))) {
                     mc.player.removeEffect(MobEffects.NIGHT_VISION);

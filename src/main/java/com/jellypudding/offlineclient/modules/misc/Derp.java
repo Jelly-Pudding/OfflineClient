@@ -298,7 +298,7 @@ public final class Derp extends Module {
             return;
         }
         flailTimer = flailGap();
-        SwingMode.PACKET.swing();
+        SwingMode.PACKET.hit();
     }
 
     // Ticks from one punch to the next. The server starts a fresh swing only once the one before

@@ -6,7 +6,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;
-import net.minecraft.world.InteractionHand;
 
 // Lets modules mine blocks the same way a held left click does.
 // MinecraftMixin suppresses the vanilla abort that runs every tick the attack key is up.
@@ -18,6 +17,8 @@ public final class BlockMiner {
     private static int lastDriveTick = IDLE;
     private static int lastMineTick = IDLE;
     private static BlockPos target;
+    private static int lastFirstTick = IDLE;
+    private static BlockPos first;
     private static boolean selfCall;
     private static boolean ownTool;
 
@@ -34,6 +35,13 @@ public final class BlockMiner {
         if (MC.player == null || MC.level == null || MC.gameMode == null || refused(pos)) {
             return false;
         }
+        if (standsBy(pos)) {
+            // The block in hand is let go of once. The one that goes first needs the server's
+            // target to itself.
+            release(pos);
+            keepControl();
+            return true;
+        }
         Direction side = BlockUtil.facingSide(pos);
         if (rotate) {
             BlockUtil.faceVector(BlockUtil.hitPoint(pos, side), RotationPriority.MINE);
@@ -48,7 +56,7 @@ public final class BlockMiner {
         if (!accepted) {
             return false;
         }
-        swing.swing(InteractionHand.MAIN_HAND);
+        swing.mine();
         keepControl();
         target = pos;
         lastMineTick = MC.player.tickCount;
@@ -67,6 +75,19 @@ public final class BlockMiner {
         } finally {
             ownTool = false;
         }
+    }
+
+    // Names a block that has to go before any other. Called every tick it is worked on by a
+    // module that guards the player or opens an enemy up. Whoever else mines meanwhile is told
+    // its block is still being mined and carries on once this one is done.
+    public static void first(BlockPos pos) {
+        first = pos.immutable();
+        lastFirstTick = MC.player.tickCount;
+    }
+
+    // True whilst another block goes first.
+    public static boolean standsBy(BlockPos pos) {
+        return lately(lastFirstTick) && !pos.equals(first);
     }
 
     // Sends the start and stop packets for a block in one go.
@@ -123,6 +144,11 @@ public final class BlockMiner {
     // True when a module drove mining this tick or the one before.
     public static boolean isActive() {
         return lately(lastDriveTick);
+    }
+
+    // True whilst the player's own held click mines a block. A module that mines is not the hand.
+    public static boolean handMines() {
+        return MC.gameMode != null && MC.gameMode.isDestroying() && !isActive();
     }
 
     private static boolean lately(int tick) {

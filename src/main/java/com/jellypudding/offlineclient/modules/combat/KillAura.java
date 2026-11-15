@@ -11,6 +11,7 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.AttackTimer;
+import com.jellypudding.offlineclient.util.BlockMiner;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.EntityKind;
@@ -152,7 +153,9 @@ public final class KillAura extends Module implements Targeting {
     private final EnumSetting<SwingMode> swing = SwingMode.setting(SwingMode.BOTH);
 
     private final BoolSetting pauseOnUse = new BoolSetting("Pause on use",
-        "Holds off whilst eating or blocking or drawing a bow or mining.", true);
+        "Holds off whilst eating or blocking or drawing a bow.", true);
+    private final BoolSetting pauseOnMine = new BoolSetting("Pause on mine",
+        "Holds off whilst you mine a block by hand. A module that mines never holds it off.", true);
     private final BoolSetting pauseOnContainers = new BoolSetting("Pause in containers",
         "No swinging whilst a chest or furnace is open. Your own inventory and the menus carry on.", true);
     private final BoolSetting pauseOnCrystals = new BoolSetting("Pause on crystals",
@@ -179,7 +182,7 @@ public final class KillAura extends Module implements Targeting {
         addSettings(timer.settings());
         addSettings(autoWeapon, weaponFromInventory, weaponSwapBack, shields, onlyWithWeapon);
         addSettings(weapons.settings());
-        addSettings(onlyOnClick, ignoreCooldown, switchDelay, swing, pauseOnUse, pauseOnContainers,
+        addSettings(onlyOnClick, ignoreCooldown, switchDelay, swing, pauseOnUse, pauseOnMine, pauseOnContainers,
             pauseOnCrystals, pauseOnLag, showTarget);
         searchTags("aura", "multi aura", "aimbot", "legit aura");
     }
@@ -262,7 +265,7 @@ public final class KillAura extends Module implements Targeting {
 
     // Every reason the aura sits this tick out.
     private boolean holdingFire() {
-        if (pauseOnUse.isOn() && (mc.player.isUsingItem() || mc.gameMode.isDestroying())) {
+        if (pauseOnUse.isOn() && mc.player.isUsingItem() || pauseOnMine.isOn() && BlockMiner.handMines()) {
             return true;
         }
         if (pauseOnContainers.isOn() && InventoryUtil.containerOpen()) {

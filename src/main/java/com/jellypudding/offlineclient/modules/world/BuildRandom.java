@@ -33,7 +33,7 @@ public final class BuildRandom extends Module {
     private final BoolSetting lineOfSight = new BoolSetting("Line of sight",
         "Never places behind a wall.", false);
     private final EnumSetting<FaceMode> faceTarget = FaceMode.setting(FaceMode.SERVER);
-    private final EnumSetting<SwingMode> swing = SwingMode.setting(SwingMode.PACKET);
+    private final BoolSetting swing = SwingMode.useSetting(false);
     private final BoolSetting fastPlace = new BoolSetting("Fast place",
         "Ignores the vanilla wait between placements.", false);
     private final BoolSetting whilstBreaking = new BoolSetting("Whilst breaking",
@@ -96,7 +96,7 @@ public final class BuildRandom extends Module {
         if (placement == null) {
             return false;
         }
-        if (placement.place(faceTarget.getValue(), swing.getValue())) {
+        if (placement.place(faceTarget.getValue(), SwingMode.of(swing.isOn()))) {
             lastPlaced = pos;
         }
         return true;

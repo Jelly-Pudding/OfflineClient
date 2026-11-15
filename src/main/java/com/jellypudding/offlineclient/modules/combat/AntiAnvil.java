@@ -6,7 +6,6 @@ import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
-import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.SwingMode;
@@ -33,7 +32,7 @@ public final class AntiAnvil extends Module {
 
     private final BoolSetting rotate = new BoolSetting("Rotate",
         "Sends a look packet towards the block.", true);
-    private final EnumSetting<SwingMode> swing = SwingMode.setting(SwingMode.BOTH);
+    private final BoolSetting swing = SwingMode.useSetting(true);
     private final BoolSetting render = new BoolSetting("Show roof",
         "Outlines the block being placed.", true);
 
@@ -121,7 +120,7 @@ public final class AntiAnvil extends Module {
         }
         slots.select(slot);
         if (BlockUtil.placeAny(target, rotate.isOn(), false)) {
-            swing.getValue().swing();
+            SwingMode.of(swing.isOn()).use();
         }
         slots.restore();
     }

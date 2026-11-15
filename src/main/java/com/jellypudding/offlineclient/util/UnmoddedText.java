@@ -54,11 +54,28 @@ public final class UnmoddedText {
         return new Reader(UnmoddedText::plain, UnmoddedText::isOwnBind).read(text);
     }
 
+    // True when the text names a word or a key bind that only a mod supplies. A server that
+    // shows such a text is looking for that mod.
+    public static boolean asksForMods(Component text) {
+        boolean asks = switch (text.getContents()) {
+            case TranslatableContents translation -> onlyAModKnows(translation.getKey())
+                || Stream.of(translation.getArgs()).anyMatch(arg -> arg instanceof Component part && asksForMods(part));
+            case KeybindContents keybind -> !isOwnBind(keybind.getName()) && KeyMapping.get(keybind.getName()) != null;
+            default -> false;
+        };
+        return asks || text.getSiblings().stream().anyMatch(UnmoddedText::asksForMods);
+    }
+
+    private static boolean onlyAModKnows(String key) {
+        return Language.getInstance().has(key) && !plain().has(key);
+    }
+
     // The name of an item as the anvil reads it on its way back to the server. Whilst ServerSpoof
     // hides mod text it holds the words a client without mods reads.
     public static Component anvilName(ItemStack stack) {
         Component name = wholeName(stack);
-        return ServerSpoof.hidesModText() ? Component.literal(flatten(name)) : name;
+        String plainWords = ServerSpoof.plainWords(name);
+        return plainWords == null ? name : Component.literal(plainWords);
     }
 
     // The name the way the game puts it together. AntiCrash cuts the name the game draws and a cut

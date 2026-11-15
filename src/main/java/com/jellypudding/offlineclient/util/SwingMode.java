@@ -1,50 +1,105 @@
 package com.jellypudding.offlineclient.util;
 
 import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.protocol.game.ServerboundPunchPacket;
 import net.minecraft.world.InteractionHand;
 
-// Whether an action shows an arm swing on this screen or to the server or both.
+// Who sees the arm swing of something a module does. The server swings the arm for everyone
+// else by itself once a block is placed or a thing is used and only this screen is left to
+// decide. A hit and a tick of mining reach the others through the punch packet alone.
 public enum SwingMode {
     BOTH, PACKET, CLIENT, NONE;
 
-    public void swing(InteractionHand hand) {
+    // The value behind a row that only switches the swing on this screen.
+    public static SwingMode of(boolean onScreen) {
+        return onScreen ? BOTH : PACKET;
+    }
+
+    // After a block went down or something was used.
+    public void use(InteractionHand hand) {
+        if (onScreen()) {
+            swingUse(hand);
+        }
+    }
+
+    public void use() {
+        use(InteractionHand.MAIN_HAND);
+    }
+
+    // After a hit. The server has started the attack cooldown again for the hit already and
+    // the punch starts it once more.
+    public void hit() {
+        if (onScreen()) {
+            swingHit();
+        }
         LocalPlayer player = OfflineClient.MC.player;
-        if (player == null) {
-            return;
-        }
-        switch (this) {
-            case BOTH, CLIENT -> swingArm(hand);
-            // The punch packet carries no hand. The server swings the main one and restarts its attack cooldown.
-            // The client's cooldown restarts with it.
-            case PACKET -> {
-                player.connection.send(ServerboundPunchPacket.INSTANCE);
-                player.resetOnlyAttackStrengthTicker();
-            }
-            case NONE -> {
-            }
+        if (toOthers() && player != null) {
+            player.connection.send(ServerboundPunchPacket.INSTANCE);
+            player.resetOnlyAttackStrengthTicker();
         }
     }
 
-    public void swing() {
-        swing(InteractionHand.MAIN_HAND);
+    // On a tick of mining. The plain game punches on every one of them and each punch starts
+    // the attack cooldown again. The hit timer keeps the punch back whilst a hit charges.
+    public void mine() {
+        if (onScreen()) {
+            swingHit();
+        }
+        LocalPlayer player = OfflineClient.MC.player;
+        if (toOthers() && player != null && AttackTimer.letsMiningPunch()) {
+            player.connection.send(ServerboundPunchPacket.INSTANCE);
+        }
     }
 
-    // A swing only this screen sees.
-    public static void swingArm(InteractionHand hand) {
+    private boolean onScreen() {
+        return this == BOTH || this == CLIENT;
+    }
+
+    private boolean toOthers() {
+        return this == BOTH || this == PACKET;
+    }
+
+    // The arm on this screen alone the way the game moves it after a use.
+    public static void swingUse(InteractionHand hand) {
         LocalPlayer player = OfflineClient.MC.player;
         if (player != null) {
-            player.swing(hand, player.getItemInHand(hand).getAttackAnimation(), false);
+            player.swing(hand, player.getItemInHand(hand).getInteractAnimation(), false);
         }
     }
 
+    // The arm on this screen alone the way the game moves it for a hit or a mining tick.
+    public static void swingHit() {
+        LocalPlayer player = OfflineClient.MC.player;
+        if (player != null) {
+            player.swing(InteractionHand.MAIN_HAND, player.getMainHandItem().getAttackAnimation(), false);
+        }
+    }
+
+    // The row of a module that hits or mines and places nothing.
     public static EnumSetting<SwingMode> setting(SwingMode defaultValue) {
-        return new EnumSetting<>("Swing", "Who sees your arm swing.", defaultValue)
-            .describe(BOTH, "You and everyone else.")
-            .describe(PACKET, "Everyone else but not you. Always the main hand. Restarts your attack cooldown.")
+        return described(new EnumSetting<>("Swing", "Who sees your arm swing.", defaultValue));
+    }
+
+    // The row of a module that hits or mines and places blocks as well.
+    public static EnumSetting<SwingMode> settingWithUses(SwingMode defaultValue) {
+        return described(new EnumSetting<>("Swing",
+            "Who sees your arm swing. The server shows everyone else the swing of a block you place whatever this says.",
+            defaultValue));
+    }
+
+    private static EnumSetting<SwingMode> described(EnumSetting<SwingMode> row) {
+        return row.describe(BOTH, "You and everyone else.")
+            .describe(PACKET, "Everyone else but not you.")
             .describe(CLIENT, "Only you.")
             .describe(NONE, "Nobody.");
+    }
+
+    // The row of a module that only places or uses things.
+    public static BoolSetting useSetting(boolean onScreen) {
+        return new BoolSetting("Swing", "Swings your arm on your own screen. Everyone else sees it either way.",
+            onScreen);
     }
 }

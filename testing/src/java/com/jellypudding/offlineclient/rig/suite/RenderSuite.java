@@ -1,6 +1,8 @@
 package com.jellypudding.offlineclient.rig.suite;
 
 import com.jellypudding.offlineclient.gui.ClickGuiScreen;
+import com.jellypudding.offlineclient.module.Category;
+import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.rig.core.Case;
 import com.jellypudding.offlineclient.rig.core.Rig;
 import com.jellypudding.offlineclient.rig.core.Stage;
@@ -55,7 +57,12 @@ public final class RenderSuite implements Suite {
     private static final int STILL_GAP = 20;
     private static final float NORTH = 180;
     private static final float PIT_PITCH = 40;
+    // Every tick is held up this long and the game draws well under twenty frames a second.
+    private static final long STALL_MILLIS = 60;
+    // SteadyFrames lets a world settle for ten seconds before it reads the frame rate.
+    private static final int STALLED_TICKS = 600;
     private static final int WALK_TICKS = 30;
+    private static final int VIGNETTE_TICKS = 500;
     // The view tilts for ten ticks after a blow.
     private static final int HURT_TICKS = 3;
     // A number rises over the mob it came from for a second.
@@ -140,7 +147,11 @@ public final class RenderSuite implements Suite {
             new Sight("HandView", rig -> Props.hold(rig, 0, "diamond_sword"), "Adjust main hand", ON,
                 "Main hand scale x", "2"),
             new Sight("ItemHighlight", rig -> Props.hold(rig, 0, "totem_of_undying")),
-            new Sight("EntityOwner", this::pet, "Own", ON));
+            new Sight("EntityOwner", this::pet, "Own", ON),
+            // A vault only wakes for a player within four blocks. This one stands still.
+            new Sight("TrialESP", rig -> rig.world().setBlock(home.offset(-3, 0, -6), "vault")),
+            // The game lists what a mob could do over its head even when it stands still.
+            new Sight("DebugDrawings", nothing, "Mob paths", "off", "Mob goals", ON));
     }
 
     private Map<String, Case.Body> plays() {
@@ -149,8 +160,12 @@ public final class RenderSuite implements Suite {
         plays.put("Trail leaves particles where you walk", this::trail);
         plays.put("NoHurtCam keeps the view level when you are hurt", this::noHurtCam);
         plays.put("DamageNumbers draws a number over a mob that is hurt", this::damageNumbers);
+        plays.put("Marker draws the box you add with its key", this::marker);
+        plays.put("SteadyFrames draws fewer chunks whilst frames are slow and all of them again after",
+            this::steadyFrames);
         plays.put("Blur blurs the world behind the inventory", this::blur);
         plays.put("Blur keeps to one blur a frame behind every kind of screen", this::blurScreens);
+        plays.put("Every render module at once changes the picture and leaves it clean", this::allAtOnce);
         return plays;
     }
 
@@ -171,6 +186,9 @@ public final class RenderSuite implements Suite {
         try {
             Stage stage = new Stage(rig);
             home = stage.home();
+            // The game darkens the corners of the screen in a fresh world and eases that off for a
+            // long while. No picture is taken before it has come to rest.
+            rig.ticks(VIGNETTE_TICKS);
             for (Case each : wanted) {
                 stage.reset(false);
                 rig.world().gameMode(SURVIVAL);
@@ -211,18 +229,61 @@ public final class RenderSuite implements Suite {
             rig.client().disable(sight.module());
             rig.ticks(SHOWN_TICKS);
             Path off = rig.frames().shot(sight.module() + " off");
+            // What the scene does by itself in the same time. The sparks of a portal come and go.
+            rig.ticks(SHOWN_TICKS);
+            Path later = rig.frames().shot(sight.module() + " later");
             double shown = Pictures.changed(before, on, again);
             double left = Pictures.changed(before, off, again);
+            double drift = Pictures.changed(off, later, again);
             rig.note(String.format(Locale.ROOT, "%.3f%% of the picture changed and %.3f%% was still changed once it "
-                + "went off", shown * PER_CENT, left * PER_CENT));
+                + "went off and the scene alone changes %.3f%%", shown * PER_CENT, left * PER_CENT, drift * PER_CENT));
             rig.expect(shown >= LEAST, sight.module() + " changed nothing in the picture");
-            rig.expect(left <= Math.max(LEAST, shown / 4), sight.module() + " left its mark on the picture");
+            rig.expect(left <= Math.max(LEAST, shown / 4) + drift, sight.module() + " left its mark on the picture");
         } finally {
             hideInterface(rig, false);
             rig.act(mc -> {
                 mc.gui.setScreen(null);
                 mc.options.setCameraType(CameraType.FIRST_PERSON);
             });
+            rig.world().attempt("time set noon");
+        }
+    }
+
+    // The whole category goes on over the still scene and off again. What two of them do to the
+    // same frame must come undone as well as what one does.
+    private void allAtOnce(Rig rig) {
+        scene(rig);
+        // An item turns as it lies. Over this many ticks it never looks the same twice.
+        rig.world().attempt("kill @e[type=item]");
+        rig.client().disable("HUD");
+        List<Module> crowd = rig.client().modules().stream().filter(module -> module.getCategory() == Category.RENDER
+            && module.isTogglable() && SmokeSuite.leftOut(module.getName(), false) == null
+            && !rig.ask(mc -> module.isEnabled())).toList();
+        rig.act(mc -> mc.gui.hud.getChat().clearMessages(true));
+        rig.ticks(STILL_TICKS);
+        Path before = rig.frames().shot("all before");
+        rig.ticks(STILL_GAP);
+        Path again = rig.frames().shot("all still");
+        try {
+            crowd.forEach(module -> rig.client().switchTo(module, true));
+            rig.ticks(SHOWN_TICKS);
+            Path on = rig.frames().shot("all on");
+            crowd.forEach(module -> rig.client().switchTo(module, false));
+            rig.act(mc -> {
+                mc.gui.setScreen(null);
+                mc.options.setCameraType(CameraType.FIRST_PERSON);
+                mc.gui.hud.getChat().clearMessages(true);
+            });
+            // Every chunk is meshed again and the sky finds its own colour.
+            rig.ticks(SHOWN_TICKS * 4);
+            Path off = rig.frames().shot("all off");
+            double shown = Pictures.changed(before, on, again);
+            double left = Pictures.changed(before, off, again);
+            rig.note(String.format(Locale.ROOT, "%d modules changed %.3f%% of the picture and %.3f%% was still "
+                + "changed once they were off", crowd.size(), shown * PER_CENT, left * PER_CENT));
+            rig.expect(shown >= LEAST, "The whole category changed nothing in the picture");
+            rig.expect(left <= LEAST, "The category left its mark on the picture");
+        } finally {
             rig.world().attempt("time set noon");
         }
     }
@@ -415,5 +476,54 @@ public final class RenderSuite implements Suite {
         } finally {
             rig.act(mc -> mc.gui.setScreen(null));
         }
+    }
+
+    private void marker(Rig rig) {
+        hideInterface(rig, true);
+        try {
+            rig.client().enable("Marker");
+            rig.controls().aimAtBlock(home.offset(0, -1, -3), Direction.UP);
+            rig.ticks(SHOWN_TICKS);
+            rig.controls().press(InputConstants.KEY_BACKSLASH);
+            rig.ticks(STILL_TICKS);
+            Path on = rig.frames().shot("Marker on");
+            rig.ticks(STILL_GAP);
+            Path again = rig.frames().shot("Marker still");
+            rig.client().disable("Marker");
+            rig.ticks(SHOWN_TICKS);
+            Path off = rig.frames().shot("Marker off");
+            double shown = Pictures.changed(on, off, again);
+            rig.note(String.format(Locale.ROOT, "%.3f%% of the picture was the marker", shown * PER_CENT));
+            rig.expect(shown >= LEAST, "No marker was drawn where the key was pressed");
+        } finally {
+            hideInterface(rig, false);
+        }
+    }
+
+    // The game is slowed by hand until the module trims the render distance. Once the stalls stop
+    // and the module goes off every chunk is drawn again.
+    private void steadyFrames(Rig rig) {
+        rig.client().set("SteadyFrames", "Least distance", "2");
+        int own = rig.ask(mc -> mc.options.getEffectiveRenderDistance());
+        rig.client().enable("SteadyFrames");
+        int trimmed = own;
+        for (int tick = 0; tick < STALLED_TICKS && trimmed >= own; tick++) {
+            rig.act(mc -> {
+                try {
+                    Thread.sleep(STALL_MILLIS);
+                } catch (InterruptedException stopped) {
+                    Thread.currentThread().interrupt();
+                }
+            });
+            rig.ticks(1);
+            trimmed = rig.ask(mc -> mc.options.getEffectiveRenderDistance());
+        }
+        rig.client().disable("SteadyFrames");
+        rig.ticks(SHOWN_TICKS);
+        int after = rig.ask(mc -> mc.options.getEffectiveRenderDistance());
+        rig.note("The game drew " + own + " chunks and " + trimmed + " whilst it was slow and " + after
+            + " afterwards");
+        rig.expect(trimmed < own, "The render distance never came down whilst the frames were slow");
+        rig.expect(after == own, "The render distance stayed down after SteadyFrames went off");
     }
 }

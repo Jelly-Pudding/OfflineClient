@@ -533,7 +533,7 @@ public final class ElytraBoost extends Module {
 
     private void use(InteractionHand hand) {
         if (mc.gameMode.useItem(mc.player, hand).consumesAction()) {
-            SwingMode.swingArm(hand);
+            SwingMode.swingUse(hand);
             lastFireTick = mc.player.tickCount;
         }
     }

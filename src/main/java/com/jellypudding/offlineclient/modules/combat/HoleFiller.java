@@ -9,19 +9,16 @@ import com.jellypudding.offlineclient.render.BoxStyle;
 import com.jellypudding.offlineclient.render.DrawBatch;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.ColorSetting;
-import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.Holes;
-import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
+import com.jellypudding.offlineclient.util.PlacingRounds;
 import com.jellypudding.offlineclient.util.SwingMode;
-import com.jellypudding.offlineclient.util.UseBudget;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -63,10 +60,7 @@ public final class HoleFiller extends Module {
         .under(nearEnemies);
     private final KeybindSetting fillKey = new KeybindSetting("Fill key",
         "Fills every hole in range whilst this key is held.", KeybindSetting.UNBOUND);
-    private final NumberSetting perRound = new NumberSetting("Blocks per round",
-        "How many blocks to place in one round.", 2, 1, 4, 1);
-    private final NumberSetting delay = new NumberSetting("Delay",
-        "Ticks to wait between placing rounds.", 1, 0, 10, 1, " ticks");
+    private final PlacingRounds rounds = new PlacingRounds(1);
     private final BoolSetting genuineOnly = new BoolSetting("Genuine holes",
         "Only fills holes that are blast proof on every side.", true);
     private final BoolSetting doubles = new BoolSetting("Two wide holes",
@@ -74,9 +68,7 @@ public final class HoleFiller extends Module {
         .under(genuineOnly);
     private final BoolSetting ownHole = new BoolSetting("Keep own hole",
         "Never fills the hole you stand in or next to.", true);
-    private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Sends a look packet towards each block.", true);
-    private final EnumSetting<SwingMode> swing = SwingMode.setting(SwingMode.BOTH);
+    private final BoolSetting swing = SwingMode.useSetting(true);
     private final BoolSetting render = new BoolSetting("Render",
         "Draws the holes waiting to be filled.", true);
     private final BoxStyle boxStyle = BoxStyle.shapeOnly(BoxStyle.Shape.BOTH).under(render);
@@ -87,14 +79,12 @@ public final class HoleFiller extends Module {
 
     private final List<Player> enemies = new ArrayList<>();
     private final List<BlockPos> holes = new ArrayList<>();
-    private int timer;
-    private final SlotSwap slots = new SlotSwap();
 
     public HoleFiller() {
         super("HoleFiller", "Seals the holes around an enemy before they can hide in one.", Category.COMBAT);
         addSettings(range, wallsRange, searchRadius, blocks, nearEnemies, targetRange, predict,
-            leadTicks, ignoreSafe, onlyMoving, fillKey, perRound, delay, genuineOnly, doubles,
-            ownHole, rotate, swing, render);
+            leadTicks, ignoreSafe, onlyMoving, fillKey, rounds.perRound(), rounds.delay(), genuineOnly, doubles,
+            ownHole, rounds.rotate(), swing, render);
         addSettings(boxStyle.settings());
         addSettings(nextColor, laterColor);
         searchTags("hole", "obsidian", "crystal", "fill");
@@ -107,15 +97,14 @@ public final class HoleFiller extends Module {
 
     @Override
     protected void onEnable() {
-        timer = 0;
-        slots.forget();
+        rounds.forget();
         enemies.clear();
         holes.clear();
     }
 
     @Override
     protected void onDisable() {
-        slots.restore();
+        rounds.restore();
         enemies.clear();
         holes.clear();
     }
@@ -130,44 +119,11 @@ public final class HoleFiller extends Module {
         boolean everything = !nearEnemies.isOn() || fillKey.isHeld();
         collectEnemies();
         if (!everything && enemies.isEmpty()) {
-            slots.restore();
+            rounds.restore();
             return;
         }
         collectHoles(everything);
-        if (holes.isEmpty()) {
-            slots.restore();
-            return;
-        }
-        if (timer > 0) {
-            timer--;
-            return;
-        }
-        int round = Math.min(perRound.getInt(), UseBudget.remaining());
-        if (round == 0) {
-            return;
-        }
-
-        int slot = BlockUtil.findRankedBlockSlot(blocks.getValue(), block -> true);
-        if (slot == -1) {
-            slots.restore();
-            return;
-        }
-        slots.select(slot);
-
-        int placed = 0;
-        for (BlockPos pos : holes) {
-            if (placed >= round) {
-                break;
-            }
-            if (BlockUtil.placeAny(pos, rotate.isOn(), false)) {
-                swing.getValue().swing(InteractionHand.MAIN_HAND);
-                placed++;
-            }
-        }
-        if (placed > 0) {
-            timer = delay.getInt();
-        }
-        slots.restore();
+        rounds.place(holes, blocks, SwingMode.of(swing.isOn()));
     }
 
     private void collectEnemies() {
@@ -276,7 +232,7 @@ public final class HoleFiller extends Module {
             return;
         }
         DrawBatch batch = event.getBatch();
-        int next = perRound.getInt();
+        int next = rounds.perRound().getInt();
         for (int i = 0; i < holes.size(); i++) {
             int color = i < next ? nextColor.getColor() : laterColor.getColor();
             boxStyle.draw(batch, holes.get(i), color, false);

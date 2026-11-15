@@ -218,7 +218,7 @@ public final class MiddleClickExtra extends Module {
         mc.rightClickDelay = InputUtil.USE_DELAY;
         slots.select(slot);
         if (mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND, hit).consumesAction()) {
-            SwingMode.swingArm(InteractionHand.MAIN_HAND);
+            SwingMode.swingUse(InteractionHand.MAIN_HAND);
         }
         slots.restore();
     }

@@ -325,7 +325,7 @@ public final class AutoFish extends Module {
         if (!gameMode.useItem(mc.player, hand).consumesAction()) {
             return false;
         }
-        SwingMode.swingArm(hand);
+        SwingMode.swingUse(hand);
         return true;
     }
 

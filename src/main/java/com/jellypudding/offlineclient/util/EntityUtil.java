@@ -42,6 +42,8 @@ import net.minecraft.world.entity.monster.zombie.ZombifiedPiglin;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.entity.projectile.throwableitemprojectile.ThrownEnderpearl;
+import net.minecraft.world.entity.vehicle.boat.AbstractChestBoat;
+import net.minecraft.world.entity.vehicle.minecart.MinecartHopper;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.EntityHitResult;
@@ -337,6 +339,15 @@ public final class EntityUtil {
             && !Modules.isGhostBody(player);
     }
 
+    // A cart or boat that holds items under plain words such as chest minecart.
+    public static String storageName(Entity entity) {
+        return switch (entity) {
+            case MinecartHopper _ -> "hopper minecart";
+            case AbstractChestBoat _ -> "chest boat";
+            default -> "chest minecart";
+        };
+    }
+
     // Someone else in view. You and the bodies only this client puts down never count.
     public static boolean isOtherPlayer(Entity entity) {
         return entity instanceof Player && entity != OfflineClient.MC.player && !Modules.isLocalBody(entity);
@@ -464,7 +475,7 @@ public final class EntityUtil {
         if (!mc.gameMode.interact(mc.player, target, new EntityHitResult(target, centre), hand).consumesAction()) {
             return false;
         }
-        SwingMode.swingArm(hand);
+        SwingMode.swingUse(hand);
         return true;
     }
 

@@ -12,7 +12,6 @@ import com.jellypudding.offlineclient.util.RotationPriority;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.tags.ItemTags;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
@@ -98,7 +97,7 @@ public final class BedAura extends RespawnBlockAura {
             return true;
         }
         if (BlockUtil.interact(best, Direction.UP)) {
-            swing.getValue().swing(InteractionHand.MAIN_HAND);
+            swing.getValue().use();
             holdBreak(breakDelay.getInt());
         }
         return true;
@@ -124,7 +123,7 @@ public final class BedAura extends RespawnBlockAura {
             return true;
         }
         if (layBed(spot)) {
-            swing.getValue().swing(InteractionHand.MAIN_HAND);
+            swing.getValue().use();
             placed();
         }
         return true;
@@ -175,7 +174,7 @@ public final class BedAura extends RespawnBlockAura {
             return false;
         }
         if (look(Vec3.atCenterOf(over)) && BlockUtil.placeAny(over, false, false)) {
-            swing.getValue().swing(InteractionHand.MAIN_HAND);
+            swing.getValue().use();
             placed();
         }
         return true;

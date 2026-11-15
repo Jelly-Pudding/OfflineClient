@@ -10,7 +10,6 @@ import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.render.BoxStyle;
 import com.jellypudding.offlineclient.setting.BoolSetting;
-import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
@@ -156,7 +155,7 @@ public final class AutoPearl extends Module {
         .under(phaseKey, phaseKey::isBound);
     private final BoolSetting fromInventory = new BoolSetting("Take from inventory",
         "Borrows a pearl or a chorus fruit from the rest of your inventory when the hotbar has none.", true);
-    private final EnumSetting<SwingMode> swing = SwingMode.setting(SwingMode.BOTH);
+    private final BoolSetting swing = SwingMode.useSetting(true);
     private final BoolSetting render = new BoolSetting("Show landing",
         "Draws where the last pearl will put you for two seconds.", true);
     private final BoxStyle style = new BoxStyle(BoxStyle.Shape.BOTH, 290).under(render);
@@ -674,7 +673,7 @@ public final class AutoPearl extends Module {
             () -> mc.gameMode.useItem(mc.player, hand).consumesAction());
         loan.giveBack();
         if (thrown) {
-            swing.getValue().swing(hand);
+            SwingMode.of(swing.isOn()).use(hand);
         }
         return thrown;
     }

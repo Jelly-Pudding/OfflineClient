@@ -10,9 +10,9 @@ import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.BreakTime;
 import com.jellypudding.offlineclient.util.Cooldowns;
 import com.jellypudding.offlineclient.util.InventoryUtil;
+import com.jellypudding.offlineclient.util.SwingMode;
 import com.jellypudding.offlineclient.util.TakeFrom;
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.AzaleaBlock;
 import net.minecraft.world.level.block.Block;
@@ -183,7 +183,7 @@ public final class BonemealAura extends BlockUseAura {
     // One hit takes the plant off.
     private void clear(BlockPos top) {
         BlockMiner.breakInstantly(top);
-        swing.getValue().swing(InteractionHand.MAIN_HAND);
+        SwingMode.of(swing.isOn()).use();
         cleared.put(top, CLEAR_TICKS);
     }
 

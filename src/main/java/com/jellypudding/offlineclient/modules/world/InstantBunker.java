@@ -119,7 +119,7 @@ public final class InstantBunker extends Module {
             placed |= BlockUtil.placeAny(pos, rotate.isOn(), false);
         }
         if (placed) {
-            SwingMode.swingArm(InteractionHand.MAIN_HAND);
+            SwingMode.swingUse(InteractionHand.MAIN_HAND);
         }
         if (outOfBlocks || reachedAll && mc.player.onGround()) {
             setEnabled(false);

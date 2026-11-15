@@ -89,6 +89,7 @@ public final class GotoSuite implements Suite {
     private static final int[][] PLACES = {{-20, 91}, {-800, 2200}, {3000, -1200}, {700, 900}, {-1700, 400},
         {2200, 2600}};
     private static final int LAND_WALK = 96;
+    private static final int FAR_WALK = 220;
     private static final int[][] HEADINGS = {{1, 0}, {0, 1}};
     private static final String[] HEADING_NAMES = {"east", "south"};
     private static final int LAND_LIMIT = 1600;
@@ -123,6 +124,8 @@ public final class GotoSuite implements Suite {
                 cases.add(Case.of(kit.name() + " over " + course.name(), each -> kitWalk(each, course, kit)));
             }
         }
+        cases.add(Case.of("a walk past the reach of one search never stands still to look again",
+            GotoSuite::farWalk));
         List<Case> wanted = rig.wanted(NAME, cases);
         if (!wanted.isEmpty()) {
             rig.openWorld(CREATIVE);
@@ -228,6 +231,21 @@ public final class GotoSuite implements Suite {
             rig.expect(walk.travelled() <= base.travelled() * WANDERING + LAND_SLACK, "The walk covered "
                 + (int) walk.travelled() + " blocks and the plain walk " + (int) base.travelled());
         }
+    }
+
+    // Flat ground runs west of the stage. One search looks eight chunks round its start and
+    // the goal lies well past that. The way on has to be found whilst the player walks.
+    private static void farWalk(Rig rig) {
+        rig.world().gameMode("survival");
+        BlockPos start = rig.ask(mc -> mc.player.blockPosition());
+        int x = start.getX() - FAR_WALK;
+        Walk walk = follow(rig, "goto " + x + " " + start.getZ(), new Vec3(x + 0.5, 0, start.getZ() + 0.5),
+            LAND_LIMIT, true);
+        judge(rig, walk);
+        rig.expect(walk.searches() == 1, "The walk stood still to look for its way " + (walk.searches() - 1)
+            + " more times");
+        rig.expect(walk.travelled() <= FAR_WALK * WANDERING, "The walk covered " + (int) walk.travelled()
+            + " blocks for " + FAR_WALK + " in a straight line");
     }
 
     private void plainWalk(Rig rig, Course course) {

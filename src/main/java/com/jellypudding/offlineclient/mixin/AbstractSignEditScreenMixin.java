@@ -1,7 +1,6 @@
 package com.jellypudding.offlineclient.mixin;
 
 import com.jellypudding.offlineclient.modules.misc.ServerSpoof;
-import com.jellypudding.offlineclient.util.UnmoddedText;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import net.minecraft.client.gui.screens.inventory.AbstractSignEditScreen;
@@ -19,6 +18,7 @@ public abstract class AbstractSignEditScreenMixin {
             + "Lnet/minecraft/world/level/block/entity/SignTextSlot;ZLnet/minecraft/network/chat/Component;)V",
         at = @At(value = "INVOKE", target = "Lnet/minecraft/network/chat/Component;getString()Ljava/lang/String;"))
     private String readLine(Component line, Operation<String> original) {
-        return ServerSpoof.hidesModText() ? UnmoddedText.flatten(line) : original.call(line);
+        String plain = ServerSpoof.plainWords(line);
+        return plain == null ? original.call(line) : plain;
     }
 }

@@ -26,27 +26,32 @@ import java.util.List;
 
 public final class AutoDrop extends Module {
 
-    public enum Mode { JUNK, HANDS, SLOTS }
+    public enum Mode { JUNK, KEEP, HANDS, SLOTS }
 
     public enum Order { ALL, TURNS }
 
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
         "What gets thrown away.", Mode.JUNK)
         .describe(Mode.JUNK, "Throws the listed junk as it arrives.")
+        .describe(Mode.KEEP, "Throws everything that is not on your keep list. An empty list throws nothing.")
         .describe(Mode.HANDS, "Throws whatever you hold.")
         .describe(Mode.SLOTS, "Throws the hotbar slots you pick.");
     private final RegistryListSetting<Item> items = new RegistryListSetting<>("Items",
-        "The items to throw away. Click to pick them.", BuiltInRegistries.ITEM, ItemUtil.JUNK)
+        "The items to throw away. Click to pick them. Blocks that Scaffold is building with stay.",
+        BuiltInRegistries.ITEM, ItemUtil.JUNK)
         .under(mode, Mode.JUNK);
+    private final RegistryListSetting<Item> keep = new RegistryListSetting<>("Keep",
+        "The items that stay. Click to pick them.", BuiltInRegistries.ITEM, List.of())
+        .under(mode, Mode.KEEP);
     private final BoolSetting hotbar = new BoolSetting("Hotbar too",
-        "Also throws junk that lands in your hotbar.", true)
-        .under(mode, Mode.JUNK);
+        "Also throws what lands in your hotbar.", true)
+        .under(mode, Mode.JUNK, Mode.KEEP);
     private final BoolSetting worn = new BoolSetting("Worn too",
-        "Also throws junk you are wearing or holding in the offhand.", false)
-        .under(mode, Mode.JUNK);
+        "Also throws what you are wearing or holding in the offhand.", false)
+        .under(mode, Mode.JUNK, Mode.KEEP);
     private final BoolSetting fullStacksOnly = new BoolSetting("Full stacks only",
         "Only throws a stack once it has filled up.", false)
-        .under(mode, Mode.JUNK);
+        .under(mode, Mode.JUNK, Mode.KEEP);
     private final BoolSetting mainHand = new BoolSetting("Main hand",
         "Throws the stack in your main hand.", true)
         .under(mode, Mode.HANDS);
@@ -66,7 +71,7 @@ public final class AutoDrop extends Module {
         .under(order, Order.TURNS);
     private final BoolSetting keepTools = new BoolSetting("Keep tools",
         "Never throws a bucket or anything that wears out like tools and armour.", true)
-        .under(mode, Mode.HANDS, Mode.SLOTS);
+        .under(mode, Mode.KEEP, Mode.HANDS, Mode.SLOTS);
     private final NumberSetting delay = new NumberSetting("Delay",
         "Ticks between each throw.", 2, 0, 20, 1, " ticks");
 
@@ -75,8 +80,9 @@ public final class AutoDrop extends Module {
     private int turn;
 
     public AutoDrop() {
-        super("AutoDrop", "Throws away junk or whatever you hold or chosen hotbar slots.", Category.PLAYER);
-        addSettings(mode, items, hotbar, worn, fullStacksOnly, mainHand, offhand, slots, order, perTurn,
+        super("AutoDrop", "Throws away junk or all but what you keep or whatever you hold or chosen hotbar slots.",
+            Category.PLAYER);
+        addSettings(mode, items, keep, hotbar, worn, fullStacksOnly, mainHand, offhand, slots, order, perTurn,
             keepTools, delay);
         searchTags("inventory cleaner", "junk", "throw", "drop hand", "drop slots");
     }
@@ -91,7 +97,7 @@ public final class AutoDrop extends Module {
             return;
         }
         boolean threw = switch (mode.getValue()) {
-            case JUNK -> throwJunk();
+            case JUNK, KEEP -> throwUnwanted();
             case HANDS -> throwHands();
             case SLOTS -> throwSlots();
         };
@@ -100,8 +106,8 @@ public final class AutoDrop extends Module {
         }
     }
 
-    private boolean throwJunk() {
-        if (!InventoryUtil.cursorFree()) {
+    private boolean throwUnwanted() {
+        if (!InventoryUtil.cursorFree() || mode.is(Mode.KEEP) && keep.getValue().isEmpty()) {
             return false;
         }
         List<Slot> menuSlots = mc.player.inventoryMenu.slots;
@@ -110,7 +116,7 @@ public final class AutoDrop extends Module {
                 continue;
             }
             ItemStack stack = menuSlots.get(netSlot).getItem();
-            if (stack.isEmpty() || !items.contains(stack.getItem()) || Modules.keepsFromThrow(stack)) {
+            if (!unwanted(stack)) {
                 continue;
             }
             if (fullStacksOnly.isOn() && stack.getCount() < stack.getMaxStackSize()) {
@@ -120,6 +126,18 @@ public final class AutoDrop extends Module {
             return true;
         }
         return false;
+    }
+
+    // Junk is what the list names. With a keep list it is whatever the list leaves out. The
+    // blocks Scaffold is building with are never junk.
+    private boolean unwanted(ItemStack stack) {
+        if (Modules.scaffoldBuildsWith(stack)) {
+            return false;
+        }
+        if (mode.is(Mode.KEEP)) {
+            return throwable(stack) && !keep.contains(stack.getItem());
+        }
+        return !stack.isEmpty() && items.contains(stack.getItem()) && !Modules.keepsFromThrow(stack);
     }
 
     private boolean scans(int netSlot) {

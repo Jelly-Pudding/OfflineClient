@@ -259,7 +259,7 @@ public final class StatePlacer {
         boolean taken = RotationManager.whileFacing(RotationManager.serverYaw(), RotationManager.serverPitch(),
             () -> plan.sneak() ? InputUtil.whileSneaking(use) : InputUtil.whileStanding(use));
         if (taken) {
-            rules.swing().swing(hand);
+            rules.swing().use(hand);
             // The block that went down may be what a spot beside it waited for.
             for (Direction side : Direction.values()) {
                 noPlan.remove(plan.pos().relative(side).asLong());

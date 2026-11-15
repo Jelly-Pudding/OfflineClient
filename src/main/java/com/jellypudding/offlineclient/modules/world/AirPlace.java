@@ -98,7 +98,7 @@ public final class AirPlace extends Module {
         BlockHitResult hit = new BlockHitResult(Vec3.atCenterOf(spot), face, spot, false);
         InteractionResult result = mc.gameMode.useItemOn(mc.player, hand, hit);
         if (result.consumesAction()) {
-            SwingMode.swingArm(hand);
+            SwingMode.swingUse(hand);
         }
     }
 

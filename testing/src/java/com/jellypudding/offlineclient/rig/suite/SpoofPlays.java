@@ -87,7 +87,15 @@ final class SpoofPlays {
 
     private static void signText(Rig rig, Duo duo) {
         String player = rig.world().player();
+        // The player hears of a probe once. An earlier case on this connection may have been it.
+        rig.client().disable(SPOOF);
+        rig.client().enable(SPOOF);
+        int mark = rig.client().chatMark();
         List<String> guarded = signLines(rig, duo, player);
+        rig.ticks(SHUT_TICKS);
+        rig.expect(rig.client().saidSince(mark).stream().anyMatch(line -> line.contains("words of a mod")),
+            "Nobody told the player the server had asked for mod words. The client said "
+                + rig.client().saidSince(mark));
         rig.client().set(SPOOF, HIDE_TEXT, OFF);
         List<String> open = signLines(rig, duo, player);
         rig.note("The sign came back as " + guarded + " and with the guard off as " + open);

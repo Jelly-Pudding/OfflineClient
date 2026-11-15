@@ -7,9 +7,11 @@ import com.jellypudding.offlineclient.rig.core.World;
 import com.jellypudding.offlineclient.rig.suite.Motion.Moved;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.entity.decoration.Cushion;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -22,6 +24,10 @@ public final class MovementSuite implements Suite {
 
     private static final String NAME = "Movement";
     private static final String TIMER = "Timer runs the game faster";
+    private static final String PHASE = "NoClip pushes you through a wall";
+    private static final String PHASE_CREATIVE = "NoClip pushes you through a wall in creative";
+    private static final String PHASE_REFUSED = "NoClip stays put in survival and says why";
+    private static final String CREATIVE = "creative";
     private static final String SURVIVAL = "survival";
 
     private static final int FORWARD = InputConstants.KEY_W;
@@ -45,6 +51,16 @@ public final class MovementSuite implements Suite {
     private static final int VOID_TICKS = 160;
     private static final int FETCH_TICKS = 160;
     private static final double NANOS = 1_000_000_000.0;
+    // A trident is ready to throw after ten ticks in the hand.
+    private static final int CHARGE_TICKS = 14;
+    private static final int THROW_TICKS = 50;
+    // The wall begins a block and a bit ahead and is two blocks thick.
+    private static final double WALL_AT = 2;
+    private static final double BEYOND = 3.5;
+    private static final int FAR = 40;
+    private static final int CRUISE = 12;
+    private static final int FLY_TICKS = 600;
+    private static final double ARRIVED = 9;
 
     // The plain moves of the ground a case stands on. Every module is held against these.
     private record Paces(double walked, double sprinted, double sprintJumped, double jumped, double dropped) {
@@ -72,6 +88,8 @@ public final class MovementSuite implements Suite {
         plays.put("Flight rises and hovers and flies on and lands unhurt with NoFall", this::flight);
         plays.put("NoFall takes the hurt out of a deadly fall off a ledge", this::noFallLedge);
         plays.put("NoFall takes the hurt out of a deadly fall that a teleport began", this::noFallTeleport);
+        plays.put("NoFall with no ground takes a deadly fall and charges nothing once it is off",
+            this::noFallNoGround);
         plays.put("Step walks up a block without a jump", this::step);
         plays.put("HighJump jumps higher", this::highJump);
         plays.put("LongJump jumps further", this::longJump);
@@ -103,12 +121,19 @@ public final class MovementSuite implements Suite {
         plays.put("Fetch brings a far item back", this::fetch);
         plays.put("NoReturn stops you going back to where it went on", this::noReturn);
         plays.put(TIMER, this::timer);
+        plays.put("TridentBoost throws you on dry land and further with more boost", this::tridentBoost);
+        plays.put(PHASE, this::noClipPhase);
+        plays.put(PHASE_CREATIVE, this::noClipCreative);
+        plays.put(PHASE_REFUSED, this::noClipRefused);
+        plays.put("Autopilot flies you to the spot you name", this::autopilot);
+        plays.put("CushionHop sets a cushion on a wall and seats you on it", this::cushionHop);
         return plays;
     }
 
     @Override
     public void run(Rig rig) {
-        Grounds.play(rig, NAME, plays(), stage -> standOn(stage.home()), Set.of(TIMER));
+        Grounds.play(rig, NAME, plays(), stage -> standOn(stage.home()),
+            Grounds.Limits.NONE.serverOnly(TIMER, PHASE_CREATIVE, PHASE_REFUSED).aloneOnly(PHASE));
     }
 
     // Measured once on each ground with no module on.
@@ -160,6 +185,115 @@ public final class MovementSuite implements Suite {
         World world = rig.world();
         world.command("tp " + world.player() + " " + (home.getX() + 0.5) + " " + (home.getY() + height) + " "
             + (home.getZ() + 0.5));
+    }
+
+    // A riptide trident does nothing out of water. The module lets it go and scales the throw.
+    private void tridentBoost(Rig rig) {
+        double dry = thrown(rig);
+        rig.client().set("TridentBoost", "Boost", "1");
+        rig.client().enable("TridentBoost");
+        double plain = thrown(rig);
+        rig.client().set("TridentBoost", "Boost", "2");
+        double boosted = thrown(rig);
+        goHome(rig);
+        rig.note("The trident threw the player " + told(dry) + " blocks on dry land and " + told(plain)
+            + " with TridentBoost and " + told(boosted) + " with the boost doubled");
+        rig.expect(dry < 1, "The trident threw the player on dry land without TridentBoost. That proves nothing");
+        rig.expect(plain >= 5, "The trident did not throw the player on dry land");
+        rig.expect(boosted >= plain * 1.3, "A doubled boost threw the player no further");
+    }
+
+    // How far the server saw a riptide trident carry the player along the ground.
+    private double thrown(Rig rig) {
+        goHome(rig);
+        Props.hold(rig, 0, "trident[enchantments={\"minecraft:riptide\":3}]");
+        return Motion.watch(rig, THROW_TICKS, () -> {
+            rig.controls().holdMouse(USE);
+            rig.ticks(CHARGE_TICKS);
+            rig.controls().releaseMouse(USE);
+        }, () -> { }).across();
+    }
+
+    // A wall two blocks thick and three high right ahead.
+    private Moved pushedAtWall(Rig rig) {
+        goHome(rig);
+        rig.world().refill(home.offset(-1, 0, -3), home.offset(1, 2, -2), "stone");
+        return Motion.hold(rig, RUN_TICKS, FORWARD);
+    }
+
+    private void noClipPhase(Rig rig) {
+        throughWall(rig);
+    }
+
+    private void noClipCreative(Rig rig) {
+        rig.world().gameMode(CREATIVE);
+        throughWall(rig);
+    }
+
+    private void throughWall(Rig rig) {
+        Moved stopped = pushedAtWall(rig);
+        rig.client().set("NoClip", "Mode", "phase");
+        rig.client().enable("NoClip");
+        Moved through = pushedAtWall(rig);
+        rig.note("A walk at the wall got " + told(stopped.across()) + " blocks and " + told(through.across())
+            + " with NoClip");
+        rig.expect(stopped.across() < WALL_AT, "The wall did not stop a plain walk. That proves nothing");
+        rig.expect(through.across() >= BEYOND, "The push did not come out behind the wall");
+    }
+
+    // A Paper server pulls a survival player back out of a wall. The module does not try.
+    private void noClipRefused(Rig rig) {
+        rig.client().set("NoClip", "Mode", "phase");
+        rig.client().enable("NoClip");
+        int mark = rig.client().chatMark();
+        Moved pushed = pushedAtWall(rig);
+        List<String> said = rig.client().saidSince(mark);
+        rig.note("The push got " + told(pushed.across()) + " blocks and the client said " + said);
+        rig.expect(pushed.across() < WALL_AT, "The push went into the wall");
+        rig.expect(!said.isEmpty(), "NoClip gave no reason for staying put");
+        expectNoSetback(rig, pushed);
+    }
+
+    // A wall three blocks high stands across the way. The crosshair rests on the side of its top
+    // block. No cushion stands on a side and it goes on top.
+    private void cushionHop(Rig rig) {
+        BlockPos top = home.offset(0, 2, -3);
+        rig.world().refill(home.offset(-1, 0, -3), home.offset(1, 2, -3), "stone");
+        Props.hold(rig, 0, "white_cushion 4");
+        rig.controls().aimAt(new Vec3(top.getX() + 0.5, top.getY() + 0.5, top.getZ() + 1));
+        rig.ticks(TAP_TICKS);
+        rig.client().enable("CushionHop");
+        rig.until("the player to sit on a cushion", RUN_TICKS * 2, mc -> mc.player.getVehicle() instanceof Cushion);
+        rig.ticks(TAP_TICKS * 5);
+        Vec3 held = rig.world().where();
+        rig.note("The server has the player " + told(held.y - home.getY()) + " blocks up and "
+            + told(home.getZ() + 0.5 - held.z) + " blocks on");
+        // A seated player is held a little under the top of the cushion.
+        rig.expect(held.y >= top.getY() + 0.5, "The server does not have the player on top of the wall");
+        rig.expect(Math.abs(held.z - (top.getZ() + 0.5)) < 1, "The server does not have the player over the wall");
+    }
+
+    // Creative flies without a module. The autopilot switches Flight on for the trip all the same.
+    private void autopilot(Rig rig) {
+        rig.world().gameMode(CREATIVE);
+        double x = home.getX() + 0.5 + FAR;
+        double z = home.getZ() + 0.5;
+        rig.client().set("Autopilot", "Cruise height", String.valueOf(home.getY() + CRUISE));
+        rig.client().command("autopilot " + (home.getX() + FAR) + " " + home.getZ());
+        try {
+            int took = rig.until("the autopilot to reach its spot", FLY_TICKS,
+                mc -> Math.hypot(mc.player.getX() - x, mc.player.getZ() - z) <= ARRIVED);
+            rig.ticks(RUN_TICKS);
+            Vec3 held = rig.world().where();
+            double off = Math.hypot(held.x - x, held.z - z);
+            rig.note("The flight took " + took + " ticks and the server has the player " + told(off)
+                + " blocks from the spot and " + told(held.y - home.getY()) + " over the ground");
+            rig.expect(off <= ARRIVED, "The server does not have the player at the spot");
+            rig.expect(held.y - home.getY() >= CRUISE / 2.0, "The flight did not keep its height at the end");
+        } finally {
+            rig.client().disable("Autopilot");
+            goHome(rig);
+        }
     }
 
     private static String told(double blocks) {
@@ -242,6 +376,31 @@ public final class MovementSuite implements Suite {
         rig.client().enable("NoFall");
         lift(rig, DEADLY_DROP);
         landUnhurt(rig);
+    }
+
+    // The server never hears of the landing and holds the whole fall. Switched off on the
+    // ground that fall has to be forgotten before the server is told the truth again.
+    private void noFallNoGround(Rig rig) {
+        rig.client().set("NoFall", "Mode", "no_ground");
+        rig.client().enable("NoFall");
+        lift(rig, DEADLY_DROP);
+        landUnhurt(rig);
+        rig.client().set("NoFall", "Mode", "packet");
+        walkedUnhurt(rig, "the mode was changed");
+        rig.client().set("NoFall", "Mode", "no_ground");
+        lift(rig, DEADLY_DROP);
+        landUnhurt(rig);
+        rig.client().disable("NoFall");
+        walkedUnhurt(rig, "NoFall was off");
+    }
+
+    // The first steps after No ground tell the server the truth again.
+    private static void walkedUnhurt(Rig rig, String when) {
+        Motion.hold(rig, RUN_TICKS, FORWARD);
+        rig.ticks(TAP_TICKS * 5);
+        float health = rig.world().health();
+        rig.expect(health == FULL_HEALTH, "The fall was charged once " + when + ". It cost "
+            + (FULL_HEALTH - health) + " health");
     }
 
     private static void landUnhurt(Rig rig) {

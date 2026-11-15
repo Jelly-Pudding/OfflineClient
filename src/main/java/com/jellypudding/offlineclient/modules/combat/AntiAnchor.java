@@ -4,7 +4,6 @@ import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.RespawnBlockBreaker;
 import com.jellypudding.offlineclient.setting.BoolSetting;
-import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ExplosionUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
@@ -22,7 +21,7 @@ public final class AntiAnchor extends RespawnBlockBreaker {
 
     private final BoolSetting headSlab = new BoolSetting("Head slab",
         "Puts a slab over your head when an anchor sits above you. It only fits whilst you crouch.", true);
-    private final EnumSetting<SwingMode> swing = SwingMode.setting(SwingMode.BOTH).under(headSlab);
+    private final BoolSetting swing = SwingMode.useSetting(true).under(headSlab);
 
     private final SlotSwap slabSlots = new SlotSwap();
 
@@ -70,7 +69,7 @@ public final class AntiAnchor extends RespawnBlockBreaker {
         slabSlots.select(slot);
         Vec3 hit = Vec3.atLowerCornerOf(head).add(0.5, UPPER_HALF, 0.5);
         if (BlockUtil.placeDirect(head, hit, rotate.isOn(), false)) {
-            swing.getValue().swing();
+            SwingMode.of(swing.isOn()).use();
         }
         slabSlots.restore();
     }

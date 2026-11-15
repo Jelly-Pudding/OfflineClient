@@ -8,7 +8,6 @@ import com.jellypudding.offlineclient.setting.Setting;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
 
@@ -233,6 +232,12 @@ public final class CoverMiner {
             slots.restore();
             return false;
         }
+        // A module that mines another block the slow way lets go of it on its next tick.
+        BlockMiner.first(pos);
+        if (BlockMiner.minesOther(pos)) {
+            slots.restore();
+            return false;
+        }
         if (!pos.equals(current)) {
             stop();
             current = pos.immutable();
@@ -249,7 +254,7 @@ public final class CoverMiner {
         }
         withTool(pos, tool, () -> {
             BlockMiner.sendStop(pos);
-            swing.get().swing(InteractionHand.MAIN_HAND);
+            swing.get().mine();
             followUp.run();
         });
         stopSentAt = MC.player.tickCount;
@@ -269,7 +274,7 @@ public final class CoverMiner {
             } else {
                 BlockMiner.sendStart(pos);
             }
-            swing.get().swing(InteractionHand.MAIN_HAND);
+            swing.get().mine();
             if (broke[0]) {
                 followUp.run();
             }

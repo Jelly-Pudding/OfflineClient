@@ -223,6 +223,9 @@ public final class BaseFinder extends Module implements FindSource, ChunkPaint {
     private final BoolSetting lostMobs = new BoolSetting("Lost mobs",
         "Marks chunks with a mob in a dimension it cannot spawn in such as a cow in the nether. Mobs also wander "
             + "through the portals players light.", false);
+    private final BoolSetting endermites = new BoolSetting("Endermites",
+        "Marks chunks with an endermite. One only crawls out of an ender pearl a player threw in the last two"
+            + " minutes.", true);
     private final BoolSetting pets = new BoolSetting("Pets and mounts",
         "Marks chunks with a tamed or saddled or leashed mob or one carrying a chest that is not yours. "
             + "Skeleton trap horses and strider jockeys and trader llamas never count.", true);
@@ -289,7 +292,7 @@ public final class BaseFinder extends Module implements FindSource, ChunkPaint {
         Map.entry(BaseClue.GROWTH, growth));
     private final Map<BaseClue, BoolSetting> entityToggles = Map.of(BaseClue.DECORATION, decorations,
         BaseClue.PEARL, pearls, BaseClue.NAMED, named, BaseClue.VILLAGER, villagers, BaseClue.BOAT, boats,
-        BaseClue.PET, pets, BaseClue.LOST_MOB, lostMobs);
+        BaseClue.PET, pets, BaseClue.LOST_MOB, lostMobs, BaseClue.ENDERMITE, endermites);
 
     private final ChunkScanner<BlockClues.Hit> scanner = new ChunkScanner<BlockClues.Hit>().onResult(this::landed);
     private final ChunkScanner<BlockPos> glowScanner = new ChunkScanner<>(0);
@@ -315,7 +318,7 @@ public final class BaseFinder extends Module implements FindSource, ChunkPaint {
         super("BaseFinder", "Marks the chunks around you where players built or lived.", Category.HUNTING);
         addSettings(signs, portals, bubbles, sky, skyHeight, bedrock, roof, spawners, beds, rooms, sideways, growth,
             growthCount, playerBlocks, blockCounts, floorMargin, ceilingMargin);
-        addSettings(decorations, pearls, named, villagers, boats, pets, lostMobs, crowds, crowdSize, crowdMobs,
+        addSettings(decorations, pearls, named, villagers, boats, pets, lostMobs, endermites, crowds, crowdSize, crowdMobs,
             crowdCounts, drops, dropCount, dropHeight);
         addSettings(notice.settings());
         addSettings(alarm.settings());

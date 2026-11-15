@@ -25,7 +25,6 @@ import com.jellypudding.offlineclient.util.WorldWatch;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.util.Mth;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.Locale;
@@ -181,8 +180,7 @@ public final class AntiAfk extends Module {
         }
         if (swing.isOn() && chance()) {
             // A swing on its own never leaves this screen. The punch is what the server counts as activity.
-            SwingMode.swingArm(InteractionHand.MAIN_HAND);
-            SwingMode.PACKET.swing();
+            SwingMode.BOTH.hit();
         }
         tickWander();
         tickSneak();

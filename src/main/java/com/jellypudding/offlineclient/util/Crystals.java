@@ -57,7 +57,7 @@ public final class Crystals {
         if (!MC.gameMode.useItemOn(MC.player, hand, crystalClick(base)).consumesAction()) {
             return false;
         }
-        swing.swing(hand);
+        swing.use(hand);
         return true;
     }
 }

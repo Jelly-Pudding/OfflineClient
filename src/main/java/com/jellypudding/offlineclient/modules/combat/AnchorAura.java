@@ -5,7 +5,6 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ExplosionUtil;
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -78,7 +77,7 @@ public final class AnchorAura extends RespawnBlockAura {
             return true;
         }
         if (look(Vec3.atCenterOf(best)) && BlockUtil.interact(best, BlockUtil.facingSide(best))) {
-            swing.getValue().swing(InteractionHand.MAIN_HAND);
+            swing.getValue().use();
             holdBreak(charging ? detonateDelay.getInt() : chargeDelay.getInt());
         }
         return true;
@@ -118,7 +117,7 @@ public final class AnchorAura extends RespawnBlockAura {
         }
         // The rotation has already been asked for. Placing must not ask again.
         if (BlockUtil.placeAny(best, false, false)) {
-            swing.getValue().swing(InteractionHand.MAIN_HAND);
+            swing.getValue().use();
             placed();
         }
         return true;

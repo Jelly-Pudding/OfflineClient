@@ -101,7 +101,7 @@ public final class GhostHand extends Module {
         if (result.consumesAction()) {
             // Cancelling skips the delay the game would have set itself.
             mc.rightClickDelay = InputUtil.USE_DELAY;
-            SwingMode.swingArm(InteractionHand.MAIN_HAND);
+            SwingMode.swingUse(InteractionHand.MAIN_HAND);
             event.cancel();
         }
     }

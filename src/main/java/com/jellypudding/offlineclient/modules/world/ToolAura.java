@@ -11,6 +11,7 @@ import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.ItemUtil;
 import com.jellypudding.offlineclient.util.RotationPriority;
+import com.jellypudding.offlineclient.util.SwingMode;
 import com.jellypudding.offlineclient.util.UseBudget;
 import com.jellypudding.offlineclient.util.WorldWatch;
 import net.minecraft.core.BlockPos;
@@ -234,7 +235,7 @@ public final class ToolAura extends BlockUseAura {
             return;
         }
         face.getValue().face(BlockUtil.hitPoint(pos, BlockUtil.facingSide(pos)), RotationPriority.MINE);
-        breaking = BlockMiner.mineWithHeld(pos, false, swing.getValue()) ? pos : null;
+        breaking = BlockMiner.mineWithHeld(pos, false, SwingMode.of(swing.isOn())) ? pos : null;
     }
 
     private void stopBreaking() {
@@ -249,7 +250,7 @@ public final class ToolAura extends BlockUseAura {
         face.getValue().face(Vec3.atCenterOf(pos), RotationPriority.PLACE);
         boolean placed = BlockUtil.placeAny(pos, false, false);
         if (placed) {
-            swing.getValue().swing();
+            SwingMode.of(swing.isOn()).use();
             mc.rightClickDelay = InputUtil.USE_DELAY;
         }
         slots.restore();

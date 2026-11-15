@@ -34,7 +34,7 @@ import net.minecraft.world.phys.Vec3;
 // a time. Place mode softens the landing instead.
 public final class NoFall extends Module {
 
-    public enum Mode { PACKET, PLACE, AIR_PLACE, BOTH }
+    public enum Mode { PACKET, NO_GROUND, PLACE, AIR_PLACE, BOTH }
     public enum AirPlaceWhen { BEFORE_DAMAGE, BEFORE_DEATH }
 
     // A jump between dimensions moves the player further than any fall.
@@ -67,6 +67,8 @@ public final class NoFall extends Module {
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
         "How the fall is stopped.", Mode.PACKET)
         .describe(Mode.PACKET, "Tells the server you have landed on every packet whilst you fall.")
+        .describe(Mode.NO_GROUND, "Never tells the server you are on the ground. A fall it never sees land costs"
+            + " nothing. Blocks break slower by hand meanwhile.")
         .describe(Mode.PLACE, "Puts one of your landing items under you before you land. Works on any server.")
         .describe(Mode.AIR_PLACE, "Puts any block from your hotbar under your feet just before the fall would hurt.")
         .describe(Mode.BOTH, "Does Packet and Place at once. Either one saves you if the other fails.");
@@ -99,11 +101,13 @@ public final class NoFall extends Module {
     private final NumberSetting minFall = new NumberSetting("Min fall",
         "Short drops are left alone until the fall passes this. Three blocks is the most"
             + " that is safe because a longer one already hurts.",
-        2.5, 0, 3, 0.1, " blocks").max(3);
+        2.5, 0, 3, 0.1, " blocks").max(3)
+        .under(mode, Mode.PACKET, Mode.PLACE, Mode.AIR_PLACE, Mode.BOTH);
     private final BoolSetting antiBounce = new BoolSetting("Anti bounce",
         "Landing on a slime block or a bed never bounces you.", true);
     private final BoolSetting pauseOnMace = new BoolSetting("Pause on mace",
-        "Leaves the fall alone whilst you hold a mace. The smash still lands.", true);
+        "Leaves the fall alone whilst you hold a mace. The smash still lands.", true)
+        .under(mode, Mode.PACKET, Mode.PLACE, Mode.AIR_PLACE, Mode.BOTH);
 
     // The fall as the client sees it. Place modes read this.
     private volatile double descent;
@@ -133,11 +137,14 @@ public final class NoFall extends Module {
     private boolean touchdown;
     private Vec3 hold;
     private boolean landingOwed;
+    // True when the mode was No ground on the tick before.
+    private boolean noGround;
 
     private final Lagback.Watcher lagback = new Lagback.Watcher();
     private final GlideMirror mirror = GlideMirror.get();
 
     private final SoftLanding landing = new SoftLanding();
+    private final LastRise lastRise = new LastRise();
     private final InventoryUtil.HotbarLoan airPlaceLoan = new InventoryUtil.HotbarLoan();
 
     public NoFall() {
@@ -157,7 +164,7 @@ public final class NoFall extends Module {
     // for as long as the module would make that claim.
     public boolean takesAnyDrop() {
         LocalPlayer player = mc.player;
-        return isEnabled() && packetMode() && player != null && guarded(player);
+        return isEnabled() && player != null && (mode.is(Mode.NO_GROUND) || packetMode() && guarded(player));
     }
 
     // Read by EntityMixin. Slime and beds check this before they bounce.
@@ -172,7 +179,37 @@ public final class NoFall extends Module {
 
     @Override
     protected void onDisable() {
+        if (mode.is(Mode.NO_GROUND)) {
+            forgetBank();
+        }
         reset();
+    }
+
+    // No ground leaves the server holding every drop since the last climb. The first movement
+    // packet to leave once the mode is over goes out a hair above the last position instead.
+    // The server takes that for a climb and forgets them. The truth follows on the next packet.
+    private void forgetBank() {
+        if (inGame() && sent != null) {
+            lastRise.from = sent;
+            watch(lastRise);
+        }
+    }
+
+    private final class LastRise {
+
+        private Vec3 from;
+
+        // After the module's own handler. This packet is not for it to rewrite.
+        @Subscribe(priority = 40)
+        private void onPacketSend(PacketSendEvent event) {
+            LocalPlayer player = mc.player;
+            if (player == null) {
+                unwatch(this);
+            } else if (event.getPacket() instanceof ServerboundMovePlayerPacket packet) {
+                unwatch(this);
+                event.setPacket(PacketUtil.withPosition(packet, player, from.x, from.y + WIPE_RISE, from.z, false));
+            }
+        }
     }
 
     private void reset() {
@@ -192,6 +229,7 @@ public final class NoFall extends Module {
         touchdown = false;
         hold = null;
         landingOwed = false;
+        noGround = false;
         landing.reset();
         airPlaceLoan.giveBack();
     }
@@ -210,6 +248,11 @@ public final class NoFall extends Module {
             reset();
             return;
         }
+        boolean holdsBank = mode.is(Mode.NO_GROUND);
+        if (noGround && !holdsBank) {
+            forgetBank();
+        }
+        noGround = holdsBank;
         trackDescent();
         sendOwedLanding();
     }
@@ -338,6 +381,13 @@ public final class NoFall extends Module {
             return;
         }
         if (!(event.getPacket() instanceof ServerboundMovePlayerPacket packet)) {
+            return;
+        }
+        if (mode.is(Mode.NO_GROUND)) {
+            // A claim another module makes for a block it breaks is left as it is.
+            if (packet.isOnGround() && !PacketUtil.isGroundClaim(packet)) {
+                event.setPacket(PacketUtil.withOnGround(packet, player, false));
+            }
             return;
         }
         if (touchdown && packet.hasPosition() && packet.isOnGround() && holdsLanding(event, packet, player)) {

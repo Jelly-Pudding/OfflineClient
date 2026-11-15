@@ -10,6 +10,7 @@ import com.jellypudding.offlineclient.modules.player.Multitask;
 import com.jellypudding.offlineclient.modules.player.NoInteract;
 import com.jellypudding.offlineclient.modules.render.Esp;
 import com.jellypudding.offlineclient.modules.render.Freecam;
+import com.jellypudding.offlineclient.util.AttackTimer;
 import com.jellypudding.offlineclient.util.BlockMiner;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.Modules;
@@ -18,9 +19,11 @@ import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.network.protocol.Packet;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
@@ -112,6 +115,16 @@ public abstract class MinecraftMixin {
         if (holding && noInteract != null && aimed != null && noInteract.blocksMining(aimed.getBlockPos())) {
             OfflineClient.MC.gameMode.stopDestroyBlock();
             ci.cancel();
+        }
+    }
+
+    // The punch that follows every tick of mining by hand. It stays here whilst a module waits
+    // for the attack cooldown the punch would start again.
+    @WrapOperation(method = "continueAttack(Z)V", at = @At(value = "INVOKE",
+        target = "Lnet/minecraft/client/multiplayer/ClientPacketListener;send(Lnet/minecraft/network/protocol/Packet;)V"))
+    private void miningPunch(ClientPacketListener connection, Packet<?> punch, Operation<Void> original) {
+        if (AttackTimer.letsMiningPunch()) {
+            original.call(connection, punch);
         }
     }
 

@@ -4,7 +4,6 @@ import com.jellypudding.offlineclient.event.Subscribe;
 import com.jellypudding.offlineclient.event.events.Render3DEvent;
 import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
-import com.jellypudding.offlineclient.module.ExclusivityGroup;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.render.BoxStyle;
 import com.jellypudding.offlineclient.setting.BoolSetting;
@@ -74,7 +73,7 @@ public final class AutoCity extends Module {
     private final NumberSetting placeRange = new NumberSetting("Place range",
         "How far you can reach to place the crystal and the support block.", 4.5, 1, 6, 0.1, " blocks")
         .visibleWhen(() -> places());
-    private final EnumSetting<SwingMode> swing = SwingMode.setting(SwingMode.BOTH);
+    private final EnumSetting<SwingMode> swing = SwingMode.settingWithUses(SwingMode.BOTH);
     private final BoolSetting rotate = new BoolSetting("Rotate",
         "Turns towards the block on the server side.", true);
     private final CoverMiner miner = new CoverMiner(rotate::isOn, swing::getValue);
@@ -127,11 +126,6 @@ public final class AutoCity extends Module {
     @Override
     public String getSuffix() {
         return suffix(targetName, status);
-    }
-
-    @Override
-    public ExclusivityGroup getExclusivityGroup() {
-        return ExclusivityGroup.MINING;
     }
 
     private boolean minesSides() {

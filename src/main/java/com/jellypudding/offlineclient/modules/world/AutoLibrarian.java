@@ -102,7 +102,7 @@ public final class AutoLibrarian extends Module {
         "Stops using a tool once this many uses are left. Nought never stops.",
         1, 0, 100, 1, " uses");
     private final EnumSetting<FaceMode> faceTarget = FaceMode.setting(FaceMode.SERVER);
-    private final EnumSetting<SwingMode> swing = SwingMode.setting(SwingMode.BOTH);
+    private final EnumSetting<SwingMode> swing = SwingMode.settingWithUses(SwingMode.BOTH);
 
     private Stage stage;
     private Villager villager;
@@ -331,7 +331,7 @@ public final class AutoLibrarian extends Module {
         faceTarget.getValue().face(centre, RotationPriority.PLACE);
         EntityHitResult hit = new EntityHitResult(villager, centre);
         if (mc.gameMode.interact(mc.player, villager, hit, InteractionHand.MAIN_HAND).consumesAction()) {
-            swing.getValue().swing(InteractionHand.MAIN_HAND);
+            swing.getValue().use();
         }
         mc.rightClickDelay = InputUtil.USE_DELAY;
     }
@@ -527,7 +527,7 @@ public final class AutoLibrarian extends Module {
         faceTarget.getValue().face(BlockUtil.hitPoint(against, support.getOpposite()),
             RotationPriority.PLACE);
         if (BlockUtil.place(lectern, support, false, false)) {
-            swing.getValue().swing(InteractionHand.MAIN_HAND);
+            swing.getValue().use();
         }
     }
 

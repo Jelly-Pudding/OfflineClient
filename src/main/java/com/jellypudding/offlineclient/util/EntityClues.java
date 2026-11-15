@@ -13,6 +13,7 @@ import net.minecraft.world.entity.decoration.ArmorStand;
 import net.minecraft.world.entity.decoration.GlowItemFrame;
 import net.minecraft.world.entity.decoration.ItemFrame;
 import net.minecraft.world.entity.decoration.painting.Painting;
+import net.minecraft.world.entity.monster.Endermite;
 import net.minecraft.world.entity.monster.Strider;
 import net.minecraft.world.entity.npc.villager.Villager;
 import net.minecraft.world.entity.npc.wanderingtrader.WanderingTrader;
@@ -52,8 +53,9 @@ public final class EntityClues {
     // Tried in this order. A traded villager with a name reads as a villager.
     private static final List<Rule> RULES = List.of(new Rule(BaseClue.DECORATION, EntityClues::decoration),
         new Rule(BaseClue.PEARL, EntityClues::pearl), new Rule(BaseClue.BOAT, EntityClues::boat),
-        new Rule(BaseClue.VILLAGER, EntityClues::villager), new Rule(BaseClue.NAMED, EntityClues::named),
-        new Rule(BaseClue.PET, EntityClues::pet), new Rule(BaseClue.LOST_MOB, EntityClues::lost));
+        new Rule(BaseClue.VILLAGER, EntityClues::villager), new Rule(BaseClue.ENDERMITE, EntityClues::endermite),
+        new Rule(BaseClue.NAMED, EntityClues::named), new Rule(BaseClue.PET, EntityClues::pet),
+        new Rule(BaseClue.LOST_MOB, EntityClues::lost));
 
     private EntityClues() {
     }
@@ -69,6 +71,12 @@ public final class EntityClues {
             }
         }
         return null;
+    }
+
+    // Nothing in the world makes one. It crawls out of an ender pearl that a player threw and
+    // is gone again two minutes later unless somebody named it.
+    private static String endermite(Entity entity) {
+        return entity instanceof Endermite ? "an endermite" : null;
     }
 
     private static String decoration(Entity entity) {

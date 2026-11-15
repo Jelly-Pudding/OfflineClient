@@ -352,7 +352,7 @@ public final class CubeRigger extends Module {
             BlockUtil.faceVector(cube.getBoundingBox().getCenter());
         }
         AttackTimer.packetHit(cube);
-        SwingMode.swingArm(InteractionHand.MAIN_HAND);
+        SwingMode.BOTH.hit();
         return true;
     }
 

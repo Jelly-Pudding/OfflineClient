@@ -46,6 +46,7 @@ import com.jellypudding.offlineclient.modules.render.PearlTracker;
 import com.jellypudding.offlineclient.modules.render.SteadyFrames;
 import com.jellypudding.offlineclient.modules.render.Waypoints;
 import com.jellypudding.offlineclient.modules.world.PacketMine;
+import com.jellypudding.offlineclient.modules.world.Scaffold;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.protocol.PacketType;
@@ -254,6 +255,12 @@ public final class Modules {
     public static boolean keepsFromThrow(ItemStack stack) {
         NoInteract noInteract = active(NoInteract.class);
         return noInteract != null && noInteract.keeps(stack);
+    }
+
+    // True whilst Scaffold is on and would build with the stack.
+    public static boolean scaffoldBuildsWith(ItemStack stack) {
+        Scaffold scaffold = active(Scaffold.class);
+        return scaffold != null && scaffold.buildsWith(stack);
     }
 
     // True whilst NoInteract is on and keeps every right click off the block.

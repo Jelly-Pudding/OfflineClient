@@ -12,6 +12,7 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.AttackTimer;
+import com.jellypudding.offlineclient.util.BlockMiner;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.HeldKey;
@@ -19,7 +20,6 @@ import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.SwingMode;
 import com.jellypudding.offlineclient.util.WorldWatch;
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.EntityHitResult;
@@ -188,7 +188,7 @@ public final class AutoClicker extends Module {
         if (!mc.options.keyAttack.isDown()) {
             return;
         }
-        if (mc.player.isUsingItem() || mc.gameMode.isDestroying() || Modules.feedersPauseCombat()
+        if (mc.player.isUsingItem() || BlockMiner.handMines() || Modules.feedersPauseCombat()
             || Modules.maceComboAirborne()) {
             return;
         }
@@ -203,7 +203,8 @@ public final class AutoClicker extends Module {
         if (target != null && !EntityUtil.isFriend(target) && !Modules.isBot(target)) {
             mc.gameMode.attack(mc.player, target);
         }
-        SwingMode.swingArm(InteractionHand.MAIN_HAND);
+        // A click of the plain game swings and punches whether it hit or not.
+        SwingMode.BOTH.hit();
         counted();
     }
 

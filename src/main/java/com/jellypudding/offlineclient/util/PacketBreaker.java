@@ -64,7 +64,7 @@ public final class PacketBreaker {
             return canSendInstant(pos);
         }
         return !sent.contains(pos) && slow == null && BreakSlots.parkingFree()
-            && !BreakSlots.busyElsewhere(pos) && !BlockMiner.kept(pos);
+            && !movesTarget(pos) && !BlockMiner.kept(pos);
     }
 
     // Only blocks a single tick finishes. One hit blocks never move the server's target.
@@ -72,7 +72,12 @@ public final class PacketBreaker {
         if (sent.contains(pos) || !BreakTime.breaksInOneTick(pos) || BlockMiner.kept(pos)) {
             return false;
         }
-        return BreakTime.canInstantBreak(pos) || !BreakSlots.busyElsewhere(pos);
+        return BreakTime.canInstantBreak(pos) || !movesTarget(pos);
+    }
+
+    // True whilst a start here would take the server's target from a block someone still mines.
+    private static boolean movesTarget(BlockPos pos) {
+        return BreakSlots.busyElsewhere(pos) || BlockMiner.standsBy(pos);
     }
 
     public void send(BlockPos pos) {

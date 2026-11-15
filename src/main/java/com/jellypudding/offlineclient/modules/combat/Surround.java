@@ -24,7 +24,6 @@ import com.jellypudding.offlineclient.util.UseBudget;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -68,7 +67,7 @@ public final class Surround extends Module {
         "Places on an open side with nothing to lean on. Off lays a support block under it first.", true);
     private final BoolSetting rotate = new BoolSetting("Rotate",
         "Sends a look packet towards each block as it goes down.", true);
-    private final EnumSetting<SwingMode> swing = SwingMode.setting(SwingMode.BOTH);
+    private final EnumSetting<SwingMode> swing = SwingMode.settingWithUses(SwingMode.BOTH);
     private final BoolSetting doubleHeight = new BoolSetting("Double height",
         "Also walls the four sides at head height to stop a face place.", false);
     private final BoolSetting protect = new BoolSetting("Protect",
@@ -259,7 +258,7 @@ public final class Surround extends Module {
                 ? BlockUtil.place(target, support, rotate.isOn(), false)
                 : BlockUtil.placeDirect(pos, rotate.isOn(), false);
             if (ok) {
-                swing.getValue().swing(InteractionHand.MAIN_HAND);
+                swing.getValue().use();
                 placed++;
             }
         }

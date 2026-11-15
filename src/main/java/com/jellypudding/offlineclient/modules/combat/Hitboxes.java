@@ -56,9 +56,10 @@ public final class Hitboxes extends Module {
         return expand.getValueString();
     }
 
-    // Extra pick radius for one entity. Zero keeps it vanilla.
+    // Extra pick radius for one entity. Zero keeps it vanilla. The copies the built in server
+    // holds keep their size for whatever it aims at them.
     public double expansionFor(Entity entity) {
-        if (!isEnabled() || entity == mc.player || !holdingWeapon()) {
+        if (!isEnabled() || entity == mc.player || !entity.level().isClientSide() || !holdingWeapon()) {
             return 0;
         }
         if (ignoreFriends.isOn() && EntityUtil.isFriend(entity) || Modules.isBot(entity)) {

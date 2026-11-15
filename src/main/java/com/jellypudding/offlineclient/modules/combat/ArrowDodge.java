@@ -270,7 +270,7 @@ public final class ArrowDodge extends Module {
         Vec3 centre = projectile.getBoundingBox().getCenter();
         RotationManager.glance(RotationManager.yawTo(centre), RotationManager.pitchTo(centre));
         mc.gameMode.attack(mc.player, projectile);
-        swing.getValue().swing(InteractionHand.MAIN_HAND);
+        swing.getValue().hit();
         struck.put(projectile.getId(), HIT_AGAIN_TICKS);
     }
 

@@ -15,6 +15,7 @@ import com.jellypudding.offlineclient.util.HomeNetwork;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.PacketUtil;
 import com.jellypudding.offlineclient.util.TextLines;
+import com.jellypudding.offlineclient.util.UnmoddedText;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.multiplayer.resolver.AddressCheck;
 import net.minecraft.client.multiplayer.resolver.ResolvedServerAddress;
@@ -95,6 +96,9 @@ public final class ServerSpoof extends Module {
     private final BoolSetting plainText = new BoolSetting("Hide mod text",
         "Sign and anvil text from the server reads the way it would without mods. A server can show you words"
             + " only a mod knows and see what comes back.", true);
+    private final BoolSetting probeAlerts = new BoolSetting("Probe alerts",
+        "Says in chat when the server shows you a sign or an anvil whose text asks for words only a mod knows.",
+        true).under(plainText);
     private final TextSetting hostName = new TextSetting("Host name",
         "The address the server is told you typed when you join. Leave it empty to send the real one.", "");
     private final BoolSetting resourcePack = new BoolSetting("Block resource packs",
@@ -112,6 +116,8 @@ public final class ServerSpoof extends Module {
     private final Map<UUID, HeldPack> held = Collections.synchronizedMap(new BoundedMap<>(MOST_HELD));
     // Filled from any thread and said on the game thread once there is a world to say them in.
     private final Queue<Component> notices = new ConcurrentLinkedQueue<>();
+    // True once the player has heard of a probe. A new connection or switching off forgets it.
+    private boolean probeTold;
     // Set as each join starts. True whilst the game's own connection went straight to an address on
     // your own network. Read on a download thread.
     private volatile boolean joinedAtHome;
@@ -120,7 +126,7 @@ public final class ServerSpoof extends Module {
         super("ServerSpoof", "Reports a plain client to the server.", Category.MISC);
         addSettings(brand, blockChannels);
         addSettings(channels.settings());
-        addSettings(plainText, hostName, resourcePack, freshPacks, homeGuard, ignoreBlocked);
+        addSettings(plainText, probeAlerts, hostName, resourcePack, freshPacks, homeGuard, ignoreBlocked);
         searchTags("server spoof", "brand", "vanilla spoof", "anti fabric", "resource pack", "blocked servers",
             "translation keys", "key binds", "mod detection", "host override", "handshake", "localhost");
     }
@@ -140,6 +146,7 @@ public final class ServerSpoof extends Module {
     protected void onDisable() {
         held.clear();
         notices.clear();
+        probeTold = false;
     }
 
     // Read by ServerNameResolverMixin. Only the game itself checks Mojang's blocked list.
@@ -154,9 +161,20 @@ public final class ServerSpoof extends Module {
 
     // True whilst the words of a text the server sent go back to it the way a game without mods
     // reads them. Read by the sign and anvil mixins. A world of your own has nobody to hide from.
-    public static boolean hidesModText() {
+    // The words a text reads as in a game with no mods. Null whilst mod text is not hidden. A
+    // text that asks for what only a mod knows is the server looking for mods. The player hears
+    // of the first one on each connection.
+    public static String plainWords(Component text) {
         ServerSpoof spoof = Modules.active(ServerSpoof.class);
-        return spoof != null && spoof.plainText.isOn() && !mc.isLocalServer();
+        if (spoof == null || !spoof.plainText.isOn() || mc.isLocalServer()) {
+            return null;
+        }
+        if (spoof.probeAlerts.isOn() && !spoof.probeTold && UnmoddedText.asksForMods(text)) {
+            spoof.probeTold = true;
+            spoof.say(Component.literal("§eThe server showed you text that asks for the words of a mod. It was"
+                + " sent what a game with no mods reads."));
+        }
+        return UnmoddedText.flatten(text);
     }
 
     // Called by ConnectionMixin on the thread that opens a join to a server. It runs whether the
@@ -165,6 +183,7 @@ public final class ServerSpoof extends Module {
     public String joining(Connection connection, String typed) {
         held.clear();
         notices.clear();
+        probeTold = false;
         joinedAtHome = Modules.active(Proxy.class) == null
             && connection.getRemoteAddress() instanceof InetSocketAddress server
             && server.getAddress() != null && HomeNetwork.holds(server.getAddress());

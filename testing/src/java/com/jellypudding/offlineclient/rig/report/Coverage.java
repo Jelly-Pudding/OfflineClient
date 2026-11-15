@@ -17,19 +17,19 @@ import java.util.regex.Pattern;
 
 // Says which modules the cases of a run put to work. A case counts for every module its name
 // holds as a whole word. The suites that only switch every module on and off or turn every
-// setting count for none. A module the rig has no way to work is listed with the reason.
+// setting count for none. A module whose cases reach only part of its work is listed with what
+// is left out.
 final class Coverage {
 
     private static final String FILE = "coverage.txt";
     private static final Set<String> BLANKET_SUITES = Set.of("Smoke", "Settings");
     // Modules a whole suite works without a case naming them.
     private static final Map<String, String> SUITE_OF = Map.of("Pathfinder", "Goto", "ClickGUI", "Screens");
-    private static final Map<String, String> OUT_OF_REACH = Map.of(
-        "InvWalk", "It reads the keyboard itself and the rig holds no real key down",
-        "FreeLook", "It takes the turn of the mouse and the rig moves no mouse",
-        "Proxy", "It needs a proxy server to join through",
-        "Streamers", "It asks a web service and the rig talks to nothing beyond this machine",
-        "Playlist", "Its work is heard and the rig runs with the sound off");
+    private static final List<String> ONLY_IN_PART = List.of(
+        "Playlist  Only its refusal is played. Its work is heard and the rig runs with the sound off",
+        "Privacy  Only the gate for usage reports. Unsigned chat needs a signed in account",
+        "MapPrinter  Only the marking of a station. A whole print takes hours",
+        "Streamers  Only a check that no site answers. The rig talks to nothing beyond this machine");
     private static final String NOT_A_LETTER_BEFORE = "(?<![A-Za-z])";
     private static final String NOT_A_LETTER_AFTER = "(?![A-Za-z])";
     private static final int NAMES_IN_A_LINE = 8;
@@ -64,20 +64,16 @@ final class Coverage {
         long worked = cases.values().stream().filter(named -> !named.isEmpty()).count();
         text.append("Modules a case of this run put to work  ").append(worked).append(" of ").append(cases.size())
             .append("\n\n");
-        List<String> barred = new ArrayList<>();
         cases.forEach((module, named) -> {
-            if (!named.isEmpty()) {
+            if (named.isEmpty()) {
+                idle.add(module);
+            } else {
                 text.append(module).append("  ").append(named.size()).append('\n');
                 named.forEach(id -> text.append("    ").append(id).append('\n'));
-            } else if (OUT_OF_REACH.containsKey(module)) {
-                barred.add(module);
-            } else {
-                idle.add(module);
             }
         });
-        text.append("\nModules the rig has no way to work  ").append(barred.size()).append('\n');
-        barred.forEach(module -> text.append("    ").append(module).append("  ").append(OUT_OF_REACH.get(module))
-            .append('\n'));
+        text.append("\nModules the rig works only in part  ").append(ONLY_IN_PART.size()).append('\n');
+        ONLY_IN_PART.forEach(line -> text.append("    ").append(line).append('\n'));
         text.append("\nModules no case of this run named  ").append(idle.size()).append('\n');
         for (int from = 0; from < idle.size(); from += NAMES_IN_A_LINE) {
             text.append("    ").append(String.join("  ", idle.subList(from, Math.min(idle.size(),

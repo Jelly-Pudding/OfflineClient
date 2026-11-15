@@ -42,7 +42,7 @@ public abstract class EntityMixin {
     @Inject(method = "isCurrentlyGlowing()Z", at = @At("HEAD"), cancellable = true)
     private void onIsCurrentlyGlowing(CallbackInfoReturnable<Boolean> cir) {
         NoRender noRender = Modules.get(NoRender.class);
-        if (noRender != null && noRender.hidesGlowing()) {
+        if (noRender != null && noRender.hidesGlowing() && ((Entity) (Object) this).level().isClientSide()) {
             cir.setReturnValue(false);
         }
     }

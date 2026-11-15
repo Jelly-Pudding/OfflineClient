@@ -37,16 +37,24 @@ public final class PaperServer {
 
     // Which of the plugins of the copied server join the rig's own and whether the server lets
     // players float. A server that does not kicks anybody who hangs in the air.
-    public record Setup(String name, List<String> plugins, boolean allowFlight) {
+    public record Setup(String name, List<String> plugins, boolean allowFlight, boolean hidesOres) {
 
         public static Setup plain() {
-            return new Setup("no plugins", List.of(), false);
+            return new Setup("no plugins", List.of(), false, false);
         }
 
         public static Setup with(String... plugins) {
-            return new Setup(String.join(" and ", plugins), List.of(plugins), true);
+            return new Setup(String.join(" and ", plugins), List.of(plugins), true, false);
+        }
+
+        // Paper's own anti xray keeps buried ores out of the chunks it sends.
+        public static Setup hidingOres() {
+            return new Setup("hidden ores", List.of(), false, true);
         }
     }
+
+    private static final String WORLD_DEFAULTS = "config/paper-world-defaults.yml";
+    private static final Pattern ANTI_XRAY = Pattern.compile("(anti-xray:\\s*\\n\\s*enabled: )(true|false)");
 
     // True when a plugin whose jar begins with the name lies among the plugins of the borrowed
     // server or in the rig's own folder of plugins.
@@ -194,6 +202,7 @@ public final class PaperServer {
         freshWorld(home);
         Files.writeString(home.resolve(HOSTS_FILE), HOST + " localhost\n");
         Files.writeString(home.resolve("server.properties"), properties(setup));
+        hideOres(home, setup.hidesOres());
         plugins(source.resolve(PLUGINS), home.resolve(PLUGINS), setup);
         return jar;
     }
@@ -249,6 +258,14 @@ public final class PaperServer {
         }
         Files.createDirectories(to.getParent());
         Files.copy(from, to, StandardCopyOption.REPLACE_EXISTING);
+    }
+
+    // Paper writes the file on its first start and the switch is flipped in it from then on.
+    private static void hideOres(Path home, boolean hide) throws IOException {
+        Path file = home.resolve(WORLD_DEFAULTS);
+        if (Files.isRegularFile(file)) {
+            Files.writeString(file, ANTI_XRAY.matcher(Files.readString(file)).replaceFirst("$1" + hide));
+        }
     }
 
     private static String properties(Setup setup) {

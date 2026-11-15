@@ -170,7 +170,7 @@ public final class AutoBuild extends Module {
     private final BoolSetting lineOfSight = new BoolSetting("Line of sight",
         "Never places through a wall. Safer against anti cheats and slower.", false);
     private final EnumSetting<FaceMode> faceTarget = FaceMode.setting(FaceMode.SERVER);
-    private final EnumSetting<SwingMode> swing = SwingMode.setting(SwingMode.PACKET);
+    private final EnumSetting<SwingMode> swing = SwingMode.settingWithUses(SwingMode.PACKET);
     private final BoolSetting show = new BoolSetting("Show build",
         "Outlines where the build goes before you start and what is left whilst it runs. A mistake is"
             + " marked red.", true);

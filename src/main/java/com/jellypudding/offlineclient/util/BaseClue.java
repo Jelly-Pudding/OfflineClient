@@ -29,6 +29,7 @@ public enum BaseClue {
     CROWD("crowd", Source.ENTITIES),
     DROPS("dropped blocks", Source.ENTITIES),
     LOST_MOB("lost mob", Source.ENTITIES),
+    ENDERMITE("endermite", Source.ENTITIES),
     MARK("mark", Source.HAND);
 
     public enum Source { BLOCKS, ENTITIES, HAND }

@@ -24,12 +24,12 @@ import net.minecraft.world.phys.Vec3;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
-// The server moves you the moment the fruit is eaten and then waits for the client to say
-// it has arrived. Until that answer it reads no move you send and takes no block you
-// click. The packet that says where it put you is kept here and handed to the game once
-// the fruit is out of your hand. A plain server sends the spot again every second under a
-// fresh number. A Paper server never does and the newest packet is always answered in the
-// end. Each number is answered once at most because a second answer is a kick.
+// The server picks the landing the moment the fruit is eaten and then waits for the client to
+// say it has arrived. Until that answer it keeps you where you ate and reads no move you send
+// and takes no block you click. The packet that names the landing is kept here and handed to
+// the game once the fruit is out of your hand. A plain server sends the spot again every second
+// under a fresh number. A Paper server never does and the newest packet is always answered in
+// the end. Each number is answered once at most because a second answer is a kick.
 public final class ChorusHold extends Module {
 
     private static final int NEVER = Integer.MIN_VALUE / 2;
@@ -46,7 +46,7 @@ public final class ChorusHold extends Module {
     private static final int MAX_HOLD_TICKS = 40;
 
     private final BoolSetting render = new BoolSetting("Show landing",
-        "Draws a box where the fruit has put you.", true);
+        "Draws a box where the fruit will put you.", true);
     private final BoxStyle style = new BoxStyle(BoxStyle.Shape.BOTH, 290).under(render);
 
     // Written on the network thread and read on the game thread.
@@ -64,7 +64,7 @@ public final class ChorusHold extends Module {
 
     public ChorusHold() {
         super("ChorusHold", "Keeps a chorus fruit teleport back until you put the fruit away or two seconds"
-            + " pass whilst the server already has you at the landing spot.", Category.COMBAT);
+            + " pass. The server holds you where you ate until then.", Category.COMBAT);
         addSettings(render);
         addSettings(style.settings());
         searchTags("chorus fruit", "chorus predict", "teleport", "desync");

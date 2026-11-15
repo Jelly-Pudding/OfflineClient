@@ -48,6 +48,9 @@ public final class MiningTrip {
     // How long after a block breaks its drops are worth going back for.
     private static final int DROP_TICKS = 200;
 
+    // Ticks the server may take to drop the item of a block the game already shows as gone.
+    private static final int DROP_WAIT = 10;
+
     private final Trip trip = new Trip();
     private final Cooldowns<BlockPos> shunned = new Cooldowns<>();
     private final Cooldowns<Integer> shunnedDrops = new Cooldowns<>();
@@ -136,7 +139,8 @@ public final class MiningTrip {
         if (target == null) {
             target = finder.get();
             if (target == null) {
-                return false;
+                // With nothing left to mine the item of the last block is still on its way.
+                return walk && collect && awaitingDrop();
             }
         }
         if (unsafe(target)) {
@@ -240,6 +244,11 @@ public final class MiningTrip {
             trip.stop();
         }
         return true;
+    }
+
+    // True whilst the block mined last may not have dropped its item yet.
+    private boolean awaitingDrop() {
+        return !mined.isEmpty() && clock() - mined.getLast().tick() <= DROP_WAIT + ServerInfo.pingTicks();
     }
 
     private ItemEntity nearestDrop() {

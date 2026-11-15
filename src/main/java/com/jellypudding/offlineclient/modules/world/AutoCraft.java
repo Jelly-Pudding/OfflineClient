@@ -16,6 +16,7 @@ import com.jellypudding.offlineclient.util.MenuClicks;
 import com.jellypudding.offlineclient.util.Recipes;
 import com.jellypudding.offlineclient.util.SwingMode;
 import com.jellypudding.offlineclient.util.ThrowOut;
+import net.minecraft.client.gui.screens.recipebook.RecipeCollection;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -99,6 +100,9 @@ public final class AutoCraft extends StationModule<AbstractCraftingMenu> {
         .under(restock);
 
     private List<Recipes.Craft> crafts;
+    // The recipe book's own list as it stood when the crafts were read. The book makes a new one
+    // each time a recipe is learnt.
+    private List<RecipeCollection> bookRead;
     // What the grid was last filled for. Null whilst no result is awaited.
     private String placed;
     // True whilst the grid holds a map and an empty map.
@@ -581,9 +585,11 @@ public final class AutoCraft extends StationModule<AbstractCraftingMenu> {
 
     // Recipe book entries for the chosen items in the order they were picked.
     private List<Recipes.Craft> crafts() {
-        if (crafts != null) {
+        List<RecipeCollection> book = mc.player.getRecipeBook().getCollections();
+        if (crafts != null && book == bookRead) {
             return crafts;
         }
+        bookRead = book;
         crafts = new ArrayList<>();
         if (only != null) {
             Recipes.known(item -> true).values().forEach(known -> known.stream().filter(only).forEach(crafts::add));

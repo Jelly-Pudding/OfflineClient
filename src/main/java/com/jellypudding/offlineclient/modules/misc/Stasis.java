@@ -32,7 +32,6 @@ import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientboundPlayerChatPacket;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.level.block.TrapDoorBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
@@ -418,8 +417,7 @@ public final class Stasis extends Module {
             begin(waiting.removeFirst());
         } else if (stayAwake.isOn() && --awakeIn <= 0) {
             awakeIn = STAY_AWAKE_TICKS;
-            SwingMode.swingArm(InteractionHand.MAIN_HAND);
-            SwingMode.PACKET.swing();
+            SwingMode.BOTH.hit();
         }
     }
 

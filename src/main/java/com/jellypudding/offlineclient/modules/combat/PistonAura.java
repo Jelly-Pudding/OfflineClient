@@ -23,7 +23,6 @@ import com.jellypudding.offlineclient.util.SwingMode;
 import com.jellypudding.offlineclient.util.TargetPriority;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.boss.enderdragon.EndCrystal;
@@ -81,7 +80,7 @@ public final class PistonAura extends Module {
     private final BlastLimits limits = new BlastLimits(6, 36).under(mode, Mode.CRYSTAL);
     private final NumberSetting delay = new NumberSetting("Delay",
         "Ticks to wait after one piston fires before the next goes down.", 4, 0, 20, 1, " ticks");
-    private final EnumSetting<SwingMode> swing = SwingMode.setting(SwingMode.BOTH);
+    private final EnumSetting<SwingMode> swing = SwingMode.settingWithUses(SwingMode.BOTH);
     private final BoolSetting render = new BoolSetting("Render",
         "Draws where the piston and the crystal and the power go.", true);
     private final BoxStyle style = new BoxStyle(BoxStyle.Shape.BOTH, 20).under(render);
@@ -196,7 +195,7 @@ public final class PistonAura extends Module {
                 status = "(piston refused)";
                 return;
             }
-            swing.getValue().swing(InteractionHand.MAIN_HAND);
+            swing.getValue().use();
         }
         if (planned.crystal() != null
             && !Crystals.placeCrystal(slots, planned.crystal().below(), swing.getValue())) {
@@ -211,7 +210,7 @@ public final class PistonAura extends Module {
             status = "(power refused)";
             return;
         }
-        swing.getValue().swing(InteractionHand.MAIN_HAND);
+        swing.getValue().use();
         timer = delay.getInt();
         if (planned.crystal() != null) {
             pending = new Pending(planned.crystal(), planned.blast());
@@ -387,7 +386,7 @@ public final class PistonAura extends Module {
         }
         if (EntityUtil.reachDistance(mc.player, crystal) <= breakRange.getValue() && selfSafe(crystal.position())) {
             AttackTimer.packetHit(crystal);
-            swing.getValue().swing();
+            swing.getValue().hit();
         }
         pending = null;
     }

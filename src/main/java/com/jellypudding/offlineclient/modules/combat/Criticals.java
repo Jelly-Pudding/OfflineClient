@@ -21,6 +21,7 @@ import com.jellypudding.offlineclient.util.MoveGate;
 import com.jellypudding.offlineclient.util.SprintPause;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.protocol.game.ServerboundAttackPacket;
+import net.minecraft.network.protocol.game.ServerboundPunchPacket;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
@@ -89,6 +90,8 @@ public final class Criticals extends Module {
     private final ChatWarning warning = new ChatWarning();
 
     private final HeldPacket<ServerboundAttackPacket> held = new HeldPacket<>();
+    // The punch of the click whose hit is held. It follows the hit out.
+    private boolean punchOwed;
     // The player whose hit is held. The id of its target means nothing to the next player.
     // It is let go with the hold. A player kept here keeps its whole world alive.
     private LocalPlayer heldBy;
@@ -142,6 +145,11 @@ public final class Criticals extends Module {
         }
         if (event.getPacket() instanceof ServerboundAttackPacket attack) {
             onAttackPacket(event, attack);
+        } else if (event.getPacket() instanceof ServerboundPunchPacket && stage != Stage.IDLE) {
+            // The punch that ends a click starts the attack cooldown again on the server. Ahead of
+            // the held hit it would leave that hit with no strength. It goes out behind the hit.
+            event.cancel();
+            punchOwed = true;
         }
     }
 
@@ -256,6 +264,11 @@ public final class Criticals extends Module {
         resetStage();
     }
 
+    // True when a hit on the entity from where the player stands would be made critical.
+    public boolean makesCritical(Entity target) {
+        return !mode.is(Mode.NONE) && wantsCrit(target.getId()) && !skipCrit();
+    }
+
     private boolean wantsCrit(int entityId) {
         Entity target = mc.level.getEntity(entityId);
         if (!(target instanceof LivingEntity)) {
@@ -361,6 +374,7 @@ public final class Criticals extends Module {
     private void clearHeld() {
         resetStage();
         held.discard();
+        punchOwed = false;
     }
 
     private void resetStage() {
@@ -387,5 +401,9 @@ public final class Criticals extends Module {
             SprintPause.hide();
         }
         held.release();
+        if (punchOwed) {
+            punchOwed = false;
+            mc.player.connection.send(ServerboundPunchPacket.INSTANCE);
+        }
     }
 }

@@ -42,7 +42,7 @@ public final class EChestFarmer extends Module {
         false);
     private final BoolSetting rotate = new BoolSetting("Rotate",
         "Turns towards the chest on the server side.", true);
-    private final EnumSetting<SwingMode> swing = SwingMode.setting(SwingMode.BOTH);
+    private final EnumSetting<SwingMode> swing = SwingMode.settingWithUses(SwingMode.BOTH);
     private final BoolSetting render = new BoolSetting("Show target",
         "Outlines where the chest goes.", true);
     private final BoxStyle targetBox = new BoxStyle(BoxStyle.Shape.BOTH, 0).under(render);
@@ -177,7 +177,7 @@ public final class EChestFarmer extends Module {
         }
         slots.select(slot);
         if (BlockUtil.place(target, support, rotate.isOn(), false)) {
-            swing.getValue().swing();
+            swing.getValue().use();
         }
     }
 

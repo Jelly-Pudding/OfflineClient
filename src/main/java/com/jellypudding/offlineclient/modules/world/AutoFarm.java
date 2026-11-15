@@ -29,7 +29,6 @@ import net.minecraft.core.Direction;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.tags.ItemTags;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -230,7 +229,7 @@ public final class AutoFarm extends Module {
     private final BoolSetting lineOfSight = new BoolSetting("Line of sight",
         "Skips anything your eyes cannot see.", false);
     private final EnumSetting<FaceMode> faceTarget = FaceMode.setting(FaceMode.SERVER);
-    private final EnumSetting<SwingMode> swing = SwingMode.setting(SwingMode.BOTH);
+    private final EnumSetting<SwingMode> swing = SwingMode.settingWithUses(SwingMode.BOTH);
     private final BoolSetting drawSpots = new BoolSetting("Draw spots",
         "Marks the spots being tracked for replanting.", true);
     private final ColorSetting spotColor = new ColorSetting("Spot colour",
@@ -414,7 +413,7 @@ public final class AutoFarm extends Module {
             sent++;
         }
         if (sent > 0) {
-            swing.getValue().swing(InteractionHand.MAIN_HAND);
+            swing.getValue().mine();
         }
     }
 
@@ -477,7 +476,7 @@ public final class AutoFarm extends Module {
             tried.put(pos, RETRY_TICKS);
             faceTarget.getValue().face(Vec3.atCenterOf(pos), RotationPriority.PLACE);
             if (BlockUtil.placeAny(pos, false, false)) {
-                swing.getValue().swing(InteractionHand.MAIN_HAND);
+                swing.getValue().use();
                 spots.remove(pos);
                 spotExpiry.remove(pos);
                 lastUse = now;
@@ -524,7 +523,7 @@ public final class AutoFarm extends Module {
             tried.put(pos, RETRY_TICKS);
             faceTarget.getValue().face(BlockUtil.hitPoint(pos, BlockUtil.facingSide(pos)), RotationPriority.PLACE);
             if (BlockTurns.use(pos)) {
-                swing.getValue().swing(InteractionHand.MAIN_HAND);
+                swing.getValue().use();
                 lastUse = now;
             }
             return true;
@@ -550,7 +549,7 @@ public final class AutoFarm extends Module {
         Direction side = BlockUtil.facingSide(target);
         faceTarget.getValue().face(BlockUtil.hitPoint(target, side), RotationPriority.PLACE);
         if (BlockUtil.useOn(target, false, false)) {
-            swing.getValue().swing(InteractionHand.MAIN_HAND);
+            swing.getValue().use();
             lastUse = now;
         }
         return true;

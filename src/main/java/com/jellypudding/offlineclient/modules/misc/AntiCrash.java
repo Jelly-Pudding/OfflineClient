@@ -74,6 +74,9 @@ public final class AntiCrash extends Module {
     // The explosion tracker spawns no more block particles than this in a tick. A bigger
     // count only serves to overflow the sum it takes over every blast of the tick.
     private static final int MAX_BLAST_PARTICLES = 512;
+    // No blast a command can make touches this many blocks. A plain server counts the air a blast
+    // went through and a wither far from any block already sends thousands.
+    private static final int MAX_REAL_BLAST = 1 << 20;
 
     // The particle engine keeps at most this many of one kind. More in one tick is wasted work.
     private static final int PARTICLE_BUDGET = 16384;
@@ -138,8 +141,11 @@ public final class AntiCrash extends Module {
 
     // Particles asked for since the last client tick. Filled on the netty thread.
     private final AtomicInteger particlesThisTick = new AtomicInteger();
-    // Entities let in since the last client tick. The world only counts them once it has ticked.
+    // Entities let in since the last client tick and in the tick before it. The world only
+    // counts one once the game thread has taken its packet. One let in just before a tick ended
+    // is in neither the world nor the fresh tally and the older tally still holds it.
     private final AtomicInteger spawnsThisTick = new AtomicInteger();
+    private final AtomicInteger spawnsLastTick = new AtomicInteger();
     private final AtomicInteger chatThisSecond = new AtomicInteger();
     private int secondTicks;
     // Stars set off since the last client tick. Bursts happen on the game thread.
@@ -162,7 +168,7 @@ public final class AntiCrash extends Module {
     @Subscribe
     private void onClientTick(ClientTickEvent event) {
         particlesThisTick.set(0);
-        spawnsThisTick.set(0);
+        spawnsLastTick.set(spawnsThisTick.getAndSet(0));
         starsThisTick = 0;
         if (++secondTicks >= SharedConstants.TICKS_PER_SECOND) {
             secondTicks = 0;
@@ -231,11 +237,15 @@ public final class AntiCrash extends Module {
             return drop("Explosions", "Dropped an explosion outside the world.");
         }
         Optional<Vec3> knockback = blast.playerKnockback().filter(AntiCrash::sane);
+        boolean wildPush = !knockback.equals(blast.playerKnockback());
         int blocks = Math.min(blast.blockCount(), MAX_BLAST_PARTICLES);
-        if (knockback.equals(blast.playerKnockback()) && blocks == blast.blockCount()) {
+        if (!wildPush && blocks == blast.blockCount()) {
             return blast;
         }
-        report("Explosions", "Trimmed an explosion that would have crashed or frozen the game.");
+        // The count of a real blast is brought down without a word.
+        if (wildPush || blast.blockCount() > MAX_REAL_BLAST) {
+            report("Explosions", "Trimmed an explosion that would have crashed or frozen the game.");
+        }
         return new ClientboundExplodePacket(blast.center(), blast.radius(), blocks, knockback,
             blast.explosionParticle(), blast.explosionSound(), blast.blockParticles(), blast.playSound());
     }
@@ -259,13 +269,14 @@ public final class AntiCrash extends Module {
             burst.xMaxSpeed(), burst.yMaxSpeed(), burst.zMaxSpeed(), left, burst.randomizationType());
     }
 
-    // The world is read from the netty thread. Its count may be a tick behind and the tally of
-    // this tick makes up for that.
+    // The world is read from the netty thread. Its count may be a tick behind and the tallies of
+    // this tick and the one before make up for that. Counting one twice for a tick only holds
+    // the next few back a moment.
     private boolean overCap(ClientboundAddEntityPacket spawn) {
         int cap = entityCap.getInt();
         ClientLevel level = mc.level;
         return cap > 0 && level != null && spawn.getType() != EntityTypes.PLAYER
-            && level.getEntityCount() + spawnsThisTick.getAndIncrement() >= cap;
+            && level.getEntityCount() + spawnsLastTick.get() + spawnsThisTick.getAndIncrement() >= cap;
     }
 
     private boolean floods() {

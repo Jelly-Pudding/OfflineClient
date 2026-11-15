@@ -95,6 +95,11 @@ public final class PopChams extends Module {
         ghosts.clear();
     }
 
+    @Override
+    public String getSuffix() {
+        return count(ghosts.size());
+    }
+
     @Subscribe
     private void onTotemPop(TotemPopEvent event) {
         Player player = event.getPlayer();

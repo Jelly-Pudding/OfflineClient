@@ -16,6 +16,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.function.BooleanSupplier;
 
@@ -119,6 +120,28 @@ public final class PathWalker {
 
     public boolean arrived() {
         return index >= path.size();
+    }
+
+    // The node this many steps past the one being steered at. The last one when the path ends sooner.
+    public BlockPos ahead(int steps) {
+        return path.get(Math.min(path.size() - 1, index + steps));
+    }
+
+    public BlockPos end() {
+        return path.getLast();
+    }
+
+    // Swaps everything past a node still ahead for a way that begins on it. False once the
+    // player is past that node.
+    public boolean rejoin(List<BlockPos> onward) {
+        int from = path.lastIndexOf(onward.getFirst());
+        if (from < index) {
+            return false;
+        }
+        List<BlockPos> joined = new ArrayList<>(path.subList(0, from));
+        joined.addAll(onward);
+        path = List.copyOf(joined);
+        return true;
     }
 
     // True once the player has strayed or the world has changed under the path.

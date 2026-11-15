@@ -27,7 +27,7 @@ Results land in a folder under `build/rig`. It is named after the moment the run
 | --- | --- |
 | `summary.txt` | What passed and what failed with what the case saw. |
 | `results.jsonl` | One line a case with what it measured. |
-| `coverage.txt` | Which modules a case put to work and which the rig has no way to work. |
+| `coverage.txt` | Which modules a case put to work and which few the rig works only in part. |
 | `guard.txt` | What the anti cheat made of each move. |
 | `shots` and `sheets` | A picture of every screen a case looked at. |
 | `server.log` | The log of the test server. |
@@ -59,13 +59,17 @@ The single player server never checks the moves of its own host. A trick done wi
 | Screens | The HUD and the click GUI and each tab and the HUD editor are drawn at GUI scales 2 and 4. No text leaves its box or lies over another. |
 | Scenarios | One case for each thing a player reported. It plays what the player did and checks what the world shows. |
 | Movement | One case for each movement module in single player and again on the server. The server says where the player ended up. |
-| Combat | KillAura and TriggerBot against a mob and the modules that manage your gear and wall you in. Both grounds. |
+| Combat | The modules that fight a mob or manage your gear or wall you in or get you out of harm. Both grounds. |
 | World | The modules that break and place and farm. The server says which blocks stand afterwards. Both grounds. |
 | Player | The modules that look after you once you are hungry or hurt or burning or dead. Both grounds. |
 | Misc | The modules that change what the game shows or says or does by itself. The screen is read back. Both grounds. |
+| Stations | The modules that work a screen for you such as a crafting table or an anvil or a villager. The server counts the goods. Both grounds. |
+| Builders | The modules that build or dig by themselves such as a staircase or a highway or a wither. Both grounds. |
+| Hunting | Each finder gets the trace it looks for built on the stage and must count it. NewChunks plays on grown land and OreProbe on a server that hides its ores. |
+| Together | What happens once more than one module is on. Each module alone is switched on and off and must leave every option and key and what the server believes of you as it found them. Two modules that cannot run at once must switch each other off. Each category and then every module at once runs on both grounds with no fault and no kick and nothing left behind. KillAura and Nuker and Scaffold are each played beside every other module in turn and must go on working. Modules that share a hand or a slot or a cooldown or the same keys are played together on both grounds for what a player would expect of them. |
 | Render | A still scene is pictured before a module goes on and whilst it is on and after it went off. The module must change the picture and leave nothing behind. A module that only draws once something happens has a case of its own. |
 | Goto | The goto command walks built courses and the game's own land with and without Speed and Step. Every walk arrives and none is slower than the plain walk. |
-| Server | What the server learns about the game with ServerSpoof on and off. A game with no mod loader in it joins as well and the server must hold the same about both. What a second player sees of you and what happens when it is hit or followed or talked to. |
+| Server | What the server learns about the game with ServerSpoof on and off. A game with no mod loader in it joins as well and the server must hold the same about both. What a second player sees of you and what happens when it is hit or followed or talked to. The modules that need an enemy play against the second player. |
 | Guard | The Movement cases again under each anti cheat. It writes down what was stopped. A plain walk must not be set back and the game must end up where the server has it. |
 
 ## Writing a case
@@ -97,6 +101,7 @@ A fault that is found and not yet fixed is marked on its case with `known` and a
 ## What the rig cannot see
 
 - Signed chat. The test server runs offline and no account signs anything.
-- A key or a mouse held on the real device. InvWalk and FreeLook read those and the rig touches neither.
-- Anything beyond this machine such as a proxy or a web service.
+- The turn of a real mouse. The rig sets the view and holds keys and never touches a device.
+- Anything beyond this machine such as a web service. A proxy and a web hook are played against a listener on `127.0.0.1`.
+- Sound. The rig runs with the volume at nought.
 - Anything that needs eyes such as whether a colour is pleasant. The pictures are kept for that.

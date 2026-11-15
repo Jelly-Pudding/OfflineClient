@@ -173,7 +173,7 @@ public final class DamageUtil {
     }
 
     // Vanilla only crits a falling attacker who is off the ground and not sprinting.
-    private static boolean canCrit(LivingEntity attacker) {
+    public static boolean canCrit(LivingEntity attacker) {
         return critFall(attacker) && !attacker.isSprinting();
     }
 

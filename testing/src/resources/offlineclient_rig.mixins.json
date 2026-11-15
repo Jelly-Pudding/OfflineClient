@@ -9,6 +9,8 @@
     "ClipboardManagerMixin",
     "GuiRenderStateMixin",
     "GuiTextRenderStateAccessor",
+    "InputConstantsMixin",
+    "LevelExtractorMixin",
     "MinecraftMixin",
     "WindowMixin"
   ],

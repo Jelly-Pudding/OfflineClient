@@ -18,6 +18,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockDamageEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.block.SignChangeEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
@@ -87,6 +88,8 @@ public final class RigProbe extends JavaPlugin implements Listener {
             case "plugin" -> say("plugin " + word(args, 1) + " "
                 + Bukkit.getPluginManager().isPluginEnabled(word(args, 1)));
             case "close" -> Bukkit.getPlayerExact(args[1]).closeInventory();
+            case "unlist" -> Bukkit.getPlayerExact(args[1]).unlistPlayer(Bukkit.getPlayerExact(args[2]));
+            case "list" -> Bukkit.getPlayerExact(args[1]).listPlayer(Bukkit.getPlayerExact(args[2]));
             case "sign" -> showSign(args);
             case "anvil" -> showAnvil(args);
             case "pack" -> Bukkit.getPlayerExact(args[1]).setResourcePack(UUID.randomUUID(), args[2], (byte[]) null,
@@ -294,6 +297,11 @@ public final class RigProbe extends JavaPlugin implements Listener {
     @EventHandler(priority = EventPriority.MONITOR)
     public void onPlace(BlockPlaceEvent event) {
         add(event.getPlayer(), event.isCancelled() ? "placesRefused" : "placed", 1);
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onDig(BlockDamageEvent event) {
+        add(event.getPlayer(), "digs", 1);
     }
 
     @EventHandler(priority = EventPriority.MONITOR)

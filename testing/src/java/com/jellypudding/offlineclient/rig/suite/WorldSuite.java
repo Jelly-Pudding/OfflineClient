@@ -1,9 +1,11 @@
 package com.jellypudding.offlineclient.rig.suite;
 
+import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.rig.core.Case;
 import com.jellypudding.offlineclient.rig.core.Rig;
 import com.jellypudding.offlineclient.rig.core.World;
 import com.jellypudding.offlineclient.rig.suite.Motion.Moved;
+import com.jellypudding.offlineclient.setting.ActionSetting;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.client.gui.screens.inventory.AbstractSignEditScreen;
@@ -14,6 +16,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 // One case for each module that breaks or places or works the world round the player. The
 // server says which blocks stand afterwards and what the animals and the chest hold.
@@ -35,10 +39,14 @@ public final class WorldSuite implements Suite {
     private static final int SEEN_TICKS = 10;
     private static final int WALK_TICKS = 20;
     private static final int WORK_TICKS = 200;
+    // Blocks of water each way from the middle of the pond. A cast lands a few blocks off its aim.
+    private static final int POND = 5;
     private static final int LONG_BREAK = 200;
     private static final int DIAMONDS = 5;
     private static final double LOOKED_AWAY = 8;
     private static final double ENDER_EYES = 2.55;
+    // The far corner of the map square as MapPrinter names it.
+    private static final Pattern SQUARE = Pattern.compile("to (-?[0-9]+) (-?[0-9]+)");
 
     private BlockPos home;
 
@@ -85,6 +93,8 @@ public final class WorldSuite implements Suite {
         plays.put("AutoSmelter loads the furnace you open", this::autoSmelter);
         plays.put("AutoSign writes the sign you place", this::autoSign);
         plays.put("BrushReader names the find you brush", this::brushReader);
+        plays.put("MapPrinter asks for the blocks of its station and turns down one where the picture goes",
+            this::mapPrinter);
         plays.put("SpawnProofer lights the dark ground at night", this::spawnProofer);
         plays.put("Painter covers the block it is told to cover", this::painter);
         plays.put("BlockSwap swaps a path for grass", this::blockSwap);
@@ -92,6 +102,7 @@ public final class WorldSuite implements Suite {
         plays.put("Flamethrower sets a cow alight", this::flamethrower);
         plays.put("AutoInteract milks the cow beside you", this::autoInteract);
         plays.put("EChestFarmer turns ender chests into obsidian", this::eChestFarmer);
+        plays.put("OpenWaterESP tells open water from a puddle", this::openWaterEsp);
         return plays;
     }
 
@@ -600,5 +611,98 @@ public final class WorldSuite implements Suite {
         int took = Props.await(rig, "obsidian from the first chest", WORK_TICKS * 3,
             () -> Props.carried(rig, "obsidian") >= 8);
         rig.note("The first eight obsidian were in the pack after about " + took + " ticks");
+    }
+
+    // Fishing only counts as open water with five blocks of water each way round the bobber.
+    private void openWaterEsp(Rig rig) {
+        World world = rig.world();
+        BlockPos near = home.offset(-POND, -2, -3 - 2 * POND);
+        BlockPos far = home.offset(POND, -1, -3);
+        world.setBlock(home.offset(3, -1, -2), "water");
+        world.fill(near, far, "water");
+        try {
+            Props.hold(rig, 0, "fishing_rod");
+            rig.client().enable("OpenWaterESP");
+            String wide = waterUnderBobber(rig, home.offset(0, -1, -3 - POND));
+            String narrow = waterUnderBobber(rig, home.offset(3, -1, -2));
+            rig.note("It called the pond " + wide + " and the puddle " + narrow);
+            rig.expect("open".equals(wide), "The pond was not called open water");
+            rig.expect("shallow".equals(narrow), "The puddle was not called shallow");
+        } finally {
+            // The pond reaches past what the stage puts back by itself.
+            world.fill(near, far.below(), "dirt");
+            world.fill(near.above(), far, "grass_block");
+        }
+    }
+
+    // Casts onto the water and hands back what the module writes beside its name. The line is
+    // reeled in again.
+    private static String waterUnderBobber(Rig rig, BlockPos water) {
+        Module esp = rig.client().module("OpenWaterESP");
+        // Water takes no crosshair. The view is turned to its surface.
+        rig.controls().aimAt(Vec3.atBottomCenterOf(water).add(0, 1, 0));
+        rig.ticks(SEEN_TICKS);
+        rig.controls().click(USE);
+        try {
+            rig.until("the bobber to settle on the water", WORK_TICKS, mc -> esp.getSuffix() != null);
+            rig.ticks(SEEN_TICKS);
+            return rig.ask(mc -> String.valueOf(esp.getSuffix()));
+        } finally {
+            rig.controls().click(USE);
+            rig.ticks(SEEN_TICKS * 2);
+        }
+    }
+
+    // The station is marked one right click at a time and stands outside the square the picture
+    // fills. A whole print takes hours and is not played here.
+    private void mapPrinter(Rig rig) {
+        World world = rig.world();
+        Module printer = rig.client().module("MapPrinter");
+        int mark = rig.client().chatMark();
+        rig.act(mc -> {
+            ActionSetting row = (ActionSetting) printer.getSetting("Mark station");
+            row.press();
+            if (row.isArmed()) {
+                row.press();
+            }
+        });
+        awaitSaid(rig, mark, "Right click the cartography table");
+        Matcher square = SQUARE.matcher(String.join(" ", rig.client().saidSince(mark)));
+        rig.expect(square.find(), "MapPrinter did not name its map square");
+        int edge = Integer.parseInt(square.group(1));
+        BlockPos inside = new BlockPos(edge - 2, home.getY(), home.getZ());
+        BlockPos table = new BlockPos(edge + 2, home.getY(), home.getZ());
+        BlockPos chest = table.south();
+        try {
+            world.teleport(edge + 0.5, home.getY(), home.getZ() + 0.5, -90, 0);
+            world.setBlock(inside, "cartography_table");
+            world.setBlock(table, "cartography_table");
+            world.setBlock(chest, "chest");
+            rig.ticks(SEEN_TICKS);
+            click(rig, inside);
+            awaitSaid(rig, mark, "stands where the picture goes");
+            click(rig, table);
+            awaitSaid(rig, mark, "chest with empty maps");
+            click(rig, chest);
+            awaitSaid(rig, mark, "finished maps go into");
+            rig.expect(rig.ask(mc -> mc.gui.screen() == null), "A marking click opened the block it marked");
+        } finally {
+            rig.client().disable("MapPrinter");
+            for (BlockPos block : List.of(inside, table, chest)) {
+                world.setBlock(block, AIR);
+            }
+        }
+    }
+
+    private static void click(Rig rig, BlockPos block) {
+        rig.controls().aimAtBlock(block, Direction.UP);
+        rig.ticks(2);
+        rig.controls().click(USE);
+        rig.ticks(2);
+    }
+
+    private static void awaitSaid(Rig rig, int mark, String words) {
+        Props.await(rig, "the client to say " + words, WORK_TICKS,
+            () -> rig.client().saidSince(mark).stream().anyMatch(line -> line.contains(words)));
     }
 }

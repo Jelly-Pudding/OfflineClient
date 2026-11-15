@@ -20,6 +20,7 @@ public final class Rig {
     private static final String LOG_FILE = "logs/latest.log";
     // How many faults of one case are spelled out in its message.
     private static final int MOST_FAULTS_TOLD = 3;
+    private static final int MOST_LINES_TOLD = 6;
     private static final String JOIN = " | ";
     // Chunks a world of the game's own land shows round the player. The server sends three fewer.
     private static final int LAND_SIGHT = 12;
@@ -119,8 +120,6 @@ public final class Rig {
     // The same with the game's own hills and woods and water grown from the seed. Nothing
     // hostile lives there.
     public LocalWorld openLand(WorldCreationUiState.SelectedGameMode mode, String seed) {
-        // A world opens with a short sight. Its first chunks would take too long to grow otherwise.
-        act(mc -> mc.options.renderDistance().set(OPENING_SIGHT));
         LocalWorld land = open(mode, seed);
         land.commands("difficulty peaceful", "weather clear");
         // The server grows every chunk in sight. A shorter sight keeps a fresh place quick to reach.
@@ -135,6 +134,9 @@ public final class Rig {
         if (world != null) {
             throw new RigFailure("A world is open already");
         }
+        // A world opens with a short sight. Its first chunks would take too long to grow otherwise.
+        // A land world before this one left the sight long.
+        act(mc -> mc.options.renderDistance().set(OPENING_SIGHT));
         TestWorldBuilder builder = context.worldBuilder();
         builder.setUseConsistentSettings(seed == null);
         builder.adjustSettings(state -> {
@@ -239,6 +241,7 @@ public final class Rig {
         long started = System.nanoTime();
         String failure = null;
         String known = each.knownFault();
+        int said = client.chatMark();
         try {
             each.body().run(this);
         } catch (KnownFault thrown) {
@@ -252,6 +255,9 @@ public final class Rig {
         } catch (Throwable thrown) {
             failure = failure == null ? "The keys could not be let go. " + describe(thrown) : failure;
         }
+        if (failure != null) {
+            noteWhatWasSaid(said);
+        }
         List<String> faults = faultsSince();
         if (failure == null && !faults.isEmpty()) {
             failure = String.join(JOIN, faults);
@@ -264,6 +270,19 @@ public final class Rig {
         results.end(outcome);
         caseId = "";
         return outcome;
+    }
+
+    // A module that gives up says why in chat. The last lines go with a case that failed.
+    private void noteWhatWasSaid(int since) {
+        try {
+            List<String> lines = client.saidSince(since);
+            if (!lines.isEmpty()) {
+                int from = Math.max(0, lines.size() - MOST_LINES_TOLD);
+                notes.add("The client said " + lines.subList(from, lines.size()));
+            }
+        } catch (RuntimeException gone) {
+            notes.add("What the client said could not be read");
+        }
     }
 
     private static Verdict verdict(String known, String failure) {

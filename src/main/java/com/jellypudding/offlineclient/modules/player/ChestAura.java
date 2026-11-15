@@ -297,7 +297,7 @@ public final class ChestAura extends Module {
         boolean used = InputUtil.whileSneaking(() -> mc.gameMode
             .interact(mc.player, vehicle, hit, InteractionHand.MAIN_HAND).consumesAction());
         if (used) {
-            SwingMode.swingArm(InteractionHand.MAIN_HAND);
+            SwingMode.swingUse(InteractionHand.MAIN_HAND);
         }
         return used;
     }

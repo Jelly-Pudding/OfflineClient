@@ -1,11 +1,15 @@
 package com.jellypudding.offlineclient.rig.suite;
 
 import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.rig.core.Rig;
 import com.jellypudding.offlineclient.rig.core.RigFailure;
+import com.jellypudding.offlineclient.rig.core.World;
 import com.jellypudding.offlineclient.rig.duo.Duo;
+import com.jellypudding.offlineclient.rig.duo.LocalSocks;
 import com.jellypudding.offlineclient.rig.duo.PaperServer;
 import com.jellypudding.offlineclient.rig.duo.Partner;
+import com.jellypudding.offlineclient.setting.ActionSetting;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.DisconnectedScreen;
@@ -55,6 +59,14 @@ final class PlayerPlays {
     private static final double KEPT = 4.5;
     private static final double EYE_TO_EYE = 0.5;
     private static final double SMASHED = 20;
+    private static final int PEARLS = 8;
+    private static final double WASP_RUN = 24;
+    private static final String PROXY = "rigproxy";
+    private static final String BED = "red_bed";
+    private static final int BEDS = 6;
+    private static final double WASP_NEAR = 3;
+    // AutoPearl looks for a landing twelve blocks from the enemy.
+    private static final double FLED = 8;
     private static final float EAST = -90;
     private static final double TURNED_TO = 6;
     private static final int TAB = InputConstants.KEY_TAB;
@@ -70,14 +82,29 @@ final class PlayerPlays {
     private static final String REPEATED_LINE = "the same words again";
     private static final String SHARED_KEY = "rigkey";
     private static final String SECRET = "meet at the old oak";
+    private static final String PASSWORD = "hunter2";
+    private static final int RIGHT_BUTTON = InputConstants.MOUSE_BUTTON_RIGHT;
+    private static final int LOOKUP_TICKS = 1200;
     private static final String OBSIDIAN = "obsidian";
     private static final String HARDY = "effect give %s resistance 600 4 true";
     // The block the second player stands in whilst in reach and the one over its head.
     private static final BlockPos STOOD_IN = new BlockPos(2, -60, 0);
     private static final BlockPos OVERHEAD = new BlockPos(2, -58, 0);
+    // The blocks round the feet of the second player where it stands in reach.
+    private static final List<BlockPos> WALLS = List.of(STOOD_IN.north(), STOOD_IN.east(), STOOD_IN.south(),
+        STOOD_IN.west());
+    // Right in front of the second player's eyes as it looks south.
+    private static final BlockPos FACED = STOOD_IN.offset(0, 1, 1);
     // Ground a block north of that spot. A crystal set on it stands right beside the player.
     private static final BlockPos CRYSTAL_BASE = new BlockPos(2, -61, -1);
     private static final List<String> CRIT_MODES = List.of("packet", "subtle", "mini_jump", "full_jump");
+    // Stone behind the first player for Nuker to chew on with the sword.
+    private static final BlockPos QUARRY_FROM = new BlockPos(-1, -60, 2);
+    private static final BlockPos QUARRY_TO = new BlockPos(1, -59, 3);
+    private static final String STURDY_HUSK = "{NoAI:1b,PersistenceRequired:1b,IsBaby:0b,Health:200f,"
+        + "attributes:[{id:\"minecraft:max_health\",base:200}]}";
+    // A diamond sword takes seven with the cooldown full.
+    private static final double FULL_SWORD = 6.5;
 
     private PlayerPlays() {
     }
@@ -87,6 +114,9 @@ final class PlayerPlays {
         plays.put("another player sees Derp flail", PlayerPlays::flail);
         plays.put("SkinDerp blinks the skin the server shows to others", PlayerPlays::skinDerp);
         plays.put("KillAura hits another player and leaves a friend alone", PlayerPlays::killAura);
+        plays.put("KillAura shows everyone the arm swing of each hit", PlayerPlays::killAuraSwings);
+        plays.put("Nuker shows everyone its arm as it mines and keeps it back whilst KillAura charges a hit",
+            PlayerPlays::nukerSwings);
         plays.put("TriggerBot hits the player under the crosshair and nobody else", PlayerPlays::triggerBot);
         plays.put("Criticals makes the hits on another player critical in every mode", PlayerPlays::criticals);
         plays.put("Criticals lands a mace smash on another player", PlayerPlays::maceSmash);
@@ -121,6 +151,27 @@ final class PlayerPlays {
         plays.put("AntiSpam stacks a line another player repeats", PlayerPlays::antiSpam);
         plays.put("SecretChat is read by a player with the key and not by the server", PlayerPlays::secretChat);
         plays.put("ChatAlerts shows a toast when another player writes your name", PlayerPlays::chatAlerts);
+        plays.put("Locator finds a player who is out of sight", PlayerPlays::locator);
+        plays.put("Dossier keeps a record of a player you met", PlayerPlays::dossier);
+        plays.put("AutoLogin answers the server's login prompt with the saved password", PlayerPlays::autoLogin);
+        plays.put("FeetESP marks the block another player stands in", PlayerPlays::feetEsp);
+        plays.put("CityESP marks the block that would open a walled in player", PlayerPlays::cityEsp);
+        plays.put("PearlTracker follows a pearl another player throws", PlayerPlays::pearlTracker);
+        plays.put("BreakIndicators shows the block another player mines", PlayerPlays::breakIndicators);
+        plays.put("PopChams leaves a copy where another player's totem popped", PlayerPlays::popChams);
+        plays.put("Streamers says what a check found with no site in reach", PlayerPlays::streamers);
+        plays.put("AntiBot keeps KillAura off a player the server hides from the tab list", PlayerPlays::antiBot);
+        plays.put("AutoWasp flies you to another player on your elytra", PlayerPlays::autoWasp);
+        plays.put("BedAura blows a bed up beside another player in the Nether", PlayerPlays::bedAura);
+        plays.put("ChatBot answers the phrase of its rule and nothing else", PlayerPlays::chatBot);
+        plays.put("Stasis asks its puller for a pull once health is low", PlayerPlays::stasisCalls);
+        plays.put("Stasis at base flips the trapdoor for a caller and puts it back", PlayerPlays::stasisPulls);
+        plays.put("Proxy carries a join through the proxy that is picked", PlayerPlays::proxy);
+        plays.put("AutoCity mines a wall of another player's hole", PlayerPlays::autoCity);
+        plays.put("PistonAura shoves a crystal into another player's hole", PlayerPlays::pistonAura);
+        plays.put("HoleFiller seals an empty hole beside another player", PlayerPlays::holeFiller);
+        plays.put("AutoPearl throws a pearl to get away from another player once health is low",
+            PlayerPlays::autoPearl);
     }
 
     private static void twerk(Rig rig, Duo duo) {
@@ -184,6 +235,61 @@ final class PlayerPlays {
         } finally {
             rig.client().command(NO_FRIEND + Partner.NAME);
         }
+    }
+
+    // A hit of the plain game ends in a swing the server shows to everyone. A hit a module makes
+    // must look the same to them.
+    private static void killAuraSwings(Rig rig, Duo duo) {
+        arm(rig);
+        duo.partnerInReach(true);
+        rig.client().enable("KillAura");
+        duo.partner().watch(rig.world().player(), WATCH_TICKS);
+        rig.ticks(WATCH_TICKS);
+        Map<String, String> seen = duo.partner().watched();
+        double hits = count(duo, HITS);
+        double swings = count(duo, "swings");
+        rig.note("KillAura landed " + hits + " hits and the server counted " + swings
+            + " swings and the second player saw " + seen.get("swings"));
+        rig.expect(hits >= FEWEST, "KillAura did not hit a player who stood in reach");
+        rig.expect(swings >= hits, "The server was shown fewer swings than hits");
+        rig.expect(Integer.parseInt(seen.get("swings")) >= FEWEST, "The second player saw no arm swing");
+    }
+
+    // A player who mines swings the arm on every tick and so must a module. Each of those swings
+    // starts the attack cooldown again on the server. Whilst KillAura waits for that cooldown
+    // they stay away and its hits land with the whole of the sword.
+    private static void nukerSwings(Rig rig, Duo duo) {
+        World world = rig.world();
+        arm(rig);
+        duo.partnerInReach(true);
+        world.refill(QUARRY_FROM, QUARRY_TO, "stone");
+        rig.client().set("Nuker", "Flat", "on");
+        rig.client().set("KillAura", "Players", "off");
+        rig.client().set("KillAura", "Hostile mobs", "on");
+        rig.client().enable("Nuker");
+        rig.ticks(FEWEST);
+        duo.server().resetTallies();
+        duo.partner().watch(world.player(), WATCH_TICKS);
+        rig.ticks(WATCH_TICKS);
+        int seen = Integer.parseInt(duo.partner().watched().get("swings"));
+        double mining = count(duo, "swings");
+        world.command("summon husk 0.5 -60 -1.5 " + STURDY_HUSK);
+        rig.client().enable("KillAura");
+        rig.ticks(WATCH_TICKS / 2);
+        duo.server().resetTallies();
+        rig.ticks(WATCH_TICKS * 2);
+        double hits = count(duo, HITS);
+        double fighting = count(duo, "swings");
+        double each = count(duo, DAMAGE) / Math.max(1, hits);
+        world.attempt("kill @e[type=husk]");
+        rig.note("The server counted " + mining + " swings in " + WATCH_TICKS + " ticks of mining and the second"
+            + " player saw " + seen + ". In the fight it counted " + fighting + " swings for " + hits
+            + " hits of " + each + " each");
+        rig.expect(mining >= WATCH_TICKS / 2.0, "The server was shown too few swings whilst Nuker mined");
+        rig.expect(seen >= FEWEST, "The second player saw no arm swing whilst Nuker mined");
+        rig.expect(hits >= FEWEST, "KillAura did not hit the husk beside Nuker");
+        rig.expect(each >= FULL_SWORD, "The hits landed weak beside Nuker");
+        rig.expect(fighting <= hits * 3, "Mining swings went on between the hits");
     }
 
     private static void triggerBot(Rig rig, Duo duo) {
@@ -744,5 +850,339 @@ final class PlayerPlays {
         rig.act(mc -> mc.gui.hud.getChat().clearMessages(true));
         rig.ticks(2);
         return rig.frames().capture("toast " + words).shows(words);
+    }
+
+    // The locator bar tells every game where the other players are.
+    private static void locator(Rig rig, Duo duo) {
+        duo.partnerAway();
+        Module locator = rig.client().module("Locator");
+        int mark = rig.client().chatMark();
+        rig.client().enable("Locator");
+        rig.until("the locator bar to give the player away", ANSWER_TICKS * 2, mc -> locator.getSuffix() != null);
+        rig.ticks(SEEN_TICKS);
+        List<String> said = rig.client().saidSince(mark);
+        rig.note("Locator said " + said);
+        rig.expect(said.stream().anyMatch(line -> line.contains(Partner.NAME)), "Chat does not name the player");
+    }
+
+    private static void dossier(Rig rig, Duo duo) {
+        rig.client().enable("Dossier");
+        duo.partnerInReach(false);
+        rig.ticks(SETTLE_TICKS);
+        Module dossier = rig.client().module("Dossier");
+        rig.act(mc -> ((ActionSetting) dossier.getSetting("Open")).press());
+        rig.ticks(SEEN_TICKS);
+        boolean listed = rig.frames().capture("dossier").shows(Partner.NAME);
+        rig.act(mc -> mc.gui.setScreen(null));
+        rig.expect(listed, "The record does not name the player who stood in view");
+    }
+
+    private static void autoLogin(Rig rig, Duo duo) {
+        String me = rig.world().player();
+        rig.client().command("autologin set " + PASSWORD);
+        rig.client().enable("AutoLogin");
+        try {
+            int mark = duo.server().logMark();
+            duo.server().console("tellraw " + me + " \"Please log in with /login <password>\"");
+            String heard = duo.server().heard("command " + me, mark, ANSWER_TICKS);
+            rig.expect(heard.contains("/login " + PASSWORD), "The server heard " + heard);
+        } finally {
+            rig.client().command("autologin remove");
+        }
+    }
+
+    // No site answers on this machine. The check must end and say that.
+    private static void streamers(Rig rig, Duo duo) {
+        Module streamers = rig.client().module("Streamers");
+        rig.client().enable("Streamers");
+        // It looks everyone up by itself a moment after it comes on and says nothing of that.
+        rig.ticks(ANSWER_TICKS * 2);
+        int mark = rig.client().chatMark();
+        rig.act(mc -> ((ActionSetting) streamers.getSetting("Check now")).press());
+        rig.until("the check to end", LOOKUP_TICKS, mc -> !rig.client().saidSince(mark).isEmpty());
+        List<String> said = rig.client().saidSince(mark);
+        rig.note("Streamers said " + said);
+        rig.expect(said.stream().anyMatch(line -> line.contains("no answer")),
+            "The check does not say that no site answered");
+    }
+
+    // Waits until the module counts something beside its name.
+    private static void awaitMark(Rig rig, String name, String what) {
+        Module module = rig.client().module(name);
+        rig.client().enable(name);
+        rig.until(what, ANSWER_TICKS, mc -> Props.tally(module) > 0);
+    }
+
+    private static String block(BlockPos pos, String block) {
+        return "setblock " + pos.getX() + " " + pos.getY() + " " + pos.getZ() + " " + block;
+    }
+
+    private static String fill(BlockPos from, BlockPos to, String block) {
+        return "fill " + Props.at(from) + " " + Props.at(to) + " " + block;
+    }
+
+    // A server shows a figure of its own as a player it keeps off the tab list. The second player
+    // is made one for the first.
+    private static void antiBot(Rig rig, Duo duo) {
+        String me = rig.world().player();
+        arm(rig);
+        duo.partnerInReach(true);
+        rig.client().enable("AntiBot");
+        rig.client().enable("KillAura");
+        rig.ticks(WATCH_TICKS);
+        double listed = count(duo, HITS);
+        duo.server().console("probe unlist " + me + " " + Partner.NAME);
+        try {
+            rig.ticks(SETTLE_TICKS);
+            duo.server().resetTallies();
+            rig.ticks(WATCH_TICKS);
+            double unlisted = count(duo, HITS);
+            rig.note("KillAura landed " + listed + " hits on the listed player and " + unlisted
+                + " once the server kept it off the tab list");
+            rig.expect(listed >= FEWEST, "KillAura did not hit a listed player with AntiBot on");
+            rig.expect(unlisted == 0, "KillAura hit a player the server keeps off the tab list " + unlisted
+                + " times");
+        } finally {
+            duo.server().console("probe list " + me + " " + Partner.NAME);
+        }
+    }
+
+    // Beds only explode outside the overworld. Both players stand in a sealed room in the Nether.
+    private static void bedAura(Rig rig, Duo duo) {
+        BlockPos feet = NetherRoom.FEET;
+        NetherRoom.enter(rig);
+        try {
+            duo.server().console(String.format(Locale.ROOT, "execute in minecraft:the_nether run tp %s %.1f %d %.1f "
+                + "90 0", Partner.NAME, feet.getX() + 2.5, feet.getY(), feet.getZ() + 0.5));
+            duo.partner().ask("ticks", Integer.toString(SETTLE_TICKS));
+            hardy(rig, duo);
+            // A bed does not stack.
+            inHand(rig, BED);
+            for (int slot = 1; slot < BEDS; slot++) {
+                rig.world().hotbar(slot, BED);
+            }
+            rig.client().enable("BedAura");
+            Props.await(rig, "a bed to blow beside the second player", KILL_TICKS,
+                () -> hurtBy(duo, "BLOCK_EXPLOSION") >= 1);
+        } finally {
+            rig.client().disable("BedAura");
+            duo.partnerHome();
+            NetherRoom.leave(rig, new BlockPos(0, -60, 0));
+        }
+    }
+
+    private static void chatBot(Rig rig, Duo duo) {
+        String me = rig.world().player();
+        Props.text(rig, "ChatBot", "Phrase 1", "ping");
+        Props.text(rig, "ChatBot", "Reply 1", "pong");
+        rig.client().enable("ChatBot");
+        int mark = duo.server().logMark();
+        duo.partner().ask("chat", "nothing to see");
+        rig.ticks(WATCH_TICKS);
+        boolean quiet = duo.server().allHeard("chat " + me, mark).isEmpty();
+        duo.partner().ask("chat", "ping");
+        String heard = duo.server().heard("chat " + me, mark, ANSWER_TICKS * 2);
+        rig.expect(quiet, "ChatBot answered a line that held no phrase of its own");
+        rig.expect(heard != null && heard.contains("pong"), "The server heard " + heard);
+    }
+
+    // Five health is under the three hearts Stasis calls at.
+    private static void stasisCalls(Rig rig, Duo duo) {
+        String me = rig.world().player();
+        Props.text(rig, "Stasis", "Puller", Partner.NAME);
+        Props.choose(rig, "Stasis", "Call on", "health");
+        rig.client().enable("Stasis");
+        rig.ticks(SETTLE_TICKS);
+        int mark = duo.server().logMark();
+        boolean quiet = duo.server().allHeard("command " + me, mark).isEmpty();
+        duo.server().console("damage " + me + " 15");
+        String heard = duo.server().heard("command " + me, mark, ANSWER_TICKS);
+        rig.expect(quiet, "Stasis called for a pull at full health");
+        rig.expect(heard != null && heard.contains(Partner.NAME) && heard.contains("home"), "The server heard "
+            + heard);
+    }
+
+    private static void stasisPulls(Rig rig, Duo duo) {
+        String me = rig.world().player();
+        BlockPos door = new BlockPos(0, -60, -4);
+        String open = "execute if block " + Props.at(door) + " oak_trapdoor[open=true]";
+        duo.server().console(block(door, "oak_trapdoor"));
+        rig.client().set("Stasis", "Role", "at_base");
+        Props.text(rig, "Stasis", "Trapdoor 1", Props.at(door));
+        Props.text(rig, "Stasis", "Caller 1", Partner.NAME);
+        rig.client().enable("Stasis");
+        rig.ticks(SETTLE_TICKS);
+        Vec3 stood = spot(duo.lead());
+        duo.partner().ask("chat", "/msg " + me + " home");
+        Props.await(rig, "the trapdoor to be flipped", KILL_TICKS, () -> rig.world().attempt(open));
+        Props.await(rig, "the trapdoor to be put back", ANSWER_TICKS, () -> !rig.world().attempt(open));
+        Props.await(rig, "the first player to walk back", KILL_TICKS, () -> spot(duo.lead()).distanceTo(stood) < 1);
+    }
+
+    // A small proxy on this machine carries the join. The first player joins the plain way again
+    // before the proxy shuts.
+    private static void proxy(Rig rig, Duo duo) throws Exception {
+        try (LocalSocks socks = LocalSocks.open()) {
+            rig.client().command("proxy add " + PROXY + " 127.0.0.1:" + socks.port() + " socks5");
+            rig.client().command("proxy use " + PROXY);
+            try {
+                duo.rejoin();
+                rig.note("The proxy carried " + socks.carried() + " connections");
+                rig.expect(socks.carried() >= 1, "The join did not go through the proxy");
+            } finally {
+                rig.client().disable("Proxy");
+                rig.client().command("proxy remove " + PROXY);
+                duo.rejoin();
+            }
+        }
+    }
+
+    // The second player stands a way off and the first has wings on.
+    private static void autoWasp(Rig rig, Duo duo) {
+        duo.partnerAt(IN_REACH.x + WASP_RUN, -60, IN_REACH.z, 90);
+        Props.wear(rig, "armor.chest", "elytra");
+        rig.ticks(SETTLE_TICKS);
+        rig.client().enable("AutoWasp");
+        boolean[] glided = new boolean[1];
+        try {
+            Props.await(rig, "the first player to fly to the second", KILL_TICKS, () -> {
+                Map<String, String> lead = duo.lead();
+                glided[0] |= "true".equals(lead.get("gliding"));
+                return spot(lead).subtract(spot(duo.server().player(Partner.NAME))).horizontalDistance() < WASP_NEAR;
+            });
+        } finally {
+            rig.client().disable("AutoWasp");
+        }
+        rig.expect(glided[0], "The server never saw the first player on its wings");
+    }
+
+    private static void autoCity(Rig rig, Duo duo) {
+        duo.partnerInReach(false);
+        duo.server().console(WALLS.stream().map(wall -> block(wall, OBSIDIAN)).toList());
+        inHand(rig, "netherite_pickaxe[enchantments={\"minecraft:efficiency\":5}]");
+        rig.ticks(SEEN_TICKS);
+        rig.client().enable("AutoCity");
+        try {
+            Props.await(rig, "a wall of the second player's hole to go", KILL_TICKS,
+                () -> WALLS.stream().anyMatch(wall -> rig.world().isAir(wall)));
+        } finally {
+            duo.server().console(WALLS.stream().map(wall -> block(wall, "air")).toList());
+        }
+        rig.until("AutoCity to switch itself off", SETTLE_TICKS, mc -> !rig.client().module("AutoCity").isEnabled());
+    }
+
+    // Obsidian round the second player's feet is the wall the crystal stands on and the floor of
+    // the piston behind it.
+    private static void pistonAura(Rig rig, Duo duo) {
+        BlockPos low = STOOD_IN.offset(-1, 0, -2);
+        BlockPos high = STOOD_IN.offset(2, 0, 2);
+        duo.server().console(List.of(fill(low, high, OBSIDIAN), block(STOOD_IN, "air")));
+        duo.partnerAt(IN_REACH.x, -60, IN_REACH.z, 90);
+        hardy(rig, duo);
+        inHand(rig, "piston 16");
+        rig.world().hotbar(1, "redstone_block 16");
+        rig.world().hotbar(2, "end_crystal 16");
+        rig.ticks(SEEN_TICKS);
+        rig.client().enable("PistonAura");
+        try {
+            Props.await(rig, "a crystal to blow in the second player's hole", KILL_TICKS,
+                () -> hurtBy(duo, "ENTITY_EXPLOSION") >= 1);
+        } finally {
+            rig.client().disable("PistonAura");
+            duo.server().console(List.of("kill @e[type=end_crystal]", fill(low, high.above(2), "air")));
+        }
+    }
+
+    private static void holeFiller(Rig rig, Duo duo) {
+        BlockPos hole = STOOD_IN.north(3);
+        duo.server().console(List.of(block(hole.below(), OBSIDIAN), block(hole.north(), OBSIDIAN),
+            block(hole.east(), OBSIDIAN), block(hole.south(), OBSIDIAN), block(hole.west(), OBSIDIAN)));
+        duo.partnerAt(IN_REACH.x, -60, IN_REACH.z, 90);
+        inHand(rig, OBSIDIAN + " 16");
+        rig.client().enable("HoleFiller");
+        try {
+            Props.await(rig, "the empty hole beside the second player to be filled", KILL_TICKS,
+                () -> !rig.world().isAir(hole));
+        } finally {
+            rig.client().disable("HoleFiller");
+            duo.server().console(List.of(fill(hole.offset(-1, 0, -1), hole.offset(1, 0, 1), "air"),
+                block(hole.below(), "grass_block")));
+        }
+    }
+
+    // Seven health is under the four hearts AutoPearl runs at and over the five a pearl costs.
+    private static void autoPearl(Rig rig, Duo duo) {
+        String me = rig.world().player();
+        duo.partnerInReach(true);
+        inHand(rig, "ender_pearl " + PEARLS);
+        rig.client().enable("AutoPearl");
+        rig.ticks(WATCH_TICKS);
+        int kept = Props.carried(rig, "ender_pearl");
+        Vec3 stood = spot(duo.lead());
+        duo.server().console("damage " + me + " 13");
+        Props.await(rig, "the first player to land far from the second", KILL_TICKS,
+            () -> spot(duo.lead()).distanceTo(stood) >= FLED);
+        int left = Props.carried(rig, "ender_pearl");
+        rig.note("The first player kept " + kept + " pearls at full health and has " + left + " after the escape");
+        rig.expect(kept == PEARLS, "AutoPearl threw a pearl at full health");
+        rig.expect(left < PEARLS, "The first player got away without a pearl");
+    }
+
+    private static void feetEsp(Rig rig, Duo duo) {
+        duo.partnerInReach(false);
+        awaitMark(rig, "FeetESP", "the block under the other player to be marked");
+    }
+
+    private static void cityEsp(Rig rig, Duo duo) {
+        duo.partnerInReach(false);
+        duo.server().console(WALLS.stream().map(wall -> block(wall, OBSIDIAN)).toList());
+        try {
+            awaitMark(rig, "CityESP", "a wall of the other player's hole to be marked");
+        } finally {
+            duo.server().console(WALLS.stream().map(wall -> block(wall, "air")).toList());
+        }
+    }
+
+    private static void pearlTracker(Rig rig, Duo duo) {
+        duo.partnerInReach(true);
+        duo.server().console("item replace entity " + Partner.NAME + " hotbar.0 with ender_pearl 4");
+        duo.partner().ask("slot", "0");
+        duo.partner().ask("look", "0", "-60");
+        Module tracker = rig.client().module("PearlTracker");
+        rig.client().enable("PearlTracker");
+        rig.ticks(SEEN_TICKS);
+        duo.partner().send("click", String.valueOf(RIGHT_BUTTON));
+        try {
+            rig.until("the pearl in the air to be followed", ANSWER_TICKS, mc -> Props.tally(tracker) > 0);
+        } finally {
+            duo.partner().await();
+        }
+    }
+
+    // The server only tells of a block being mined as its cracks grow. Planks take a bare hand
+    // three seconds and crack a little more every few ticks.
+    private static void breakIndicators(Rig rig, Duo duo) {
+        duo.partnerInReach(false);
+        duo.server().console(block(FACED, "oak_planks"));
+        duo.partner().ask("look", "0", "0");
+        Module indicators = rig.client().module("BreakIndicators");
+        rig.client().enable("BreakIndicators");
+        duo.partner().ask("holdMouse", String.valueOf(LEFT_BUTTON));
+        try {
+            rig.until("the block the other player mines to be marked", ANSWER_TICKS, mc -> Props.tally(indicators) > 0);
+        } finally {
+            duo.partner().ask("releaseMouse", String.valueOf(LEFT_BUTTON));
+            duo.server().console(block(FACED, "air"));
+        }
+    }
+
+    private static void popChams(Rig rig, Duo duo) {
+        duo.partnerInReach(false);
+        duo.server().console("item replace entity " + Partner.NAME + " weapon.offhand with totem_of_undying");
+        Module chams = rig.client().module("PopChams");
+        rig.client().enable("PopChams");
+        rig.ticks(SETTLE_TICKS);
+        duo.server().console("damage " + Partner.NAME + " 1000");
+        rig.until("a copy of the player whose totem popped", ANSWER_TICKS, mc -> Props.tally(chams) > 0);
     }
 }

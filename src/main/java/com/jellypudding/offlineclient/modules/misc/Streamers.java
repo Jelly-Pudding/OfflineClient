@@ -111,6 +111,8 @@ public final class Streamers extends Module {
     // Set by Check now. The run that empties the queue then says when it found nobody.
     private volatile boolean asked;
     private final AtomicInteger foundLive = new AtomicInteger();
+    // Lookups of the run that no site answered. A check that reached nobody found nothing out.
+    private final AtomicInteger unanswered = new AtomicInteger();
 
     private JoinWatch joins = new JoinWatch();
     private final Set<String> seen = new HashSet<>();
@@ -193,6 +195,7 @@ public final class Streamers extends Module {
         }
         told.clear();
         foundLive.set(0);
+        unanswered.set(0);
         asked = true;
         return everyone(true);
     }
@@ -267,7 +270,9 @@ public final class Streamers extends Module {
         if (asked) {
             asked = false;
             if (foundLive.get() == 0) {
-                mc.execute(() -> tell("found nobody live."));
+                int lost = unanswered.get();
+                mc.execute(() -> tell(lost == 0 ? "found nobody live."
+                    : "found nobody live. " + Tally.counted(lost, "lookup") + " got no answer."));
             }
         }
     }
@@ -281,6 +286,7 @@ public final class Streamers extends Module {
             return;
         }
         if (!page.ok()) {
+            unanswered.incrementAndGet();
             return;
         }
         boolean live;

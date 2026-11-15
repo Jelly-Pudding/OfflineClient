@@ -229,7 +229,7 @@ public final class CrystalAura extends Module implements Targeting {
         .describe(YawSteps.BREAK, "Only the turn to hit a crystal.")
         .describe(YawSteps.ALL, "Placing turns too.")
         .under(faceTarget, FaceMode.SERVER);
-    private final EnumSetting<SwingMode> swing = SwingMode.setting(SwingMode.BOTH);
+    private final EnumSetting<SwingMode> swing = SwingMode.settingWithUses(SwingMode.BOTH);
 
     private final EnumSetting<RenderMode> renderMode = new EnumSetting<>("Render",
         "How the placement box is drawn.", RenderMode.NORMAL)
@@ -628,7 +628,7 @@ public final class CrystalAura extends Module implements Targeting {
             return false;
         }
         AttackTimer.packetHit(crystal);
-        swing.getValue().swing();
+        swing.getValue().hit();
         lastHitAt = System.currentTimeMillis();
         breakTimer = breakDelay.getInt();
         busyTimer = BUSY_TICKS;
@@ -680,7 +680,7 @@ public final class CrystalAura extends Module implements Targeting {
             return;
         }
         if (mc.gameMode.useItemOn(mc.player, hand, click).consumesAction()) {
-            swing.getValue().swing(hand);
+            swing.getValue().use(hand);
             ownSpots.put(base.above().immutable(), OWN_MEMORY);
             placeTimer = placeDelay.getInt();
             busyTimer = BUSY_TICKS;
@@ -938,7 +938,7 @@ public final class CrystalAura extends Module implements Targeting {
         }
         boolean placed = BlockUtil.placeAny(best, false, false);
         if (placed) {
-            swing.getValue().swing(InteractionHand.MAIN_HAND);
+            swing.getValue().use();
         }
         // The block goes down before the borrowed stack heads home.
         loan.giveBack();

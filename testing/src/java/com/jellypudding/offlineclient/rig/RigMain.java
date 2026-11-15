@@ -7,9 +7,11 @@ import com.jellypudding.offlineclient.rig.core.WindowPlace;
 import com.jellypudding.offlineclient.rig.duo.Partner;
 import com.jellypudding.offlineclient.rig.duo.PartnerLoop;
 import com.jellypudding.offlineclient.rig.suite.BootSuite;
+import com.jellypudding.offlineclient.rig.suite.BuildersSuite;
 import com.jellypudding.offlineclient.rig.suite.CombatSuite;
 import com.jellypudding.offlineclient.rig.suite.GotoSuite;
 import com.jellypudding.offlineclient.rig.suite.GuardSuite;
+import com.jellypudding.offlineclient.rig.suite.HuntingSuite;
 import com.jellypudding.offlineclient.rig.suite.MiscSuite;
 import com.jellypudding.offlineclient.rig.suite.MovementSuite;
 import com.jellypudding.offlineclient.rig.suite.PlayerSuite;
@@ -19,7 +21,9 @@ import com.jellypudding.offlineclient.rig.suite.ScreensSuite;
 import com.jellypudding.offlineclient.rig.suite.ServerSuite;
 import com.jellypudding.offlineclient.rig.suite.SettingsSuite;
 import com.jellypudding.offlineclient.rig.suite.SmokeSuite;
+import com.jellypudding.offlineclient.rig.suite.StationsSuite;
 import com.jellypudding.offlineclient.rig.suite.Suite;
+import com.jellypudding.offlineclient.rig.suite.TogetherSuite;
 import com.jellypudding.offlineclient.rig.suite.WorldSuite;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
@@ -67,7 +71,7 @@ public final class RigMain implements FabricClientGameTest {
         return List.of(new BootSuite(), new SmokeSuite(), new SettingsSuite(), new ScreensSuite(),
             new ScenariosSuite(),
             new MovementSuite(), new CombatSuite(), new WorldSuite(), new PlayerSuite(), new MiscSuite(),
-            new RenderSuite(),
+            new StationsSuite(), new BuildersSuite(), new HuntingSuite(), new TogetherSuite(), new RenderSuite(),
             new GotoSuite(),
             new ServerSuite(), new GuardSuite());
     }

@@ -24,6 +24,7 @@ import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.ChunkScanner;
 import com.jellypudding.offlineclient.util.ChunkWindow;
 import com.jellypudding.offlineclient.util.Cooldowns;
+import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.Notice;
 import com.jellypudding.offlineclient.util.OwnDigs;
@@ -48,8 +49,6 @@ import net.minecraft.sounds.SoundEvents;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.vehicle.ContainerEntity;
-import net.minecraft.world.entity.vehicle.boat.AbstractChestBoat;
-import net.minecraft.world.entity.vehicle.minecart.MinecartHopper;
 import net.minecraft.world.level.BaseSpawner;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LevelEvent;
@@ -651,19 +650,10 @@ public final class SpawnerFinder extends Module implements FindSource {
         for (Entity entity : mc.level.getEntitiesOfClass(Entity.class, new AABB(pos).inflate(reach),
             entity -> entity instanceof ContainerEntity)) {
             if (entity.distanceToSqr(centre) <= reachSqr && !arrival.place.makesCart(entity.getType())) {
-                stored.add(cartName(entity));
+                stored.add(EntityUtil.storageName(entity));
             }
         }
         return stored;
-    }
-
-    // Carts and boats are counted under plain words such as 2 chest minecarts.
-    private static String cartName(Entity entity) {
-        return switch (entity) {
-            case MinecartHopper _ -> "hopper minecart";
-            case AbstractChestBoat _ -> "chest boat";
-            default -> "chest minecart";
-        };
     }
 
     // Tells each room the scanner turned up once for what it shows. The spawner you mined or

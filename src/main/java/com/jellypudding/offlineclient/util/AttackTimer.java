@@ -8,8 +8,6 @@ import net.minecraft.SharedConstants;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.protocol.game.ServerboundAttackPacket;
-import net.minecraft.network.protocol.game.ServerboundPunchPacket;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 
 import java.util.List;
@@ -21,6 +19,12 @@ public final class AttackTimer {
 
     // The game reads the charge of a hit half a tick on.
     private static final float CHARGE_READ = 0.5f;
+
+    // Player ticks. The tick a module last asked for the charge and the tick the server last
+    // began its cooldown again without the game's own count hearing of it.
+    private static final int NEVER = Integer.MIN_VALUE / 2;
+    private static int askedAt = NEVER;
+    private static int restartedAt = NEVER;
 
     private final NumberSetting delay = new NumberSetting("Hit delay",
         "Ticks to wait between hits.", 0, 0, 20, 1, " ticks");
@@ -44,9 +48,41 @@ public final class AttackTimer {
         return new Setting<?>[] {delay, randomise, tpsSync, missChance};
     }
 
-    // True once the attack cooldown has filled. A hit before then lands weaker.
+    // True once the attack cooldown has filled. A hit before then lands weaker. The server
+    // begins its cooldown again on every punch of mining and after every block placed or
+    // thing used. The game's own count misses all of those.
     public static boolean charged() {
-        return OfflineClient.MC.player.getAttackStrengthScale(CHARGE_READ) >= 1;
+        LocalPlayer player = OfflineClient.MC.player;
+        askedAt = player.tickCount;
+        float sinceRestart = (ticksSince(restartedAt) + CHARGE_READ) / player.getCurrentItemAttackStrengthDelay();
+        return Math.min(player.getAttackStrengthScale(CHARGE_READ), sinceRestart) >= 1;
+    }
+
+    // Called when something the game's own count does not hear of makes the server begin its
+    // attack cooldown again.
+    public static void restarted() {
+        LocalPlayer player = OfflineClient.MC.player;
+        if (player != null) {
+            restartedAt = player.tickCount;
+        }
+    }
+
+    // Asked for each punch of mining before it goes out. False whilst a module waits for the
+    // cooldown to fill for a hit. The punch would start the cooldown again and the hit would
+    // land weak. Only this screen sees the arm of such a tick.
+    public static boolean letsMiningPunch() {
+        if (ticksSince(askedAt) <= 1) {
+            return false;
+        }
+        restarted();
+        return true;
+    }
+
+    // A count from before the player was born again reads as long ago.
+    private static int ticksSince(int tick) {
+        LocalPlayer player = OfflineClient.MC.player;
+        int since = player == null ? -1 : player.tickCount - tick;
+        return since < 0 ? Integer.MAX_VALUE / 2 : since;
     }
 
     // A bare hit with no swing and no miss. The server restarts its attack cooldown for every
@@ -76,7 +112,7 @@ public final class AttackTimer {
         for (Entity target : targets) {
             mc.gameMode.attack(mc.player, target);
         }
-        swing.swing(InteractionHand.MAIN_HAND);
+        swing.hit();
         spent();
     }
 
@@ -86,18 +122,14 @@ public final class AttackTimer {
     }
 
     // Asked just before a hit goes out. True swings at thin air the way the game does for a
-    // click on nothing and starts the next wait. The hit is then left out. The arm only moves
-    // on your screen where the module's own hits move it there.
+    // click on nothing and starts the next wait. The hit is then left out. The arm shows to
+    // whoever the module's own hits show it to.
     private boolean misses(SwingMode swing) {
         if (random.nextDouble() * 100 >= missChance.getValue()) {
             return false;
         }
-        LocalPlayer player = OfflineClient.MC.player;
-        player.resetAttackStrengthTicker();
-        if (swing == SwingMode.BOTH || swing == SwingMode.CLIENT) {
-            SwingMode.swingArm(InteractionHand.MAIN_HAND);
-        }
-        player.connection.send(ServerboundPunchPacket.INSTANCE);
+        OfflineClient.MC.player.resetAttackStrengthTicker();
+        swing.hit();
         spent();
         return true;
     }

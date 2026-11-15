@@ -17,7 +17,6 @@ import com.jellypudding.offlineclient.util.TakeFrom;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.tags.BlockTags;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -64,7 +63,7 @@ public final class TreeAura extends Module {
         "Ticks to wait between one sapling or meal and the next.", 2, 0, 20, 1, " ticks");
     private final BoolSetting rotate = new BoolSetting("Rotate",
         "Turns towards each block on the server side.", true);
-    private final EnumSetting<SwingMode> swing = SwingMode.setting(SwingMode.BOTH);
+    private final BoolSetting swing = SwingMode.useSetting(true);
     private final BoolSetting render = new BoolSetting("Show spot",
         "Outlines where the next sapling goes.", true);
 
@@ -158,7 +157,7 @@ public final class TreeAura extends Module {
         boolean placed = BlockUtil.place(spot, Direction.DOWN, rotate.isOn(), false);
         slots.restore();
         if (placed) {
-            swing.getValue().swing(InteractionHand.MAIN_HAND);
+            SwingMode.of(swing.isOn()).use();
             planted++;
         }
         return placed;
@@ -177,7 +176,7 @@ public final class TreeAura extends Module {
             return false;
         }
         BlockUtil.useOn(target, rotate.isOn(), false);
-        swing.getValue().swing(InteractionHand.MAIN_HAND);
+        SwingMode.of(swing.isOn()).use();
         meals.merge(target, 1, Integer::sum);
         return true;
     }

@@ -19,15 +19,13 @@ import com.jellypudding.offlineclient.util.Crystals;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.ExplosionUtil;
 import com.jellypudding.offlineclient.util.Holes;
-import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
+import com.jellypudding.offlineclient.util.PlacingRounds;
 import com.jellypudding.offlineclient.util.SwingMode;
 import com.jellypudding.offlineclient.util.Tally;
-import com.jellypudding.offlineclient.util.UseBudget;
 import com.jellypudding.offlineclient.util.WorldWatch;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.piston.PistonBaseBlock;
@@ -86,13 +84,8 @@ public final class Blocker extends Module {
         .under(mined);
     private final NumberSetting placeRange = new NumberSetting("Place range",
         "How far you can reach to place.", 4.5, 1, 6, 0.1, " blocks");
-    private final NumberSetting perRound = new NumberSetting("Blocks per round",
-        "How many blocks to place in one round.", 2, 1, 4, 1);
-    private final NumberSetting delay = new NumberSetting("Delay",
-        "Ticks to wait between placing rounds.", 0, 0, 10, 1, " ticks");
-    private final BoolSetting rotate = new BoolSetting("Rotate",
-        "Sends a look packet towards each block as it goes down.", true);
-    private final EnumSetting<SwingMode> swing = SwingMode.setting(SwingMode.BOTH);
+    private final PlacingRounds rounds = new PlacingRounds(0);
+    private final EnumSetting<SwingMode> swing = SwingMode.settingWithUses(SwingMode.BOTH);
     private final KeybindSetting keepKey = new KeybindSetting("Keep spot key",
         "Marks the block you look at and fills it again the moment it breaks.", KeybindSetting.UNBOUND);
     private final ActionSetting clearSpots = new ActionSetting("Clear spots",
@@ -101,7 +94,6 @@ public final class Blocker extends Module {
         "Draws the spots waiting to be filled.", true);
     private final BoxStyle style = new BoxStyle(BoxStyle.Shape.BOTH, 50).under(render);
 
-    private final SlotSwap slots = new SlotSwap();
     private List<BlockPos> pending = List.of();
     // The spots you marked with the keep key. They belong to the world they were marked in.
     private final Set<BlockPos> kept = new LinkedHashSet<>();
@@ -109,13 +101,12 @@ public final class Blocker extends Module {
     private final CrystalGuard guard = new CrystalGuard();
     // The tick each block of the cover was first seen mined by somebody else.
     private final Map<BlockPos, Integer> minedSince = new HashMap<>();
-    private int timer;
 
     public Blocker() {
         super("Blocker", "Fills the spots around your hole that crystals and pistons would use.",
             Category.COMBAT);
         addSettings(blocks, onlyInHole, crystals, minDamage, radius, enemyRange, pistons, mined, mineTime,
-            keepKey, clearSpots, placeRange, perRound, delay, rotate, swing, render);
+            keepKey, clearSpots, placeRange, rounds.perRound(), rounds.delay(), rounds.rotate(), swing, render);
         addSettings(style.settings());
         searchTags("anti crystal", "anti piston", "anti city", "reinforce", "face place", "hole");
     }
@@ -127,8 +118,7 @@ public final class Blocker extends Module {
 
     @Override
     protected void onEnable() {
-        timer = 0;
-        slots.forget();
+        rounds.forget();
         pending = List.of();
         minedSince.clear();
         guard.forget();
@@ -136,7 +126,7 @@ public final class Blocker extends Module {
 
     @Override
     protected void onDisable() {
-        slots.restore();
+        rounds.restore();
         pending = List.of();
     }
 
@@ -164,42 +154,7 @@ public final class Blocker extends Module {
             }
         }
         pending = new ArrayList<>(spots);
-        if (pending.isEmpty()) {
-            slots.restore();
-            return;
-        }
-        if (timer > 0) {
-            timer--;
-            return;
-        }
-        int round = Math.min(perRound.getInt(), UseBudget.remaining());
-        if (round == 0) {
-            return;
-        }
-        int slot = BlockUtil.findRankedBlockSlot(blocks.getValue(), block -> true);
-        if (slot == -1) {
-            slots.restore();
-            return;
-        }
-        slots.select(slot);
-        int placed = 0;
-        boolean turned = false;
-        for (BlockPos pos : pending) {
-            if (placed >= round) {
-                break;
-            }
-            // The rotation manager keeps the first turn of a tick.
-            boolean turn = rotate.isOn() && !turned;
-            if (BlockUtil.placeAny(pos, turn, false)) {
-                swing.getValue().swing(InteractionHand.MAIN_HAND);
-                turned |= turn;
-                placed++;
-            }
-        }
-        if (placed > 0) {
-            timer = delay.getInt();
-        }
-        slots.restore();
+        rounds.place(pending, blocks, swing.getValue());
     }
 
     @Subscribe
@@ -287,7 +242,7 @@ public final class Blocker extends Module {
             if (!BlockUtil.isReplaceable(beside)) {
                 continue;
             }
-            guard.clear(new AABB(beside), rotate.isOn(), swing.getValue());
+            guard.clear(new AABB(beside), rounds.rotate().isOn(), swing.getValue());
             addFillable(spots, beside);
         }
     }

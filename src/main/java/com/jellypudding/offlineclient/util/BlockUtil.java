@@ -393,7 +393,7 @@ public final class BlockUtil {
             return false;
         }
         if (swing) {
-            SwingMode.swingArm(hand);
+            SwingMode.swingUse(hand);
         }
         return true;
     }
@@ -410,7 +410,7 @@ public final class BlockUtil {
             if (!placed) {
                 return false;
             }
-            swing.swing(InteractionHand.MAIN_HAND);
+            swing.use();
             MC.rightClickDelay = InputUtil.USE_DELAY;
             return true;
         }
@@ -683,7 +683,7 @@ public final class BlockUtil {
         boolean used = InputUtil.whileStanding(() -> MC.gameMode
             .useItemOn(MC.player, hand, result).consumesAction());
         if (used) {
-            SwingMode.swingArm(hand);
+            SwingMode.swingUse(hand);
         }
         return used;
     }

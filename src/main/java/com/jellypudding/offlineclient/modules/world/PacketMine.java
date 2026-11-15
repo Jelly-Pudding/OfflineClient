@@ -286,7 +286,7 @@ public final class PacketMine extends Module {
             boolean sent = driveCentre(head);
             sent |= breakArea(head);
             if (sent) {
-                swing.getValue().swing();
+                swing.getValue().mine();
             }
         }
         if (hideCracks.isOn()) {
