@@ -17,6 +17,7 @@ import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.EntityKind;
 import com.jellypudding.offlineclient.util.EntitySpecies;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.HotbarLoan;
 import com.jellypudding.offlineclient.util.Modules;
@@ -237,7 +238,7 @@ public final class KillAura extends Module implements Targeting {
         if (switchTimer > 0) {
             switchTimer--;
         }
-        if (!inGame() || mc.player.isSpectator() || holdingFire()) {
+        if (!inGame() || Hands.tied() || holdingFire()) {
             return;
         }
         targets.addAll(pickTargets());

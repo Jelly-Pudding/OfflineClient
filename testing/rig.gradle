@@ -10,6 +10,8 @@ def rigLimit = (findProperty("rig.limit") ?: "7200").toString().toInteger()
 // A folder holding a copy of a player's offlineclient folder. Empty runs on first run defaults.
 def rigOwner = (findProperty("rig.owner") ?: "").toString()
 def rigName = (findProperty("rig.name") ?: new Date().format("yyyy-MM-dd_HH-mm-ss")).toString()
+// A control run keeps every module off. A case about a module that still passes proves nothing.
+def rigControl = (findProperty("rig.control") ?: "false").toString()
 
 // Settings of this machine alone. The file is not in git.
 def rigLocal = new Properties()
@@ -57,6 +59,7 @@ loom.runs.clientGameTest {
     property "rig.scales", rigScales
     property "rig.limit", rigLimit.toString()
     property "rig.owner", rigOwner.isEmpty() ? "false" : "true"
+    property "rig.control", rigControl
     property "rig.server", rigServer
     property "rig.guard", rigGuard
     property "rig.plugins", file("testing/plugins").absolutePath

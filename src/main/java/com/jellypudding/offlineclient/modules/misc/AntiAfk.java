@@ -161,6 +161,10 @@ public final class AntiAfk extends Module {
 
     @Override
     protected void onDisable() {
+        letGoOfKeys();
+    }
+
+    private void letGoOfKeys() {
         stopStrafe();
         crouch.letGo();
         stopWander();
@@ -168,8 +172,9 @@ public final class AntiAfk extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
+        // The dead cannot stir. It rests and carries on once you are back.
         if (mc.player.isDeadOrDying()) {
-            setEnabled(false);
+            letGoOfKeys();
             return;
         }
         if (creativeFlight && mc.player.getAbilities().mayfly) {

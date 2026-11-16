@@ -12,6 +12,7 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.TargetPriority;
 import com.jellypudding.offlineclient.util.UseBudget;
@@ -99,7 +100,7 @@ public final class AutoWeb extends Module {
     private void onTick(TickEvent event) {
         pending.clear();
         done.clear();
-        if (mc.player.isSpectator()) {
+        if (Hands.tied()) {
             targetName = null;
             return;
         }

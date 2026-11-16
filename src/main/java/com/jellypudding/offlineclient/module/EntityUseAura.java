@@ -53,7 +53,7 @@ public abstract class EntityUseAura extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (mc.player.isSpectator() || mc.gui.screen() != null || Hands.taken()) {
+        if (mc.gui.screen() != null || Hands.taken()) {
             return;
         }
         clicked.tick();

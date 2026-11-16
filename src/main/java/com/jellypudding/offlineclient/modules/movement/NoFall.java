@@ -34,7 +34,7 @@ import net.minecraft.world.phys.Vec3;
 // a time. Place mode softens the landing instead.
 public final class NoFall extends Module {
 
-    public enum Mode { PACKET, NO_GROUND, PLACE, AIR_PLACE, BOTH }
+    public enum Mode { PACKET, AIRBORNE, PLACE, AIR_PLACE, BOTH }
     public enum AirPlaceWhen { BEFORE_DAMAGE, BEFORE_DEATH }
 
     // A jump between dimensions moves the player further than any fall.
@@ -67,7 +67,7 @@ public final class NoFall extends Module {
     private final EnumSetting<Mode> mode = new EnumSetting<>("Mode",
         "How the fall is stopped.", Mode.PACKET)
         .describe(Mode.PACKET, "Tells the server you have landed on every packet whilst you fall.")
-        .describe(Mode.NO_GROUND, "Never tells the server you are on the ground. A fall it never sees land costs"
+        .describe(Mode.AIRBORNE, "Never tells the server you are on the ground. A fall it never sees land costs"
             + " nothing. Blocks break slower by hand meanwhile.")
         .describe(Mode.PLACE, "Puts one of your landing items under you before you land. Works on any server.")
         .describe(Mode.AIR_PLACE, "Puts any block from your hotbar under your feet just before the fall would hurt.")
@@ -137,8 +137,8 @@ public final class NoFall extends Module {
     private boolean touchdown;
     private Vec3 hold;
     private boolean landingOwed;
-    // True when the mode was No ground on the tick before.
-    private boolean noGround;
+    // True when the mode was Airborne on the tick before.
+    private boolean airborne;
 
     private final Lagback.Watcher lagback = new Lagback.Watcher();
     private final GlideMirror mirror = GlideMirror.get();
@@ -151,7 +151,7 @@ public final class NoFall extends Module {
         super("NoFall", "Stops fall damage.", Category.MOVEMENT);
         addSettings(mode, limitSpeed, dives, landings, pickUp, airPlaceWhen, switchBack, anchor, minFall,
             antiBounce, pauseOnMace);
-        searchTags("fall damage", "water bucket", "clutch", "air place");
+        searchTags("fall damage", "water bucket", "clutch", "air place", "no ground");
     }
 
     @Override
@@ -164,7 +164,7 @@ public final class NoFall extends Module {
     // for as long as the module would make that claim.
     public boolean takesAnyDrop() {
         LocalPlayer player = mc.player;
-        return isEnabled() && player != null && (mode.is(Mode.NO_GROUND) || packetMode() && guarded(player));
+        return isEnabled() && player != null && (mode.is(Mode.AIRBORNE) || packetMode() && guarded(player));
     }
 
     // Read by EntityMixin. Slime and beds check this before they bounce.
@@ -177,15 +177,17 @@ public final class NoFall extends Module {
         reset();
     }
 
+    // The mode may have changed in the tick that switches the module off. The bank is still
+    // there for as long as the last packets went out airborne.
     @Override
     protected void onDisable() {
-        if (mode.is(Mode.NO_GROUND)) {
+        if (airborne) {
             forgetBank();
         }
         reset();
     }
 
-    // No ground leaves the server holding every drop since the last climb. The first movement
+    // Airborne leaves the server holding every drop since the last climb. The first movement
     // packet to leave once the mode is over goes out a hair above the last position instead.
     // The server takes that for a climb and forgets them. The truth follows on the next packet.
     private void forgetBank() {
@@ -229,7 +231,7 @@ public final class NoFall extends Module {
         touchdown = false;
         hold = null;
         landingOwed = false;
-        noGround = false;
+        airborne = false;
         landing.reset();
         airPlaceLoan.giveBack();
     }
@@ -248,11 +250,11 @@ public final class NoFall extends Module {
             reset();
             return;
         }
-        boolean holdsBank = mode.is(Mode.NO_GROUND);
-        if (noGround && !holdsBank) {
+        boolean holdsBank = mode.is(Mode.AIRBORNE);
+        if (airborne && !holdsBank) {
             forgetBank();
         }
-        noGround = holdsBank;
+        airborne = holdsBank;
         trackDescent();
         sendOwedLanding();
     }
@@ -383,7 +385,7 @@ public final class NoFall extends Module {
         if (!(event.getPacket() instanceof ServerboundMovePlayerPacket packet)) {
             return;
         }
-        if (mode.is(Mode.NO_GROUND)) {
+        if (mode.is(Mode.AIRBORNE)) {
             // A claim another module makes for a block it breaks is left as it is.
             if (packet.isOnGround() && !PacketUtil.isGroundClaim(packet)) {
                 event.setPacket(PacketUtil.withOnGround(packet, player, false));

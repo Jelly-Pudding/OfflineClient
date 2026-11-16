@@ -13,6 +13,7 @@ import com.jellypudding.offlineclient.util.DamageUtil;
 import com.jellypudding.offlineclient.util.EntityFilter;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.FaceMode;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.RotationPriority;
 import com.jellypudding.offlineclient.util.SwingMode;
@@ -76,7 +77,7 @@ public final class TriggerBot extends Module implements Targeting {
     @Subscribe
     private void onTick(TickEvent event) {
         target = null;
-        if (mc.gui.screen() != null || mc.player.isSpectator()) {
+        if (mc.gui.screen() != null || Hands.tied()) {
             return;
         }
         boolean blocking = whilstBlocking.isOn() && mc.player.isBlocking();

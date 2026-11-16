@@ -2,6 +2,7 @@ package com.jellypudding.offlineclient.rig.suite;
 
 import com.jellypudding.offlineclient.rig.core.Case;
 import com.jellypudding.offlineclient.rig.core.Rig;
+import com.jellypudding.offlineclient.rig.core.RigFailure;
 import com.jellypudding.offlineclient.rig.core.Stage;
 import com.jellypudding.offlineclient.rig.core.World;
 import com.jellypudding.offlineclient.rig.suite.Motion.Moved;
@@ -14,7 +15,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 
 // One case for each movement module. The test player moves by held keys and the server says where
 // it ended up. Each case plays in single player and again on a Paper server that checks every
@@ -45,6 +45,17 @@ public final class MovementSuite implements Suite {
     private static final int DEADLY_DROP = 30;
     private static final float FULL_HEALTH = 20;
     private static final int HOVER_TICKS = 110;
+    private static final int STALL_MILLIS = 1500;
+    private static final String STALL = "Flight keeps clear of the kick for floating when the game stalls for a moment";
+    private static final String NO_DODGE = "Flight with no dodge of the kick is thrown out in a climb of seven seconds";
+    private static final String CLIMB = "Flight climbs for seven seconds in every mode with either dodge of the kick";
+    private static final String DIPS = "Flight hovers and drifts through sixteen dips in a row with either dodge of the kick";
+    private static final List<String> FLIGHT_MODES = List.of("creative", "direct", "teleport");
+    private static final List<String> KICK_DODGES = List.of("dip", "packet");
+    private static final int CLIMB_TICKS = 140;
+    // With a dip every forty one ticks a single dip the server misses is a kick.
+    private static final int TIGHT_INTERVAL = 41;
+    private static final int DIPS_IN_A_ROW = 16;
     private static final int DESCENT_LIMIT = 200;
     private static final int GLIDE_TICKS = 40;
     private static final int FLOOD_REACH = 9;
@@ -86,9 +97,13 @@ public final class MovementSuite implements Suite {
         plays.put("Speed outruns a sprint", this::speed);
         plays.put("Speed in BHop mode hops and outruns a walk", this::bhop);
         plays.put("Flight rises and hovers and flies on and lands unhurt with NoFall", this::flight);
+        plays.put(STALL, this::flightThroughAStall);
+        plays.put(NO_DODGE, this::flightNoDodge);
+        plays.put(CLIMB, this::flightLongClimb);
+        plays.put(DIPS, this::flightManyDips);
         plays.put("NoFall takes the hurt out of a deadly fall off a ledge", this::noFallLedge);
         plays.put("NoFall takes the hurt out of a deadly fall that a teleport began", this::noFallTeleport);
-        plays.put("NoFall with no ground takes a deadly fall and charges nothing once it is off",
+        plays.put("NoFall in its Airborne mode takes a deadly fall and charges nothing once it is off",
             this::noFallNoGround);
         plays.put("Step walks up a block without a jump", this::step);
         plays.put("HighJump jumps higher", this::highJump);
@@ -133,7 +148,8 @@ public final class MovementSuite implements Suite {
     @Override
     public void run(Rig rig) {
         Grounds.play(rig, NAME, plays(), stage -> standOn(stage.home()),
-            Grounds.Limits.NONE.serverOnly(TIMER, PHASE_CREATIVE, PHASE_REFUSED).aloneOnly(PHASE));
+            Grounds.Limits.NONE.serverOnly(TIMER, PHASE_CREATIVE, PHASE_REFUSED, STALL, NO_DODGE, CLIMB, DIPS)
+                .aloneOnly(PHASE));
     }
 
     // Measured once on each ground with no module on.
@@ -360,6 +376,108 @@ public final class MovementSuite implements Suite {
         rig.expect(up.setbacks() + hover.setbacks() + along.setbacks() == 0, "The server put the flight back");
     }
 
+    // The server throws out whoever hangs in the air for eighty of its ticks. With a dip every
+    // sixty a single dip it misses is a kick. The game stalls for a second and a half across the
+    // moment a dip is due and plays it in the burst of ticks that follows. The dip has to last
+    // until the server has had a tick of its own to see it.
+    private void flightThroughAStall(Rig rig) {
+        rig.client().set("Flight", "Kick interval", "60");
+        rig.client().enable("Flight");
+        Motion.hold(rig, RUN_TICKS / 2, JUMP);
+        rig.ticks(RUN_TICKS * 3 / 4);
+        rig.act(mc -> {
+            try {
+                Thread.sleep(STALL_MILLIS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        });
+        rig.ticks(HOVER_TICKS);
+        Stage.expectAlive(rig);
+        double height = rig.ask(mc -> mc.player.getY()) - home.getY();
+        rig.client().disable("Flight");
+        rig.note("The player still hung " + told(height) + " blocks up " + HOVER_TICKS + " ticks after the stall");
+        rig.expect(height >= 1, "Flight never lifted the player. That proves nothing");
+    }
+
+    // The climb the dodges are held against. A server that lets it stand with no dodge at all
+    // proves nothing about them.
+    private void flightNoDodge(Rig rig) {
+        rig.client().set("Flight", "AntiKick", "off");
+        rig.client().enable("Flight");
+        try {
+            Motion.hold(rig, CLIMB_TICKS, JUMP);
+        } catch (RuntimeException | AssertionError lost) {
+            rig.note("The climb ended early");
+        }
+        boolean thrownOut = rig.ask(mc -> mc.player == null);
+        if (!thrownOut) {
+            goHome(rig);
+            rig.client().disable("Flight");
+        }
+        rig.expect(thrownOut, "The server let a climb of " + CLIMB_TICKS + " ticks stand with no dodge of the kick");
+    }
+
+    // A climb is a hang in the air to the server however fast it goes. Each dodge has to make
+    // a real drop of it now and then.
+    private void flightLongClimb(Rig rig) {
+        for (String mode : FLIGHT_MODES) {
+            for (String dodge : KICK_DODGES) {
+                String combo = mode + " with " + dodge;
+                rig.client().restoreDefaults();
+                rig.client().set("Flight", "Mode", mode);
+                rig.client().set("Flight", "AntiKick", dodge);
+                rig.client().set("Flight", "Rise step", "0.5");
+                rig.client().enable("Flight");
+                Moved up;
+                try {
+                    up = Motion.hold(rig, CLIMB_TICKS, JUMP);
+                } catch (RuntimeException | AssertionError lost) {
+                    throw new RigFailure(combo + " did not last the climb. " + Rig.describe(lost));
+                }
+                String state = rig.ask(mc -> mc.player == null ? "was thrown out" : "");
+                rig.expect(state.isEmpty(), combo + " " + state);
+                goHome(rig);
+                rig.client().disable("Flight");
+                rig.note(combo + " rose " + told(up.rise()) + " blocks");
+                rig.expect(up.rise() >= 20, combo + " rose " + told(up.rise()) + " blocks in " + CLIMB_TICKS + " ticks");
+            }
+        }
+    }
+
+    // Every dip has to reach the server. The player hangs still for one round and drifts
+    // slowly forward for the next since a player on the move sends a position every tick.
+    private void flightManyDips(Rig rig) {
+        for (String dodge : KICK_DODGES) {
+            for (boolean drifting : List.of(false, true)) {
+                String combo = dodge + (drifting ? " on the move" : " hanging still");
+                rig.client().restoreDefaults();
+                rig.client().set("Flight", "AntiKick", dodge);
+                rig.client().set("Flight", "Kick interval", String.valueOf(TIGHT_INTERVAL));
+                rig.client().set("Flight", "Horizontal speed", "0.1");
+                rig.client().enable("Flight");
+                Motion.hold(rig, RUN_TICKS / 2, JUMP);
+                Moved hover;
+                try {
+                    hover = drifting ? Motion.hold(rig, TIGHT_INTERVAL * DIPS_IN_A_ROW, FORWARD)
+                        : Motion.hold(rig, TIGHT_INTERVAL * DIPS_IN_A_ROW);
+                } catch (RuntimeException | AssertionError lost) {
+                    throw new RigFailure(combo + " did not last the hover. " + Rig.describe(lost));
+                }
+                String state = rig.ask(mc -> mc.player == null ? "was thrown out" : "");
+                rig.expect(state.isEmpty(), combo + " " + state);
+                double height = rig.ask(mc -> mc.player.getY()) - home.getY();
+                goHome(rig);
+                rig.client().disable("Flight");
+                rig.note(combo + " hung " + told(height) + " blocks up at the end and had drifted " + told(hover.rise())
+                    + " blocks up or down and " + told(hover.across()) + " along");
+                rig.expect(height >= 1, combo + " never lifted the player. That proves nothing");
+                rig.expect(Math.abs(hover.rise()) < 1.5, combo + " did not hold its height. It drifted "
+                    + told(hover.rise()) + " blocks");
+            }
+        }
+    }
+
     // The player stands on one block high in the air and the block is taken away.
     private void noFallLedge(Rig rig) {
         World world = rig.world();
@@ -381,20 +499,20 @@ public final class MovementSuite implements Suite {
     // The server never hears of the landing and holds the whole fall. Switched off on the
     // ground that fall has to be forgotten before the server is told the truth again.
     private void noFallNoGround(Rig rig) {
-        rig.client().set("NoFall", "Mode", "no_ground");
+        rig.client().set("NoFall", "Mode", "airborne");
         rig.client().enable("NoFall");
         lift(rig, DEADLY_DROP);
         landUnhurt(rig);
         rig.client().set("NoFall", "Mode", "packet");
         walkedUnhurt(rig, "the mode was changed");
-        rig.client().set("NoFall", "Mode", "no_ground");
+        rig.client().set("NoFall", "Mode", "airborne");
         lift(rig, DEADLY_DROP);
         landUnhurt(rig);
         rig.client().disable("NoFall");
         walkedUnhurt(rig, "NoFall was off");
     }
 
-    // The first steps after No ground tell the server the truth again.
+    // The first steps after Airborne tell the server the truth again.
     private static void walkedUnhurt(Rig rig, String when) {
         Motion.hold(rig, RUN_TICKS, FORWARD);
         rig.ticks(TAP_TICKS * 5);
@@ -787,6 +905,10 @@ public final class MovementSuite implements Suite {
         rig.ticks(TAP_TICKS);
         rig.controls().release(JUMP);
         rig.until("the wings to open", RUN_TICKS, mc -> mc.player.isFallFlying());
+        // A rocket only lifts a player the server has gliding. The game opens its wings a
+        // moment before the server does.
+        Props.await(rig, "the server to see the glide", RUN_TICKS, () -> world.holds("gliding"));
+        rig.expect(rig.ask(mc -> mc.player.isFallFlying()), "The glide ended before the rocket could go");
         rig.client().press("ElytraBoost");
         rig.ticks(TAP_TICKS);
         int rockets = 0;

@@ -14,6 +14,7 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.ColorUtil;
 import com.jellypudding.offlineclient.util.EntityFilter;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.ProjectilePath;
 import com.jellypudding.offlineclient.util.ProjectileUtil;
 import com.jellypudding.offlineclient.util.RenderUtil;
@@ -108,7 +109,7 @@ public final class BowAimbot extends Module implements Targeting {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (mc.player.isSpectator()) {
+        if (Hands.tied()) {
             target = null;
             return;
         }

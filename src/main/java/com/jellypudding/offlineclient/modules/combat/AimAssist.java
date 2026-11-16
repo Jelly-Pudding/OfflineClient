@@ -10,6 +10,7 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.EntityFilter;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.TargetFilter;
 import com.jellypudding.offlineclient.util.RotationManager;
 import net.minecraft.SharedConstants;
@@ -144,7 +145,7 @@ public final class AimAssist extends Module {
 
     // Every reason the aim sits a tick out.
     private boolean ready() {
-        if (!inGame() || mc.player.isSpectator() || mc.gui.screen() != null) {
+        if (!inGame() || Hands.tied() || mc.gui.screen() != null) {
             return false;
         }
         if (!whileUsing.isOn() && mc.player.isUsingItem()) {

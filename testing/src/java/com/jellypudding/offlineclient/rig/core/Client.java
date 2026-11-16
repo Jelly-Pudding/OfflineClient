@@ -57,7 +57,10 @@ public final class Client {
     // Presses the key of a module that is no switch and does its work on the press.
     public void press(String name) {
         Module module = module(name);
-        rig.act(mc -> module.onKeybind());
+        // A module that is no switch does its work on its key. A control run keeps that back too.
+        if (!rig.control()) {
+            rig.act(mc -> module.onKeybind());
+        }
     }
 
     public boolean isOn(String name) {

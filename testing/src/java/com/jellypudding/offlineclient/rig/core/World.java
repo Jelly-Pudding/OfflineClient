@@ -116,7 +116,8 @@ public abstract class World {
         attempt("fill " + at(from) + " " + at(to) + " " + block);
     }
 
-    private static String at(BlockPos pos) {
+    // The three numbers of a spot the way a command takes them.
+    public static String at(BlockPos pos) {
         return pos.getX() + " " + pos.getY() + " " + pos.getZ();
     }
 

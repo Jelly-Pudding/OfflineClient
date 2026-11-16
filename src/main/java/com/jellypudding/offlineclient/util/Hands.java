@@ -11,10 +11,17 @@ public final class Hands {
     }
 
     // True whilst a feeder eats or ShulkerPacker moves stacks or a combat module has something to
-    // fight or the player uses an item.
+    // fight or the player uses an item or has no use of the hands at all.
     public static boolean taken() {
         LocalPlayer player = OfflineClient.MC.player;
-        return slotsTaken() || Modules.fighting() || player != null && player.isUsingItem();
+        return tied() || slotsTaken() || Modules.fighting() || player != null && player.isUsingItem();
+    }
+
+    // True whilst the player lies dead or looks on as a spectator. Neither can hit or use or dig
+    // and the plain game sends the server nothing of the kind from one.
+    public static boolean tied() {
+        LocalPlayer player = OfflineClient.MC.player;
+        return player != null && (player.isDeadOrDying() || player.isSpectator());
     }
 
     // True whilst a feeder eats or ShulkerPacker moves stacks. A change of slot would cut the meal

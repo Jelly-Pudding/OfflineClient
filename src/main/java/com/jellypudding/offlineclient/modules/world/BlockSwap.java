@@ -8,6 +8,7 @@ import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatWarning;
 import com.jellypudding.offlineclient.util.ColorUtil;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.ServerInfo;
 import com.jellypudding.offlineclient.util.WorldWatch;
 import net.minecraft.core.BlockPos;
@@ -66,7 +67,7 @@ public final class BlockSwap extends AreaPlacer {
     // Runs before the placing round.
     @Subscribe
     private void onTick(TickEvent event) {
-        if (mc.player.isSpectator()) {
+        if (Hands.tied()) {
             return;
         }
         if (world.changed()) {

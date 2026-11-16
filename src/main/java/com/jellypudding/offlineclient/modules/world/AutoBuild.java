@@ -495,7 +495,7 @@ public final class AutoBuild extends Module {
 
     // Food and tools keep their use and a door or chest under the crosshair still opens.
     private boolean pressBuilds() {
-        if (mc.player.isSpectator() || mc.player.isHandsBusy() || mc.hitResult instanceof EntityHitResult) {
+        if (Hands.tied() || mc.player.isHandsBusy() || mc.hitResult instanceof EntityHitResult) {
             return false;
         }
         ItemStack held = mc.player.getMainHandItem();
@@ -699,7 +699,7 @@ public final class AutoBuild extends Module {
         for (Job job : jobs()) {
             job.ghost.tick(job.site, rules, spare.isOn());
         }
-        if (sites.isEmpty() || mc.player.isSpectator()) {
+        if (sites.isEmpty() || Hands.tied()) {
             worker.stop();
         } else {
             work(sites, rules);

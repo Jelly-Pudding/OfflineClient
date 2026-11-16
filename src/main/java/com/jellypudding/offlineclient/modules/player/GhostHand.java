@@ -7,6 +7,7 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.SwingMode;
@@ -79,7 +80,7 @@ public final class GhostHand extends Module {
         if (event.isBlank() || !inGame() || mc.gameMode == null) {
             return;
         }
-        if (mc.player.isSpectator() || mc.player.isShiftKeyDown()) {
+        if (Hands.tied() || mc.player.isShiftKeyDown()) {
             return;
         }
         BlockHitResult aimed = BlockUtil.aimedBlock();

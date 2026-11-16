@@ -22,6 +22,7 @@ public final class Rig {
     private static final int MOST_FAULTS_TOLD = 3;
     private static final int MOST_LINES_TOLD = 6;
     private static final String JOIN = " | ";
+    private static final String PROVES_NOTHING = "It passes with every module off and proves nothing about one";
     // Chunks a world of the game's own land shows round the player. The server sends three fewer.
     private static final int LAND_SIGHT = 12;
     private static final int OPENING_SIGHT = 5;
@@ -34,6 +35,7 @@ public final class Rig {
     private final Client client;
     private final Controls controls;
     private final Frames frames;
+    private final boolean control;
     private World world;
     private LocalWorld local;
 
@@ -42,8 +44,9 @@ public final class Rig {
     private final List<String> shots = new ArrayList<>();
     private String caseId = "";
 
-    public Rig(ClientGameTestContext context, Path out, String filterWords) {
+    public Rig(ClientGameTestContext context, Path out, String filterWords, boolean control) {
         this.context = context;
+        this.control = control;
         this.results = new Results(out);
         this.filter = new Filter(filterWords);
         Path gameFolder = context.computeOnClient(mc -> mc.gameDirectory.toPath());
@@ -58,6 +61,11 @@ public final class Rig {
 
     public ClientGameTestContext context() {
         return context;
+    }
+
+    // True in a control run. Every module stays off there.
+    public boolean control() {
+        return control;
     }
 
     public Results results() {
@@ -244,6 +252,11 @@ public final class Rig {
         int said = client.chatMark();
         try {
             each.body().run(this);
+            // A dead player can make a case pass for the wrong reason. One that kills on purpose
+            // brings the player back before it ends.
+            if (world != null && Stage.dead(this)) {
+                failure = "The player lay dead when the case ended";
+            }
         } catch (KnownFault thrown) {
             failure = thrown.getMessage();
             known = thrown.mark();
@@ -265,11 +278,22 @@ public final class Rig {
             failure = failure + JOIN + String.join(JOIN, faults);
         }
         long millis = (System.nanoTime() - started) / 1_000_000;
-        Outcome outcome = new Outcome(suite, each.name(), verdict(known, failure), message(known, failure), millis,
-            List.copyOf(shots));
+        Outcome outcome = control ? withoutModules(suite, each.name(), failure, millis)
+            : new Outcome(suite, each.name(), verdict(known, failure), message(known, failure), millis,
+                List.copyOf(shots));
         results.end(outcome);
         caseId = "";
         return outcome;
+    }
+
+    // The verdict of a control run is the other way round. The case had no module to prove and
+    // one that passed all the same would pass whatever its module did.
+    private Outcome withoutModules(String suite, String name, String failure, long millis) {
+        String told = String.join(JOIN, notes);
+        if (failure == null) {
+            return new Outcome(suite, name, Verdict.FAILED, join(PROVES_NOTHING, told), millis, List.copyOf(shots));
+        }
+        return new Outcome(suite, name, Verdict.PASSED, "With every module off " + failure, millis, List.of());
     }
 
     // A module that gives up says why in chat. The last lines go with a case that failed.

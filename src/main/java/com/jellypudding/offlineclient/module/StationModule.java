@@ -55,7 +55,7 @@ public abstract class StationModule<M extends AbstractContainerMenu> extends Mod
     // and an item in use come first and nothing is opened over another screen. A fight comes
     // first too unless the module is there to serve one.
     protected final boolean handsFree(boolean inFights) {
-        return inGame() && mc.gui.screen() == null && !mc.player.isSpectator() && !mc.player.isUsingItem()
+        return inGame() && mc.gui.screen() == null && !Hands.tied() && !mc.player.isUsingItem()
             && !Hands.slotsTaken() && (inFights || !Modules.fighting());
     }
 

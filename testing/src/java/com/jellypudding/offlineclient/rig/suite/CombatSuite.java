@@ -3,15 +3,21 @@ package com.jellypudding.offlineclient.rig.suite;
 import com.jellypudding.offlineclient.rig.core.Case;
 import com.jellypudding.offlineclient.rig.core.Rig;
 import com.jellypudding.offlineclient.rig.core.RigFailure;
+import com.jellypudding.offlineclient.rig.core.Stage;
+import com.jellypudding.offlineclient.rig.core.World;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.util.Mth;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.animal.cow.Cow;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 // One case for each combat module that a mob or the player's own gear can prove. The server
 // says whether the mob died and what the player wears and which blocks stand. What needs another
@@ -22,6 +28,11 @@ public final class CombatSuite implements Suite {
     private static final String SLINGSHOT = "Slingshot makes an arrow hit much harder";
     private static final String SKY_DROP = "SkyDrop drops an arrow onto a mob much harder than a plain shot";
     private static final String SWAP_GAINS = "AttributeSwap adds the sharpness of another blade to the hit";
+    private static final String SWAP_NEVER_WEAKER =
+        "AttributeSwap never makes a hit weaker and puts the first item back";
+    private static final String SWAP_SPARES =
+        "AttributeSwap keeps to the item in hand against a target it is not set for";
+    private static final String BED_SAFE = "AntiBed leaves a bed alone where beds are safe";
     private static final String SKY_DROP_FAULT = "Now and then the server refuses the way home after the drop and "
         + "leaves the player by the target. The arrow still lands";
     private static final String SLINGSHOT_FAULT = "The long hop ends where the server holds no chunk. The server "
@@ -44,6 +55,7 @@ public final class CombatSuite implements Suite {
         + "attributes:[{id:\"minecraft:max_health\",base:100}]}";
     private static final int TOUGH_HEALTH = 100;
     private static final int COW_HEALTH = 10;
+    private static final String STRENGTH_ARROWS = "tipped_arrow[potion_contents={potion:\"minecraft:strength\"}] 8";
     private static final String SHARP_SWORD = SWORD + "[enchantments={\"minecraft:sharpness\":5}]";
     private static final String HOLDING = "holding";
     private static final float EAST = -90;
@@ -83,9 +95,17 @@ public final class CombatSuite implements Suite {
     private static final int HELD_LONGEST = 60;
     private static final double MOVED = 0.3;
     private static final int FUSE = 30;
+    private static final String LIT_CREEPER = "{NoAI:1b,PersistenceRequired:1b,ignited:1b,Fuse:" + FUSE + "}";
+    // The stage is dirt three deep on bedrock.
+    private static final int PIT_DEPTH = 3;
     private static final int TNT_FUSE = 50;
+    // Ticks before the end of its fuse at which TNT that must not blow is taken away.
+    private static final int TNT_SPARE = 10;
     // Evade hops four blocks.
     private static final double HOPPED = 3;
+    // A creeper hurts out to six blocks and TNT out to eight.
+    private static final double CREEPER_REACH = 6;
+    private static final double TNT_REACH = 8;
     private static final int LAP_TICKS = 70;
     private static final double HALF_LAP = 180;
     private static final double RING = 2.5;
@@ -102,7 +122,7 @@ public final class CombatSuite implements Suite {
     public void run(Rig rig) {
         Grounds.play(rig, NAME, plays(), stage -> home = stage.home(),
             Grounds.Limits.NONE.aloneOnly(SWAP_GAINS).knownOnServer(SLINGSHOT, SLINGSHOT_FAULT)
-                .knownOnServer(SKY_DROP, SKY_DROP_FAULT));
+                .knownOnServer(SKY_DROP, SKY_DROP_FAULT).holdsBack(SWAP_NEVER_WEAKER, SWAP_SPARES, BED_SAFE));
     }
 
     private Map<String, Case.Body> plays() {
@@ -130,26 +150,26 @@ public final class CombatSuite implements Suite {
         plays.put(SLINGSHOT, this::slingshot);
         plays.put("Quiver puts the tipped arrow on the string", this::quiver);
         plays.put("PotionArrows shoots a strength arrow into yourself", this::potionArrows);
+        plays.put("PotionArrows shoots again when its first arrow brought no effect", this::potionArrowsAgain);
         plays.put("AntiAnchor breaks the anchor set beside you", this::antiAnchor);
-        plays.put("AttributeSwap never makes a hit weaker and puts the first item back",
-            this::attributeSwapNeverWeaker);
+        plays.put(SWAP_NEVER_WEAKER, this::attributeSwapNeverWeaker);
         plays.put(SWAP_GAINS, this::attributeSwapGains);
         plays.put("AttributeSwap brings the fire of another blade to the hit", this::attributeSwapFire);
-        plays.put("AttributeSwap keeps to the item in hand against a target it is not set for",
-            this::attributeSwapSpares);
+        plays.put(SWAP_SPARES, this::attributeSwapSpares);
         plays.put("MaceCombo launches off a wind charge and smashes a mob", this::maceCombo);
         plays.put("SelfAnvil drops an anvil into your own block", this::selfAnvil);
         plays.put("ChorusHold keeps you where you stood until the fruit is put away", this::chorusHold);
         plays.put("ChorusHold lets the teleport go by itself after two seconds", this::chorusHoldLimit);
         plays.put("Evade hops clear of a creeper before it blows", this::evadeCreeper);
         plays.put("Evade hops clear of lit TNT once its setting is on", this::evadeTnt);
+        plays.put("Evade hops out of a pit that a creeper is about to blow up", this::evadePit);
         plays.put("Protect fights off a mob near the one it guards and never hits its ward", this::protect);
         plays.put("Confuse runs you round the mob KillAura fights", this::confuse);
         plays.put(SKY_DROP, this::skyDrop);
         plays.put("Blocker blocks the piston aimed into your hole", this::blockerPiston);
         plays.put("Blocker fills the crystal spots round your hole", this::blockerCrystals);
         plays.put("AntiBed breaks a bed set beside you in the Nether", this::antiBed);
-        plays.put("AntiBed leaves a bed alone where beds are safe", this::antiBedOverworld);
+        plays.put(BED_SAFE, this::antiBedOverworld);
         plays.put("CubeRigger loads TNT into a sulfur cube in reach", this::cubeRiggerLoads);
         plays.put("CubeRigger rigs the TNT cube you light", this::cubeRiggerRigs);
         return plays;
@@ -450,13 +470,34 @@ public final class CombatSuite implements Suite {
     }
 
     private void potionArrows(Rig rig) {
-        String player = rig.world().player();
         Props.hold(rig, 0, "bow");
-        Props.pack(rig, 0, "tipped_arrow[potion_contents={potion:\"minecraft:strength\"}] 8");
+        Props.pack(rig, 0, STRENGTH_ARROWS);
         rig.client().set("PotionArrows", "Only in holes", "off");
         rig.client().enable("PotionArrows");
-        Props.await(rig, "the strength of the arrow", KILL_TICKS * 2, () -> rig.world().attempt(
-            "execute if entity @a[name=" + player + ",nbt={active_effects:[{id:\"minecraft:strength\"}]}]"));
+        Props.await(rig, "the strength of the arrow", KILL_TICKS * 2, () -> strong(rig));
+    }
+
+    // An arrow does nothing to a creative player. The first one is spent on one and brings no
+    // effect. The module has to see that and shoot again and by then the player can be hit.
+    private void potionArrowsAgain(Rig rig) {
+        World world = rig.world();
+        Props.hold(rig, 0, "bow");
+        Props.pack(rig, 0, STRENGTH_ARROWS);
+        rig.client().set("PotionArrows", "Only in holes", "off");
+        world.gameMode("creative");
+        rig.client().enable("PotionArrows");
+        Props.await(rig, "the first arrow to fly", KILL_TICKS, () -> Props.living(rig, "arrow") > 0);
+        rig.ticks(SEEN_TICKS);
+        boolean spent = !strong(rig);
+        world.gameMode("survival");
+        Props.await(rig, "the strength of a second arrow", KILL_TICKS * 2, () -> strong(rig));
+        rig.expect(spent, "The first arrow gave a creative player its effect. That proves nothing");
+    }
+
+    private static boolean strong(Rig rig) {
+        World world = rig.world();
+        return world.attempt("execute if entity @a[name=" + world.player()
+            + ",nbt={active_effects:[{id:\"minecraft:strength\"}]}]");
     }
 
     private void antiAnchor(Rig rig) {
@@ -598,49 +639,92 @@ public final class CombatSuite implements Suite {
 
     private void evadeCreeper(Rig rig) {
         rig.client().enable("Evade");
-        double clear = clearWhenItBlew(rig, "creeper", "{NoAI:1b,PersistenceRequired:1b,ignited:1b,Fuse:" + FUSE
-            + "}", FUSE);
-        rig.note("The player stood " + Math.round(clear) + " blocks off when the creeper blew");
-        rig.expect(clear >= HOPPED, "Evade did not hop the player clear of the creeper");
+        Blast blast = blast(rig, home.north(2), "creeper", LIT_CREEPER, FUSE);
+        rig.note("The player stood " + Math.round(blast.clear()) + " blocks off when the creeper blew and lost "
+            + blast.lost() + " health");
+        expectClear(rig, blast, CREEPER_REACH);
     }
 
     private void evadeTnt(Rig rig) {
         rig.client().enable("Evade");
-        double stayed = clearWhenItBlew(rig, "tnt", "{fuse:" + TNT_FUSE + "}", TNT_FUSE);
-        rig.world().command("effect give " + rig.world().player() + " instant_health 1 20 true");
-        rig.world().teleport(home.getX() + 0.5, home.getY(), home.getZ() + 0.5, 180, 0);
+        double stayed = besideTnt(rig);
         rig.client().set("Evade", "Lit TNT", ON);
-        double clear = clearWhenItBlew(rig, "tnt", "{fuse:" + TNT_FUSE + "}", TNT_FUSE);
-        rig.note("The player stood " + Math.round(stayed) + " blocks off when the TNT blew and " + Math.round(clear)
-            + " with Lit TNT on");
+        Blast blast = blast(rig, home.north(2), "tnt", "{fuse:" + TNT_FUSE + "}", TNT_FUSE);
+        rig.note("The player stayed within " + Math.round(stayed) + " blocks of the TNT with Lit TNT off and stood "
+            + Math.round(blast.clear()) + " off when it blew with Lit TNT on and lost " + blast.lost() + " health");
         rig.expect(stayed < HOPPED, "Evade hopped away from TNT with its setting off");
-        rig.expect(clear >= HOPPED, "Evade did not hop the player clear of the TNT");
+        expectClear(rig, blast, TNT_REACH);
     }
 
-    // Stands something that blows up two blocks north and hands back how far the player was from
-    // it the last tick it was still there.
-    private double clearWhenItBlew(Rig rig, String type, String tags, int fuse) {
+    // The pit is a trench three long and as deep as the stage goes. The player stands at one end
+    // of its floor and the creeper at the other. Every spot a hop away at the height of the
+    // floor lies in the ground and the one way clear leads up and out.
+    private void evadePit(Rig rig) {
+        World world = rig.world();
+        world.fill(home.below(PIT_DEPTH), home.north(2).below(), "air");
+        world.teleport(home.getX() + 0.5, home.getY() - PIT_DEPTH, home.getZ() + 0.5, 180, 0);
+        rig.client().enable("Evade");
+        Blast blast = blast(rig, home.north(2).below(PIT_DEPTH), "creeper", LIT_CREEPER, FUSE);
+        rig.note("The player stood " + Math.round(blast.clear()) + " blocks off when the creeper blew and lost "
+            + blast.lost() + " health");
+        expectClear(rig, blast, CREEPER_REACH);
+    }
+
+    // Stands lit TNT two blocks north and takes it away a moment before it would blow. A blast
+    // that close kills the player and digs up the ground the next TNT is to stand on. Hands back
+    // the furthest the player strayed from it.
+    private double besideTnt(Rig rig) {
         BlockPos spot = home.north(2);
         Vec3 danger = Vec3.atBottomCenterOf(spot);
+        Props.summon(rig, "tnt", spot, "{fuse:" + TNT_FUSE + "}");
+        double strayed = 0;
+        for (int tick = 0; tick < TNT_FUSE - TNT_SPARE; tick++) {
+            rig.ticks(1);
+            strayed = Math.max(strayed, rig.ask(mc -> mc.player.position().distanceTo(danger)));
+        }
+        rig.world().command("kill @e[type=tnt]");
+        rig.ticks(SEEN_TICKS);
+        rig.expect(Props.living(rig, "tnt") == 0, "The TNT is still there");
+        return strayed;
+    }
+
+    // How far the player stood from a blast the last tick the game still saw what blew and the
+    // health the blast cost.
+    private record Blast(double clear, float lost) {
+    }
+
+    // Stands something that blows up on the spot. The server says when it is gone. The game
+    // loses sight of it sooner when the player dies.
+    private Blast blast(Rig rig, BlockPos spot, String type, String tags, int fuse) {
+        Vec3 danger = Vec3.atBottomCenterOf(spot);
+        float before = rig.world().health();
         Props.summon(rig, type, spot, tags);
         String id = "minecraft:" + type;
         double clear = 0;
         for (int tick = 0; tick < fuse + SEEN_TICKS * 2; tick++) {
             rig.ticks(1);
             double seen = rig.ask(mc -> {
-                for (net.minecraft.world.entity.Entity entity : mc.level.entitiesForRendering()) {
-                    if (net.minecraft.world.entity.EntityType.getKey(entity.getType()).toString().equals(id)) {
+                for (Entity entity : mc.level.entitiesForRendering()) {
+                    if (EntityType.getKey(entity.getType()).toString().equals(id)) {
                         return mc.player.position().distanceTo(danger);
                     }
                 }
                 return -1.0;
             });
-            if (seen < 0 && tick > SEEN_TICKS) {
-                return clear;
+            if (seen >= 0) {
+                clear = seen;
+            } else if (tick > SEEN_TICKS && Props.living(rig, type) == 0) {
+                Stage.expectAlive(rig);
+                return new Blast(clear, before - rig.world().health());
             }
-            clear = Math.max(seen, clear);
         }
         throw new RigFailure("The " + type + " never blew");
+    }
+
+    private static void expectClear(Rig rig, Blast blast, double reach) {
+        rig.expect(blast.clear() >= reach, "Evade left the player " + Math.round(blast.clear())
+            + " blocks from a blast that reaches " + Math.round(reach));
+        rig.expect(blast.lost() <= 0, "The blast took " + blast.lost() + " health off the player");
     }
 
     private void protect(Rig rig) {
@@ -652,13 +736,51 @@ public final class CombatSuite implements Suite {
         rig.ticks(SEEN_TICKS);
         String guarding = String.valueOf(rig.client().module("Protect").getSuffix());
         Props.summon(rig, HUSK, home.north(3), GROWN_STILL);
-        int took = Props.await(rig, "the husk to die", KILL_TICKS, () -> Props.living(rig, HUSK) == 0);
+        // Where everybody stood when the cow was first seen hurt. It goes with a failure.
+        String[] hurt = new String[1];
+        int took = Props.await(rig, "the husk to die", KILL_TICKS, () -> {
+            if (hurt[0] == null && Props.living(rig, "cow") == 1 && Props.health(rig, "cow") < COW_HEALTH) {
+                hurt[0] = rig.ask(mc -> {
+                    StringBuilder stood = new StringBuilder("the player at " + mc.player.position());
+                    for (Entity entity : mc.level.entitiesForRendering()) {
+                        if (entity instanceof LivingEntity living && entity != mc.player) {
+                            stood.append(" and ").append(entity.getName().getString()).append(" at ")
+                                .append(entity.position()).append(" with ").append(living.getHealth()).append(" health");
+                        }
+                    }
+                    return stood.toString();
+                }) + hurtBy(rig);
+            }
+            return Props.living(rig, HUSK) == 0;
+        });
         rig.note("Protect says " + guarding + " and the husk was dead after about " + took + " ticks");
         rig.expect(guarding.contains("Cow"), "Protect does not say it guards the cow");
         int cows = Props.living(rig, "cow");
         int health = cows == 0 ? 0 : Props.health(rig, "cow");
         rig.expect(cows == 1 && health == COW_HEALTH, "The cow Protect guards has " + health + " of " + COW_HEALTH
-            + " health");
+            + " health. It was first seen hurt with " + hurt[0]);
+    }
+
+    // What the single player server holds as the last thing that hurt the cow. A real server
+    // keeps that to itself.
+    private static String hurtBy(Rig rig) {
+        if (rig.ask(mc -> !mc.hasSingleplayerServer())) {
+            return "";
+        }
+        return rig.local().server(server -> {
+            for (Entity entity : server.overworld().getAllEntities()) {
+                if (entity instanceof Cow cow && cow.getLastDamageSource() != null) {
+                    DamageSource source = cow.getLastDamageSource();
+                    return ". The server says the cow was hurt by " + source.type().msgId() + " straight from "
+                        + named(source.getDirectEntity()) + " and in the end from " + named(source.getEntity());
+                }
+            }
+            return ". The server names nothing that hurt the cow";
+        });
+    }
+
+    private static String named(Entity entity) {
+        return entity == null ? "nothing" : entity.getName().getString();
     }
 
     // The husk cannot be hurt and the fight goes on for as long as the case looks.

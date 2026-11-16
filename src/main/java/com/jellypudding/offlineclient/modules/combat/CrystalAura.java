@@ -29,6 +29,7 @@ import com.jellypudding.offlineclient.util.DamageUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.ExplosionUtil;
 import com.jellypudding.offlineclient.util.FaceMode;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.HotbarLoan;
@@ -388,7 +389,7 @@ public final class CrystalAura extends Module implements Targeting {
     private void onTick(TickEvent event) {
         entities.clear();
         targets.clear();
-        if (mc.player.isSpectator()) {
+        if (Hands.tied()) {
             return;
         }
         tickTimers();

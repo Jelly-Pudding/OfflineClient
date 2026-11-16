@@ -15,6 +15,7 @@ import com.jellypudding.offlineclient.util.AttackTimer;
 import com.jellypudding.offlineclient.util.BlockMiner;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.HeldKey;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.SwingMode;
@@ -131,7 +132,7 @@ public final class AutoClicker extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (mc.player.isSpectator()) {
+        if (Hands.tied()) {
             letGo();
             return;
         }

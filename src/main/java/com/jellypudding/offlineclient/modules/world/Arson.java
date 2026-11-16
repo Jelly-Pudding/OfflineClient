@@ -13,6 +13,7 @@ import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatWarning;
 import com.jellypudding.offlineclient.util.Cooldowns;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.Ignition;
 import com.jellypudding.offlineclient.util.InventoryUtil.HotbarLoan;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
@@ -134,7 +135,7 @@ public final class Arson extends Module {
     @Subscribe
     private void onTick(TickEvent event) {
         targets.clear();
-        if (mc.player.isSpectator()) {
+        if (Hands.tied()) {
             return;
         }
         tried.tick();

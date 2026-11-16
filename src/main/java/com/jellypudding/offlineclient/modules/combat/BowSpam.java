@@ -8,6 +8,7 @@ import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
@@ -86,7 +87,7 @@ public final class BowSpam extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (mc.player.isSpectator()) {
+        if (Hands.tied()) {
             return;
         }
         if (mc.player.containerMenu != mc.player.inventoryMenu) {
@@ -134,7 +135,7 @@ public final class BowSpam extends Module {
     // and along the aim any aimbot set this tick.
     @Subscribe
     private void onPostMotion(PostMotionEvent event) {
-        if (!inGame() || mc.player.isSpectator() || mc.player.containerMenu != mc.player.inventoryMenu
+        if (!inGame() || Hands.tied() || mc.player.containerMenu != mc.player.inventoryMenu
             || crossbowTimer > 0 || !rapidFiring()) {
             return;
         }

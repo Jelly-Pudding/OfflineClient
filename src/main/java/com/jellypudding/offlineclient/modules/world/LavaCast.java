@@ -216,11 +216,6 @@ public final class LavaCast extends Module {
             setEnabled(false);
             return;
         }
-        Staircase stairs = Modules.active(Staircase.class);
-        if (stairs != null) {
-            stairs.setEnabled(false);
-        }
-        Modules.stopFlight();
         if (InventoryUtil.findSlot(Items.LAVA_BUCKET, InventoryUtil.WHOLE_INVENTORY) == -1
             || InventoryUtil.findSlot(Items.WATER_BUCKET, InventoryUtil.WHOLE_INVENTORY) == -1) {
             disable("LavaCast needs a lava bucket and a water bucket.");
@@ -237,6 +232,12 @@ public final class LavaCast extends Module {
             disable("Aim at the top of a block to start LavaCast.");
             return;
         }
+        // Only a cast that starts takes the stairs and the flight away.
+        Staircase stairs = Modules.active(Staircase.class);
+        if (stairs != null) {
+            stairs.setEnabled(false);
+        }
+        Modules.stopFlight();
         pillarClimbed = 0;
         layersDone = 0;
         flowEstimate = -1;

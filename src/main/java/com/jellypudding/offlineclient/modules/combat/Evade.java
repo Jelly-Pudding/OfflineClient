@@ -10,6 +10,7 @@ import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.ExplosionUtil;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.Hop;
 import com.jellypudding.offlineclient.util.PlayerMoves;
 import com.jellypudding.offlineclient.util.SafeDrop;
@@ -87,9 +88,10 @@ public final class Evade extends Module {
     // Ticks a hit is kept whilst its health lands and a hop finds a way.
     private static final int HIT_WAIT = 3;
 
-    // The hop tries this many bearings round you and the same height first.
+    // The hop tries this many bearings round you and the same height first. The higher ones
+    // lead out of a pit or a crater.
     private static final int BEARINGS = 8;
-    private static final double[] HEIGHTS = {0, 1, -1};
+    private static final double[] HEIGHTS = {0, 1, -1, 2, 3, 4};
 
     // Ticks the reason for the last hop stays beside the name.
     private static final int SHOW_TICKS = 20;
@@ -179,7 +181,7 @@ public final class Evade extends Module {
         List<Threat> threats = new ArrayList<>();
         String found = gather(threats);
         lastHealth = EntityUtil.totalHealth(mc.player);
-        if (found == null || rest > 0 || pauseKey.isHeld() || mc.player.isSpectator() || mc.player.isPassenger()
+        if (found == null || rest > 0 || pauseKey.isHeld() || Hands.tied() || mc.player.isPassenger()
             || mc.player.isFallFlying() || Hop.travelling()) {
             return;
         }

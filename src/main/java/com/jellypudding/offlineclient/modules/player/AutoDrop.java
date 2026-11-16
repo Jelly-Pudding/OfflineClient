@@ -9,6 +9,7 @@ import com.jellypudding.offlineclient.setting.ChoiceListSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.ItemUtil;
 import com.jellypudding.offlineclient.util.Modules;
@@ -89,7 +90,7 @@ public final class AutoDrop extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (mc.player.isSpectator() || Modules.packing()) {
+        if (Hands.tied() || Modules.packing()) {
             return;
         }
         if (timer > 0) {

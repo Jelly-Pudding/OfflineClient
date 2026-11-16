@@ -11,6 +11,7 @@ import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatWarning;
 import com.jellypudding.offlineclient.util.EntityFilter;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.Ignition;
 import com.jellypudding.offlineclient.util.InventoryUtil.HotbarLoan;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
@@ -135,7 +136,7 @@ public final class LavaAura extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (mc.player.isSpectator()) {
+        if (Hands.tied()) {
             return;
         }
         if (pauseOnLag.isOn() && TickRate.INSTANCE.stalled()) {

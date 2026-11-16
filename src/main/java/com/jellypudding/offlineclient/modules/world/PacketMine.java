@@ -224,7 +224,7 @@ public final class PacketMine extends Module {
     // moves the kept spot on to the new block.
     @Subscribe
     private void onBlockBreak(BlockBreakEvent event) {
-        if (attackHeld || BlockMiner.isSelfCall() || !inGame() || mc.player.isSpectator()) {
+        if (attackHeld || BlockMiner.isSelfCall() || !inGame() || Hands.tied()) {
             return;
         }
         forgetOldBody();
@@ -268,7 +268,7 @@ public final class PacketMine extends Module {
     @Subscribe
     private void onTick(TickEvent event) {
         trail.tick();
-        if (mc.player.isSpectator()) {
+        if (Hands.tied()) {
             queue.clear();
             return;
         }

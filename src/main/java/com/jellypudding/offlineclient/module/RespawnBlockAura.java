@@ -243,7 +243,7 @@ public abstract class RespawnBlockAura extends Module implements Targeting {
         planned.clear();
         armed = null;
         status = null;
-        if (mc.player.isSpectator()) {
+        if (Hands.tied()) {
             miner.stop();
             target = null;
             return;

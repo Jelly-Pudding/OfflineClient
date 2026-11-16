@@ -15,6 +15,7 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChunkScanner;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.NearestCut;
 import com.jellypudding.offlineclient.util.Tally;
 import com.jellypudding.offlineclient.worldgen.NaturalBlocks;
@@ -125,7 +126,7 @@ public final class Salvage extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (mc.player.isSpectator()) {
+        if (Hands.tied()) {
             return;
         }
         refreshTest();

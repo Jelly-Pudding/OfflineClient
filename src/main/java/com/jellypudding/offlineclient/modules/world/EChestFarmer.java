@@ -81,7 +81,7 @@ public final class EChestFarmer extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (mc.player.isSpectator() || mc.gui.screen() != null) {
+        if (Hands.tied() || mc.gui.screen() != null) {
             return;
         }
         // The chests take a hotbar slot and a turn and wait whilst something else has them.

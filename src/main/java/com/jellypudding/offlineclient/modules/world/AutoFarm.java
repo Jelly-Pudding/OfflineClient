@@ -301,7 +301,7 @@ public final class AutoFarm extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (mc.player.isSpectator()) {
+        if (Hands.tied()) {
             loan.giveBack();
             return;
         }

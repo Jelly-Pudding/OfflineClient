@@ -8,6 +8,7 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.HoverDip;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.Modules;
@@ -23,8 +24,9 @@ public final class AntiVoid extends Module {
     // Fall speed that counts as a fall and not a step down.
     private static final double FALLING = -0.2;
 
-    // Ticks between the dips that keep the flight kick away whilst caught.
-    private static final int DIP_INTERVAL = 60;
+    // Server ticks between the dips that keep the flight kick away whilst caught. The server
+    // kicks at eighty and may miss one dip.
+    private static final int DIP_INTERVAL = 30;
 
     // Ticks of placing in a row before the catch takes over. Open void has
     // nothing to build against and every placement comes back as a ghost.
@@ -76,7 +78,7 @@ public final class AntiVoid extends Module {
     private void onTick(TickEvent event) {
         boolean wasCatching = catching;
         catching = false;
-        if (mc.player.isSpectator()) {
+        if (Hands.tied()) {
             return;
         }
         if (flightStarted) {

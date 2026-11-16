@@ -72,7 +72,7 @@ public final class AutoNametag extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (mc.player.isSpectator() || mc.gui.screen() != null) {
+        if (Hands.tied() || mc.gui.screen() != null) {
             return;
         }
         // The tag takes a hotbar slot and waits whilst something else has the hands.

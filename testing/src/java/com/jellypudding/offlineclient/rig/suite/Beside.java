@@ -14,15 +14,23 @@ import net.minecraft.core.BlockPos;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 
-// Three modules a player leans on are played beside every other module one at a time. Each has
-// to go on doing its work. A module that stops one of them by design is listed with the
+// The modules a player leans on most are played beside every other module one at a time. Each
+// has to go on doing its work. A module that stops one of them by design is listed with the
 // reason and any other that does fails the case by name.
 final class Beside {
 
     private static final int FORWARD = InputConstants.KEY_W;
+    private static final int JUMP = InputConstants.KEY_SPACE;
     private static final String PANIC = "Panic";
+    private static final String TOTEM = "totem_of_undying";
+    private static final String CHESTPLATE = "diamond_chestplate";
+    private static final int SWAP_TICKS = 40;
+    private static final int POLL_TICKS = 4;
+    private static final int LIFT_TICKS = 10;
+    private static final int HANG_TICKS = 20;
     private static final String STONE = "stone";
     private static final String TOUGH_HUSK = "{NoAI:1b,PersistenceRequired:1b,IsBaby:0b,Health:200f,"
         + "attributes:[{id:\"minecraft:max_health\",base:200}]}";
@@ -33,7 +41,7 @@ final class Beside {
     private static final int FLOOR_REACH = 6;
     private static final int PERCH = 8;
 
-    // The modules that stop each of the three on purpose and why. Autopilot only does when an
+    // The modules that stop each of them on purpose and why. Autopilot only does when an
     // earlier case left it a spot to fly to.
     private static final String FLIES_OFF = "it flies the player away to the spot it was last given";
     private static final Map<String, String> AURA_STOPPED_BY = Map.of(
@@ -51,6 +59,11 @@ final class Beside {
         "Sneak", "Scaffold takes a held sneak for the wish to build downwards",
         "Freecam", "the keys move the camera and the body stays",
         "Autopilot", FLIES_OFF);
+    private static final Map<String, String> TOTEM_STOPPED_BY = Map.of();
+    private static final Map<String, String> ARMOUR_STOPPED_BY = Map.of();
+    private static final Map<String, String> FLIGHT_STOPPED_BY = Map.of(
+        "Freecam", "the keys move the camera and the body stays",
+        "Staircase", "it switches Flight off since a flying player never lands on the steps it builds");
 
     // What a core module needs on the stage and the proof that it did its work there.
     private interface Core {
@@ -165,14 +178,107 @@ final class Beside {
         }
     };
 
+    private static final Core TOTEM_HAND = new Core() {
+        @Override
+        public String module() {
+            return "AutoTotem";
+        }
+
+        @Override
+        public String work() {
+            return "keeps a totem in the offhand";
+        }
+
+        @Override
+        public void setUp(Rig rig, BlockPos home) {
+            Props.pack(rig, 5, TOTEM);
+        }
+
+        @Override
+        public boolean worked(Rig rig, BlockPos home) {
+            return within(rig, () -> Props.holds(rig, "weapon.offhand", TOTEM));
+        }
+
+        @Override
+        public Map<String, String> stoppedBy() {
+            return TOTEM_STOPPED_BY;
+        }
+    };
+
+    private static final Core ARMOUR = new Core() {
+        @Override
+        public String module() {
+            return "AutoArmor";
+        }
+
+        @Override
+        public String work() {
+            return "puts the armour on";
+        }
+
+        @Override
+        public void setUp(Rig rig, BlockPos home) {
+            Props.pack(rig, 5, CHESTPLATE);
+        }
+
+        @Override
+        public boolean worked(Rig rig, BlockPos home) {
+            return within(rig, () -> Props.holds(rig, "armor.chest", CHESTPLATE));
+        }
+
+        @Override
+        public Map<String, String> stoppedBy() {
+            return ARMOUR_STOPPED_BY;
+        }
+    };
+
+    private static final Core WINGS = new Core() {
+        @Override
+        public String module() {
+            return "Flight";
+        }
+
+        @Override
+        public String work() {
+            return "lifts you and holds you there";
+        }
+
+        @Override
+        public void setUp(Rig rig, BlockPos home) {
+        }
+
+        @Override
+        public boolean worked(Rig rig, BlockPos home) {
+            Motion.hold(rig, LIFT_TICKS, JUMP);
+            rig.ticks(HANG_TICKS);
+            return rig.ask(mc -> mc.player.getY()) >= home.getY() + 1.5;
+        }
+
+        @Override
+        public Map<String, String> stoppedBy() {
+            return FLIGHT_STOPPED_BY;
+        }
+    };
+
     private Beside() {
+    }
+
+    // True once the server says it within the time a swap of slots takes.
+    private static boolean within(Rig rig, BooleanSupplier holds) {
+        for (int waited = 0; waited <= SWAP_TICKS; waited += POLL_TICKS) {
+            if (holds.getAsBoolean()) {
+                return true;
+            }
+            rig.ticks(POLL_TICKS);
+        }
+        return false;
     }
 
     // One case for each core module and each category of the others. The stage is the one the
     // suite stands on when the case runs.
     static List<Case> cases(List<Module> modules, Supplier<Stage> stage) {
         List<Case> cases = new ArrayList<>();
-        for (Core core : List.of(AURA, NUKER, SCAFFOLD)) {
+        for (Core core : List.of(AURA, NUKER, SCAFFOLD, TOTEM_HAND, ARMOUR, WINGS)) {
             for (Category category : Category.values()) {
                 List<Module> others = modules.stream().filter(module -> module.getCategory() == category).toList();
                 cases.add(Case.of(core.module() + " " + core.work() + " beside every " + category.getDisplayName()
@@ -230,6 +336,7 @@ final class Beside {
             return false;
         } finally {
             rig.controls().release(FORWARD);
+            rig.controls().release(JUMP);
             rig.act(mc -> mc.gui.setScreen(null));
         }
     }

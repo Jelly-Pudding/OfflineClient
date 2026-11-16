@@ -55,6 +55,8 @@ public final class RenderSuite implements Suite {
     // Long enough for a fade or a zoom to finish.
     private static final int SHOWN_TICKS = 30;
     private static final int STILL_GAP = 20;
+    // Pictures of the scene at rest before a module goes on.
+    private static final int STILLS = 3;
     private static final float NORTH = 180;
     private static final float PIT_PITCH = 40;
     // Every tick is held up this long and the game draws well under twenty frames a second.
@@ -221,23 +223,31 @@ public final class RenderSuite implements Suite {
             rig.ticks(STILL_TICKS);
             Path before = rig.frames().shot(sight.module() + " before");
             // Long enough apart for a slow flicker such as a portal's to show as one.
-            rig.ticks(STILL_GAP);
-            Path again = rig.frames().shot(sight.module() + " still");
+            List<Path> stills = new ArrayList<>();
+            for (int still = 0; still < STILLS; still++) {
+                rig.ticks(STILL_GAP);
+                stills.add(rig.frames().shot(sight.module() + " still " + still));
+            }
+            // What the scene does by itself whilst the module is still off. The last still is held
+            // against the first picture the way the picture with the module on will be.
+            double idle = Pictures.changed(before, stills.getLast(), stills.subList(0, STILLS - 1));
             rig.client().enable(sight.module());
             rig.ticks(SHOWN_TICKS);
             Path on = rig.frames().shot(sight.module() + " on");
             rig.client().disable(sight.module());
             rig.ticks(SHOWN_TICKS);
             Path off = rig.frames().shot(sight.module() + " off");
-            // What the scene does by itself in the same time. The sparks of a portal come and go.
+            // And what it does once the module is off again. The sparks of a portal come and go.
             rig.ticks(SHOWN_TICKS);
             Path later = rig.frames().shot(sight.module() + " later");
-            double shown = Pictures.changed(before, on, again);
-            double left = Pictures.changed(before, off, again);
-            double drift = Pictures.changed(off, later, again);
+            double shown = Pictures.changed(before, on, stills);
+            double left = Pictures.changed(before, off, stills);
+            double drift = Pictures.changed(off, later, stills);
             rig.note(String.format(Locale.ROOT, "%.3f%% of the picture changed and %.3f%% was still changed once it "
-                + "went off and the scene alone changes %.3f%%", shown * PER_CENT, left * PER_CENT, drift * PER_CENT));
-            rig.expect(shown >= LEAST, sight.module() + " changed nothing in the picture");
+                + "went off. The scene alone changed %.3f%% before and %.3f%% after", shown * PER_CENT, left * PER_CENT,
+                idle * PER_CENT, drift * PER_CENT));
+            rig.expect(shown >= LEAST + 2 * idle, sight.module() + " changed no more of the picture than the scene"
+                + " does by itself");
             rig.expect(left <= Math.max(LEAST, shown / 4) + drift, sight.module() + " left its mark on the picture");
         } finally {
             hideInterface(rig, false);
@@ -292,11 +302,14 @@ public final class RenderSuite implements Suite {
         rig.act(mc -> mc.gui.setScreen(new InventoryScreen(mc.player)));
     }
 
-    // A lit portal in a frame of obsidian off to the left.
+    // A lit portal in a frame of obsidian off to the left with a wall before it. The module
+    // shows a portal through a wall. The swirl and the sparks of the portal stay behind it and
+    // the picture holds nothing that moves by itself.
     private void portal(Rig rig) {
         World world = rig.world();
         world.fill(home.offset(-6, 0, -6), home.offset(-3, 4, -6), "obsidian");
         world.fill(home.offset(-5, 1, -6), home.offset(-4, 3, -6), "nether_portal[axis=x]");
+        world.fill(home.offset(-6, 0, -5), home.offset(-3, 4, -5), "stone");
     }
 
     // A waypoint saved six blocks ahead of where the pictures are taken from.
@@ -430,12 +443,29 @@ public final class RenderSuite implements Suite {
     // The game takes one blur a frame and throws on a second. Every kind of screen Blur covers
     // comes up in turn. An inventory and one of the client's own menus and the chat.
     private void blurScreens(Rig rig) {
+        scene(rig);
+        rig.client().disable("HUD");
         rig.client().set("Blur", "Chat", ON);
+        int sharp = edgesBehindChat(rig, "sharp");
         rig.client().enable("Blur");
         show(rig, mc -> new InventoryScreen(mc.player));
         show(rig, mc -> new ClickGuiScreen());
-        show(rig, mc -> new ChatScreen("", false));
+        int blurred = edgesBehindChat(rig, "blurred");
+        rig.note("The world behind the chat showed " + sharp + " sharp edges and " + blurred + " with Blur on");
         rig.expect(rig.inWorld(), "The game left the world with Blur on");
+        // No dark veil lies over the world behind the chat and its hardest edges outlast the blur.
+        rig.expect(blurred * 4 < sharp * 3, "The world behind the chat stayed sharp");
+    }
+
+    private static int edgesBehindChat(Rig rig, String name) {
+        rig.act(mc -> mc.gui.setScreen(new ChatScreen("", false)));
+        try {
+            rig.ticks(SHOWN_TICKS / 2);
+            return Pictures.edges(rig.frames().shot("Blur chat " + name));
+        } finally {
+            rig.act(mc -> mc.gui.setScreen(null));
+            rig.ticks(2);
+        }
     }
 
     private static void show(Rig rig, Function<Minecraft, Screen> screen) {

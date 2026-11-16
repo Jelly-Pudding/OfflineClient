@@ -16,6 +16,7 @@ import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.BreakSlots;
 import com.jellypudding.offlineclient.util.BreakTime;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.ItemUtil;
 import com.jellypudding.offlineclient.util.Modules;
@@ -190,7 +191,7 @@ public final class AutoTool extends Module {
     private void onBlockBreak(BlockBreakEvent event) {
         holdingBack = false;
         // A creative break is instant and wears nothing.
-        if (!inGame() || mc.player.isSpectator() || mc.player.getAbilities().instabuild) {
+        if (!inGame() || Hands.tied() || mc.player.getAbilities().instabuild) {
             return;
         }
         BlockPos pos = event.getPos();

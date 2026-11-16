@@ -255,7 +255,7 @@ final class PlayerPlays {
         rig.expect(Integer.parseInt(seen.get("swings")) >= FEWEST, "The second player saw no arm swing");
     }
 
-    // A player who mines swings the arm on every tick and so must a module. Each of those swings
+    // A player who mines swings the arm on every tick and a module that mines must too. Each swing
     // starts the attack cooldown again on the server. Whilst KillAura waits for that cooldown
     // they stay away and its hits land with the whole of the sword.
     private static void nukerSwings(Rig rig, Duo duo) {
@@ -785,6 +785,9 @@ final class PlayerPlays {
         rig.ticks(SETTLE_TICKS);
         duo.partner().ask("leave");
         rig.ticks(SETTLE_TICKS);
+        // The server says in chat who left and that line names the player as well.
+        rig.act(mc -> mc.gui.hud.getChat().clearMessages(true));
+        rig.ticks(2);
         boolean marked;
         try {
             marked = rig.frames().capture("logout spot").texts().stream().anyMatch(text -> text.contains(Partner.NAME));

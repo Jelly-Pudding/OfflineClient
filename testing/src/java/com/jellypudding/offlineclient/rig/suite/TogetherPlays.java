@@ -947,9 +947,6 @@ final class TogetherPlays {
     // A server that lets nobody float throws out a player who hangs in the air for four seconds.
     // Flight dips in time by itself and has to go on doing that whilst the keys move the camera.
     private void hoverInFreecam(Rig rig) {
-        // The dips are counted in ticks of the game and the server counts its own. Seventy leave
-        // ten to spare and a game that stutters for half a second uses them up.
-        rig.client().set("Flight", "Kick interval", "40");
         rig.client().enable("Flight");
         Motion.hold(rig, RUN_TICKS / 2, JUMP);
         double height = rig.ask(mc -> mc.player.getY());

@@ -13,6 +13,7 @@ import com.jellypudding.offlineclient.rig.suite.GotoSuite;
 import com.jellypudding.offlineclient.rig.suite.GuardSuite;
 import com.jellypudding.offlineclient.rig.suite.HuntingSuite;
 import com.jellypudding.offlineclient.rig.suite.MiscSuite;
+import com.jellypudding.offlineclient.rig.suite.ModesSuite;
 import com.jellypudding.offlineclient.rig.suite.MovementSuite;
 import com.jellypudding.offlineclient.rig.suite.PlayerSuite;
 import com.jellypudding.offlineclient.rig.suite.RenderSuite;
@@ -24,6 +25,7 @@ import com.jellypudding.offlineclient.rig.suite.SmokeSuite;
 import com.jellypudding.offlineclient.rig.suite.StationsSuite;
 import com.jellypudding.offlineclient.rig.suite.Suite;
 import com.jellypudding.offlineclient.rig.suite.TogetherSuite;
+import com.jellypudding.offlineclient.rig.suite.TypedSuite;
 import com.jellypudding.offlineclient.rig.suite.WorldSuite;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
@@ -42,7 +44,7 @@ public final class RigMain implements FabricClientGameTest {
 
     @Override
     public void runTest(ClientGameTestContext context) {
-        Rig rig = new Rig(context, RigConfig.out(), RigConfig.filter());
+        Rig rig = new Rig(context, RigConfig.out(), RigConfig.filter(), RigConfig.control());
         int[] size = rig.ask(mc -> new int[] {mc.getWindow().getWidth(), mc.getWindow().getHeight()});
         rig.act(mc -> {
             for (SoundSource source : SoundSource.values()) {
@@ -57,7 +59,7 @@ public final class RigMain implements FabricClientGameTest {
         try {
             rig.frames().drawAt(FRAME_WIDTH, FRAME_HEIGHT);
             Ledger.write(rig);
-            for (Suite suite : suites()) {
+            for (Suite suite : rig.control() ? moduleSuites() : suites()) {
                 run(rig, suite);
             }
         } finally {
@@ -71,9 +73,17 @@ public final class RigMain implements FabricClientGameTest {
         return List.of(new BootSuite(), new SmokeSuite(), new SettingsSuite(), new ScreensSuite(),
             new ScenariosSuite(),
             new MovementSuite(), new CombatSuite(), new WorldSuite(), new PlayerSuite(), new MiscSuite(),
-            new StationsSuite(), new BuildersSuite(), new HuntingSuite(), new TogetherSuite(), new RenderSuite(),
-            new GotoSuite(),
-            new ServerSuite(), new GuardSuite());
+            new StationsSuite(), new BuildersSuite(), new HuntingSuite(), new TogetherSuite(), new ModesSuite(),
+            new RenderSuite(), new GotoSuite(),
+            new ServerSuite(), new GuardSuite(), new TypedSuite());
+    }
+
+    // The suites whose cases are there to prove what a module does. A control run plays these
+    // alone. The others prove the client as a whole and pass with or without a module.
+    private static List<Suite> moduleSuites() {
+        return List.of(new ScenariosSuite(), new MovementSuite(), new CombatSuite(), new WorldSuite(),
+            new PlayerSuite(), new MiscSuite(), new StationsSuite(), new BuildersSuite(), new HuntingSuite(),
+            new TogetherSuite(), new ModesSuite(), new RenderSuite(), new ServerSuite());
     }
 
     // A suite that breaks outside its cases is written down as one failed case and the next

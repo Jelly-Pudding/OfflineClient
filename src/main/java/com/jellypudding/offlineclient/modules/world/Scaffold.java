@@ -14,6 +14,7 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatWarning;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.MovementUtil;
@@ -153,7 +154,7 @@ public final class Scaffold extends Module {
         descending = false;
         rotatedThisTick = false;
         agePlaced();
-        if (mc.player.isSpectator() || mc.player.isPassenger()) {
+        if (Hands.tied() || mc.player.isPassenger()) {
             return;
         }
         // The input object is swapped for a silent one by Freecam.

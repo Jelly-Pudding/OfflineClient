@@ -4,6 +4,7 @@ import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.ItemUtil;
 import com.jellypudding.offlineclient.util.Modules;
@@ -76,7 +77,7 @@ public final class ChestSwap extends Module {
     }
 
     public boolean canSwap() {
-        return inGame() && !mc.player.isSpectator() && InventoryUtil.cursorFree();
+        return inGame() && !Hands.tied() && InventoryUtil.cursorFree();
     }
 
     public void swap() {

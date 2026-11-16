@@ -100,21 +100,24 @@ public final class Flight extends Module {
         "Lava stops you like a wall whilst you fly.", true);
     private final EnumSetting<AntiKick> antiKick = new EnumSetting<>("AntiKick",
         "How the vanilla flight kick is dodged.", AntiKick.DIP)
-        .describe(AntiKick.DIP, "Drifts down a little now and then and climbs straight back.")
+        .describe(AntiKick.DIP, "Drifts down a little now and then and climbs straight back. A climb"
+            + " stops for the dip.")
         .describe(AntiKick.PACKET, "Tells the server you dipped whilst you stay put. Needs air below you."
-            + " In teleport mode you really drift down for one tick and climb straight back.")
+            + " In teleport mode you really drift down and climb straight back.")
         .describe(AntiKick.OFF, "Does nothing about the kick.");
     private final NumberSetting antiKickInterval = new NumberSetting("Kick interval",
-        "Ticks between each little dip.", 70, 5, 80, 1, " ticks").min(1)
+        "Server ticks between each little dip. The server kicks at 80. A low number leaves room for a"
+            + " dip the server misses and for a game that stalls.", 30, 5, 80, 1, " ticks").min(1)
         .under(antiKick, AntiKick.DIP, AntiKick.PACKET);
     private final NumberSetting dipTicks = new NumberSetting("Dip ticks",
-        "How many ticks each dip lasts before the climb back.", 1, 1, 20, 1, " ticks")
+        "How many server ticks each dip lasts before the climb back.", 1, 1, 20, 1, " ticks")
         .under(antiKick, AntiKick.DIP);
 
     private final HoverDip dip = new HoverDip();
 
-    // Ticks since the last packet dip and whether the real height still has to go back out.
-    private int packetTicks;
+    // The height the server was last told whilst a packet dip lasts and whether the real one
+    // still has to go back out.
+    private double toldHeight = Double.NaN;
     private volatile boolean restorePending;
 
     // Where this tick's teleport step began. Fillers go out ahead of a long one.
@@ -154,13 +157,14 @@ public final class Flight extends Module {
     // Read by LocalPlayerMixin instead of the fly speed creative flight pushes with.
     // The horizontal setting must not leak into it. A teleport step is pushed by nothing.
     public float verticalFlySpeed() {
-        return flowing() ? (float) (MovementUtil.VANILLA_FLY_SPEED * verticalSpeed.getValue()) : 0;
+        return flowing() && !dip.sinking() ? (float) (MovementUtil.VANILLA_FLY_SPEED * verticalSpeed.getValue())
+            : 0;
     }
 
     @Override
     protected void onEnable() {
         dip.reset();
-        packetTicks = 0;
+        toldHeight = Double.NaN;
         restorePending = false;
         fallOwed = true;
         movingTicks = 0;
@@ -216,6 +220,16 @@ public final class Flight extends Module {
             || mc.options.keyJump.isDown() || mc.options.keyShift.isDown();
         Timer.override(TIMER_KEY, moving && flowing() ? timer.getFloat() : 1f);
 
+        // The server counts nobody it lets fly. A step that rises has to know of a dip before
+        // it is taken.
+        boolean counted = !mc.player.isCreative() && !mc.player.isSpectator();
+        boolean dips = counted && (antiKick.is(AntiKick.DIP) || antiKick.is(AntiKick.PACKET) && !tellsOfDips());
+        if (dips) {
+            dip.plan(antiKickInterval.getInt(), antiKick.is(AntiKick.DIP) ? dipTicks.getInt() : 1,
+                MovementUtil.verticalInput() == 0);
+        } else if (!counted) {
+            dip.reset();
+        }
         switch (mode.getValue()) {
             case CREATIVE -> creativeTick();
             case DIRECT -> MovementUtil.flyDirect(MovementUtil.FLY_HORIZONTAL * horizontalSpeed.getValue(),
@@ -225,11 +239,11 @@ public final class Flight extends Module {
         if (flowing()) {
             fallOwed = true;
         }
-        // The dip adds to the speed and has to follow the teleport step that zeroes it.
-        switch (antiKick.getValue()) {
-            case DIP -> dip.tick(antiKickInterval.getInt(), dipTicks.getInt());
-            case PACKET -> packetKick();
-            case OFF -> { }
+        // The dip sets the speed and has to follow the teleport step that zeroes it.
+        if (dips) {
+            dip.apply();
+        } else if (counted && antiKick.is(AntiKick.PACKET)) {
+            packetDipTick();
         }
     }
 
@@ -239,14 +253,11 @@ public final class Flight extends Module {
         abilities.setFlyingSpeed((float) (MovementUtil.VANILLA_FLY_SPEED * horizontalSpeed.getValue()));
     }
 
-    // A teleport step already sends a packet every tick. The dip rides on it. A client dip also
-    // stands in whilst Latency holds the positions a packet dip would send.
-    private void packetKick() {
-        if (flowing() && !MoveGate.held(false)) {
-            packetDipTick();
-        } else {
-            dip.tick(antiKickInterval.getInt());
-        }
+    // True whilst the packet dodge can send a dip of its own. A teleport step already sends a
+    // packet every tick and a real dip rides on it. A real dip also stands in whilst Latency
+    // holds the positions a packet dip would send.
+    private boolean tellsOfDips() {
+        return flowing() && !MoveGate.held(false);
     }
 
     // Hangs still in the air and moves the whole step in one go. The client's own packet
@@ -275,7 +286,8 @@ public final class Flight extends Module {
     // Up or down first as the server moves a box and then across at the new height. A
     // step through a floor goes on its own.
     private Vec3 nextStep(Vec3 at) {
-        int vertical = MovementUtil.verticalInput();
+        // A dip is no dip under a step that rises.
+        int vertical = dip.sinking() ? Math.min(0, MovementUtil.verticalInput()) : MovementUtil.verticalInput();
         Vec3 heading = snapToAxis.isOn()
             ? MovementUtil.inputDirection(Math.round(mc.player.getYRot() / AXIS_DEGREES) * AXIS_DEGREES)
             : MovementUtil.inputDirection();
@@ -354,32 +366,46 @@ public final class Flight extends Module {
         stepFrom = null;
     }
 
-    // Sends the dip itself once the interval is up. Waiting for the client's own
-    // packet is no good since a still player only sends one every twenty ticks.
-    // A dip into a block would be refused by the server. It waits for air.
+    // Sends the dip itself once the interval is up. Waiting for the client's own packet is
+    // no good since a still player only sends one every twenty ticks. The server measures a
+    // drop from where it had the player as its own tick began. Every tick of the dip tells it
+    // a height lower than the last until it has seen one. A dip into a block would be refused
+    // by the server. It waits for air.
     private void packetDipTick() {
+        LocalPlayer player = mc.player;
         if (restorePending) {
             // Nothing carried the real height back last tick.
             restorePending = false;
-            sendHeight(mc.player.getY());
+            sendHeight(player.getY());
             return;
         }
-        packetTicks++;
-        int interval = antiKickInterval.getInt();
-        // A trip by packet leaves the server's own count ahead of this one.
-        if (packetTicks < interval && MoveGate.floatingTicks(false) < interval) {
+        boolean dipping = !Double.isNaN(toldHeight);
+        if (dipping ? dip.seen(1) : !dip.due(antiKickInterval.getInt())) {
+            endPacketDip();
             return;
         }
-        if (!mc.level.noCollision(mc.player, mc.player.getBoundingBox().move(0, -PACKET_DIP, 0))) {
+        double height = (dipping ? toldHeight : player.getY()) - PACKET_DIP;
+        boolean open = mc.level.noCollision(player, player.getBoundingBox().move(0, height - player.getY(), 0));
+        if (!open || !sendHeight(height)) {
+            endPacketDip();
             return;
         }
-        packetTicks = 0;
-        sendHeight(mc.player.getY() - PACKET_DIP);
-        restorePending = true;
+        if (!dipping) {
+            dip.begin();
+        }
+        toldHeight = height;
     }
 
-    private void sendHeight(double y) {
-        MoveGate.send(mc.player.getX(), y, mc.player.getZ(), mc.player.onGround());
+    // The client's own packet of this tick carries the real height back.
+    private void endPacketDip() {
+        if (!Double.isNaN(toldHeight)) {
+            toldHeight = Double.NaN;
+            restorePending = true;
+        }
+    }
+
+    private boolean sendHeight(double y) {
+        return MoveGate.send(mc.player.getX(), y, mc.player.getZ(), mc.player.onGround());
     }
 
     // After NoFall. A teleport drop must not claim a landing the server would charge.

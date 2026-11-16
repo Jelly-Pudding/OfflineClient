@@ -11,6 +11,7 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.ItemUtil;
@@ -256,7 +257,7 @@ public final class AttributeSwap extends Module {
     }
 
     private boolean canSwap() {
-        if (!inGame() || mc.player.isSpectator() || slots.isHolding()) {
+        if (!inGame() || Hands.tied() || slots.isHolding()) {
             return false;
         }
         if (onlyWithKillAura.isOn() && !Modules.enabled(KillAura.class)) {

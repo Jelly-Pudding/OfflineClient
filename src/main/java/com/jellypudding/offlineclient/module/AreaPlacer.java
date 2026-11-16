@@ -148,7 +148,7 @@ public abstract class AreaPlacer extends Module {
     @Subscribe
     private void onTick(TickEvent event) {
         targets.clear();
-        if (mc.player.isSpectator()) {
+        if (Hands.tied()) {
             return;
         }
         collect();

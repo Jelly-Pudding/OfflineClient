@@ -8,6 +8,7 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.DamageUtil;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.RotationManager;
 import com.jellypudding.offlineclient.util.SprintPause;
@@ -74,7 +75,7 @@ public final class Knockback extends Module {
     // Runs after Sprint and Criticals have had their say about the hit.
     @Subscribe(priority = -100)
     private void onPacketSend(PacketSendEvent event) {
-        if (!(event.getPacket() instanceof ServerboundAttackPacket attack) || !inGame() || mc.player.isSpectator()
+        if (!(event.getPacket() instanceof ServerboundAttackPacket attack) || !inGame() || Hands.tied()
             || !(mc.level.getEntity(attack.entityId()) instanceof LivingEntity target)) {
             return;
         }

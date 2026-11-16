@@ -14,6 +14,7 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.Holes;
 import com.jellypudding.offlineclient.util.PlacingRounds;
 import com.jellypudding.offlineclient.util.SwingMode;
@@ -112,7 +113,7 @@ public final class HoleFiller extends Module {
     @Subscribe
     private void onTick(TickEvent event) {
         holes.clear();
-        if (mc.player.isSpectator()) {
+        if (Hands.tied()) {
             enemies.clear();
             return;
         }

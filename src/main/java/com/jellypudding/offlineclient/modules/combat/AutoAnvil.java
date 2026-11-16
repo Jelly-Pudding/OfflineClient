@@ -11,6 +11,7 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.PacketUtil;
 import com.jellypudding.offlineclient.util.TargetPriority;
@@ -84,7 +85,7 @@ public final class AutoAnvil extends Module {
     @Subscribe
     private void onTick(TickEvent event) {
         spot = null;
-        if (mc.player.isSpectator()) {
+        if (Hands.tied()) {
             targetName = null;
             return;
         }

@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 // Holds pictures of the game against each other.
 final class Pictures {
@@ -31,13 +32,28 @@ final class Pictures {
     // in the first says what moves by itself there such as a spinning item. Those pixels and
     // the ones round them are left out. One for pictures of two sizes.
     static double changed(Path before, Path after, Path still) {
+        return changed(before, after, List.of(still));
+    }
+
+    // The same with several shots of the scene at rest. A pixel that moved in any of them is
+    // left out.
+    static double changed(Path before, Path after, List<Path> stills) {
         Picture first = read(before);
         Picture second = read(after);
-        Picture third = read(still);
-        if (first.pixels().length != second.pixels().length || first.pixels().length != third.pixels().length) {
+        if (first.pixels().length != second.pixels().length) {
             return 1;
         }
-        boolean[] restless = spread(differing(first, third), first.width());
+        boolean[] restless = new boolean[first.pixels().length];
+        for (Path still : stills) {
+            Picture rest = read(still);
+            if (rest.pixels().length != restless.length) {
+                return 1;
+            }
+            boolean[] moves = spread(differing(first, rest), first.width());
+            for (int at = 0; at < restless.length; at++) {
+                restless[at] |= moves[at];
+            }
+        }
         boolean[] moved = differing(first, second);
         int counted = 0;
         for (int at = 0; at < moved.length; at++) {

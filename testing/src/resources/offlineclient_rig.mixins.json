@@ -10,8 +10,10 @@
     "GuiRenderStateMixin",
     "GuiTextRenderStateAccessor",
     "InputConstantsMixin",
+    "IntegratedServerMixin",
     "LevelExtractorMixin",
     "MinecraftMixin",
+    "ModuleMixin",
     "WindowMixin"
   ],
   "injectors": {

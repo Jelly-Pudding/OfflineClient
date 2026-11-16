@@ -165,7 +165,7 @@ public final class AutoCity extends Module {
     @Subscribe
     private void onTick(TickEvent event) {
         status = null;
-        if (mc.player.isSpectator()) {
+        if (Hands.tied()) {
             return;
         }
         crystals.tick();

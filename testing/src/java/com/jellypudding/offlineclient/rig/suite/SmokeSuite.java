@@ -216,6 +216,11 @@ public final class SmokeSuite implements Suite {
     }
 
     // Why a blanket run leaves a module off. Null when it takes part.
+    // Why a blanket run only asks for the help of a command. Null for a command it may type.
+    static String helpOnly(String command) {
+        return HELP_ONLY_COMMANDS.get(command);
+    }
+
     static String leftOut(String module, boolean onServer) {
         String reason = OUTSIDE_MODULES.get(module);
         if (reason == null && onServer) {

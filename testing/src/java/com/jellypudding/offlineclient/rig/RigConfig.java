@@ -20,6 +20,7 @@ public final class RigConfig {
     private static final String ROLE_PROPERTY = "rig.role";
     private static final String PARTNER = "partner";
     private static final String LINK_PROPERTY = "rig.link";
+    private static final String CONTROL_PROPERTY = "rig.control";
     private static final String SEPARATOR = ",";
 
     private RigConfig() {
@@ -94,6 +95,12 @@ public final class RigConfig {
 
     public static String outAt(Path folder) {
         return "-D" + OUT_PROPERTY + "=" + folder;
+    }
+
+    // True for a control run. No module can be switched on and every case about a module has to
+    // fail. One that still passes proves nothing.
+    public static boolean control() {
+        return Boolean.getBoolean(CONTROL_PROPERTY);
     }
 
     // True when the run started with a copy of a player's own data folder.

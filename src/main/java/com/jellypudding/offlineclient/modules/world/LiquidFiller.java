@@ -85,7 +85,7 @@ public final class LiquidFiller extends AreaPlacer {
     // Runs before the fill round. One block put down earlier comes out again at a time.
     @Subscribe
     private void onTick(TickEvent event) {
-        if (mc.player.isSpectator()) {
+        if (Hands.tied()) {
             return;
         }
         if (world.changed()) {

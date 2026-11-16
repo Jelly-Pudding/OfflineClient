@@ -18,6 +18,7 @@ import com.jellypudding.offlineclient.util.InventoryUtil.Swap;
 import com.jellypudding.offlineclient.util.ItemUtil;
 import com.jellypudding.offlineclient.util.RotationManager;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffects;
@@ -37,6 +38,14 @@ public final class PotionArrows extends Module {
     // The weakest draw that still fires. The arrow barely leaves the bow.
     private static final float RELEASE_POWER = 0.12f;
     private static final float STRAIGHT_UP = -RotationManager.STRAIGHT_DOWN;
+    // Ticks an arrow has to come back down and how many go up for one effect before it is
+    // given up. A weak draw can fall short of the height at which an arrow may hit its archer.
+    private static final int LAND_TICKS = 40;
+    private static final int MOST_SHOTS = 3;
+
+    // An arrow stack still to shoot and the effect it carries.
+    private record Shot(int index, Holder<MobEffect> effect) {
+    }
 
     private final RegistryListSetting<MobEffect> effects = new RegistryListSetting<>("Effects",
         "Effects to shoot yourself with in this order.", BuiltInRegistries.MOB_EFFECT,
@@ -59,8 +68,12 @@ public final class PotionArrows extends Module {
 
     private final InventoryUtil.HotbarLoan bow = new InventoryUtil.HotbarLoan();
 
-    // Inventory indexes of the arrow stacks still to shoot.
-    private final Deque<Integer> arrows = new ArrayDeque<>();
+    private final Deque<Shot> arrows = new ArrayDeque<>();
+    // True whilst the arrow at the front is in the air and its effect has yet to show. Then
+    // the tick by which it has to and the arrows shot for that effect.
+    private boolean awaited;
+    private int landBy;
+    private int shots;
 
     // Network slots swapped. The next arrow is the one the bow reads first.
     private int movedFrom = -1;
@@ -89,12 +102,14 @@ public final class PotionArrows extends Module {
     @Override
     protected void onEnable() {
         arrows.clear();
+        awaited = false;
+        shots = 0;
         movedFrom = -1;
         movedTo = -1;
         drawing = false;
         timer = 0;
         bow.forget();
-        if (!inGame() || mc.player.isSpectator()) {
+        if (!inGame() || Hands.tied()) {
             setEnabled(false);
             return;
         }
@@ -135,7 +150,10 @@ public final class PotionArrows extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (mc.player.isSpectator() || !allowed()) {
+        if (Hands.tied() || !allowed()) {
+            return;
+        }
+        if (awaited && !landed()) {
             return;
         }
         if (arrows.isEmpty()) {
@@ -162,7 +180,7 @@ public final class PotionArrows extends Module {
             stop("Lost the bow.");
             return;
         }
-        if (!bringForward(arrows.peekFirst())) {
+        if (!bringForward(arrows.peekFirst().index())) {
             return;
         }
         InputUtil.hold(mc.options.keyUse);
@@ -177,8 +195,37 @@ public final class PotionArrows extends Module {
         mc.gameMode.releaseUsingItem(mc.player);
         drawing = false;
         restoreArrow();
-        arrows.pollFirst();
+        Shot shot = arrows.peekFirst();
+        shots++;
+        // An effect that works at once leaves nothing to wait for and one you already have
+        // would only seem to have landed.
+        if (shot.effect().value().isInstantaneous() || mc.player.hasEffect(shot.effect())) {
+            next();
+        } else {
+            awaited = true;
+            landBy = mc.player.tickCount + LAND_TICKS;
+        }
         timer = cooldown.getInt();
+    }
+
+    // False whilst the arrow is still on its way. An arrow that missed goes up again unless
+    // enough have been spent on its effect.
+    private boolean landed() {
+        // A respawn starts the tick count again at nought.
+        landBy = Math.min(landBy, mc.player.tickCount + LAND_TICKS);
+        boolean timeUp = mc.player.tickCount >= landBy;
+        if (mc.player.hasEffect(arrows.peekFirst().effect()) || timeUp && shots >= MOST_SHOTS) {
+            next();
+            return true;
+        }
+        awaited = !timeUp;
+        return timeUp;
+    }
+
+    private void next() {
+        arrows.pollFirst();
+        awaited = false;
+        shots = 0;
     }
 
     // Every check that ends the module. The reason goes to chat when asked for.
@@ -226,14 +273,15 @@ public final class PotionArrows extends Module {
     private void collectArrows() {
         Set<Integer> taken = new HashSet<>();
         for (MobEffect effect : effects.resolved()) {
-            if (skipActive.isOn() && mc.player.hasEffect(BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect))) {
+            Holder<MobEffect> held = BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect);
+            if (skipActive.isOn() && mc.player.hasEffect(held)) {
                 continue;
             }
             for (int i = 0; i < InventoryUtil.WHOLE_INVENTORY; i++) {
                 ItemStack stack = mc.player.getInventory().getItem(i);
                 if (!taken.contains(i) && stack.is(Items.TIPPED_ARROW) && ItemUtil.carriesEffect(stack, effect)) {
                     taken.add(i);
-                    arrows.addLast(i);
+                    arrows.addLast(new Shot(i, held));
                     break;
                 }
             }
@@ -244,7 +292,7 @@ public final class PotionArrows extends Module {
     private boolean bringForward(int index) {
         if (!mc.player.getInventory().getItem(index).is(Items.TIPPED_ARROW)) {
             // The stack was moved or used up since the list was built.
-            arrows.pollFirst();
+            next();
             return false;
         }
         int first = InventoryUtil.firstArrowSlot();

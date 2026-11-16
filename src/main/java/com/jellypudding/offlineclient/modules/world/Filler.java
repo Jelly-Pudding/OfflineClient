@@ -9,6 +9,7 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.CornerPicker;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.WorldWatch;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.Blocks;
@@ -101,7 +102,7 @@ public final class Filler extends AreaPlacer implements CornerPicker.Taker {
     // Runs before the placing round. Blocks in the way come out first.
     @Subscribe
     private void onTick(TickEvent event) {
-        if (mc.player.isSpectator()) {
+        if (Hands.tied()) {
             return;
         }
         if (world.changed()) {

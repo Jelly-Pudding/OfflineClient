@@ -81,8 +81,7 @@ public abstract class BlockUseAura extends Module {
             return;
         }
         tried.tick();
-        if (mc.player.isSpectator() || mc.player.isDeadOrDying() || mc.gui.screen() != null
-            || Hands.taken() || busy()) {
+        if (mc.gui.screen() != null || Hands.taken() || busy()) {
             rest();
             return;
         }

@@ -48,11 +48,23 @@ public final class Watchdog implements PreLaunchEntrypoint {
         Runtime.getRuntime().halt(TIMED_OUT);
     }
 
-    // Where every thread stood. It shows what the run was stuck on.
+    // Where every thread stood. It shows what the run was stuck on. A thread's own summary
+    // stops after eight frames and the frame that matters often lies deeper.
     private static String threads() {
         StringBuilder text = new StringBuilder();
         for (ThreadInfo thread : ManagementFactory.getThreadMXBean().dumpAllThreads(true, true)) {
-            text.append(thread);
+            text.append('"').append(thread.getThreadName()).append("\" ").append(thread.getThreadState());
+            if (thread.getLockName() != null) {
+                text.append(" on ").append(thread.getLockName());
+            }
+            if (thread.getLockOwnerName() != null) {
+                text.append(" held by \"").append(thread.getLockOwnerName()).append('"');
+            }
+            text.append('\n');
+            for (StackTraceElement frame : thread.getStackTrace()) {
+                text.append("\tat ").append(frame).append('\n');
+            }
+            text.append('\n');
         }
         return text.toString();
     }

@@ -295,7 +295,12 @@ public final class PathFinder {
                 double base = diagonal ? DIAGONAL : 1;
                 BlockPos side = from.offset(dx, 0, dz);
                 double level = entryCost(side);
-                if (level >= 0) {
+                // A player on a vine or at the top of one bobs about the height of the spot. The
+                // step to the side is only safe onto something that holds the feet whatever
+                // the height. A second vine that hangs free begins at its own lowest block and a
+                // hair under that there is nothing. Nobody steps into that lowest block from a
+                // ledge either.
+                if (level >= 0 && (firm || firm(side)) && !dangles(side)) {
                     out.add(new Step(side, base + level));
                 } else if (!diagonal && means.bridge() && !afloat(from) && wantsFloor(side)) {
                     out.add(new Step(side, base + PLACE));
@@ -362,7 +367,10 @@ public final class PathFinder {
             return null;
         }
 
-        // Ladders and vines and swimming let the player move straight up or down.
+        // Ladders and vines and swimming let the player move straight up or down. A climb
+        // begins inside the ladder or the vine. One that starts at head height is only caught
+        // by a jump straight up from under it and the top of one vine is no place to reach
+        // the next from. A swimmer rises into whatever water or ladder is above.
         private void addClimb(BlockPos from, List<Step> out) {
             BlockPos up = from.above();
             BlockPos down = from.below();
@@ -370,7 +378,7 @@ public final class PathFinder {
                 if (spaceCost(up, false) >= 0 && spaceCost(up.above(), false) >= 0) {
                     out.add(new Step(up, CLIMB));
                 }
-            } else if (canFloat(view.get(up)) && entryCost(up) >= 0) {
+            } else if (means.swim() && (wet(from) || wet(up)) && canFloat(view.get(up)) && entryCost(up) >= 0) {
                 out.add(new Step(up, CLIMB));
             } else if (means.pillar() && !afloat(from) && wantsFloor(up)) {
                 out.add(new Step(up, CLIMB + PLACE));
@@ -389,13 +397,23 @@ public final class PathFinder {
         }
 
         // True for a ladder or a vine with nothing under it to stand on.
-        private boolean hangs(BlockPos pos) {
+        boolean hangs(BlockPos pos) {
             BlockState under = view.get(pos.below());
             return climbable(view.get(pos)) && !solidFloor(under) && !holdsUp(under);
         }
 
+        // True for the lowest block of a vine that hangs free. A player who comes into it
+        // from the side sinks out of the bottom before the climb begins.
+        private boolean dangles(BlockPos pos) {
+            return hangs(pos) && !climbable(view.get(pos.below()));
+        }
+
         private boolean canFloat(BlockState state) {
             return climbable(state) || (means.swim() && state.getFluidState().is(FluidTags.WATER));
+        }
+
+        private boolean wet(BlockPos pos) {
+            return view.get(pos).getFluidState().is(FluidTags.WATER);
         }
 
         // A diagonal needs both of the sides beside it open or the player would clip

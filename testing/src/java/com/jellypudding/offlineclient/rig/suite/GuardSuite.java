@@ -171,8 +171,9 @@ public final class GuardSuite implements Suite {
         int setBack = duo.setBacks(moved);
         rows.add(row(name, setBack, checks, outcome));
         rig.note("Set back " + setBack + " times and flagged for " + checks + " and " + outcome);
-        boolean dead = rig.ask(mc -> mc.player.isDeadOrDying());
-        if (dead) {
+        if (Stage.dead(rig)) {
+            rig.note("The player died");
+            Stage.revive(rig);
             return;
         }
         double apart = rig.ask(mc -> mc.player.position()).distanceTo(rig.world().where());

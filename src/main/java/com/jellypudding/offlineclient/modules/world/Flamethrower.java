@@ -75,7 +75,7 @@ public final class Flamethrower extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (mc.player.isSpectator() || Hands.taken()) {
+        if (Hands.taken()) {
             return;
         }
         ticks++;

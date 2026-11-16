@@ -7,6 +7,7 @@ import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.SwingMode;
 import net.minecraft.core.BlockPos;
@@ -65,7 +66,7 @@ public final class AntiAnvil extends Module {
     @Subscribe
     private void onTick(TickEvent event) {
         roof = null;
-        if (mc.player.isSpectator()) {
+        if (Hands.tied()) {
             return;
         }
         BlockPos feet = mc.player.blockPosition();

@@ -12,6 +12,7 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.Holes;
 import com.jellypudding.offlineclient.util.PlacingRounds;
 import com.jellypudding.offlineclient.util.SwingMode;
@@ -101,7 +102,7 @@ public final class AutoTrap extends Module {
     @Subscribe
     private void onTick(TickEvent event) {
         pending = List.of();
-        if (mc.player.isSpectator()) {
+        if (Hands.tied()) {
             return;
         }
         Player target = EntityUtil.bestEnemy(targetRange.getValue(), priority.getValue());

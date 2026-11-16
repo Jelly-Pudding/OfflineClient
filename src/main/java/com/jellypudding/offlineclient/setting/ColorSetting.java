@@ -70,7 +70,9 @@ public final class ColorSetting extends Setting<Float> {
     }
 
     public void setHue(float hue) {
-        value = ((hue % 360f) + 360f) % 360f;
+        if (Float.isFinite(hue)) {
+            value = ((hue % 360f) + 360f) % 360f;
+        }
     }
 
     // Zero is grey. One is the pure hue.
@@ -79,7 +81,9 @@ public final class ColorSetting extends Setting<Float> {
     }
 
     public void setSaturation(float saturation) {
-        this.saturation = Math.clamp(saturation, 0f, 1f);
+        if (Float.isFinite(saturation)) {
+            this.saturation = Math.clamp(saturation, 0f, 1f);
+        }
     }
 
     // Zero is black. One is as bright as the hue goes.
@@ -88,7 +92,9 @@ public final class ColorSetting extends Setting<Float> {
     }
 
     public void setBrightness(float brightness) {
-        this.brightness = Math.clamp(brightness, 0f, 1f);
+        if (Float.isFinite(brightness)) {
+            this.brightness = Math.clamp(brightness, 0f, 1f);
+        }
     }
 
     // The shade it shows written as the mark and six hex digits such as #33CCFF.

@@ -5,6 +5,7 @@ import com.jellypudding.offlineclient.event.events.TickEvent;
 import com.jellypudding.offlineclient.module.Category;
 import com.jellypudding.offlineclient.module.Module;
 import com.jellypudding.offlineclient.setting.BoolSetting;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.WindLaunch;
 
 // One launch each time it is switched on. Bind it to a key.
@@ -35,7 +36,7 @@ public final class WindJump extends Module {
     @Override
     protected void onEnable() {
         waited = 0;
-        if (!inGame() || mc.player.isSpectator()) {
+        if (!inGame() || Hands.tied()) {
             setEnabled(false);
             return;
         }

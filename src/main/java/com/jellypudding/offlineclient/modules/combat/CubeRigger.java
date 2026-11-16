@@ -219,7 +219,7 @@ public final class CubeRigger extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (mc.player.isSpectator()) {
+        if (Hands.tied()) {
             return;
         }
         // A respawn starts the clock again and every time counted on it is dropped.

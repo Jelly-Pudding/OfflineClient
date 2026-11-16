@@ -21,10 +21,14 @@ public final class UseHold {
         waited = 0;
     }
 
-    // True whilst the use is still running. False once it has finished or been abandoned.
+    // True whilst the use is still running. False once it has finished or been abandoned. The
+    // game starts another use the tick after one ends for as long as the key is down and it
+    // does that before any module hears of the tick. The vanilla wait between two uses is kept
+    // full whilst this one runs and the key is let go before another can start.
     public boolean tick() {
         if (MC.player.isUsingItem()) {
             started = true;
+            MC.rightClickDelay = InputUtil.USE_DELAY;
         } else if (started || ++waited > START_TIMEOUT) {
             return false;
         }

@@ -21,7 +21,11 @@ import net.minecraft.client.telemetry.TelemetryEventSender;
 import net.minecraft.client.telemetry.TelemetryEventType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.network.protocol.game.ClientboundExplodePacket;
 import net.minecraft.network.protocol.game.ServerboundPunchPacket;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.util.random.WeightedList;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.LightningBolt;
 import net.minecraft.world.level.block.entity.SignBlockEntity;
@@ -38,6 +42,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -58,6 +63,10 @@ public final class MiscSuite implements Suite {
     private static final int ENTITY_CAP = 100;
     // TNT this high over the stage breaks nothing.
     private static final int BLAST_HEIGHT = 10;
+    private static final float BLAST_RADIUS = 4;
+    private static final int CRASH_BLOCKS = (1 << 20) + 1;
+    private static final String PLAIN_BLAST = "AntiCrash lets a plain blast pass without a word";
+    private static final String CRASH_BLAST = "AntiCrash speaks up about a blast no real explosion could send";
     private static final int ACT_TICKS = 100;
     // A beacon counts its pyramid every four seconds.
     private static final int BEACON_TICKS = 100;
@@ -88,7 +97,8 @@ public final class MiscSuite implements Suite {
 
     @Override
     public void run(Rig rig) {
-        Grounds.play(rig, NAME, plays(), stage -> home = stage.home());
+        Grounds.play(rig, NAME, plays(), stage -> home = stage.home(),
+            Grounds.Limits.NONE.aloneOnly(CRASH_BLAST).holdsBack(PLAIN_BLAST));
     }
 
     private Map<String, Case.Body> plays() {
@@ -111,7 +121,8 @@ public final class MiscSuite implements Suite {
         plays.put("SoundBlocker mutes the sound on its list", this::soundBlocker);
         plays.put("ColourCodes colours the sign you write", this::colourCodes);
         plays.put("AntiCrash keeps a crowd of entities under its cap", this::antiCrash);
-        plays.put("AntiCrash lets a plain blast pass without a word", this::plainBlast);
+        plays.put(PLAIN_BLAST, this::plainBlast);
+        plays.put(CRASH_BLAST, this::crashBlast);
         plays.put("PacketCanceller drops the server's chat lines", this::packetCanceller);
         plays.put("Triggers switches a module on once you are badly hurt and off again", this::triggers);
         plays.put("Webhook posts its test line and a line when you are hurt", this::webhook);
@@ -143,8 +154,10 @@ public final class MiscSuite implements Suite {
     private void panic(Rig rig) {
         rig.client().enable("Fullbright");
         rig.client().enable("Speed");
+        boolean on = rig.client().isOn("Fullbright") && rig.client().isOn("Speed");
         rig.client().enable("Panic");
         rig.ticks(SEEN_TICKS);
+        rig.expect(on, "Nothing was on for Panic to switch off. That proves nothing");
         rig.expect(!rig.client().isOn("Fullbright") && !rig.client().isOn("Speed"), "A module stayed on after Panic");
     }
 
@@ -255,7 +268,10 @@ public final class MiscSuite implements Suite {
         rig.note("The book was signed after about " + took + " ticks");
     }
 
+    // Each hop comes at a random moment. With five seconds between them on average one run in
+    // twenty would see none in the time. One second between them leaves no such run.
     private void antiAfk(Rig rig) {
+        rig.client().set("AntiAFK", "Interval", "1");
         rig.client().enable("AntiAFK");
         int took = rig.until("a jump with no key held", IDLE_TICKS, mc -> mc.player.getY() > home.getY() + 0.2);
         rig.ticks(SEEN_TICKS);
@@ -443,6 +459,25 @@ public final class MiscSuite implements Suite {
         rig.ticks(CHAT_TICKS * 2);
         List<String> said = rig.client().saidSince(mark);
         rig.expect(said.isEmpty(), "AntiCrash raised an alarm over a stick of TNT and said " + said);
+    }
+
+    // No blast of a real server holds a million blocks. Only the single player server can be
+    // made to send one.
+    private void crashBlast(Rig rig) {
+        rig.client().set("AntiCrash", "Notify", "on");
+        rig.client().enable("AntiCrash");
+        int mark = rig.client().chatMark();
+        Vec3 centre = Vec3.atCenterOf(home.above(BLAST_HEIGHT));
+        rig.local().server(server -> {
+            server.getPlayerList().getPlayers().getFirst().connection.send(new ClientboundExplodePacket(centre,
+                BLAST_RADIUS, CRASH_BLOCKS, Optional.empty(), ParticleTypes.EXPLOSION, SoundEvents.GENERIC_EXPLODE,
+                WeightedList.of(), false));
+            return true;
+        });
+        rig.ticks(CHAT_TICKS);
+        List<String> said = rig.client().saidSince(mark);
+        rig.expect(said.stream().anyMatch(line -> line.contains("explosion")), "AntiCrash said nothing of a blast of "
+            + CRASH_BLOCKS + " blocks. It said " + said);
     }
 
     // Two hearts are left after the blow and the rule asks for fewer than three.

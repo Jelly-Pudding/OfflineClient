@@ -23,6 +23,8 @@ import java.util.Map;
 public final class HuntingSuite implements Suite {
 
     private static final String NAME = "Hunting";
+    private static final String FEW_CONTAINERS = "StashFinder leaves a chunk with three containers alone";
+    private static final String SLEEPING_SPAWNER = "SpawnerFinder leaves a far spawner alone that nobody woke";
     private static final String ORE_PROBE = "OreProbe uncovers an ore the server hides";
     private static final int PROBE_TICKS = 400;
     private static final int HEAP = 8;
@@ -57,7 +59,8 @@ public final class HuntingSuite implements Suite {
 
     @Override
     public void run(Rig rig) {
-        Grounds.play(rig, NAME, plays(), stage -> home = stage.home());
+        Grounds.play(rig, NAME, plays(), stage -> home = stage.home(),
+            Grounds.Limits.NONE.holdsBack(FEW_CONTAINERS, SLEEPING_SPAWNER));
         onGrownLand(rig);
         whereOresHide(rig);
     }
@@ -111,12 +114,12 @@ public final class HuntingSuite implements Suite {
     private Map<String, Case.Body> plays() {
         Map<String, Case.Body> plays = new LinkedHashMap<>();
         plays.put("StashFinder points out a chunk packed with containers", this::stashFinder);
-        plays.put("StashFinder leaves a chunk with three containers alone", this::fewContainers);
+        plays.put(FEW_CONTAINERS, this::fewContainers);
         plays.put("StashFinder counts storage minecarts heaped in one block", this::heapedCarts);
         plays.put("BaseFinder marks the chunk of a written sign", this::baseFinder);
         plays.put("BaseFinder marks the chunk an endermite crawls in", this::endermiteClue);
         plays.put("SpawnerFinder finds a far spawner whose count has run", this::spawnerFinder);
-        plays.put("SpawnerFinder leaves a far spawner alone that nobody woke", this::sleepingSpawner);
+        plays.put(SLEEPING_SPAWNER, this::sleepingSpawner);
         plays.put("PotFinder finds a decorated pot a player placed", this::potFinder);
         plays.put("TunnelESP marks a tunnel dug through stone", this::tunnelEsp);
         plays.put("CaveTracks finds a block mined out of an old cave", this::caveTracks);

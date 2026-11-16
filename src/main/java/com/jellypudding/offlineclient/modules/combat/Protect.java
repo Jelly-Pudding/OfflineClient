@@ -13,6 +13,7 @@ import com.jellypudding.offlineclient.util.Chase;
 import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.EntityFilter;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.Modules;
 import com.jellypudding.offlineclient.util.SwingMode;
@@ -124,7 +125,7 @@ public final class Protect extends Module implements Targeting {
     @Subscribe
     private void onTick(TickEvent event) {
         enemy = null;
-        if (mc.player.isSpectator() || mc.player.isDeadOrDying()) {
+        if (Hands.tied()) {
             chase.stop();
             return;
         }

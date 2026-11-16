@@ -128,7 +128,7 @@ public final class AutoReplenish extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (mc.player.isSpectator()) {
+        if (Hands.tied()) {
             return;
         }
         // The containers of an errand are worked with their own screens open. A meal or a fight

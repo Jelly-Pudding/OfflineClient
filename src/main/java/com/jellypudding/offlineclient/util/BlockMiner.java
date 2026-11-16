@@ -114,8 +114,8 @@ public final class BlockMiner {
     }
 
     private static void send(ServerboundPlayerActionPacket.Action action, BlockPos pos) {
-        if (MC.player == null || MC.level == null
-            || action != ServerboundPlayerActionPacket.Action.ABORT_DESTROY_BLOCK && refused(pos)) {
+        boolean breaks = action != ServerboundPlayerActionPacket.Action.ABORT_DESTROY_BLOCK;
+        if (MC.player == null || MC.level == null || breaks && (Hands.tied() || refused(pos))) {
             return;
         }
         MC.player.connection.send(new ServerboundPlayerActionPacket(action, pos, BlockUtil.facingSide(pos)));

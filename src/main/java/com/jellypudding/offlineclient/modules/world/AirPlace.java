@@ -10,6 +10,7 @@ import com.jellypudding.offlineclient.render.BoxStyle;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.SwingMode;
 import net.minecraft.core.BlockPos;
@@ -61,7 +62,7 @@ public final class AirPlace extends Module {
     @Subscribe
     private void onTick(TickEvent event) {
         target = null;
-        if (mc.player.isSpectator() || mc.player.isHandsBusy()) {
+        if (Hands.tied() || mc.player.isHandsBusy()) {
             return;
         }
         if (heldPlaceableHand() == null) {
@@ -74,7 +75,7 @@ public final class AirPlace extends Module {
     // click only uses the held item.
     @Subscribe(priority = -10)
     private void onRightClick(RightClickEvent event) {
-        if (event.isBlank() || !inGame() || mc.player.isSpectator() || mc.gameMode.isDestroying()) {
+        if (event.isBlank() || !inGame() || Hands.tied() || mc.gameMode.isDestroying()) {
             return;
         }
         // Swallowing the click whilst the hands are busy would eat a normal use.

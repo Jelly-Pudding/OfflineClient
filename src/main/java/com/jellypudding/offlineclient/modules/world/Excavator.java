@@ -161,7 +161,7 @@ public final class Excavator extends Module implements CornerPicker.Taker {
     @Subscribe
     private void onTick(TickEvent event) {
         current = null;
-        if (mc.player.isSpectator()) {
+        if (Hands.tied()) {
             return;
         }
         if (world.changed()) {

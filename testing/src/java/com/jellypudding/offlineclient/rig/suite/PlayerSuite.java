@@ -1,7 +1,11 @@
 package com.jellypudding.offlineclient.rig.suite;
 
+import com.jellypudding.offlineclient.OfflineClient;
+import com.jellypudding.offlineclient.event.Subscribe;
+import com.jellypudding.offlineclient.event.events.ClientTickEvent;
 import com.jellypudding.offlineclient.rig.core.Case;
 import com.jellypudding.offlineclient.rig.core.Rig;
+import com.jellypudding.offlineclient.rig.core.Stage;
 import com.jellypudding.offlineclient.rig.core.World;
 import com.jellypudding.offlineclient.rig.suite.Motion.Moved;
 import com.mojang.blaze3d.platform.InputConstants;
@@ -11,6 +15,7 @@ import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.network.protocol.game.ServerboundUseItemPacket;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.Items;
@@ -40,6 +45,8 @@ public final class PlayerSuite implements Suite {
     private static final double TURN_NEAR = 2;
 
     private static final int SEEN_TICKS = 10;
+    // The hotbar slot the key 3 picks counted from nought.
+    private static final int THIRD_SLOT = 2;
     private static final int WALK_TICKS = 40;
     private static final int ACT_TICKS = 100;
     private static final int EAT_TICKS = 400;
@@ -131,14 +138,28 @@ public final class PlayerSuite implements Suite {
         rig.note("The first steak was eaten after about " + took + " ticks");
     }
 
+    // A meal is one use of the item. The game would start another the moment the first is
+    // over for as long as the use key is down. One apple brings the health back over the line
+    // and nothing calls for a second.
     private void autoGap(Rig rig) {
         World world = rig.world();
         Props.hold(rig, 0, APPLE + " " + APPLES_GIVEN);
-        rig.client().enable("AutoGap");
-        world.command("damage " + world.player() + " 9");
-        int took = Props.await(rig, "a golden apple to be eaten", ACT_TICKS * 2,
-            () -> Props.carried(rig, APPLE) < APPLES_GIVEN);
-        rig.note("An apple was eaten about " + took + " ticks after the hurt");
+        PacketTally uses = new PacketTally(packet -> packet instanceof ServerboundUseItemPacket);
+        uses.listen(rig);
+        try {
+            rig.client().enable("AutoGap");
+            world.command("damage " + world.player() + " 9");
+            int took = Props.await(rig, "a golden apple to be eaten", ACT_TICKS * 2,
+                () -> Props.carried(rig, APPLE) < APPLES_GIVEN);
+            rig.note("An apple was eaten about " + took + " ticks after the hurt");
+            rig.ticks(ACT_TICKS / 2);
+        } finally {
+            uses.stop(rig);
+        }
+        int begun = uses.drain().values().stream().mapToInt(Integer::intValue).sum();
+        int left = Props.carried(rig, APPLE);
+        rig.expect(left == APPLES_GIVEN - 1, (APPLES_GIVEN - left) + " apples went for one hurt");
+        rig.expect(begun == 1, "The one meal began " + begun + " uses of the apple");
     }
 
     // A fire lit in the player's own block. Left alone a player burns for eight seconds after it.
@@ -483,18 +504,41 @@ public final class PlayerSuite implements Suite {
         rig.expect(kept, "The click went through and the anchor blew up");
     }
 
+    // The command puts a layout back whether Loadouts is on or off. The key of a layout only
+    // works whilst it is on.
     private void loadouts(Rig rig) {
         World world = rig.world();
         world.hotbar(0, "diamond_sword");
         world.hotbar(1, "diamond_pickaxe");
         rig.ticks(SEEN_TICKS);
         rig.client().command("loadout save rig");
-        world.hotbar(0, "diamond_pickaxe");
-        world.hotbar(1, "diamond_sword");
+        rig.client().command("loadout key rig k");
+        try {
+            mixUp(rig);
+            rig.controls().press(InputConstants.KEY_K);
+            rig.ticks(SEEN_TICKS * 2);
+            boolean deaf = Props.holds(rig, "hotbar.0", "diamond_pickaxe");
+            rig.client().enable("Loadouts");
+            rig.controls().press(InputConstants.KEY_K);
+            awaitLayout(rig, "the key");
+            rig.client().disable("Loadouts");
+            mixUp(rig);
+            rig.client().command("loadout load rig");
+            awaitLayout(rig, "the command");
+            rig.expect(deaf, "The key put the layout back with Loadouts off");
+        } finally {
+            rig.client().command("loadout remove rig");
+        }
+    }
+
+    private static void mixUp(Rig rig) {
+        rig.world().hotbar(0, "diamond_pickaxe");
+        rig.world().hotbar(1, "diamond_sword");
         rig.ticks(SEEN_TICKS);
-        rig.client().enable("Loadouts");
-        rig.client().command("loadout load rig");
-        Props.await(rig, "the sword to be back in the first slot", ACT_TICKS,
+    }
+
+    private static void awaitLayout(Rig rig, String by) {
+        Props.await(rig, by + " to put the sword back in the first slot", ACT_TICKS,
             () -> Props.holds(rig, "hotbar.0", "diamond_sword") && Props.holds(rig, "hotbar.1", "diamond_pickaxe"));
     }
 
@@ -518,8 +562,7 @@ public final class PlayerSuite implements Suite {
         } catch (RuntimeException stillDead) {
             rose = false;
             rig.client().disable("Ghost");
-            rig.act(mc -> mc.player.respawn());
-            rig.until("the player to live again", ACT_TICKS, mc -> mc.player != null && mc.player.isAlive());
+            Stage.revive(rig);
         }
         rig.expect(!screened, "The death screen came up");
         rig.expect(health == 0, "The server has the player at " + health + " health. That proves nothing");
@@ -742,14 +785,18 @@ public final class PlayerSuite implements Suite {
 
     // The keys are read once a frame in place of once a tick. A number key and the attack button
     // must still do their work.
+    // The game reads the keys as a tick begins. Whilst FrameInput is on the tick leaves them be
+    // and they are read once the frame is drawn. A key pressed between two ticks has then not
+    // been taken when the tick after it ends.
     private void frameInput(Rig rig) {
         BlockPos block = home.north(2);
         rig.world().refill(block, block, "dirt");
-        Props.hold(rig, 0);
+        int plain = slotAsTickEnds(rig);
         rig.client().enable("FrameInput");
-        rig.controls().press(InputConstants.KEY_3);
-        rig.ticks(SEEN_TICKS);
+        int framed = slotAsTickEnds(rig);
         int slot = rig.ask(mc -> mc.player.getInventory().getSelectedSlot());
+        rig.expect(plain == THIRD_SLOT, "The tick took no key without FrameInput. That proves nothing");
+        rig.expect(framed == 0, "The tick still read the keys with FrameInput on");
         rig.controls().aimAtBlock(block, Direction.SOUTH);
         rig.ticks(2);
         rig.controls().holdMouse(ATTACK);
@@ -758,7 +805,31 @@ public final class PlayerSuite implements Suite {
         } finally {
             rig.controls().releaseMouse(ATTACK);
         }
-        rig.expect(slot == 2, "The key for the third slot left slot " + slot + " in the hand");
+        rig.expect(slot == THIRD_SLOT, "The key for the third slot left slot " + slot + " in the hand");
+    }
+
+    // Takes the first slot in the hand and presses the key of the third. Hands back the slot in
+    // the hand as the tick after the press ends.
+    private static int slotAsTickEnds(Rig rig) {
+        Props.hold(rig, 0);
+        int[] seen = {-1};
+        Object tap = new Object() {
+            @Subscribe
+            private void onTick(ClientTickEvent event) {
+                if (seen[0] < 0) {
+                    seen[0] = OfflineClient.MC.player.getInventory().getSelectedSlot();
+                }
+            }
+        };
+        rig.act(mc -> OfflineClient.INSTANCE.getEventBus().register(tap));
+        rig.controls().hold(InputConstants.KEY_3);
+        try {
+            rig.ticks(SEEN_TICKS);
+        } finally {
+            rig.controls().release(InputConstants.KEY_3);
+            rig.act(mc -> OfflineClient.INSTANCE.getEventBus().unregister(tap));
+        }
+        return seen[0];
     }
 
     private void menuClicker(Rig rig) {

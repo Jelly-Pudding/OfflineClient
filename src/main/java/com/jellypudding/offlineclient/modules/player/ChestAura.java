@@ -16,6 +16,7 @@ import com.jellypudding.offlineclient.util.ChatUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.FaceMode;
 import com.jellypudding.offlineclient.util.FrameLabels;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.JoinWatch;
@@ -210,7 +211,7 @@ public final class ChestAura extends Module {
         }
         ChestStealer stealer = Modules.get(ChestStealer.class);
         // A container set down beside you and one the aura opens could each take the other's screen.
-        if (stealer == null || mc.player.isSpectator() || mc.player.isDeadOrDying() || Modules.packing()
+        if (stealer == null || Hands.tied() || Modules.packing()
             || PlacedBox.anyAtWork()) {
             endVisit();
             return;

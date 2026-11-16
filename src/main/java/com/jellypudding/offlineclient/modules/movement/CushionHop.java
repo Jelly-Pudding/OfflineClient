@@ -9,6 +9,7 @@ import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.SwingMode;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -53,7 +54,7 @@ public final class CushionHop extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (mc.player.isSpectator() || mc.gui.screen() != null || hopKey.isBound() && !hopKey.isHeld()) {
+        if (Hands.tied() || mc.gui.screen() != null || hopKey.isBound() && !hopKey.isHeld()) {
             return;
         }
         if (wait > 0) {

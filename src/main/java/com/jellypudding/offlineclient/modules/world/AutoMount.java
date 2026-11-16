@@ -10,6 +10,7 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.Cooldowns;
 import com.jellypudding.offlineclient.util.EntityUtil;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.ServerInfo;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.InteractionHand;
@@ -69,7 +70,7 @@ public final class AutoMount extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (mc.player.isSpectator() || mc.player.isPassenger() || mc.player.isShiftKeyDown()) {
+        if (Hands.tied() || mc.player.isPassenger() || mc.player.isShiftKeyDown()) {
             return;
         }
         // A spawn egg on a mob makes a baby instead of a ride.

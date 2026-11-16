@@ -6,6 +6,7 @@ import com.jellypudding.offlineclient.module.RespawnBlockBreaker;
 import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ExplosionUtil;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.SwingMode;
 import com.jellypudding.offlineclient.util.UseBudget;
@@ -50,7 +51,7 @@ public final class AntiAnchor extends RespawnBlockBreaker {
 
     @Subscribe
     private void onSlabTick(TickEvent event) {
-        if (!headSlab.isOn() || mc.player.isSpectator() || !explodesHere()) {
+        if (!headSlab.isOn() || Hands.tied() || !explodesHere()) {
             return;
         }
         BlockPos head = mc.player.blockPosition().above();

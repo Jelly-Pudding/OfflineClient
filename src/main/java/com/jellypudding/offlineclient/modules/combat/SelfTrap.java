@@ -11,6 +11,7 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.Holes;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import net.minecraft.core.BlockPos;
@@ -81,7 +82,7 @@ public final class SelfTrap extends Module {
     @Subscribe
     private void onTick(TickEvent event) {
         pending = List.of();
-        if (mc.player.isSpectator()) {
+        if (Hands.tied()) {
             return;
         }
         List<BlockPos> missing = Holes.trapSpots(Holes.feetBlocks(mc.player),

@@ -87,9 +87,13 @@ public final class NumberSetting extends Setting<Double> {
         return value.floatValue();
     }
 
-    // Typed values keep their exact number. Only the hard limits apply.
+    // Typed values keep their exact number. Only the hard limits apply. A value that is no
+    // number changes nothing. A save edited by hand can hold one.
     @Override
     public void setValue(Double newValue) {
+        if (!Double.isFinite(newValue)) {
+            return;
+        }
         value = Math.clamp(newValue, hardMin, hardMax);
         if (value > sliderMax) {
             sessionMax = Math.max(sessionMax, value);

@@ -1,44 +1,117 @@
 package com.jellypudding.offlineclient.util;
 
 import com.jellypudding.offlineclient.OfflineClient;
+import net.minecraft.SharedConstants;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.phys.Vec3;
 
-// Dodges the vanilla flight kick. The server counts the ticks a player hangs in the
-// air without dropping and one dip of a few hundredths resets it.
+// Dodges the vanilla flight kick. The server counts its own ticks for as long as the last
+// move it heard from a player in open air did not drop and throws the player out at eighty.
+// A drop of a few hundredths resets the count once one of those ticks comes round whilst the
+// drop is the last thing the server heard. The server ticks by the clock. A game that stutters
+// plays its ticks late and several of them in one frame. Both the gap between two dips and the
+// length of one go by the clock for that reason.
 public final class HoverDip {
 
     private static final double DIP = 0.04;
+    // A dip half a tick longer than the server ticks it has to last cannot fall between them.
+    private static final long SLACK_MILLIS = SharedConstants.MILLIS_PER_TICK / 2;
 
-    private int ticks;
+    private enum Part { REST, SINK, CLIMB, SETTLE }
 
+    private Part part = Part.REST;
+    // Ticks the dip sank for and the ticks of the climb back still to come.
+    private int sunk;
+    private int owed;
+    // Wall clock milliseconds at which the last dip began.
+    private long dippedAt;
+
+    // The next tick dips whatever came before.
     public void reset() {
-        ticks = 0;
+        part = Part.REST;
+        sunk = 0;
+        owed = 0;
+        dippedAt = 0;
     }
 
+    // True once the interval has passed on the server since the last dip began. A trip by
+    // packet leaves the server's own count ahead of the clock and the dip comes early.
+    public boolean due(int interval) {
+        return sinceDip() >= (long) interval * SharedConstants.MILLIS_PER_TICK
+            || MoveGate.floatingTicks(false) >= interval;
+    }
+
+    // Marks the start of a dip.
+    public void begin() {
+        dippedAt = System.currentTimeMillis();
+    }
+
+    // True once the server has had the given number of its ticks to take the dip in.
+    public boolean seen(int serverTicks) {
+        return sinceDip() >= (long) serverTicks * SharedConstants.MILLIS_PER_TICK + SLACK_MILLIS;
+    }
+
+    private long sinceDip() {
+        return System.currentTimeMillis() - dippedAt;
+    }
+
+    // True whilst this tick is part of the way down. Whatever lifts the player has to wait.
+    public boolean sinking() {
+        return part == Part.SINK;
+    }
+
+    // A whole dip for a player who hangs still. Runs every tick of the hover.
     public void tick(int interval) {
-        tick(interval, 1);
+        plan(interval, 1, true);
+        apply();
     }
 
-    // Runs every tick whilst hovering. Sinks for the dip ticks then climbs back
-    // over as many. The height is unchanged once the dip is over. A trip by packet
-    // leaves the server's own count ahead of this one and the dip comes early.
-    public void tick(int interval, int dipTicks) {
-        boolean climbed = ticks >= dipTicks * 2;
-        if (climbed && (ticks >= interval || MoveGate.floatingTicks(false) >= interval)) {
-            ticks = 0;
+    // Picks this tick's part of a dip. It sinks until the server has seen it and climbs back
+    // over as many ticks as it sank and the height is then what it was. Only a player who
+    // hangs still is owed the climb. One who rises or sinks by a key keeps what the key gave.
+    public void plan(int interval, int dipTicks, boolean hangsStill) {
+        switch (part) {
+            case REST -> {
+                if (due(interval)) {
+                    begin();
+                    part = Part.SINK;
+                    sunk = 0;
+                }
+            }
+            case SINK -> {
+                if (seen(dipTicks)) {
+                    owed = sunk;
+                    part = Part.CLIMB;
+                }
+            }
+            case CLIMB -> {
+                if (owed == 0) {
+                    part = Part.SETTLE;
+                }
+            }
+            case SETTLE -> part = Part.REST;
         }
-        double nudge = 0;
-        if (ticks < dipTicks) {
-            nudge = -DIP;
-        } else if (ticks < dipTicks * 2) {
-            nudge = DIP;
+        if (!hangsStill && (part == Part.CLIMB || part == Part.SETTLE)) {
+            part = Part.REST;
         }
-        if (nudge != 0) {
-            LocalPlayer player = OfflineClient.MC.player;
-            Vec3 velocity = player.getDeltaMovement();
-            player.setDeltaMovement(velocity.add(0, nudge, 0));
+    }
+
+    // Gives the player the speed this tick's part asks for. It goes after whatever else sets
+    // the speed this tick. The tick after the climb stops what is left of it.
+    public void apply() {
+        LocalPlayer player = OfflineClient.MC.player;
+        Vec3 speed = player.getDeltaMovement();
+        switch (part) {
+            case SINK -> {
+                sunk++;
+                player.setDeltaMovement(speed.x, Math.min(speed.y, -DIP), speed.z);
+            }
+            case CLIMB -> {
+                owed--;
+                player.setDeltaMovement(speed.x, DIP, speed.z);
+            }
+            case SETTLE -> player.setDeltaMovement(speed.x, 0, speed.z);
+            case REST -> { }
         }
-        ticks++;
     }
 }

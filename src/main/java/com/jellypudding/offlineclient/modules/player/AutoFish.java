@@ -204,7 +204,7 @@ public final class AutoFish extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (mc.player.isSpectator()) {
+        if (Hands.tied()) {
             return;
         }
         if (castTimer > 0) {

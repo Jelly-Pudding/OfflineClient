@@ -83,9 +83,8 @@ final class Props {
         return world.attempt("execute if items entity " + world.player() + " " + slot + " " + item);
     }
 
-    // The three numbers of a spot the way a command takes them.
     static String at(BlockPos pos) {
-        return pos.getX() + " " + pos.getY() + " " + pos.getZ();
+        return World.at(pos);
     }
 
     static boolean is(Rig rig, BlockPos pos, String block) {

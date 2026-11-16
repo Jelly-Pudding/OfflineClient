@@ -86,8 +86,8 @@ public final class AutoShearer extends Module {
         if (mc.player.isSpectator() || mc.gui.screen() != null) {
             return;
         }
-        // The shears make way whilst dying and whilst something else has the hands.
-        if (mc.player.isDeadOrDying() || Hands.taken()) {
+        // The shears make way whilst something else has the hands.
+        if (Hands.taken()) {
             loan.standAside();
             return;
         }

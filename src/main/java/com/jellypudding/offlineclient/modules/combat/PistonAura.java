@@ -15,6 +15,7 @@ import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.Crystals;
 import com.jellypudding.offlineclient.util.EntityUtil;
 import com.jellypudding.offlineclient.util.ExplosionUtil;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil.SlotSwap;
 import com.jellypudding.offlineclient.util.RotationManager;
@@ -138,7 +139,7 @@ public final class PistonAura extends Module {
     private void onTick(TickEvent event) {
         status = null;
         turning = false;
-        if (mc.player.isSpectator()) {
+        if (Hands.tied()) {
             targetName = null;
             planned = null;
             pending = null;

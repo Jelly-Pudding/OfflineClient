@@ -50,6 +50,13 @@ public final class PathWalker {
     // Ticks a floor may refuse to go down before the walk looks for another way.
     private static final int LAY_PATIENCE = 20;
 
+    // A vine with no floor under it is caught from a spot this far out of the middle of the
+    // block before towards it. The player has to stand this near the spot and move no faster
+    // than this.
+    private static final double LEAN = 0.25;
+    private static final double ON_THE_SPOT = 0.15;
+    private static final double AT_REST = 0.03;
+
     // The walk that holds the sneak key down. Null whilst none does.
     private static PathWalker sneaker;
 
@@ -69,6 +76,8 @@ public final class PathWalker {
     // The node the walk steered at in vain as it was lost. Null when it was lost another way.
     private BlockPos walled;
     private boolean holding;
+    // The vine the walk has come to rest before and now goes into. Null whilst there is none.
+    private BlockPos poisedFor;
     private int layTicks;
     private final InventoryUtil.SlotSwap slots = new InventoryUtil.SlotSwap();
 
@@ -92,6 +101,7 @@ public final class PathWalker {
         pushTicks = 0;
         stallTicks = 0;
         layTicks = 0;
+        poisedFor = null;
         lost = false;
         walled = null;
     }
@@ -155,8 +165,9 @@ public final class PathWalker {
         return walled;
     }
 
-    // The steps a walk of this tick has ahead before it next goes down. A pace above a plain walk
-    // skips a gap one block wide and lands past a ledge. No walk leaves any pace free.
+    // The steps a walk of this tick has ahead before it next goes down or into a vine. A pace
+    // above a plain walk skips a gap one block wide and lands past a ledge and carries through a
+    // vine. No walk leaves any pace free.
     public static int levelRun() {
         return steering() ? levelRun : Integer.MAX_VALUE;
     }
@@ -174,6 +185,7 @@ public final class PathWalker {
         strayTicks = 0;
         pushTicks = 0;
         stallTicks = 0;
+        poisedFor = null;
         lost = false;
         walled = null;
     }
@@ -220,7 +232,7 @@ public final class PathWalker {
             return;
         }
         RouteView.walking(path, index);
-        measureRun(player);
+        measureRun(rules, player);
 
         BlockPos prev = path.get(index - 1);
         BlockPos node = path.get(index);
@@ -249,6 +261,20 @@ public final class PathWalker {
 
         Vec3 target = Vec3.atBottomCenterOf(node);
         face(target);
+        // A vine or a ladder that hangs clear of the floor is one block wide with nothing round
+        // it. A player who comes at it on the slant or at a run passes through and falls. It is
+        // caught from rest and without a sprint.
+        boolean catching = across(prev, node) && rules.hangs(node);
+        if (catching && !node.equals(poisedFor) && player.onGround() && here.equals(prev)) {
+            if (!poised(player, prev, node)) {
+                if (++stallTicks > STALL_LIMIT) {
+                    lost = true;
+                    walled = node;
+                }
+                return;
+            }
+            poisedFor = node;
+        }
         steer(target, player);
         holding = true;
         // A wall no rule names holds the player on the node before. Anything else that keeps the
@@ -259,8 +285,8 @@ public final class PathWalker {
             walled = node;
         }
 
-        // Step lifts nobody who sneaks.
-        boolean walksUp = !sneaks && !climbing && stepsUp(rules, here, node);
+        // Step lifts nobody who sneaks and nobody into a vine.
+        boolean walksUp = !sneaks && !climbing && !catching && stepsUp(rules, here, node);
         if (node.getY() > here.getY() && (player.onGround() || climbing) && !walksUp) {
             InputUtil.hold(MC.options.keyJump);
         } else if (player.isInWater() && node.getY() >= here.getY()) {
@@ -269,8 +295,9 @@ public final class PathWalker {
             InputUtil.release(MC.options.keyJump);
         }
         // Forward is what climbs a ladder. Let go of it on the way straight down one. A step off
-        // to the side out of a vine that hangs over the ground still needs it.
-        if (climbing && node.getY() < here.getY() && !across(here, node)) {
+        // to the side out of a vine that hangs over the ground still needs it. And a player who
+        // still stands on the lip above one has to walk on to drop in.
+        if (climbing && !player.onGround() && node.getY() < here.getY() && !across(here, node)) {
             InputUtil.release(MC.options.keyUp);
         }
 
@@ -278,19 +305,20 @@ public final class PathWalker {
         // height for the step out of it to the side.
         sneak(sneaks || climbing && !player.onGround() && across(here, node) && node.getY() >= here.getY());
 
-        if (sprint && !player.isInWater() && node.getY() >= here.getY()) {
+        if (sprint && !catching && !player.isInWater() && node.getY() >= here.getY()) {
             InputUtil.hold(MC.options.keySprint);
         } else {
             InputUtil.release(MC.options.keySprint);
         }
     }
 
-    // Counts the steps ahead before the path goes down. A path through water has none. Nothing
-    // asks about a run longer than the sight.
-    private void measureRun(LocalPlayer player) {
+    // Counts the steps ahead before the path goes down or into a vine with no floor under it. A
+    // path through water has none. Nothing asks about a run longer than the sight.
+    private void measureRun(PathFinder.Rules rules, LocalPlayer player) {
         int last = Math.min(path.size(), index + RUN_SIGHT);
         int level = 0;
-        while (index + level < last && path.get(index + level).getY() >= path.get(index + level - 1).getY()) {
+        while (index + level < last && path.get(index + level).getY() >= path.get(index + level - 1).getY()
+            && !rules.hangs(path.get(index + level))) {
             level++;
         }
         // A swimmer bobs out of the water and back in. Pace added in the air between would
@@ -321,7 +349,17 @@ public final class PathWalker {
         if (!player.onGround() || here.equals(path.get(index - 1))) {
             return;
         }
-        if (++strayTicks > STRAY_LIMIT) {
+        // Ground more than a block under the node behind and every node the walk can see ahead
+        // is where a fall off the path ended. No hop gets back up to it. The node the fall came
+        // short of is one to keep away from the next time.
+        int lowest = path.get(index - 1).getY();
+        for (int i = index; i < last; i++) {
+            lowest = Math.min(lowest, path.get(i).getY());
+        }
+        if (here.getY() + 1 < lowest) {
+            lost = true;
+            walled = path.get(index);
+        } else if (++strayTicks > STRAY_LIMIT) {
             lost = true;
         }
     }
@@ -337,6 +375,27 @@ public final class PathWalker {
             lost = true;
         }
         return true;
+    }
+
+    // True once the player stands at rest on the spot a vine or a ladder with no floor under it
+    // is caught from. The spot lies on the line from the block before straight into it. Until
+    // then the walk creeps there or waits for its pace to die.
+    private boolean poised(LocalPlayer player, BlockPos prev, BlockPos node) {
+        double alongX = node.getX() - prev.getX();
+        double alongZ = node.getZ() - prev.getZ();
+        double length = Math.sqrt(alongX * alongX + alongZ * alongZ);
+        Vec3 spot = Vec3.atBottomCenterOf(prev).add(alongX / length * LEAN, 0, alongZ / length * LEAN);
+        double away = Math.hypot(player.getX() - spot.x, player.getZ() - spot.z);
+        if (away <= ON_THE_SPOT && player.getDeltaMovement().horizontalDistance() <= AT_REST) {
+            return true;
+        }
+        releaseKeys();
+        if (away > ON_THE_SPOT) {
+            steer(spot, player);
+        }
+        sneak(true);
+        holding = true;
+        return false;
     }
 
     // True when the rise to the node is one the player walks up without a jump. Straight

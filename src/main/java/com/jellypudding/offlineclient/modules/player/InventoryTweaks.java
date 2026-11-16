@@ -10,6 +10,7 @@ import com.jellypudding.offlineclient.setting.EnumSetting;
 import com.jellypudding.offlineclient.setting.KeybindSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.InputUtil;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.ItemUtil;
@@ -173,7 +174,7 @@ public final class InventoryTweaks extends Module {
 
     @Subscribe
     private void onClientTick(ClientTickEvent event) {
-        if (!inGame() || mc.player.isSpectator()) {
+        if (!inGame() || Hands.tied()) {
             return;
         }
         if (!craftingCarry.isOn()) {

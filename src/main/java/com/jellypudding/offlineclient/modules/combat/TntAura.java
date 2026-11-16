@@ -190,7 +190,7 @@ public final class TntAura extends Module {
         if (justLit.tick()) {
             waiting.clear();
         }
-        if (mc.player.isSpectator()) {
+        if (Hands.tied()) {
             return;
         }
         if (!lightPlaced.isOn()) {

@@ -13,6 +13,7 @@ import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.setting.RegistryListSetting;
 import com.jellypudding.offlineclient.util.BlockUtil;
 import com.jellypudding.offlineclient.util.ChatUtil;
+import com.jellypudding.offlineclient.util.Hands;
 import com.jellypudding.offlineclient.util.Holes;
 import com.jellypudding.offlineclient.util.InventoryUtil;
 import com.jellypudding.offlineclient.util.MoveGate;
@@ -99,7 +100,7 @@ public final class Burrow extends Module {
         armed = false;
         pullBack = false;
         slots.forget();
-        if (!inGame() || mc.player.isSpectator()) {
+        if (!inGame() || Hands.tied()) {
             setEnabled(false);
             return;
         }
@@ -169,7 +170,7 @@ public final class Burrow extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
-        if (mc.player.isSpectator() || anchor == null) {
+        if (Hands.tied() || anchor == null) {
             setEnabled(false);
             return;
         }

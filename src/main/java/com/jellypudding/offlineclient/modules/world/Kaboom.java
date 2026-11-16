@@ -9,6 +9,7 @@ import com.jellypudding.offlineclient.setting.BoolSetting;
 import com.jellypudding.offlineclient.setting.NumberSetting;
 import com.jellypudding.offlineclient.util.BlockMiner;
 import com.jellypudding.offlineclient.util.BlockUtil;
+import com.jellypudding.offlineclient.util.Hands;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.sounds.SoundEvents;
@@ -84,6 +85,11 @@ public final class Kaboom extends Module {
 
     @Subscribe
     private void onTick(TickEvent event) {
+        // The dead break nothing and the blast ends with the player.
+        if (Hands.tied()) {
+            setEnabled(false);
+            return;
+        }
         int budget = rate.getInt();
         while (budget > 0 && roundsLeft > 0) {
             BlockMiner.breakInstantly(targets.get(next));

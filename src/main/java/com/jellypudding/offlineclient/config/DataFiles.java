@@ -11,8 +11,11 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.FileSystemException;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
@@ -28,6 +31,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.locks.LockSupport;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -42,6 +46,9 @@ public final class DataFiles {
     private static final String TEMP = ".tmp";
     // A file that cannot be read is kept beside the new one under this ending.
     private static final String BROKEN = ".broken";
+    // How often a refused swap is tried and the wait before each new go.
+    private static final int SWAP_TRIES = 5;
+    private static final long SWAP_WAIT_NANOS = 20_000_000;
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Pattern UNSAFE = Pattern.compile("[^a-zA-Z0-9_.-]");
     // How much of a key's hash tells two keys with the same safe name apart.
@@ -270,17 +277,37 @@ public final class DataFiles {
     }
 
     // Fills a file beside the target that then takes its place. A crash mid write cannot
-    // corrupt the saved file. False after logging why the file could not be written.
-    public static boolean writeSafely(Path path, Contents contents) {
+    // corrupt the saved file. One save at a time has the file beside the target to itself.
+    // False after logging why the file could not be written.
+    public static synchronized boolean writeSafely(Path path, Contents contents) {
         Path temp = path.resolveSibling(path.getFileName() + TEMP);
         try {
             Files.createDirectories(path.getParent());
             contents.writeTo(temp);
-            Files.move(temp, path, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            swapIn(temp, path);
             return true;
         } catch (IOException e) {
             OfflineClient.LOG.error("Failed to save {}", path.getFileName(), e);
             return false;
+        }
+    }
+
+    // Windows refuses the swap for as long as anything else has the old file open and a virus
+    // scanner opens every file that was just written. It lets go within moments and the swap
+    // is tried again.
+    private static void swapIn(Path temp, Path path) throws IOException {
+        for (int tries = 1; ; tries++) {
+            try {
+                Files.move(temp, path, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+                return;
+            } catch (FileSystemException held) {
+                boolean hopeless = held instanceof NoSuchFileException
+                    || held instanceof AtomicMoveNotSupportedException;
+                if (hopeless || tries == SWAP_TRIES) {
+                    throw held;
+                }
+                LockSupport.parkNanos(SWAP_WAIT_NANOS);
+            }
         }
     }
 }

@@ -237,7 +237,7 @@ public final class ElytraBoost extends Module {
     // The elytra goes on and the jump goes off. The glide opens on a later tick once the server has
     // heard that you left the ground.
     private void startJump() {
-        if (jump != Jump.NONE || !inGame() || mc.player.isSpectator()) {
+        if (jump != Jump.NONE || !inGame() || Hands.tied()) {
             return;
         }
         String problem = jumpProblem();
@@ -461,7 +461,7 @@ public final class ElytraBoost extends Module {
     }
 
     private boolean usable() {
-        return inGame() && !mc.player.isSpectator() && !mc.player.isUsingItem()
+        return inGame() && !Hands.tied() && !mc.player.isUsingItem()
             && !mc.player.isInWater();
     }
 

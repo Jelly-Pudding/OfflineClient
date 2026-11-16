@@ -335,7 +335,7 @@ public final class Nuker extends Module {
         candidates.clear();
         toolFor.clear();
         region = null;
-        if (mc.player.isSpectator()) {
+        if (Hands.tied()) {
             current = null;
             slots.restoreIfMine();
             return;

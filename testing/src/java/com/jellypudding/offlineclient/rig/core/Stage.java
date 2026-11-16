@@ -17,6 +17,7 @@ public final class Stage {
     // A case may build this high and no higher. What stands above it outlives the case.
     private static final int HEADROOM = 14;
     private static final int RESPAWN_TICKS = 100;
+    private static final int LAND_TICKS = 200;
     private static final int REOPEN_TRIES = 30;
     private static final int REOPEN_WAIT = 20;
     private static final double AT_HOME = 0.05;
@@ -52,13 +53,26 @@ public final class Stage {
 
     // Fails the running case when the player is dead or the world is gone.
     public static void expectAlive(Rig rig) {
-        String state = rig.ask(mc -> {
-            if (mc.player == null || mc.level == null) {
-                return "The world was left";
-            }
-            return mc.player.isDeadOrDying() || mc.gui.screen() instanceof DeathScreen ? "The player died" : "";
-        });
-        rig.expect(state.isEmpty(), state);
+        boolean left = rig.ask(mc -> mc.player == null || mc.level == null);
+        rig.expect(!left, "The world was left");
+        rig.expect(!dead(rig), "The player died");
+    }
+
+    // True when a world stands and its player lies dead.
+    public static boolean dead(Rig rig) {
+        return rig.ask(mc -> mc.player != null && mc.level != null
+            && (mc.player.isDeadOrDying() || mc.gui.screen() instanceof DeathScreen));
+    }
+
+    // Brings a dead player back to life. A living one is left alone.
+    public static void revive(Rig rig) {
+        if (!dead(rig)) {
+            return;
+        }
+        rig.act(mc -> mc.player.respawn());
+        rig.until("the player to come back to life", RESPAWN_TICKS,
+            mc -> mc.player != null && !mc.player.isDeadOrDying());
+        rig.act(mc -> mc.gui.setScreen(null));
     }
 
     // Opens a fresh world after one was lost. The server of the lost one may still be on its
@@ -90,7 +104,7 @@ public final class Stage {
         if (!worldStands()) {
             return;
         }
-        revive();
+        revive(rig);
         // Smoke and sparks of the case before would drift through the pictures of this one.
         rig.act(mc -> {
             mc.gui.setScreen(null);
@@ -98,6 +112,7 @@ public final class Stage {
         });
         rig.client().restoreDefaults();
         World world = rig.world();
+        holdLand(world);
         BlockPos low = home.offset(-REACH, -1, -REACH);
         BlockPos high = home.offset(REACH, -1, REACH);
         String player = world.player();
@@ -118,9 +133,31 @@ public final class Stage {
         }
     }
 
+    // The server lets go of land nobody stands near and of all that is on it. That happens a
+    // second after a death and when a case ends far from home. A tidy would miss what was left
+    // there and it would come back with the player in the middle of the next case.
+    private void holdLand(World world) {
+        StringBuilder loaded = new StringBuilder("execute");
+        for (int x : List.of(-REACH, REACH)) {
+            for (int z : List.of(-REACH, REACH)) {
+                loaded.append(" if loaded ").append(World.at(home.offset(x, 0, z)));
+            }
+        }
+        String held = loaded.toString();
+        if (world.attempt(held)) {
+            return;
+        }
+        world.teleport(home.getX() + 0.5, home.getY(), home.getZ() + 0.5, FACING, 0);
+        for (int waited = 0; !world.attempt(held); waited++) {
+            if (waited >= LAND_TICKS) {
+                throw new RigFailure("The server never loaded the land round the stage");
+            }
+            rig.ticks(1);
+        }
+    }
+
     private static String fill(BlockPos from, BlockPos to, String block) {
-        return "fill " + from.getX() + " " + from.getY() + " " + from.getZ() + " " + to.getX() + " " + to.getY() + " "
-            + to.getZ() + " " + block;
+        return "fill " + World.at(from) + " " + World.at(to) + " " + block;
     }
 
     private void giveKit(World world) {
@@ -138,17 +175,5 @@ public final class Stage {
             + " " + MOB_TAGS);
         world.quietly(kit);
         rig.act(mc -> mc.player.getInventory().setSelectedSlot(0));
-    }
-
-    // A dead player is brought back before anything else happens.
-    private void revive() {
-        boolean dead = rig.ask(mc -> mc.player.isDeadOrDying() || mc.gui.screen() instanceof DeathScreen);
-        if (!dead) {
-            return;
-        }
-        rig.act(mc -> mc.player.respawn());
-        rig.until("the player to come back to life", RESPAWN_TICKS,
-            mc -> mc.player != null && !mc.player.isDeadOrDying());
-        rig.act(mc -> mc.gui.setScreen(null));
     }
 }

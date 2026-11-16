@@ -74,6 +74,13 @@ public final class GotoSuite implements Suite {
         new Course("the terraces", GotoSuite::terraces, new BlockPos(1, 0, 3), new BlockPos(21, 6, 3)),
         new Course("the open diagonal", GotoSuite::pillars, new BlockPos(1, 0, 1), new BlockPos(22, 0, 22)));
 
+    private static final Course VINES = new Course("the vines", GotoSuite::vines, new BlockPos(3, 0, 6),
+        new BlockPos(10, 4, 6));
+    // The short way over the vines is some eight blocks along the ground and the stairs twice that.
+    private static final int STAIRS_WAY = 14;
+    private static final Course SIDE_VINE = new Course("the side vine", GotoSuite::sideVine, new BlockPos(3, 0, 1),
+        new BlockPos(4, 6, 8));
+
     private static final String[] BHOP = {"Speed", "Mode", "bhop"};
     private static final List<Kit> KITS = List.of(
         new Kit("Speed", List.of("Speed"), List.of()),
@@ -126,6 +133,10 @@ public final class GotoSuite implements Suite {
         }
         cases.add(Case.of("a walk past the reach of one search never stands still to look again",
             GotoSuite::farWalk));
+        cases.add(Case.of("a walk takes the stairs where the short way crosses to a vine that hangs free",
+            GotoSuite::vineWalk));
+        cases.add(Case.of("a walk that turns a corner into a vine that hangs free catches it",
+            GotoSuite::sideVineWalk));
         List<Case> wanted = rig.wanted(NAME, cases);
         if (!wanted.isEmpty()) {
             rig.openWorld(CREATIVE);
@@ -246,6 +257,53 @@ public final class GotoSuite implements Suite {
             + " more times");
         rig.expect(walk.travelled() <= FAR_WALK * WANDERING, "The walk covered " + (int) walk.travelled()
             + " blocks for " + FAR_WALK + " in a straight line");
+    }
+
+    // The tower is four blocks high. A vine runs up a post beside it and from the top of that
+    // vine a second one hangs free between the post and the tower. A player at the top of a
+    // vine bobs about its height and misses the lowest block of the next. The stairs behind
+    // the tower are the longer way and the only sound one.
+    private static void vineWalk(Rig rig) {
+        Walk walk = walk(rig, VINES, LEAST_LIMIT * PATIENCE);
+        judge(rig, walk);
+        rig.expect(walk.searches() == 1, "The walk looked for its way " + walk.searches() + " times");
+        rig.expect(walk.travelled() >= STAIRS_WAY, "The walk took the short way over the vine that hangs free. It"
+            + " covered " + (int) walk.travelled() + " blocks");
+    }
+
+    // A walkway three blocks up ends at a vine that hangs free one step to the side. The vine is
+    // one block wide with nothing round it. A walk that takes the corner at a run flies past it
+    // and falls. Nothing else leads up to the ledge.
+    private static void sideVineWalk(Rig rig) {
+        Walk walk = walk(rig, SIDE_VINE, LEAST_LIMIT * PATIENCE);
+        judge(rig, walk);
+        rig.expect(walk.searches() == 1, "The walk looked for its way " + walk.searches() + " times");
+    }
+
+    // Three steps lead up to the walkway. A post holds the top half of the vine and the lower
+    // half hangs from that. The ledge of the goal juts out beside the top of the vine on the
+    // side the walk comes from. Nothing stands on the far side to stop a player who slides on.
+    private static void sideVine(World world, BlockPos origin) {
+        for (int step = 0; step < 3; step++) {
+            world.fill(origin.offset(3, 0, 2 + step), origin.offset(3, step, 2 + step), WALL);
+        }
+        world.fill(origin.offset(3, 0, 5), origin.offset(3, 2, 9), WALL);
+        world.fill(origin.offset(5, 5, 9), origin.offset(5, 6, 9), WALL);
+        world.setBlock(origin.offset(4, 5, 8), WALL);
+        for (int height = 6; height >= 3; height--) {
+            world.setBlock(origin.offset(4, height, 9), "vine[east=true]");
+        }
+    }
+
+    private static void vines(World world, BlockPos origin) {
+        world.fill(origin.offset(9, 0, 5), origin.offset(11, 3, 7), WALL);
+        world.fill(origin.offset(7, 0, 7), origin.offset(7, 3, 7), WALL);
+        world.fill(origin.offset(7, 0, 6), origin.offset(7, 3, 6), "vine[south=true]");
+        world.setBlock(origin.offset(8, 5, 6), WALL);
+        world.setBlock(origin.offset(8, 4, 6), "vine[up=true]");
+        for (int step = 0; step < 3; step++) {
+            world.fill(origin.offset(12 + step, 0, 5), origin.offset(12 + step, 2 - step, 7), WALL);
+        }
     }
 
     private void plainWalk(Rig rig, Course course) {

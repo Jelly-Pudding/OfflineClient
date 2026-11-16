@@ -160,7 +160,7 @@ public final class ArrowDodge extends Module {
         dodging = false;
         boolean turnedBefore = turned;
         turned = false;
-        if (mc.player.isSpectator()) {
+        if (Hands.tied()) {
             lower();
             return;
         }
